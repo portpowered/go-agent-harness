@@ -1,0 +1,1108 @@
+{
+  "ancestry": "accepted",
+  "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "build_inputs": {
+    "agent-cli/cmd/yui/main.go": "dd5993d23c09b2aa8c925793da64287529fec96da77af290a77ffff5517ec8e8",
+    "agent-cli/go.mod": "3546c664ee476c1726701292b5aa9db20b532af010ca74b610e81681b9e3b845",
+    "agent-cli/go.sum": "b3d017ad5561d38878513c6ebc87054ba5ea4031bddf70420f9054a7c25281c1",
+    "agent-cli/internal/room/mixer.go": "2dcfd92228cf870267d84898105d67eaed104d71a7e9fcb2899d087d8e0beac1",
+    "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/cmd/pcm/main.go": "7443cf03334a3aa9114761cb8e1f259928f7d0e2796477e57d830567a2a980ff",
+    "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/go.mod": "986e9f96e27c2093769b38318091838aabf32c4c191199e3f65112affcb09904",
+    "go-audio/go.mod": "0b959f3a6a23c827c8f1a89323a760637b3ff001f4b70f75aa423c9c053d88d7",
+    "go-audio/go.sum": "0eb084ae04738236d00d96d849c231482df0549e2456fcf8637f4bceb96c6857",
+    "go-audio/pkg/codec/pcm16.go": "88c71d08aa45c65450a9d33d01f52086b515d84d97d93434278692f1c3fe6d52",
+    "go-audio/pkg/mixer/mixer.go": "3b0d1f3c11ea60dd1ac1a874dcb472e1c82783f2fe816603e8b46a47aea47822",
+    "go-audio/pkg/mixer/pcm_mix.go": "61ceaa1fa95af9069deca4ff0c1a3c5f101ac2668119653098d6b60293ee19e3"
+  },
+  "candidate_is_evidence_only_descendant": true,
+  "candidate_revision": "c8f3ed2124f9499613462f6eaab5ed1df9f507a9",
+  "changed_path_allowlist": {
+    "allowed": [
+      "agent-cli/internal/room/mixer.go",
+      "agent-cli/internal/room/mixer_test.go",
+      "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/",
+      "go-audio/pkg/mixer/pcm_mix.go",
+      "go-audio/pkg/mixer/pcm_mix_test.go"
+    ],
+    "changed": [
+      "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/verify.py"
+    ],
+    "malformed": [],
+    "outside": []
+  },
+  "cleanup_control": {
+    "argv": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-c",
+      "import time; time.sleep(30)"
+    ],
+    "cleanup_bounded": true,
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/intentional-child-hang",
+    "duration_seconds": 0.255084,
+    "exit_code": -15,
+    "label": "intentional-child-hang",
+    "process_group_alive": false,
+    "stderr": "",
+    "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/020-intentional-child-hang.stderr.log",
+    "stdout": "",
+    "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/020-intentional-child-hang.stdout.log",
+    "timed_out": true
+  },
+  "commands": [
+    {
+      "argv": [
+        "git",
+        "rev-parse",
+        "--verify",
+        "decaf8c0acd30d10c6a4f7d0fc1451303e8b2da2^{commit}"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.020373,
+      "exit_code": 0,
+      "label": "git-verify-source",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/001-git-verify-source.stderr.log",
+      "stdout": "decaf8c0acd30d10c6a4f7d0fc1451303e8b2da2\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/001-git-verify-source.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.048684,
+      "exit_code": 0,
+      "label": "git-source-status",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/002-git-source-status.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/002-git-source-status.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.02472,
+      "exit_code": 0,
+      "label": "git-rev-parse-candidate",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/003-git-rev-parse-candidate.stderr.log",
+      "stdout": "c8f3ed2124f9499613462f6eaab5ed1df9f507a9\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/003-git-rev-parse-candidate.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--name-only",
+        "decaf8c0acd30d10c6a4f7d0fc1451303e8b2da2",
+        "c8f3ed2124f9499613462f6eaab5ed1df9f507a9"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.024757,
+      "exit_code": 0,
+      "label": "git-changed-paths",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/004-git-changed-paths.stderr.log",
+      "stdout": "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/verify.py\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/004-git-changed-paths.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "version"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.021265,
+      "exit_code": 0,
+      "label": "version-go",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/005-version-go.stderr.log",
+      "stdout": "go version go1.26.7 darwin/arm64\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/005-version-go.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "--version"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.012121,
+      "exit_code": 0,
+      "label": "version-python",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/006-version-python.stderr.log",
+      "stdout": "Python 3.14.5\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/006-version-python.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+        "decaf8c0acd30d10c6a4f7d0fc1451303e8b2da2"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.023537,
+      "exit_code": 0,
+      "label": "baseline-ancestry",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/007-baseline-ancestry.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/007-baseline-ancestry.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "8bdafc7f947a3a2c9856220abdc539437035bd21",
+        "decaf8c0acd30d10c6a4f7d0fc1451303e8b2da2"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.024547,
+      "exit_code": 0,
+      "label": "startup-ancestry",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/008-startup-ancestry.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/008-startup-ancestry.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "c61ee2774986c896560ee40a92441c914976000d",
+        "decaf8c0acd30d10c6a4f7d0fc1451303e8b2da2"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.024728,
+      "exit_code": 0,
+      "label": "planning-ancestry",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/009-planning-ancestry.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/009-planning-ancestry.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--quiet",
+        "decaf8c0acd30d10c6a4f7d0fc1451303e8b2da2",
+        "c8f3ed2124f9499613462f6eaab5ed1df9f507a9",
+        "--",
+        "go-audio/go.mod",
+        "go-audio/go.sum",
+        "go-audio/pkg/codec/pcm16.go",
+        "go-audio/pkg/mixer/pcm_mix.go",
+        "go-audio/pkg/mixer/mixer.go",
+        "agent-cli/go.mod",
+        "agent-cli/go.sum",
+        "agent-cli/internal/room/mixer.go",
+        "agent-cli/cmd/yui/main.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/cmd/pcm/main.go"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.022074,
+      "exit_code": 0,
+      "label": "git-evidence-input-equality",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/010-git-evidence-input-equality.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/010-git-evidence-input-equality.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "archive",
+        "--format=tar",
+        "--output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/source.tar",
+        "decaf8c0acd30d10c6a4f7d0fc1451303e8b2da2"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.478587,
+      "exit_code": 0,
+      "label": "git-archive-source",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/011-git-archive-source.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/011-git-archive-source.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/pcm-consumer",
+        "./cmd/pcm"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer",
+      "duration_seconds": 0.191111,
+      "exit_code": 0,
+      "label": "build-pcm-consumer",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/012-build-pcm-consumer.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/012-build-pcm-consumer.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/pcm-consumer",
+        "--mode",
+        "controls"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts",
+      "duration_seconds": 0.253383,
+      "exit_code": 0,
+      "label": "pcm-consumer-controls",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/013-pcm-consumer-controls.stderr.log",
+      "stdout": "{\"schema\":\"audio-runtime-c35-canonical-pcm-byte-mixing-consumer.v1\",\"mode\":\"controls\",\"source\":\"working-tree\",\"cases\":[{\"name\":\"signed-extrema-final-clip\",\"output_hex\":\"fe7f03000180\",\"want_hex\":\"fe7f03000180\"},{\"name\":\"short-tail-silence\",\"output_hex\":\"0100020000000000\",\"want_hex\":\"0100020000000000\"},{\"name\":\"empty-output\",\"output_hex\":\"\",\"want_hex\":\"\"}],\"negative_controls\":{\"negative-output\":\"PCM16 mix output length is invalid: got -1 samples, want 0..1048576\",\"odd-source\":\"PCM16 payload has odd byte length: source 0 has 1 bytes\",\"overlong-source\":\"PCM16 mix source exceeds output length: source 0 has 2 samples, want at most 1\",\"oversized-output\":\"PCM16 mix output length is invalid: got 1048577 samples, want 0..1048576\",\"source-limit\":\"PCM16 mix source count exceeds supported bound: got 1048577 sources, want at most 1048576\"},\"input_unchanged\":true,\"output_independent\":true,\"clean_shutdown\":true,\"expected_failure\":false}\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/013-pcm-consumer-controls.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/pcm-consumer",
+        "--mode",
+        "mutated"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts",
+      "duration_seconds": 0.0061,
+      "exit_code": 1,
+      "label": "pcm-consumer-mutated-oracle",
+      "process_group_alive": false,
+      "stderr": "mutated oracle rejected as expected\n",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/014-pcm-consumer-mutated-oracle.stderr.log",
+      "stdout": "{\"schema\":\"audio-runtime-c35-canonical-pcm-byte-mixing-consumer.v1\",\"mode\":\"mutated\",\"source\":\"working-tree\",\"cases\":[{\"name\":\"signed-extrema-final-clip\",\"output_hex\":\"fe7f03000180\",\"want_hex\":\"fe7f03000180\"},{\"name\":\"short-tail-silence\",\"output_hex\":\"0100020000000000\",\"want_hex\":\"0100020000000000\"},{\"name\":\"empty-output\",\"output_hex\":\"\",\"want_hex\":\"\"}],\"negative_controls\":{\"mutated-expected-sample\":\"rejected: got fe7f03000180, mutated ff7f03000180\"},\"input_unchanged\":true,\"output_independent\":true,\"clean_shutdown\":true,\"expected_failure\":true}\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/014-pcm-consumer-mutated-oracle.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=45s",
+        "./go-audio/pkg/mixer",
+        "./agent-cli/internal/room"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 4.243182,
+      "exit_code": 0,
+      "label": "focused-normal-tests",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/015-focused-normal-tests.stderr.log",
+      "stdout": "{\"Time\":\"2026-09-10T03:06:16.931944-07:00\",\"Action\":\"start\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\"}\n{\"Time\":\"2026-09-10T03:06:17.02969-07:00\",\"Action\":\"start\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\"}\n{\"Time\":\"2026-09-10T03:06:17.093789-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\"}\n{\"Time\":\"2026-09-10T03:06:17.09386-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Output\":\"=== RUN   TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.111877-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Output\":\"--- PASS: TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize (0.02s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.1133-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Elapsed\":0.02}\n{\"Time\":\"2026-09-10T03:06:17.113342-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\"}\n{\"Time\":\"2026-09-10T03:06:17.113351-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Output\":\"=== RUN   TestPCMAccumulatorWritesHonestEmptyWAV\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.123903-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Output\":\"--- PASS: TestPCMAccumulatorWritesHonestEmptyWAV (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.12394-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:17.12396-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\"}\n{\"Time\":\"2026-09-10T03:06:17.123969-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Output\":\"=== RUN   TestPCMAccumulatorRetainsOffsetTailAndReportsBound\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.135164-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Output\":\"--- PASS: TestPCMAccumulatorRetainsOffsetTailAndReportsBound (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.135189-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:17.135196-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\"}\n{\"Time\":\"2026-09-10T03:06:17.135202-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Output\":\"=== RUN   TestPCMAccumulatorUsesAuthoritativeSampleCursor\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.139902-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Output\":\"--- PASS: TestPCMAccumulatorUsesAuthoritativeSampleCursor (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.139925-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.139932-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\"}\n{\"Time\":\"2026-09-10T03:06:17.139957-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Output\":\"=== RUN   TestPCMAccumulatorReanchorsAfterEndOfResponsePause\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.144574-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Output\":\"--- PASS: TestPCMAccumulatorReanchorsAfterEndOfResponsePause (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.144591-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.144598-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\"}\n{\"Time\":\"2026-09-10T03:06:17.144602-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Output\":\"=== RUN   TestPCMAccumulatorBoundsSourceTimelineState\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.144741-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Output\":\"--- PASS: TestPCMAccumulatorBoundsSourceTimelineState (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.14477-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.144775-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\"}\n{\"Time\":\"2026-09-10T03:06:17.144786-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Output\":\"=== RUN   TestMixerMixesPeersAndClips\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.146121-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Output\":\"--- PASS: TestMixerMixesPeersAndClips (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.146143-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.14615-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\"}\n{\"Time\":\"2026-09-10T03:06:17.146154-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Output\":\"=== RUN   TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.147267-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Output\":\"--- PASS: TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.147292-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.147297-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\"}\n{\"Time\":\"2026-09-10T03:06:17.147312-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Output\":\"=== RUN   TestMixerPreservesShortResponseTailAndEpochs\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.156174-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Output\":\"--- PASS: TestMixerPreservesShortResponseTailAndEpochs (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.156223-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:17.156229-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\"}\n{\"Time\":\"2026-09-10T03:06:17.156233-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Output\":\"=== RUN   TestMixerFramesProviderPacketsWithoutPadding\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.165226-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Output\":\"--- PASS: TestMixerFramesProviderPacketsWithoutPadding (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.165262-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:17.165269-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\"}\n{\"Time\":\"2026-09-10T03:06:17.165273-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Output\":\"=== RUN   TestMixerPreservesBoundaryWithoutInventingSilence\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.167828-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Output\":\"--- PASS: TestMixerPreservesBoundaryWithoutInventingSilence (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.167866-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.167873-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\"}\n{\"Time\":\"2026-09-10T03:06:17.167878-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Output\":\"=== RUN   TestMixerDoesNotMergePeerBoundariesOrEpochs\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.170391-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Output\":\"--- PASS: TestMixerDoesNotMergePeerBoundariesOrEpochs (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.170421-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.170426-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\"}\n{\"Time\":\"2026-09-10T03:06:17.17043-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Output\":\"=== RUN   TestMixerDoesNotAttributeBoundaryToAnotherSource\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.172966-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Output\":\"--- PASS: TestMixerDoesNotAttributeBoundaryToAnotherSource (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.172977-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.172981-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\"}\n{\"Time\":\"2026-09-10T03:06:17.172986-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\",\"Output\":\"=== RUN   TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259133-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\"}\n{\"Time\":\"2026-09-10T03:06:17.259181-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259872-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Output\":\"--- PASS: TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259884-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.259891-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\"}\n{\"Time\":\"2026-09-10T03:06:17.259895-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259971-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Output\":\"--- PASS: TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259978-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.259982-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\"}\n{\"Time\":\"2026-09-10T03:06:17.259986-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259991-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\"}\n{\"Time\":\"2026-09-10T03:06:17.259994-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.26009-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOpti\n...[clipped]",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/015-focused-normal-tests.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-race",
+        "-count=1",
+        "-timeout=45s",
+        "./go-audio/pkg/mixer",
+        "./agent-cli/internal/room"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 5.299398,
+      "exit_code": 0,
+      "label": "focused-race-tests",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/016-focused-race-tests.stderr.log",
+      "stdout": "{\"Time\":\"2026-09-10T03:06:21.195926-07:00\",\"Action\":\"start\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\"}\n{\"Time\":\"2026-09-10T03:06:21.319787-07:00\",\"Action\":\"start\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\"}\n{\"Time\":\"2026-09-10T03:06:21.370809-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\"}\n{\"Time\":\"2026-09-10T03:06:21.370871-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Output\":\"=== RUN   TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.381129-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Output\":\"--- PASS: TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.381157-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.38118-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\"}\n{\"Time\":\"2026-09-10T03:06:21.381193-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Output\":\"=== RUN   TestPCMAccumulatorWritesHonestEmptyWAV\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.386938-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Output\":\"--- PASS: TestPCMAccumulatorWritesHonestEmptyWAV (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.386952-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.386959-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\"}\n{\"Time\":\"2026-09-10T03:06:21.386964-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Output\":\"=== RUN   TestPCMAccumulatorRetainsOffsetTailAndReportsBound\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.397331-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Output\":\"--- PASS: TestPCMAccumulatorRetainsOffsetTailAndReportsBound (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.397356-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.397363-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\"}\n{\"Time\":\"2026-09-10T03:06:21.397368-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Output\":\"=== RUN   TestPCMAccumulatorUsesAuthoritativeSampleCursor\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.402942-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Output\":\"--- PASS: TestPCMAccumulatorUsesAuthoritativeSampleCursor (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.402964-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.402975-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\"}\n{\"Time\":\"2026-09-10T03:06:21.402999-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Output\":\"=== RUN   TestPCMAccumulatorReanchorsAfterEndOfResponsePause\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.408075-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Output\":\"--- PASS: TestPCMAccumulatorReanchorsAfterEndOfResponsePause (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.408094-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.408107-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\"}\n{\"Time\":\"2026-09-10T03:06:21.408113-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Output\":\"=== RUN   TestPCMAccumulatorBoundsSourceTimelineState\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.408896-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Output\":\"--- PASS: TestPCMAccumulatorBoundsSourceTimelineState (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.408905-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.40891-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\"}\n{\"Time\":\"2026-09-10T03:06:21.408913-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Output\":\"=== RUN   TestMixerMixesPeersAndClips\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.410364-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Output\":\"--- PASS: TestMixerMixesPeersAndClips (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.410385-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.410391-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\"}\n{\"Time\":\"2026-09-10T03:06:21.410396-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Output\":\"=== RUN   TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.411619-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Output\":\"--- PASS: TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.411661-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.411668-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\"}\n{\"Time\":\"2026-09-10T03:06:21.411672-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Output\":\"=== RUN   TestMixerPreservesShortResponseTailAndEpochs\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.420588-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Output\":\"--- PASS: TestMixerPreservesShortResponseTailAndEpochs (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.420656-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.420679-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\"}\n{\"Time\":\"2026-09-10T03:06:21.420684-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Output\":\"=== RUN   TestMixerFramesProviderPacketsWithoutPadding\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.4297-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Output\":\"--- PASS: TestMixerFramesProviderPacketsWithoutPadding (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.42971-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.429716-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\"}\n{\"Time\":\"2026-09-10T03:06:21.42972-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Output\":\"=== RUN   TestMixerPreservesBoundaryWithoutInventingSilence\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.432348-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Output\":\"--- PASS: TestMixerPreservesBoundaryWithoutInventingSilence (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.432362-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.432368-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\"}\n{\"Time\":\"2026-09-10T03:06:21.432372-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Output\":\"=== RUN   TestMixerDoesNotMergePeerBoundariesOrEpochs\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.434577-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Output\":\"--- PASS: TestMixerDoesNotMergePeerBoundariesOrEpochs (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.434603-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.434609-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\"}\n{\"Time\":\"2026-09-10T03:06:21.434613-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Output\":\"=== RUN   TestMixerDoesNotAttributeBoundaryToAnotherSource\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.44461-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Output\":\"--- PASS: TestMixerDoesNotAttributeBoundaryToAnotherSource (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.444665-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.444674-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\"}\n{\"Time\":\"2026-09-10T03:06:21.444699-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\",\"Output\":\"=== RUN   TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.546597-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\"}\n{\"Time\":\"2026-09-10T03:06:21.546656-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.549822-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Output\":\"--- PASS: TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.549845-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.549851-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\"}\n{\"Time\":\"2026-09-10T03:06:21.549856-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.550607-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Output\":\"--- PASS: TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.550615-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.550638-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\"}\n{\"Time\":\"2026-09-10T03:06:21.550642-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.550648-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\"}\n{\"Time\":\"2026-09-10T03:06:21.550652-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.551562-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQual\n...[clipped]",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/016-focused-race-tests.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "go",
+        "vet",
+        "./go-audio/pkg/mixer",
+        "./agent-cli/internal/room"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.25103,
+      "exit_code": 0,
+      "label": "focused-vet",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/017-focused-vet.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/017-focused-vet.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "make",
+        "architecture-size-check"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 13.043155,
+      "exit_code": 0,
+      "label": "architecture-size-check",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/018-architecture-size-check.stderr.log",
+      "stdout": "architecture gate passed: 181 package(s), 1866 file(s), 27558 function(s) checked\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/018-architecture-size-check.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.046657,
+      "exit_code": 0,
+      "label": "git-diff-check",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/019-git-diff-check.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/019-git-diff-check.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-c",
+        "import time; time.sleep(30)"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/intentional-child-hang",
+      "duration_seconds": 0.255084,
+      "exit_code": -15,
+      "label": "intentional-child-hang",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/020-intentional-child-hang.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/020-intentional-child-hang.stdout.log",
+      "timed_out": true
+    },
+    {
+      "argv": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+        "./cmd/yui"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/agent-cli",
+      "duration_seconds": 4.147642,
+      "exit_code": 0,
+      "label": "build-yui",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/021-build-yui.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/021-build-yui.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+        "session",
+        "--help"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/yui-help",
+      "duration_seconds": 0.547993,
+      "exit_code": 0,
+      "label": "yui-session-help",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/022-yui-session-help.stderr.log",
+      "stdout": "Run a bidirectional session inference capture or replay a session capture file.\nUse --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\nWith no capture, prompt, file-audio, scheduled-turn, image, or browser flags, bare `yui session` starts a live OpenAI Realtime voice session over WebSocket on the default microphone and speakers; use --provider, --model, --api-key, --voice, or --audio-in-device/--audio-out-device to override its live defaults.\nUse repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\nWebMCP browser sessions: use --browser-tools webmcp without --browser-cdp-url or --browser-ws-endpoint for an agent-managed local Chrome; no CDP port is required. With only --browser-tools and a provider, the command starts an interactive microphone session, prints Starting and Listening state, and waits for cancellation or provider termination. Supplying either endpoint keeps the externally managed browser path, and the agent never closes an external browser.\n\nWebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\nInput transcription is enabled by default only for live OpenAI sessions that accept audio input; use --no-input-transcription to opt out. Replay always follows its recorded session.update handshake.\n\nSession history management remains available through the show, list, and delete subcommands.\n\nFilesystem tool scope:\nWith no --workdir, the effective workdir is the process current directory and relative filesystem-tool paths resolve there. --workdir <directory> selects an existing accessible directory. Repeat --allow-path <directory> to add existing accessible roots; relative allow-path values resolve from the effective workdir and duplicate roots are normalized.\nRead and list operations refuse protected system and credential locations even when a broad --allow-path contains them. Shell-command deny-pattern policy is separate; filesystem confinement is not an operating-system sandbox.\n\nExamples:\n  allowed: agent --workdir ./project tool write_file path=notes/today.txt content=hello\n  refused: agent --workdir ./project tool write_file path=../outside.txt content=hello\n\nUsage:\n  yui session [flags]\n  yui session [command]\n\nExamples:\n  yui session\n  yui session --voice marin --model gpt-realtime-2.1\n  yui session --record session.json\n  yui session --browser-tools webmcp --browser-open https://example.com/\n\nAvailable Commands:\n  delete      Delete a session by ID\n  list        List saved sessions\n  replay      Replay recorded provider and tool events through the agent loop offline\n  self-play   Run two fixed-persona live agents through a PCM16 audio bridge\n  show        Show a session by ID\n\nFlags:\n      --api-key string                        Session provider API key for live record mode\n      --audio-device-server string            Use a loopback audio-device server host:port instead of platform devices\n      --audio-in string                       Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input\n      --audio-in-device string                Capture RTC audio from a registry device ID; empty or default selects the input default\n      --audio-in-turn stringArray             Add a finite .wav/.pcm/.raw spoken turn to one persistent --record-dir session (repeatable)\n      --audio-in-turn-barge                   Release later --audio-in-turn inputs against an active prior response; without this flag scheduled turns remain completion-gated\n      --audio-interrupt stringArray           Release finite .wav/.pcm/.raw audio after the first observed in-flight WebMCP invocation (repeatable; live browser sessions only)\n      --audio-interrupt-on-tool string        With --audio-interrupt, wait for this WebMCP tool's in-flight invocation instead of the first one\n      --audio-out string                      Write assistant PCM16 to a .wav/.pcm/.raw path or -; with --audio-out-device, tap device-bound PCM\n      --audio-out-device string               Play RTC audio to a registry device ID; empty or default selects the output default\n      --base-url string                       Session provider base URL override\n      --browser-activate-tab                  Activate the selected browser tab\n      --browser-allow-process-scan            Allow process-based browser endpoint discovery\n      --browser-allow-remote-cdp              Allow non-loopback DevTools endpoints\n      --browser-allowed-origin stringArray    Allow an exact browser page origin (repeatable)\n      --browser-approval string               Browser page approval policy: always, writes, or never\n      --browser-auto-select string            Browser target auto-selection: off, single, or persisted\n      --browser-browser string                Exact normalized browser ID\n      --browser-cancel-on-interrupt string    Browser invocation cancellation policy: never, read-only, or always\n      --browser-cdp-url string                Browser DevTools HTTP endpoint\n      --browser-close-on-exit                 Close the exact agent-managed browser when the session exits; external endpoints are never closed\n      --browser-denied-origin stringArray     Deny an exact browser page origin (repeatable)\n      --browser-headless                      Use headless mode for an agent-managed browser\n      --browser-invocation-timeout duration   Maximum browser invocation duration (Go duration)\n      --browser-max-input-bytes int           Maximum browser input_json bytes (decimal integer)\n      --browser-max-result-bytes int          Maximum browser result bytes (decimal integer)\n      --browser-open url                      Open exactly one startup URL in an agent-managed browser (default: about:blank)\n      --browser-origin string                 Exact browser page origin filter\n      --browser-persist-selection             Persist the selected browser ID and target metadata\n      --browser-record                        Record semantic browser events with the session capture\n      --browser-record-arguments              Include redacted browser tool arguments in recording\n      --browser-record-results                Include redacted browser tool results in recording\n      --browser-redact-url-fragment           Redact fragment data from browser URLs\n      --browser-redact-url-query              Redact query data from browser URLs\n      --browser-replay string                 Browser semantic replay fixture path\n      --browser-replay-strict                 Reject divergent browser replay events\n      --browser-serialize-per-target          Serialize browser page calls per target\n      --browser-tab string                    Exact browser target ID\n      --browser-tools string                  Enable WebMCP browser tools; without an endpoint, the agent manages a local Chrome\n      --browser-user-data-dir string          Browser profile directory used for DevTools discovery\n      --browser-ws-endpoint string            Browser DevTools WebSocket endpoint\n      --computer-use                          Expose host screen and pointer computer-control tools\n      --experimental-tools                    Expose experimental skill, sleep, and web tools\n  -h, --help                                  help for session\n      --image stringArray                     Attach a local image to the realtime user turn (repeatable; order is preserved)\n      --max-duration duration                 Maximum session duration as a Go duration; exits cleanly when the bound is reached\n      --media-source string                   Deferred/unavailable WebRTC receive-only external media source; requires --transport webrtc and cannot be combined with --audio-in\n      --model string                          Session model ID for live record mode\n      --no-input-transcription                Disable customer-speech transcription for live OpenAI audio-input sessions\n      --no-terminal-tools                     Hide built-in shell and filesystem tools from the model\n      --prompt string                         Seed the realtime session with text\n      --provider string                       Session provider ID (use grok or openai for live record mode)\n      --reasoning-effort string               OpenAI Realtime reasoning effort: minimal, low, medium, high, or xhigh\n      --record string                         Record bidirectional session traffic to a JSON capture file\n      --record-dir string                     Record a complete both-side session directory separately from --record\n      --replay string                         Replay bidirectional session traffic from a JSON capture file without live provider network calls\n      --replay-timing string                  Replay cadence: immediate for fast order validation, or recorded to preserve timestamp_ms timing (default \"immediate\")\n      --signaling string                      Deferred/unavailable WebRTC signaling endpoint; customer-reachable network signaling is not wired yet; requires --transport webrtc, and --transport webrtc requires this flag\n      --system-prompt string                  Path to system prompt file or literal text\n      --trace-audio                           Record audio boundary WAVs and timing JSONL (included automatically with --record-dir)\n      --transport string                      Session transport: ws (default, supported) or webrtc (deferred/unavailable customer path) (default \"ws\")\n      --voice string                          OpenAI Realtime audio output voice (supported: alloy, ash, ballad, cedar, coral, echo, marin, sage, shimmer, verse)\n      --wait-for-close                        Keep the session running after a completed response until the provider closes it\n      --web-cast                              Enable native-media and selected-tab Google Cast controls; requires --browser-tools webmcp\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui session [command] --help\" for more information about a command.\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/022-yui-session-help.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+        "-C",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace/config",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-2.json",
+        "--audio-out",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace/rendered.pcm",
+        "--record-dir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace/bundle",
+        "--max-duration",
+        "60s",
+        "--trace-audio"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace",
+      "duration_seconds": 0.12765,
+      "exit_code": 0,
+      "label": "yui-tool-trace-capture",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/023-yui-tool-trace-capture.stderr.log",
+      "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/023-yui-tool-trace-capture.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+        "-C",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-directory-replay/config",
+        "session",
+        "replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace/bundle"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-directory-replay",
+      "duration_seconds": 0.024809,
+      "exit_code": 0,
+      "label": "yui-tool-directory-replay",
+      "process_group_alive": false,
+      "stderr": "Replay verified: 18 wire events, 1 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/024-yui-tool-directory-replay.stderr.log",
+      "stdout": "strict replay continuation",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/024-yui-tool-directory-replay.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+        "-C",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-tampered-replay/config",
+        "session",
+        "replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-tampered/bundle"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-tampered-replay",
+      "duration_seconds": 0.02444,
+      "exit_code": 1,
+      "label": "yui-tool-tampered-replay",
+      "process_group_alive": false,
+      "stderr": "Error: replay bundle is incomplete: validate recording bundle: replay capture is unavailable: recording artifact \"audio/out-000.pcm\" digest mismatch (expected 0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502, actual dbf3a28ea1a040c497508944615930288517aa98b7daddcc3f72fb89b8546297)\n",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/025-yui-tool-tampered-replay.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/025-yui-tool-tampered-replay.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+        "-C",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/config",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-3.json",
+        "--audio-out",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/rendered.pcm",
+        "--record-dir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/bundle",
+        "--max-duration",
+        "60s",
+        "--trace-audio"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace",
+      "duration_seconds": 0.075479,
+      "exit_code": 0,
+      "label": "yui-interruption-trace-capture",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/026-yui-interruption-trace-capture.stderr.log",
+      "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/026-yui-interruption-trace-capture.stdout.log",
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+        "-C",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-directory-replay/config",
+        "session",
+        "replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/bundle"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-directory-replay",
+      "duration_seconds": 0.024094,
+      "exit_code": 0,
+      "label": "yui-interruption-directory-replay",
+      "process_group_alive": false,
+      "stderr": "Replay verified: 15 wire events, 0 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/027-yui-interruption-directory-replay.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/027-yui-interruption-directory-replay.stdout.log",
+      "timed_out": false
+    }
+  ],
+  "consumer_artifact": {
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/pcm-consumer",
+    "sha256": "a7e0bba1289f7d4f887be2dacc37da8aba45e77d94c1c3c39291326c80f529d0"
+  },
+  "consumer_controls": {
+    "mutated": {
+      "cases": [
+        {
+          "name": "signed-extrema-final-clip",
+          "output_hex": "fe7f03000180",
+          "want_hex": "fe7f03000180"
+        },
+        {
+          "name": "short-tail-silence",
+          "output_hex": "0100020000000000",
+          "want_hex": "0100020000000000"
+        },
+        {
+          "name": "empty-output",
+          "output_hex": "",
+          "want_hex": ""
+        }
+      ],
+      "clean_shutdown": true,
+      "expected_failure": true,
+      "input_unchanged": true,
+      "mode": "mutated",
+      "negative_controls": {
+        "mutated-expected-sample": "rejected: got fe7f03000180, mutated ff7f03000180"
+      },
+      "output_independent": true,
+      "schema": "audio-runtime-c35-canonical-pcm-byte-mixing-consumer.v1",
+      "source": "working-tree"
+    },
+    "mutated_process": {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/pcm-consumer",
+        "--mode",
+        "mutated"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts",
+      "duration_seconds": 0.0061,
+      "exit_code": 1,
+      "label": "pcm-consumer-mutated-oracle",
+      "process_group_alive": false,
+      "stderr": "mutated oracle rejected as expected\n",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/014-pcm-consumer-mutated-oracle.stderr.log",
+      "stdout": "{\"schema\":\"audio-runtime-c35-canonical-pcm-byte-mixing-consumer.v1\",\"mode\":\"mutated\",\"source\":\"working-tree\",\"cases\":[{\"name\":\"signed-extrema-final-clip\",\"output_hex\":\"fe7f03000180\",\"want_hex\":\"fe7f03000180\"},{\"name\":\"short-tail-silence\",\"output_hex\":\"0100020000000000\",\"want_hex\":\"0100020000000000\"},{\"name\":\"empty-output\",\"output_hex\":\"\",\"want_hex\":\"\"}],\"negative_controls\":{\"mutated-expected-sample\":\"rejected: got fe7f03000180, mutated ff7f03000180\"},\"input_unchanged\":true,\"output_independent\":true,\"clean_shutdown\":true,\"expected_failure\":true}\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/014-pcm-consumer-mutated-oracle.stdout.log",
+      "timed_out": false
+    },
+    "positive": {
+      "cases": [
+        {
+          "name": "signed-extrema-final-clip",
+          "output_hex": "fe7f03000180",
+          "want_hex": "fe7f03000180"
+        },
+        {
+          "name": "short-tail-silence",
+          "output_hex": "0100020000000000",
+          "want_hex": "0100020000000000"
+        },
+        {
+          "name": "empty-output",
+          "output_hex": "",
+          "want_hex": ""
+        }
+      ],
+      "clean_shutdown": true,
+      "expected_failure": false,
+      "input_unchanged": true,
+      "mode": "controls",
+      "negative_controls": {
+        "negative-output": "PCM16 mix output length is invalid: got -1 samples, want 0..1048576",
+        "odd-source": "PCM16 payload has odd byte length: source 0 has 1 bytes",
+        "overlong-source": "PCM16 mix source exceeds output length: source 0 has 2 samples, want at most 1",
+        "oversized-output": "PCM16 mix output length is invalid: got 1048577 samples, want 0..1048576",
+        "source-limit": "PCM16 mix source count exceeds supported bound: got 1048577 sources, want at most 1048576"
+      },
+      "output_independent": true,
+      "schema": "audio-runtime-c35-canonical-pcm-byte-mixing-consumer.v1",
+      "source": "working-tree"
+    },
+    "positive_process": {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/pcm-consumer",
+        "--mode",
+        "controls"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts",
+      "duration_seconds": 0.253383,
+      "exit_code": 0,
+      "label": "pcm-consumer-controls",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/013-pcm-consumer-controls.stderr.log",
+      "stdout": "{\"schema\":\"audio-runtime-c35-canonical-pcm-byte-mixing-consumer.v1\",\"mode\":\"controls\",\"source\":\"working-tree\",\"cases\":[{\"name\":\"signed-extrema-final-clip\",\"output_hex\":\"fe7f03000180\",\"want_hex\":\"fe7f03000180\"},{\"name\":\"short-tail-silence\",\"output_hex\":\"0100020000000000\",\"want_hex\":\"0100020000000000\"},{\"name\":\"empty-output\",\"output_hex\":\"\",\"want_hex\":\"\"}],\"negative_controls\":{\"negative-output\":\"PCM16 mix output length is invalid: got -1 samples, want 0..1048576\",\"odd-source\":\"PCM16 payload has odd byte length: source 0 has 1 bytes\",\"overlong-source\":\"PCM16 mix source exceeds output length: source 0 has 2 samples, want at most 1\",\"oversized-output\":\"PCM16 mix output length is invalid: got 1048577 samples, want 0..1048576\",\"source-limit\":\"PCM16 mix source count exceeds supported bound: got 1048577 sources, want at most 1048576\"},\"input_unchanged\":true,\"output_independent\":true,\"clean_shutdown\":true,\"expected_failure\":false}\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/013-pcm-consumer-controls.stdout.log",
+      "timed_out": false
+    }
+  },
+  "decision": "ACCEPTED",
+  "duration_seconds": 29.398959,
+  "evidence_input_equality": {
+    "command": {
+      "argv": [
+        "git",
+        "diff",
+        "--quiet",
+        "decaf8c0acd30d10c6a4f7d0fc1451303e8b2da2",
+        "c8f3ed2124f9499613462f6eaab5ed1df9f507a9",
+        "--",
+        "go-audio/go.mod",
+        "go-audio/go.sum",
+        "go-audio/pkg/codec/pcm16.go",
+        "go-audio/pkg/mixer/pcm_mix.go",
+        "go-audio/pkg/mixer/mixer.go",
+        "agent-cli/go.mod",
+        "agent-cli/go.sum",
+        "agent-cli/internal/room/mixer.go",
+        "agent-cli/cmd/yui/main.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/cmd/pcm/main.go"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+      "duration_seconds": 0.022074,
+      "exit_code": 0,
+      "label": "git-evidence-input-equality",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/010-git-evidence-input-equality.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/010-git-evidence-input-equality.stdout.log",
+      "timed_out": false
+    },
+    "equal": true,
+    "paths": [
+      "go-audio/go.mod",
+      "go-audio/go.sum",
+      "go-audio/pkg/codec/pcm16.go",
+      "go-audio/pkg/mixer/pcm_mix.go",
+      "go-audio/pkg/mixer/mixer.go",
+      "agent-cli/go.mod",
+      "agent-cli/go.sum",
+      "agent-cli/internal/room/mixer.go",
+      "agent-cli/cmd/yui/main.go",
+      "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/go.mod",
+      "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/cmd/pcm/main.go"
+    ]
+  },
+  "focused": {
+    "aggregate_seconds": 600,
+    "bounded_child_seconds": 60,
+    "commands": [
+      {
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "-timeout=45s",
+          "./go-audio/pkg/mixer",
+          "./agent-cli/internal/room"
+        ],
+        "cleanup_bounded": true,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+        "duration_seconds": 4.243182,
+        "exit_code": 0,
+        "label": "focused-normal-tests",
+        "process_group_alive": false,
+        "stderr": "",
+        "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/015-focused-normal-tests.stderr.log",
+        "stdout": "{\"Time\":\"2026-09-10T03:06:16.931944-07:00\",\"Action\":\"start\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\"}\n{\"Time\":\"2026-09-10T03:06:17.02969-07:00\",\"Action\":\"start\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\"}\n{\"Time\":\"2026-09-10T03:06:17.093789-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\"}\n{\"Time\":\"2026-09-10T03:06:17.09386-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Output\":\"=== RUN   TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.111877-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Output\":\"--- PASS: TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize (0.02s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.1133-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Elapsed\":0.02}\n{\"Time\":\"2026-09-10T03:06:17.113342-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\"}\n{\"Time\":\"2026-09-10T03:06:17.113351-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Output\":\"=== RUN   TestPCMAccumulatorWritesHonestEmptyWAV\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.123903-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Output\":\"--- PASS: TestPCMAccumulatorWritesHonestEmptyWAV (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.12394-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:17.12396-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\"}\n{\"Time\":\"2026-09-10T03:06:17.123969-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Output\":\"=== RUN   TestPCMAccumulatorRetainsOffsetTailAndReportsBound\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.135164-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Output\":\"--- PASS: TestPCMAccumulatorRetainsOffsetTailAndReportsBound (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.135189-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:17.135196-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\"}\n{\"Time\":\"2026-09-10T03:06:17.135202-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Output\":\"=== RUN   TestPCMAccumulatorUsesAuthoritativeSampleCursor\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.139902-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Output\":\"--- PASS: TestPCMAccumulatorUsesAuthoritativeSampleCursor (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.139925-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.139932-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\"}\n{\"Time\":\"2026-09-10T03:06:17.139957-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Output\":\"=== RUN   TestPCMAccumulatorReanchorsAfterEndOfResponsePause\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.144574-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Output\":\"--- PASS: TestPCMAccumulatorReanchorsAfterEndOfResponsePause (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.144591-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.144598-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\"}\n{\"Time\":\"2026-09-10T03:06:17.144602-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Output\":\"=== RUN   TestPCMAccumulatorBoundsSourceTimelineState\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.144741-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Output\":\"--- PASS: TestPCMAccumulatorBoundsSourceTimelineState (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.14477-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.144775-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\"}\n{\"Time\":\"2026-09-10T03:06:17.144786-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Output\":\"=== RUN   TestMixerMixesPeersAndClips\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.146121-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Output\":\"--- PASS: TestMixerMixesPeersAndClips (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.146143-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.14615-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\"}\n{\"Time\":\"2026-09-10T03:06:17.146154-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Output\":\"=== RUN   TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.147267-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Output\":\"--- PASS: TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.147292-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.147297-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\"}\n{\"Time\":\"2026-09-10T03:06:17.147312-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Output\":\"=== RUN   TestMixerPreservesShortResponseTailAndEpochs\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.156174-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Output\":\"--- PASS: TestMixerPreservesShortResponseTailAndEpochs (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.156223-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:17.156229-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\"}\n{\"Time\":\"2026-09-10T03:06:17.156233-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Output\":\"=== RUN   TestMixerFramesProviderPacketsWithoutPadding\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.165226-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Output\":\"--- PASS: TestMixerFramesProviderPacketsWithoutPadding (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.165262-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:17.165269-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\"}\n{\"Time\":\"2026-09-10T03:06:17.165273-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Output\":\"=== RUN   TestMixerPreservesBoundaryWithoutInventingSilence\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.167828-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Output\":\"--- PASS: TestMixerPreservesBoundaryWithoutInventingSilence (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.167866-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.167873-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\"}\n{\"Time\":\"2026-09-10T03:06:17.167878-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Output\":\"=== RUN   TestMixerDoesNotMergePeerBoundariesOrEpochs\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.170391-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Output\":\"--- PASS: TestMixerDoesNotMergePeerBoundariesOrEpochs (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.170421-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.170426-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\"}\n{\"Time\":\"2026-09-10T03:06:17.17043-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Output\":\"=== RUN   TestMixerDoesNotAttributeBoundaryToAnotherSource\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.172966-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Output\":\"--- PASS: TestMixerDoesNotAttributeBoundaryToAnotherSource (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.172977-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.172981-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\"}\n{\"Time\":\"2026-09-10T03:06:17.172986-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\",\"Output\":\"=== RUN   TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259133-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\"}\n{\"Time\":\"2026-09-10T03:06:17.259181-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259872-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Output\":\"--- PASS: TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259884-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.259891-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\"}\n{\"Time\":\"2026-09-10T03:06:17.259895-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259971-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Output\":\"--- PASS: TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259978-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:17.259982-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\"}\n{\"Time\":\"2026-09-10T03:06:17.259986-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.259991-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\"}\n{\"Time\":\"2026-09-10T03:06:17.259994-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\\n\"}\n{\"Time\":\"2026-09-10T03:06:17.26009-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOpti\n...[clipped]",
+        "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/015-focused-normal-tests.stdout.log",
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "go",
+          "test",
+          "-json",
+          "-race",
+          "-count=1",
+          "-timeout=45s",
+          "./go-audio/pkg/mixer",
+          "./agent-cli/internal/room"
+        ],
+        "cleanup_bounded": true,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+        "duration_seconds": 5.299398,
+        "exit_code": 0,
+        "label": "focused-race-tests",
+        "process_group_alive": false,
+        "stderr": "",
+        "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/016-focused-race-tests.stderr.log",
+        "stdout": "{\"Time\":\"2026-09-10T03:06:21.195926-07:00\",\"Action\":\"start\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\"}\n{\"Time\":\"2026-09-10T03:06:21.319787-07:00\",\"Action\":\"start\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\"}\n{\"Time\":\"2026-09-10T03:06:21.370809-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\"}\n{\"Time\":\"2026-09-10T03:06:21.370871-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Output\":\"=== RUN   TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.381129-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Output\":\"--- PASS: TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.381157-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorAlignsOverlapAndClipsAtFinalize\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.38118-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\"}\n{\"Time\":\"2026-09-10T03:06:21.381193-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Output\":\"=== RUN   TestPCMAccumulatorWritesHonestEmptyWAV\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.386938-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Output\":\"--- PASS: TestPCMAccumulatorWritesHonestEmptyWAV (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.386952-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorWritesHonestEmptyWAV\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.386959-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\"}\n{\"Time\":\"2026-09-10T03:06:21.386964-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Output\":\"=== RUN   TestPCMAccumulatorRetainsOffsetTailAndReportsBound\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.397331-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Output\":\"--- PASS: TestPCMAccumulatorRetainsOffsetTailAndReportsBound (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.397356-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorRetainsOffsetTailAndReportsBound\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.397363-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\"}\n{\"Time\":\"2026-09-10T03:06:21.397368-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Output\":\"=== RUN   TestPCMAccumulatorUsesAuthoritativeSampleCursor\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.402942-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Output\":\"--- PASS: TestPCMAccumulatorUsesAuthoritativeSampleCursor (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.402964-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorUsesAuthoritativeSampleCursor\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.402975-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\"}\n{\"Time\":\"2026-09-10T03:06:21.402999-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Output\":\"=== RUN   TestPCMAccumulatorReanchorsAfterEndOfResponsePause\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.408075-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Output\":\"--- PASS: TestPCMAccumulatorReanchorsAfterEndOfResponsePause (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.408094-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorReanchorsAfterEndOfResponsePause\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.408107-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\"}\n{\"Time\":\"2026-09-10T03:06:21.408113-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Output\":\"=== RUN   TestPCMAccumulatorBoundsSourceTimelineState\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.408896-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Output\":\"--- PASS: TestPCMAccumulatorBoundsSourceTimelineState (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.408905-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestPCMAccumulatorBoundsSourceTimelineState\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.40891-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\"}\n{\"Time\":\"2026-09-10T03:06:21.408913-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Output\":\"=== RUN   TestMixerMixesPeersAndClips\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.410364-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Output\":\"--- PASS: TestMixerMixesPeersAndClips (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.410385-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerMixesPeersAndClips\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.410391-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\"}\n{\"Time\":\"2026-09-10T03:06:21.410396-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Output\":\"=== RUN   TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.411619-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Output\":\"--- PASS: TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.411661-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerOutputWithSourcesKeepsAttributionSeparateFromEpoch\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.411668-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\"}\n{\"Time\":\"2026-09-10T03:06:21.411672-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Output\":\"=== RUN   TestMixerPreservesShortResponseTailAndEpochs\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.420588-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Output\":\"--- PASS: TestMixerPreservesShortResponseTailAndEpochs (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.420656-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesShortResponseTailAndEpochs\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.420679-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\"}\n{\"Time\":\"2026-09-10T03:06:21.420684-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Output\":\"=== RUN   TestMixerFramesProviderPacketsWithoutPadding\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.4297-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Output\":\"--- PASS: TestMixerFramesProviderPacketsWithoutPadding (0.01s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.42971-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerFramesProviderPacketsWithoutPadding\",\"Elapsed\":0.01}\n{\"Time\":\"2026-09-10T03:06:21.429716-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\"}\n{\"Time\":\"2026-09-10T03:06:21.42972-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Output\":\"=== RUN   TestMixerPreservesBoundaryWithoutInventingSilence\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.432348-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Output\":\"--- PASS: TestMixerPreservesBoundaryWithoutInventingSilence (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.432362-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerPreservesBoundaryWithoutInventingSilence\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.432368-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\"}\n{\"Time\":\"2026-09-10T03:06:21.432372-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Output\":\"=== RUN   TestMixerDoesNotMergePeerBoundariesOrEpochs\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.434577-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Output\":\"--- PASS: TestMixerDoesNotMergePeerBoundariesOrEpochs (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.434603-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotMergePeerBoundariesOrEpochs\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.434609-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\"}\n{\"Time\":\"2026-09-10T03:06:21.434613-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Output\":\"=== RUN   TestMixerDoesNotAttributeBoundaryToAnotherSource\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.44461-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Output\":\"--- PASS: TestMixerDoesNotAttributeBoundaryToAnotherSource (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.444665-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerDoesNotAttributeBoundaryToAnotherSource\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.444674-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\"}\n{\"Time\":\"2026-09-10T03:06:21.444699-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer\",\"Test\":\"TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\",\"Output\":\"=== RUN   TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.546597-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\"}\n{\"Time\":\"2026-09-10T03:06:21.546656-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.549822-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Output\":\"--- PASS: TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.549845-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.549851-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\"}\n{\"Time\":\"2026-09-10T03:06:21.549856-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.550607-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Output\":\"--- PASS: TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults (0.00s)\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.550615-07:00\",\"Action\":\"pass\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults\",\"Elapsed\":0}\n{\"Time\":\"2026-09-10T03:06:21.550638-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\"}\n{\"Time\":\"2026-09-10T03:06:21.550642-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.550648-07:00\",\"Action\":\"run\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\"}\n{\"Time\":\"2026-09-10T03:06:21.550652-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\",\"Output\":\"=== RUN   TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions/unsupported_backend\\n\"}\n{\"Time\":\"2026-09-10T03:06:21.551562-07:00\",\"Action\":\"output\",\"Package\":\"github.com/portpowered/go-agent-harness/agent-cli/internal/room\",\"Test\":\"TestParseManifest_BrowserToolsRejectsInvalidParticipantQual\n...[clipped]",
+        "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/016-focused-race-tests.stdout.log",
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "go",
+          "vet",
+          "./go-audio/pkg/mixer",
+          "./agent-cli/internal/room"
+        ],
+        "cleanup_bounded": true,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+        "duration_seconds": 0.25103,
+        "exit_code": 0,
+        "label": "focused-vet",
+        "process_group_alive": false,
+        "stderr": "",
+        "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/017-focused-vet.stderr.log",
+        "stdout": "",
+        "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/017-focused-vet.stdout.log",
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "make",
+          "architecture-size-check"
+        ],
+        "cleanup_bounded": true,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+        "duration_seconds": 13.043155,
+        "exit_code": 0,
+        "label": "architecture-size-check",
+        "process_group_alive": false,
+        "stderr": "",
+        "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/018-architecture-size-check.stderr.log",
+        "stdout": "architecture gate passed: 181 package(s), 1866 file(s), 27558 function(s) checked\n",
+        "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/018-architecture-size-check.stdout.log",
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "cleanup_bounded": true,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+        "duration_seconds": 0.046657,
+        "exit_code": 0,
+        "label": "git-diff-check",
+        "process_group_alive": false,
+        "stderr": "",
+        "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/019-git-diff-check.stderr.log",
+        "stdout": "",
+        "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/019-git-diff-check.stdout.log",
+        "timed_out": false
+      }
+    ]
+  },
+  "mode": "all",
+  "physical_or_acoustic_evidence": "not claimed",
+  "planning_revision": "c61ee2774986c896560ee40a92441c914976000d",
+  "project": "audio-runtime",
+  "public": {
+    "help": {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+        "session",
+        "--help"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/yui-help",
+      "duration_seconds": 0.547993,
+      "exit_code": 0,
+      "label": "yui-session-help",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/022-yui-session-help.stderr.log",
+      "stdout": "Run a bidirectional session inference capture or replay a session capture file.\nUse --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\nWith no capture, prompt, file-audio, scheduled-turn, image, or browser flags, bare `yui session` starts a live OpenAI Realtime voice session over WebSocket on the default microphone and speakers; use --provider, --model, --api-key, --voice, or --audio-in-device/--audio-out-device to override its live defaults.\nUse repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\nWebMCP browser sessions: use --browser-tools webmcp without --browser-cdp-url or --browser-ws-endpoint for an agent-managed local Chrome; no CDP port is required. With only --browser-tools and a provider, the command starts an interactive microphone session, prints Starting and Listening state, and waits for cancellation or provider termination. Supplying either endpoint keeps the externally managed browser path, and the agent never closes an external browser.\n\nWebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\nInput transcription is enabled by default only for live OpenAI sessions that accept audio input; use --no-input-transcription to opt out. Replay always follows its recorded session.update handshake.\n\nSession history management remains available through the show, list, and delete subcommands.\n\nFilesystem tool scope:\nWith no --workdir, the effective workdir is the process current directory and relative filesystem-tool paths resolve there. --workdir <directory> selects an existing accessible directory. Repeat --allow-path <directory> to add existing accessible roots; relative allow-path values resolve from the effective workdir and duplicate roots are normalized.\nRead and list operations refuse protected system and credential locations even when a broad --allow-path contains them. Shell-command deny-pattern policy is separate; filesystem confinement is not an operating-system sandbox.\n\nExamples:\n  allowed: agent --workdir ./project tool write_file path=notes/today.txt content=hello\n  refused: agent --workdir ./project tool write_file path=../outside.txt content=hello\n\nUsage:\n  yui session [flags]\n  yui session [command]\n\nExamples:\n  yui session\n  yui session --voice marin --model gpt-realtime-2.1\n  yui session --record session.json\n  yui session --browser-tools webmcp --browser-open https://example.com/\n\nAvailable Commands:\n  delete      Delete a session by ID\n  list        List saved sessions\n  replay      Replay recorded provider and tool events through the agent loop offline\n  self-play   Run two fixed-persona live agents through a PCM16 audio bridge\n  show        Show a session by ID\n\nFlags:\n      --api-key string                        Session provider API key for live record mode\n      --audio-device-server string            Use a loopback audio-device server host:port instead of platform devices\n      --audio-in string                       Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input\n      --audio-in-device string                Capture RTC audio from a registry device ID; empty or default selects the input default\n      --audio-in-turn stringArray             Add a finite .wav/.pcm/.raw spoken turn to one persistent --record-dir session (repeatable)\n      --audio-in-turn-barge                   Release later --audio-in-turn inputs against an active prior response; without this flag scheduled turns remain completion-gated\n      --audio-interrupt stringArray           Release finite .wav/.pcm/.raw audio after the first observed in-flight WebMCP invocation (repeatable; live browser sessions only)\n      --audio-interrupt-on-tool string        With --audio-interrupt, wait for this WebMCP tool's in-flight invocation instead of the first one\n      --audio-out string                      Write assistant PCM16 to a .wav/.pcm/.raw path or -; with --audio-out-device, tap device-bound PCM\n      --audio-out-device string               Play RTC audio to a registry device ID; empty or default selects the output default\n      --base-url string                       Session provider base URL override\n      --browser-activate-tab                  Activate the selected browser tab\n      --browser-allow-process-scan            Allow process-based browser endpoint discovery\n      --browser-allow-remote-cdp              Allow non-loopback DevTools endpoints\n      --browser-allowed-origin stringArray    Allow an exact browser page origin (repeatable)\n      --browser-approval string               Browser page approval policy: always, writes, or never\n      --browser-auto-select string            Browser target auto-selection: off, single, or persisted\n      --browser-browser string                Exact normalized browser ID\n      --browser-cancel-on-interrupt string    Browser invocation cancellation policy: never, read-only, or always\n      --browser-cdp-url string                Browser DevTools HTTP endpoint\n      --browser-close-on-exit                 Close the exact agent-managed browser when the session exits; external endpoints are never closed\n      --browser-denied-origin stringArray     Deny an exact browser page origin (repeatable)\n      --browser-headless                      Use headless mode for an agent-managed browser\n      --browser-invocation-timeout duration   Maximum browser invocation duration (Go duration)\n      --browser-max-input-bytes int           Maximum browser input_json bytes (decimal integer)\n      --browser-max-result-bytes int          Maximum browser result bytes (decimal integer)\n      --browser-open url                      Open exactly one startup URL in an agent-managed browser (default: about:blank)\n      --browser-origin string                 Exact browser page origin filter\n      --browser-persist-selection             Persist the selected browser ID and target metadata\n      --browser-record                        Record semantic browser events with the session capture\n      --browser-record-arguments              Include redacted browser tool arguments in recording\n      --browser-record-results                Include redacted browser tool results in recording\n      --browser-redact-url-fragment           Redact fragment data from browser URLs\n      --browser-redact-url-query              Redact query data from browser URLs\n      --browser-replay string                 Browser semantic replay fixture path\n      --browser-replay-strict                 Reject divergent browser replay events\n      --browser-serialize-per-target          Serialize browser page calls per target\n      --browser-tab string                    Exact browser target ID\n      --browser-tools string                  Enable WebMCP browser tools; without an endpoint, the agent manages a local Chrome\n      --browser-user-data-dir string          Browser profile directory used for DevTools discovery\n      --browser-ws-endpoint string            Browser DevTools WebSocket endpoint\n      --computer-use                          Expose host screen and pointer computer-control tools\n      --experimental-tools                    Expose experimental skill, sleep, and web tools\n  -h, --help                                  help for session\n      --image stringArray                     Attach a local image to the realtime user turn (repeatable; order is preserved)\n      --max-duration duration                 Maximum session duration as a Go duration; exits cleanly when the bound is reached\n      --media-source string                   Deferred/unavailable WebRTC receive-only external media source; requires --transport webrtc and cannot be combined with --audio-in\n      --model string                          Session model ID for live record mode\n      --no-input-transcription                Disable customer-speech transcription for live OpenAI audio-input sessions\n      --no-terminal-tools                     Hide built-in shell and filesystem tools from the model\n      --prompt string                         Seed the realtime session with text\n      --provider string                       Session provider ID (use grok or openai for live record mode)\n      --reasoning-effort string               OpenAI Realtime reasoning effort: minimal, low, medium, high, or xhigh\n      --record string                         Record bidirectional session traffic to a JSON capture file\n      --record-dir string                     Record a complete both-side session directory separately from --record\n      --replay string                         Replay bidirectional session traffic from a JSON capture file without live provider network calls\n      --replay-timing string                  Replay cadence: immediate for fast order validation, or recorded to preserve timestamp_ms timing (default \"immediate\")\n      --signaling string                      Deferred/unavailable WebRTC signaling endpoint; customer-reachable network signaling is not wired yet; requires --transport webrtc, and --transport webrtc requires this flag\n      --system-prompt string                  Path to system prompt file or literal text\n      --trace-audio                           Record audio boundary WAVs and timing JSONL (included automatically with --record-dir)\n      --transport string                      Session transport: ws (default, supported) or webrtc (deferred/unavailable customer path) (default \"ws\")\n      --voice string                          OpenAI Realtime audio output voice (supported: alloy, ash, ballad, cedar, coral, echo, marin, sage, shimmer, verse)\n      --wait-for-close                        Keep the session running after a completed response until the provider closes it\n      --web-cast                              Enable native-media and selected-tab Google Cast controls; requires --browser-tools webmcp\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui session [command] --help\" for more information about a command.\n",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/022-yui-session-help.stdout.log",
+      "timed_out": false
+    },
+    "interruption": {
+      "capture": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/config",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-3.json",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/rendered.pcm",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/bundle",
+          "--max-duration",
+          "60s",
+          "--trace-audio"
+        ],
+        "cleanup_bounded": true,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace",
+        "duration_seconds": 0.075479,
+        "exit_code": 0,
+        "label": "yui-interruption-trace-capture",
+        "process_group_alive": false,
+        "stderr": "",
+        "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/026-yui-interruption-trace-capture.stderr.log",
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n",
+        "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/026-yui-interruption-trace-capture.stdout.log",
+        "timed_out": false
+      },
+      "directory_replay": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-directory-replay/config",
+          "session",
+          "replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/bundle"
+        ],
+        "cleanup_bounded": true,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-directory-replay",
+        "duration_seconds": 0.024094,
+        "exit_code": 0,
+        "label": "yui-interruption-directory-replay",
+        "process_group_alive": false,
+        "stderr": "Replay verified: 15 wire events, 0 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+        "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/027-yui-interruption-directory-replay.stderr.log",
+        "stdout": "",
+        "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/027-yui-interruption-directory-replay.stdout.log",
+        "timed_out": false
+      },
+      "fixture": {
+        "bytes": 12980,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-3.json",
+        "sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206"
+      },
+      "healthy_tail": {
+        "bytes": 2400,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/healthy-tail.pcm",
+        "sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
+      },
+      "provider": {
+        "bytes": 3840,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/bundle/audio/out-000.pcm",
+        "sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"
+      },
+      "rendered": {
+        "bytes": 3360,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/rendered.pcm",
+        "sha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff"
+      },
+      "session_records": 2,
+      "timeline": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/interruption-trace/bundle/audio-trace/timeline.jsonl"
+    },
+    "software_replay_only": true,
+    "tool": {
+      "capture": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace/config",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-2.json",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace/rendered.pcm",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace/bundle",
+          "--max-duration",
+          "60s",
+          "--trace-audio"
+        ],
+        "cleanup_bounded": true,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace",
+        "duration_seconds": 0.12765,
+        "exit_code": 0,
+        "label": "yui-tool-trace-capture",
+        "process_group_alive": false,
+        "stderr": "",
+        "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/023-yui-tool-trace-capture.stderr.log",
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+        "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/023-yui-tool-trace-capture.stdout.log",
+        "timed_out": false
+      },
+      "directory_replay": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-directory-replay/config",
+          "session",
+          "replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace/bundle"
+        ],
+        "cleanup_bounded": true,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-directory-replay",
+        "duration_seconds": 0.024809,
+        "exit_code": 0,
+        "label": "yui-tool-directory-replay",
+        "process_group_alive": false,
+        "stderr": "Replay verified: 18 wire events, 1 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+        "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/024-yui-tool-directory-replay.stderr.log",
+        "stdout": "strict replay continuation",
+        "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/024-yui-tool-directory-replay.stdout.log",
+        "timed_out": false
+      },
+      "fixture": {
+        "bytes": 14060,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-2.json",
+        "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+      },
+      "provider": {
+        "bytes": 4800,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace/bundle/audio/out-000.pcm",
+        "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
+      },
+      "rendered": {
+        "bytes": 3200,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace/rendered.pcm",
+        "sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
+      },
+      "session_records": 1,
+      "tampered_replay": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-tampered-replay/config",
+          "session",
+          "replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-tampered/bundle"
+        ],
+        "cleanup_bounded": true,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-tampered-replay",
+        "duration_seconds": 0.02444,
+        "exit_code": 1,
+        "label": "yui-tool-tampered-replay",
+        "process_group_alive": false,
+        "stderr": "Error: replay bundle is incomplete: validate recording bundle: replay capture is unavailable: recording artifact \"audio/out-000.pcm\" digest mismatch (expected 0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502, actual dbf3a28ea1a040c497508944615930288517aa98b7daddcc3f72fb89b8546297)\n",
+        "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/025-yui-tool-tampered-replay.stderr.log",
+        "stdout": "",
+        "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/025-yui-tool-tampered-replay.stdout.log",
+        "timed_out": false
+      },
+      "timeline": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/runs/tool-trace/bundle/audio-trace/timeline.jsonl"
+    }
+  },
+  "realtime_sessions": 0,
+  "schema": "audio-runtime-c35-canonical-pcm-byte-mixing-verification.v1",
+  "source_archive": {
+    "bytes": 128706560,
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/source.tar",
+    "revision": "decaf8c0acd30d10c6a4f7d0fc1451303e8b2da2",
+    "sha256": "afe18b8ffe1f7d442b2d1ab6c48e052e4a24b5e596fcc662ba5beb2455eee6f2"
+  },
+  "source_inspection": {
+    "canonical_mixer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/go-audio/pkg/mixer/pcm_mix.go",
+    "canonical_reuses_codec_and_sample_mix": true,
+    "room_calls_canonical_bytes": true,
+    "room_direct_codec_import": false,
+    "room_direct_sample_mix": false,
+    "room_mixer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/agent-cli/internal/room/mixer.go"
+  },
+  "source_revision": "decaf8c0acd30d10c6a4f7d0fc1451303e8b2da2",
+  "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "toolchain": {
+    "go": {
+      "stderr": "",
+      "stdout": "go version go1.26.7 darwin/arm64\n"
+    },
+    "python": {
+      "stderr": "",
+      "stdout": "Python 3.14.5\n"
+    }
+  },
+  "work": "audio-runtime-c35-canonical-pcm-byte-mixing",
+  "yui_artifact": {
+    "build": {
+      "argv": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+        "./cmd/yui"
+      ],
+      "cleanup_bounded": true,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/agent-cli",
+      "duration_seconds": 4.147642,
+      "exit_code": 0,
+      "label": "build-yui",
+      "process_group_alive": false,
+      "stderr": "",
+      "stderr_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/021-build-yui.stderr.log",
+      "stdout": "",
+      "stdout_log": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/logs/021-build-yui.stdout.log",
+      "timed_out": false
+    },
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c35-canonical-pcm-byte-mixing/docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/runs/verification-report-rw042h34/artifacts/yui",
+    "sha256": "fe42e36fed98871ac62ad600c072bf5c947392becea99b167e512b9d1c8e305b"
+  }
+}
