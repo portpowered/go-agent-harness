@@ -63,17 +63,29 @@ type allocationOracle struct {
 }
 
 type ioReport struct {
-	OpenReadBytes          int  `json:"open_read_bytes"`
-	OpenPayloadReadBytes   int  `json:"open_payload_read_bytes"`
-	SampleReadBytes        int  `json:"sample_read_bytes"`
-	SamplePayloadReadBytes int  `json:"sample_payload_read_bytes"`
-	FrameReadBytes         int  `json:"frame_read_bytes"`
-	FramePayloadReadBytes  int  `json:"frame_payload_read_bytes"`
-	CloseCount             int  `json:"close_count"`
-	OpenBoundPass          bool `json:"open_bound_pass"`
-	SampleBoundPass        bool `json:"sample_bound_pass"`
-	FrameBoundPass         bool `json:"frame_bound_pass"`
-	Pass                   bool `json:"pass"`
+	OpenReadBytes             int         `json:"open_read_bytes"`
+	OpenPayloadReadBytes      int         `json:"open_payload_read_bytes"`
+	OpenReadRanges            []readRange `json:"open_read_ranges"`
+	OpenSeekCount             int         `json:"open_seek_count"`
+	SampleReadBytes           int         `json:"sample_read_bytes"`
+	SamplePayloadReadBytes    int         `json:"sample_payload_read_bytes"`
+	SampleReadRanges          []readRange `json:"sample_read_ranges"`
+	SampleSeekCount           int         `json:"sample_seek_count"`
+	FrameReadBytes            int         `json:"frame_read_bytes"`
+	FramePayloadReadBytes     int         `json:"frame_payload_read_bytes"`
+	FrameReadRanges           []readRange `json:"frame_read_ranges"`
+	FrameSeekCount            int         `json:"frame_seek_count"`
+	FrameSourceOpenReadRanges []readRange `json:"frame_source_open_read_ranges"`
+	FrameSourceOpenSeekCount  int         `json:"frame_source_open_seek_count"`
+	CloseCount                int         `json:"close_count"`
+	CloseCounts               []int       `json:"close_counts"`
+	OpenBoundPass             bool        `json:"open_bound_pass"`
+	SampleBoundPass           bool        `json:"sample_bound_pass"`
+	FrameBoundPass            bool        `json:"frame_bound_pass"`
+	OpenTracePass             bool        `json:"open_trace_pass"`
+	SampleTracePass           bool        `json:"sample_trace_pass"`
+	FrameTracePass            bool        `json:"frame_trace_pass"`
+	Pass                      bool        `json:"pass"`
 }
 
 type checkReport struct {
@@ -288,8 +300,11 @@ func characterizeIO() (*ioReport, error) {
 	}
 	openReadBytes := readBytes(first.reads)
 	openPayloadBytes := payloadReadBytes(first.reads, 44, int64(len(encoded)))
+	openReadRanges := copyReadRanges(first.reads)
+	openSeekCount := first.seeks
 	buffer := make([]int16, 7)
 	beforeRead := len(first.reads)
+	beforeReadSeeks := first.seeks
 	count, readErr := stream.ReadSamples(context.Background(), buffer)
 	if readErr != nil || count != 7 || !reflect.DeepEqual(buffer, samples[:7]) {
 		_ = stream.Close()
@@ -297,6 +312,8 @@ func characterizeIO() (*ioReport, error) {
 	}
 	sampleReadBytes := readBytes(first.reads[beforeRead:])
 	samplePayloadBytes := payloadReadBytes(first.reads[beforeRead:], 44, int64(len(encoded)))
+	sampleReadRanges := copyReadRanges(first.reads[beforeRead:])
+	sampleSeekCount := first.seeks - beforeReadSeeks
 	if err := stream.Close(); err != nil {
 		return nil, fmt.Errorf("counted source close: %w", err)
 	}
@@ -310,27 +327,46 @@ func characterizeIO() (*ioReport, error) {
 		return nil, fmt.Errorf("frame counted source open: %w", err)
 	}
 	beforeFrame := len(second.reads)
+	frameSourceOpenReadRanges := copyReadRanges(second.reads[:beforeFrame])
+	frameSourceOpenSeekCount := second.seeks
 	frame := make([]int16, audio.FrameSize)
+	beforeFrameSeeks := second.seeks
 	if err := frameSource.ReadFrame(context.Background(), frame); err != nil {
 		_ = frameSource.Close()
 		return nil, fmt.Errorf("counted ReadFrame: %w", err)
 	}
 	frameReadBytes := readBytes(second.reads[beforeFrame:])
 	framePayloadBytes := payloadReadBytes(second.reads[beforeFrame:], 44, int64(len(encoded)))
+	frameReadRanges := copyReadRanges(second.reads[beforeFrame:])
+	frameSeekCount := second.seeks - beforeFrameSeeks
 	if err := frameSource.Close(); err != nil {
 		return nil, fmt.Errorf("frame counted source close: %w", err)
 	}
 
 	result := &ioReport{
 		OpenReadBytes: openReadBytes, OpenPayloadReadBytes: openPayloadBytes,
+		OpenReadRanges: openReadRanges, OpenSeekCount: openSeekCount,
 		SampleReadBytes: sampleReadBytes, SamplePayloadReadBytes: samplePayloadBytes,
+		SampleReadRanges: sampleReadRanges, SampleSeekCount: sampleSeekCount,
 		FrameReadBytes: frameReadBytes, FramePayloadReadBytes: framePayloadBytes,
-		CloseCount: first.closed + second.closed,
+		FrameReadRanges: frameReadRanges, FrameSeekCount: frameSeekCount,
+		FrameSourceOpenReadRanges: frameSourceOpenReadRanges,
+		FrameSourceOpenSeekCount:  frameSourceOpenSeekCount,
+		CloseCount:                first.closed + second.closed, CloseCounts: []int{first.closed, second.closed},
 	}
+	wantOpenRanges := []readRange{{Start: 0, End: 12}, {Start: 12, End: 20}, {Start: 20, End: 36}, {Start: 36, End: 44}}
+	wantSampleRanges := []readRange{{Start: 44, End: 58}}
+	wantFrameRanges := []readRange{{Start: 44, End: 64}}
 	result.OpenBoundPass = openReadBytes <= 64 && openPayloadBytes == 0
 	result.SampleBoundPass = samplePayloadBytes == 14 && sampleReadBytes == 14
 	result.FrameBoundPass = framePayloadBytes <= audio.FrameSize*2 && frameReadBytes <= audio.FrameSize*2
-	result.Pass = result.OpenBoundPass && result.SampleBoundPass && result.FrameBoundPass && first.closed == 1 && second.closed == 1
+	result.OpenTracePass = reflect.DeepEqual(openReadRanges, wantOpenRanges) && openSeekCount == 6 &&
+		reflect.DeepEqual(frameSourceOpenReadRanges, wantOpenRanges) && frameSourceOpenSeekCount == 6
+	result.SampleTracePass = reflect.DeepEqual(sampleReadRanges, wantSampleRanges) && sampleSeekCount == 0
+	result.FrameTracePass = reflect.DeepEqual(frameReadRanges, wantFrameRanges) && frameSeekCount == 0
+	result.Pass = result.OpenBoundPass && result.SampleBoundPass && result.FrameBoundPass &&
+		result.OpenTracePass && result.SampleTracePass && result.FrameTracePass &&
+		reflect.DeepEqual(result.CloseCounts, []int{1, 1})
 	if !result.Pass {
 		return result, fmt.Errorf("streaming IO oracle failed: %+v", result)
 	}
@@ -741,6 +777,10 @@ func payloadReadBytes(ranges []readRange, payloadStart, payloadEnd int64) int {
 		}
 	}
 	return int(total)
+}
+
+func copyReadRanges(ranges []readRange) []readRange {
+	return append([]readRange{}, ranges...)
 }
 
 func median(values []uint64) uint64 {

@@ -24,6 +24,9 @@ CONSUMER = HERE / "consumer"
 ARTIFACTS = HERE / "artifacts"
 RUNS = HERE / "runs"
 TIMEOUT_SECONDS = 60
+PROCESS_CLEANUP_TIMEOUT_SECONDS = 0.25
+TIMEOUT_CONTROL_SECONDS = 0.1
+TIMEOUT_CONTROL_HOLD_SECONDS = 2.0
 C21_VERIFY = ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/verify.py"
 C21_FIXTURE_DIR = ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures"
 WORKFLOW_SAMPLES = [-32768, -12345, -1, 0, 1, 12345, 32767]
@@ -184,7 +187,35 @@ def build_input_manifest() -> dict[str, dict[str, Any]]:
     }
 
 
-def bounded_process(name: str, argv: list[str], cwd: pathlib.Path, env: dict[str, str] | None = None) -> dict[str, Any]:
+def _decode_output(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def _close_pipe(pipe: Any) -> bool:
+    if pipe is None:
+        return True
+    try:
+        pipe.close()
+    except OSError:
+        return False
+    return True
+
+
+def bounded_process(
+    name: str,
+    argv: list[str],
+    cwd: pathlib.Path,
+    env: dict[str, str] | None = None,
+    *,
+    timeout_seconds: float = TIMEOUT_SECONDS,
+    cleanup_timeout_seconds: float = PROCESS_CLEANUP_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    """Run a child with bounded timeout cleanup, including inherited pipes."""
+
     started = time.monotonic()
     process_env = os.environ.copy()
     if env:
@@ -199,12 +230,65 @@ def bounded_process(name: str, argv: list[str], cwd: pathlib.Path, env: dict[str
         start_new_session=True,
         text=True,
     )
+    timed_out = False
+    cleanup: dict[str, Any] = {
+        "attempted": False,
+        "signal": None,
+        "signal_sent": False,
+        "reaped": False,
+        "reap_timed_out": False,
+        "pipes_closed": False,
+        "elapsed_ms": 0,
+    }
     try:
-        stdout, stderr = process.communicate(timeout=TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGKILL)
-        stdout, stderr = process.communicate()
-        raise EvidenceError(f"{name} exceeded {TIMEOUT_SECONDS}s process deadline")
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+        cleanup["reaped"] = True
+        cleanup["pipes_closed"] = True
+    except subprocess.TimeoutExpired as timeout_error:
+        timed_out = True
+        cleanup["attempted"] = True
+        cleanup_started = time.monotonic()
+        try:
+            if os.name == "posix":
+                os.killpg(process.pid, signal.SIGKILL)
+                cleanup["signal"] = "SIGKILL"
+            else:
+                process.kill()
+                cleanup["signal"] = "KILL"
+            cleanup["signal_sent"] = True
+        except ProcessLookupError:
+            cleanup["signal"] = "already-exited"
+        except OSError as error:
+            cleanup["kill_error"] = str(error)
+            try:
+                process.kill()
+                cleanup["signal"] = "KILL"
+                cleanup["signal_sent"] = True
+            except ProcessLookupError:
+                cleanup["signal"] = "already-exited"
+
+        reap_deadline = time.monotonic() + cleanup_timeout_seconds
+        try:
+            process.wait(timeout=max(0.0, reap_deadline - time.monotonic()))
+            cleanup["reaped"] = True
+        except subprocess.TimeoutExpired:
+            cleanup["reap_timed_out"] = True
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+            remaining = max(0.0, reap_deadline - time.monotonic())
+            if remaining:
+                try:
+                    process.wait(timeout=remaining)
+                    cleanup["reaped"] = True
+                except subprocess.TimeoutExpired:
+                    pass
+        finally:
+            cleanup["pipes_closed"] = _close_pipe(process.stdout) and _close_pipe(process.stderr)
+            cleanup["elapsed_ms"] = int((time.monotonic() - cleanup_started) * 1000)
+        stdout = _decode_output(timeout_error.output)
+        stderr = _decode_output(timeout_error.stderr)
     return {
         "name": name,
         "argv": argv,
@@ -213,6 +297,10 @@ def bounded_process(name: str, argv: list[str], cwd: pathlib.Path, env: dict[str
         "elapsed_ms": int((time.monotonic() - started) * 1000),
         "stdout": stdout,
         "stderr": stderr,
+        "timed_out": timed_out,
+        "timeout_seconds": timeout_seconds,
+        "cleanup_timeout_seconds": cleanup_timeout_seconds,
+        "cleanup": cleanup,
     }
 
 
@@ -235,7 +323,7 @@ def build() -> dict[str, Any]:
         {"GOWORK": "off"},
     )
     save_run("build-consumer", consumer_result)
-    if consumer_result["exit_code"] != 0:
+    if consumer_result["timed_out"] or consumer_result["exit_code"] != 0:
         raise EvidenceError(f"consumer build failed: {consumer_result['stderr']}")
     yui_result = bounded_process(
         "build-yui",
@@ -243,7 +331,7 @@ def build() -> dict[str, Any]:
         ROOT,
     )
     save_run("build-yui", yui_result)
-    if yui_result["exit_code"] != 0:
+    if yui_result["timed_out"] or yui_result["exit_code"] != 0:
         raise EvidenceError(f"yui build failed: {yui_result['stderr']}")
     tested_source = source_identity()
     inputs = build_input_manifest()
@@ -311,7 +399,7 @@ def characterize(label: str) -> None:
     report, result = consumer_case("characterize", f"characterize-{label}")
     allocations = report.get("allocations", {})
     oracle = allocations.get("oracle", {})
-    if result["exit_code"] != 0:
+    if result["timed_out"] or result["exit_code"] != 0:
         raise EvidenceError(f"characterization child failed: {result['stderr']}")
     if label == "before" and oracle.get("pass") is not False:
         raise EvidenceError("pre-fix characterization did not fail the frozen allocation oracle")
@@ -516,6 +604,49 @@ def regression() -> None:
     (HERE / "regression.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
 
+def timeout_control() -> None:
+    """Prove timeout cleanup does not wait for a detached pipe holder."""
+
+    if os.name != "posix":
+        raise EvidenceError("timeout control requires POSIX process-group cleanup")
+    child = (
+        "import os, time\n"
+        "detached = os.fork()\n"
+        "if detached == 0:\n"
+        "    os.setsid()\n"
+        f"    time.sleep({TIMEOUT_CONTROL_HOLD_SECONDS!r})\n"
+        "    os._exit(0)\n"
+        "while True:\n"
+        "    time.sleep(1)\n"
+    )
+    result = bounded_process(
+        "detached-pipe-timeout-control",
+        [sys.executable, "-c", child],
+        HERE,
+        timeout_seconds=TIMEOUT_CONTROL_SECONDS,
+        cleanup_timeout_seconds=PROCESS_CLEANUP_TIMEOUT_SECONDS,
+    )
+    cleanup = result["cleanup"]
+    max_elapsed_ms = int(
+        (TIMEOUT_CONTROL_SECONDS + PROCESS_CLEANUP_TIMEOUT_SECONDS + 0.5) * 1000
+    )
+    result["control"] = {
+        "detached_pipe_holder_seconds": TIMEOUT_CONTROL_HOLD_SECONDS,
+        "max_elapsed_ms": max_elapsed_ms,
+        "pass": (
+            result["timed_out"]
+            and cleanup["signal_sent"]
+            and cleanup["reaped"]
+            and cleanup["pipes_closed"]
+            and not cleanup["reap_timed_out"]
+            and result["elapsed_ms"] <= max_elapsed_ms
+        ),
+    }
+    save_run("timeout-control", result)
+    if not result["control"]["pass"]:
+        raise EvidenceError(f"timeout cleanup control failed: {result}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-root", default=".")
@@ -526,11 +657,12 @@ def main() -> int:
     parser.add_argument("--negative-control", action="store_true")
     parser.add_argument("--workflow", action="store_true")
     parser.add_argument("--regression", action="store_true")
+    parser.add_argument("--timeout-control", action="store_true")
     args = parser.parse_args()
 
     if pathlib.Path(args.source_root).resolve() != ROOT.resolve():
         raise EvidenceError(f"source root must be the isolated worktree root: {ROOT}")
-    selected = sum(bool(value) for value in (args.build, args.characterize, args.positive, args.negative_control, args.workflow, args.regression))
+    selected = sum(bool(value) for value in (args.build, args.characterize, args.positive, args.negative_control, args.workflow, args.regression, args.timeout_control))
     if selected != 1:
         raise EvidenceError("select exactly one evidence action")
     if args.build:
@@ -547,6 +679,8 @@ def main() -> int:
         workflow()
     elif args.regression:
         regression()
+    elif args.timeout_control:
+        timeout_control()
     return 0
 
 

@@ -1,7 +1,7 @@
 # C31 source and evidence ledger
 
-Task: `audio-runtime-c31-streaming-wav-source`  
-Branch: `codex/audio-runtime-c31-streaming-wav-source`  
+Task: `audio-runtime-c31-streaming-wav-source`
+Branch: `codex/audio-runtime-c31-streaming-wav-source`
 Isolated worktree: `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source`
 
 Admission used the sole `audio-runtime` project manifest and the exact
@@ -83,7 +83,9 @@ merged-source run measured small-fixture allocations of
 The public `NewWAVSource` counter records metadata-only open reads (44 bytes,
 zero payload), exactly 14 payload bytes for `ReadSamples(7)`, and no more than
 `FrameSize*2` payload bytes for `ReadFrame`. The caller-owned stream is closed
-once.
+once. The JSON IO report now preserves the exact metadata/read ranges and seek
+counts for both counted opens, plus the per-source close counts; the consumer
+asserts the canonical ranges rather than only their aggregate byte totals.
 
 ## Latest CI rejection reconciliation
 

@@ -13,6 +13,9 @@ every measured constructor and 16384 bytes for median large-minus-small growth.
 The same consumer checks the public `audio.NewWAVSource` metadata/read bounds:
 open reads at most 64 bytes and no payload, `ReadSamples(7)` reads exactly 14
 payload bytes, and one `ReadFrame` reads at most `FrameSize*2` payload bytes.
+Its JSON report preserves the exact header/data read ranges, metadata seek count,
+per-operation seek counts, and one-close-per-source counts; the oracle asserts
+those traces as well as their byte totals.
 It also checks that `NewFileSource` keeps its historical path-level
 `FormatError`/`wavio.UnsupportedError` identity for a valid but incompatible
 44.1 kHz WAV, while direct `NewWAVSource` rate validation remains intact.
@@ -26,13 +29,16 @@ rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-w
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/run.py --negative-control
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/run.py --workflow
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/run.py --regression
+rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/run.py --timeout-control
 ```
 
 The pre-fix characterization is intentionally a recorded failing oracle; the
 runner succeeds only when it observes that failure. After the source repair,
 the identical oracle must pass. Generated binaries, process records, and JSON
 reports record exact source identity and are retained as task evidence when
-they are committed.
+they are committed. `--timeout-control` uses a deterministic POSIX child that
+detaches while holding inherited pipes; it records the signal, bounded reap,
+pipe closure, and wall-time evidence without waiting for the detached holder.
 
 The JSON reports identify the clean merged implementation revision that was
 tested as `tested_source_revision`
