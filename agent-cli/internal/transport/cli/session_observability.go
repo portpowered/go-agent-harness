@@ -25,6 +25,7 @@ import (
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -200,6 +201,8 @@ func (c *SessionCommand) runtimeLiveRequest(ctx context.Context, request service
 		ReplayService:       c.liveReplayService,
 		ModelAdmission:      c.modelAdmission,
 		CredentialReference: c.liveCredentialReference,
+		InstructionService:  runtimeSessionWire.NewInstructionService(),
+		PageSightToolID:     cliTools.PageSightToolID,
 		Capabilities:        c.runtimeLiveCapabilities,
 		BindImagePreparer:   bindRuntimeLiveImagePreparer,
 		OpenImages:          openRuntimeLiveImages,
@@ -230,12 +233,13 @@ func (c *SessionCommand) runtimeLiveCapabilities(cfg *config.Config) (*runtimeSe
 		return nil, err
 	}
 	binding := &runtimeSession.LiveCapabilities{
-		Executor:           capabilities.Executor,
-		Definitions:        append([]messages.ToolDefinition(nil), capabilities.Definitions...),
-		InheritDefaults:    false,
-		Initialize:         capabilities.Initialize,
-		Close:              capabilities.Close,
-		RefreshDefinitions: capabilities.RefreshDefinitionsWithError,
+		Executor:               capabilities.Executor,
+		Definitions:            append([]messages.ToolDefinition(nil), capabilities.Definitions...),
+		BrowserCapabilityState: runtimeSession.BrowserCapabilityState(string(capabilities.BrowserCapabilityState)),
+		InheritDefaults:        false,
+		Initialize:             capabilities.Initialize,
+		Close:                  capabilities.Close,
+		RefreshDefinitions:     capabilities.RefreshDefinitionsWithError,
 	}
 	if binding.RefreshDefinitions == nil && capabilities.RefreshDefinitions != nil {
 		binding.RefreshDefinitions = func(ctx context.Context) ([]messages.ToolDefinition, error) {
