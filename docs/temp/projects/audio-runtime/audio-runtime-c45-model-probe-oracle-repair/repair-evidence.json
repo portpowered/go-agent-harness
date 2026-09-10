@@ -13,6 +13,8 @@
     "d04ecbb163f9011f16a58ac0d36fd5d206096f94"
   ],
   "candidate_revision": "d04ecbb163f9011f16a58ac0d36fd5d206096f94",
+  "tested_delivery_revision": "71e57375b9f8662ea2ca61e748618a31cc6b30fb",
+  "delivery_revision_change": "Documentation-only evidence commit over the tested code; verifier and executable build inputs are unchanged.",
   "review_findings_repaired": {
     "process_inspection": "Empty or malformed ps output raises EvidenceFailure; valid nonmatching rows still prove no survivors.",
     "aggregate_deadline": "run_controls receives the main start time and checks the same total budget after every control; synthetic overrun fails.",
@@ -41,8 +43,8 @@
   "staged_probe": {
     "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c45-model-probe-oracle-repair/run_staged_probe.py --staged-root $FACTORY_ROOT/docs/temp/probes/audio-runtime-c44-model-admission-vertical-probe --child-timeout 60 --total-timeout 1500 --max-output-bytes 67108864 --min-free-bytes 2147483648",
     "result": "PASS",
-    "run_id": "staged-probe-20260910T233544Z-88145",
-    "tested_source_revision": "d04ecbb163f9011f16a58ac0d36fd5d206096f94",
+    "run_id": "staged-probe-20260910T233721Z-90419",
+    "tested_source_revision": "71e57375b9f8662ea2ca61e748618a31cc6b30fb",
     "verifier_sha256": "93879a7647fd3003ad9036e9be7b25c4ad712d4c3b5454cc860f9949949d1bf2",
     "artifact_hashes_before_after_equal": true,
     "artifact_hashes": {
@@ -52,9 +54,9 @@
       "build_descriptor": "e62c5da67ff259dfdfe5ade71f2fb2d654b12617b58e84767d853c95a2319d11"
     },
     "free_space_samples_bytes": {
-      "before": 3296886784,
-      "during": 3264065536,
-      "after": 3321552896,
+      "before": 3314520064,
+      "during": 3256078336,
+      "after": 3313569792,
       "minimum_required": 2147483648
     },
     "output_bytes": 4716,
