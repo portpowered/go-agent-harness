@@ -1,0 +1,38 @@
+{
+  "argv": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "-c",
+    "import json,os,signal,subprocess,sys,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); child=subprocess.Popen([sys.executable,'-c',\"import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)\"]); print(json.dumps({'child_pid':child.pid,'child_pgid':os.getpgid(child.pid)}),flush=True); time.sleep(30)"
+  ],
+  "child_timeout_seconds": 0.25,
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs",
+  "descendant": {
+    "pid": 86426,
+    "pid_gone": true,
+    "process_group_gone": true,
+    "process_group_id": 86425,
+    "same_process_group": true
+  },
+  "elapsed_seconds": 2.260228,
+  "environment": {
+    "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+    "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+    "GOEXPERIMENT": "",
+    "GOFLAGS": "",
+    "GOTOOLCHAIN": "",
+    "GOWORK": "",
+    "HOME": "/Users/abdifamily",
+    "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0T542gG:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+  },
+  "exit_code": -9,
+  "kill_sent": true,
+  "label": "hang-control",
+  "output_drained": true,
+  "process_group_gone": true,
+  "process_group_id": 86425,
+  "reaped": true,
+  "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/hang-control.stderr",
+  "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/hang-control.stdout",
+  "term_sent": true,
+  "timed_out": true
+}

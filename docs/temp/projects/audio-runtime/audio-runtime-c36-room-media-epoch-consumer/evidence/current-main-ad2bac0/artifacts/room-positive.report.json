@@ -1,0 +1,316 @@
+{
+  "epochs": {
+    "end_of_response_before_terminal": true,
+    "healthy_tail": [
+      111,
+      112,
+      113,
+      114
+    ],
+    "stale_pending_samples": 4
+  },
+  "lifecycle": {
+    "closed": 2,
+    "natural_exit": true,
+    "opened": 2,
+    "repeated_close_ok": true,
+    "started": 2,
+    "waited": 2,
+    "workers_joined": true
+  },
+  "mode": "positive",
+  "output_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-positive",
+  "peer_outputs": {
+    "alice": [
+      211,
+      212,
+      213,
+      214
+    ],
+    "bob": [
+      111,
+      112,
+      113,
+      114
+    ]
+  },
+  "playback": {
+    "admitted": [
+      322,
+      324,
+      326,
+      328
+    ],
+    "admitted_samples": 4,
+    "callback_count": 2,
+    "capability_gap": "software queue proof only; no physical playback device was opened",
+    "consumed": [
+      322,
+      324,
+      326,
+      328
+    ],
+    "consumed_samples": 4,
+    "discarded_samples": 3,
+    "discarded_stale": [
+      7,
+      8,
+      9
+    ],
+    "domain": "software-playback",
+    "observed": [
+      {
+        "end_of_response": false,
+        "epoch": 1,
+        "samples": [
+          322,
+          324,
+          326,
+          328
+        ],
+        "sequence": 0
+      }
+    ],
+    "physical_device": false,
+    "rendered_before_callback": 0,
+    "rendered_samples": 6,
+    "underflow": [
+      0,
+      0
+    ],
+    "underflow_samples": 2,
+    "zero_filled_samples": 2
+  },
+  "playback_boundary": {
+    "admitted": [
+      41,
+      42
+    ],
+    "admitted_samples": 2,
+    "callback_count": 1,
+    "capability_gap": "software queue proof only; no physical playback device was opened",
+    "consumed": [
+      41,
+      42,
+      0,
+      0
+    ],
+    "consumed_samples": 2,
+    "discarded_samples": 3,
+    "discarded_stale": [
+      7,
+      8,
+      9
+    ],
+    "domain": "software-playback-boundary",
+    "physical_device": false,
+    "rendered_before_callback": 0,
+    "rendered_samples": 4,
+    "underflow": [
+      0,
+      0
+    ],
+    "underflow_samples": 2,
+    "zero_filled_samples": 2
+  },
+  "provider_admission": {
+    "frames": 4,
+    "samples": 12
+  },
+  "raw_events": [
+    {
+      "epoch": 1,
+      "kind": "source_audio",
+      "participant": "alice",
+      "samples": [
+        101,
+        102
+      ],
+      "sequence": 1
+    },
+    {
+      "end_of_response": true,
+      "epoch": 2,
+      "kind": "source_audio",
+      "participant": "alice",
+      "samples": [
+        111,
+        112,
+        113,
+        114
+      ],
+      "sequence": 2
+    },
+    {
+      "epoch": 1,
+      "kind": "source_audio",
+      "participant": "bob",
+      "samples": [
+        201,
+        202
+      ],
+      "sequence": 1
+    },
+    {
+      "end_of_response": true,
+      "epoch": 2,
+      "kind": "source_audio",
+      "participant": "bob",
+      "samples": [
+        211,
+        212,
+        213,
+        214
+      ],
+      "sequence": 2
+    },
+    {
+      "epoch": 1,
+      "kind": "playback_input",
+      "participant": "listener",
+      "samples": [
+        322,
+        324,
+        326,
+        328
+      ],
+      "sequence": 0,
+      "target": "listener"
+    },
+    {
+      "end_of_response": true,
+      "epoch": 1,
+      "kind": "peer_output",
+      "participant": "alice",
+      "samples": [
+        211,
+        212,
+        213,
+        214
+      ],
+      "sequence": 0,
+      "target": "alice"
+    },
+    {
+      "end_of_response": true,
+      "epoch": 1,
+      "kind": "peer_output",
+      "participant": "bob",
+      "samples": [
+        111,
+        112,
+        113,
+        114
+      ],
+      "sequence": 0,
+      "target": "bob"
+    },
+    {
+      "classification": "fixture_complete",
+      "epoch": 0,
+      "kind": "terminal",
+      "output_state": "complete",
+      "participant": "alice",
+      "provenance": "provider",
+      "reason": "fixture_complete",
+      "sequence": 99,
+      "terminal_reason": "provider_close"
+    },
+    {
+      "classification": "fixture_complete",
+      "epoch": 0,
+      "kind": "terminal",
+      "output_state": "complete",
+      "participant": "bob",
+      "provenance": "provider",
+      "reason": "fixture_complete",
+      "sequence": 99,
+      "terminal_reason": "provider_close"
+    }
+  ],
+  "recording": {
+    "pcm_bytes": 24,
+    "provider_trace": "unavailable",
+    "reason": "fixture live handles intentionally do not emit provider capture artifacts",
+    "replayable": false,
+    "state": "partial"
+  },
+  "replay_reject_reason": "room replay bundle incomplete field \"manifest\": room replay bundle incomplete: open /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-positive/run-manifest.json: no such file or directory",
+  "replay_rejected": true,
+  "room": {
+    "participants": {
+      "alice": "ended",
+      "bob": "ended",
+      "listener": "ended"
+    },
+    "termination_reason": "stopped"
+  },
+  "schema_version": 1,
+  "source_inputs": [
+    {
+      "end_of_response": false,
+      "epoch": 1,
+      "participant": "alice",
+      "samples": [
+        101,
+        102
+      ],
+      "sequence": 1
+    },
+    {
+      "end_of_response": true,
+      "epoch": 2,
+      "participant": "alice",
+      "samples": [
+        111,
+        112,
+        113,
+        114
+      ],
+      "sequence": 2
+    },
+    {
+      "end_of_response": false,
+      "epoch": 1,
+      "participant": "bob",
+      "samples": [
+        201,
+        202
+      ],
+      "sequence": 1
+    },
+    {
+      "end_of_response": true,
+      "epoch": 2,
+      "participant": "bob",
+      "samples": [
+        211,
+        212,
+        213,
+        214
+      ],
+      "sequence": 2
+    }
+  ],
+  "status": "complete",
+  "terminal": {
+    "alice": {
+      "classification": "fixture_complete",
+      "kind": "terminal",
+      "output_state": "complete",
+      "provenance": "provider",
+      "reason": "fixture_complete",
+      "sequence": 99,
+      "terminal_reason": "provider_close"
+    },
+    "bob": {
+      "classification": "fixture_complete",
+      "kind": "terminal",
+      "output_state": "complete",
+      "provenance": "provider",
+      "reason": "fixture_complete",
+      "sequence": 99,
+      "terminal_reason": "provider_close"
+    }
+  }
+}
