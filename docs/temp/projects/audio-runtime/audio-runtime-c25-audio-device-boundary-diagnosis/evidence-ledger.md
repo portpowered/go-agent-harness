@@ -229,3 +229,10 @@ The source ancestry and audited source-path diff both returned 0. Positive canon
   `origin/main` still lacks a reviewed C20 repair; push/update PR417 now, then
   retain C25 ownership and refresh the same task after that repair reaches
   main before script-CI submission.
+
+## Exact pushed-head refresh
+
+- Fresh `origin/main` remains `a1156f0c0c6271643578cb37894026944df2a633`, with the required startup integration and baseline ancestry preserved. No reviewed C20 composition repair is present on that main.
+- At pushed `HEAD` `50cab0a75732f7d669d8d0ec232a1f854db30368`, `verify.py --mode all` returned `ACCEPTED` in `11.975s` across 25 bounded commands. `SOURCE_GAP_CONFIRMED`, source/archive/fixture/AST/allowlist, focused normal/race/vet, zero-test, child-hang cleanup and aggregate-shutdown controls all passed with no surviving child process.
+- Generated diagnosis/provenance, ownership, extraction-plan and CI metadata now identify the exact head. The C25 diff remains confined to the admitted evidence prefix; no production/shared/fixture/baseline/device/provider/realtime path changed.
+- The latest hosted rejection remains PR417 head `b061bf852076d4b36526600377ad916751e32b4b`, run `34413969081`, job `102674534021`, C20-owned `agent-cli/internal/wire/composition_test.go:417` (`nil` instead of `ErrLiveMediaUnavailable`). C25 will not resubmit unchanged evidence; after the reviewed C20 repair reaches main, refresh against that changed source and submit the same task to script CI without polling.

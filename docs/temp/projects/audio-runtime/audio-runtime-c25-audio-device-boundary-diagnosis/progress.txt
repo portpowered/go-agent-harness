@@ -200,3 +200,8 @@ Exact-head verifier refresh at the resumed candidate
   update PR417, then retain ownership until the reviewed C20 repair reaches
   main; only then refresh against the changed source and submit the same task
   to script CI without polling.
+
+Exact pushed-head evidence refresh
+- Fresh `origin/main` remains `a1156f0c0c6271643578cb37894026944df2a633`; no reviewed C20 composition repair is available to integrate. At pushed `HEAD` `50cab0a75732f7d669d8d0ec232a1f854db30368`, `verify.py --mode all` returned `ACCEPTED` in `11.975s` across 25 bounded commands. `SOURCE_GAP_CONFIRMED`, archive/fixture/AST/allowlist, focused normal/race/vet, zero-test, child-hang cleanup and aggregate shutdown controls passed; no child survived.
+- Regenerated `diagnosis.json`, `diagnosis.md` and `provenance.json` now identify the exact pushed head. Updated `ownership.json`, `extraction-plan.json` and `ci-diagnosis.json` to the same candidate. No production/shared/fixture/baseline/device/provider/realtime path changed.
+- The latest hosted rejection remains PR417 head `b061bf852076d4b36526600377ad916751e32b4b`, run `34413969081`, job `102674534021`, C20-owned `agent-cli/internal/wire/composition_test.go:417` with nil instead of `ErrLiveMediaUnavailable`. Do not submit unchanged C25 evidence; next action is to commit/push this exact-head refresh, update PR417, and retain the same task until the reviewed C20 repair reaches `origin/main`, then refresh against that changed source and submit to script CI without polling.

@@ -183,3 +183,15 @@ reviewed C20 repair is present in fetched `origin/main`, so C25 will not submit
 an unchanged candidate to script CI. The evidence checkpoint must be pushed
 and PR417 updated; after the reviewed C20 repair reaches main, refresh again
 against that changed source and submit the same task through the script gate.
+
+## Exact current-head refresh
+
+At pushed `HEAD` `50cab0a75732f7d669d8d0ec232a1f854db30368`, the bounded
+`verify.py --mode all` run returned `ACCEPTED` in `11.975` seconds across 25
+commands. `SOURCE_GAP_CONFIRMED`, source/archive/fixture/AST/allowlist checks,
+focused normal/race/vet regressions, zero-test discovery, child-hang cleanup,
+and aggregate shutdown all passed with no surviving child. The generated
+`diagnosis.json` and `provenance.json`, ownership checkpoint, extraction plan,
+and CI evidence now identify this exact head. This remains source/package
+evidence only; the C20-owned coverage rejection is unchanged and no CI-green,
+merge, runtime, physical-device, acoustic, or project-acceptance claim is made.
