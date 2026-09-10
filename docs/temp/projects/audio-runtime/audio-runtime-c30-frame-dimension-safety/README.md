@@ -53,3 +53,17 @@ clean-shutdown evidence to the owned `artifacts/` and `runs/` directories. Those
 script CI, independent review, guarded merge, and the post-merge exact-artifact
 vertical probe remain external gates. This software replay cannot establish
 physical/acoustic device consumption or broad project completion.
+
+## Shipped yui regression
+
+`artifacts/yui-verification.json` records the same-source shipped `yui`
+audio/tool capture and bundle-replay controls using the accepted credential-free
+fixtures. The `yui` executable was built from the recorded source revision with
+`go build -trimpath -o artifacts/yui ./agent-cli/cmd/yui`; the report includes
+the executable SHA256, fixture hashes, and an aggregate SHA256 over all tracked
+Go/module build inputs. Tool capture and strict directory replay verify 18 wire
+events and one tool call; interruption capture and replay verify 15 wire events
+and zero tool calls. The no-trace bundle is retained as a negative control and
+strict replay rejects its missing `timeline.jsonl`. Every child has a 60-second
+process-group deadline. This is software/file replay evidence, not physical or
+acoustic device proof.

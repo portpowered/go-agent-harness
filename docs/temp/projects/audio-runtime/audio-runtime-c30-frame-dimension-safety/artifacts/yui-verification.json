@@ -1,0 +1,190 @@
+{
+  "build": {
+    "argv": [
+      "go",
+      "build",
+      "-trimpath",
+      "-o",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
+      "./agent-cli/cmd/yui"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety",
+    "executable": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
+    "executable_sha256": "6fd688d254aa99ab84c298fc2c8096f3cc451f8b7245f12b33bd61afd1bfe0e9",
+    "exit_code": 0,
+    "go_build_inputs": {
+      "file_count": 1921,
+      "sha256": "0b20bb2a19d9fb4ece9f5a45099d9a8dfd798c27bd64a89523fefed34eccbc3d"
+    },
+    "go_version": "go version go1.26.7 darwin/arm64"
+  },
+  "decision": "PASS",
+  "fixtures": {
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c12-interruption-replay-vertical-probe/artifact-2.json": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c12-interruption-replay-vertical-probe/artifact-3.json": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206"
+  },
+  "project": "audio-runtime",
+  "results": {
+    "interruption": {
+      "capture": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/interruption-5abkbois/config",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c12-interruption-replay-vertical-probe/artifact-3.json",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/interruption-5abkbois/rendered.pcm",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/interruption-5abkbois/bundle",
+          "--max-duration",
+          "60s",
+          "--trace-audio"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/interruption-5abkbois",
+        "duration_seconds": 0.05376,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/interruption-5abkbois; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n"
+      },
+      "provider": {
+        "bytes": 3840,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/interruption-5abkbois/bundle/audio/out-000.pcm",
+        "sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"
+      },
+      "rendered": {
+        "bytes": 3360,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/interruption-5abkbois/rendered.pcm",
+        "sha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff"
+      },
+      "replay": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/interruption-directory-replay-wfjlx9_t/config",
+          "session",
+          "replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/interruption-5abkbois/bundle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/interruption-directory-replay-wfjlx9_t",
+        "duration_seconds": 0.021077,
+        "exit_code": 0,
+        "stderr": "Replay verified: 15 wire events, 0 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+        "stdout": ""
+      },
+      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/interruption-directory-replay-wfjlx9_t"
+    },
+    "tool_no_trace": {
+      "capture": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-no-trace-5s9dkmvv/config",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c12-interruption-replay-vertical-probe/artifact-2.json",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-no-trace-5s9dkmvv/rendered.pcm",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-no-trace-5s9dkmvv/bundle",
+          "--max-duration",
+          "60s"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-no-trace-5s9dkmvv",
+        "duration_seconds": 0.057827,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-no-trace-5s9dkmvv; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n"
+      },
+      "provider": {
+        "bytes": 4800,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-no-trace-5s9dkmvv/bundle/audio/out-000.pcm",
+        "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
+      },
+      "rendered": {
+        "bytes": 3200,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-no-trace-5s9dkmvv/rendered.pcm",
+        "sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
+      },
+      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-no-trace-5s9dkmvv"
+    },
+    "tool_no_trace_strict_control": {
+      "expected": "missing timeline rejection",
+      "replay": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/no-trace-strict-control-k5umck8d/config",
+          "session",
+          "replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-no-trace-5s9dkmvv/bundle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/no-trace-strict-control-k5umck8d",
+        "duration_seconds": 0.018129,
+        "exit_code": 1,
+        "stderr": "Error: replay bundle is incomplete: missing timeline.jsonl in /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-no-trace-5s9dkmvv/bundle or /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-no-trace-5s9dkmvv/bundle/audio-trace\n",
+        "stdout": ""
+      },
+      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/no-trace-strict-control-k5umck8d"
+    },
+    "tool_trace": {
+      "capture": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-trace-8lebns39/config",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c12-interruption-replay-vertical-probe/artifact-2.json",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-trace-8lebns39/rendered.pcm",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-trace-8lebns39/bundle",
+          "--max-duration",
+          "60s",
+          "--trace-audio"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-trace-8lebns39",
+        "duration_seconds": 0.557485,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-trace-8lebns39; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n"
+      },
+      "provider": {
+        "bytes": 4800,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-trace-8lebns39/bundle/audio/out-000.pcm",
+        "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
+      },
+      "rendered": {
+        "bytes": 3200,
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-trace-8lebns39/rendered.pcm",
+        "sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
+      },
+      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-trace-8lebns39"
+    },
+    "tool_trace_directory_replay": {
+      "replay": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/c30-tool-trace-directory-replay-txbbhox1/config",
+          "session",
+          "replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/tool-trace-8lebns39/bundle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/c30-tool-trace-directory-replay-txbbhox1",
+        "duration_seconds": 0.02239,
+        "exit_code": 0,
+        "stderr": "Replay verified: 18 wire events, 1 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+        "stdout": "strict replay continuation"
+      },
+      "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/c30-tool-trace-directory-replay-txbbhox1"
+    }
+  },
+  "schema": "audio-runtime-c30-yui-verification.v1",
+  "shutdown": "all yui capture/replay child processes returned within 60s; process groups were reaped",
+  "source_revision": "20af5a5f9147da7d40cfe61f068bc70c76ef510b",
+  "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety",
+  "work": "audio-runtime-c30-frame-dimension-safety"
+}
