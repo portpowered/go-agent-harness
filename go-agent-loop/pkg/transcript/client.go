@@ -5,6 +5,8 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // ClientMetadata supplies the logical timing attached to the next client
@@ -31,7 +33,8 @@ type Client = ClientCapture
 // reporter receives the first transcript failure and never a live-path error.
 func NewClientCapture(sink RecordSink, metadata ClientMetadata, reporters ...func(error)) *ClientCapture {
 	if metadata == nil {
-		metadata = func() (uint64, time.Time) { return 0, time.Now().UTC() }
+		realClock := clock.Real{}
+		metadata = func() (uint64, time.Time) { return 0, realClock.Now().UTC() }
 	}
 	var reporter func(error)
 	if len(reporters) > 0 {
