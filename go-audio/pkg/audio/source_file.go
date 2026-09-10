@@ -208,7 +208,7 @@ func NewFileSource(path string, stdin io.Reader) (*FileSource, error) {
 
 	source := &FileSource{path: path, format: format, reader: file, closer: file}
 	if format == formatWAV {
-		wav, readErr := NewWAVSource(path, file)
+		wav, readErr := newFileWAVSource(path, file)
 		if readErr != nil {
 			_ = file.Close()
 			return nil, newStreamError("read", path, format, readErr)

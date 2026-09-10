@@ -29,7 +29,20 @@ C21_FIXTURE_DIR = ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c21-cor
 WORKFLOW_SAMPLES = [-32768, -12345, -1, 0, 1, 12345, 32767]
 WORKFLOW_SOURCE_FIXTURE = ROOT / "agent-cli/test/integration/testdata/s2s-e2e-vision-describe/s2s_e2e_vision_describe.session.json"
 WORKFLOW_OUTPUT_PCM = struct.pack("<" + ("h" * 480), *([1234] + ([0] * 479)))
-SOURCE_PATHS = ("go-audio/pkg/audio",)
+BUILD_INPUT_GROUPS = {
+    "consumer": ("go-audio", "docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/consumer"),
+    "yui": (
+        "agent-cli",
+        "go-agent-loop",
+        "go-agent-runtime",
+        "go-audio",
+        "go-device-gateway",
+        "go-llm-gateway",
+        "go.work",
+        "go.work.sum",
+    ),
+}
+PROVENANCE_PATHS = tuple(dict.fromkeys(path for prefixes in BUILD_INPUT_GROUPS.values() for path in prefixes))
 
 
 class EvidenceError(RuntimeError):
@@ -121,13 +134,17 @@ def write_workflow_capture(path: pathlib.Path, source: pathlib.Path, input_frame
     path.write_text(json.dumps(capture, indent=2) + "\n", encoding="utf-8")
 
 
-def source_identity() -> str:
+def source_revision() -> str:
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, text=True, capture_output=True
     )
-    revision = result.stdout.strip()
+    return result.stdout.strip()
+
+
+def source_identity() -> str:
+    revision = source_revision()
     diff = subprocess.run(
-        ["git", "diff", "--no-ext-diff", "--binary", "HEAD", "--", *SOURCE_PATHS],
+        ["git", "diff", "--no-ext-diff", "--binary", "HEAD", "--", *PROVENANCE_PATHS],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -135,6 +152,36 @@ def source_identity() -> str:
     if not diff:
         return revision
     return f"{revision}+dirty-{hashlib.sha256(diff).hexdigest()[:16]}"
+
+
+def build_input_paths(prefixes: tuple[str, ...]) -> list[pathlib.Path]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--", *prefixes], cwd=ROOT, check=True, capture_output=True
+    )
+    paths = [pathlib.Path(raw) for raw in result.stdout.decode().split("\0") if raw]
+    if not paths:
+        raise EvidenceError(f"no tracked build inputs found for {prefixes}")
+    return paths
+
+
+def build_input_hash(prefixes: tuple[str, ...]) -> str:
+    digest = hashlib.sha256()
+    for relative in build_input_paths(prefixes):
+        digest.update(relative.as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update((ROOT / relative).read_bytes())
+    return digest.hexdigest()
+
+
+def build_input_manifest() -> dict[str, dict[str, Any]]:
+    return {
+        name: {
+            "path_prefixes": list(prefixes),
+            "file_count": len(build_input_paths(prefixes)),
+            "sha256": build_input_hash(prefixes),
+        }
+        for name, prefixes in BUILD_INPUT_GROUPS.items()
+    }
 
 
 def bounded_process(name: str, argv: list[str], cwd: pathlib.Path, env: dict[str, str] | None = None) -> dict[str, Any]:
@@ -198,13 +245,27 @@ def build() -> dict[str, Any]:
     save_run("build-yui", yui_result)
     if yui_result["exit_code"] != 0:
         raise EvidenceError(f"yui build failed: {yui_result['stderr']}")
+    tested_source = source_identity()
+    inputs = build_input_manifest()
     manifest = {
-        "schema": "audio-runtime-c31-artifact-manifest.v1",
-        "source": source_identity(),
+        "schema": "audio-runtime-c31-artifact-manifest.v2",
+        "source": tested_source,
+        "tested_source_revision": tested_source,
+        "build_inputs": inputs,
         "go_version": subprocess.run(["go", "version"], check=True, text=True, capture_output=True).stdout.strip(),
         "artifacts": {
-            "consumer": {"path": str(consumer_path), "sha256": sha256(consumer_path)},
-            "yui": {"path": str(yui_path), "sha256": sha256(yui_path)},
+            "consumer": {
+                "path": str(consumer_path),
+                "sha256": sha256(consumer_path),
+                "tested_source_revision": tested_source,
+                "build_inputs_sha256": inputs["consumer"]["sha256"],
+            },
+            "yui": {
+                "path": str(yui_path),
+                "sha256": sha256(yui_path),
+                "tested_source_revision": tested_source,
+                "build_inputs_sha256": inputs["yui"]["sha256"],
+            },
         },
     }
     (HERE / "artifact-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
@@ -232,7 +293,10 @@ def consumer_case(case: str, label: str) -> tuple[dict[str, Any], dict[str, Any]
         f"consumer-{label}",
         [str(consumer), "--case", case],
         HERE,
-        {"C31_SOURCE_REVISION": revision},
+        {
+            "C31_SOURCE_REVISION": revision,
+            "C31_SOURCE_INPUTS_SHA256": build_input_hash(BUILD_INPUT_GROUPS["consumer"]),
+        },
     )
     save_run(f"consumer-{label}", result)
     try:
@@ -334,6 +398,24 @@ def workflow() -> None:
         )
     if not audio_out.is_file() or audio_out.stat().st_size <= 44:
         raise EvidenceError("file-input workflow exited cleanly without non-empty audio output")
+    output_bytes = audio_out.read_bytes()
+    if output_bytes[:4] != b"RIFF" or output_bytes[8:12] != b"WAVE" or output_bytes[36:40] != b"data":
+        raise EvidenceError("file-input workflow output is not a canonical PCM16 WAV")
+    declared_output_bytes = struct.unpack_from("<I", output_bytes, 40)[0]
+    observed_output_pcm = output_bytes[44:]
+    if declared_output_bytes != len(observed_output_pcm):
+        raise EvidenceError(
+            "file-input workflow output data size disagrees with payload: "
+            f"declared={declared_output_bytes} actual={len(observed_output_pcm)}"
+        )
+    expected_output_sha256 = hashlib.sha256(WORKFLOW_OUTPUT_PCM).hexdigest()
+    observed_output_sha256 = hashlib.sha256(observed_output_pcm).hexdigest()
+    if observed_output_pcm != WORKFLOW_OUTPUT_PCM:
+        raise EvidenceError(
+            "file-input workflow changed the literal output payload: "
+            f"expected={len(WORKFLOW_OUTPUT_PCM)}:{expected_output_sha256} "
+            f"actual={len(observed_output_pcm)}:{observed_output_sha256}"
+        )
     manifest = load_json(manifest_path)
     artifacts = manifest.get("artifacts")
     if not isinstance(artifacts, list):
@@ -345,6 +427,8 @@ def workflow() -> None:
     summary = {
         "schema": "audio-runtime-c31-file-input-workflow.v1",
         "source": source_identity(),
+        "tested_source_revision": source_identity(),
+        "yui_build_inputs_sha256": build_input_hash(BUILD_INPUT_GROUPS["yui"]),
         "fixture": str(fixture),
         "fixture_sha256": sha256(fixture),
         "fixture_source": str(fixture_source),
@@ -373,9 +457,14 @@ def workflow() -> None:
         },
         "output": {
             "path": str(audio_out),
-            "bytes": audio_out.stat().st_size,
-            "sha256": sha256(audio_out),
-            "pcm_payload_sha256": hashlib.sha256(WORKFLOW_OUTPUT_PCM).hexdigest(),
+            "bytes": len(output_bytes),
+            "sha256": hashlib.sha256(output_bytes).hexdigest(),
+            "expected_pcm_payload_bytes": len(WORKFLOW_OUTPUT_PCM),
+            "expected_pcm_payload_sha256": expected_output_sha256,
+            "observed_pcm_payload_bytes": len(observed_output_pcm),
+            "observed_pcm_payload_sha256": observed_output_sha256,
+            "pcm_payload_sha256": observed_output_sha256,
+            "pcm_payload_exact": True,
         },
     }
     (HERE / "workflow.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
@@ -403,6 +492,8 @@ def regression() -> None:
     summary = {
         "schema": "audio-runtime-c31-read-only-c21-regression.v1",
         "source": source_identity(),
+        "tested_source_revision": source_identity(),
+        "yui_build_inputs_sha256": build_input_hash(BUILD_INPUT_GROUPS["yui"]),
         "controls": str(C21_VERIFY),
         "fixtures": {
             label: {

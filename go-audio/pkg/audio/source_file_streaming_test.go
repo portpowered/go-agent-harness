@@ -111,6 +111,68 @@ func TestFileSourceWAVRejectsPhysicalTruncationBeforeFirstRead(t *testing.T) {
 	}
 }
 
+func TestFileSourceWAVUnsupportedRatePreservesFormatIdentity(t *testing.T) {
+	encoded, err := encodedStreamingWAV(44100, []int16{7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "unsupported-rate.wav")
+	if err := os.WriteFile(path, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	source, err := NewFileSource(path, nil)
+	if source != nil {
+		if closeErr := source.Close(); closeErr != nil {
+			t.Fatalf("unexpected source.Close() error = %v", closeErr)
+		}
+		t.Fatal("NewFileSource() returned a source for an unsupported rate")
+	}
+	var formatErr *FormatError
+	var unsupported *wavio.UnsupportedError
+	var streamErr *StreamError
+	if !errors.As(err, &formatErr) || !errors.As(err, &unsupported) || !errors.Is(err, wavio.ErrUnsupportedRate) {
+		t.Fatalf("NewFileSource() error = %v, want FormatError wrapping wavio.UnsupportedError", err)
+	}
+	if errors.As(err, &streamErr) || formatErr.Path != path || formatErr.Format != "wav" || unsupported.Observed != 44100 {
+		t.Fatalf("NewFileSource() error = %v, want path-aware format identity without StreamError", err)
+	}
+
+	directReader := newStreamingCountingReadSeekCloser(encoded)
+	direct, directErr := NewWAVSource("direct.wav", directReader)
+	if direct != nil || !errors.As(directErr, &unsupported) || !errors.Is(directErr, wavio.ErrUnsupportedRate) {
+		t.Fatalf("NewWAVSource() = %v, %v; want direct unsupported-rate validation", direct, directErr)
+	}
+	if closeErr := directReader.Close(); closeErr != nil {
+		t.Fatalf("direct reader Close() error = %v", closeErr)
+	}
+}
+
+func TestFileSourceWAVPostOpenTruncationReportsActualBytes(t *testing.T) {
+	path := writeStreamingWAV(t, SampleRate, []int16{1})
+	source, err := NewFileSource(path, nil)
+	if err != nil {
+		t.Fatalf("NewFileSource() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := source.Close(); closeErr != nil {
+			t.Errorf("source.Close() error = %v", closeErr)
+		}
+	})
+	if err := os.Truncate(path, 45); err != nil {
+		t.Fatal(err)
+	}
+
+	count, readErr := source.ReadSamples(context.Background(), make([]int16, 1))
+	var truncErr *TruncatedPCMError
+	if count != 0 || !errors.As(readErr, &truncErr) || !errors.Is(readErr, ErrTruncatedPCM) || truncErr.Bytes != 1 {
+		t.Fatalf("ReadSamples() = %d, %v, want one actual trailing byte", count, readErr)
+	}
+	if count, readErr := source.ReadSamples(context.Background(), make([]int16, 1)); count != 0 || !errors.Is(readErr, io.EOF) {
+		t.Fatalf("ReadSamples() after truncation = %d, %v; want terminal EOF", count, readErr)
+	}
+}
+
 func TestWAVSourceMetadataAndPayloadReadBounds(t *testing.T) {
 	encoded, err := encodedStreamingWAV(SampleRate, []int16{-32768, -12345, -1, 0, 1, 12345, 32767})
 	if err != nil {

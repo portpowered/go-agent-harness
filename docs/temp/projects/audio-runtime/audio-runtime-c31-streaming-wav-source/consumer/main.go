@@ -26,6 +26,7 @@ type report struct {
 	Schema        string            `json:"schema"`
 	Case          string            `json:"case"`
 	Source        string            `json:"source"`
+	SourceInputs  string            `json:"source_inputs_sha256"`
 	GOOS          string            `json:"goos"`
 	GOARCH        string            `json:"goarch"`
 	StartedAt     string            `json:"started_at"`
@@ -151,6 +152,7 @@ func main() {
 		Schema:        schema,
 		Case:          *caseName,
 		Source:        sourceRevision(),
+		SourceInputs:  os.Getenv("C31_SOURCE_INPUTS_SHA256"),
 		GOOS:          runtime.GOOS,
 		GOARCH:        runtime.GOARCH,
 		StartedAt:     started.UTC().Format(time.RFC3339Nano),
@@ -564,7 +566,7 @@ func checkUpfrontErrors(directory string, samples []int16) (bool, string) {
 	}
 
 	ratePath := filepath.Join(directory, "unsupported-rate.wav")
-	rateEncoded, err := encodedWAV(wavio.Rate24kHz, []int16{1})
+	rateEncoded, err := encodedWAV(44100, []int16{1})
 	if err != nil {
 		return false, err.Error()
 	}
@@ -574,7 +576,8 @@ func checkUpfrontErrors(directory string, samples []int16) (bool, string) {
 	_, err = audio.NewFileSource(ratePath, nil)
 	var formatErr *audio.FormatError
 	var unsupported *wavio.UnsupportedError
-	if err == nil || !errors.As(err, &formatErr) || !errors.As(err, &unsupported) || !errors.Is(err, wavio.ErrUnsupportedRate) {
+	var streamErr *audio.StreamError
+	if err == nil || !errors.As(err, &formatErr) || !errors.As(err, &unsupported) || errors.As(err, &streamErr) || !errors.Is(err, wavio.ErrUnsupportedRate) || unsupported.Observed != 44100 {
 		return false, fmt.Sprintf("unsupported rate err=%v", err)
 	}
 	return true, ""
@@ -624,7 +627,7 @@ func checkPostOpenTruncation(path string) (bool, string) {
 	}
 	count, readErr := source.ReadSamples(context.Background(), make([]int16, 2))
 	var truncErr *audio.TruncatedPCMError
-	if count != 0 || !errors.As(readErr, &truncErr) || !errors.Is(readErr, audio.ErrTruncatedPCM) {
+	if count != 0 || !errors.As(readErr, &truncErr) || !errors.Is(readErr, audio.ErrTruncatedPCM) || truncErr.Bytes != 1 {
 		return false, fmt.Sprintf("count=%d err=%v", count, readErr)
 	}
 	return true, fmt.Sprintf("first read reports %T; subsequent reads are terminal", readErr)
