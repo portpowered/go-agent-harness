@@ -11,9 +11,11 @@
 
 This is the admitted `audio-runtime-c34-replay-terminal-integrity` task. The
 implementation merge checkpoint is
-`f3a230fd7f86b1fd990abea07305a6247a47771b`; subsequent evidence commits are
-documentation-only descendants with identical executable inputs. The candidate merged fresh
-`origin/main` at `c95a2cb4f96fa8c14bd4655f5197a822c86a980c`; ancestry probes also
+`f3a230fd7f86b1fd990abea07305a6247a47771b`. The current-main integration
+checkpoint is `f3e58cb7dc3b1b578385fdee00d7021833927eab`; subsequent evidence
+commits are documentation-only descendants with identical executable inputs. The
+candidate merged fresh `origin/main` at
+`c61ee2774986c896560ee40a92441c914976000d`; ancestry probes also
 pass for startup `8bdafc7f947a3a2c9856220abdc539437035bd21` and architecture
 baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
 
@@ -28,10 +30,11 @@ unchanged; the focused architecture-size and pinned lint gates pass locally.
 The evidence runner also repairs the previously non-causal controls: it runs a
 real valid-audio trace mutated after its first close, tests missing-timeline and
 corrupt-audio bundle failures, and asserts bounded process-group cleanup and
-bounded output capture. Candidate verification reports were generated at
-`36feeeea48748948de16bf186ff3d75cd50d5cb2`; the runtime report was generated at
-`8e5f1d12e155ca3964a28708224709549aab9dcd`. These are documentation-only
-descendants of the implementation checkpoint with identical executable inputs.
+bounded output capture. Candidate verification and runtime reports were generated
+at `f3e58cb7dc3b1b578385fdee00d7021833927eab`. These are source-pinned to the
+current-main integration checkpoint. The rebuilt consumer source hash is
+`ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3` and its
+binary hash is `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d`.
 
 ## Validation
 
@@ -53,22 +56,21 @@ descendants of the implementation checkpoint with identical executable inputs.
   diagnostics and no descendant leak.
 
 The stale-head review rejection was reconciled by merging current `origin/main`
-at `c95a2cb4f96fa8c14bd4655f5197a822c86a980c`. Candidate reports record source
-`36feeeea48748948de16bf186ff3d75cd50d5cb2`, runtime report source
-`8e5f1d12e155ca3964a28708224709549aab9dcd`, origin-main/base revisions,
+at `c61ee2774986c896560ee40a92441c914976000d`. Candidate reports record source
+`f3e58cb7dc3b1b578385fdee00d7021833927eab`, origin-main/base revisions,
 consumer source hash
 `ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3`, consumer
 binary hash `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d`,
 the mutated fixture hashes, the source-bundle file hashes, and rebuilt same-source
 YUI hash `68dc30f39196160de41c2909c7c3748430cc5506040a0af2c12b858cfa93b7c4`.
 
-The latest CI rejection was run `34448550045`, job `102778686103`
-(`https://github.com/portpowered/go-agent-harness/actions/runs/34448550045/job/102778686103`),
-at old head `8be379cb061c503a701a3b1c92a228868924fae5`. The only failed test was the
-unrelated remote `test46/provider_burst` playback timeout; its evidence reported
-the final PCM marker absent and the child still running at the scenario deadline.
-The full raw run JSON and job log are saved under `/tmp` for canonical review.
-No C34 lifecycle check failed in that run; current-head script CI must rerun after
+The saved CI rejection was run `34435976492`, job `102741003399`
+(`https://github.com/portpowered/go-agent-harness/actions/runs/34435976492/job/102741003399`),
+at old head `ee15be2f0e4093e12c06c32df4e7a8ed4219861d`. Its static gate found
+four OpenReplay architecture-size baseline drifts and pinned `goconst` findings;
+the focused architecture and lint gates pass on this candidate. The raw run JSON
+and job log are saved in this evidence directory. Later green checks for
+superseded head `d0d4358c` are not reused; current-head script CI must run after
 this changed candidate is submitted.
 
 This is software replay evidence only; it does not claim physical-device or

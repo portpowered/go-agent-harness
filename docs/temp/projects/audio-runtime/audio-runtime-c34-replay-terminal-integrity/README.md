@@ -10,19 +10,20 @@ and process cleanup state.
 
 - admitted task: `audio-runtime-c34-replay-terminal-integrity`
 - implementation merge checkpoint: `f3a230fd7f86b1fd990abea07305a6247a47771b`
-- evidence lineage: documentation-only descendants of the implementation merge
-  checkpoint; owned Go inputs are unchanged from that checkpoint
-- fresh `origin/main` merged into the candidate: `c95a2cb4f96fa8c14bd4655f5197a822c86a980c`
+- current-main integration checkpoint: `f3e58cb7dc3b1b578385fdee00d7021833927eab`
+- evidence lineage: documentation-only descendants of the current-main
+  integration checkpoint; owned Go inputs are unchanged from that checkpoint
+- fresh `origin/main` merged into the candidate: `c61ee2774986c896560ee40a92441c914976000d`
 - required startup revision ancestor: `8bdafc7f947a3a2c9856220abdc539437035bd21`
 - architecture baseline ancestor: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`
 
 The reports record successful ancestry probes for the fresh main and both required
-startup/baseline revisions. Candidate verification was generated at source
-`36feeeea48748948de16bf186ff3d75cd50d5cb2`, and the runtime regression at
-`8e5f1d12e155ca3964a28708224709549aab9dcd`; both are documentation-only
-descendants of the implementation merge checkpoint and report only the preserved
-untracked operator note as dirty. The final evidence head does not alter executable
-inputs.
+startup/baseline revisions. Candidate verification and the runtime regression were
+generated at source `f3e58cb7dc3b1b578385fdee00d7021833927eab`; both report only
+the preserved untracked operator note as dirty. The final evidence head does not
+alter executable inputs. The rebuilt public consumer has source hash
+`ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3` and binary
+hash `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d`.
 The operator's untracked `meta-operator-throughput-feedback.md` remains
 untouched and is outside the admitted owned paths.
 
@@ -86,7 +87,7 @@ rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c34-replay-term
   --output docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runtime-regression.json
 ```
 
-The tested YUI is `/private/tmp/audio-runtime-c34-yui-8e5f1d1` with SHA-256
+The tested YUI is `/private/tmp/audio-runtime-c34-yui-k7Wd0P/yui` with SHA-256
 `68dc30f39196160de41c2909c7c3748430cc5506040a0af2c12b858cfa93b7c4`. It was
 rebuilt from the exact source used by the runtime report. Both
 positive replay invocations passed; one reported `15 wire events, 0 tool calls`
@@ -107,17 +108,21 @@ microphone, speaker, or acoustic proof.
 ## Rejection reconciliation
 
 Review attempts `work-review-148` and `work-review-154` rejected stale ancestry
-and provenance. The candidate now contains the fetched `origin/main` merge and
-fresh source-pinned reports. The runner includes the requested real
+and provenance; `work-review-173` recorded the same remaining stale-main issue.
+The latest board finding identified committed evidence based on `origin/main`
+`c95a2cb4f96fa8c14bd4655f5197a822c86a980c` while remote main was
+`c61ee2774986c896560ee40a92441c914976000d`, with
+`contains_origin_main=false`. The candidate now contains the fetched current-main
+merge and fresh source-pinned reports. The runner includes the requested real
 mutated-valid-audio control, missing-timeline and corrupt-audio controls, bounded
 output capture, and descendant process-group cleanup assertions; all pass.
 
-The latest CI rejection was run `34448550045`, job `102778686103`
-(`https://github.com/portpowered/go-agent-harness/actions/runs/34448550045/job/102778686103`),
-against old head `8be379cb061c503a701a3b1c92a228868924fae5`. Its sole failing test was the
-unrelated remote `test46/provider_burst` playback scenario, which timed out before
-the final PCM marker while the child was still running. The full raw run JSON and
-job log were saved as `/tmp/audio-runtime-c34-ci-rejection-34448550045-run.json`
-and `/tmp/audio-runtime-c34-ci-rejection-34448550045-job-102778686103.log`; no
-C34 lifecycle failure was reported. This changed candidate is ready for the
-script-owned CI gate to run current-head checks again.
+The saved CI rejection was run `34435976492`, job `102741003399`
+(`https://github.com/portpowered/go-agent-harness/actions/runs/34435976492/job/102741003399`),
+against old head `ee15be2f0e4093e12c06c32df4e7a8ed4219861d`. Its static gate found
+four OpenReplay architecture-size baseline drifts and pinned `goconst` findings
+in `replay.go` and `replay_lifecycle_test.go`; the focused architecture and lint
+gates now pass locally. The full raw run JSON and job log remain in this evidence
+directory. The later board green checks were for superseded head `d0d4358c` and
+are not reused. This changed candidate is ready for the script-owned CI gate to
+run current-head checks again.
