@@ -1,0 +1,43 @@
+{
+  "schema": "audio-runtime-c42-capture-energy-provenance.v1",
+  "factory_session": "~default",
+  "factory_server": "http://127.0.0.1:7439",
+  "project": "audio-runtime",
+  "task": "audio-runtime-c42-capture-energy-software-coverage",
+  "admission": {
+    "command": "project-control.py verify-work --type task --name audio-runtime-c42-capture-energy-software-coverage",
+    "status": "admitted",
+    "project": "audio-runtime",
+    "name": "audio-runtime-c42-capture-energy-software-coverage"
+  },
+  "branch_name": "codex/audio-runtime-c42-capture-energy-software-coverage",
+  "isolated_worktree": ".claude/worktrees/audio-runtime-c42-capture-energy-software-coverage",
+  "manifest": {
+    "source_plan_sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
+    "request_sha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
+    "acceptance_sha256": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5",
+    "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
+  },
+  "ancestry": {
+    "fetched_origin_main": "926ded7bfa8f3c3e42115192d03aa1240c4806db",
+    "planning_main": "926ded7bfa8f3c3e42115192d03aa1240c4806db",
+    "startup_integration": "8bdafc7f947a3a2c9856220abdc539437035bd21"
+  },
+  "preserved_predecessor": {
+    "historical_report": "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json",
+    "historical_report_sha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+    "original_oracle": "docs/temp/projects/audio-runtime/audio-runtime-c32-canonical-capture-sample-energy/expected.json",
+    "original_oracle_sha256": "d209639bf6cf51c61fe2931eed9e50586fae1824334daa3239af8cc841a47f34"
+  },
+  "scope": {
+    "owned_source_paths": [
+      "go-audio/pkg/codec/sample_value.go",
+      "go-audio/pkg/codec/sample_value_test.go",
+      "go-device-gateway/pkg/devices/device_windows.go",
+      "go-device-gateway/pkg/devices/device_windows_test.go"
+    ],
+    "evidence_path": "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage",
+    "excluded": ["workflow files", "module files outside consumer", "baseline/policy files", "peer review files"]
+  },
+  "hardware_status": "not claimed; native WASAPI/acoustic evidence requires the Windows host and active endpoints"
+}

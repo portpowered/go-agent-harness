@@ -309,3 +309,250 @@ func float64Packet(values ...float64) []byte {
 	}
 	return data
 }
+
+func TestPacketEnergyC42Coverage(t *testing.T) {
+	runPacketEnergyC42Coverage(t)
+}
+
+// TestWindowsPortablePlaybackBurstPreservesFIFOCaptureEnergyCodecCoverage is
+// selected by the existing Windows portable software-test regex. It keeps the
+// codec controls in this package so the Windows job exercises the same
+// canonical implementation as the normal package run.
+func TestWindowsPortablePlaybackBurstPreservesFIFOCaptureEnergyCodecCoverage(t *testing.T) {
+	runPacketEnergyC42Coverage(t)
+}
+
+func runPacketEnergyC42Coverage(t *testing.T) {
+	t.Helper()
+	t.Run("pcm16-padded", runC42PCM16Padded)
+	t.Run("pcm24-padded", runC42PCM24Padded)
+	t.Run("pcm32-padded", runC42PCM32Padded)
+	t.Run("float64-padded", runC42Float64Padded)
+	t.Run("zero-frames", runC42ZeroFrames)
+	t.Run("accumulation-overflow", runC42AccumulationOverflow)
+	t.Run("later-nonfinite", runC42LaterNonFinite)
+	t.Run("truncated", runC42Truncated)
+	t.Run("malformed", runC42Malformed)
+	t.Run("allocations", runC42Allocations)
+}
+
+func runC42PCM16Padded(t *testing.T) {
+	format := pcmFormat(16, 12)
+	data := []byte{
+		0x01, 0x40, 0x00, 0xc0, 0x00, 0x20, 0xaa, 0xbb,
+		0x00, 0x00, 0x00, 0x80, 0x00, 0xe0, 0xcc, 0xdd,
+		0x13, 0x37,
+	}
+	wantSamples := []float64{16385.0 / 32768.0, -0.5, 0.25, 0, -1, -0.25}
+	wantEnergy := 1744863233.0 / 1073741824.0
+	assertC42PacketSamples(t, data, 2, 3, 8, format, wantSamples)
+	assertC42PacketMutations(t, data, 2, 3, 8, format, []int{6, 7, 14, 15, 16, 17}, 0, 0x01, wantEnergy)
+}
+
+func runC42PCM24Padded(t *testing.T) {
+	format := pcmFormat(24, 20)
+	data := []byte{
+		0x00, 0x00, 0x40, 0x00, 0x00, 0xc0, 0xde, 0xad,
+		0xff, 0xff, 0x7f, 0x00, 0x00, 0x00, 0xbe, 0xef,
+		0x5a,
+	}
+	assertC42PacketSamples(t, data, 2, 2, 8, format, []float64{0.5, -0.5, 8388607.0 / 8388608.0, 0})
+	assertC42PacketMutations(t, data, 2, 2, 8, format, []int{6, 7, 14, 15, 16}, 0, 0x01, 0.5+(8388607.0/8388608.0)*(8388607.0/8388608.0))
+}
+
+func runC42PCM32Padded(t *testing.T) {
+	format := pcmFormat(32, 24)
+	data := []byte{
+		0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0xe0, 0xaa, 0xbb, 0xcc, 0xdd,
+		0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x60, 0x11, 0x22, 0x33, 0x44,
+		0x55, 0x66,
+	}
+	assertC42PacketSamples(t, data, 2, 2, 12, format, []float64{0.5, -0.25, -1, 0.75})
+	assertC42PacketMutations(t, data, 2, 2, 12, format, []int{8, 9, 10, 11, 20, 21, 22, 23, 24, 25}, 0, 0x01, 1.875)
+}
+
+func runC42Float64Padded(t *testing.T) {
+	data := make([]byte, 50)
+	copy(data[0:16], float64Packet(0.5, -0.25))
+	copy(data[24:40], float64Packet(-1, 0.75))
+	for _, index := range []int{16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49} {
+		data[index] = 0xd3
+	}
+	format := floatFormat(64)
+	assertC42PacketSamples(t, data, 2, 2, 24, format, []float64{0.5, -0.25, -1, 0.75})
+	assertC42PacketMutations(t, data, 2, 2, 24, format, []int{16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49}, 7, 0x01, 1.875)
+}
+
+func assertC42PacketMutations(t *testing.T, data []byte, frames, channels, stride int, format codec.SampleFormat, padding []int, measuredIndex int, measuredXor byte, wantEnergy float64) {
+	t.Helper()
+	before := append([]byte(nil), data...)
+	energy, err := codec.PacketEnergy(data, frames, channels, stride, format)
+	if err != nil {
+		t.Fatalf("padded energy error = %v", err)
+	}
+	if energy != wantEnergy {
+		t.Fatalf("padded energy = %.17g, want %.17g", energy, wantEnergy)
+	}
+	if !bytes.Equal(data, before) {
+		t.Fatal("padded packet changed after successful measurement")
+	}
+	paddingOnly := append([]byte(nil), data...)
+	for _, index := range padding {
+		paddingOnly[index] ^= 0xff
+	}
+	paddingEnergy, err := codec.PacketEnergy(paddingOnly, frames, channels, stride, format)
+	if err != nil || paddingEnergy != wantEnergy {
+		t.Fatalf("padding/trailing mutation changed energy: got %.17g, err %v, want %.17g", paddingEnergy, err, wantEnergy)
+	}
+	measuredMutation := append([]byte(nil), data...)
+	measuredMutation[measuredIndex] ^= measuredXor
+	changedEnergy, err := codec.PacketEnergy(measuredMutation, frames, channels, stride, format)
+	if err != nil {
+		t.Fatalf("measured-sample mutation error = %v", err)
+	}
+	if changedEnergy == wantEnergy {
+		t.Fatal("measured-sample mutation did not change literal energy")
+	}
+}
+
+func runC42ZeroFrames(t *testing.T) {
+	data := littleEndian64(math.Float64bits(math.NaN()))
+	before := append([]byte(nil), data...)
+	energy, err := codec.PacketEnergy(data, 0, 1, 8, floatFormat(64))
+	if err != nil || energy != 0 {
+		t.Fatalf("zero-frame nonfinite tail = %.17g, %v, want exact zero", energy, err)
+	}
+	if !bytes.Equal(data, before) {
+		t.Fatal("zero-frame packet changed while trailing sample was ignored")
+	}
+	malformedFormat := floatFormat(64)
+	malformedFormat.ValidBitsPerSample = 0
+	if _, err := codec.PacketEnergy(nil, 0, 1, 8, malformedFormat); !errors.Is(err, codec.ErrInvalidSampleFormat) {
+		t.Fatalf("zero-frame malformed format error = %v, want codec.ErrInvalidSampleFormat", err)
+	}
+	if _, err := codec.PacketEnergy(nil, 0, 0, 8, floatFormat(64)); !errors.Is(err, codec.ErrInvalidPacketDimensions) {
+		t.Fatalf("zero-frame malformed dimensions error = %v, want codec.ErrInvalidPacketDimensions", err)
+	}
+}
+
+func runC42AccumulationOverflow(t *testing.T) {
+	data := float64Packet(math.Ldexp(1, 511), math.Ldexp(1, 511), math.Ldexp(1, 511), math.Ldexp(1, 511))
+	for _, testCase := range []struct {
+		name             string
+		frames, channels int
+		stride           int
+	}{
+		{name: "four channels in one frame", frames: 1, channels: 4, stride: 32},
+		{name: "four mono frames", frames: 4, channels: 1, stride: 8},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			before := append([]byte(nil), data...)
+			_, err := codec.PacketEnergy(data, testCase.frames, testCase.channels, testCase.stride, floatFormat(64))
+			if !errors.Is(err, codec.ErrPacketEnergyOverflow) {
+				t.Fatalf("error = %v, want codec.ErrPacketEnergyOverflow", err)
+			}
+			if !bytes.Equal(data, before) {
+				t.Fatal("true accumulation-overflow packet changed after rejection")
+			}
+		})
+	}
+}
+
+func runC42LaterNonFinite(t *testing.T) {
+	for _, testCase := range []struct {
+		name             string
+		data             []byte
+		frames, channels int
+		stride           int
+	}{
+		{name: "later channel NaN", data: float64Packet(0.5, -0.25, math.NaN()), frames: 1, channels: 3, stride: 24},
+		{name: "later frame negative infinity", data: float64Packet(0.5, math.Inf(-1)), frames: 2, channels: 1, stride: 8},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			before := append([]byte(nil), testCase.data...)
+			first, firstErr := codec.DecodeSampleValue(testCase.data[:8], floatFormat(64))
+			if firstErr != nil || first != 0.5 {
+				t.Fatalf("adjacent finite literal = %.17g, %v, want 0.5", first, firstErr)
+			}
+			energy, err := codec.PacketEnergy(testCase.data, testCase.frames, testCase.channels, testCase.stride, floatFormat(64))
+			if !errors.Is(err, codec.ErrNonFiniteSample) || energy != 0 {
+				t.Fatalf("energy/error = %.17g, %v, want zero and codec.ErrNonFiniteSample", energy, err)
+			}
+			if !bytes.Equal(testCase.data, before) {
+				t.Fatal("nonfinite packet changed after rejection")
+			}
+		})
+	}
+}
+
+func runC42Truncated(t *testing.T) {
+	backing := make([]byte, 24)
+	for index := range backing {
+		backing[index] = 0xa5
+	}
+	before := append([]byte(nil), backing...)
+	if _, err := codec.PacketEnergy(backing[:15], 2, 3, 8, pcmFormat(16, 12)); !errors.Is(err, codec.ErrPacketInputTooShort) {
+		t.Fatalf("one-byte-short padded final frame error = %v, want codec.ErrPacketInputTooShort", err)
+	}
+	if !bytes.Equal(backing, before) {
+		t.Fatal("truncated packet backing storage changed after rejection")
+	}
+}
+
+func runC42Malformed(t *testing.T) {
+	if _, err := codec.PacketEnergy([]byte{0x00}, 1, 3, 5, pcmFormat(16, 16)); !errors.Is(err, codec.ErrInvalidPacketDimensions) {
+		t.Fatalf("malformed channel/stride error = %v, want codec.ErrInvalidPacketDimensions", err)
+	}
+	maximum := int(^uint(0) >> 1)
+	if _, err := codec.PacketEnergy([]byte{0x00}, maximum, 1, 2, pcmFormat(16, 16)); !errors.Is(err, codec.ErrInvalidPacketDimensions) {
+		t.Fatalf("unrepresentable frame extent error = %v, want codec.ErrInvalidPacketDimensions", err)
+	}
+}
+
+func runC42Allocations(t *testing.T) {
+	packets := []struct {
+		name             string
+		data             []byte
+		frames, channels int
+		stride           int
+		format           codec.SampleFormat
+		want             float64
+	}{
+		{name: "small preallocated", data: []byte{0x00, 0x80, 0xff}, frames: 3, channels: 1, stride: 1, format: pcmFormat(8, 8), want: 1 + (127.0/128)*(127.0/128)},
+		{name: "large preallocated", data: make([]byte, 64*8), frames: 64, channels: 1, stride: 8, format: floatFormat(64), want: 0},
+	}
+	for _, testCase := range packets {
+		t.Run(testCase.name, func(t *testing.T) {
+			allocations := testing.AllocsPerRun(100, func() {
+				got, err := codec.PacketEnergy(testCase.data, testCase.frames, testCase.channels, testCase.stride, testCase.format)
+				if err != nil || got != testCase.want {
+					t.Fatalf("codec.PacketEnergy() = %.17g, %v, want %.17g", got, err, testCase.want)
+				}
+			})
+			if allocations != 0 {
+				t.Fatalf("successful PacketEnergy path allocated %.2f times", allocations)
+			}
+		})
+	}
+}
+
+func assertC42PacketSamples(t *testing.T, data []byte, frames, channels, stride int, format codec.SampleFormat, want []float64) {
+	t.Helper()
+	width, err := format.ByteWidth()
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := 0
+	for frame := 0; frame < frames; frame++ {
+		for channel := 0; channel < channels; channel++ {
+			value, err := codec.DecodeSampleValue(data[frame*stride+channel*width:], format)
+			if err != nil {
+				t.Fatalf("literal sample frame=%d channel=%d error = %v", frame, channel, err)
+			}
+			if value != want[index] {
+				t.Fatalf("literal sample frame=%d channel=%d = %.17g, want %.17g", frame, channel, value, want[index])
+			}
+			index++
+		}
+	}
+}
