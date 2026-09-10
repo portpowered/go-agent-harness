@@ -101,7 +101,7 @@ def build_consumer(source_root: Path, output: Path) -> dict:
         source_sum = source_root / "go-audio/go.sum"
         if source_sum.is_file():
             (build_root / "go.sum").write_bytes(source_sum.read_bytes())
-        command = ["rtk", "proxy", "go", "build", "-mod=mod", "-o", str(output), "."]
+        command = ["rtk", "proxy", "go", "build", "-mod=mod", "-trimpath", "-o", str(output), "."]
         environment = os.environ.copy()
         environment["GOWORK"] = "off"
         result = run_process(command, build_root, BUILD_TIMEOUT, environment)
@@ -182,10 +182,29 @@ def runtime_regression(yui: Path, run_dir: Path) -> dict:
     work = Path(tempfile.mkdtemp(prefix="c33-runtime-", dir=run_dir))
     config = work / "config"
     config.mkdir()
+    (work / "evidence/runs").mkdir(parents=True)
     output = work / "rendered.pcm"
     bundle = work / "bundle"
     capture = run_process(
-        [str(yui), "-C", str(config), "session", "--replay", str(TOOL_FIXTURE), "--audio-out", str(output), "--record-dir", str(bundle), "--trace-audio", "--max-duration", "60s"],
+        [
+            str(yui),
+            "-C",
+            str(config),
+            "session",
+            "--replay",
+            str(TOOL_FIXTURE),
+            "--audio-out",
+            str(output),
+            "--record-dir",
+            str(bundle),
+            "--trace-audio",
+            "--max-duration",
+            "60s",
+            "--workdir",
+            str(work),
+            "--allow-path",
+            str(work),
+        ],
         work,
         RUN_TIMEOUT,
     )
@@ -236,6 +255,8 @@ def main() -> int:
         if args.runtime_regression:
             if args.yui is None:
                 raise EvidenceError("--runtime-regression requires --yui")
+            result["source_root"] = str(source_root)
+            result["source_revision"] = git_revision(source_root)
             result["runtime_regression"] = runtime_regression(args.yui.resolve(), run_dir)
         elif args.mode is not None:
             result["public"] = run_public_mode(
