@@ -21,7 +21,7 @@
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c32-canonical-capture-sample-energy/docs/temp/projects/audio-runtime/audio-runtime-c32-canonical-capture-sample-energy",
     "deadline_seconds": 10,
-    "elapsed_seconds": 0.005421,
+    "elapsed_seconds": 0.006876,
     "exit_code": 0,
     "timed_out": false
   },
@@ -49,7 +49,7 @@
     "packet_scratch_allocation": "none in canonical helpers"
   },
   "schema": "audio-runtime-c32-capture-sample-energy-verification.v1",
-  "source_revision": "918aee53",
+  "source_revision": "b41f5ee647f1208e33df689d780c4b459534a8f2",
   "source_sha256": {
     "docs/temp/projects/audio-runtime/audio-runtime-c32-canonical-capture-sample-energy/consumer/main.go": "d4183e08ce60b2d2478810cb7304e0e655defe21e5b51e50d55ca2cf0a0a462f",
     "go-audio/pkg/audio/packet_energy.go": "6cb747c67a8284ead5f7252c52fab490120f6beee19d0e1d81e506d4e2fcedd7",
