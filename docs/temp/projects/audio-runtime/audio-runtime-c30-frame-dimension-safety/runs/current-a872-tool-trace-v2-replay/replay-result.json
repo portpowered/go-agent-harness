@@ -1,0 +1,11 @@
+{
+  "schema": "audio-runtime-c30-yui-replay.v1",
+  "tested_source_revision": "a87247bf77abaf6746820c3eb2073d33166c3ac1",
+  "bundle": "runs/current-a872-tool-trace-v2/bundle",
+  "bundle_manifest_sha256": "77e6e244fb8a4584f6909106d8075c4a18975db9e9188717690b643a95ede1f9",
+  "exit_code": 0,
+  "timed_out": false,
+  "clean_shutdown": true,
+  "stdout": "strict replay continuation",
+  "stderr": "Replay verified: 18 wire events, 1 tool calls. Recorded render audio: false; render tap unavailable: false."
+}
