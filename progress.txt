@@ -1726,3 +1726,54 @@ C18 Review167 bounded-watchdog repair and current-main handoff checkpoint 2026-0
   same task, update PR #410 with exact head/base/evidence, then return
   `ACCEPTED` to script-owned current-head CI without polling; retain ownership
   for any exact-head rejection.
+
+C18 current-head CI rejection reconciliation and same-owner handoff 2026-09-10
+
+- Admission was reverified with `factory/scripts/project-control.py verify-work
+  --type task --name audio-runtime-c18-public-strict-replay`, returning
+  `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c18-public-strict-replay"}`.
+  The isolated branch remains `codex/audio-runtime-c18-public-strict-replay`,
+  exactly matching `prd.json.branchName`; the worktree was clean at rejected
+  HEAD `218af14742013052a17e72386c96fd4b226af338`. `origin/main` is
+  `c61ee2774986c896560ee40a92441c914976000d`, already an ancestor, and the
+  startup, immutable baseline and planning-main ancestors remain preserved.
+- The complete latest rejection was inspected from run `34456748819`, job
+  `102804819275`; raw API responses and the untruncated 346-line job log are
+  retained under `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/`.
+  The API log SHA256 is
+  `e4754d7e037b81338b5626e862fe7e01ddc2572f194374056408d79f99013e7f`.
+  All required jobs passed except `CI (integration)`, whose only failed step
+  was `make test-integration`.
+- The exact failure was
+  `TestFamilyAIterativeBuildUpThroughShippedProcess` in
+  `agent-cli/test/integration/s2s_conversational_customer_sim_family_a_test.go:95`:
+  the provider simulator got a TCP `connection reset by peer` while the shipped
+  child had already exited normally with all four expected 4-byte markers
+  (`stdout=01415250024152500341525004415250`, 16 bytes), closed input/output,
+  and no live descendants. The complete machine-readable reconciliation is
+  `ci-rejection-34456748819.json`.
+- The exact named test passes locally once with the bounded command
+  `cd agent-cli && go test ./test/integration -run
+  "^TestFamilyAIterativeBuildUpThroughShippedProcess$" -count=1 -timeout=90s
+  -v` (test `0.61s`, package `11.404s`). The failing integration source is
+  absent from `git diff origin/main...HEAD`, is outside C18 replay/clock/owned
+  room paths, and C20 owns the live/recording/composition surface. No C18
+  causal defect reproduced; the hosted failure remains non-waived and no
+  out-of-lease repair or deadline/assertion change was made.
+- C18 validation on this exact source remains green: replay normal/race,
+  standalone `tests/embedding` `GOWORK=off` normal/race, clock parent-cause
+  controls (`20x` normal/`5x` race), transferred room terminal controls
+  (`20x` normal/`20x` race), `COUNT=1` accumulated normal/coverage/race
+  regressions, Wire regeneration, architecture-size (`182` packages,
+  `1876` files, `27572` functions), focused vet, required ancestry and
+  `git diff --check`. HEAD's delta from `0059633bc0f9d613f082544a6d5daed897ff2e83`
+  is evidence-only; executable inputs for the existing final reports are
+  unchanged.
+- Review30/37/40/42/43 repairs, Review56 main integration, Review156 clock
+  cause propagation and Review167 bounded watchdog cleanup remain accounted
+  for. No CI success, independent review, guarded merge, vertical acceptance
+  or project completion is claimed. Next exact action: commit this durable raw
+  rejection/evidence checkpoint, push the same PR #410 branch, update PR #410
+  with the exact failure and non-reproduction/ownership evidence, and return
+  `ACCEPTED` to script-owned current-head CI without polling; retain ownership
+  for any exact-head actionable C18 rejection.
