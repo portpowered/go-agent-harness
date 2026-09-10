@@ -1,0 +1,38 @@
+{
+  "schema": "audio-runtime-c39-storage-provenance.v1",
+  "sourceRevision": "ace0fdbe7e91685f02a89c0879a7d426b554c311",
+  "yui": {
+    "path": "/tmp/audio-runtime-c39-yui-ace0fdb",
+    "bytes": 51154738,
+    "sha256": "3541db580e476effd2d0c18cbba6943a5d8363763a091719e293e74a4f57932c"
+  },
+  "probeReport": {
+    "path": "evidence-current-main-ace0fdb-run2/probe-report.json",
+    "sha256": "170f282653f35c4a54718794526ff94b8c74c163fd0112d1a3a6829929119626"
+  },
+  "measurements": {
+    "freeSpaceBeforeBuildKiB": 2556272,
+    "freeSpaceAfterBuildKiB": 2420424,
+    "freeSpaceAfterProbeKiB": 2169648,
+    "ownedEvidenceDirectoryKiB": 724,
+    "sourceStagingBytes": 0,
+    "reproducibleScratchBytesRetained": 0
+  },
+  "limits": {
+    "aggregateNewGrowthCeilingBytes": 2147483648,
+    "minimumFreeReserveBytes": 2147483648,
+    "c39OwnerUpperBoundBytes": 67108864
+  },
+  "cleanup": {
+    "probeChildrenReaped": true,
+    "probeTemporaryScratchRemoved": true,
+    "cacheCleanup": "none",
+    "peerArtifactsDeleted": false,
+    "staleExecutableRelabeled": false
+  },
+  "notes": [
+    "The binary was freshly built from the exact merged source revision; no prior executable was relabeled.",
+    "The probe reused only the checked-in replay fixtures/configuration and created a fresh owned evidence directory.",
+    "No duplicate repository/source staging, hardlinks, historical evidence deletion, or peer artifact deletion was used."
+  ]
+}

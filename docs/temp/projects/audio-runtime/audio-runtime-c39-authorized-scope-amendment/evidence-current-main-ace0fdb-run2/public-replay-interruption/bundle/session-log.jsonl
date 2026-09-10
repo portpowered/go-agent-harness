@@ -1,0 +1,2 @@
+{"turn_index":1,"input":{"text":"c07 interruption","audio_offset_bytes":0,"audio_bytes":0,"committed":false},"response":{"text":"","complete":true,"audio_offset_bytes":0,"audio_bytes":1440,"audio_segments":["audio/out-000.pcm"]}}
+{"turn_index":2,"input":{"text":"","audio_offset_bytes":0,"audio_bytes":0,"committed":false},"response":{"text":"","complete":true,"audio_offset_bytes":1440,"audio_bytes":2400,"audio_segments":["audio/out-000.pcm"]}}
