@@ -1,0 +1,94 @@
+{
+  "argv": [
+    "docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/run.py",
+    "--source-root",
+    ".",
+    "--build",
+    "--mode",
+    "characterize",
+    "--report",
+    "docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/before-characterize.json"
+  ],
+  "passed": true,
+  "public": {
+    "binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/artifacts/raw-sink-consumer-1f82284abee0",
+    "binary_sha256": "8503a5ff8266a8af52f5fbc185bfe07fedd242d198738bd945b7212c010a6a4e",
+    "build": {
+      "argv": [
+        "rtk",
+        "proxy",
+        "go",
+        "build",
+        "-mod=mod",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/artifacts/raw-sink-consumer-1f82284abee0",
+        "."
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c33-build-qhzzqci4",
+      "duration_seconds": 0.191097,
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "execution": {
+      "argv": [
+        "rtk",
+        "proxy",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/artifacts/raw-sink-consumer-1f82284abee0",
+        "--mode",
+        "characterize",
+        "--output",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T031536Z-16945/consumer-characterize.json"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink",
+      "duration_seconds": 0.254207,
+      "exit_code": 0,
+      "report": {
+        "allocation_budget_bytes": 262144,
+        "clean_shutdown": true,
+        "constructor_alloc_bytes": 112,
+        "go_version": "go1.26.7",
+        "measurements": [
+          {
+            "additional_alloc_bytes": 2105344,
+            "bytes": 2097158,
+            "expected_sha256": "e030ba41539620d000c2f320e440a862bb12ae903a54b63e2b110006dd3ec1fb",
+            "max_writer_request": 2097158,
+            "samples": 1048579,
+            "sha256": "e030ba41539620d000c2f320e440a862bb12ae903a54b63e2b110006dd3ec1fb",
+            "writer_calls": 1
+          },
+          {
+            "additional_alloc_bytes": 16785408,
+            "bytes": 16777222,
+            "expected_sha256": "9fcc93121a4301d2fad4ce2ecae35f1ecb86cee5e7fc04dc1c80c15be36b7f03",
+            "max_writer_request": 16777222,
+            "samples": 8388611,
+            "sha256": "9fcc93121a4301d2fad4ce2ecae35f1ecb86cee5e7fc04dc1c80c15be36b7f03",
+            "writer_calls": 1
+          }
+        ],
+        "mode": "characterize",
+        "negative_control": false,
+        "oracle": {
+          "exact_oracle_passed": true,
+          "one_sample_hex": "0080",
+          "pattern_bytes": 10,
+          "pattern_hex": "0080ffff00000100ff7f",
+          "pattern_sha256": "556753b4da9b39610600e40b9673205bc62e4df0f649c9957c6282bd59ab42a0",
+          "short_tail_bytes": 6,
+          "short_tail_hex": "0080ff7fffff"
+        },
+        "resource_bound": false,
+        "scratch_bytes": 65536,
+        "source": "working-tree",
+        "version": "c33-v1"
+      },
+      "stderr": "",
+      "stdout": ""
+    },
+    "source_revision": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+    "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink"
+  },
+  "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c33-bounded-raw-sink/docs/temp/projects/audio-runtime/audio-runtime-c33-bounded-raw-sink/runs/run-20260910T031536Z-16945"
+}
