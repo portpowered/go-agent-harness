@@ -288,6 +288,9 @@ def build_consumer(run_dir: Path, temporary: Path) -> tuple[Path, dict[str, Any]
     )
     require_command_ok(record)
     require(binary.is_file(), "consumer build did not produce an executable")
+    record["binary_bytes"] = binary.stat().st_size
+    record["binary_sha256"] = sha256_file(binary)
+    write_json(run_dir / "consumer-build.json", record)
     return binary, record
 
 
@@ -371,6 +374,9 @@ def build_yui(run_dir: Path, temporary: Path) -> tuple[Path, dict[str, Any]]:
     )
     require_command_ok(record)
     require(binary.is_file(), "YUI build did not produce an executable")
+    record["binary_bytes"] = binary.stat().st_size
+    record["binary_sha256"] = sha256_file(binary)
+    write_json(run_dir / "yui-build.json", record)
     return binary, record
 
 
@@ -684,6 +690,8 @@ def main() -> int:
         "mode": args.mode,
         "run_dir": str(run_dir),
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "candidate_head": git_output("rev-parse", "HEAD"),
+        "origin_main": git_output("rev-parse", "origin/main"),
         "decision": "FAILED",
         "aggregate_deadline_seconds": TOTAL_TIMEOUT_SECONDS,
     }
