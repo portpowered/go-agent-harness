@@ -2584,6 +2584,97 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - The same-source public replay passed audio/tool (`3,200` rendered / `4,800` provider PCM bytes, hashes `7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805` / `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`) and interruption (`3,360` rendered / `3,840` provider PCM bytes, hashes `302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff` / `6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`), with tool side effect, healthy `2,400`-byte follow-on tail, missing-timeline negatives and all children reaped. The report is an evidence-only descendant of tested source `9f0d3d36`; no executable inputs were changed after the tested build.
 - Admission remains verified for the sole project and the branch still matches `prd.json`; fetched `origin/main=7b6ce8cecee80d3f78b7aad02760067387853ade` is already an ancestor along with startup `8bdafc7f947a3a2c9856220abdc539437035bd21` and reviewed main `926ded7bfa8f3c3e42115192d03aa1240c4806db`. No host checkout, second project, waiver, manifest, active mission, predecessor checkpoint or unrelated owner path changed.
 - This is executor handoff evidence only: the prior CI failures remain outside C39 ownership (C18 room cancellation and C21 remote `test46/provider_burst`), and no CI success, independent review, guarded merge, post-merge vertical acceptance or project completion is claimed. Next action: commit the fresh report and this evidence-only checkpoint, push the same PR `#432`, update its finding/provenance map, and return `ACCEPTED` to the script-owned current-head CI gate without polling; retain C39 ownership through `CONTINUE` for any exact rejection.
+# C43 current-main integration and static rejection repair 2026-09-10
+
+- Reverified the admitted sole `audio-runtime` project with
+  `factory/scripts/project-control.py verify-work --type task --name
+  audio-runtime-c43-retire-cli-image-staging`, which returned admitted. The
+  isolated branch remains exactly `codex/audio-runtime-c43-retire-cli-image-staging`,
+  matching `prd.json`; the worktree was clean before repair and the running
+  host checkout, predecessor checkpoints, peer paths, project admission and
+  acceptance policy were not reset or changed.
+- Read the full canonical `~default` board and the saved CI rejection log for
+  PR `#434`, run `34511330330`, job `102985912553`, at head
+  `3da342cc45aa063ec27c28d60918717614501b2f`. Architecture-size passed in
+  that log; the sole actionable failure was pinned golangci-lint errcheck at
+  `agent-cli/internal/services/internal/agentruntime/session_image_staging.go:46`
+  for discarded `staged.Cleanup()`. The task inbox had no concluded C43 review
+  finding beyond this current-head CI rejection.
+- Fetched `origin/main=d6efc88d10e046396e777762802f5f731c9c6d9d` and integrated
+  it into the preserved C43 branch as clean merge `3dfd88d3`. The prior C43
+  implementation, coverage registration and mainline ancestry remain intact;
+  no architecture baseline or generated Wire file was edited.
+- Repaired the complete static gate in owned paths. CLI deferred cleanup now
+  explicitly logs a cleanup error. Private partial-write failure now returns
+  `errors.Join(writeError, cleanupError)`; the unchanged `0700` directory and
+  `0600` file policies are named constants, and
+  `TestService_PartialWriteFailureJoinsCleanupError` proves both causes remain
+  observable. Source checkpoint `a14b86638a7e1ba8b9d7f4438e97a1f6764c34b2`
+  contains the repair.
+- Exact-head gates pass: normal and race tools suites (`325` tests in `16`
+  packages), focused CLI image/session normal and race (`22` tests), private
+  imagestaging normal/race (`6` tests each), affected-package vet, `make fmt`,
+  `make wire-check`, `make architecture-size-check` (`182` packages, `1,881`
+  files, `27,712` functions), `make coverage-registration` (`172` packages),
+  pinned golangci-lint `v2.9.0` with `0` issues, and pinned staticcheck
+  `2026.1`.
+- Clean-source `verify.py --mode focused` run
+  `verify-20260910T182006Z-42109` returns `PASS`: public Wire consumer reads
+  the exact `70`-byte PNG with SHA-256
+  `4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5`, exact
+  refreshed advertisement and idempotent cleanup; wrong-oracle negative exits
+  `1` with expected `71` versus actual `70`; cleanup-negative rejects a
+  post-cleanup read; private normal/race, CLI adapter normal/race, all tools
+  regressions, shipped CLI image workflow and credential-free replay all pass.
+- This is an executor handoff, not CI/review/merge or project acceptance. The
+  next action is to push this same branch, update PR `#434` with head
+  `a14b86638a7e1ba8b9d7f4438e97a1f6764c34b2` and the repair/evidence map, then
+  return `ACCEPTED` to the script-owned CI gate without polling. Retain C43
+  ownership through `CONTINUE` for any exact current-head rejection or other
+  actionable repair; the primary must perform independent review, guarded merge
+  and the fresh exact-artifact vertical probe.
+
+# C43 shipped-process evidence and refresh repair checkpoint 2026-09-10
+
+- Reverified admission for the sole `audio-runtime` project with
+  `factory/scripts/project-control.py verify-work --type task --name
+  audio-runtime-c43-retire-cli-image-staging`, which returned `admitted`.
+  The isolated branch/worktree still match the admitted task packet:
+  `codex/audio-runtime-c43-retire-cli-image-staging` at the task worktree
+  path. The host checkout and predecessor checkpoints were not edited.
+- The prior Review-254 evidence gap is repaired in checkpoint `97b1141b`:
+  the verifier builds the shipped `yui`, a credential-free loopback WebSocket
+  provider, and drives a real Chrome native WebMCP page. It records exact
+  commands, outputs, exit codes, source/build/fixture hashes, dynamic refresh,
+  induced timeout, staging cleanup, and process-group cleanup.
+- The shipped-process probe found a causal migration bug: the preferred
+  semantic browser stream emitted `tools_added`/navigation events while the
+  runtime refresh predicate only recognized legacy catalog/generation names.
+  The runtime now refreshes for semantic catalog mutations and navigation; the
+  focused normal/race regression is
+  `TestCapabilityEventRequiresRefreshForSemanticCatalogMutations`.
+- Exact-head verifier run `verify-20260910T200021Z-37030` returned `PASS` with
+  18 steps at source `97b1141b10b13c19ef73750694fa4acda4cc1bb2`. Consumer,
+  staging, CLI adapter, live-refresh, tools, shipped process, timeout, and
+  strict replay checks all passed their expected outcomes. The negative image
+  oracle exited `1` as required (`70` actual versus `71` expected).
+- The image process exited `0`; the local provider saw `PASS`, exact 70-byte
+  PNG SHA-256 `4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5`,
+  page events `initial, refreshed`, and `c43_refreshed_probe` in the second
+  provider `session.update`. Staging leftovers and CLI/provider/Chrome
+  process survivors were all absent. The induced `--max-duration 2s` process
+  also exited `0` with expected client-close cleanup and no survivors.
+- Source inventory records baseline `926ded7bfa8f3c3e42115192d03aa1240c4806db`,
+  142 baseline adapter lines, 71 final lines, source-delta SHA-256
+  `94652a9bec7dd6ee8241229e4d4aee24c57bcb9c44683d3c051981894403d6d4`, and
+  retired symbols `sessionImageToolPathDescription`,
+  `sessionImageStageExtension`, and `advertiseSessionImagePaths`.
+- `implementation-handoff.md` and `pr-body.md` contain the exact process
+  provenance and limitations. This remains an executor handoff only: no CI
+  result, independent review, merge, vertical acceptance, physical/acoustic
+  proof, or project-wide acceptance is claimed. Next action is push/update
+  PR `#434` and submit this same task to the script-owned CI gate without
+  polling; repair the same task on any exact rejection.
 # C36 deterministic deadline repair and current-head handoff checkpoint 2026-09-10
 
 - Re-read the Factory operating policy and implementation handoff, the admitted
@@ -2771,6 +2862,91 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and prior review-finding map, then return `ACCEPTED` to the script-owned
   current-head CI gate without polling. Retain C39 ownership through
   `CONTINUE` for any exact rejection or actionable repair.
+# C43 current-main architecture-fit and storage checkpoint 2026-09-10
+
+- Reverified admission for the sole `audio-runtime` project with
+  `factory/scripts/project-control.py verify-work --type task --name
+  audio-runtime-c43-retire-cli-image-staging`, which returned admitted. The
+  branch and isolated worktree still match the admitted `prd.branchName`; the
+  host checkout, peer worktrees and predecessor checkpoints were not reset or
+  edited.
+- Fetched `origin/main=7b6ce8cecee80d3f78b7aad02760067387853ade` and integrated
+  it with merge `5ca154f67ee95be1a61cddab99537912b424afb3`. The only merge
+  conflict was shared `progress.txt`; both C43 and incoming C36 ledger entries
+  were retained. Baseline `926ded7b`, startup integration `8bdafc7f`, and
+  current main are all ancestors of the candidate.
+- The merged-head architecture gate initially found the semantic refresh
+  change at 409/400 lines and 16/15 live package files. Repair commit
+  `169490ea69ff1886fc07ec333ac98dfa142aef05` retained the
+  `tools_added`/`tools_removed`/page-navigation/frame-navigation refresh
+  predicate, compressed `start_support.go` to 399 lines, and removed the
+  newly introduced dedicated test file to restore the immutable package
+  ceiling. No baseline or generated Wire file changed. Final architecture
+  gate passes at `183` packages / `1,884` files / `27,748` functions; coverage
+  registration passes at `173` packages.
+- Causal tools regressions pass on the merged source in normal and race modes
+  (`go test ./services/tools/...`), including the private imagestaging package.
+  The first merged-head CLI image command failed during link with
+  `no space left on device` before tests ran. Filesystem headroom was then
+  `270 MiB`, below the recorded `2 GiB` build reserve. No cache, evidence,
+  peer artifact or unrelated worktree was deleted; this is an operator
+  prerequisite, not a code failure.
+- The earlier exact-process run
+  `verify-20260910T200021Z-37030` remains historical for source `97b1141b` and
+  is not relabeled as merged-head proof. Exact next action: restore measured
+  headroom without deleting retained artifacts, rerun the focused verifier and
+  merged-head CLI normal/race checks with new provenance, then push/update PR
+  `#434` and return `ACCEPTED` to script CI only after those current-head
+  checks complete. Retain C43 ownership through `CONTINUE` while this
+  prerequisite remains unavailable.
+
+# C43 fresh merged-head process evidence checkpoint 2026-09-10
+
+- The storage prerequisite cleared to `7.3 GiB` free. The exact command
+  `rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused`
+  passed as `runs/verify-20260910T211145Z-67634` at source
+  `169490ea69ff1886fc07ec333ac98dfa142aef05`; all 18 steps passed, with the
+  deliberate wrong-oracle control exiting `1` as expected (`70` actual versus
+  `71` expected) and all other steps exiting `0` without timeout.
+- Fresh evidence covers the public tools-Wire consumer, exact image bytes and
+  cleanup, wrong-oracle and post-cleanup negatives, semantic capability refresh
+  normal/race, private imagestaging/Wire normal/race, CLI adapter normal/race,
+  all tools regressions, the in-process image integration, the built shipped
+  CLI image process workflow, induced timeout, and credential-free replay.
+  `make architecture-size-check` passes at `183` packages / `1,884` files /
+  `27,748` functions; `make coverage-registration` passes at `173` packages;
+  Wire regeneration produced no tracked changes; `git diff --check` passes.
+- The image process exits `0` with provider `PASS`, real Chrome WebMCP events
+  `initial, refreshed`, exact 70-byte PNG/readback and typed projection,
+  refreshed `c43_refreshed_probe`, no staging leftovers, and no CLI/provider/
+  Chrome process survivors. The induced `--max-duration 2s` process exits `0`
+  with `expected_timeout_client_close=true`, no leftovers and no survivors.
+  Credential-free replay exits `0` with `PROBE_TOOL_MARKER_9182` and
+  `strict replay continuation`.
+- Fresh provenance records CLI SHA-256
+  `05e617f416b98e577437bf31eb1999eac147600124a8dea2115499bc16da0ad1`, local
+  provider SHA-256
+  `7ac892d52f27bb1fcb426c6b83eb203f07bf5a1c3b08b1e5b1124e7961045c26`, page
+  SHA-256 `703a8c098f75de45957f932a5cb979b5326befb24f8d21f66d6645db6918f698`,
+  and 70-byte fixture SHA-256
+  `4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5`.
+  The source inventory is 142 baseline lines to 71 final adapter lines,
+  retiring `sessionImageToolPathDescription`, `sessionImageStageExtension`,
+  and `advertiseSessionImagePaths` while retaining
+  `prepareSessionImageToolAccess` and `sessionImageStagingConfigDir`.
+- Current-head pinned analyzer repair checks also pass: `make lint` exits 0
+  with golangci-lint `2.9.0`, and `make staticcheck` exits 0 with staticcheck
+  `2026.1`; this resolves the saved CI rejection's old-head errcheck finding.
+- This documentation checkpoint is a docs-only descendant of tested source
+  `169490ea`; relative to that tested source only the C43 README, implementation
+  handoff, PR body and root `progress.txt` changed, so executable/build/fixture
+  inputs are identical.
+- This remains an implementation checkpoint only: terminal CI, independent
+  review, guarded merge, post-merge vertical acceptance, physical/acoustic
+  proof and project acceptance are not claimed. Exact next action: commit this
+  evidence/documentation checkpoint, push/update PR `#434` with the current
+  head and Review-254 repair map, then return `ACCEPTED` to script CI without
+  polling; retain C43 through `CONTINUE` for any exact rejection.
 # C44 current-main integration and storage-blocked validation checkpoint 2026-09-10
 
 - Re-read the required Factory operating policy and implementation handoff,
@@ -2992,3 +3168,124 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and this checkpoint, commit/push the same PR `#432`, update its exact
   finding/provenance map, then return `ACCEPTED` to script CI without polling;
   retain C39 ownership through `CONTINUE` for any exact rejection.
+# C43 current-head merge and storage prerequisite checkpoint 2026-09-10
+
+- Re-read the admitted C43 task/review rows from the canonical `~default` board,
+  including the concluded Review-254 rejection and the task's merge-conflict
+  feedback. Admission verification returned `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c43-retire-cli-image-staging"}`.
+  The isolated branch remains `codex/audio-runtime-c43-retire-cli-image-staging`,
+  exactly matching `prd.json.branchName`; the running host checkout, peer
+  worktrees, predecessor checkpoints and unrelated paths were not reset or
+  edited.
+- Fetched `origin/main=5f14c45313cfdc71e000fda209e3408fcf863faf` and merged it
+  into the preserved C43 branch as `ac77c076`. The only conflict was the shared
+  `progress.txt`; both the C43 and incoming C44 ledger entries were retained.
+  Required baseline `926ded7b`, startup integration `8bdafc7f`, and fetched
+  current main all pass `git merge-base --is-ancestor` against this head.
+- After the merge, bounded focused checks passed: tools normal/race, CLI image
+  adapter normal/race, live package normal/race, `make fmt wire-check vet
+  size-check`, pinned golangci-lint 2.9.0 with 0 issues, pinned staticcheck
+  2026.1, `make architecture-size-check` at 184 packages/1,888 files/27,779
+  functions, and `make coverage-registration` at 174 workspace packages.
+  Wire regeneration left no tracked changes and `git diff --check` is clean.
+- Storage preflight was 2.3 GiB free before the focused quality runs and is now
+  1,794,788 KiB (about 1.7 GiB), below the required 2 GiB reserve and the
+  C43 256 MiB attributable-growth cap. No cache, evidence, peer artifact or
+  unrelated worktree was deleted. The historical C43 process run at source
+  `169490ea` is not relabeled as current-head proof because the merged main
+  changed executable inputs.
+- This is an implementation checkpoint only: no current-head executable build,
+  process image/read_image/semantic-refresh/timeout cleanup verifier, CI result,
+  independent review, guarded merge, vertical acceptance or project acceptance
+  is claimed. Next action after the operator restores stable headroom above the
+  2 GiB reserve is the exact bounded command
+  `rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused`,
+  followed by fresh provenance/handoff and PR #434 update, then submission of
+  the changed same-task head to script CI without polling. Retain C43 through
+  `CONTINUE` while this prerequisite is unavailable.
+
+# C43 fresh exact-head process and evidence handoff — 2026-09-10T22:05Z
+
+- Re-read the required Factory policy, implementation handoff, manifest,
+  progress and full canonical `~default` task/review inbox. Admission remains
+  `audio-runtime-c43-retire-cli-image-staging`; the isolated branch matches
+  `prd.json.branchName`, and the sole project/ownership/acceptance context is
+  preserved. Fetched `origin/main=5f14c45313cfdc71e000fda209e3408fcf863faf`
+  remains an ancestor through merge `ac77c076`; the running host checkout,
+  predecessor checkpoints, peer paths and generated Wire/baseline files were
+  not changed.
+- The latest concluded review finding was Review-254's missing shipped
+  executable/dynamic-refresh/timeout-cleanup proof and missing provenance/
+  142-to-71 symbol inventory. The candidate's bounded process harness and
+  handoff repair remain in place. I corrected its stale live test selector so
+  normal/race execute the existing `TestLiveCapabilityHandleOwnsLifecycleAndBrowserEvents`
+  test rather than returning `[no tests to run]`; semantic refresh remains
+  proven by the shipped process control.
+- The exact bounded command
+  `rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused`
+  returned `PASS` as `verify-20260910T220504Z-18231` at source
+  `ba6fffadc76e392b6086c86128cb4ae889c2aedf`, with 18 steps, no timeouts,
+  all positive steps exit 0, and the deliberate wrong-oracle child exit 1
+  (`70` actual versus `71` expected). The run is force-archived with complete
+  logs, observations, recordings, source delta and build provenance.
+- Process image proof: CLI exit 0; loopback provider `PASS`; Chrome page events
+  `initial, refreshed`; refreshed `c43_refreshed_probe`; exact 70-byte PNG
+  SHA-256 `4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5`;
+  typed `input_image`; no staging leftovers; and no CLI/provider/Chrome
+  survivors. Induced `--max-duration 2s` exited 0 with
+  `expected_timeout_client_close=true` and no survivors. Credential-free
+  strict replay exited 0 with `PROBE_TOOL_MARKER_9182`,
+  `strict replay continuation`, and no survivor.
+- Provenance records CLI SHA-256
+  `330545ccf3727e1531640079b0971c30efa98199f620448e8fa39b014b350e37`, local
+  provider SHA-256
+  `7ac892d52f27bb1fcb426c6b83eb203f07bf5a1c3b08b1e5b1124e7961045c26`, page
+  SHA-256 `703a8c098f75de45957f932a5cb979b5326befb24f8d21f66d6645db6918f698`,
+  and source delta SHA-256
+  `94652a9bec7dd6ee8241229e4d4aee24c57bcb9c44683d3c051981894403d6d4`.
+  The inventory records baseline `142` lines, final adapter `71` lines,
+  retired `sessionImageToolPathDescription`, `sessionImageStageExtension`,
+  `advertiseSessionImagePaths`, and retained adapter symbols
+  `prepareSessionImageToolAccess` and `sessionImageStagingConfigDir`.
+- Free space measured `4,588,244 KiB` before and `3,739,048 KiB` after the
+  run; the retained run directory is `65,760 KiB`, and no cache, evidence,
+  peer artifact or unrelated worktree was deleted. The 2 GiB reserve remains
+  available. This is executor evidence only; CI, independent review, guarded
+  merge, vertical acceptance, physical/acoustic proof and project acceptance
+  remain open.
+- Next action: commit and push the verifier/evidence/handoff checkpoint,
+  update PR #434 with the exact run and Review-254 repair map, then return
+  `ACCEPTED` to the script-owned CI gate without polling. Retain C43 ownership
+  through `CONTINUE` for any exact CI rejection or actionable repair.
+
+# C43 CI rejection diagnosis and bounded resubmission checkpoint 2026-09-10
+
+- Re-read the full current C43 task/review inbox and reverified admission with
+  `factory/scripts/project-control.py verify-work --type task --name
+  audio-runtime-c43-retire-cli-image-staging`; the sole admitted project is
+  still `audio-runtime`, and the isolated branch still exactly matches
+  `prd.json.branchName`. The running host checkout, predecessor checkpoints,
+  peer paths, generated Wire and architecture baselines remain untouched.
+- The complete failed log for current PR head `e4bb352c` was inspected:
+  run `34536368154`, job `103068810231`, `CI (macOS audio release)`. The
+  package-adjacent macOS tests, physical-device compile and native EAC
+  cross-build/inspection all passed. The only failure was GoReleaser
+  validation: `go run github.com/goreleaser/goreleaser/v2@v2.17.0 check
+  --config .goreleaser.yaml` timed out downloading from `proxy.golang.org`
+  (`dial tcp 142.251.214.49:443:443: i/o timeout`). This is a bounded CI
+  network failure with no C43 source defect or acceptance waiver indicated.
+- After that rejection, current-head focused checks passed: tools normal/race,
+  CLI image/read-image normal/race, live semantic-refresh normal/race,
+  `make architecture-size-check` (`184` packages/`1,888` files/`27,779`
+  functions), `make coverage-registration` (`174` workspace packages), Wire
+  regeneration with no tracked changes, and `git diff --check`. The exact
+  shipped-process evidence remains the force-archived
+  `verify-20260910T220504Z-18231` run at tested source `ba6fffad`; current
+  changes are documentation/ledger only relative to those executable inputs.
+- Local free space after the bounded checks is `2,016,056 KiB`, below the
+  recorded 2 GiB build reserve. No new executable build is attempted, and no
+  cache, retained evidence, peer artifact or unrelated worktree is deleted.
+- Next action: commit/push this diagnosis checkpoint, update PR #434, and
+  return `ACCEPTED` to the script-owned CI gate without polling. Retain the
+  same task through `CONTINUE` for any new exact CI rejection or actionable
+  repair; do not claim CI green, review, merge or vertical/project acceptance.

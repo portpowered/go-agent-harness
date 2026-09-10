@@ -1,0 +1,38 @@
+[
+  {
+    "description": "",
+    "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@79460ebecaa5625e57a5fb679a735659e73dc687/inspector.html?ws=127.0.0.1:53280/devtools/page/991FF64E78D35575F4C1856AAFE25D75",
+    "id": "991FF64E78D35575F4C1856AAFE25D75",
+    "title": "",
+    "type": "browser_ui",
+    "url": "chrome://omnibox-popup.top-chrome/",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:53280/devtools/page/991FF64E78D35575F4C1856AAFE25D75"
+  },
+  {
+    "description": "",
+    "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@79460ebecaa5625e57a5fb679a735659e73dc687/inspector.html?ws=127.0.0.1:53280/devtools/page/854121BD0606791B2E9C71DDD52EF3D2",
+    "id": "854121BD0606791B2E9C71DDD52EF3D2",
+    "title": "",
+    "type": "browser_ui",
+    "url": "chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:53280/devtools/page/854121BD0606791B2E9C71DDD52EF3D2"
+  },
+  {
+    "description": "",
+    "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@79460ebecaa5625e57a5fb679a735659e73dc687/inspector.html?ws=127.0.0.1:53280/devtools/page/88F3C251339FCBC2A5675E2883371D3E",
+    "id": "88F3C251339FCBC2A5675E2883371D3E",
+    "title": "Google Hangouts",
+    "type": "background_page",
+    "url": "chrome-extension://nkeimhogjdpnpccoofpliimaahmaaome/background.html",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:53280/devtools/page/88F3C251339FCBC2A5675E2883371D3E"
+  },
+  {
+    "description": "",
+    "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@79460ebecaa5625e57a5fb679a735659e73dc687/inspector.html?ws=127.0.0.1:53280/devtools/page/A3A5980713ACDB28E75AF4F4E77E16B9",
+    "id": "A3A5980713ACDB28E75AF4F4E77E16B9",
+    "title": "",
+    "type": "page",
+    "url": "http://127.0.0.1:53278/c43.html",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:53280/devtools/page/A3A5980713ACDB28E75AF4F4E77E16B9"
+  }
+]

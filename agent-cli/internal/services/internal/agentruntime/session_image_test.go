@@ -1,22 +1,24 @@
 package agentruntime_test
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
 import (
 	"context"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+	_ "unsafe"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
+	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPrepareSessionImageParts_ReturnsDistinctTypedErrors(t *testing.T) {
@@ -30,7 +32,6 @@ func TestPrepareSessionImageParts_ReturnsDistinctTypedErrors(t *testing.T) {
 	unsupported := writeSessionImageFile(t, dir, "unsupported.gif", []byte("GIF89a"))
 	disguised := writeSessionImageFile(t, dir, "disguised.png", []byte("plain text, not image bytes"))
 	empty := writeSessionImageFile(t, dir, "empty.png", nil)
-
 	metadata := agentruntime.SessionImageCapabilities{
 		Model:                   "gpt-realtime",
 		SupportsImageInput:      true,
@@ -97,7 +98,6 @@ func TestPrepareSessionImageParts_ReturnsDistinctTypedErrors(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			caseMetadata := metadata
@@ -112,7 +112,6 @@ func TestPrepareSessionImageParts_ReturnsDistinctTypedErrors(t *testing.T) {
 		})
 	}
 }
-
 func TestSendSessionImageTurn_UsesOneOrderedMessageAfterEarlierTurn(t *testing.T) {
 	dir := t.TempDir()
 	png := copySessionImageFixture(t, dir, "fixture.png")
@@ -141,7 +140,6 @@ func TestSendSessionImageTurn_UsesOneOrderedMessageAfterEarlierTurn(t *testing.T
 	assertSessionImagePart(t, got.ContentParts[1].(messages.ImagePart), mustReadSessionImage(t, png), "image/png")
 	assertSessionImagePart(t, got.ContentParts[2].(messages.ImagePart), mustReadSessionImage(t, jpeg), "image/jpeg")
 }
-
 func TestSendSessionImageTurn_ImageOnlyMessageHasNoPlaceholderText(t *testing.T) {
 	dir := t.TempDir()
 	png := copySessionImageFixture(t, dir, "fixture.png")
@@ -160,7 +158,6 @@ func TestSendSessionImageTurn_ImageOnlyMessageHasNoPlaceholderText(t *testing.T)
 		t.Fatalf("provider message = %#v, want image-only message without placeholder text", session.messages)
 	}
 }
-
 func TestSendSessionImageTurn_RejectsStreamOnlySessionWithoutPartialSend(t *testing.T) {
 	dir := t.TempDir()
 	imagePath := copySessionImageFixture(t, dir, "fixture.png")
@@ -180,7 +177,6 @@ func TestSendSessionImageTurn_RejectsStreamOnlySessionWithoutPartialSend(t *test
 		t.Fatalf("stream events = %#v, want no partial text or image events", session.events)
 	}
 }
-
 func TestRunSessionWithImages_ProviderObservesOrderedFixtures(t *testing.T) {
 	dir := t.TempDir()
 	png := copySessionImageFixture(t, dir, "fixture.png")
@@ -212,7 +208,6 @@ func TestRunSessionWithImages_ProviderObservesOrderedFixtures(t *testing.T) {
 	assertSessionImagePart(t, got.ContentParts[1].(messages.ImagePart), mustReadSessionImage(t, png), "image/png")
 	assertSessionImagePart(t, got.ContentParts[2].(messages.ImagePart), mustReadSessionImage(t, jpeg), "image/jpeg")
 }
-
 func TestRunSessionWithImages_ValidatesBeforeConnect(t *testing.T) {
 	inf := &countingSessionImageInferencer{}
 	missing := filepath.Join(t.TempDir(), "does-not-exist.png")
@@ -234,7 +229,6 @@ func TestRunSessionWithImages_ValidatesBeforeConnect(t *testing.T) {
 		t.Fatalf("ConnectSession calls = %d, want zero before image validation", inf.connects)
 	}
 }
-
 func TestRunSessionWithImages_RejectsConfiguredNonImageModelBeforeConnect(t *testing.T) {
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, "config")
@@ -251,7 +245,6 @@ models:
 	}
 	imagePath := copySessionImageFixture(t, dir, "fixture.png")
 	inf := &countingSessionImageInferencer{}
-
 	err := agentruntime.RunSessionWithImages(context.Background(), io.Discard, agentruntime.SessionImageRunOptions{
 		SessionRunOptions: agentruntime.SessionRunOptions{ModelCatalog: testModelCatalog(),
 			RecordPath:        filepath.Join(dir, "capture.json"),
@@ -278,7 +271,6 @@ models:
 		t.Fatalf("ConnectSession calls = %d, want zero before capability rejection", inf.connects)
 	}
 }
-
 func TestSessionCommand_ImageFlagCardinalityAndOrder(t *testing.T) {
 	dir := t.TempDir()
 	png := copySessionImageFixture(t, dir, "fixture.png")
@@ -292,7 +284,6 @@ func TestSessionCommand_ImageFlagCardinalityAndOrder(t *testing.T) {
 		{name: "one", images: []string{png}, mimes: []string{"image/png"}},
 		{name: "repeated", images: []string{png, jpeg}, mimes: []string{"image/png", "image/jpeg"}},
 	}
-
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			session := newRecordingSessionImageSession()
@@ -363,7 +354,6 @@ func TestSessionCommand_ImageFlagCardinalityAndOrder(t *testing.T) {
 		})
 	}
 }
-
 func TestSessionCommand_ImagePreservesDurationAndAudioFlags(t *testing.T) {
 	dir := t.TempDir()
 	imagePath := copySessionImageFixture(t, dir, "fixture.png")
@@ -377,7 +367,6 @@ func TestSessionCommand_ImagePreservesDurationAndAudioFlags(t *testing.T) {
 		{name: "audio output", flags: []string{"--audio-out", filepath.Join(dir, "assistant.wav")}, wantAudio: true},
 		{name: "duration and audio output", flags: []string{"--max-duration", "1s", "--audio-out", filepath.Join(dir, "assistant-bounded.wav")}, wantAudio: true, wantArtifacts: true},
 	}
-
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			capturePath := filepath.Join(dir, tc.name, "capture.json")
@@ -435,6 +424,55 @@ func TestSessionCommand_ImagePreservesDurationAndAudioFlags(t *testing.T) {
 			}
 		})
 	}
+}
+
+//go:linkname prepareSessionImageToolAccess github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.prepareSessionImageToolAccess
+func prepareSessionImageToolAccess(opts agentruntime.SessionRunOptions, sourcePaths []string, parts []messages.ImagePart) (agentruntime.SessionRunOptions, func(), error)
+
+func TestPrepareSessionImageToolAccess_NoReadImageSkipsHostResolution(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "not-created")
+	got, cleanup, err := prepareSessionImageToolAccess(agentruntime.SessionRunOptions{ConfigDir: "\x00invalid-config-path", ToolDefinitions: []messages.ToolDefinition{{Name: "unrelated"}}}, []string{"image.png"}, nil)
+	if err != nil {
+		t.Fatalf("prepare without read_image returned error: %v", err)
+	}
+	if len(got.ToolDefinitions) != 1 || got.ToolDefinitions[0].Name != "unrelated" {
+		t.Fatalf("tool definitions = %#v, want unchanged no-op", got.ToolDefinitions)
+	}
+	cleanup()
+	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unexpected staging root stat error = %v", err)
+	}
+}
+
+func TestPrepareSessionImageToolAccess_StagesAndRefreshesThroughToolsContract(t *testing.T) {
+	configDir, imageBytes := filepath.Join(t.TempDir(), "config"), []byte("literal-image")
+	base := []messages.ToolDefinition{{Name: "unrelated", Description: "keep"}, {Name: runtimeTools.ReadImageToolID, Parameters: []messages.ToolParameter{{Name: "path", Type: "string", Description: "original", Required: true}}}}
+	got, cleanup, err := prepareSessionImageToolAccess(agentruntime.SessionRunOptions{ConfigDir: configDir, ToolDefinitions: base}, []string{"source.any"}, []messages.ImagePart{{Bytes: imageBytes, MediaType: "image/png"}})
+	require.NoError(t, err)
+	require.Nil(t, got.RefreshToolDefinitions)
+	const marker = "Session-staged image path(s) (use one of these exact absolute paths):\n- "
+	path := ""
+	for _, definition := range got.ToolDefinitions {
+		for _, parameter := range definition.Parameters {
+			if definition.Name == runtimeTools.ReadImageToolID && parameter.Name == "path" {
+				if index := strings.Index(parameter.Description, marker); index >= 0 {
+					path = strings.TrimSpace(strings.Split(parameter.Description[index+len(marker):], "\n- ")[0])
+				}
+			}
+		}
+	}
+	require.NotEmpty(t, path, "read_image definition missing staged path marker")
+	require.True(t, filepath.IsAbs(path), "advertised path = %q, want absolute path", path)
+	require.Equal(t, ".png", filepath.Ext(path))
+	actual, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, imageBytes, actual)
+	_, err = os.Stat(filepath.Dir(path))
+	require.NoError(t, err)
+	cleanup()
+	cleanup()
+	_, err = os.Stat(filepath.Dir(path))
+	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func copySessionImageFixture(t *testing.T, dir, name string) string {
