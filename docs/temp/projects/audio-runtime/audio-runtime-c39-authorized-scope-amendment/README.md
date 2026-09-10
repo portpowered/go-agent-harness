@@ -135,3 +135,25 @@ missing-timeline negatives. All children were reaped and the probe used zero
 Realtime sessions/seconds. Resource measurements and the below-reserve
 operator condition are recorded in the adjacent `resource-usage.json`;
 no cache cleanup or peer artifact deletion was used.
+
+The current-main conflict repair is archived at
+`evidence-merge-cab3310-run1/probe-report.json` for exact source
+`cab3310c9ec0dc84e64706da87eb4dbf53b963db` (report SHA-256
+`0d80272decc1369a7047b1e5c2ebede88ecf0cee4bf589a6f7f1e33774bceb50`). The
+fresh nomicrophone yui is `/tmp/audio-runtime-c39-yui-cab3310` (51,171,954
+bytes, SHA-256
+`a66517529efe174bf550820e16573d3e99c081a13e5a09bc4d7618050fcf9280`). The
+probe completed in 3.129179 seconds with zero Realtime sessions/seconds.
+Controller append/idempotent status, exact staged Work/project/build identity,
+alternate-manifest and mismatched-build negatives, protected hashes,
+deterministic TERM/reap, and unchanged yui help hashes passed. Audio/tool
+replay passed 3,200 rendered / 4,800 provider bytes with the existing PCM
+oracles and tool marker; interruption passed 3,360 rendered / 3,840 provider
+bytes with sequence `[1440, 2400]` and the 2,400-byte healthy follow-on tail.
+Directory replay and missing-timeline negatives passed for both cases, and all
+children were reaped. Storage provenance is in the adjacent
+`evidence-merge-cab3310-run1/resource-usage.json`; available space was below
+the 2 GiB operator reserve, so no further build or cache mutation is planned
+until operator recovery. This remains executor handoff evidence only: script
+CI, independent review, guarded merge, the primary-owned exact-artifact
+vertical probe, physical/acoustic proof, and project completion remain open.
