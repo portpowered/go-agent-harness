@@ -48,3 +48,15 @@ diff checks also pass. The interruption replay is not rerun: C38/task198 still
 owns the observed 2400-byte result against the frozen 3840-byte oracle, pending
 reviewed repair and primary independent vertical acceptance. The branch remains
 local and unsubmitted until that known failing replay can be rerun honestly.
+
+## Exact candidate checkpoint
+
+Candidate `3fdbf5bb910ab064b1a10c076ab137c415a447a3` preserves the same runtime
+inputs and adds the bounded evidence-runner repair. Exact-head runs are recorded
+under `runs/run-*-20260910T221539Z-*`: inventory, standalone consumer,
+wrong-oracle, public policy, and cleanup control all return accepted. Inventory
+reports 246 tools dependency packages with no forbidden CLI/config/WebMCP import;
+cleanup control records capped output, native exit `-15`, bounded SIGTERM/SIGKILL,
+and descendant reaping. The shipped tool workflow retains the marker and exact
+4800-byte PCM hash. The interruption replay remains explicitly blocked on the
+unrepaired C38/task198 retention finding and is not relabeled or retried.

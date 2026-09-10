@@ -1,11 +1,11 @@
 {
   "schema": "audio-runtime-c40-interactive-policy-ledger/v1",
-  "candidate_revision": "20fc8b00b7a2295aa8116bfde8606d7dabe4fd9f",
-  "tested_source_revision": "e143999df93b92a2ad3fe3b7ede5b157d30fd8a4",
-  "candidate_revision_note": "20fc8b00 is an evidence/coverage-registration descendant of the tested source; executable inputs are unchanged.",
+  "candidate_revision": "3fdbf5bb910ab064b1a10c076ab137c415a447a3",
+  "tested_source_revision": "ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9",
+  "candidate_revision_note": "3fdbf5bb is the exact candidate. Runtime/build inputs remain those of the tested merged source ecad8fb9; 3fdbf5bb adds only bounded evidence-runner validation and does not relabel the historical executable artifacts.",
   "baseline_revision": "926ded7bfa8f3c3e42115192d03aa1240c4806db",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "origin_main": "d6efc88d10e046396e777762802f5f731c9c6d9d",
+  "origin_main": "5f14c45313cfdc71e000fda209e3408fcf863faf",
   "current_integration_checkpoint": {
     "candidate_revision": "94921e3829a25f069ebf2aeeaae1b953e751c452",
     "origin_main": "7b6ce8cecee80d3f78b7aad02760067387853ade",
@@ -279,6 +279,7 @@
     "hermetic": "job 102976451968 rejected the old head on unrelated go-agent-loop functional sessions: TestConcurrentSessionsZeroCrossSessionLeakage timed out after 2m0s; no C40 package was implicated."
   },
   "local_validation": {
+    "status": "historical checkpoint; superseded by latest_exact_head_validation",
     "focused_normal": "passed: go-agent-runtime/services/tools/... and CLI interactive-policy tests",
     "focused_race": "passed: go-agent-runtime/services/tools/... and CLI interactive-policy tests",
     "wire": "passed: check-wire.py; generation produced no diff",
@@ -289,6 +290,87 @@
     "diff_check": "passed: git diff --check",
     "pinned_lint": "not completed locally: pinned golangci-lint 2.9.0 installation failed at dsymutil with No space left on device; no pinned-lint pass is claimed",
     "storage": "observed free space below the required 2 GiB compilation reserve; no new large build/cache expansion was performed"
+  },
+  "latest_exact_head_validation": {
+    "candidate_revision": "3fdbf5bb910ab064b1a10c076ab137c415a447a3",
+    "tested_runtime_source_revision": "ecad8fb9633b5a41bfba8bdeaa0c4b9dd8ed2bc9",
+    "origin_main": "5f14c45313cfdc71e000fda209e3408fcf863faf",
+    "source_tree_dirty": false,
+    "ancestry": {
+      "baseline_926ded7b_is_ancestor": true,
+      "startup_8bdafc7_is_ancestor": true,
+      "origin_main_is_ancestor": true
+    },
+    "run_ids": {
+      "inventory": "runs/run-inventory-20260910T221539Z-29595",
+      "consumer": "runs/run-consumer-20260910T221539Z-29593",
+      "wrong_oracle": "runs/run-wrong-oracle-20260910T221539Z-29596",
+      "cleanup_control": "runs/run-cleanup-control-20260910T221539Z-29600",
+      "public_policy": "runs/run-public-policy-20260910T221539Z-29603"
+    },
+    "inventory": {
+      "cli_policy_lines": {
+        "baseline": 173,
+        "candidate": 155,
+        "method": "physical lines including comments and blanks"
+      },
+      "aggregate_cli_agentruntime_production_lines": {
+        "baseline": 41305,
+        "candidate": 41202
+      },
+      "runtime_dependency_count": 246,
+      "forbidden_runtime_dependencies": [],
+      "forbidden_import_scan": "passed"
+    },
+    "consumer": {
+      "decision": "ACCEPTED",
+      "binary_sha256": "7fa671bf2a58a88c9cc8660f1814719727cc8981ed3da599b0aab2e8bb75552a",
+      "defaults": "5s fast/read, 20s long-running, 2s acknowledgement",
+      "overrides": "7s fast/read, 15s long-running, 1.2s acknowledgement",
+      "invalid_rejected_before_effects": true,
+      "snapshot_input_isolation": true,
+      "snapshot_clone_isolation": true,
+      "wrong_oracle": "exit 1 at literal class decision assertion"
+    },
+    "public_policy": {
+      "decision": "ACCEPTED",
+      "yui_binary_sha256": "71eb588b4421d01436209c61862c816bfcc06b9b6d9e18929089d5a3f560bc21",
+      "tool_marker": "PROBE_TOOL_MARKER_9182",
+      "pcm_bytes": 4800,
+      "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+      "clean_child_shutdown": true
+    },
+    "cleanup_control": {
+      "decision": "ACCEPTED",
+      "native_exit_code": -15,
+      "harness_verdict": "timed_out",
+      "termination_signals": ["SIGTERM", "SIGKILL"],
+      "output_truncated": true,
+      "descendants_reaped": true,
+      "aggregate_elapsed_seconds": 4.052609
+    },
+    "focused_validation": {
+      "tools_normal": "334 tests in 16 packages",
+      "tools_race": "334 tests in 16 packages",
+      "cli_policy_normal": "13 tests",
+      "cli_policy_race": "13 tests",
+      "replay_bundle": "19 tests",
+      "strict_allowlist": "2 tests",
+      "policy_coverage": "98.3% of statements",
+      "coverage_registration": "174 workspace packages across 6 modules",
+      "architecture_and_size": "184 packages, 1887 files, 27788 functions",
+      "wire": "passed; generated files unchanged",
+      "fmt_vet": "passed",
+      "pinned_lint": "passed with golangci-lint 2.9.0",
+      "pinned_staticcheck": "passed with staticcheck 2026.1",
+      "diff_check": "passed"
+    },
+    "replay_regression": {
+      "decision": "BLOCKED_PENDING_C38_REVIEWED_REPAIR_AND_PRIMARY_INDEPENDENT_VERTICAL_ACCEPTANCE",
+      "not_run": true,
+      "owner": "C38/task198",
+      "reason": "C38 review258 still requires closeErr repair; the frozen interruption oracle remains 3840 bytes while the retained observed result is 2400 bytes."
+    }
   },
   "focused_commands": [
     "rtk go test ./go-agent-runtime/services/tools/... -count=1 -timeout 60s",
