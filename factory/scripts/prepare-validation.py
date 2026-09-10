@@ -7,7 +7,7 @@ import sys
 
 import project_admission
 import project_scope_amendment
-from project_contract import ContractError, artifact, check_packet, digest, manifest, root_path, work_name
+from project_contract import ContractError, artifact, check_packet, digest, root_path, work_name
 
 
 MAX_ARTIFACT_BYTES = 2 * 1024 * 1024 * 1024
@@ -68,7 +68,10 @@ def _criteria(packet, contract, scope):
 
 
 def prepare(root, name, payload):
-    contract = manifest(root)
+    try:
+        contract = project_scope_amendment.admitted_contract(root)
+    except project_scope_amendment.ScopeAmendmentError as error:
+        raise ContractError(str(error)) from error
     check_packet(project_admission.status(root), contract)
     work_name(name)
     if not name.startswith(contract["project"] + "-c"):

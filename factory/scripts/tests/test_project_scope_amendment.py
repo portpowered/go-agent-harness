@@ -502,6 +502,76 @@ class ScopeAmendmentTests(unittest.TestCase):
             result = PROJECT_CONTROL.verify_completion(self.root, self.fixture.project)
         self.assertEqual(result["status"], "verified")
 
+    def test_amended_preparation_rejects_alternate_manifest_criteria(self):
+        self.fixture.append()
+        contract = project_contract.manifest(self.root)
+        alternate = self.root / "alternate-manifest.json"
+        alternate.write_text(
+            json.dumps(
+                {
+                    "version": contract["version"],
+                    "project": contract["project"],
+                    "contractRevision": contract["contractRevision"],
+                    "authority": contract["authority"],
+                    "criteria": [copy.deepcopy(contract["criteria"][0])],
+                    "realtimeBudget": contract["realtimeBudget"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        packet = self.fixture.prepare_packet("engineering", "alternate-manifest")
+        packet["criteria"] = [copy.deepcopy(contract["criteria"][0])]
+
+        with mock.patch.dict(
+            os.environ,
+            {"FACTORY_PROJECT_MANIFEST": str(alternate)},
+        ):
+            with self.assertRaisesRegex(
+                project_contract.ContractError,
+                "alternate project manifest override is not permitted",
+            ):
+                PREPARE_VALIDATION.prepare(
+                    self.root,
+                    "audio-runtime-c39-alternate-manifest-prepare",
+                    json.dumps(packet),
+                )
+
+    def test_amended_completion_rejects_alternate_manifest_criteria(self):
+        self.fixture.append()
+        build, reports = self.fixture.prepare_reports()
+        for report_path in reports.values():
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["criteria"] = {"AUDIO": report["criteria"]["AUDIO"]}
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+        self.fixture.bind_runtime()
+        self.fixture.completion(build, reports)
+
+        contract = project_contract.manifest(self.root)
+        alternate = self.root / "alternate-completion-manifest.json"
+        alternate.write_text(
+            json.dumps(
+                {
+                    "version": contract["version"],
+                    "project": contract["project"],
+                    "contractRevision": contract["contractRevision"],
+                    "authority": contract["authority"],
+                    "criteria": [copy.deepcopy(contract["criteria"][0])],
+                    "realtimeBudget": contract["realtimeBudget"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        with mock.patch.dict(
+            os.environ,
+            {"FACTORY_PROJECT_MANIFEST": str(alternate)},
+        ):
+            with self.assertRaisesRegex(
+                project_contract.ContractError,
+                "alternate project manifest override is not permitted",
+            ):
+                with mock.patch.object(PROJECT_CONTROL, "completed_validation"):
+                    PROJECT_CONTROL.verify_completion(self.root, self.fixture.project)
+
     def test_present_null_amendment_is_rejected(self):
         self.fixture.append()
         packet = self.fixture.prepare_packet("engineering", "null-amendment")

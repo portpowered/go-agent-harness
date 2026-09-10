@@ -114,6 +114,11 @@ areas and repeat the two excluded entries plus the preserved historical report
 metadata in `scopeEvidence`; an old vertical report cannot be relabeled into
 amended completion.
 
+Amended preparation and completion always load the manifest from the admitted
+repository root. A `FACTORY_PROJECT_MANIFEST` override with different bytes is
+rejected; even a same-byte override is never used to select criteria, rubrics,
+or budget.
+
 Before primary activation, verify the merged source and these input hashes,
 preserve existing admission/active missions, run `amendment-status`, append the
 reviewed record once, and prepare new project-scope missions.  No

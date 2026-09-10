@@ -362,6 +362,33 @@ def _contract_and_inputs(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     return contract, expected_authority
 
 
+def admitted_contract(root: Path) -> dict[str, Any]:
+    """Load the immutable contract from the admitted repository root.
+
+    ``project_contract.manifest`` supports a process-wide manifest override for
+    factory setup. Amendment-aware preparation and completion must not allow
+    that override to replace the admitted root contract, because its criteria
+    and budget are part of the immutable acceptance authority. A same-byte
+    override is harmless for existing factory launchers, but it is never used
+    to select the contract; any other override fails closed.
+    """
+
+    configured_manifest = os.environ.get("FACTORY_PROJECT_MANIFEST")
+    if configured_manifest is not None:
+        try:
+            configured_digest = _digest(Path(configured_manifest).expanduser())
+        except ScopeAmendmentError as error:
+            raise ScopeAmendmentError(
+                "alternate project manifest override is not permitted"
+            ) from error
+        if configured_digest != TRUSTED_MANIFEST_SHA256:
+            raise ScopeAmendmentError(
+                "alternate project manifest override is not permitted"
+            )
+    contract, _ = _contract_and_inputs(root)
+    return contract
+
+
 def _trusted_authorization(root: Path) -> dict[str, Any]:
     path, anchor = _read_json_file(root, AUTHORIZATION_RELATIVE, "authorization anchor")
     if _digest(path) != TRUSTED_AUTHORIZATION_SHA256:

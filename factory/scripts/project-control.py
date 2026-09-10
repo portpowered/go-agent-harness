@@ -178,7 +178,10 @@ def validate_report(report, contract, role, build, expected, *, root=None, amend
 
 
 def verify_completion(root, name):
-    contract = manifest(root)
+    try:
+        contract = project_scope_amendment.admitted_contract(root)
+    except project_scope_amendment.ScopeAmendmentError as error:
+        raise ContractError(str(error)) from error
     owner(root, contract)
     if name != contract["project"]:
         raise ContractError("completion is for a different project")
