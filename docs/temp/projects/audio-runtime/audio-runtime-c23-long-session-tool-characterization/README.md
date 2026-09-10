@@ -20,10 +20,18 @@ it does not claim physical device, acoustic, or host-load proof.
 The runner also records source/ancestry/toolchain/build provenance, sanitized
 child execution, bounded output, raw public session capture, semantic
 recording, per-turn timestamp-domain latency samples, heap/goroutine
-measurements, and deliberate negative controls for PCM mismatch, identity
-swap, missing result, and duplicate result. It stops at the first unexpected
-failure and preserves that report for classification.
+measurements, a zero-turn baseline, per-length median/p95/max summaries and
+checkpoint deltas, host-load/resource observations with explicit no-quiet-host
+policy, and deliberate negative controls for PCM mismatch, identity swap,
+missing result, and duplicate result. Recording manifests, every configured
+resource counter, and session-capture integrity hashes are verified. It stops
+at the first unexpected failure and preserves binary/fixture/build-input
+hashes, exit status, expected-versus-actual summaries, and links to the
+bounded report/child logs.
 
 Required driver commands are documented by `characterize.py --help`; the
 admission handoff invokes `prepare`, `verify-provenance`, `controls`, `matrix`,
-`shipped-regressions`, `report`, and `self-check` in that order.
+`shipped-regressions`, `self-check`, and `report` in that order. The
+post-merge `probe --source-revision <exact-merged-head>` command rebuilds and
+exercises the public consumer plus credential-free shipped replay; it records
+simulated-provider evidence only and does not claim device/acoustic output.

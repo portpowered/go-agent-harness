@@ -14,13 +14,20 @@ import base64
 from contextlib import suppress
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import signal
+import statistics
 import subprocess
 import sys
 import time
 from typing import Any
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - Windows has no resource module.
+    resource = None  # type: ignore[assignment]
 
 
 OWNED_ROOT = Path(__file__).resolve().parent
@@ -42,6 +49,20 @@ MAX_FIXTURE_BYTES = 2 * 1024 * 1024
 MAX_TRACE_EVENTS = 8192
 EXPECTED_TURNS = (16, 64, 128, 256)
 EXPECTED_RECORDING_MODES = ("off", "on")
+RECORDING_LIMIT_KEYS = (
+    "transcript_bytes",
+    "transcript_items",
+    "audio_bytes",
+    "audio_items",
+    "sidecar_bytes",
+    "sidecar_items",
+    "metadata_bytes",
+    "metadata_items",
+    "terminal_bytes",
+    "terminal_items",
+    "provider_bytes",
+    "provider_items",
+)
 SESSION_CAPTURE_INTEGRITY_COVERAGE = "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)"
 TASK_NAME = "audio-runtime-c23-long-session-tool-characterization"
 EXPECTED_BRANCH = "codex/audio-runtime-c23-long-session-tool-characterization"
@@ -68,6 +89,7 @@ EXPECTED_NEGATIVE_TERMINAL = {
 }
 BUDGET_PATH = OWNED_ROOT / "budget.json"
 FIRST_FAILURE_ROOT = OWNED_ROOT / "artifacts" / "first-failures"
+LAST_FAILURE_CONTEXT: dict[str, Any] = {}
 
 
 class VerificationError(RuntimeError):
@@ -118,6 +140,10 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def canonical_json_digest(value: Any) -> str:
+    return sha256_bytes(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode())
 
 
 def fixture_value() -> dict[str, Any]:
@@ -253,7 +279,21 @@ def build_inputs(timeout: float) -> list[dict[str, Any]]:
             if not isinstance(package, dict):
                 continue
             package_dir = Path(package.get("Dir", ""))
-            for field in ("GoFiles", "CgoFiles", "IgnoredGoFiles", "EmbedFiles"):
+            for field in (
+                "GoFiles",
+                "CgoFiles",
+                "CFiles",
+                "CXXFiles",
+                "MFiles",
+                "HFiles",
+                "FFiles",
+                "SFiles",
+                "SwigFiles",
+                "SwigCXXFiles",
+                "SysoFiles",
+                "IgnoredGoFiles",
+                "EmbedFiles",
+            ):
                 for filename in package.get(field, []) or []:
                     candidate = package_dir / filename
                     try:
@@ -287,6 +327,7 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
     run_capture(build_yui, timeout=args.child_timeout_seconds)
     go_version = run_capture(["go", "version"], timeout=args.child_timeout_seconds).stdout.strip()
     fixture_sha = fixture_hash()
+    inputs = build_inputs(args.child_timeout_seconds)
     provenance: dict[str, Any] = {
         "schema": "audio-runtime.c23.provenance.v1",
         "task": TASK_NAME,
@@ -301,7 +342,8 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
         "consumer": {"path": relative_owned(CONSUMER_PATH), "sha256": sha256_file(CONSUMER_PATH), "bytes": CONSUMER_PATH.stat().st_size, "command": build_consumer},
         "yui": {"path": relative_owned(YUI_PATH), "sha256": sha256_file(YUI_PATH), "bytes": YUI_PATH.stat().st_size, "command": build_yui},
         "source_files": source_files(),
-        "build_inputs": build_inputs(args.child_timeout_seconds),
+        "build_inputs": inputs,
+        "build_inputs_sha256": canonical_json_digest(inputs),
         "bounds": {"child_timeout_seconds": args.child_timeout_seconds, "total_timeout_seconds": args.total_timeout_seconds, "max_child_output_bytes": MAX_CHILD_OUTPUT_BYTES, "max_trace_events": MAX_TRACE_EVENTS, "max_fixture_bytes": MAX_FIXTURE_BYTES},
         "public_surface": ["messages", "session", "session/wire", "recording", "recording/wire", "audio/clock", "gatewaytesting"],
         "private_imports": False,
@@ -341,19 +383,86 @@ def sanitized_environment(source_revision: str, run_root: Path) -> dict[str, str
     return allowed
 
 
-def terminate_process_group(process: subprocess.Popen[Any]) -> None:
+def host_load_snapshot() -> dict[str, Any]:
     try:
-        os.killpg(process.pid, signal.SIGTERM)
+        one, five, fifteen = os.getloadavg()
+    except (AttributeError, OSError):
+        return {"available": False, "reason": "os.getloadavg unavailable", "cpu_count": os.cpu_count()}
+    return {
+        "available": True,
+        "one_minute": one,
+        "five_minute": five,
+        "fifteen_minute": fifteen,
+        "cpu_count": os.cpu_count(),
+    }
+
+
+def child_resource_snapshot() -> dict[str, Any]:
+    if resource is None:
+        return {"available": False, "reason": "resource module unavailable"}
+    try:
+        usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+    except (AttributeError, OSError):
+        return {"available": False, "reason": "resource.getrusage unavailable"}
+    # macOS reports ru_maxrss in bytes; Linux reports KiB. The report records
+    # the platform rule instead of presenting an inferred process RSS value.
+    scale = 1 if sys.platform == "darwin" else 1024
+    return {
+        "available": True,
+        "user_cpu_seconds": usage.ru_utime,
+        "system_cpu_seconds": usage.ru_stime,
+        "max_rss_high_water_bytes": int(usage.ru_maxrss * scale),
+        "measurement": "RUSAGE_CHILDREN cumulative high-water/CPU observer",
+    }
+
+
+def process_group_alive(process_id: int) -> bool:
+    try:
+        os.killpg(process_id, 0)
     except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=2)
-    except subprocess.TimeoutExpired:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def terminate_process_group(process: subprocess.Popen[Any]) -> dict[str, Any]:
+    alive_before = process_group_alive(process.pid)
+    term_sent = False
+    kill_sent = False
+    errors: list[str] = []
+    if alive_before:
         try:
-            os.killpg(process.pid, signal.SIGKILL)
+            os.killpg(process.pid, signal.SIGTERM)
+            term_sent = True
         except ProcessLookupError:
             pass
-        process.wait(timeout=2)
+        except OSError as error:
+            errors.append(f"SIGTERM: {error}")
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+                kill_sent = True
+            except ProcessLookupError:
+                pass
+            except OSError as error:
+                errors.append(f"SIGKILL: {error}")
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                errors.append("parent did not reap after SIGKILL")
+    alive_after = process_group_alive(process.pid)
+    return {
+        "attempted": True,
+        "term_sent": term_sent,
+        "kill_sent": kill_sent,
+        "parent_reaped": process.returncode is not None,
+        "group_alive_before": alive_before,
+        "group_alive_after": alive_after,
+        "errors": errors,
+    }
 
 
 def run_child(command: list[str], label: str, run_root: Path, source_revision: str, timeout: float) -> dict[str, Any]:
@@ -363,6 +472,8 @@ def run_child(command: list[str], label: str, run_root: Path, source_revision: s
     stderr_path = run_root / "stderr.log"
     environment = sanitized_environment(source_revision, run_root)
     started = time.monotonic()
+    resource_before = child_resource_snapshot()
+    host_before = host_load_snapshot()
     timed_out = False
     with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
         process = subprocess.Popen(command, cwd=REPO_ROOT, env=environment, stdout=stdout, stderr=stderr, start_new_session=True)
@@ -370,8 +481,8 @@ def run_child(command: list[str], label: str, run_root: Path, source_revision: s
             returncode = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             timed_out = True
-            terminate_process_group(process)
             returncode = process.returncode if process.returncode is not None else -signal.SIGKILL
+        cleanup = terminate_process_group(process)
     elapsed_ms = int((time.monotonic() - started) * 1000)
     stdout_bytes = stdout_path.stat().st_size
     stderr_bytes = stderr_path.stat().st_size
@@ -387,8 +498,13 @@ def run_child(command: list[str], label: str, run_root: Path, source_revision: s
         "stdout_bytes": stdout_bytes,
         "stderr_bytes": stderr_bytes,
         "output_bounded": output_bounded,
+        "cleanup": cleanup,
+        "host_load": {"before": host_before, "after": host_load_snapshot(), "limits": {"quiet_host_threshold": None, "claim": "observation_only"}},
+        "resource_usage": {"before": resource_before, "after": child_resource_snapshot(), "policy": "child-process RUSAGE_CHILDREN observer; no quiet-host performance claim"},
     }
+    set_failure_context(execution=result)
     require(output_bounded, f"{label} exceeded the bounded child output volume")
+    require(not cleanup["group_alive_after"], f"{label} left a live process group after cleanup")
     return result
 
 
@@ -409,6 +525,43 @@ def new_run_root(label: str) -> Path:
     return candidate
 
 
+def summarize_report(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scenario": report.get("scenario"),
+        "turns": report.get("turns"),
+        "recording": report.get("recording"),
+        "tool_control": report.get("tool_control"),
+        "error": report.get("error"),
+        "terminal": report.get("terminal"),
+        "clean_shutdown": report.get("clean_shutdown"),
+        "trace_complete": report.get("trace_complete"),
+        "events": report.get("events"),
+        "pcm": report.get("pcm"),
+        "tool_call_count": len(report.get("tool_calls", [])),
+        "tool_result_count": len(report.get("tool_results", [])),
+        "trace_event_count": len(report.get("trace", [])),
+        "runtime": report.get("runtime"),
+    }
+
+
+def set_failure_context(
+    *,
+    execution: dict[str, Any] | None = None,
+    report: dict[str, Any] | None = None,
+    report_path: Path | None = None,
+    expected: Any = None,
+    actual: Any = None,
+) -> None:
+    global LAST_FAILURE_CONTEXT
+    LAST_FAILURE_CONTEXT = {
+        "execution": execution,
+        "report_path": relative_owned(report_path) if report_path is not None else None,
+        "report_summary": summarize_report(report) if report is not None else None,
+        "expected": expected,
+        "actual": actual if actual is not None else (summarize_report(report) if report is not None else None),
+    }
+
+
 def preserve_first_failure(phase: str, error: Exception, **details: Any) -> str:
     """Persist the first unexpected failure for this exact candidate."""
     with suppress(Exception):
@@ -417,15 +570,53 @@ def preserve_first_failure(phase: str, error: Exception, **details: Any) -> str:
         head = "unknown-head"
     path = FIRST_FAILURE_ROOT / f"{head}-{phase}.json"
     if not path.exists():
+        provenance: dict[str, Any] = {}
+        with suppress(Exception):
+            provenance = load_json(PROVENANCE_PATH)
+        binary_evidence: dict[str, Any] = {}
+        for name in ("consumer", "yui"):
+            descriptor = provenance.get(name, {})
+            binary_path = OWNED_ROOT / descriptor.get("path", "") if descriptor.get("path") else None
+            if binary_path is not None and binary_path.is_file():
+                binary_evidence[name] = {"path": relative_owned(binary_path), "sha256": sha256_file(binary_path)}
+        context = LAST_FAILURE_CONTEXT
+        execution = context.get("execution") or {}
         payload: dict[str, Any] = {
-            "schema": "audio-runtime.c23.first-failure.v1",
+            "schema": "audio-runtime.c23.first-failure.v2",
             "task": TASK_NAME,
             "phase": phase,
             "candidate_revision": head,
             "error": str(error),
             "recorded_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "exit_status": {
+                "returncode": execution.get("returncode"),
+                "timed_out": execution.get("timed_out"),
+                "parent_reaped": execution.get("cleanup", {}).get("parent_reaped"),
+                "descendants_stopped": not execution.get("cleanup", {}).get("group_alive_after", False),
+            },
+            "provenance": {
+                "candidate_revision": provenance.get("candidate_revision", head),
+                "source_revision": provenance.get("source_revision"),
+                "fixture_sha256": provenance.get("fixture", {}).get("sha256"),
+                "consumer": binary_evidence.get("consumer"),
+                "yui": binary_evidence.get("yui"),
+                "build_inputs_sha256": provenance.get("build_inputs_sha256"),
+            },
+            "expected_actual": {
+                "expected": context.get("expected") if context.get("expected") is not None else details.get("expected", "phase contract"),
+                "actual": context.get("actual") if context.get("actual") is not None else details.get("actual", str(error)),
+            },
+            "bounded_trace": {
+                "report_path": context.get("report_path"),
+                "report_summary": context.get("report_summary"),
+                "stdout_path": execution.get("stdout"),
+                "stderr_path": execution.get("stderr"),
+                "max_trace_events": MAX_TRACE_EVENTS,
+                "max_child_output_bytes": MAX_CHILD_OUTPUT_BYTES,
+            },
+            "execution": execution,
         }
-        payload.update(details)
+        payload["details"] = details
         write_json(path, payload)
     return relative_owned(path)
 
@@ -482,9 +673,12 @@ def begin_phase(phase: str, provenance: dict[str, Any], args: argparse.Namespace
 
 
 def expected_pcm(turns: int) -> bytes:
+    audio = fixture_value().get("audio", {})
+    samples_per_turn = audio.get("samples_per_turn")
+    require(isinstance(samples_per_turn, int) and samples_per_turn > 0, "fixture samples_per_turn is invalid")
     data = bytearray()
     for turn in range(turns):
-        for index in range(64):
+        for index in range(samples_per_turn):
             value = 100 + turn * 3 + index
             data.extend(int(value).to_bytes(2, "little", signed=True))
     return bytes(data)
@@ -529,18 +723,71 @@ def validate_recording_usage(report: dict[str, Any]) -> None:
     enabled = bool(report.get("recording"))
     require(usage.get("enabled") is enabled, "recording enabled state is not bound to usage evidence")
     limits = usage.get("limits", {})
-    require(isinstance(limits, dict) and limits and all(isinstance(value, int) and value > 0 for value in limits.values()), "recording limits are missing or unbounded")
-    if enabled:
-        require(usage.get("available") is True, "recording usage reporter was unavailable")
-        observed = usage.get("usage", {})
-        require(isinstance(observed, dict), "recording usage snapshot is malformed")
-        for name in ("transcript_bytes", "audio_bytes", "provider_bytes", "summary_bytes"):
-            require(isinstance(observed.get(name), int) and observed[name] >= 0, f"recording usage {name} is unavailable")
-        require(observed["transcript_bytes"] <= limits["transcript_bytes"], "recording transcript usage exceeded its configured limit")
-        require(observed["audio_bytes"] <= limits["audio_bytes"], "recording audio usage exceeded its configured limit")
-        require(observed["provider_bytes"] <= limits["provider_bytes"], "recording provider usage exceeded its configured limit")
+    require(isinstance(limits, dict) and set(limits) == set(RECORDING_LIMIT_KEYS), "recording limits are incomplete")
+    require(all(isinstance(limits.get(key), int) and limits[key] > 0 for key in RECORDING_LIMIT_KEYS), "recording limits are missing or unbounded")
+    drops = usage.get("drops", {})
+    require(isinstance(drops, dict) and all(isinstance(value, int) and value >= 0 for value in drops.values()), "recording drop counters are malformed")
+    if not enabled:
+        require(usage.get("available") is False, "disabled recording unexpectedly reported a usage snapshot")
+        return
+    require(usage.get("available") is True, "recording usage reporter was unavailable")
+    observed = usage.get("usage", {})
+    require(isinstance(observed, dict) and observed, "recording usage snapshot is malformed")
+    require(all(isinstance(value, int) and value >= 0 for value in observed.values()), "recording usage contains a negative or non-integer counter")
+    for key in RECORDING_LIMIT_KEYS:
+        require(key in observed, f"recording usage omitted configured counter {key}")
+        require(observed[key] <= limits[key], f"recording usage {key} exceeded its configured limit")
 
 
+def validate_session_capture(path: Path) -> dict[str, Any]:
+    require(path.is_file() and not path.is_symlink(), f"session capture is not a regular file: {path}")
+    relative_owned(path)
+    capture = load_json(path)
+    require(capture.get("version") == 2, f"session capture version is not 2: {path}")
+    require(isinstance(capture.get("provider"), dict) and isinstance(capture.get("session"), dict), "session capture metadata is incomplete")
+    require(isinstance(capture.get("records"), list) and capture["records"], "session capture records are missing")
+    coverage: dict[str, Any] = {key: capture[key] for key in ("version", "provider", "session", "records")}
+    if capture.get("ends_with_disconnect"):
+        coverage["ends_with_disconnect"] = True
+    expected_digest = sha256_bytes(json.dumps(coverage, ensure_ascii=False, separators=(",", ":")).encode())
+    integrity = capture.get("integrity", {})
+    require(integrity == {"algorithm": "sha256", "coverage": SESSION_CAPTURE_INTEGRITY_COVERAGE, "digest": expected_digest}, f"session capture integrity is missing or invalid: {path}")
+    sequences = [record.get("sequence") for record in capture["records"]]
+    require(sequences == list(range(1, len(sequences) + 1)), f"session capture sequence is not contiguous: {path}")
+    return capture
+
+
+def validate_recording_artifacts(report: dict[str, Any]) -> None:
+    artifacts = report.get("artifacts", {})
+    provider_value = artifacts.get("provider_capture")
+    require(isinstance(provider_value, str) and provider_value, "recording report omitted provider capture path")
+    provider_path = Path(provider_value)
+    validate_session_capture(provider_path)
+    if not report.get("recording"):
+        return
+    semantic_value = artifacts.get("semantic_root")
+    require(isinstance(semantic_value, str) and semantic_value, "recording report omitted semantic artifact root")
+    semantic_root = Path(semantic_value)
+    require(semantic_root.is_dir() and not semantic_root.is_symlink(), "recording semantic root is not a regular directory")
+    relative_owned(semantic_root)
+    manifest_path = semantic_root / "manifest.json"
+    manifest = load_json(manifest_path)
+    require(manifest.get("format_version") == 1, "recording manifest format is not version 1")
+    require(isinstance(manifest.get("artifacts"), list) and manifest["artifacts"], "recording manifest has no artifacts")
+    expected_names = {"client.transcript.jsonl", "agent.transcript.jsonl", "session-log.jsonl", "audio/out-000.pcm", "provider.json"}
+    actual_names = {item.get("path") for item in manifest["artifacts"]}
+    require(actual_names == expected_names, f"recording manifest artifact set changed: {actual_names}")
+    terminal = manifest.get("terminal", {})
+    report_terminal = report.get("terminal", {})
+    for name in ("reason", "classification", "terminal_provenance", "output_state"):
+        report_name = "provenance" if name == "terminal_provenance" else name
+        require(terminal.get(name) == report_terminal.get(report_name), f"recording manifest terminal {name} is not bound to the public report")
+    for item in manifest["artifacts"]:
+        relative = Path(str(item.get("path", "")))
+        require(not relative.is_absolute() and ".." not in relative.parts, f"recording manifest path escaped semantic root: {relative}")
+        artifact_path = semantic_root / relative
+        require(artifact_path.is_file() and not artifact_path.is_symlink(), f"recording manifest artifact is missing: {relative}")
+        require(item.get("sha256") == sha256_file(artifact_path), f"recording manifest hash mismatch: {relative}")
 def validate_terminal(report: dict[str, Any], expected: dict[str, str], label: str) -> None:
     terminal = report.get("terminal")
     require(terminal == expected, f"{label} terminal state changed: {terminal!r} != {expected!r}")
@@ -555,6 +802,7 @@ def validate_tool_report(report: dict[str, Any], turns: int, fixture_sha: str) -
     require(report.get("trace_complete") is True, "consumer trace was truncated")
     validate_terminal(report, EXPECTED_COMPLETION_TERMINAL, "successful tool matrix")
     validate_recording_usage(report)
+    validate_recording_artifacts(report)
     events = report.get("events", {})
     require(events.get("overflow_drops") == 0, "consumer live-event overflow was not zero")
     require(events.get("count", 0) > 0 and events.get("count", 0) <= MAX_TRACE_EVENTS, "consumer event trace is outside bounds")
@@ -582,9 +830,9 @@ def validate_tool_report(report: dict[str, Any], turns: int, fixture_sha: str) -
     validate_ordered_trace(report, expected_call_ids, expected_response_ids)
     pcm = report.get("pcm", {})
     expected = expected_pcm(turns)
-    require(pcm.get("format") == "pcm16-le" and pcm.get("sample_rate") == 16000 and pcm.get("channels") == 1 and pcm.get("bit_depth") == 16, "PCM format proof is incomplete")
+    require(pcm.get("format") == "pcm16-le" and pcm.get("sample_rate") == fixture_value().get("audio", {}).get("sample_rate") and pcm.get("channels") == 1 and pcm.get("bit_depth") == 16, "PCM format proof is incomplete")
     require(pcm.get("bytes") == len(expected) and pcm.get("sha256") == sha256_bytes(expected), "PCM byte/SHA oracle mismatch")
-    require(pcm.get("frame_samples") == 64, "PCM frame size proof is incomplete")
+    require(pcm.get("frame_samples") == fixture_value().get("audio", {}).get("samples_per_turn"), "PCM frame size proof is incomplete")
     latency = report.get("latency", [])
     require(len(latency) == turns, f"latency sample count {len(latency)} != {turns}")
     for sample in latency:
@@ -615,23 +863,127 @@ def validate_interruption_report(report: dict[str, Any], fixture_sha: str) -> No
 def run_consumer(source_revision: str, fixture_sha: str, turns: int, recording: bool, label: str, timeout: float) -> dict[str, Any]:
     root = new_run_root(label)
     report_path = root / "consumer-report.json"
-    command = [str(CONSUMER_PATH), "--scenario", "tool-matrix", "--turns", str(turns), "--artifact-root", str(root / "consumer-artifacts"), "--output", str(report_path)]
+    command = [str(CONSUMER_PATH), "--fixture", str(FIXTURE_PATH), "--scenario", "tool-matrix", "--turns", str(turns), "--artifact-root", str(root / "consumer-artifacts"), "--output", str(report_path)]
     if recording:
         command.append("--recording")
     execution = run_child(command, label, root / "process", source_revision, timeout)
     require(execution["returncode"] == 0 and not execution["timed_out"], f"{label} child failed: {child_text(execution, 'stderr').strip()}")
     report = load_json(report_path)
+    set_failure_context(execution=execution, report=report, report_path=report_path, expected={"scenario": "tool-matrix", "turns": turns, "recording": recording})
     validate_tool_report(report, turns, fixture_sha)
     return {"label": label, "recording": recording, "turns": turns, "execution": execution, "report": report, "report_path": relative_owned(report_path)}
 
 
+def run_baseline(source_revision: str, fixture_sha: str, label: str, timeout: float) -> dict[str, Any]:
+    root = new_run_root(label)
+    report_path = root / "consumer-report.json"
+    command = [str(CONSUMER_PATH), "--fixture", str(FIXTURE_PATH), "--scenario", "baseline", "--artifact-root", str(root / "consumer-artifacts"), "--output", str(report_path)]
+    execution = run_child(command, label, root / "process", source_revision, timeout)
+    require(execution["returncode"] == 0 and not execution["timed_out"], f"{label} child failed: {child_text(execution, 'stderr').strip()}")
+    report = load_json(report_path)
+    set_failure_context(execution=execution, report=report, report_path=report_path, expected={"scenario": "baseline", "fixture_sha256": fixture_sha})
+    require(report.get("scenario") == "baseline", "baseline consumer changed scenario")
+    require(report.get("fixture_sha256") == fixture_sha, "baseline fixture digest does not match provenance")
+    require(report.get("clean_shutdown") is True and report.get("trace_complete") is True, "baseline consumer did not finish cleanly")
+    require(isinstance(report.get("runtime"), dict) and report["runtime"].get("baseline") and report["runtime"].get("after"), "baseline runtime observation is incomplete")
+    return {"label": label, "execution": execution, "report": report, "report_path": relative_owned(report_path)}
+
+
+def numeric_stats(values: list[int | float]) -> dict[str, Any]:
+    require(values, "measurement has no numeric samples")
+    ordered = sorted(values)
+    tail_index = min(len(ordered) - 1, max(0, math.ceil(len(ordered) * 0.95) - 1))
+    return {
+        "count": len(values),
+        "raw": values,
+        "median": statistics.median(values),
+        "tail_p95": ordered[tail_index],
+        "max": max(values),
+    }
+
+
+def runtime_checkpoint(report: dict[str, Any]) -> dict[str, Any]:
+    runtime = report.get("runtime", {})
+    return {
+        "elapsed_ms": runtime.get("elapsed_ms"),
+        "heap_live_bytes": runtime.get("heap_live_bytes"),
+        "heap_allocated_bytes": runtime.get("heap_allocated_bytes"),
+        "heap_objects": runtime.get("heap_objects"),
+        "goroutines": runtime.get("goroutines"),
+        "rss_bytes": runtime.get("rss_bytes") if runtime.get("rss_availability") not in (None, "unavailable_in_public_consumer") else None,
+        "state": runtime.get("state", {}),
+    }
+
+
+def subtract_numeric(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in left.items():
+        if key == "state":
+            continue
+        if isinstance(value, (int, float)) and isinstance(right.get(key), (int, float)):
+            result[key] = value - right[key]
+    return result
+
+
+def measurement_for_run(run: dict[str, Any]) -> dict[str, Any]:
+    report = run["report"]
+    latency = report.get("latency", [])
+    return {
+        "turns": run.get("turns"),
+        "recording": run.get("recording"),
+        "per_turn_latency_ns": {
+            "request_to_first_pcm": numeric_stats([item["request_to_first_pcm_ns"] for item in latency]),
+            "request_to_terminal": numeric_stats([item["request_to_terminal_ns"] for item in latency]),
+        },
+        "runtime": runtime_checkpoint(report),
+        "measurement": report.get("runtime", {}).get("measurement", {}),
+        "host_load": run["execution"].get("host_load", {}),
+        "resource_usage": run["execution"].get("resource_usage", {}),
+    }
+
+
+def build_measurements(baseline: dict[str, Any], mode_runs: dict[int, dict[str, dict[str, Any]]], args: argparse.Namespace) -> dict[str, Any]:
+    baseline_runtime = runtime_checkpoint(baseline["report"])
+    by_turn: list[dict[str, Any]] = []
+    checkpoint_deltas: list[dict[str, Any]] = []
+    for turns in EXPECTED_TURNS:
+        modes = {mode: measurement_for_run(mode_runs[turns][mode]) for mode in EXPECTED_RECORDING_MODES}
+        by_turn.append({"turns": turns, "recording": modes})
+        checkpoint_deltas.append({
+            "turns": turns,
+            "recording": {
+                mode: {
+                    "from_baseline": subtract_numeric(modes[mode]["runtime"], baseline_runtime),
+                    "state_observed": modes[mode]["runtime"].get("state", {}),
+                }
+                for mode in EXPECTED_RECORDING_MODES
+            },
+        })
+    return {
+        "schema": "audio-runtime.c23.measurements.v1",
+        "policy": {
+            "gc": "no forced GC; runtime.ReadMemStats is sampled before and after each public run",
+            "observer": "event collector, recording usage reporter, two runtime.ReadMemStats samples and child RUSAGE observer; overhead is not subtracted",
+            "clock": "request-to-PCM and request-to-terminal use injected deterministic event timestamps; process elapsed uses monotonic wall time",
+            "host_load": "os.getloadavg sampled before and after each child; no quiet-host threshold or performance claim",
+            "unavailable": ["private retained conversation count", "device callback consumption", "physical/acoustic output"],
+        },
+        "limits": {
+            "child_timeout_seconds": args.child_timeout_seconds,
+            "total_timeout_seconds": args.total_timeout_seconds,
+            "host_load_threshold": None,
+            "quiet_host_claim": False,
+        },
+        "baseline": {"report_path": baseline["report_path"], "runtime": baseline_runtime, "host_load": baseline["execution"].get("host_load", {}), "resource_usage": baseline["execution"].get("resource_usage", {})},
+        "by_turn": by_turn,
+        "checkpoint_deltas": checkpoint_deltas,
+    }
+
+
 def compare_recording_pair(off: dict[str, Any], on: dict[str, Any]) -> None:
     require(report_normalized(off["report"]) == report_normalized(on["report"]), f"recording off/on semantic or PCM parity failed for {off['turns']} turns")
-    artifacts = on["report"].get("artifacts", {})
-    semantic = artifacts.get("semantic_root")
-    provider = artifacts.get("provider_capture")
-    require(semantic and provider, "recording-on report omitted semantic/raw evidence paths")
-    require(Path(semantic).is_dir() and Path(provider).is_file(), "recording-on evidence paths are not materialized")
+    validate_recording_artifacts(off["report"])
+    validate_recording_artifacts(on["report"])
 
 
 def matrix_spec(args: argparse.Namespace) -> tuple[tuple[int, ...], tuple[str, ...]]:
@@ -656,10 +1008,11 @@ def controls(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str, 
         compare_recording_pair(off, on)
         interruption_root = new_run_root("controls-interruption")
         report_path = interruption_root / "consumer-report.json"
-        command = [str(CONSUMER_PATH), "--scenario", "interruption", "--artifact-root", str(interruption_root / "consumer-artifacts"), "--output", str(report_path)]
+        command = [str(CONSUMER_PATH), "--fixture", str(FIXTURE_PATH), "--scenario", "interruption", "--artifact-root", str(interruption_root / "consumer-artifacts"), "--output", str(report_path)]
         execution = run_child(command, "controls-interruption", interruption_root / "process", source_revision, phase.child_timeout(args.child_timeout_seconds))
         require(execution["returncode"] == 0 and not execution["timed_out"], f"interruption control failed: {child_text(execution, 'stderr').strip()}")
         interruption = load_json(report_path)
+        set_failure_context(execution=execution, report=interruption, report_path=report_path, expected={"scenario": "interruption", "terminal": EXPECTED_INTERRUPTION_TERMINAL})
         validate_interruption_report(interruption, fixture_sha)
         result = {"schema": "audio-runtime.c23.controls.v1", "passed": True, "elapsed_ms": int((time.monotonic() - started) * 1000), "tool_pair": {"off": off, "on": on}, "interruption": {"execution": execution, "report": interruption, "report_path": relative_owned(report_path)}}
         write_json(OWNED_ROOT / "controls.json", result)
@@ -676,37 +1029,72 @@ def matrix(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str, An
     source_revision = provenance["source_revision"]
     fixture_sha = provenance["fixture"]["sha256"]
     phase = begin_phase("matrix", provenance, args)
+    baseline: dict[str, Any] | None = None
+    runs_by_turn: dict[int, dict[str, dict[str, Any]]] = {}
     runs: list[dict[str, Any]] = []
     pairs: list[dict[str, Any]] = []
     try:
         requested_turns, recording_modes = matrix_spec(args)
+        baseline = run_baseline(source_revision, fixture_sha, "matrix-baseline", phase.child_timeout(args.child_timeout_seconds))
         for turns in requested_turns:
             require(time.monotonic() - started <= args.total_timeout_seconds, "matrix exceeded its total timeout before the next pair")
-            mode_runs: dict[str, dict[str, Any]] = {}
+            current_runs: dict[str, dict[str, Any]] = {}
             for mode in recording_modes:
-                mode_runs[mode] = run_consumer(source_revision, fixture_sha, turns, mode == "on", f"matrix-{mode}-{turns}", phase.child_timeout(args.child_timeout_seconds))
-            off = mode_runs["off"]
-            on = mode_runs["on"]
+                current_runs[mode] = run_consumer(source_revision, fixture_sha, turns, mode == "on", f"matrix-{mode}-{turns}", phase.child_timeout(args.child_timeout_seconds))
+            off = current_runs["off"]
+            on = current_runs["on"]
             compare_recording_pair(off, on)
             runs.extend([off, on])
+            runs_by_turn[turns] = current_runs
             pairs.append({"turns": turns, "recording_off": off["report_path"], "recording_on": on["report_path"], "normalized_sha256": sha256_bytes(json.dumps(report_normalized(off["report"]), sort_keys=True, separators=(",", ":")).encode())})
-        result = {"schema": "audio-runtime.c23.matrix.v1", "passed": True, "elapsed_ms": int((time.monotonic() - started) * 1000), "turns": list(requested_turns), "recording_modes": list(recording_modes), "runs": runs, "pairs": pairs, "bounds": {"child_timeout_seconds": args.child_timeout_seconds, "total_timeout_seconds": args.total_timeout_seconds}}
+        require(baseline is not None, "matrix baseline was not observed")
+        measurements = build_measurements(baseline, runs_by_turn, args)
+        result = {"schema": "audio-runtime.c23.matrix.v1", "passed": True, "elapsed_ms": int((time.monotonic() - started) * 1000), "turns": list(requested_turns), "recording_modes": list(recording_modes), "baseline": baseline, "runs": runs, "pairs": pairs, "measurements": measurements, "bounds": {"child_timeout_seconds": args.child_timeout_seconds, "total_timeout_seconds": args.total_timeout_seconds}}
         write_json(OWNED_ROOT / "matrix.json", result)
         phase.finish(True)
         return result
     except Exception as error:
-        partial = {"schema": "audio-runtime.c23.matrix.v1", "passed": False, "elapsed_ms": int((time.monotonic() - started) * 1000), "runs": runs, "pairs": pairs, "error": str(error)}
+        partial = {"schema": "audio-runtime.c23.matrix.v1", "passed": False, "elapsed_ms": int((time.monotonic() - started) * 1000), "baseline": baseline, "completed_runs": [{"label": item.get("label"), "report_path": item.get("report_path"), "execution": item.get("execution")} for item in runs], "pairs": pairs, "error": str(error)}
         write_json(OWNED_ROOT / "matrix.json", partial)
         phase.finish(False, str(error))
         preserve_first_failure("matrix", error, source_revision=source_revision, partial=partial)
         raise
 
 
-def test6_capture(path: Path) -> dict[str, Any]:
+def shipped_replay_expectations() -> dict[str, Any]:
+    value = fixture_value().get("shipped_replay")
+    require(isinstance(value, dict), "fixture shipped replay expectations are missing")
+    require(isinstance(value.get("expected_types"), list) and value["expected_types"], "fixture shipped replay event oracle is missing")
+    return value
+
+
+def shipped_audio_segments() -> tuple[Path, list[bytes]]:
     audio_source = REPO_ROOT / "agent-cli" / "internal" / "transport" / "cli" / "testdata" / "test6-openai-barge-in.base64"
     require(audio_source.is_file(), f"shipped test6 audio fixture missing: {audio_source}")
     segments = [base64.b64decode(line.strip()) for line in audio_source.read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
     require(len(segments) == 2 and all(segments), "shipped test6 audio fixture did not provide two non-empty segments")
+    return audio_source, segments
+
+
+def validate_shipped_capture(capture: dict[str, Any], segments: list[bytes]) -> None:
+    expectations = shipped_replay_expectations()
+    records = capture.get("records", [])
+    require(len(records) == expectations["expected_record_count"], "shipped capture record count changed")
+    require([record.get("type") for record in records] == expectations["expected_types"], "shipped capture event ordering/type oracle changed")
+    require([record.get("sequence") for record in records] == list(range(1, len(records) + 1)), "shipped capture sequence is not contiguous")
+    require(records[0].get("direction") == "client_to_server" and records[1].get("direction") == "server_to_client", "shipped capture handshake direction changed")
+    for record in records:
+        require(record.get("payload_type") == "websocket_message" and isinstance(record.get("payload"), dict), "shipped capture record envelope is incomplete")
+    interrupted = [record for record in records if record.get("payload", {}).get("response_id") == capture.get("interrupted_response_id") and record.get("payload", {}).get("type") == "response.output_audio.delta"]
+    healthy = [record for record in records if record.get("payload", {}).get("response_id") == capture.get("healthy_response_id") and record.get("payload", {}).get("type") == "response.output_audio.delta"]
+    require(len(interrupted) == 1 and len(healthy) == 1, "shipped capture does not contain exactly one interrupted and healthy audio delta")
+    require(base64.b64decode(interrupted[0]["payload"]["delta"]) == segments[0], "interrupted shipped PCM fixture changed")
+    require(base64.b64decode(healthy[0]["payload"]["delta"]) == segments[1], "healthy shipped PCM fixture changed")
+    require(capture.get("healthy_segment_sha256") == sha256_bytes(segments[1]), "healthy shipped PCM fixture hash is stale")
+
+
+def test6_capture(path: Path) -> dict[str, Any]:
+    audio_source, segments = shipped_audio_segments()
     records: list[dict[str, Any]] = []
 
     def add(direction: str, payload: dict[str, Any]) -> None:
@@ -731,9 +1119,18 @@ def test6_capture(path: Path) -> dict[str, Any]:
     add(s2c, {"type": "response.output_audio.delta", "response_id": "resp-test6-new-assistant", "item_id": "item-test6-new-assistant", "output_index": 0, "content_index": 0, "delta": base64.b64encode(segments[1]).decode()})
     add(s2c, {"type": "response.output_audio.done", "response_id": "resp-test6-new-assistant", "item_id": "item-test6-new-assistant", "output_index": 0, "content_index": 0})
     add(s2c, {"type": "response.done", "response": {"id": "resp-test6-new-assistant", "status": "completed"}})
+    expectations = shipped_replay_expectations()
     capture = seal_session_capture({"version": 2, "provider": {"name": "openai", "model": "gpt-realtime-2.1-mini"}, "session": {"id": "sess-test6-barge-in", "started_at_utc": "2026-09-02T18:49:17.635745Z", "fixture_provenance": "shipped-test6-derived"}, "records": records})
+    capture["expected_audio_bytes"] = expectations["expected_audio_bytes"]
+    capture["expected_audio_sha256"] = expectations["expected_audio_sha256"]
+    capture["interrupted_prefix_bytes"] = expectations["interrupted_prefix_bytes"]
+    capture["expected_record_count"] = expectations["expected_record_count"]
+    capture["interrupted_response_id"] = "resp-test6-interrupted"
+    capture["healthy_response_id"] = "resp-test6-new-assistant"
+    capture["healthy_segment_sha256"] = sha256_bytes(segments[1])
+    validate_shipped_capture(capture, segments)
     write_json(path, capture, sort_keys=False)
-    return {"path": relative_owned(path), "source_audio": relative_repo(audio_source), "source_audio_sha256": sha256_file(audio_source), "segment_bytes": [len(segment) for segment in segments], "healthy_segment_sha256": sha256_bytes(segments[1]), "record_count": len(records), "interrupted_response_id": "resp-test6-interrupted", "healthy_response_id": "resp-test6-new-assistant"}
+    return {"path": relative_owned(path), "source_audio": relative_repo(audio_source), "source_audio_sha256": sha256_file(audio_source), "segment_bytes": [len(segment) for segment in segments], "healthy_segment_sha256": sha256_bytes(segments[1]), "record_count": len(records), "interrupted_response_id": "resp-test6-interrupted", "healthy_response_id": "resp-test6-new-assistant", "expected_audio_bytes": expectations["expected_audio_bytes"], "expected_audio_sha256": expectations["expected_audio_sha256"], "interrupted_prefix_bytes": expectations["interrupted_prefix_bytes"]}
 
 
 def shipped_regressions(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str, Any]:
@@ -750,20 +1147,29 @@ def shipped_regressions(args: argparse.Namespace, provenance: dict[str, Any]) ->
         execution = run_child(command, "shipped-yui-test6", root / "process", source_revision, phase.child_timeout(args.child_timeout_seconds))
         stderr = child_text(execution, "stderr")
         stdout = child_text(execution, "stdout")
+        set_failure_context(execution=execution, expected={"returncode": 0, "clean_shutdown": True, "exact_pcm": True})
         require(execution["returncode"] == 0 and not execution["timed_out"], f"shipped yui replay failed: {(stderr or stdout).strip()}")
         lower_output = (stderr + stdout).lower()
         for forbidden in ("api_key", "openai_api_key", "credential_reference", "unauthorized"):
             require(forbidden not in lower_output, f"shipped yui replay exposed or requested credential material: {forbidden}")
         require(audio_out.is_file() and audio_out.stat().st_size > 0, "shipped yui replay did not produce non-empty audio output")
-        capture_value = load_json(capture_path)
+        capture_value = validate_session_capture(capture_path)
+        _, segments = shipped_audio_segments()
+        validate_shipped_capture(capture_value, segments)
         healthy_records = [record for record in capture_value.get("records", []) if record.get("payload", {}).get("response_id") == capture["healthy_response_id"] and record.get("payload", {}).get("type") == "response.output_audio.delta"]
         require(len(healthy_records) == 1, "shipped capture did not contain exactly one healthy audio delta")
         healthy_pcm = base64.b64decode(healthy_records[0]["payload"]["delta"])
         output_pcm = audio_out.read_bytes()
-        require(output_pcm.endswith(healthy_pcm), "shipped yui output does not preserve the exact healthy PCM tail")
+        prefix_bytes = int(capture_value["interrupted_prefix_bytes"])
+        expected_pcm = segments[0][:prefix_bytes] + segments[1]
+        require(len(expected_pcm) == int(capture_value["expected_audio_bytes"]), "shipped PCM fixture expected length is inconsistent")
+        require(sha256_bytes(expected_pcm) == capture_value["expected_audio_sha256"], "shipped PCM fixture expected hash is inconsistent")
+        require(output_pcm == expected_pcm, "shipped yui output PCM bytes/order/hash changed")
         healthy_tail = output_pcm[-len(healthy_pcm):]
+        require(len(output_pcm) == int(capture_value["expected_audio_bytes"]), "shipped yui output PCM length changed")
+        require(sha256_bytes(output_pcm) == capture_value["expected_audio_sha256"], "shipped yui output PCM SHA-256 changed")
         require(sha256_bytes(healthy_tail) == capture["healthy_segment_sha256"], "shipped yui healthy PCM tail hash does not match the fixture")
-        result = {"schema": "audio-runtime.c23.shipped-regressions.v1", "passed": True, "fixture": capture, "execution": execution, "audio_output": {"path": relative_owned(audio_out), "bytes": audio_out.stat().st_size, "sha256": sha256_file(audio_out), "healthy_tail_bytes": len(healthy_tail), "healthy_tail_sha256": sha256_bytes(healthy_tail), "prefix_bytes": len(output_pcm) - len(healthy_tail)}, "classification": {"provider_edge": "shipped credential-free replay", "process": "proved", "PCM_file": "proved", "simulated_callback": "proved by replay ordering", "physical_device": "not_attempted", "acoustic": "not_attempted", "host_load": "not_claimed"}, "same_source_yui_sha256": provenance["yui"]["sha256"]}
+        result = {"schema": "audio-runtime.c23.shipped-regressions.v1", "passed": True, "fixture": capture, "execution": execution, "audio_output": {"path": relative_owned(audio_out), "bytes": len(output_pcm), "sha256": sha256_bytes(output_pcm), "expected_bytes": capture_value["expected_audio_bytes"], "expected_sha256": capture_value["expected_audio_sha256"], "healthy_tail_bytes": len(healthy_tail), "healthy_tail_sha256": sha256_bytes(healthy_tail), "prefix_bytes": prefix_bytes}, "capture_validation": {"record_count": len(capture_value["records"]), "sequence_contiguous": True, "integrity_verified": True, "ordered_types_verified": True}, "classification": {"provider_edge": "shipped credential-free replay", "process": "proved", "PCM_file": "proved_exact_bytes_order_length_sha256", "simulated_callback": "not_attempted", "physical_device": "not_attempted", "acoustic": "not_attempted", "host_load": "observed_only"}, "same_source_yui_sha256": provenance["yui"]["sha256"]}
         write_json(OWNED_ROOT / "shipped-regressions.json", result)
     except Exception as error:
         phase.finish(False, str(error))
@@ -790,7 +1196,9 @@ def verify_provenance(args: argparse.Namespace) -> dict[str, Any]:
     )
     require(git_is_ancestor(provenance["source_revision"], head), "provenance ancestry no longer verifies")
     require(provenance.get("source_files") == source_files(), "owned source hashes changed after prepare")
-    require(provenance.get("build_inputs") == build_inputs(float(provenance["bounds"]["child_timeout_seconds"])), "executable build-input hashes changed after prepare")
+    current_inputs = build_inputs(float(provenance["bounds"]["child_timeout_seconds"]))
+    require(provenance.get("build_inputs") == current_inputs, "executable build-input hashes changed after prepare")
+    require(provenance.get("build_inputs_sha256") == canonical_json_digest(current_inputs), "executable build-input digest changed after prepare")
     fixture = provenance["fixture"]
     require(fixture.get("sha256") == fixture_hash(), "fixture changed after prepare")
     consumer = OWNED_ROOT / provenance["consumer"]["path"]
@@ -848,10 +1256,11 @@ def self_check(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str
         for name, expectation in runtime_controls.items():
             root = new_run_root(f"self-check-{name}")
             report_path = root / "consumer-report.json"
-            command = [str(CONSUMER_PATH), "--scenario", "tool-control", "--control", name, "--turns", "2", "--artifact-root", str(root / "consumer-artifacts"), "--output", str(report_path)]
+            command = [str(CONSUMER_PATH), "--fixture", str(FIXTURE_PATH), "--scenario", "tool-control", "--control", name, "--turns", "2", "--artifact-root", str(root / "consumer-artifacts"), "--output", str(report_path)]
             execution = run_child(command, f"self-check-{name}", root / "process", provenance["source_revision"], phase.child_timeout(args.child_timeout_seconds))
             require(execution["returncode"] != 0 and not execution["timed_out"], f"runtime negative control {name} unexpectedly succeeded or timed out")
             runtime_report = load_json(report_path)
+            set_failure_context(execution=execution, report=runtime_report, report_path=report_path, expected={"tool_control": name, "terminal": EXPECTED_NEGATIVE_TERMINAL, "clean_shutdown": False})
             actual_error = str(runtime_report.get("error", ""))
             require(runtime_report.get("tool_control") == name, f"runtime negative control {name} did not identify its control")
             require(expectation["diagnostic"] in actual_error.lower(), f"runtime negative control {name} omitted its provider-observed diagnostic: {actual_error}")
@@ -894,8 +1303,38 @@ def final_report(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[s
     require(shipped.get("same_source_yui_sha256") == provenance["yui"]["sha256"], "shipped regression yui hash is stale")
     require(matrix_result.get("turns") == list(EXPECTED_TURNS), "matrix does not contain the required long-session turns")
     require(matrix_result.get("recording_modes") == list(EXPECTED_RECORDING_MODES), "matrix does not contain both required recording modes")
-    result = {"schema": "audio-runtime.c23.final-report.v1", "passed": True, "ready_for_script_ci": True, "candidate_revision": provenance["candidate_revision"], "source_revision": provenance["source_revision"], "branch": provenance["branch"], "provenance": relative_owned(PROVENANCE_PATH), "gate_evidence": {"verify_provenance": relative_owned(OWNED_ROOT / "verify-provenance.json"), "controls": relative_owned(OWNED_ROOT / "controls.json"), "matrix": relative_owned(OWNED_ROOT / "matrix.json"), "shipped_regressions": relative_owned(OWNED_ROOT / "shipped-regressions.json"), "self_check": relative_owned(OWNED_ROOT / "self-check.json"), "budget": relative_owned(BUDGET_PATH)}, "criteria_classification": {"deterministic_tool_overlap": "proved", "recording_off_on_semantic_parity": "proved", "pcm_format_frame_byte_sha_parity": "proved", "interruption_recovery": "proved_simulated_provider", "process_bounds": "proved", "heap_goroutine_observations": "reported", "physical_acoustic": "not_attempted", "quiet_180s": "not_claimed"}, "ci_handoff": "ACCEPTED means submit this candidate to script CI; this report does not claim CI green."}
+    measurements = matrix_result.get("measurements", {})
+    require(measurements.get("schema") == "audio-runtime.c23.measurements.v1", "matrix measurements are missing")
+    require(measurements.get("baseline") and len(measurements.get("by_turn", [])) == len(EXPECTED_TURNS), "matrix measurements do not contain baseline and all checkpoints")
+    require(shipped.get("classification", {}).get("simulated_callback") == "not_attempted", "shipped report overclaims simulated callback consumption")
+    result = {"schema": "audio-runtime.c23.final-report.v1", "passed": True, "ready_for_script_ci": True, "candidate_revision": provenance["candidate_revision"], "source_revision": provenance["source_revision"], "branch": provenance["branch"], "provenance": relative_owned(PROVENANCE_PATH), "gate_evidence": {"verify_provenance": relative_owned(OWNED_ROOT / "verify-provenance.json"), "controls": relative_owned(OWNED_ROOT / "controls.json"), "matrix": relative_owned(OWNED_ROOT / "matrix.json"), "shipped_regressions": relative_owned(OWNED_ROOT / "shipped-regressions.json"), "self_check": relative_owned(OWNED_ROOT / "self-check.json"), "budget": relative_owned(BUDGET_PATH), "measurements": relative_owned(OWNED_ROOT / "matrix.json")}, "criteria_classification": {"deterministic_tool_overlap": "proved", "recording_off_on_semantic_parity": "proved", "pcm_format_frame_byte_sha_parity": "proved", "interruption_recovery": "proved_simulated_provider", "process_bounds": "proved", "heap_goroutine_observations": "reported_with_baseline_and_checkpoint_deltas", "host_load": "observed_not_claimed", "shipped_pcm_order_length_sha": "proved", "simulated_callback": "not_attempted", "physical_acoustic": "not_attempted", "quiet_180s": "not_claimed"}, "ci_handoff": "ACCEPTED means submit this candidate to script CI; this report does not claim CI green."}
     write_json(OWNED_ROOT / "report.json", result)
+    return result
+
+
+def vertical_probe(args: argparse.Namespace) -> dict[str, Any]:
+    require(len(args.source_revision) == 40, "probe --source-revision must be a full SHA")
+    require(git_value("rev-parse", "HEAD") == args.source_revision, "probe source revision must equal the exact executable source HEAD")
+    provenance = prepare(args)
+    controls_result = controls(args, provenance)
+    shipped_result = shipped_regressions(args, provenance)
+    verify_args = argparse.Namespace(negative_control="tampered-fixture")
+    verification = verify_provenance(verify_args)
+    result = {
+        "schema": "audio-runtime.c23.vertical-probe.v1",
+        "passed": True,
+        "scope": "vertical",
+        "candidate_revision": provenance["candidate_revision"],
+        "source_revision": provenance["source_revision"],
+        "provenance": relative_owned(PROVENANCE_PATH),
+        "controls": relative_owned(OWNED_ROOT / "controls.json"),
+        "shipped_regressions": relative_owned(OWNED_ROOT / "shipped-regressions.json"),
+        "verification": relative_owned(OWNED_ROOT / "verify-provenance.json"),
+        "classification": {"public_consumer": "proved", "audio_tool_replay": "proved", "interruption_recovery": "proved_simulated_provider", "clean_shutdown": "proved", "simulated_callback": "not_attempted", "physical_acoustic": "not_attempted"},
+        "ci_handoff": "post-merge probe evidence only; it does not claim project completion or physical/acoustic proof",
+        "phase_results": {"controls": controls_result.get("passed"), "shipped_regressions": shipped_result.get("passed"), "verification": verification.get("passed")},
+    }
+    write_json(OWNED_ROOT / "vertical-probe.json", result)
     return result
 
 
@@ -925,6 +1364,10 @@ def main() -> int:
     shipped_parser.add_argument("--total-timeout-seconds", type=float, default=600)
     report_parser = subparsers.add_parser("report", help="validate complete gate evidence")
     report_parser.add_argument("--require-complete-provenance", action="store_true")
+    probe_parser = subparsers.add_parser("probe", help="run the bounded post-merge vertical public-workflow probe")
+    probe_parser.add_argument("--source-revision", required=True)
+    probe_parser.add_argument("--child-timeout-seconds", type=float, default=60)
+    probe_parser.add_argument("--total-timeout-seconds", type=float, default=600)
     self_parser = subparsers.add_parser("self-check", help="run deliberate negative controls")
     self_parser.add_argument("--negative-controls", required=True)
     self_parser.add_argument("--child-timeout-seconds", type=float, default=60)
@@ -935,6 +1378,8 @@ def main() -> int:
             result = prepare(args)
         elif args.command == "verify-provenance":
             result = verify_provenance(args)
+        elif args.command == "probe":
+            result = vertical_probe(args)
         else:
             provenance = load_provenance()
             if args.command == "controls":

@@ -6,6 +6,29 @@
   "interruption": {
     "healthy_tail": [21, 34, 55, 89, 144, 233, 13, 8]
   },
+  "shipped_replay": {
+    "expected_audio_bytes": 9120,
+    "expected_audio_sha256": "9495487706f4a3001922c10d4dd496e7cd29fff9815a76f2f842f8e970725cc9",
+    "interrupted_prefix_bytes": 6720,
+    "expected_record_count": 15,
+    "expected_types": [
+      "session.update",
+      "session.created",
+      "conversation.item.create",
+      "response.create",
+      "response.created",
+      "response.output_audio.delta",
+      "input_audio_buffer.speech_started",
+      "conversation.item.truncate",
+      "conversation.item.truncated",
+      "response.output_audio.done",
+      "response.done",
+      "response.created",
+      "response.output_audio.delta",
+      "response.output_audio.done",
+      "response.done"
+    ]
+  },
   "seed": "c23-overlap",
   "tool_identities": [
     {
