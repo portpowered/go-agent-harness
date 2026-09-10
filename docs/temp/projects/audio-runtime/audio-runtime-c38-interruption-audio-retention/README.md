@@ -66,9 +66,10 @@ The owned repair is confined to
 `session_audio_out.go` and `session_audio_out_test.go`:
 
 - provider ingress is connected without the caller cancellation signal;
-- the wrapper requests the underlying session close as a terminal barrier, then
-  drains the finite accepted provider buffer under a bounded, non-cancellable
-  teardown context until that barrier settles;
+- the wrapper waits for the underlying provider terminal signal (or its bounded
+  wall-time fallback), requests the underlying session close, joins the close
+  completion/recording relay, and drains the finite accepted provider buffer
+  under a bounded, non-cancellable teardown context;
 - assistant PCM is written before best-effort public-buffer publication during
   teardown; and
 - clean interruption uses barrier regressions for both a delayed delta and a

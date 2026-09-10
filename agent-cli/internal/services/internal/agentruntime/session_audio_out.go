@@ -589,42 +589,34 @@ func newSessionAudioOutputSession(ctx context.Context, inner messages.Session, o
 	go s.forward()
 	return s
 }
-
 func (s *sessionAudioOutputSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	if s.replaceSeed(msg) {
 		msg.Value = messages.NewTextDeltaValue(s.seedValue)
 	}
 	return s.Session.Send(ctx, msg)
 }
-
 func (s *sessionAudioOutputSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
 	return messages.RequestSessionResponse(ctx, s.Session)
 }
-
 func (s *sessionAudioOutputSession) SupportsResponseRequests() bool {
 	return messages.SupportsSessionResponseRequests(s.Session)
 }
-
 func (s *sessionAudioOutputSession) SendMessage(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.Session.(SessionImageMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
-
 func (s *sessionAudioOutputSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
-
 func (s *sessionAudioOutputSession) SupportsCompleteMessages() bool {
 	complete, _ := completeMessageCapabilities(s.Session)
 	return complete
 }
-
 func (s *sessionAudioOutputSession) SupportsCompleteMessagesWithoutResponse() bool {
 	_, withoutResponse := completeMessageCapabilities(s.Session)
 	return withoutResponse
 }
-
 func (s *sessionAudioOutputSession) replaceSeed(msg messages.StreamMessage) bool {
 	if s.wirePrompt == "" || msg.Type != messages.StreamTypeTextDelta {
 		return false
@@ -642,7 +634,6 @@ func (s *sessionAudioOutputSession) replaceSeed(msg messages.StreamMessage) bool
 	s.seedSent = true
 	return true
 }
-
 func (s *sessionAudioOutputSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.receive
 }
@@ -705,19 +696,23 @@ func (s *sessionAudioOutputSession) drain(input *messages.TypedBuffer[messages.S
 }
 
 func (s *sessionAudioOutputSession) drainAfterCancellation(input *messages.TypedBuffer[messages.StreamMessage]) {
-	s.closeInner()
 	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
 	defer cancel()
+	terminal := time.NewTimer(sessionStragglerDrainWallSafety)
+	defer terminal.Stop()
 	for {
 		select {
 		case msg := <-input.Chan():
 			if !s.forwardMessageWithContext(retainCtx, msg, true) {
 				return
 			}
-		case <-s.innerCloseDone:
+		case <-s.Session.Done():
+			s.closeInner()
 			s.drainAfterInnerClose(input, retainCtx)
 			return
-		case <-retainCtx.Done():
+		case <-terminal.C:
+			s.closeInner()
+			s.drainAfterInnerClose(input, retainCtx)
 			return
 		}
 	}
@@ -726,6 +721,11 @@ func (s *sessionAudioOutputSession) drainAfterCancellation(input *messages.Typed
 // Keep the post-barrier quiet tail bounded so a final accepted delta cannot
 // race the public PCM oracle after provider close completes.
 func (s *sessionAudioOutputSession) drainAfterInnerClose(input *messages.TypedBuffer[messages.StreamMessage], ctx context.Context) {
+	select {
+	case <-s.innerCloseDone:
+	case <-ctx.Done():
+		return
+	}
 	for {
 		select {
 		case msg := <-input.Chan():

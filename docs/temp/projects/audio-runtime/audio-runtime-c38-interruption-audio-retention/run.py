@@ -1119,6 +1119,8 @@ def run_causal(source_root: Path, fixtures: Path, evidence_dir: Path) -> dict[st
         "closeRequested",
         "closeInner",
         "innerCloseDone",
+        "Session.Done()",
+        "time.NewTimer(sessionStragglerDrainWallSafety)",
     )
     if any(marker not in current_source for marker in expected_markers):
         raise EvidenceFailure("current session audio output source is missing one or more causal repair markers")
@@ -1158,7 +1160,7 @@ def run_causal(source_root: Path, fixtures: Path, evidence_dir: Path) -> dict[st
             {
                 "question": "Does provider ingress stop before the output wrapper can retain accepted frames?",
                 "boundary": "sessionAudioOutputInferencer.ConnectSession",
-                "evidence": "The repaired wrapper connects the provider with a non-cancelled ingress context, requests the underlying Close as a terminal barrier, and drains accepted messages until that barrier settles, bounded by wall safety.",
+                "evidence": "The repaired wrapper connects the provider with a non-cancelled ingress context, waits for the provider Done signal or bounded wall fallback, requests the underlying Close, joins innerCloseDone for the recording relay, and drains accepted messages through a bounded quiet tail.",
                 "result": "resolved_in_owned_session_audio_output",
             },
             {
