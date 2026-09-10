@@ -3392,3 +3392,54 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   finding-to-repair map, then submit the changed same-task head to script CI
   without polling; retain C38 ownership through `CONTINUE` while storage or
   any exact actionable repair remains.
+
+# C38 exact-head validation and script-CI handoff checkpoint 2026-09-10T23:18Z
+
+- Admission was reverified for the sole `audio-runtime` project with
+  `factory/scripts/project-control.py verify-work --type task --name
+  audio-runtime-c38-interruption-audio-retention`, returning `admitted`.
+  The isolated branch exactly matches `prd.json.branchName`; startup,
+  baseline, C30 planning and fetched `origin/main=fdf3b2d98914f50577865e825c733e73520b9ef3`
+  ancestry remain intact. No second project, waiver, reset, host-checkout,
+  predecessor or unrelated owner path was touched.
+- The restored storage prerequisite measured about `5.9 GiB` free before the
+  bounded build and about `3.5 GiB` after it, remaining above the documented
+  `2 GiB` reserve. Fresh exact-source run
+  `repaired-20260910T231538Z-77788` returns `REPAIRED_ORACLE_PASS` from clean
+  source `5d2e029a51e934fb8dcc78702ad8acb14c5e4402`. Its yui artifact is
+  `50,912,034` bytes with SHA-256
+  `8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`.
+  Tool PCM is `4,800`/`3,200` bytes with the frozen hashes; interruption PCM
+  is `3,840`/`3,360` bytes with the frozen hashes and the exact `2,400`-byte
+  healthy tail. Both strict replays pass.
+- Causal run `causal-20260910T231514Z-76987` passes the deterministic
+  cancellation barrier and records the owned
+  `session_audio_output_session.forward` boundary. Focused run
+  `focused-checks-20260910T231349Z-72475` passes normal/race session-audio
+  regressions, vet, architecture/size (`184` packages, `1,888` files,
+  `27,806` functions), and Wire. The newly leased
+  `TestRemoteToolAudioSlowDeviceEdgeOracleControl` passes in both normal and
+  race modes with its unchanged final-marker/zero-loss oracle.
+- Negative run `negative-controls-20260910T231525Z-77395` preserves the
+  21-case C30 consumer and exit-1 control, rejects a real same-length PCM/hash
+  mutation, and rejects missing timeline. Cleanup run
+  `cleanup-control-20260910T231528Z-77578` proves capped output, TERM/KILL,
+  reaping and no survivors. Immutable run
+  `original-20260910T231759Z-79359` returns
+  `HISTORICAL_FAILURE_PRESERVED`; the archived source-2525 failure remains
+  authoritative and the live legacy oracle pass is retained as scheduling
+  variation only.
+- Exact package run returns `PACKAGE_READY` with clean source/artifact/build
+  provenance. The build-input manifest SHA-256 is
+  `7689716a955acc5299b34c23aa3d600fa6c7829eed577c93232b2b0984716309` over
+  `2,185` inputs; architecture helper SHA-256 is
+  `debe7ca096d60db699974b7d9a37ba15d146ec3f26a860f45544f96a9e6d547f`.
+  Prior review-219/229/245/249/258 repair controls remain covered; no stale
+  artifact was relabeled.
+- This is the executor handoff only: no current-head CI success, independent
+  review, guarded merge, post-delivery vertical acceptance, physical/acoustic
+  proof or project completion is claimed. Exact next action: commit and push
+  this checkpoint, update PR `#430` with the fresh evidence, and return
+  `ACCEPTED` to the script-owned current-head CI gate without polling. Retain
+  C38 ownership through `CONTINUE` for any exact CI/review rejection or
+  actionable repair.

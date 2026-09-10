@@ -44,3 +44,38 @@ The next action is to restore stable free space above 2 GiB, run the remaining
 bounded C38 causal/original/repaired/negative/cleanup/focused/package controls
 from the clean head, then submit this same PR to the script-owned CI gate
 without polling. Retain the task for any exact rejection or actionable repair.
+
+## Fresh exact-head handoff — 2026-09-10T23:18Z
+
+The storage prerequisite was available for this run: approximately 5.9 GiB was
+free before the build and approximately 3.5 GiB remained afterward, above the
+required 2 GiB reserve. The clean tested source is
+`5d2e029a51e934fb8dcc78702ad8acb14c5e4402`.
+
+- `repaired-20260910T231538Z-77788` returns `REPAIRED_ORACLE_PASS`. The newly
+  built yui is 50,912,034 bytes,
+  `8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`.
+  Tool PCM is 4,800/3,200 bytes with the frozen hashes; interruption PCM is
+  3,840/3,360 bytes with the frozen hashes and 2,400-byte healthy tail; strict
+  replays pass.
+- `causal-20260910T231514Z-76987` passes the deterministic retention barrier.
+  `focused-checks-20260910T231349Z-72475` passes normal/race, vet,
+  architecture/size (`184` packages / `1,888` files / `27,806` functions),
+  and Wire. The remote-marker control passes normal and race.
+- `negative-controls-20260910T231525Z-77395` passes the 21-case C30 consumer
+  plus exit-1 negative control, real same-length PCM/hash mutation rejection,
+  and missing-timeline rejection. `cleanup-control-20260910T231528Z-77578`
+  passes capped output, TERM/KILL, reaping, and no survivors.
+- `original-20260910T231759Z-79359` returns
+  `HISTORICAL_FAILURE_PRESERVED` against the immutable C30 artifacts and
+  records the live legacy pass as scheduling variation only. `package` returns
+  `PACKAGE_READY` for the exact source/artifact/build inputs; build-input SHA is
+  `7689716a955acc5299b34c23aa3d600fa6c7829eed577c93232b2b0984716309` over
+  `2,185` inputs and the architecture helper SHA is
+  `debe7ca096d60db699974b7d9a37ba15d146ec3f26a860f45544f96a9e6d547f`.
+
+The candidate is ready for the script-owned current-head CI gate. This does not
+claim CI success, independent review, guarded merge, vertical acceptance, or
+project completion. Submit the changed same-task head once without polling;
+retain C38 ownership through `CONTINUE` for any exact rejection or actionable
+repair.

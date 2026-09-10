@@ -118,3 +118,37 @@ Realtime, physical-device, microphone, speaker, acoustic, or CI-green claim.
 The next external steps are the script-owned current-head CI gate, independent
 Luna review, guarded merge, and fresh post-delivery vertical validation. CI is
 not polled by this runner.
+
+## Fresh exact-head validation
+
+The storage prerequisite was restored before this validation: about 5.9 GiB was
+free before the build and about 3.5 GiB remained afterward, above the required
+2 GiB reserve. The clean tested source is `5d2e029a51e934fb8dcc78702ad8acb14c5e4402`.
+
+- `repaired-20260910T231538Z-77788` built a new yui artifact at that exact
+  source. The artifact is 50,912,034 bytes with SHA-256
+  `8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`.
+  The tool capture is 4,800/3,200 bytes with the frozen provider/rendered
+  hashes, and interruption is 3,840/3,360 bytes with the frozen hashes and
+  the 2,400-byte healthy tail. Both strict bundle replays pass.
+- `causal-20260910T231514Z-76987` passes the deterministic cancellation barrier
+  and identifies the owned `session_audio_output_session.forward` boundary.
+  `focused-checks-20260910T231349Z-72475` passes normal/race, vet,
+  architecture/size, and Wire checks (`184` packages, `1,888` files,
+  `27,806` functions).
+- `negative-controls-20260910T231525Z-77395` preserves the 21-case C30
+  consumer and exit-1 control, rejects a real same-length PCM/hash mutation,
+  and rejects missing timeline. `cleanup-control-20260910T231528Z-77578`
+  passes capped output, TERM/KILL, reap, and no-survivor checks.
+- The newly leased `TestRemoteToolAudioSlowDeviceEdgeOracleControl` passes in
+  both normal and race modes with the existing final-marker and zero-loss
+  oracle. `original-20260910T231759Z-79359` preserves the immutable C30
+  `HISTORICAL_FAILURE_PRESERVED` record; its live legacy pass is retained as
+  scheduling variation only.
+- `package` passes with build-input manifest SHA-256
+  `7689716a955acc5299b34c23aa3d600fa6c7829eed577c93232b2b0984716309` over
+  `2,185` inputs and architecture-helper SHA-256
+  `debe7ca096d60db699974b7d9a37ba15d146ec3f26a860f45544f96a9e6d547f`.
+
+These are executor handoff results only. Script CI, independent review,
+guarded merge, and the primary's exact-artifact vertical probe remain open.
