@@ -248,9 +248,9 @@ The focused current-main composition regression also passed with coverage in
 (`34413969081`/`102674534021`, `composition_test.go:417`) remains preserved and
 C20-owned; C20's separate `test46/provider_burst` timeout remains unwaived.
 No hosted CI result, merge, runtime, physical-device, acoustic, or project
-acceptance is claimed. Next action: commit/push the synchronized evidence-only
-descendant, update PR417, and submit this changed same task to the script CI
-gate without polling; retain ownership for any exact rejection.
+acceptance is claimed. The synchronized evidence-only descendant is pushed to
+PR417. Next action: submit this changed same task to the script CI gate without
+polling; retain ownership for any exact rejection.
 
 ## Exact current-head refresh
 

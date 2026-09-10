@@ -163,8 +163,8 @@ The current source archive is `57,067,520` bytes with SHA-256
 
 The prior hosted PR417 rejection remains historical and separately owned by
 C20; no CI-green, runtime, physical-device, acoustic, or project-completion
-claim is made here. Submit this changed same task to the script CI gate after
-the remaining evidence metadata is synchronized, without polling CI.
+claim is made here. The synchronized evidence-only descendant is pushed;
+submit this changed same task to the script CI gate without polling CI.
 
 ## Gate map and later handoff
 

@@ -254,6 +254,6 @@ Current exact-head refresh after current-main integration
   historical and C20-owned; its separate `test46/provider_burst` failure is
   unwaived. No CI-green, runtime, physical-device, acoustic, or project
   completion claim is made.
-- Next action: synchronize remaining metadata, commit/push, update PR417, and
+- The synchronized evidence-only descendant is pushed to PR417. Next action:
   submit the changed same task to the script CI gate without polling; retain
   ownership for any exact rejection.

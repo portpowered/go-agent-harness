@@ -299,6 +299,5 @@ The focused current-main composition regression with coverage passed in
 `0.555s` (`4.5%` statements). The hosted PR417 coverage rejection remains
 historical and C20-owned; C20's separate `test46/provider_burst` failure is
 unwaived. This task makes no CI-green, runtime, physical-device, acoustic, or
-project-completion claim. Next action is to synchronize, commit, and push the
-remaining metadata, then submit the same task to the script CI gate without
-polling.
+project-completion claim. The synchronized evidence-only descendant is pushed;
+next action is to submit the same task to the script CI gate without polling.
