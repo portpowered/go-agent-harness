@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 import project_admission
+import project_scope_amendment
 from project_contract import ContractError, artifact, check_packet, manifest, read_json, root_path, task_packet, work_name
 
 
@@ -64,13 +65,13 @@ def completed_validation(work_id, session_id, server):
         raise ContractError("validation Work has not completed in canonical runtime state")
 
 
-def validate_report(report, contract, role, build, expected):
+def validate_report(report, contract, role, build, expected, *, root=None, amendment=None, report_path=None):
     """Validate one final project-scope report without trusting its claims."""
     check_packet(report, contract)
     # A missing scope is the legacy final-report shape.  Explicit vertical
     # reports must never satisfy the whole-project completion gate, even when a
     # worker accidentally reports every criterion.
-    if report.get("scope", "project") != "project":
+    if amendment is None and report.get("scope", "project") != "project":
         raise ContractError("project completion requires scope=project validation reports")
     report_build = report.get("build")
     if (
@@ -79,6 +80,22 @@ def validate_report(report, contract, role, build, expected):
         or report_build.get("sha256") != build["sha256"]
     ):
         raise ContractError("validation role/artifact mismatch")
+    if amendment is not None:
+        if root is None or report_path is None:
+            raise ContractError("amended report validation is missing its repository path")
+        try:
+            project_scope_amendment.validate_amended_report(
+                root,
+                report,
+                role=role,
+                build=build,
+                expected_criteria=expected,
+                amendment=amendment,
+                report_path=report_path,
+            )
+        except project_scope_amendment.ScopeAmendmentError as error:
+            raise ContractError(str(error)) from error
+        return
     criteria = report.get("criteria", {})
     if not isinstance(criteria, dict) or set(criteria) != expected or any(
         not isinstance(value, dict) or value.get("verdict") != "PASS" or
@@ -97,6 +114,15 @@ def verify_completion(root, name):
     check_packet(record, contract)
     expected = {entry["id"] for entry in contract["criteria"]}
     build = artifact(record.get("build"))
+    amendment = None
+    if "amendment" in record:
+        try:
+            amendment = project_scope_amendment.amendment_reference(
+                root,
+                record["amendment"],
+            )
+        except project_scope_amendment.ScopeAmendmentError as error:
+            raise ContractError(str(error)) from error
     runtime = runtime_record(root)
     if not runtime or runtime.get("project") != name:
         raise ContractError("runtime identity is missing")
@@ -106,7 +132,16 @@ def verify_completion(root, name):
         if not report_path.is_relative_to(root / "docs/temp/projects" / name):
             raise ContractError("report is outside the admitted project")
         report = read_json(report_path)
-        validate_report(report, contract, role, build, expected)
+        validate_report(
+            report,
+            contract,
+            role,
+            build,
+            expected,
+            root=root,
+            amendment=amendment,
+            report_path=report_path,
+        )
         work_id = report.get("validationWorkId")
         if not isinstance(work_id, str) or not work_id or work_id in seen:
             raise ContractError("validation must use distinct canonical Work identities")
@@ -117,13 +152,57 @@ def verify_completion(root, name):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation", choices=["status", "verify-work", "verify-completion"])
+    parser.add_argument(
+        "operation",
+        choices=[
+            "status",
+            "verify-work",
+            "verify-completion",
+            "amendment-append",
+            "amendment-status",
+            "scope-amendment-append",
+            "scope-amendment-status",
+            "append-amendment",
+            "status-amendment",
+            "amendment",
+        ],
+    )
+    parser.add_argument("action", nargs="?", choices=["append", "status"])
     parser.add_argument("--type", choices=["project", "idea", "task"])
     parser.add_argument("--name")
     parser.add_argument("--payload", default="{}")
+    parser.add_argument("--record")
+    parser.add_argument("--amendment-id")
+    parser.add_argument("--root")
     args = parser.parse_args()
-    root = root_path()
-    if args.operation == "status":
+    root = Path(args.root).resolve() if args.root else root_path()
+    operation = args.operation
+    if operation == "amendment":
+        if args.action == "append":
+            operation = "amendment-append"
+        elif args.action == "status":
+            operation = "amendment-status"
+        else:
+            parser.error("amendment requires append or status")
+    if operation in {
+        "amendment-append",
+        "scope-amendment-append",
+        "append-amendment",
+    }:
+        if not args.record:
+            parser.error("amendment append requires --record")
+        contract = manifest(root)
+        owner(root, contract)
+        result = project_scope_amendment.append_record(root, args.record)
+    elif operation in {
+        "amendment-status",
+        "scope-amendment-status",
+        "status-amendment",
+    }:
+        contract = manifest(root)
+        owner(root, contract)
+        result = project_scope_amendment.list_status(root, args.amendment_id)
+    elif operation == "status":
         result = {"manifest": manifest(root), "admission": project_admission.status(root),
                   "runtime": runtime_record(root)}
     elif args.operation == "verify-work":

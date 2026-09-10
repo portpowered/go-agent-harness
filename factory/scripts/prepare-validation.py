@@ -6,6 +6,7 @@ import shutil
 import sys
 
 import project_admission
+import project_scope_amendment
 from project_contract import ContractError, artifact, check_packet, digest, manifest, root_path, work_name
 
 
@@ -74,10 +75,21 @@ def prepare(root, name, payload):
         raise ContractError("validation name belongs to another project")
     packet = json.loads(payload)
     check_packet(packet, contract)
+    amendment_scope_explicit = "scope" in packet and "amendment" in packet
     if packet.get("role") not in {"customer", "engineering", "retrospective"}:
         raise ContractError("unknown validation role")
     scope = _validation_scope(packet)
     _criteria(packet, contract, scope)
+    amendment = None
+    if "amendment" in packet:
+        if not amendment_scope_explicit:
+            raise ContractError(
+                "scope amendments require an explicit project-scope mission"
+            )
+        try:
+            amendment = project_scope_amendment.normalize_packet_amendment(root, packet)
+        except project_scope_amendment.ScopeAmendmentError as error:
+            raise ContractError(str(error)) from error
     budget = packet.get("budget", {})
     time_seconds = budget.get("timeSeconds") if isinstance(budget, dict) else None
     if (
@@ -120,6 +132,9 @@ def prepare(root, name, payload):
             staged.append({**value, "path": str(destination)})
         packet["build"], packet["fixtures"] = staged[0], staged[1:]
         packet["authority"] = contract["authority"]
+        packet["validationWorkName"] = name
+        if amendment is not None:
+            packet["manifestSha256"] = amendment["manifestSha256"]
         (target / "mission.json").write_text(json.dumps(packet, indent=2) + "\n")
         (target / "mission.json").chmod(0o400)
         report.parent.mkdir(parents=True, exist_ok=True)
@@ -127,14 +142,27 @@ def prepare(root, name, payload):
         # Keep the uniquely owned failed directory as evidence, but publish no mission.
         (target / "mission.json").unlink(missing_ok=True)
         raise
-    return {"status": "ready", "directory": str(target), "build": packet["build"]}
+    return {
+        "status": "ready",
+        "directory": str(target),
+        "build": packet["build"],
+        "validationWorkName": name,
+        "missionSha256": digest(target / "mission.json"),
+        **({"amendment": amendment} if amendment is not None else {}),
+    }
 
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) != 3:
-            raise ContractError("usage: prepare-validation.py <name> <payload-json>")
-        print(json.dumps(prepare(root_path(), sys.argv[1], sys.argv[2])))
+        import argparse
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--root")
+        parser.add_argument("name")
+        parser.add_argument("payload")
+        args = parser.parse_args()
+        root = Path(args.root).resolve() if args.root else root_path()
+        print(json.dumps(prepare(root, args.name, args.payload)))
     except (ValueError, OSError, RuntimeError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)
