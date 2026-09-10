@@ -172,6 +172,27 @@ func TestService_PartialWriteFailureCleansAlreadyWrittenFiles(t *testing.T) {
 	}
 }
 
+func TestService_PartialWriteFailureJoinsCleanupError(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "config")
+	writeErr := errors.New("forced partial write")
+	cleanupErr := errors.New("forced cleanup failure")
+	service := &Service{files: fileOps{
+		mkdirAll:  os.MkdirAll,
+		mkdirTemp: os.MkdirTemp,
+		writeFile: func(string, []byte, os.FileMode) error { return writeErr },
+		removeAll: func(string) error { return cleanupErr },
+	}}
+	_, err := service.Stage(context.Background(), public.ImageStagingRequest{
+		StagingRoot:     root,
+		SourcePaths:     []string{"image.png"},
+		ImageParts:      []messages.ImagePart{{Bytes: []byte("image"), MediaType: "image/png"}},
+		ToolDefinitions: []messages.ToolDefinition{{Name: public.ReadImageToolID}},
+	})
+	if !errors.Is(err, writeErr) || !errors.Is(err, cleanupErr) {
+		t.Fatalf("partial Stage error = %v, want write and cleanup causes", err)
+	}
+}
+
 func TestService_RefreshPreservesPathsAndCallbackErrors(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "config")
 	refreshErr := errors.New("refresh failed")

@@ -4,6 +4,7 @@ package imagestaging
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,7 +15,11 @@ import (
 	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
-const toolPathDescription = "Session-staged image path(s) (use one of these exact absolute paths):\n- "
+const (
+	toolPathDescription              = "Session-staged image path(s) (use one of these exact absolute paths):\n- "
+	stagingDirectoryMode os.FileMode = 0o700
+	stagingFileMode      os.FileMode = 0o600
+)
 
 type fileOps struct {
 	mkdirAll  func(string, os.FileMode) error
@@ -56,7 +61,7 @@ func (s *Service) Stage(ctx context.Context, request public.ImageStagingRequest)
 	if files.mkdirAll == nil || files.mkdirTemp == nil || files.writeFile == nil || files.removeAll == nil {
 		return public.ImageStagingResult{}, fmt.Errorf("stage session images: filesystem operations are not configured")
 	}
-	if err := files.mkdirAll(root, 0o700); err != nil {
+	if err := files.mkdirAll(root, stagingDirectoryMode); err != nil {
 		return public.ImageStagingResult{}, fmt.Errorf("stage session images in %q: create config directory: %w", root, err)
 	}
 	stageDir, err := files.mkdirTemp(root, ".session-images-*")
@@ -66,8 +71,7 @@ func (s *Service) Stage(ctx context.Context, request public.ImageStagingRequest)
 	cleanup := newCleanup(stageDir, files.removeAll)
 	stagedPaths, err := writeStagedImages(ctx, stageDir, files, request)
 	if err != nil {
-		_ = cleanup()
-		return public.ImageStagingResult{}, err
+		return public.ImageStagingResult{}, errors.Join(err, cleanup())
 	}
 
 	return public.ImageStagingResult{
@@ -102,7 +106,7 @@ func writeStagedImages(ctx context.Context, stageDir string, files fileOps, requ
 			return nil, err
 		}
 		path := filepath.Join(stageDir, fmt.Sprintf("image-%03d%s", index, stageExtension(request.SourcePaths[index], part.MediaType)))
-		if err := files.writeFile(path, part.Bytes, 0o600); err != nil {
+		if err := files.writeFile(path, part.Bytes, stagingFileMode); err != nil {
 			return nil, fmt.Errorf("stage session image %q: %w", request.SourcePaths[index], err)
 		}
 		stagedPaths[index] = filepath.Clean(path)

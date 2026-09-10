@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +44,9 @@ func prepareSessionImageToolAccess(opts SessionRunOptions, sourcePaths []string,
 	opts.RefreshToolDefinitions = staged.RefreshToolDefinitions
 	cleanup := func() {
 		if staged.Cleanup != nil {
-			_ = staged.Cleanup()
+			if err := staged.Cleanup(); err != nil {
+				log.Printf("stage session images: cleanup: %v", err)
+			}
 		}
 	}
 	return opts, cleanup, nil
