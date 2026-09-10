@@ -165,19 +165,6 @@
       "sequence": 2
     },
     {
-      "epoch": 1,
-      "kind": "playback_input",
-      "participant": "listener",
-      "samples": [
-        322,
-        324,
-        326,
-        328
-      ],
-      "sequence": 0,
-      "target": "listener"
-    },
-    {
       "end_of_response": true,
       "epoch": 1,
       "kind": "peer_output",
@@ -190,6 +177,19 @@
       ],
       "sequence": 0,
       "target": "alice"
+    },
+    {
+      "epoch": 1,
+      "kind": "playback_input",
+      "participant": "listener",
+      "samples": [
+        322,
+        324,
+        326,
+        328
+      ],
+      "sequence": 0,
+      "target": "listener"
     },
     {
       "end_of_response": true,

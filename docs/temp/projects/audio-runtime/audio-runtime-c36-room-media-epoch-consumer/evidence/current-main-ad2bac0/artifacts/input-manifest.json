@@ -5619,7 +5619,7 @@
     {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/scenario.go",
       "role": "consumer",
-      "sha256": "1f0f7dfcf850f0e1f5e62b9f5af8318702f74403daa7aa306f4c0a6ce546b9a8"
+      "sha256": "7cdcef0394677429ea3713924b2bfc2d6d4aa8c72c26799542683aa418841544"
     },
     {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/scenario_test.go",
@@ -10702,7 +10702,7 @@
       "sha256": "771f6df0e159ddaf47d81d40b551fe555317fd56aeb3d97f904498dcf92b8307"
     }
   ],
-  "manifest_sha256": "30dae80d7289a7f7b49717a3813282a1bc56aa4ff7b859ce2e11f6dcd8359c0f",
+  "manifest_sha256": "596a1fbc2d1141e15a52be6ea8d17f8184a180f1437a11c3cf9eaabf0f05c9a1",
   "module": "docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer",
   "replacement_modules": [
     {

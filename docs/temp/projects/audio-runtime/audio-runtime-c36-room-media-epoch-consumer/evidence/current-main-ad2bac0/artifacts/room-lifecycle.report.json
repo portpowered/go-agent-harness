@@ -165,6 +165,20 @@
       "sequence": 2
     },
     {
+      "end_of_response": true,
+      "epoch": 1,
+      "kind": "peer_output",
+      "participant": "alice",
+      "samples": [
+        211,
+        212,
+        213,
+        214
+      ],
+      "sequence": 0,
+      "target": "alice"
+    },
+    {
       "epoch": 1,
       "kind": "playback_input",
       "participant": "listener",
@@ -190,20 +204,6 @@
       ],
       "sequence": 0,
       "target": "bob"
-    },
-    {
-      "end_of_response": true,
-      "epoch": 1,
-      "kind": "peer_output",
-      "participant": "alice",
-      "samples": [
-        211,
-        212,
-        213,
-        214
-      ],
-      "sequence": 0,
-      "target": "alice"
     },
     {
       "classification": "fixture_complete",

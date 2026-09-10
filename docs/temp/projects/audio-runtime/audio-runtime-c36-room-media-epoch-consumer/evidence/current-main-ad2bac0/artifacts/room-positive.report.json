@@ -165,17 +165,18 @@
       "sequence": 2
     },
     {
+      "end_of_response": true,
       "epoch": 1,
-      "kind": "playback_input",
-      "participant": "listener",
+      "kind": "peer_output",
+      "participant": "bob",
       "samples": [
-        322,
-        324,
-        326,
-        328
+        111,
+        112,
+        113,
+        114
       ],
       "sequence": 0,
-      "target": "listener"
+      "target": "bob"
     },
     {
       "end_of_response": true,
@@ -192,18 +193,17 @@
       "target": "alice"
     },
     {
-      "end_of_response": true,
       "epoch": 1,
-      "kind": "peer_output",
-      "participant": "bob",
+      "kind": "playback_input",
+      "participant": "listener",
       "samples": [
-        111,
-        112,
-        113,
-        114
+        322,
+        324,
+        326,
+        328
       ],
       "sequence": 0,
-      "target": "bob"
+      "target": "listener"
     },
     {
       "classification": "fixture_complete",

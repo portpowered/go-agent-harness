@@ -194,9 +194,12 @@ type coordinator struct {
 	handles          map[string]*fakeHandle
 	done             chan struct{}
 	healthyReady     chan struct{}
+	routedReady      chan struct{}
 	activeMediaReady chan struct{}
 	healthyCount     int
+	routedCount      int
 	readyOnce        sync.Once
+	routedOnce       sync.Once
 	activeMediaOnce  sync.Once
 	finished         bool
 	finish           sync.Once
@@ -204,13 +207,14 @@ type coordinator struct {
 
 func newCoordinator() *coordinator {
 	return &coordinator{
-		outputs:          make(map[string][]int16),
-		terminalSeen:     make(map[string]bool),
-		outputFrames:     make(map[string]int),
-		outputEnded:      make(map[string]bool),
-		handles:          make(map[string]*fakeHandle),
+		outputs:      make(map[string][]int16),
+		terminalSeen: make(map[string]bool),
+		outputFrames: make(map[string]int),
+		outputEnded:  make(map[string]bool),
+		handles:      make(map[string]*fakeHandle),
 		done:             make(chan struct{}),
 		healthyReady:     make(chan struct{}),
+		routedReady:      make(chan struct{}),
 		activeMediaReady: make(chan struct{}),
 	}
 }
@@ -234,6 +238,24 @@ func (c *coordinator) awaitHealthyInput(ctx context.Context) error {
 func (c *coordinator) inputsReady() bool {
 	select {
 	case <-c.healthyReady:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *coordinator) markInputRouted() {
+	c.mu.Lock()
+	c.routedCount++
+	if c.routedCount == 2 {
+		c.routedOnce.Do(func() { close(c.routedReady) })
+	}
+	c.mu.Unlock()
+}
+
+func (c *coordinator) inputsRoutedReady() bool {
+	select {
+	case <-c.routedReady:
 		return true
 	default:
 		return false
@@ -290,9 +312,11 @@ func (c *coordinator) recordOutput(target string, frame audio.PCMFrame) error {
 	c.outputFrames[target]++
 	c.mu.Unlock()
 	// Handle.Start proves provider admission only. This signal is emitted by
-	// the public room graph after a real frame crosses an output endpoint, so
-	// cancellation cannot claim an active media run too early.
-	c.activeMediaOnce.Do(func() { close(c.activeMediaReady) })
+	// the public room graph after a nonempty frame crosses an output endpoint,
+	// so cancellation cannot claim an active media run too early.
+	if len(frame.Samples) > 0 || frame.EndOfResponse {
+		c.activeMediaOnce.Do(func() { close(c.activeMediaReady) })
+	}
 	c.maybeFinish()
 	return nil
 }
@@ -539,6 +563,7 @@ type scriptedInbound struct {
 	mu     sync.Mutex
 	frames []audio.PCMFrame
 	index  int
+	routed bool
 	closed bool
 	coord  *coordinator
 }
@@ -549,6 +574,12 @@ func (s *scriptedInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error)
 	}
 	s.mu.Lock()
 	if s.index >= len(s.frames) {
+		if !s.routed {
+			s.routed = true
+			if s.coord != nil {
+				s.coord.markInputRouted()
+			}
+		}
 		s.mu.Unlock()
 		return audio.PCMFrame{}, io.EOF
 	}
@@ -796,7 +827,7 @@ func runLiveScenario(outputDir string, mode string) (Report, error) {
 			}
 			return Report{}, fmt.Errorf("room service timeout: %w", outcome.err)
 		}
-		if !coord.inputsReady() {
+		if !coord.inputsRoutedReady() {
 			runtime.Gosched()
 			continue
 		}
@@ -1188,6 +1219,10 @@ func runCancellationProbe(mode, outputDir string) (*CancellationReport, error) {
 				cancel()
 				return nil, fmt.Errorf("public room service did not produce an active media frame: source_frames=%d output_frames=%d", sourceFrames, outputFrames)
 			default:
+				if !coord.inputsRoutedReady() {
+					runtime.Gosched()
+					continue
+				}
 				scheduler.Advance()
 				runtime.Gosched()
 			}

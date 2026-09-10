@@ -194,20 +194,6 @@
             "end_of_response": true,
             "epoch": 1,
             "kind": "peer_output",
-            "participant": "alice",
-            "samples": [
-              211,
-              212,
-              213,
-              214
-            ],
-            "sequence": 0,
-            "target": "alice"
-          },
-          {
-            "end_of_response": true,
-            "epoch": 1,
-            "kind": "peer_output",
             "participant": "bob",
             "samples": [
               111,
@@ -217,6 +203,20 @@
             ],
             "sequence": 0,
             "target": "bob"
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "alice",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 0,
+            "target": "alice"
           },
           {
             "classification": "fixture_complete",
@@ -334,7 +334,7 @@
         ],
         "child_timeout_seconds": 60.0,
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/artifacts",
-        "elapsed_seconds": 0.085404,
+        "elapsed_seconds": 0.129094,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -343,14 +343,14 @@
           "GOTOOLCHAIN": "",
           "GOWORK": "off",
           "HOME": "/Users/abdifamily",
-          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0T542gG:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
         },
         "exit_code": 1,
         "kill_sent": false,
         "label": "room-mutation-epoch",
         "output_drained": true,
         "process_group_gone": true,
-        "process_group_id": 86417,
+        "process_group_id": 15221,
         "reaped": true,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-mutation-epoch.stderr",
         "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-mutation-epoch.stdout",
@@ -505,19 +505,6 @@
             "end_of_response": true,
             "epoch": 2,
             "kind": "source_audio",
-            "participant": "alice",
-            "samples": [
-              111,
-              112,
-              113,
-              114
-            ],
-            "sequence": 2
-          },
-          {
-            "end_of_response": true,
-            "epoch": 2,
-            "kind": "source_audio",
             "participant": "bob",
             "samples": [
               211,
@@ -528,17 +515,17 @@
             "sequence": 2
           },
           {
-            "epoch": 1,
-            "kind": "playback_input",
-            "participant": "listener",
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "alice",
             "samples": [
-              322,
-              324,
-              326,
-              328
+              111,
+              112,
+              113,
+              114
             ],
-            "sequence": 0,
-            "target": "listener"
+            "sequence": 2
           },
           {
             "end_of_response": true,
@@ -553,6 +540,19 @@
             ],
             "sequence": 0,
             "target": "alice"
+          },
+          {
+            "epoch": 1,
+            "kind": "playback_input",
+            "participant": "listener",
+            "samples": [
+              322,
+              324,
+              326,
+              328
+            ],
+            "sequence": 0,
+            "target": "listener"
           },
           {
             "end_of_response": true,
@@ -684,7 +684,7 @@
         ],
         "child_timeout_seconds": 60.0,
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/artifacts",
-        "elapsed_seconds": 0.072771,
+        "elapsed_seconds": 0.129655,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -693,14 +693,14 @@
           "GOTOOLCHAIN": "",
           "GOWORK": "off",
           "HOME": "/Users/abdifamily",
-          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0T542gG:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
         },
         "exit_code": 1,
         "kill_sent": false,
         "label": "room-mutation-pcm",
         "output_drained": true,
         "process_group_gone": true,
-        "process_group_id": 86418,
+        "process_group_id": 15222,
         "reaped": true,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-mutation-pcm.stderr",
         "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-mutation-pcm.stdout",
@@ -840,20 +840,33 @@
           {
             "epoch": 1,
             "kind": "source_audio",
-            "participant": "alice",
-            "samples": [
-              101,
-              102
-            ],
-            "sequence": 1
-          },
-          {
-            "epoch": 1,
-            "kind": "source_audio",
             "participant": "bob",
             "samples": [
               201,
               202
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 2
+          },
+          {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              101,
+              102
             ],
             "sequence": 1
           },
@@ -872,16 +885,17 @@
           },
           {
             "end_of_response": true,
-            "epoch": 2,
-            "kind": "source_audio",
-            "participant": "bob",
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "mallory",
             "samples": [
               211,
               212,
               213,
               214
             ],
-            "sequence": 2
+            "sequence": 0,
+            "target": "mallory"
           },
           {
             "epoch": 1,
@@ -895,20 +909,6 @@
             ],
             "sequence": 0,
             "target": "listener"
-          },
-          {
-            "end_of_response": true,
-            "epoch": 1,
-            "kind": "peer_output",
-            "participant": "mallory",
-            "samples": [
-              211,
-              212,
-              213,
-              214
-            ],
-            "sequence": 0,
-            "target": "mallory"
           },
           {
             "end_of_response": true,
@@ -1040,7 +1040,7 @@
         ],
         "child_timeout_seconds": 60.0,
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/artifacts",
-        "elapsed_seconds": 0.12644,
+        "elapsed_seconds": 0.131153,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -1049,14 +1049,14 @@
           "GOTOOLCHAIN": "",
           "GOWORK": "off",
           "HOME": "/Users/abdifamily",
-          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0T542gG:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
         },
         "exit_code": 1,
         "kill_sent": false,
         "label": "room-mutation-peer-participant-key",
         "output_drained": true,
         "process_group_gone": true,
-        "process_group_id": 86415,
+        "process_group_id": 15219,
         "reaped": true,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-mutation-peer-participant-key.stderr",
         "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-mutation-peer-participant-key.stdout",
@@ -1190,16 +1190,6 @@
           {
             "epoch": 1,
             "kind": "source_audio",
-            "participant": "bob",
-            "samples": [
-              201,
-              202
-            ],
-            "sequence": 1
-          },
-          {
-            "epoch": 1,
-            "kind": "source_audio",
             "participant": "alice",
             "samples": [
               101,
@@ -1221,6 +1211,16 @@
             "sequence": 2
           },
           {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              201,
+              202
+            ],
+            "sequence": 1
+          },
+          {
             "end_of_response": true,
             "epoch": 2,
             "kind": "source_audio",
@@ -1237,20 +1237,6 @@
             "end_of_response": true,
             "epoch": 1,
             "kind": "peer_output",
-            "participant": "alice",
-            "samples": [
-              211,
-              212,
-              213,
-              214
-            ],
-            "sequence": 0,
-            "target": "alice"
-          },
-          {
-            "end_of_response": true,
-            "epoch": 1,
-            "kind": "peer_output",
             "participant": "bob",
             "samples": [
               111,
@@ -1260,6 +1246,20 @@
             ],
             "sequence": 0,
             "target": "bob"
+          },
+          {
+            "end_of_response": true,
+            "epoch": 1,
+            "kind": "peer_output",
+            "participant": "alice",
+            "samples": [
+              211,
+              212,
+              213,
+              214
+            ],
+            "sequence": 0,
+            "target": "alice"
           },
           {
             "epoch": 1,
@@ -1390,7 +1390,7 @@
         ],
         "child_timeout_seconds": 60.0,
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/artifacts",
-        "elapsed_seconds": 0.07109,
+        "elapsed_seconds": 0.124237,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -1399,14 +1399,14 @@
           "GOTOOLCHAIN": "",
           "GOWORK": "off",
           "HOME": "/Users/abdifamily",
-          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0T542gG:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
         },
         "exit_code": 1,
         "kill_sent": false,
         "label": "room-mutation-source-order",
         "output_drained": true,
         "process_group_gone": true,
-        "process_group_id": 86416,
+        "process_group_id": 15220,
         "reaped": true,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-mutation-source-order.stderr",
         "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-mutation-source-order.stdout",
@@ -1540,20 +1540,33 @@
           {
             "epoch": 1,
             "kind": "source_audio",
-            "participant": "bob",
-            "samples": [
-              201,
-              202
-            ],
-            "sequence": 1
-          },
-          {
-            "epoch": 1,
-            "kind": "source_audio",
             "participant": "alice",
             "samples": [
               101,
               102
+            ],
+            "sequence": 1
+          },
+          {
+            "end_of_response": true,
+            "epoch": 2,
+            "kind": "source_audio",
+            "participant": "alice",
+            "samples": [
+              111,
+              112,
+              113,
+              114
+            ],
+            "sequence": 2
+          },
+          {
+            "epoch": 1,
+            "kind": "source_audio",
+            "participant": "bob",
+            "samples": [
+              201,
+              202
             ],
             "sequence": 1
           },
@@ -1571,17 +1584,17 @@
             "sequence": 2
           },
           {
-            "end_of_response": true,
-            "epoch": 2,
-            "kind": "source_audio",
-            "participant": "alice",
+            "epoch": 1,
+            "kind": "playback_input",
+            "participant": "listener",
             "samples": [
-              111,
-              112,
-              113,
-              114
+              322,
+              324,
+              326,
+              328
             ],
-            "sequence": 2
+            "sequence": 0,
+            "target": "listener"
           },
           {
             "end_of_response": true,
@@ -1612,25 +1625,12 @@
             "target": "bob"
           },
           {
-            "epoch": 1,
-            "kind": "playback_input",
-            "participant": "listener",
-            "samples": [
-              322,
-              324,
-              326,
-              328
-            ],
-            "sequence": 0,
-            "target": "listener"
-          },
-          {
             "classification": "fixture_complete",
             "epoch": 0,
             "kind": "terminal",
             "output_state": "complete",
-            "participant": "alice",
-            "provenance": "replay",
+            "participant": "bob",
+            "provenance": "provider",
             "reason": "fixture_complete",
             "sequence": 99,
             "terminal_reason": "provider_close"
@@ -1640,8 +1640,8 @@
             "epoch": 0,
             "kind": "terminal",
             "output_state": "complete",
-            "participant": "bob",
-            "provenance": "provider",
+            "participant": "alice",
+            "provenance": "replay",
             "reason": "fixture_complete",
             "sequence": 99,
             "terminal_reason": "provider_close"
@@ -1740,7 +1740,7 @@
         ],
         "child_timeout_seconds": 60.0,
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/artifacts",
-        "elapsed_seconds": 0.074428,
+        "elapsed_seconds": 0.077352,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -1749,14 +1749,14 @@
           "GOTOOLCHAIN": "",
           "GOWORK": "off",
           "HOME": "/Users/abdifamily",
-          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0T542gG:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
         },
         "exit_code": 1,
         "kill_sent": false,
         "label": "room-mutation-terminal",
         "output_drained": true,
         "process_group_gone": true,
-        "process_group_id": 86419,
+        "process_group_id": 15223,
         "reaped": true,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-mutation-terminal.stderr",
         "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/runs/room-mutation-terminal.stdout",
