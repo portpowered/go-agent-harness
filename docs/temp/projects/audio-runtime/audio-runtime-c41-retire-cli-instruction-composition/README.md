@@ -12,7 +12,21 @@ SHA-256 oracle for the complete composed policy. `consumer-negative` mutates
 that expected digest and must fail with a policy-oracle mismatch.
 
 `verify.py` runs bounded positive, negative, regression, and process-cleanup
-controls and writes JSON reports under `reports/`. It records the source
-revision, module/build inputs, executable hash, commands, exit codes, output,
-and cleanup observations. It does not use a live provider or claim physical,
-acoustic, CI, review, merge, or project acceptance.
+controls and writes JSON reports under `reports/`. The `public-session` mode
+also rebuilds the shipped `agent-cli/cmd/yui` binary from the candidate source
+and runs it against an in-process deterministic RFC 6455 provider. The
+provider observes the initial tool-enabled `session.update` before the first
+user turn, drives a `read_file` function call, checks the marker effect and
+continuation response, and requires a clean `session.closed`/process shutdown.
+This is intentionally the handoff's unchanged-output live-host control: the
+shipped yui command uses the LiveService bootstrap, so its raw configured
+prompt is recorded as raw. The migrated C41 composition is asserted separately
+by the public session Wire consumer and the focused provider-instruction test;
+the report never relabels the live bootstrap as composed policy.
+
+`regression` rebuilds the same yui binary and runs the committed offline replay
+fixture. Reports record the source revision, module/build inputs,
+executable/fixture/capture hashes, commands, exit codes, output, and cleanup
+observations. The provider is local and the API key is only a hermetic sentinel;
+no live credentials, physical/acoustic result, CI, review, merge, or project
+acceptance is claimed.
