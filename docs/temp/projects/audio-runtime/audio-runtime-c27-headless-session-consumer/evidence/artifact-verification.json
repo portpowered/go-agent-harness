@@ -1,8 +1,8 @@
 {
   "descriptor": {
     "path": "evidence/package.json",
-    "sha256": "74749271a505b483f77477d90f89fc4ecb54bcfab015823bf9c34a5b752fdb51",
-    "size": 11777
+    "sha256": "39b38c75eaa5b888ee596e7d160d923c4611a5fd6e6b47f4b8976f10b29c01e0",
+    "size": 12665
   },
   "missing_descriptor_control": "[Errno 2] No such file or directory: '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/package.missing.json'",
   "tamper_control": "tampered artifact digest/size rejected",
@@ -11,23 +11,33 @@
     "checked": [
       {
         "path": "evidence/artifacts/source.tar.gz",
-        "sha256": "20027500ac41e88bea91abdd32e5b552a5f9aedecd65ba7f5cb6b84e3c6bed30",
-        "size": 7561380
+        "sha256": "282e48a7cbd4a1c5002846c820145724c9125ecacb43e9f9e04ff6fec23258d4",
+        "size": 7578605
       },
       {
         "path": "evidence/artifacts/headless-session.archive",
-        "sha256": "906538b99469341b4a8b08a77b57824841ffc0e95ebb87b007c11389fac5b9d7",
-        "size": 9207842
+        "sha256": "de26edb0580672db87b986c3ea432d63b0319131ff738a7efd115d0dbda408cd",
+        "size": 9224354
       },
       {
         "path": "evidence/artifacts/yui.archive",
-        "sha256": "1a9d077bbb656f8f1cfd048f7619a7a5ce8e6f7ec6c205244bc66eee98dba8a0",
-        "size": 52548978
+        "sha256": "ff8a975e58d9705f57ea2527ddb28645dbe858906f48be875770bed717d22a90",
+        "size": 52674162
       },
       {
         "path": "evidence/fixtures/c07-audio-tool-traced.session.json",
         "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
         "size": 14060
+      },
+      {
+        "path": "fixtures/yui-config/config.yaml",
+        "sha256": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+        "size": 2337
+      },
+      {
+        "path": "fixtures/yui-config/models.yaml",
+        "sha256": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1",
+        "size": 10779
       },
       {
         "path": "go.mod",
@@ -41,15 +51,15 @@
       },
       {
         "path": "scripts/verify.py",
-        "sha256": "6b3f30779268445183f2067292c8155216d561f4bad3ff6a17ab2102adf57a91",
-        "size": 51594
+        "sha256": "64fb07bd801bb06a6886ce3fa289399ee1324ae783cbb57fe5e4a81449c9ccfd",
+        "size": 61388
       }
     ],
     "provenance": {
       "current_branch": "codex/audio-runtime-c27-headless-session-consumer",
-      "current_head": "9ec9c9b57d46251661103a6a477ab266c3b6c21d",
+      "current_head": "c8504b47a7fad1064bf7115914ebdb32ad947b63",
       "source_changes_since_source_revision": [],
-      "source_revision": "9ec9c9b57d46251661103a6a477ab266c3b6c21d",
+      "source_revision": "c8504b47a7fad1064bf7115914ebdb32ad947b63",
       "source_revision_matches_current_head": true
     }
   }

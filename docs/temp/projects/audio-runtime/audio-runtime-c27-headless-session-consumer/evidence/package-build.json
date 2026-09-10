@@ -1,8 +1,8 @@
 {
   "descriptor": {
     "path": "evidence/package.json",
-    "sha256": "74749271a505b483f77477d90f89fc4ecb54bcfab015823bf9c34a5b752fdb51",
-    "size": 11777
+    "sha256": "39b38c75eaa5b888ee596e7d160d923c4611a5fd6e6b47f4b8976f10b29c01e0",
+    "size": 12665
   },
   "descriptor_value": {
     "ancestry": {
@@ -19,8 +19,13 @@
           "origin",
           "main"
         ],
+        "cleanup_bounded": true,
+        "cleanup_error": "",
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer",
-        "duration_seconds": 0.557919,
+        "descendants_alive": false,
+        "descendants_killed": 0,
+        "descendants_seen": 0,
+        "duration_seconds": 0.477102,
         "exit_code": 0,
         "process_group_alive": false,
         "reaped": true,
@@ -28,7 +33,7 @@
         "stdout": "",
         "timed_out": false
       },
-      "head": "9ec9c9b57d46251661103a6a477ab266c3b6c21d",
+      "head": "c8504b47a7fad1064bf7115914ebdb32ad947b63",
       "manifest": {
         "branchName": "codex/audio-runtime-c27-headless-session-consumer",
         "ownedPaths": [
@@ -38,7 +43,7 @@
         "project": "audio-runtime"
       },
       "no_merge_or_reset": true,
-      "origin_main": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+      "origin_main": "b0acab1238d1aa6bf6bce5ca074451310c7eb039",
       "origin_main_is_ancestor": true
     },
     "branch": "codex/audio-runtime-c27-headless-session-consumer",
@@ -48,7 +53,7 @@
         "build",
         "-trimpath",
         "-o",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-c308plhm/source/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/bin/headless-session",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-po1wt596/source/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/bin/headless-session",
         "./cmd/headless-session"
       ],
       "archive_yui_build": [
@@ -56,7 +61,7 @@
         "build",
         "-trimpath",
         "-o",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-c308plhm/source/agent-cli/bin/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-po1wt596/source/agent-cli/bin/yui",
         "./cmd/yui"
       ],
       "consumer_build": [
@@ -81,13 +86,13 @@
     "executables": {
       "consumer": {
         "path": "evidence/artifacts/headless-session.archive",
-        "sha256": "906538b99469341b4a8b08a77b57824841ffc0e95ebb87b007c11389fac5b9d7",
-        "size": 9207842
+        "sha256": "de26edb0580672db87b986c3ea432d63b0319131ff738a7efd115d0dbda408cd",
+        "size": 9224354
       },
       "yui": {
         "path": "evidence/artifacts/yui.archive",
-        "sha256": "1a9d077bbb656f8f1cfd048f7619a7a5ce8e6f7ec6c205244bc66eee98dba8a0",
-        "size": 52548978
+        "sha256": "ff8a975e58d9705f57ea2527ddb28645dbe858906f48be875770bed717d22a90",
+        "size": 52674162
       }
     },
     "extraction": {
@@ -98,11 +103,16 @@
           "build",
           "-trimpath",
           "-o",
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-c308plhm/source/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/bin/headless-session",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-po1wt596/source/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/bin/headless-session",
           "./cmd/headless-session"
         ],
-        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-c308plhm/source/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer",
-        "duration_seconds": 19.263167,
+        "cleanup_bounded": true,
+        "cleanup_error": "",
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-po1wt596/source/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer",
+        "descendants_alive": false,
+        "descendants_killed": 0,
+        "descendants_seen": 0,
+        "duration_seconds": 19.812351,
         "exit_code": 0,
         "process_group_alive": false,
         "reaped": true,
@@ -118,15 +128,20 @@
           "build",
           "-trimpath",
           "-o",
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-c308plhm/source/agent-cli/bin/yui",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-po1wt596/source/agent-cli/bin/yui",
           "./cmd/yui"
         ],
-        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-c308plhm/source/agent-cli",
-        "duration_seconds": 34.070042,
+        "cleanup_bounded": true,
+        "cleanup_error": "",
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-package-extract-po1wt596/source/agent-cli",
+        "descendants_alive": false,
+        "descendants_killed": 0,
+        "descendants_seen": 0,
+        "duration_seconds": 33.732539,
         "exit_code": 0,
         "process_group_alive": false,
         "reaped": true,
-        "stderr": "go: downloading go1.26.7 (darwin/arm64)\ngo: downloading github.com/google/wire v0.7.0\ngo: downloading github.com/pion/rtp v1.10.5\ngo: downloading github.com/pion/webrtc/v4 v4.2.18\ngo: downloading github.com/knadh/koanf/parsers/yaml v1.1.0\ngo: downloading github.com/knadh/koanf/providers/file v1.2.1\ngo: downloading github.com/knadh/koanf/providers/env v1.1.0\ngo: downloading github.com/knadh/koanf/providers/structs v1.0.0\ngo: downloading github.com/knadh/koanf/v2 v2.3.2\ngo: downloading gopkg.in/yaml.v3 v3.0.1\ngo: downloading github.com/charmbracelet/bubbles v1.0.0\ngo: downloading github.com/charmbracelet/bubbletea v1.3.10\ngo: downloading github.com/charmbracelet/glamour v0.10.0\ngo: downloading github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834\ngo: downloading github.com/mattn/go-runewidth v0.0.19\ngo: downloading github.com/pion/opus v0.1.1-0.20260814200708-161621adf560\ngo: downloading github.com/spf13/cobra v1.9.1\ngo: downloading github.com/spf13/pflag v1.0.6\ngo: downloading golang.org/x/term v0.40.0\ngo: downloading github.com/gorilla/websocket v1.5.3\ngo: downloading github.com/ebitengine/purego v0.11.0\ngo: downloading github.com/gen2brain/malgo v0.11.24\ngo: downloading go.yaml.in/yaml/v3 v3.0.3\ngo: downloading github.com/fatih/structs v1.1.0\ngo: downloading github.com/fsnotify/fsnotify v1.9.0\ngo: downloading github.com/knadh/koanf/maps v0.1.2\ngo: downloading github.com/atotto/clipboard v0.1.4\ngo: downloading github.com/charmbracelet/x/ansi v0.11.6\ngo: downloading github.com/rivo/uniseg v0.4.7\ngo: downloading github.com/go-viper/mapstructure/v2 v2.4.0\ngo: downloading github.com/mitchellh/copystructure v1.2.0\ngo: downloading github.com/pion/randutil v0.1.0\ngo: downloading go.uber.org/zap v1.27.1\ngo: downloading github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f\ngo: downloading github.com/chromedp/chromedp v0.16.0\ngo: downloading github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68\ngo: downloading github.com/charmbracelet/x/term v0.2.2\ngo: downloading github.com/muesli/cancelreader v0.2.2\ngo: downloading github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6\ngo: downloading github.com/clipperhouse/uax29/v2 v2.5.0\ngo: downloading golang.org/x/sys v0.47.0\ngo: downloading github.com/charmbracelet/x/cellbuf v0.0.15\ngo: downloading github.com/muesli/termenv v0.16.0\ngo: downloading github.com/yuin/goldmark v1.7.8\ngo: downloading github.com/yuin/goldmark-emoji v1.0.5\ngo: downloading github.com/pion/datachannel v1.6.2\ngo: downloading github.com/pion/dtls/v3 v3.1.5\ngo: downloading github.com/pion/ice/v4 v4.4.0\ngo: downloading github.com/pion/interceptor v0.1.47\ngo: downloading github.com/pion/rtcp v1.2.17\ngo: downloading github.com/pion/logging v0.2.4\ngo: downloading github.com/pion/sctp v1.11.1\ngo: downloading github.com/pion/sdp/v3 v3.0.19\ngo: downloading github.com/pion/srtp/v3 v3.0.12\ngo: downloading github.com/pion/stun/v3 v3.1.6\ngo: downloading github.com/pion/transport/v4 v4.0.2\ngo: downloading golang.org/x/net v0.50.0\ngo: downloading github.com/clipperhouse/displaywidth v0.9.0\ngo: downloading github.com/lucasb-eyer/go-colorful v1.3.0\ngo: downloading golang.org/x/image v0.36.0\ngo: downloading go.uber.org/multierr v1.10.0\ngo: downloading github.com/mitchellh/reflectwalk v1.0.2\ngo: downloading github.com/chromedp/sysutil v1.1.0\ngo: downloading github.com/alecthomas/chroma/v2 v2.14.0\ngo: downloading github.com/charmbracelet/x/exp/slice v0.0.0-20250327172914-2fdc97757edf\ngo: downloading github.com/microcosm-cc/bluemonday v1.0.27\ngo: downloading github.com/muesli/reflow v0.3.0\ngo: downloading golang.org/x/text v0.34.0\ngo: downloading github.com/gobwas/ws v1.4.0\ngo: downloading github.com/clipperhouse/stringish v0.1.1\ngo: downloading github.com/charmbracelet/colorprofile v0.4.1\ngo: downloading github.com/aymanbagabas/go-osc52/v2 v2.0.1\ngo: downloading github.com/mattn/go-isatty v0.0.20\ngo: downloading github.com/google/uuid v1.6.0\ngo: downloading github.com/pion/mdns/v2 v2.1.0\ngo: downloading github.com/pion/turn/v5 v5.0.12\ngo: downloading golang.org/x/crypto v0.48.0\ngo: downloading github.com/aymerick/douceur v0.2.0\ngo: downloading github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e\ngo: downloading github.com/gobwas/pool v0.2.1\ngo: downloading github.com/gobwas/httphead v0.1.0\ngo: downloading github.com/dlclark/regexp2 v1.11.0\ngo: downloading github.com/wlynxg/anet v0.0.5\ngo: downloading golang.org/x/time v0.14.0\ngo: downloading github.com/gorilla/css v1.0.1\n",
+        "stderr": "go: downloading go1.26.7 (darwin/arm64)\ngo: downloading github.com/google/wire v0.7.0\ngo: downloading github.com/pion/rtp v1.10.5\ngo: downloading github.com/pion/webrtc/v4 v4.2.18\ngo: downloading github.com/knadh/koanf/parsers/yaml v1.1.0\ngo: downloading github.com/knadh/koanf/providers/env v1.1.0\ngo: downloading github.com/knadh/koanf/providers/file v1.2.1\ngo: downloading github.com/knadh/koanf/providers/structs v1.0.0\ngo: downloading github.com/knadh/koanf/v2 v2.3.2\ngo: downloading gopkg.in/yaml.v3 v3.0.1\ngo: downloading github.com/charmbracelet/bubbles v1.0.0\ngo: downloading github.com/charmbracelet/bubbletea v1.3.10\ngo: downloading github.com/charmbracelet/glamour v0.10.0\ngo: downloading github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834\ngo: downloading github.com/mattn/go-runewidth v0.0.19\ngo: downloading github.com/pion/opus v0.1.1-0.20260814200708-161621adf560\ngo: downloading github.com/gorilla/websocket v1.5.3\ngo: downloading github.com/ebitengine/purego v0.11.0\ngo: downloading github.com/gen2brain/malgo v0.11.24\ngo: downloading github.com/spf13/cobra v1.9.1\ngo: downloading github.com/spf13/pflag v1.0.6\ngo: downloading golang.org/x/term v0.40.0\ngo: downloading github.com/knadh/koanf/maps v0.1.2\ngo: downloading github.com/fatih/structs v1.1.0\ngo: downloading github.com/go-viper/mapstructure/v2 v2.4.0\ngo: downloading github.com/mitchellh/copystructure v1.2.0\ngo: downloading go.yaml.in/yaml/v3 v3.0.3\ngo: downloading github.com/fsnotify/fsnotify v1.9.0\ngo: downloading github.com/atotto/clipboard v0.1.4\ngo: downloading github.com/charmbracelet/x/ansi v0.11.6\ngo: downloading github.com/rivo/uniseg v0.4.7\ngo: downloading github.com/pion/randutil v0.1.0\ngo: downloading github.com/charmbracelet/x/term v0.2.2\ngo: downloading github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6\ngo: downloading github.com/muesli/cancelreader v0.2.2\ngo: downloading go.uber.org/zap v1.27.1\ngo: downloading github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f\ngo: downloading github.com/chromedp/chromedp v0.16.0\ngo: downloading github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68\ngo: downloading github.com/clipperhouse/uax29/v2 v2.5.0\ngo: downloading github.com/muesli/termenv v0.16.0\ngo: downloading github.com/yuin/goldmark v1.7.8\ngo: downloading github.com/yuin/goldmark-emoji v1.0.5\ngo: downloading github.com/charmbracelet/x/cellbuf v0.0.15\ngo: downloading golang.org/x/sys v0.47.0\ngo: downloading github.com/pion/datachannel v1.6.2\ngo: downloading github.com/pion/dtls/v3 v3.1.5\ngo: downloading github.com/pion/ice/v4 v4.4.0\ngo: downloading github.com/pion/interceptor v0.1.47\ngo: downloading github.com/pion/logging v0.2.4\ngo: downloading github.com/pion/rtcp v1.2.17\ngo: downloading github.com/pion/sctp v1.11.1\ngo: downloading github.com/pion/sdp/v3 v3.0.19\ngo: downloading github.com/pion/srtp/v3 v3.0.12\ngo: downloading github.com/pion/stun/v3 v3.1.6\ngo: downloading github.com/pion/transport/v4 v4.0.2\ngo: downloading golang.org/x/net v0.50.0\ngo: downloading golang.org/x/image v0.36.0\ngo: downloading github.com/mitchellh/reflectwalk v1.0.2\ngo: downloading github.com/clipperhouse/displaywidth v0.9.0\ngo: downloading github.com/lucasb-eyer/go-colorful v1.3.0\ngo: downloading go.uber.org/multierr v1.10.0\ngo: downloading github.com/chromedp/sysutil v1.1.0\ngo: downloading github.com/alecthomas/chroma/v2 v2.14.0\ngo: downloading github.com/microcosm-cc/bluemonday v1.0.27\ngo: downloading github.com/charmbracelet/x/exp/slice v0.0.0-20250327172914-2fdc97757edf\ngo: downloading github.com/muesli/reflow v0.3.0\ngo: downloading golang.org/x/text v0.34.0\ngo: downloading github.com/gobwas/ws v1.4.0\ngo: downloading github.com/aymanbagabas/go-osc52/v2 v2.0.1\ngo: downloading github.com/mattn/go-isatty v0.0.20\ngo: downloading github.com/clipperhouse/stringish v0.1.1\ngo: downloading github.com/charmbracelet/colorprofile v0.4.1\ngo: downloading github.com/google/uuid v1.6.0\ngo: downloading github.com/pion/mdns/v2 v2.1.0\ngo: downloading github.com/pion/turn/v5 v5.0.12\ngo: downloading golang.org/x/crypto v0.48.0\ngo: downloading github.com/aymerick/douceur v0.2.0\ngo: downloading github.com/gobwas/httphead v0.1.0\ngo: downloading github.com/gobwas/pool v0.2.1\ngo: downloading github.com/wlynxg/anet v0.0.5\ngo: downloading golang.org/x/time v0.14.0\ngo: downloading github.com/dlclark/regexp2 v1.11.0\ngo: downloading github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e\ngo: downloading github.com/gorilla/css v1.0.1\n",
         "stdout": "",
         "timed_out": false
       }
@@ -160,28 +175,42 @@
       },
       "path": "example.com/audio-runtime-c27-headless-session-consumer",
       "relative_path": "docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer",
-      "source_tree_sha256": "829dc57e8c0ab0b456cec8ff4690c160bd5eabb0089e2f1a4e4ea8326d20801e"
+      "source_tree_sha256": "16eabb096984bdb284185774f7301f84d8e58f062e715c49c5a2f7eb7def8fc8"
     },
     "no_credentials_or_network_prerequisite": true,
+    "regression_inputs": {
+      "config": {
+        "config.yaml": {
+          "path": "fixtures/yui-config/config.yaml",
+          "sha256": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+          "size": 2337
+        },
+        "models.yaml": {
+          "path": "fixtures/yui-config/models.yaml",
+          "sha256": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1",
+          "size": 10779
+        }
+      }
+    },
     "replacement_source_tree_sha256": {
-      "agent-cli": "9bb640416c5cc39a9839b291469323fd4f4bb06024a59c23cc2a6f31bd7d45f0",
+      "agent-cli": "3b9ed39a43bc09783fa45e2976564d3309c838f7e7ddcc371cb813525f9c1a09",
       "go-agent-loop": "303fa4db63b4a1cee6a5424ce27f07645de132e853544ca87adbfbda9db17d60",
-      "go-agent-runtime": "58f184c02544715cd2fe8ed2a038c7be021c96d875887ce970a9164d9f67f1f6",
+      "go-agent-runtime": "789a9e972d487a67929f6448d65dda9441456f408dcfa1ddb91a2bcccdb57a86",
       "go-audio": "b5316a989231fcea762b222c6b6367ca0f8799b0cc4c5f0b3fdb215fbe39f6aa",
       "go-device-gateway": "0bcbbd6d9acb350158b8080c9707616c334b8a02f2d2717171822ac7307e2ddf",
       "go-llm-gateway": "1f13bfecbe6d9dfe1e1244bd27bf01c3c3bba3914864a71e8460c474ecf2d319"
     },
     "runner": {
       "path": "scripts/verify.py",
-      "sha256": "6b3f30779268445183f2067292c8155216d561f4bad3ff6a17ab2102adf57a91",
-      "size": 51594
+      "sha256": "64fb07bd801bb06a6886ce3fa289399ee1324ae783cbb57fe5e4a81449c9ccfd",
+      "size": 61388
     },
     "schema": "audio-runtime-c27-package/v1",
     "source_archive": {
       "path": "evidence/artifacts/source.tar.gz",
-      "sha256": "20027500ac41e88bea91abdd32e5b552a5f9aedecd65ba7f5cb6b84e3c6bed30",
-      "size": 7561380
+      "sha256": "282e48a7cbd4a1c5002846c820145724c9125ecacb43e9f9e04ff6fec23258d4",
+      "size": 7578605
     },
-    "source_revision": "9ec9c9b57d46251661103a6a477ab266c3b6c21d"
+    "source_revision": "c8504b47a7fad1064bf7115914ebdb32ad947b63"
   }
 }
