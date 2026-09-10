@@ -162,6 +162,9 @@ def _make_fixture(parent: Path) -> Path:
     destination = root / "factory" / "projects" / amendments.PROJECT
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, destination)
+    # The candidate record is a deliverable, but this isolated fixture must
+    # start before publication so it exercises the fresh append path.
+    shutil.rmtree(destination / "amendments", ignore_errors=True)
     (root / "docs" / "temp" / "projects" / amendments.PROJECT).mkdir(parents=True)
     (root / "docs" / "temp" / "probes").mkdir(parents=True)
     _copy_reviewed_inputs(root)
@@ -208,6 +211,18 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
     )
     if append["exitCode"] != 0:
         raise ProbeError(f"authorized append failed: {append['stderr']}")
+    append_repeat = _controller(
+        "project-control.py",
+        fixture,
+        "amendment-append",
+        "--record",
+        str(record_input),
+    )
+    if append_repeat["exitCode"] != 0:
+        raise ProbeError(f"idempotent append failed: {append_repeat['stderr']}")
+    repeat_value = json.loads(append_repeat["stdout"])
+    if repeat_value.get("status") != "already-present":
+        raise ProbeError("idempotent append did not preserve the published record")
     status = _controller(
         "project-control.py",
         fixture,
@@ -405,6 +420,7 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
         protected[relative] = _sha256(fixture / relative)
     return {
         "append": json.loads(append["stdout"]),
+        "appendRepeat": repeat_value,
         "status": status_value,
         "prepared": prepared,
         "completion": completion,

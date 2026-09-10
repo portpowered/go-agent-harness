@@ -62,5 +62,5 @@ exclusion negative control exited `1`. The timeout control exited `-15` after
 bounded TERM/reap, and the supplied C32 yui `--help` exited `0` with the
 immutable `db1f7de4881d9868859e546a2f66b0cd35e60ac5682c323b445254f3c2aaf628`
 SHA-256 unchanged. The full machine-readable result is kept beside this
-README as `probe-report.json`; it records source revision, protected hashes,
+README under `evidence/probe-report.json`; it records source revision, protected hashes,
 fresh mission/report completion, and residual physical/acoustic limits.
