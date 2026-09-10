@@ -28,6 +28,6 @@ func NewModelCatalog() providers.ModelCatalog { return catalog.New() }
 // NewModelAdmission constructs the provider-owned admission role around an
 // explicitly supplied catalog. This keeps custom catalogs usable by an
 // independent consumer without exposing providers/internal packages.
-func NewModelAdmission(modelCatalog providers.ModelCatalog) providers.ModelAdmission {
+func NewModelAdmission(modelCatalog providers.ModelCatalog) providers.ModelAdmissionResolver {
 	return admission.NewService(modelCatalog)
 }

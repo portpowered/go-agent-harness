@@ -28,29 +28,12 @@ type OpenAIRealtimeModel = runtimeproviders.RealtimeModel
 type UnsupportedRealtimeModelError = runtimeproviders.UnsupportedRealtimeModelError
 type UnsupportedOpenAIRealtimeModelError = UnsupportedRealtimeModelError
 
-func providerModelAdmission(catalog runtimeproviders.ModelCatalog) runtimeproviders.ModelAdmissionResolver {
-	modelAdmission := providerswire.NewModelAdmission(catalog)
-	adapter, ok := modelAdmission.(runtimeproviders.ModelAdmissionResolver)
-	if !ok {
-		return nil
-	}
-	return adapter
-}
-
 func lookupOpenAIRealtimeModel(opts SessionRunOptions, model string) (runtimeproviders.RealtimeModel, bool) {
-	modelAdmission := providerModelAdmission(opts.ModelCatalog)
-	if modelAdmission == nil {
-		return runtimeproviders.RealtimeModel{}, false
-	}
-	return modelAdmission.ResolveRealtimeModel(sessionProviderOpenAI, model, runtimeproviders.ModelAdmissionOptions{TrimModel: true})
+	return providerswire.NewModelAdmission(opts.ModelCatalog).ResolveRealtimeModel(sessionProviderOpenAI, model, runtimeproviders.ModelAdmissionOptions{TrimModel: true})
 }
 
 func unsupportedOpenAIRealtimeModelErrorFor(opts SessionRunOptions, model string) error {
-	modelAdmission := providerModelAdmission(opts.ModelCatalog)
-	if modelAdmission == nil {
-		return fmt.Errorf("%w: OpenAI realtime model admission", runtimeproviders.ErrModelCatalogRequired)
-	}
-	err := modelAdmission.ValidateRealtimeModel(sessionProviderOpenAI, model, runtimeproviders.ModelAdmissionOptions{
+	err := providerswire.NewModelAdmission(opts.ModelCatalog).ValidateRealtimeModel(sessionProviderOpenAI, model, runtimeproviders.ModelAdmissionOptions{
 		TrimModel:            true,
 		PreserveModelInError: true,
 	})
@@ -68,11 +51,7 @@ func validateBareSessionModel(opts SessionRunOptions, provider, model string) er
 }
 
 func validateSelfPlayModel(opts SelfPlayRunOptions) error {
-	modelAdmission := providerModelAdmission(opts.modelCatalog)
-	if modelAdmission == nil {
-		return fmt.Errorf("%w: self-play model admission", runtimeproviders.ErrModelCatalogRequired)
-	}
-	err := modelAdmission.ValidateRealtimeModel(SelfPlayDefaultProvider, opts.Model, runtimeproviders.ModelAdmissionOptions{
+	err := providerswire.NewModelAdmission(opts.modelCatalog).ValidateRealtimeModel(SelfPlayDefaultProvider, opts.Model, runtimeproviders.ModelAdmissionOptions{
 		PreserveModelInError: true,
 	})
 	if err == nil {

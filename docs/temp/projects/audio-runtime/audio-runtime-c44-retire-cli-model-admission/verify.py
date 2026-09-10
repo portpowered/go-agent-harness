@@ -44,6 +44,10 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def artifact_facts(path: pathlib.Path) -> dict[str, Any]:
+    return {"path": str(path), "bytes": path.stat().st_size, "sha256": sha256(path)}
+
+
 def selected_environment(env: dict[str, str]) -> dict[str, str]:
     keys = ("PATH", "GOWORK", "GOFLAGS", "GOTOOLCHAIN", "FACTORY_ROOT", "FACTORY_SERVER_URL")
     return {key: env.get(key, "") for key in keys}
@@ -160,6 +164,10 @@ def run_process(
         "kill_sent": kill_sent,
         "parent_reaped": process.returncode is not None,
         "surviving_process_group_pids": survivors,
+        "stdout_bytes": len(stdout),
+        "stdout_sha256": sha256_bytes(stdout),
+        "stderr_bytes": len(stderr),
+        "stderr_sha256": sha256_bytes(stderr),
         "stdout_path": str(stdout_path),
         "stderr_path": str(stderr_path),
     }
@@ -194,6 +202,7 @@ def build_consumer(run_dir: pathlib.Path, started: float, total_timeout: float, 
     require_ok(result)
     if not CONSUMER.is_file():
         raise EvidenceFailure(f"external consumer build did not create {CONSUMER}")
+    result["artifact"] = artifact_facts(CONSUMER)
     return result
 
 
@@ -209,6 +218,7 @@ def build_yui(run_dir: pathlib.Path, started: float, total_timeout: float, child
     require_ok(result)
     if not YUI.is_file():
         raise EvidenceFailure(f"yui build did not create {YUI}")
+    result["artifact"] = artifact_facts(YUI)
     return result
 
 
@@ -374,6 +384,7 @@ def run_invalid_cli(
         raise EvidenceFailure(f"{label} created its output target before admission: {output_target}")
     return {
         "result": result,
+        "expected_text": expected_text,
         "provider_connection_accepted": probe.accepted,
         "output_target_exists": output_target.exists() if output_target is not None else False,
     }
@@ -515,7 +526,17 @@ def validate_replay(label: str, fixture: pathlib.Path, case_dir: pathlib.Path) -
         tail = pcm_bytes[expectation["healthy_tail_offset_bytes"]:]
         healthy_tail = {"offset_bytes": expectation["healthy_tail_offset_bytes"], "bytes": len(tail), "sha256": sha256_bytes(tail)}
         require(healthy_tail["bytes"] == expectation["healthy_tail_bytes"] and healthy_tail["sha256"] == expectation["healthy_tail_sha256"], f"{label} healthy PCM tail changed: {healthy_tail}")
-    return {"manifest": str(manifest), "pcm": str(pcm), "pcm_bytes": len(pcm_bytes), "pcm_sha256": sha256(pcm), "healthy_tail": healthy_tail, "terminal": manifest_data["terminal"]}
+    return {
+        "fixture": str(fixture),
+        "fixture_bytes": fixture.stat().st_size,
+        "fixture_sha256": sha256(fixture),
+        "manifest": str(manifest),
+        "pcm": str(pcm),
+        "pcm_bytes": len(pcm_bytes),
+        "pcm_sha256": sha256(pcm),
+        "healthy_tail": healthy_tail,
+        "terminal": manifest_data["terminal"],
+    }
 
 
 def validate_replay_output(label: str, stdout: str) -> None:
@@ -621,13 +642,59 @@ def run_timeout_control(run_dir: pathlib.Path, started: float, total_timeout: fl
     return result
 
 
+def tracked_input_manifest(scope: str, prefixes: list[str]) -> dict[str, Any]:
+    try:
+        listed = subprocess.run(
+            ["rtk", "proxy", "git", "ls-files", "-z", "--", *prefixes],
+            cwd=str(ROOT),
+            check=True,
+            capture_output=True,
+            timeout=30,
+        ).stdout.decode("utf-8")
+    except (OSError, subprocess.SubprocessError, UnicodeError) as exc:
+        raise EvidenceFailure(f"{scope} input manifest failed: {exc}") from exc
+
+    entries: list[str] = []
+    for relative in sorted(path for path in listed.split("\0") if path):
+        path = ROOT / relative
+        if not path.is_file():
+            raise EvidenceFailure(f"{scope} input manifest references missing file: {relative}")
+        entries.append(f"{relative}\0{path.stat().st_size}\0{sha256(path)}\n")
+    manifest = "".join(entries).encode("utf-8")
+    return {
+        "prefixes": prefixes,
+        "file_count": len(entries),
+        "manifest_sha256": sha256_bytes(manifest),
+    }
+
+
 def source_facts(source: str) -> dict[str, Any]:
     try:
         revision = subprocess.run(["rtk", "proxy", "git", "rev-parse", "HEAD"], cwd=str(ROOT), check=True, capture_output=True, text=True, timeout=10).stdout.strip()
         status = subprocess.run(["rtk", "proxy", "git", "status", "--porcelain"], cwd=str(ROOT), check=True, capture_output=True, text=True, timeout=10).stdout.splitlines()
+        archive = subprocess.run(["rtk", "proxy", "git", "archive", "--format=tar", "HEAD"], cwd=str(ROOT), check=True, capture_output=True, timeout=30).stdout
+        go_version = subprocess.run(["rtk", "proxy", "go", "version"], cwd=str(ROOT), check=True, capture_output=True, text=True, timeout=10).stdout.strip()
     except (OSError, subprocess.SubprocessError) as exc:
         raise EvidenceFailure(f"source provenance failed: {exc}") from exc
-    return {"source": source, "revision": revision, "status": status, "consumer_sha256": sha256(CONSUMER_SOURCE), "consumer_bytes": CONSUMER_SOURCE.stat().st_size}
+    shared_prefixes = ["go.work", "go.work.sum", "go-agent-loop", "go-audio", "go-device-gateway", "go-llm-gateway", "go-agent-runtime"]
+    return {
+        "source": source,
+        "revision": revision,
+        "source_tree_dirty": bool(status),
+        "status": status,
+        "source_archive_bytes": len(archive),
+        "source_archive_sha256": sha256_bytes(archive),
+        "go_version": go_version,
+        "build_inputs": {
+            "external_consumer": tracked_input_manifest(
+                "external consumer",
+                shared_prefixes + ["docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/consumer"],
+            ),
+            "shipped_yui": tracked_input_manifest("shipped yui", shared_prefixes + ["agent-cli"]),
+        },
+        "consumer_source_sha256": sha256(CONSUMER_SOURCE),
+        "consumer_source_bytes": CONSUMER_SOURCE.stat().st_size,
+    }
 
 
 def main() -> int:

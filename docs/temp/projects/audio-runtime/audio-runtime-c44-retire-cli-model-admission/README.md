@@ -27,3 +27,29 @@ rtk python3 docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-
 The negative-controls mode requires the external consumer to reject the
 deliberately wrong built-in-model oracle and proves that a forced timeout kills
 the complete process group within the child bound.
+
+## Implementation ledger
+
+The candidate was based on reviewed main `926ded7b` and then merged with the
+freshly fetched `origin/main` `11b9035b` in the isolated worktree. Required
+baseline `3194edd9` and startup integration `8bdafc7f` remain ancestors. The
+merge is recorded in the task branch history; the verifier records the exact
+source revision used by each public or negative run.
+
+The baseline `session_models.go` had 67 lines. The final adapter is 68 lines:
+`lookupOpenAIRealtimeModel`, `unsupportedOpenAIRealtimeModelErrorFor`,
+`validateBareSessionModel`, and `validateSelfPlayModel` remain as compatibility
+and presentation adapters, while their direct catalog lookup and unsupported
+error construction decisions are retired. The exported model aliases,
+constants, and error identity remain available to existing callers. The
+provider-owned decision is `providers/internal/admission.Admission.Decide`,
+with `admission.Service` exposed through `providers/wire.NewModelAdmission`.
+
+The owned verifier records process output hashes, artifact SHA-256 and sizes,
+reviewed fixture hashes, source archive and toolchain identity, and canonical
+hashes for all tracked files in the external-consumer and shipped-yui build
+input scopes. A run with `source_tree_dirty=true` is diagnostic only; final
+handoff evidence must be regenerated from the clean committed source. Native
+Windows hardware and physical acoustic proof are out of scope under the
+current project amendment; Windows software and hermetic checks remain later
+project gates.
