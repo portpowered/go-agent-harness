@@ -9,15 +9,20 @@ and process cleanup state.
 ## Revisions and admission
 
 - admitted task: `audio-runtime-c34-replay-terminal-integrity`
-- implementation source revision: `1278b1a4eaaaf9784c072b47e8cdcf62b5e3f028`
-- fresh `origin/main` merged into the candidate: `431fc96c14f0e0045629d9c36f98ee61ff06e840`
+- implementation merge checkpoint: `f3a230fd7f86b1fd990abea07305a6247a47771b`
+- evidence head: `953ad5ce9fbe01a1444659f8e0cf4b28b5ed4e47` (documentation-only
+  descendants; owned Go inputs are unchanged from the merge checkpoint)
+- fresh `origin/main` merged into the candidate: `c95a2cb4f96fa8c14bd4655f5197a822c86a980c`
 - required startup revision ancestor: `8bdafc7f947a3a2c9856220abdc539437035bd21`
 - architecture baseline ancestor: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`
 
 The reports record successful ancestry probes for the fresh main and both required
-startup/baseline revisions. They were generated from a clean detached checkout of
-the implementation source above; the submitted evidence/docs descendant changes do
-not alter executable inputs.
+startup/baseline revisions. Candidate verification was generated at source
+`36feeeea48748948de16bf186ff3d75cd50d5cb2`, and the runtime regression at
+`8e5f1d12e155ca3964a28708224709549aab9dcd`; both are documentation-only
+descendants of the implementation merge checkpoint and report only the preserved
+untracked operator note as dirty. The final evidence head does not alter executable
+inputs.
 The operator's untracked `meta-operator-throughput-feedback.md` remains
 untouched and is outside the admitted owned paths.
 
@@ -81,8 +86,9 @@ rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c34-replay-term
   --output docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runtime-regression.json
 ```
 
-The tested YUI is `/private/tmp/audio-runtime-c34-yui-431fc96c` with SHA-256
-`4aa43e242cea79f06c12c0bef2f9d1e061262835eb8e9ee567584f83fa99cba5`. Both
+The tested YUI is `/private/tmp/audio-runtime-c34-yui-8e5f1d1` with SHA-256
+`68dc30f39196160de41c2909c7c3748430cc5506040a0af2c12b858cfa93b7c4`. It was
+rebuilt from the exact source used by the runtime report. Both
 positive replay invocations passed; one reported `15 wire events, 0 tool calls`
 and the terminal replay completed with `output_state=complete`. Rendered PCM is
 3,360 bytes with SHA-256
@@ -97,3 +103,20 @@ source bundle and both mutated copies.
 
 This is software replay evidence only; it does not claim physical-device,
 microphone, speaker, or acoustic proof.
+
+## Rejection reconciliation
+
+Review attempts `work-review-148` and `work-review-154` rejected stale ancestry
+and provenance. The candidate now contains the fetched `origin/main` merge and
+fresh source-pinned reports. The runner includes the requested real
+mutated-valid-audio control, missing-timeline and corrupt-audio controls, bounded
+output capture, and descendant process-group cleanup assertions; all pass.
+
+The latest CI rejection was run `34448550045`, job `102778686103`, against old
+head `8be379cb061c503a701a3b1c92a228868924fae5`. Its sole failing test was the
+unrelated remote `test46/provider_burst` playback scenario, which timed out before
+the final PCM marker while the child was still running. The full raw run JSON and
+job log were saved as `/tmp/audio-runtime-c34-ci-rejection-34448550045-run.json`
+and `/tmp/audio-runtime-c34-ci-rejection-34448550045-job-102778686103.log`; no
+C34 lifecycle failure was reported. This changed candidate is ready for the
+script-owned CI gate to run current-head checks again.
