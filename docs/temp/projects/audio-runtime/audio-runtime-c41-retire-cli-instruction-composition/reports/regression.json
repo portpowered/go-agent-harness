@@ -12,7 +12,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/consumer",
-      "duration_seconds": 0.131184,
+      "duration_seconds": 0.130999,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -20,8 +20,8 @@
       "timed_out": false
     },
     "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/instruction-consumer",
-    "sha256": "ce176cd5ff3a7f2b03c3df9202f900ad20cc8a4b86ff8008b6d15a1c1e7c28de",
-    "size": 7931938
+    "sha256": "55c16ef3ac6106d4ac56a51367cca93e9e9e9419829a4c6753d9e693857a4684",
+    "size": 7931970
   },
   "build_inputs": {
     "module_files": [
@@ -48,14 +48,14 @@
     ],
     "source_trees": [
       {
-        "file_count": 1110,
+        "file_count": 1102,
         "prefix": "agent-cli",
-        "sha256": "97805f0ce970a34fb6b0c26bc0a6dfaf203ab30f4f7755446f876725d2b51d6e"
+        "sha256": "f1db054d886b2a762ab61edb79582b5ff13f69795ded41d2ec21c7680e6a8268"
       },
       {
-        "file_count": 311,
+        "file_count": 327,
         "prefix": "go-agent-runtime",
-        "sha256": "3ad58f716160a4d9edb6f2d778a22e97688935b170d3759b9f12755fb65c63b5"
+        "sha256": "bec3d7d31d120162a40129e75545e5bd929cf76ab6cfca7de1f11136b07c8f2a"
       },
       {
         "file_count": 295,
@@ -63,9 +63,9 @@
         "sha256": "352e945486ab75eed336d635257fc9205a596cf360a102e8a06c29214f495c0c"
       },
       {
-        "file_count": 124,
+        "file_count": 125,
         "prefix": "go-audio",
-        "sha256": "c9c624569bb2b82819bcabfe42e9915e8ff8424b8fadf8e3af5b9a4ca3b68263"
+        "sha256": "4e0d641c24a6e4889de1cf77bbe71fa8995fe574aaff781cbbec5a9120394ede"
       },
       {
         "file_count": 72,
@@ -92,7 +92,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/agent-cli",
-      "duration_seconds": 0.255632,
+      "duration_seconds": 0.248553,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -100,8 +100,8 @@
       "timed_out": false
     },
     "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/artifacts/yui",
-    "sha256": "3b721fd2fd76f74e64eda222a577eeb62665da3460ba416623ff9ed179d34e6f",
-    "size": 52677330
+    "sha256": "e53fcd077c9657d378d05c0ba0780ce7efb9db603b8bdd26f4a13214f359a3a4",
+    "size": 52751762
   },
   "direct_imports": {
     "forbidden": [],
@@ -120,6 +120,51 @@
       "os",
       "strings"
     ]
+  },
+  "focused_instruction_controls": {
+    "commands": [
+      {
+        "argv": [
+          "go",
+          "test",
+          "./internal/transport/cli/internal/livehost",
+          "-run",
+          "TestBuildRequest(UsesWireInstructionCompositionBeforeProviderStartup|PreservesEmptyAndRejectsInvalidWorkspace)$",
+          "-count=1",
+          "-timeout=120s"
+        ],
+        "cleanup_bounded": true,
+        "cleanup_errors": [],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/agent-cli",
+        "duration_seconds": 0.727784,
+        "exit_code": 0,
+        "reaped": true,
+        "stderr": "",
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost\t0.193s\n",
+        "timed_out": false
+      },
+      {
+        "argv": [
+          "go",
+          "test",
+          "./services/session/internal/instructions",
+          "-run",
+          "TestServiceComposeUsesNormalizedToolIdentifierAndBrowserState$",
+          "-count=1",
+          "-timeout=120s"
+        ],
+        "cleanup_bounded": true,
+        "cleanup_errors": [],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/go-agent-runtime",
+        "duration_seconds": 0.360389,
+        "exit_code": 0,
+        "reaped": true,
+        "stderr": "",
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/instructions\t0.159s\n",
+        "timed_out": false
+      }
+    ],
+    "status": "accepted"
   },
   "input_files": [
     {
@@ -179,7 +224,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition",
-      "duration_seconds": 0.61566,
+      "duration_seconds": 0.618955,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -202,7 +247,7 @@
       "cleanup_bounded": true,
       "cleanup_errors": [],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c41-retire-cli-instruction-composition/docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition",
-      "duration_seconds": 0.072457,
+      "duration_seconds": 0.082135,
       "exit_code": 0,
       "reaped": true,
       "stderr": "",
@@ -234,7 +279,7 @@
     }
   },
   "schema": "audio-runtime-c41-instruction-evidence/v1",
-  "source_revision": "529a82cfd80e93c00c46f78edd041cf276c71bb8",
+  "source_revision": "07d4d757be3799c29ddaa869c978e1623a9d6be1",
   "status": "accepted",
-  "worktree_status_at_start": " M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/cleanup-negative.json\n M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/consumer-negative.json\n M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/public-session.json\n M docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/reports/regression.json\n"
+  "worktree_status_at_start": ""
 }
