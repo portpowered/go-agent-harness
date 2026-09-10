@@ -1,17 +1,17 @@
 {
   "descriptor": {
     "path": "evidence/package.json",
-    "sha256": "f6ed193932ba5a73a7dd562faf8d72c2fc713650bb617e9c4d6ea63254ab4311",
-    "size": 12663
+    "sha256": "ceb47a0654c2e650d55559149b29fece7fe660fac1bdd2ee2db719fd4489619a",
+    "size": 12724
   },
   "missing_artifact_control": "declared artifact is missing: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/missing-headless-session.archive",
   "missing_descriptor_control": "artifact descriptor is missing: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/package.missing.json",
   "tamper_control": "artifact digest mismatch: evidence/artifacts/headless-session.archive",
   "tamper_controls": {
     "consumer_artifact_sha256": "artifact digest mismatch: evidence/artifacts/headless-session.archive",
-    "dependency_graph_packages_sha256": "dependency graph digest mismatch for packages_sha256: declared 0000000000000000000000000000000000000000000000000000000000000000, observed 3ec8a26eb83511326fd9eaa221dd8d30dfe881d9623313182e49e1ddf7cd8e9c",
+    "dependency_graph_packages_sha256": "dependency graph digest mismatch for packages_sha256: declared 0000000000000000000000000000000000000000000000000000000000000000, observed 43917fc69ac711edfdcd8dbc127e69f268336e6ef723570fc40de4344dada836",
     "missing_declared_artifact": "declared artifact is missing: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/missing-headless-session.archive",
-    "module_source_tree_sha256": "module source tree digest mismatch: declared 0000000000000000000000000000000000000000000000000000000000000000, observed 801773b7f401ff37e53af9a7fcd3a4b5fb2b828e3c00ecc4fb034fb108969652",
+    "module_source_tree_sha256": "module source tree digest mismatch: declared 0000000000000000000000000000000000000000000000000000000000000000, observed 5cf914e25c8e93f5e41f68fcb95acb280b3e20fa36f1664beb00cc4f2bb787c3",
     "replacement_source_tree_sha256": "replacement source tree digest mismatch for go-audio: declared 0000000000000000000000000000000000000000000000000000000000000000, observed cd5cf5393e15c34462cbca43bc2f9c2a180c449d5f6c1960be9b7ef519f54c65"
   },
   "verified": {
@@ -19,8 +19,8 @@
     "checked": [
       {
         "path": "evidence/artifacts/source.tar.gz",
-        "sha256": "57afb7c7b0737af664585f3861ae4acaf2a205a3fa3584754dddc74c03f67c21",
-        "size": 7587387
+        "sha256": "12dbcd0dbee413cef635c6eb1a294850aa239fe32610fbaea5a464d066ef341b",
+        "size": 7588845
       },
       {
         "path": "evidence/artifacts/headless-session.archive",
@@ -59,23 +59,25 @@
       },
       {
         "path": "scripts/verify.py",
-        "sha256": "987cd16fab3be80e7f6365cb6c6f92cb90e9a7296175eecec7183b4e8510a104",
-        "size": 66853
+        "sha256": "7f2ca20e93df45fa3a61dac9b5e650e857ceb8c9c2c579afdb9e4e258d3b2438",
+        "size": 73499
       }
     ],
     "provenance": {
       "current_branch": "codex/audio-runtime-c27-headless-session-consumer",
-      "current_head": "4fdefe4ffff1c845301feb44969431185005623b",
+      "current_head": "fa8da9f993e0daf702f044f31b4c2dbc5f35990e",
+      "git_metadata_present": true,
       "source_changes_since_source_revision": [],
-      "source_revision": "f773563f08e5e62ee376d226680bc3824092c6cc",
-      "source_revision_matches_current_head": false
+      "source_revision": "fa8da9f993e0daf702f044f31b4c2dbc5f35990e",
+      "source_revision_matches_current_head": true,
+      "verification_mode": "checkout"
     },
     "verified_digests": {
       "dependency_graph": {
-        "modules_sha256": "bc45389a3ed781fb22eaa2956f94d9c8fcc8123528eac82cc73c81cf44b16997",
-        "packages_sha256": "3ec8a26eb83511326fd9eaa221dd8d30dfe881d9623313182e49e1ddf7cd8e9c"
+        "modules_sha256": "3bc2ef24c5202e0bf022a03f8987cbab927d45723e338c1e430515ce85bb2f36",
+        "packages_sha256": "43917fc69ac711edfdcd8dbc127e69f268336e6ef723570fc40de4344dada836"
       },
-      "module_source_tree_sha256": "801773b7f401ff37e53af9a7fcd3a4b5fb2b828e3c00ecc4fb034fb108969652",
+      "module_source_tree_sha256": "5cf914e25c8e93f5e41f68fcb95acb280b3e20fa36f1664beb00cc4f2bb787c3",
       "replacement_source_tree_sha256": {
         "agent-cli": "3b9ed39a43bc09783fa45e2976564d3309c838f7e7ddcc371cb813525f9c1a09",
         "go-agent-loop": "303fa4db63b4a1cee6a5424ce27f07645de132e853544ca87adbfbda9db17d60",
