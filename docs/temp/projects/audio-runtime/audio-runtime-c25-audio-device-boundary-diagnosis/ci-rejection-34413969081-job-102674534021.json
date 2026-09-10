@@ -1,0 +1,67 @@
+{
+  "completed_at": "2026-09-09T22:53:47Z",
+  "conclusion": "failure",
+  "head_sha": "b061bf852076d4b36526600377ad916751e32b4b",
+  "id": 102674534021,
+  "name": "CI (coverage)",
+  "started_at": "2026-09-09T22:48:00Z",
+  "status": "completed",
+  "steps": [
+    {
+      "completed_at": "2026-09-09T22:48:01Z",
+      "conclusion": "success",
+      "name": "Set up job",
+      "number": 1,
+      "started_at": "2026-09-09T22:48:00Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-09-09T22:48:03Z",
+      "conclusion": "success",
+      "name": "Check out repository",
+      "number": 2,
+      "started_at": "2026-09-09T22:48:01Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-09-09T22:48:07Z",
+      "conclusion": "success",
+      "name": "Set up Go",
+      "number": 3,
+      "started_at": "2026-09-09T22:48:03Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-09-09T22:53:46Z",
+      "conclusion": "failure",
+      "name": "Run coverage profiles and coverage gate",
+      "number": 4,
+      "started_at": "2026-09-09T22:48:07Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-09-09T22:53:46Z",
+      "conclusion": "skipped",
+      "name": "Post Set up Go",
+      "number": 7,
+      "started_at": "2026-09-09T22:53:46Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-09-09T22:53:46Z",
+      "conclusion": "success",
+      "name": "Post Check out repository",
+      "number": 8,
+      "started_at": "2026-09-09T22:53:46Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-09-09T22:53:46Z",
+      "conclusion": "success",
+      "name": "Complete job",
+      "number": 9,
+      "started_at": "2026-09-09T22:53:46Z",
+      "status": "completed"
+    }
+  ]
+}
