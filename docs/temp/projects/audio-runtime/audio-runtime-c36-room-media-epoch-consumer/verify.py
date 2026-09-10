@@ -1076,6 +1076,7 @@ def parity_run(
         "pcm_sha256": sha256(pcm),
         "audio_out": str(audio_out),
         "audio_out_bytes": audio_out.stat().st_size if audio_out.exists() else 0,
+        "bundle": str(record_dir),
         "terminal": parity["terminal"],
         "healthy_tail": parity["healthy_tail"],
         "strict_bundle_replay": strict_replay,
@@ -1144,6 +1145,26 @@ def run_boundary(
             evidence, deadline, child_timeout,
         ),
     ]
+    max_request_bytes = 1 << 20
+    first_object_prefix = b'{"mode":"positive","output_dir":"'
+    first_object_suffix = b'"}'
+    first_object = (
+        first_object_prefix
+        + b"x" * (max_request_bytes - len(first_object_prefix) - len(first_object_suffix))
+        + first_object_suffix
+    )
+    if len(first_object) != max_request_bytes:
+        raise EvidenceFailure("oversized-input control did not construct an exact 1 MiB first object")
+    oversized = expect_child_failure(
+        "room-oversized-input",
+        room,
+        first_object + b'{"mode":"positive"}\n',
+        evidence, deadline, child_timeout,
+    )
+    oversized_stderr = pathlib.Path(oversized["stderr_path"]).read_text(encoding="utf-8")
+    if "maximum size" not in oversized_stderr.lower():
+        raise EvidenceFailure(f"oversized input failed without the size diagnostic: {oversized_stderr!r}")
+    negatives.append(oversized)
     outcome = {"positive": positive, "report": report, "dependency": dependency, "negative_controls": negatives}
     write_json(evidence / "artifacts" / "boundary.json", outcome)
     return outcome
@@ -1436,6 +1457,12 @@ def run_lifecycle(room: pathlib.Path, evidence: pathlib.Path, deadline: float, c
             raise EvidenceFailure(f"cancel-active failed before cancellation: {observed}")
         if mode == "cancel-active" and observed.get("waited") != observed.get("opened"):
             raise EvidenceFailure(f"cancel-active did not prove every public handle Wait returned: {observed}")
+        if mode == "cancel-active" and (
+            observed.get("media_pump_active") is not True
+            or observed.get("source_frames", 0) <= 0
+            or observed.get("output_frames", 0) <= 0
+        ):
+            raise EvidenceFailure(f"cancel-active did not prove an active public media pump: {observed}")
         cancellations[mode] = {"run": cancellation_run, "report": cancellation}
     outcome = {"run": run, "report": report, "cancellations": cancellations}
     write_json(evidence / "artifacts" / "lifecycle.json", outcome)
@@ -1497,13 +1524,17 @@ def run_parity(yui: pathlib.Path, evidence: pathlib.Path, deadline: float, child
     ]
     negative_dir = evidence / "runs" / "parity-negative"
     negative_dir.mkdir(parents=True, exist_ok=True)
-    bad_fixture = negative_dir / "missing-timeline.session.json"
-    data = load_json(FIXTURES / "c16-interruption.session.json")
-    records = data.get("records")
-    if not isinstance(records, list) or len(records) < 2:
-        raise EvidenceFailure("interruption fixture is too short for missing-timeline control")
-    data["records"] = records[:-1]
-    write_json(bad_fixture, data)
+    source_bundle = pathlib.Path(runs[1]["bundle"])
+    if not source_bundle.is_dir():
+        raise EvidenceFailure(f"generated interruption bundle is missing: {source_bundle}")
+    missing_bundle = negative_dir / "bundle"
+    if missing_bundle.exists():
+        shutil.rmtree(missing_bundle)
+    shutil.copytree(source_bundle, missing_bundle)
+    missing_timeline = missing_bundle / "audio-trace" / "timeline.jsonl"
+    if not missing_timeline.is_file():
+        raise EvidenceFailure(f"generated interruption bundle has no timeline to remove: {missing_timeline}")
+    missing_timeline.unlink()
     negative_case = negative_dir / "case"
     negative_case.mkdir(parents=True, exist_ok=True)
     (negative_case / "config").mkdir(parents=True, exist_ok=True)
@@ -1511,9 +1542,7 @@ def run_parity(yui: pathlib.Path, evidence: pathlib.Path, deadline: float, child
         "yui-missing-timeline",
         [
             str(yui), "--config-dir", str(negative_case / "config"), "--workdir", str(negative_case),
-            "--allow-path", str(negative_case), "session", "--replay", str(bad_fixture),
-            "--audio-out", str(negative_case / "audio.wav"), "--record-dir", str(negative_case / "tool-record"),
-            "--trace-audio",
+            "--allow-path", str(negative_case), "session", "replay", str(missing_bundle),
         ],
         negative_case,
         evidence / "runs",
@@ -1527,7 +1556,21 @@ def run_parity(yui: pathlib.Path, evidence: pathlib.Path, deadline: float, child
         or not negative["process_group_gone"] or not negative["output_drained"]
     ):
         raise EvidenceFailure(f"missing-timeline replay was not rejected: {negative}")
-    outcome = {"parity": runs, "missing_timeline_rejected": negative}
+    negative_output = (
+        pathlib.Path(negative["stdout_path"]).read_text(encoding="utf-8")
+        + pathlib.Path(negative["stderr_path"]).read_text(encoding="utf-8")
+    )
+    if "missing timeline.jsonl" not in negative_output.lower():
+        raise EvidenceFailure(f"missing-timeline replay failed for the wrong reason: {negative_output!r}")
+    if "integrity_checksum_mismatch" in negative_output.lower():
+        raise EvidenceFailure(f"missing-timeline replay used a corrupted fixture instead of a bundle: {negative_output!r}")
+    outcome = {
+        "parity": runs,
+        "missing_timeline_rejected": negative,
+        "missing_timeline_bundle": str(missing_bundle),
+        "removed_artifact": str(missing_timeline.relative_to(missing_bundle)),
+        "rejection_output": negative_output,
+    }
     write_json(evidence / "artifacts" / "parity.json", outcome)
     return outcome
 

@@ -176,40 +176,42 @@ type CancellationReport struct {
 	PublicServiceRun bool              `json:"public_service_run"`
 	ClosedByService  bool              `json:"closed_by_service"`
 	RepeatedCloseOK  bool              `json:"repeated_close_ok"`
+	SourceFrames     int               `json:"source_frames"`
+	OutputFrames     int               `json:"output_frames"`
+	MediaPumpActive  bool              `json:"media_pump_active"`
 }
 
 type coordinator struct {
-	mu             sync.Mutex
-	outputs        map[string][]int16
-	playback       []int16
-	inputs         []InputObservation
-	rawEvents      []RawEvent
-	terminalSeen   map[string]bool
-	outputFrames   map[string]int
-	outputEnded    map[string]bool
-	playbackFrames int
-	handles        map[string]*fakeHandle
-	done           chan struct{}
-	healthyReady   chan struct{}
-	startedReady   chan struct{}
-	healthyCount   int
-	startedCount   int
-	readyOnce      sync.Once
-	startedOnce    sync.Once
-	finished       bool
-	finish         sync.Once
+	mu               sync.Mutex
+	outputs          map[string][]int16
+	playback         []int16
+	inputs           []InputObservation
+	rawEvents        []RawEvent
+	terminalSeen     map[string]bool
+	outputFrames     map[string]int
+	outputEnded      map[string]bool
+	playbackFrames   int
+	handles          map[string]*fakeHandle
+	done             chan struct{}
+	healthyReady     chan struct{}
+	activeMediaReady chan struct{}
+	healthyCount     int
+	readyOnce        sync.Once
+	activeMediaOnce  sync.Once
+	finished         bool
+	finish           sync.Once
 }
 
 func newCoordinator() *coordinator {
 	return &coordinator{
-		outputs:      make(map[string][]int16),
-		terminalSeen: make(map[string]bool),
-		outputFrames: make(map[string]int),
-		outputEnded:  make(map[string]bool),
-		handles:      make(map[string]*fakeHandle),
-		done:         make(chan struct{}),
-		healthyReady: make(chan struct{}),
-		startedReady: make(chan struct{}),
+		outputs:          make(map[string][]int16),
+		terminalSeen:     make(map[string]bool),
+		outputFrames:     make(map[string]int),
+		outputEnded:      make(map[string]bool),
+		handles:          make(map[string]*fakeHandle),
+		done:             make(chan struct{}),
+		healthyReady:     make(chan struct{}),
+		activeMediaReady: make(chan struct{}),
 	}
 }
 
@@ -236,15 +238,6 @@ func (c *coordinator) inputsReady() bool {
 	default:
 		return false
 	}
-}
-
-func (c *coordinator) noteStarted() {
-	c.mu.Lock()
-	c.startedCount++
-	if c.startedCount >= 2 {
-		c.startedOnce.Do(func() { close(c.startedReady) })
-	}
-	c.mu.Unlock()
 }
 
 func (c *coordinator) recordInput(participant string, frame audio.PCMFrame) error {
@@ -296,6 +289,10 @@ func (c *coordinator) recordOutput(target string, frame audio.PCMFrame) error {
 	c.outputs[target] = append(c.outputs[target], frame.Samples...)
 	c.outputFrames[target]++
 	c.mu.Unlock()
+	// Handle.Start proves provider admission only. This signal is emitted by
+	// the public room graph after a real frame crosses an output endpoint, so
+	// cancellation cannot claim an active media run too early.
+	c.activeMediaOnce.Do(func() { close(c.activeMediaReady) })
 	c.maybeFinish()
 	return nil
 }
@@ -380,6 +377,12 @@ func (c *coordinator) snapshotRawEvents() []RawEvent {
 		events[index].Samples = append([]int16(nil), events[index].Samples...)
 	}
 	return events
+}
+
+func (c *coordinator) frameCounts() (source, output int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.inputs), c.outputFrames["alice"] + c.outputFrames["bob"]
 }
 
 func (c *coordinator) recordTerminal(participant string, event session.LiveEvent) {
@@ -469,7 +472,6 @@ func (h *fakeHandle) Start(context.Context) error {
 	}
 	h.started = true
 	h.startCount++
-	h.coord.noteStarted()
 	return nil
 }
 
@@ -1148,39 +1150,49 @@ func Run(request Request) (Report, error) {
 func runCancellationProbe(mode, outputDir string) (*CancellationReport, error) {
 	coord := newCoordinator()
 	live := &fakeLiveService{coord: coord}
-	service := wire.NewService(wire.Dependencies{Live: live, Clock: clock.NewDeterministic(time.Unix(0, 0).UTC(), time.Millisecond)})
+	scheduler := clock.NewDeterministic(time.Unix(0, 0).UTC(), time.Millisecond)
+	service := wire.NewService(wire.Dependencies{Live: live, Clock: scheduler})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if mode == "cancel-before-start" {
 		cancel()
 	}
-	resultCh := make(chan struct {
+	type roomRunOutcome struct {
 		result rooms.RoomResult
 		err    error
-	}, 1)
+	}
+	resultCh := make(chan roomRunOutcome, 1)
 	go func() {
 		result, err := service.Run(ctx, io.Discard, rooms.RoomRunOptions{
 			Manifest: buildCancellationManifest(), OutputDir: outputDir, ConfigDir: outputDir,
 			WorkDir: outputDir, AllowPaths: []string{outputDir},
 			AudioFormat: mixer.Format{SampleRate: 1000, Channels: 1, FrameDuration: 4 * time.Millisecond},
 		})
-		resultCh <- struct {
-			result rooms.RoomResult
-			err    error
-		}{result, err}
+		resultCh <- roomRunOutcome{result: result, err: err}
 	}()
+	var outcome roomRunOutcome
 	if mode == "cancel-active" {
-		select {
-		case <-coord.startedReady:
-			cancel()
-		case <-time.After(2 * time.Second):
-			cancel()
-			return nil, errors.New("public room service did not admit active cancellation participants")
+		activeDeadline := time.NewTimer(2 * time.Second)
+		defer activeDeadline.Stop()
+		active := false
+		for !active {
+			select {
+			case <-coord.activeMediaReady:
+				active = true
+			case outcome = <-resultCh:
+				sourceFrames, outputFrames := coord.frameCounts()
+				cancel()
+				return nil, fmt.Errorf("public room service returned before active media: source_frames=%d output_frames=%d err=%v", sourceFrames, outputFrames, outcome.err)
+			case <-activeDeadline.C:
+				sourceFrames, outputFrames := coord.frameCounts()
+				cancel()
+				return nil, fmt.Errorf("public room service did not produce an active media frame: source_frames=%d output_frames=%d", sourceFrames, outputFrames)
+			default:
+				scheduler.Advance()
+				runtime.Gosched()
+			}
 		}
-	}
-	var outcome struct {
-		result rooms.RoomResult
-		err    error
+		cancel()
 	}
 	select {
 	case outcome = <-resultCh:
@@ -1197,6 +1209,8 @@ func runCancellationProbe(mode, outputDir string) (*CancellationReport, error) {
 	for id, participant := range outcome.result.Participants {
 		report.Participants[id] = string(participant.TerminationReason)
 	}
+	report.SourceFrames, report.OutputFrames = coord.frameCounts()
+	report.MediaPumpActive = report.OutputFrames > 0
 	for _, handle := range handles {
 		handle.mu.Lock()
 		report.Opened++
@@ -1219,7 +1233,7 @@ func runCancellationProbe(mode, outputDir string) (*CancellationReport, error) {
 			return report, fmt.Errorf("pre-start cancellation unexpectedly started %d participants", report.Started)
 		}
 		report.StartError = "public room admission observed no start before cancellation"
-	} else if report.Opened != 2 || report.Started != report.Opened {
+	} else if report.Opened != 2 || report.Started != report.Opened || !report.MediaPumpActive || report.SourceFrames == 0 {
 		return report, fmt.Errorf("active cancellation started %d of %d admitted participants", report.Started, report.Opened)
 	}
 	report.RepeatedCloseOK = true

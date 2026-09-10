@@ -12,6 +12,8 @@ import (
 	roommedia "github.com/portpowered/go-agent-harness/audio-runtime-c36-room-media-epoch-consumer"
 )
 
+const maxRequestBytes = 1 << 20
+
 func main() {
 	request, err := decodeRequest(os.Stdin)
 	if err != nil {
@@ -35,9 +37,12 @@ func main() {
 }
 
 func decodeRequest(reader io.Reader) (roommedia.Request, error) {
-	data, err := io.ReadAll(io.LimitReader(reader, 1<<20))
+	data, err := io.ReadAll(io.LimitReader(reader, maxRequestBytes+1))
 	if err != nil {
 		return roommedia.Request{}, fmt.Errorf("read request: %w", err)
+	}
+	if len(data) > maxRequestBytes {
+		return roommedia.Request{}, fmt.Errorf("request exceeds maximum size of %d bytes", maxRequestBytes)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
