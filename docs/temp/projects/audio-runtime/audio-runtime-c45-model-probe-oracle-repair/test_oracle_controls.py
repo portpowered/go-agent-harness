@@ -173,6 +173,22 @@ def run_current_controls(module: dict[str, Any], root: pathlib.Path, started: fl
         verifier_globals["process_group_pids"] = original_inspector
     assert "process inspection unavailable" in inspection_error
 
+    original_ps_run = verifier_globals["subprocess"].run
+    inspection_rows: dict[str, str] = {}
+    try:
+        for label, ps_output in (("empty", ""), ("malformed", "424242 only\n")):
+            def fake_ps_run(*args: Any, _ps_output: str = ps_output, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(args[0], 0, stdout=_ps_output, stderr="")
+
+            verifier_globals["subprocess"].run = fake_ps_run
+            inspection_rows[label] = expect_evidence_failure(
+                lambda: module["process_group_pids"](424242),
+                f"{label} process inspection rows",
+            )
+            assert "process inspection unavailable" in inspection_rows[label]
+    finally:
+        verifier_globals["subprocess"].run = original_ps_run
+
     return {
         "positive": {
             "wrong_pcm_exit": positive["wrong_pcm"]["exit_code"],
@@ -186,6 +202,8 @@ def run_current_controls(module: dict[str, Any], root: pathlib.Path, started: fl
             "malformed_manifest": malformed_manifest_error,
             "accidental_marker_success": accidental_marker_error,
             "process_inspection": inspection_error,
+            "process_inspection_empty_rows": inspection_rows["empty"],
+            "process_inspection_malformed_rows": inspection_rows["malformed"],
         },
     }
 
@@ -202,7 +220,6 @@ def run_staged_probe_success_path() -> dict[str, Any]:
         )
         evidence_root = temporary_root / "evidence"
         fake_runs = evidence_root / "runs"
-        fixture_root = evidence_root / "fixtures"
         artifact_facts = {
             "artifact-0-yui": {"bytes": 3, "sha256": "a" * 64},
             "artifact-1-consumer": {"bytes": 5, "sha256": "b" * 64},
@@ -215,7 +232,9 @@ def run_staged_probe_success_path() -> dict[str, Any]:
             return artifact_facts
 
         def fake_extract_required_fixtures(_archive: pathlib.Path, _destination: pathlib.Path) -> pathlib.Path:
+            fixture_root = _destination / "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures"
             fixture_root.mkdir(parents=True, exist_ok=True)
+            (fixture_root / "c16-audio-tool.session.json").write_text("synthetic fixture\n", encoding="utf-8")
             return fixture_root
 
         def fake_import_verify() -> dict[str, Any]:
@@ -264,10 +283,149 @@ def run_staged_probe_success_path() -> dict[str, Any]:
         assert report["controls"] == controls
         assert report["tested_source_revision"] == expected_revision
         assert report["artifact_input_equivalence"] is True
+        assert report["source_staging_bytes"] > 0
+        assert report["fixture_bytes"] == report["source_staging_bytes"]
+        assert report["scratch_bytes"] == report["source_staging_bytes"]
+        assert report["scratch_cleanup"]["bytes_after"] == 0
+        assert report["scratch_cleanup"]["errors"] == []
+        assert not pathlib.Path(report["scratch_paths"][0]).exists()
         return {
             "decision": report["decision"],
             "tested_source_revision": report["tested_source_revision"],
             "artifact_input_equivalence": report["artifact_input_equivalence"],
+            "scratch_bytes": report["scratch_bytes"],
+            "scratch_bytes_after": report["scratch_cleanup"]["bytes_after"],
+        }
+
+
+def run_staged_probe_aggregate_output_control() -> dict[str, Any]:
+    staged_probe = runpy.run_path(str(HERE / "run_staged_probe.py"), run_name="c45_staged_output_test")
+    with tempfile.TemporaryDirectory(prefix="c45-staged-output-") as temporary:
+        temporary_root = pathlib.Path(temporary)
+        run_dir = temporary_root / "run"
+        fixture_root = temporary_root / "fixtures"
+        staged_root = temporary_root / "staged"
+        for path in (run_dir, fixture_root, staged_root):
+            path.mkdir()
+        module: dict[str, Any] = {
+            "_c45_globals": {
+                "run_process": lambda *_args, **_kwargs: {
+                    "label": "synthetic-output",
+                    "stdout_bytes": 40,
+                    "stderr_bytes": 0,
+                },
+                "EvidenceFailure": RuntimeError,
+            },
+            "_c45_forbidden_calls": [],
+        }
+        verifier_globals = module["_c45_globals"]
+
+        def synthetic_control(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+            verifier_globals["run_process"]("synthetic-output")
+            return {"synthetic": "accepted"}
+
+        for name in (
+            "run_public_consumer",
+            "run_effect_observer_positive",
+            "run_cli_admission_controls",
+            "run_replay_controls",
+            "run_wrong_replay_oracles",
+            "run_timeout_control",
+        ):
+            module[name] = synthetic_control
+        try:
+            staged_probe["run_controls"](
+                module,
+                run_dir,
+                fixture_root,
+                staged_root,
+                time.monotonic(),
+                30,
+                1,
+                64,
+            )
+        except RuntimeError as exc:
+            message = str(exc)
+        else:
+            raise AssertionError("aggregate output control unexpectedly passed")
+        assert "aggregate private output limit" in message
+        assert "80" in message and "64" in message
+        return {"message": message, "per_child_bytes": 40, "aggregate_bytes": 80}
+
+
+def run_staged_probe_deadline_control() -> dict[str, Any]:
+    staged_probe = runpy.run_path(str(HERE / "run_staged_probe.py"), run_name="c45_staged_deadline_test")
+    with tempfile.TemporaryDirectory(prefix="c45-staged-deadline-") as temporary:
+        temporary_root = pathlib.Path(temporary)
+        staged_root = temporary_root / "staged"
+        staged_root.mkdir()
+        (staged_root / "artifact-3.json").write_text(
+            json.dumps({"schema": "c45-test-descriptor/v1", "mode": "reused", "decision": "ACCEPTED", "steps": []}),
+            encoding="utf-8",
+        )
+        evidence_root = temporary_root / "evidence"
+        fake_runs = evidence_root / "runs"
+        artifact_facts = {
+            "artifact-0-yui": {"bytes": 3, "sha256": "a" * 64},
+            "artifact-1-consumer": {"bytes": 5, "sha256": "b" * 64},
+            "artifact-2-source-snapshot": {"bytes": 7, "sha256": "c" * 64},
+            "artifact-3-build-descriptor": {"bytes": 11, "sha256": "d" * 64},
+        }
+
+        def fake_check_staged_artifacts(_staged_root: pathlib.Path) -> dict[str, Any]:
+            return artifact_facts
+
+        def fake_extract_required_fixtures(_archive: pathlib.Path, destination: pathlib.Path) -> pathlib.Path:
+            fixture_root = destination / "fixtures"
+            fixture_root.mkdir(parents=True, exist_ok=True)
+            (fixture_root / "required.json").write_text("synthetic fixture\n", encoding="utf-8")
+            return fixture_root
+
+        def fake_import_verify() -> dict[str, Any]:
+            return {"_c45_forbidden_calls": []}
+
+        def slow_run_controls(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+            time.sleep(0.03)
+            return {"synthetic": "accepted"}
+
+        original_argv = sys.argv
+        sys.argv = [
+            str(HERE / "run_staged_probe.py"),
+            "--staged-root",
+            str(staged_root),
+            "--child-timeout",
+            "1",
+            "--total-timeout",
+            "0.01",
+            "--max-output-bytes",
+            "1024",
+            "--min-free-bytes",
+            str(2 * 1024 * 1024 * 1024),
+        ]
+        probe_globals = staged_probe["main"].__globals__
+        probe_globals["HERE"] = evidence_root
+        probe_globals["RUNS"] = fake_runs
+        probe_globals["free_bytes"] = lambda _path: 2 * 1024 * 1024 * 1024
+        probe_globals["check_staged_artifacts"] = fake_check_staged_artifacts
+        probe_globals["extract_required_fixtures"] = fake_extract_required_fixtures
+        probe_globals["import_verify"] = fake_import_verify
+        probe_globals["run_controls"] = slow_run_controls
+        try:
+            exit_code = staged_probe["main"]()
+        finally:
+            sys.argv = original_argv
+        report = json.loads((evidence_root / "latest-staged-probe.json").read_text(encoding="utf-8"))
+        assert exit_code == 1
+        assert report["decision"] == "FAILED"
+        assert "aggregate deadline exceeded" in report["error"]
+        assert report["scratch_bytes"] > 0
+        assert report["scratch_cleanup"]["bytes_after"] == 0
+        assert report["scratch_cleanup"]["errors"] == []
+        return {
+            "decision": report["decision"],
+            "error": report["error"],
+            "scratch_bytes": report["scratch_bytes"],
+            "scratch_bytes_after": report["scratch_cleanup"]["bytes_after"],
         }
 
 
@@ -333,6 +491,8 @@ def main() -> int:
     reproduction = reproduce_original(args.original_revision, old_source, HERE)
     module = load_verify(VERIFY)
     success_path = run_staged_probe_success_path()
+    aggregate_output = run_staged_probe_aggregate_output_control()
+    deadline = run_staged_probe_deadline_control()
     with tempfile.TemporaryDirectory(prefix="c45-current-controls-") as temporary:
         controls = run_current_controls(module, pathlib.Path(temporary), started, args.total_timeout, args.child_timeout)
     if time.monotonic() - started > args.total_timeout:
@@ -346,6 +506,8 @@ def main() -> int:
                 "original_revision": args.original_revision,
                 "reproduction": reproduction,
                 "staged_probe_success_path": success_path,
+                "staged_probe_aggregate_output": aggregate_output,
+                "staged_probe_deadline": deadline,
                 "controls": controls,
                 "elapsed_seconds": round(time.monotonic() - started, 6),
             },

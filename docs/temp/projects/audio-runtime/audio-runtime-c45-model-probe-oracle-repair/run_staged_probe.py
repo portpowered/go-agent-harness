@@ -52,6 +52,48 @@ def tree_bytes(path: pathlib.Path) -> int:
     return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
 
 
+def path_bytes(path: pathlib.Path) -> int:
+    if path.is_symlink():
+        return 0
+    if path.is_file():
+        return path.stat().st_size
+    if path.is_dir():
+        return tree_bytes(path)
+    return 0
+
+
+def cleanup_scratch(paths: list[pathlib.Path]) -> dict[str, Any]:
+    before = [{"path": str(path), "bytes": path_bytes(path)} for path in paths]
+    removed: list[str] = []
+    errors: list[dict[str, str]] = []
+    for path in paths:
+        if not path.exists() and not path.is_symlink():
+            continue
+        try:
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+            elif path.is_dir():
+                shutil.rmtree(path)
+            removed.append(str(path))
+        except OSError as exc:
+            errors.append({"path": str(path), "error": str(exc)})
+    after = [{"path": str(path), "bytes": path_bytes(path)} for path in paths]
+    return {
+        "paths": [str(path) for path in paths],
+        "bytes_before": sum(item["bytes"] for item in before),
+        "bytes_after": sum(item["bytes"] for item in after),
+        "before": before,
+        "after": after,
+        "removed": removed,
+        "errors": errors,
+    }
+
+
+def require_deadline(started: float, total_timeout: float, phase: str) -> None:
+    if time.monotonic() - started > total_timeout:
+        raise RuntimeError(f"aggregate deadline exceeded during {phase}")
+
+
 def check_staged_artifacts(staged_root: pathlib.Path) -> dict[str, Any]:
     before: dict[str, Any] = {}
     for key, expected in EXPECTED_ARTIFACTS.items():
@@ -98,8 +140,16 @@ def import_verify() -> dict[str, Any]:
     return loaded
 
 
-def run_controls(module: dict[str, Any], run_dir: pathlib.Path, fixture_root: pathlib.Path, staged_root: pathlib.Path, child_timeout: float, total_timeout: float, max_output_bytes: int) -> dict[str, Any]:
-    started = time.monotonic()
+def run_controls(
+    module: dict[str, Any],
+    run_dir: pathlib.Path,
+    fixture_root: pathlib.Path,
+    staged_root: pathlib.Path,
+    started: float,
+    child_timeout: float,
+    total_timeout: float,
+    max_output_bytes: int,
+) -> dict[str, Any]:
     verifier_globals = module["_c45_globals"]
     verifier_globals["CONSUMER"] = staged_root / "artifact-1"
     verifier_globals["YUI"] = staged_root / "artifact-0"
@@ -107,22 +157,33 @@ def run_controls(module: dict[str, Any], run_dir: pathlib.Path, fixture_root: pa
     verifier_globals["ARTIFACTS"] = run_dir / "unused-artifacts"
     verifier_globals["RUNS"] = run_dir / "unused-runs"
     original_run_process = verifier_globals["run_process"]
+    aggregate_output_bytes = 0
 
     def bounded_run_process(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        nonlocal aggregate_output_bytes
         result = original_run_process(*args, **kwargs)
-        if result["stdout_bytes"] + result["stderr_bytes"] > max_output_bytes:
+        child_output_bytes = result["stdout_bytes"] + result["stderr_bytes"]
+        aggregate_output_bytes += child_output_bytes
+        result["aggregate_output_bytes"] = aggregate_output_bytes
+        if aggregate_output_bytes > max_output_bytes:
             raise verifier_globals["EvidenceFailure"](
-                f"{result['label']} exceeded the private output limit: {result['stdout_bytes'] + result['stderr_bytes']} > {max_output_bytes}"
+                f"staged controls exceeded the aggregate private output limit: {aggregate_output_bytes} > {max_output_bytes}"
             )
         return result
 
     verifier_globals["run_process"] = bounded_run_process
     public_consumer = module["run_public_consumer"](run_dir, started, total_timeout, child_timeout)
+    require_deadline(started, total_timeout, "public consumer")
     observer = module["run_effect_observer_positive"](run_dir, started, total_timeout, child_timeout)
+    require_deadline(started, total_timeout, "effect observer")
     cli_admission = module["run_cli_admission_controls"](run_dir, started, total_timeout, child_timeout)
+    require_deadline(started, total_timeout, "CLI admission")
     replay = module["run_replay_controls"](run_dir, started, total_timeout, child_timeout)
+    require_deadline(started, total_timeout, "replay")
     wrong_replay_oracles = module["run_wrong_replay_oracles"](run_dir, started, total_timeout, child_timeout, replay)
+    require_deadline(started, total_timeout, "wrong replay oracles")
     timeout_cleanup = module["run_timeout_control"](run_dir, started, total_timeout, child_timeout)
+    require_deadline(started, total_timeout, "timeout cleanup")
     if module["_c45_forbidden_calls"]:
         raise RuntimeError(f"forbidden verifier helpers called: {module['_c45_forbidden_calls']}")
     return {
@@ -132,6 +193,7 @@ def run_controls(module: dict[str, Any], run_dir: pathlib.Path, fixture_root: pa
         "replay": replay,
         "wrong_replay_oracles": wrong_replay_oracles,
         "timeout_cleanup": timeout_cleanup,
+        "output_bytes": aggregate_output_bytes,
         "elapsed_seconds": round(time.monotonic() - started, 6),
     }
 
@@ -156,6 +218,7 @@ def main() -> int:
     staged_root = args.staged_root.resolve()
     run_dir = RUNS / f"staged-probe-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.getpid()}"
     run_dir.mkdir(parents=True, exist_ok=False)
+    scratch_paths = [run_dir / "staged-source", run_dir / "unused-artifacts", run_dir / "unused-runs"]
     outcome: dict[str, Any] = {
         "schema": "audio-runtime-c45-staged-probe/v1",
         "decision": "FAILED",
@@ -166,6 +229,7 @@ def main() -> int:
         "max_output_bytes": args.max_output_bytes,
         "min_free_bytes": args.min_free_bytes,
         "forbidden_helpers_called": [],
+        "scratch_paths": [str(path) for path in scratch_paths],
     }
     started = time.monotonic()
     try:
@@ -181,6 +245,7 @@ def main() -> int:
         outcome["binary_output_bytes"] = 0
         outcome["free_space_before_bytes"] = free_before
         outcome["source_staging_bytes"] = tree_bytes(run_dir / "staged-source")
+        outcome["fixture_bytes"] = outcome["source_staging_bytes"]
         outcome["original_artifact_provenance"] = {
             "descriptor_schema": descriptor.get("schema"),
             "descriptor_mode": descriptor.get("mode"),
@@ -194,32 +259,41 @@ def main() -> int:
             if isinstance(step, dict)
         ]
         module = import_verify()
-        controls = run_controls(module, run_dir, fixture_root, staged_root, args.child_timeout, args.total_timeout, args.max_output_bytes)
+        controls = run_controls(module, run_dir, fixture_root, staged_root, started, args.child_timeout, args.total_timeout, args.max_output_bytes)
         outcome["controls"] = controls
         outcome["forbidden_helpers_called"] = module["_c45_forbidden_calls"]
         if outcome["forbidden_helpers_called"]:
             raise RuntimeError(f"forbidden verifier helpers called: {outcome['forbidden_helpers_called']}")
+        require_deadline(started, args.total_timeout, "staged controls")
         free_during = free_bytes(ROOT)
         if free_during < args.min_free_bytes:
             raise RuntimeError(f"free-space reserve exhausted during probe: {free_during} < {args.min_free_bytes}")
         staged_after = check_staged_artifacts(staged_root)
         if staged_before != staged_after:
             raise RuntimeError(f"staged artifact changed during probe: before={staged_before}, after={staged_after}")
+        outcome["artifact_hashes_after"] = staged_after
+        outcome["artifact_input_equivalence"] = staged_before == staged_after
+        outcome["fixture_bytes"] = tree_bytes(fixture_root)
+        cleanup = cleanup_scratch(scratch_paths)
+        outcome["scratch_bytes"] = cleanup["bytes_before"]
+        outcome["scratch_cleanup"] = cleanup
+        if cleanup["errors"] or cleanup["bytes_after"] != 0:
+            raise RuntimeError(f"staged probe scratch cleanup incomplete: {cleanup}")
         free_after = free_bytes(ROOT)
         if free_after < args.min_free_bytes:
             raise RuntimeError(f"free-space reserve exhausted after probe: {free_after} < {args.min_free_bytes}")
-        outcome["artifact_hashes_after"] = staged_after
-        outcome["artifact_input_equivalence"] = staged_before == staged_after
         outcome["free_space_samples_bytes"] = {"before": free_before, "during": free_during, "after": free_after}
-        outcome["fixture_bytes"] = tree_bytes(fixture_root)
         outcome["report_bytes"] = tree_bytes(run_dir)
-        outcome["scratch_bytes"] = 0
         outcome["tested_source_revision"] = subprocess.run(
             ["rtk", "proxy", "git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True, timeout=10
         ).stdout.strip()
         outcome["decision"] = "ACCEPTED"
     except Exception as exc:
         outcome["error"] = f"{type(exc).__name__}: {exc}"
+        cleanup = cleanup_scratch(scratch_paths)
+        outcome["scratch_bytes"] = cleanup["bytes_before"]
+        outcome["scratch_cleanup"] = cleanup
+        outcome["report_bytes"] = tree_bytes(run_dir)
         outcome["elapsed_seconds"] = round(time.monotonic() - started, 6)
         (run_dir / "outcome.json").write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")
         (HERE / "latest-staged-probe.json").write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")

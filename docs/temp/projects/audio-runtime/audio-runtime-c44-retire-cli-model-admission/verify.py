@@ -68,11 +68,20 @@ def process_group_pids(pgid: int) -> list[int]:
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise EvidenceFailure(f"process inspection unavailable for pgid {pgid}: {exc}") from exc
-    return [
-        int(fields[0])
-        for line in completed.stdout.splitlines()
-        if (fields := line.split()) and len(fields) == 2 and fields[0].isdigit() and fields[1].isdigit() and int(fields[1]) == pgid
-    ]
+    lines = completed.stdout.splitlines()
+    if not lines:
+        raise EvidenceFailure(f"process inspection unavailable for pgid {pgid}: ps returned no rows")
+    pids: list[int] = []
+    for line in lines:
+        fields = line.split()
+        if len(fields) != 2 or not all(field.isdigit() for field in fields):
+            raise EvidenceFailure(f"process inspection unavailable for pgid {pgid}: malformed ps row {line!r}")
+        pid, row_pgid = (int(field) for field in fields)
+        if pid <= 0 or row_pgid < 0:
+            raise EvidenceFailure(f"process inspection unavailable for pgid {pgid}: invalid ps row {line!r}")
+        if row_pgid == pgid:
+            pids.append(pid)
+    return pids
 
 
 def run_process(
