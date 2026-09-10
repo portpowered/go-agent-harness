@@ -41,7 +41,6 @@ MAX_FIXTURE_BYTES = 2 * 1024 * 1024
 MAX_TRACE_EVENTS = 8192
 EXPECTED_TURNS = (16, 64, 128, 256)
 EXPECTED_RECORDING_MODES = ("off", "on")
-MAIN_REVISION = "5d5afcb14d7b269378020809f5a2418c499ac94d"
 SESSION_CAPTURE_INTEGRITY_COVERAGE = "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)"
 
 
@@ -503,7 +502,11 @@ def shipped_regressions(args: argparse.Namespace, provenance: dict[str, Any]) ->
 def verify_provenance(args: argparse.Namespace) -> dict[str, Any]:
     provenance = load_json(PROVENANCE_PATH)
     require(provenance.get("schema") == "audio-runtime.c23.provenance.v1", "provenance schema is not C23 v1")
-    require(provenance.get("source_revision") == MAIN_REVISION, "provenance source revision is not the admitted fetched main")
+    origin_main = git_value("rev-parse", "origin/main")
+    require(
+        provenance.get("source_revision") == origin_main,
+        f"provenance source revision is not the admitted fetched main {origin_main}",
+    )
     require(git_is_ancestor(provenance["source_revision"], provenance["candidate_revision"]), "provenance ancestry no longer verifies")
     fixture = provenance["fixture"]
     require(fixture.get("sha256") == fixture_hash(), "fixture changed after prepare")
