@@ -13,6 +13,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
+const rawSinkScratchBytes = 64 * 1024
+
 // FileSink writes mono PCM16 to a WAV or raw PCM path. Raw PCM has no
 // container rate; WAV output keeps the rate selected at construction.
 type FileSink struct {
@@ -101,13 +103,16 @@ func (s *FileSink) WriteSamples(ctx context.Context, samples []int16) error {
 	return s.writeSamples(ctx, samples)
 }
 
-func (s *FileSink) writeSamples(_ context.Context, samples []int16) error {
+func (s *FileSink) writeSamples(ctx context.Context, samples []int16) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.closed {
 		return &ClosedError{Operation: "write", Path: s.path}
+	}
+	if err := ContextError(ctx); err != nil {
+		return err
 	}
 	if s.format == formatWAV {
 		if err := s.wav.WriteSamples(samples); err != nil {
@@ -119,12 +124,23 @@ func (s *FileSink) writeSamples(_ context.Context, samples []int16) error {
 		return nil
 	}
 
-	encoded := make([]byte, len(samples)*2)
-	if err := codec.EncodePCM16Into(encoded, samples); err != nil {
-		return newStreamError("write", s.path, s.format, err)
-	}
-	if err := writeAll(s.writer, encoded); err != nil {
-		return newStreamError("write", s.path, s.format, err)
+	var scratch [rawSinkScratchBytes]byte
+	for len(samples) > 0 {
+		if err := ContextError(ctx); err != nil {
+			return err
+		}
+		count := len(samples)
+		if count > len(scratch)/2 {
+			count = len(scratch) / 2
+		}
+		encoded := scratch[:count*2]
+		if err := codec.EncodePCM16Into(encoded, samples[:count]); err != nil {
+			return newStreamError("write", s.path, s.format, err)
+		}
+		if err := writeAll(s.writer, encoded); err != nil {
+			return newStreamError("write", s.path, s.format, err)
+		}
+		samples = samples[count:]
 	}
 	return nil
 }

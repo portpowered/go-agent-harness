@@ -110,11 +110,13 @@ def build_consumer(source_root: Path, output: Path) -> dict:
     return result
 
 
-def run_consumer(binary: Path, mode: str, report_path: Path, negative: bool = False) -> dict:
+def run_consumer(binary: Path, mode: str, report_path: Path, source_revision: str, negative: bool = False) -> dict:
     command = ["rtk", "proxy", str(binary), "--mode", mode, "--output", str(report_path)]
     if negative:
         command.append("--negative-control")
-    result = run_process(command, REPO_ROOT, RUN_TIMEOUT)
+    environment = os.environ.copy()
+    environment["C33_SOURCE_REVISION"] = source_revision
+    result = run_process(command, REPO_ROOT, RUN_TIMEOUT, environment)
     if report_path.is_file():
         result["report"] = json.loads(report_path.read_text(encoding="utf-8"))
     return result
@@ -138,7 +140,7 @@ def run_public_mode(
     binary.parent.mkdir(parents=True, exist_ok=True)
     build_result = build_consumer(source_root, binary) if build or not binary.is_file() else {"reused": True}
     report_path = run_dir / f"consumer-{mode}.json"
-    execution = run_consumer(binary, mode, report_path, negative)
+    execution = run_consumer(binary, mode, report_path, revision, negative)
     if negative:
         if execution["exit_code"] == 0 or "oracle" not in execution["stderr"].lower():
             raise EvidenceError(f"negative oracle control unexpectedly passed: {execution}")
