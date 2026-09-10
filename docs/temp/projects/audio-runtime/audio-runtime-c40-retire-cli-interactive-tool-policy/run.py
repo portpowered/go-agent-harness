@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import selectors
 import shutil
 import signal
 import subprocess
@@ -93,6 +94,21 @@ class EvidenceFailure(RuntimeError):
     pass
 
 
+class RunBudget:
+    """One monotonic deadline shared by every action in a verifier mode."""
+
+    def __init__(self, seconds: float) -> None:
+        self.started = time.monotonic()
+        self.deadline = self.started + seconds
+
+    def remaining(self) -> float:
+        return self.deadline - time.monotonic()
+
+    def require_time(self, label: str) -> None:
+        if self.remaining() <= 0:
+            raise EvidenceFailure(f"aggregate deadline of {TOTAL_TIMEOUT_SECONDS}s exceeded before {label}")
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise EvidenceFailure(message)
@@ -170,10 +186,14 @@ def run_command(
     input_text: str | None = None,
     environment: dict[str, str] | None = None,
     removed_credentials: list[str] | None = None,
+    budget: RunBudget | None = None,
 ) -> dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
     command = [str(item) for item in argv]
     env = dict(environment) if environment is not None else sanitized_environment()[0]
+    if budget is not None:
+        budget.require_time(label)
+        timeout_seconds = min(timeout_seconds, budget.remaining())
     started = time.monotonic()
     process = subprocess.Popen(
         command,
@@ -183,61 +203,132 @@ def run_command(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         start_new_session=True,
-        text=True,
+        text=False,
     )
     timed_out = False
+    cleanup_timed_out = False
     termination_signals: list[str] = []
-    stdout = ""
-    stderr = ""
-    try:
+    stdout = bytearray()
+    stderr = bytearray()
+    stdout_truncated = False
+    stderr_truncated = False
+    selector = selectors.DefaultSelector()
+
+    def register_stream(stream: Any, kind: str) -> None:
+        if stream is not None:
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ, kind)
+
+    register_stream(process.stdout, "stdout")
+    register_stream(process.stderr, "stderr")
+    input_bytes = input_text.encode() if input_text is not None else b""
+    input_offset = 0
+    if process.stdin is not None:
+        if input_bytes:
+            os.set_blocking(process.stdin.fileno(), False)
+            selector.register(process.stdin, selectors.EVENT_WRITE, "stdin")
+        else:
+            process.stdin.close()
+
+    def append_output(target: bytearray, chunk: bytes, stream_name: str) -> None:
+        nonlocal stdout_truncated, stderr_truncated
+        remaining = OUTPUT_LIMIT - len(target)
+        if remaining > 0:
+            target.extend(chunk[:remaining])
+        if len(chunk) > max(remaining, 0):
+            if stream_name == "stdout":
+                stdout_truncated = True
+            else:
+                stderr_truncated = True
+
+    def close_stream(stream: Any) -> None:
         try:
-            stdout, stderr = process.communicate(input=input_text, timeout=timeout_seconds)
-        except subprocess.TimeoutExpired as exc:
-            timed_out = True
-            stdout = exc.stdout or ""
-            stderr = exc.stderr or ""
-            signal_group(process.pid, signal.SIGTERM)
-            termination_signals.append("SIGTERM")
-            try:
-                trailing_stdout, trailing_stderr = process.communicate(timeout=TERMINATE_GRACE_SECONDS)
-                stdout += trailing_stdout or ""
-                stderr += trailing_stderr or ""
-            except subprocess.TimeoutExpired as grace_exc:
-                stdout += grace_exc.stdout or ""
-                stderr += grace_exc.stderr or ""
-                signal_group(process.pid, signal.SIGKILL)
-                termination_signals.append("SIGKILL")
+            selector.unregister(stream)
+        except (KeyError, ValueError):
+            pass
+        try:
+            stream.close()
+        except OSError:
+            pass
+
+    def drain_until(deadline: float) -> bool:
+        """Drain capped pipes until the process and all pipes quiesce."""
+        nonlocal input_offset
+        while True:
+            if process.poll() is not None and not selector.get_map():
+                return True
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            events = selector.select(min(remaining, 0.1))
+            if not events:
+                continue
+            for key, _ in events:
+                stream = key.fileobj
+                kind = key.data
                 try:
-                    trailing_stdout, trailing_stderr = process.communicate(timeout=TERMINATE_GRACE_SECONDS)
-                    stdout += trailing_stdout or ""
-                    stderr += trailing_stderr or ""
-                except subprocess.TimeoutExpired as reap_exc:
-                    stdout += reap_exc.stdout or ""
-                    stderr += reap_exc.stderr or ""
+                    if kind == "stdin":
+                        written = os.write(stream.fileno(), input_bytes[input_offset:])
+                        input_offset += written
+                        if input_offset >= len(input_bytes):
+                            close_stream(stream)
+                    else:
+                        chunk = os.read(stream.fileno(), 64 * 1024)
+                        if not chunk:
+                            close_stream(stream)
+                        else:
+                            append_output(stdout if kind == "stdout" else stderr, chunk, kind)
+                except (BrokenPipeError, OSError) as exc:
+                    if kind == "stdin" and isinstance(exc, BrokenPipeError):
+                        close_stream(stream)
+                    elif isinstance(exc, BlockingIOError):
+                        continue
+                    else:
+                        close_stream(stream)
+
+    def terminate_group(sig: signal.Signals) -> None:
+        name = sig.name
+        if name not in termination_signals:
+            termination_signals.append(name)
+        signal_group(process.pid, sig)
+
+    try:
+        drained = drain_until(started + timeout_seconds)
+        if not drained and process.poll() is None:
+            timed_out = True
+            terminate_group(signal.SIGTERM)
+            drained = drain_until(time.monotonic() + TERMINATE_GRACE_SECONDS)
+            if not drained or process.poll() is None or process_group_alive(process.pid):
+                cleanup_timed_out = True
+                terminate_group(signal.SIGKILL)
+                drain_until(time.monotonic() + TERMINATE_GRACE_SECONDS)
+        elif process.poll() is not None and (selector.get_map() or process_group_alive(process.pid)):
+            # The leader can exit while a descendant retains a pipe. Give that
+            # descendant a bounded chance to close, then kill the whole group.
+            drained = drain_until(time.monotonic() + TERMINATE_GRACE_SECONDS)
+            if not drained or process_group_alive(process.pid):
+                cleanup_timed_out = True
+                terminate_group(signal.SIGKILL)
+                drain_until(time.monotonic() + TERMINATE_GRACE_SECONDS)
         if process.poll() is None:
-            signal_group(process.pid, signal.SIGKILL)
-            if "SIGKILL" not in termination_signals:
-                termination_signals.append("SIGKILL")
+            cleanup_timed_out = True
+            terminate_group(signal.SIGKILL)
             try:
-                trailing_stdout, trailing_stderr = process.communicate(timeout=TERMINATE_GRACE_SECONDS)
-                stdout += trailing_stdout or ""
-                stderr += trailing_stderr or ""
+                process.wait(timeout=TERMINATE_GRACE_SECONDS)
             except subprocess.TimeoutExpired:
                 pass
     finally:
-        if process.stdin is not None:
-            process.stdin.close()
-        if process.stdout is not None:
-            process.stdout.close()
-        if process.stderr is not None:
-            process.stderr.close()
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None:
+                close_stream(stream)
+        selector.close()
 
-    stdout_truncated = len(stdout.encode()) > OUTPUT_LIMIT
-    stderr_truncated = len(stderr.encode()) > OUTPUT_LIMIT
-    if stdout_truncated:
-        stdout = stdout.encode()[:OUTPUT_LIMIT].decode(errors="replace")
-    if stderr_truncated:
-        stderr = stderr.encode()[:OUTPUT_LIMIT].decode(errors="replace")
+    try:
+        process.wait(timeout=0)
+    except subprocess.TimeoutExpired:
+        pass
+    stdout_text = bytes(stdout).decode(errors="replace")
+    stderr_text = bytes(stderr).decode(errors="replace")
     record = {
         "label": label,
         "argv": command,
@@ -246,6 +337,8 @@ def run_command(
         "removed_credentials": removed_credentials or [],
         "exit_code": process.returncode,
         "timed_out": timed_out,
+        "harness_verdict": "timed_out" if timed_out else "completed",
+        "cleanup_timed_out": cleanup_timed_out,
         "termination_signals": termination_signals,
         "descendants_reaped": not process_group_alive(process.pid),
         "stdout_truncated": stdout_truncated,
@@ -254,8 +347,8 @@ def run_command(
     }
     stdout_path = run_dir / f"{label}.stdout.txt"
     stderr_path = run_dir / f"{label}.stderr.txt"
-    stdout_path.write_text(stdout, encoding="utf-8")
-    stderr_path.write_text(stderr, encoding="utf-8")
+    stdout_path.write_text(stdout_text, encoding="utf-8")
+    stderr_path.write_text(stderr_text, encoding="utf-8")
     record["stdout_path"] = str(stdout_path)
     record["stderr_path"] = str(stderr_path)
     write_json(run_dir / f"{label}.json", record)
@@ -263,7 +356,8 @@ def run_command(
 
 
 def require_command_ok(record: dict[str, Any]) -> None:
-    require(record["timed_out"] is False, f"{record['label']} exceeded {CHILD_TIMEOUT_SECONDS}s")
+    require(record["harness_verdict"] == "completed", f"{record['label']} exceeded its bounded deadline")
+    require(record["cleanup_timed_out"] is False, f"{record['label']} cleanup exceeded its bounded deadline")
     require(record["descendants_reaped"] is True, f"{record['label']} left a live process group")
     require(record["stdout_truncated"] is False and record["stderr_truncated"] is False, f"{record['label']} exceeded output cap")
     require(record["exit_code"] == 0, f"{record['label']} exited {record['exit_code']}; see {record['stderr_path']}")
@@ -275,7 +369,7 @@ def settings_from_output(report: dict[str, Any], key: str) -> dict[str, str]:
     return value
 
 
-def build_consumer(run_dir: Path, temporary: Path) -> tuple[Path, dict[str, Any]]:
+def build_consumer(run_dir: Path, temporary: Path, budget: RunBudget) -> tuple[Path, dict[str, Any]]:
     binary = temporary / "interactive-policy-consumer"
     environment, removed = sanitized_environment()
     record = run_command(
@@ -285,6 +379,7 @@ def build_consumer(run_dir: Path, temporary: Path) -> tuple[Path, dict[str, Any]
         run_dir,
         environment=environment,
         removed_credentials=removed,
+        budget=budget,
     )
     require_command_ok(record)
     require(binary.is_file(), "consumer build did not produce an executable")
@@ -294,7 +389,7 @@ def build_consumer(run_dir: Path, temporary: Path) -> tuple[Path, dict[str, Any]
     return binary, record
 
 
-def run_consumer(binary: Path, run_dir: Path, *, wrong_oracle: bool = False) -> dict[str, Any]:
+def run_consumer(binary: Path, run_dir: Path, budget: RunBudget, *, wrong_oracle: bool = False) -> dict[str, Any]:
     environment, removed = sanitized_environment()
     args: list[str | Path] = ["rtk", "proxy", binary]
     if wrong_oracle:
@@ -306,6 +401,7 @@ def run_consumer(binary: Path, run_dir: Path, *, wrong_oracle: bool = False) -> 
         run_dir,
         environment=environment,
         removed_credentials=removed,
+        budget=budget,
     )
     return record
 
@@ -346,10 +442,10 @@ def parse_consumer_output(record: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
-def run_consumer_mode(run_dir: Path, *, wrong_oracle: bool = False) -> dict[str, Any]:
+def run_consumer_mode(run_dir: Path, budget: RunBudget, *, wrong_oracle: bool = False) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="audio-runtime-c40-consumer-") as temporary_name:
-        binary, build_record = build_consumer(run_dir, Path(temporary_name))
-        record = run_consumer(binary, run_dir, wrong_oracle=wrong_oracle)
+        binary, build_record = build_consumer(run_dir, Path(temporary_name), budget)
+        record = run_consumer(binary, run_dir, budget, wrong_oracle=wrong_oracle)
         if wrong_oracle:
             require(record["timed_out"] is False and record["descendants_reaped"] is True, "wrong-oracle control did not shut down cleanly")
             require(record["exit_code"] != 0, "deliberate wrong-oracle control unexpectedly passed")
@@ -360,7 +456,7 @@ def run_consumer_mode(run_dir: Path, *, wrong_oracle: bool = False) -> dict[str,
         return {"build": build_record, "run": record, "consumer": parse_consumer_output(record)}
 
 
-def build_yui(run_dir: Path, temporary: Path) -> tuple[Path, dict[str, Any]]:
+def build_yui(run_dir: Path, temporary: Path, budget: RunBudget) -> tuple[Path, dict[str, Any]]:
     binary = temporary / "yui"
     environment, removed = sanitized_environment()
     environment["GOWORK"] = str(ROOT / "go.work")
@@ -371,6 +467,7 @@ def build_yui(run_dir: Path, temporary: Path) -> tuple[Path, dict[str, Any]]:
         run_dir,
         environment=environment,
         removed_credentials=removed,
+        budget=budget,
     )
     require_command_ok(record)
     require(binary.is_file(), "YUI build did not produce an executable")
@@ -455,7 +552,7 @@ def validate_record_artifacts(label: str, fixture: Path, record_dir: Path) -> di
     }
 
 
-def run_yui_case(label: str, fixture: Path, yui: Path, run_dir: Path) -> dict[str, Any]:
+def run_yui_case(label: str, fixture: Path, yui: Path, run_dir: Path, budget: RunBudget) -> dict[str, Any]:
     require(fixture.is_file(), f"missing accepted fixture {fixture}")
     require(sha256_file(fixture) == FIXTURE_HASHES[fixture], f"accepted fixture hash changed: {fixture}")
     case_dir = run_dir / f"yui-{label}"
@@ -474,6 +571,7 @@ def run_yui_case(label: str, fixture: Path, yui: Path, run_dir: Path) -> dict[st
         run_dir,
         environment=environment,
         removed_credentials=removed,
+        budget=budget,
     )
     require_command_ok(record)
     stdout = Path(record["stdout_path"]).read_text(encoding="utf-8")
@@ -539,21 +637,21 @@ def strict_negative_controls(label: str, fixture: Path, valid_record_dir: Path, 
     return controls
 
 
-def replay_regression(run_dir: Path) -> dict[str, Any]:
+def replay_regression(run_dir: Path, budget: RunBudget) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="audio-runtime-c40-yui-") as temporary_name:
-        yui, build_record = build_yui(run_dir, Path(temporary_name))
-        audio = run_yui_case("audio-tool", AUDIO_FIXTURE, yui, run_dir)
-        interruption = run_yui_case("interruption", INTERRUPTION_FIXTURE, yui, run_dir)
+        yui, build_record = build_yui(run_dir, Path(temporary_name), budget)
+        audio = run_yui_case("audio-tool", AUDIO_FIXTURE, yui, run_dir, budget)
+        interruption = run_yui_case("interruption", INTERRUPTION_FIXTURE, yui, run_dir, budget)
         negatives = strict_negative_controls("audio-tool", AUDIO_FIXTURE, Path(audio["manifest"]).parent, run_dir)
         interruption_negatives = strict_negative_controls("interruption", INTERRUPTION_FIXTURE, Path(interruption["manifest"]).parent, run_dir)
         return {"build": build_record, "audio_tool": audio, "interruption": interruption, "negative_controls": negatives + interruption_negatives}
 
 
-def public_policy(run_dir: Path) -> dict[str, Any]:
-    consumer = run_consumer_mode(run_dir)
+def public_policy(run_dir: Path, budget: RunBudget) -> dict[str, Any]:
+    consumer = run_consumer_mode(run_dir, budget)
     with tempfile.TemporaryDirectory(prefix="audio-runtime-c40-public-") as temporary_name:
-        yui, build_record = build_yui(run_dir, Path(temporary_name))
-        replay = run_yui_case("audio-tool", AUDIO_FIXTURE, yui, run_dir)
+        yui, build_record = build_yui(run_dir, Path(temporary_name), budget)
+        replay = run_yui_case("audio-tool", AUDIO_FIXTURE, yui, run_dir, budget)
         return {
             "consumer": consumer,
             "yui_build": build_record,
@@ -646,6 +744,39 @@ def production_inventory() -> dict[str, Any]:
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if "ResolveInteractiveToolConfig" in line:
                 residual.append({"path": str(path.relative_to(ROOT)), "line": line_number, "owner": "existing CLI config-loading transport boundary"})
+    direct_runtime_paths = [
+        ROOT / "go-agent-runtime/services/tools/interactive_policy.go",
+        ROOT / "go-agent-runtime/services/tools/internal/policy/policy.go",
+        ROOT / "go-agent-runtime/services/tools/wire/wire.go",
+    ]
+    direct_forbidden = [
+        token
+        for token in ["agent-cli", "internal/config", "webmcp"]
+        if any(token in path.read_text(encoding="utf-8") for path in direct_runtime_paths)
+    ]
+    import_environment = os.environ.copy()
+    import_environment["GOWORK"] = str(ROOT / "go.work")
+    import_scan = subprocess.run(
+        [
+            "go",
+            "list",
+            "-deps",
+            "-f",
+            "{{.ImportPath}}\\t{{.Dir}}",
+            "./go-agent-runtime/services/tools/...",
+        ],
+        cwd=str(ROOT),
+        env=import_environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=CHILD_TIMEOUT_SECONDS,
+    )
+    require(import_scan.returncode == 0, import_scan.stderr.strip() or "runtime dependency scan failed")
+    dependency_rows = [line for line in import_scan.stdout.splitlines() if line.strip()]
+    forbidden_dependencies = [
+        line for line in dependency_rows if any(token in line for token in ["agent-cli", "internal/config", "webmcp"])
+    ]
     return {
         "baseline_revision": BASELINE_REVISION,
         "startup_revision": STARTUP_REVISION,
@@ -662,14 +793,19 @@ def production_inventory() -> dict[str, Any]:
         "runtime_forbidden_import_scan": {
             "paths": ["go-agent-runtime/services/tools/interactive_policy.go", "go-agent-runtime/services/tools/internal/policy", "go-agent-runtime/services/tools/wire"],
             "forbidden": ["agent-cli", "internal/config", "webmcp"],
-            "method": "source import scan",
-            "passed": not any(token in (ROOT / path).read_text(encoding="utf-8") for path in ["go-agent-runtime/services/tools/interactive_policy.go", "go-agent-runtime/services/tools/internal/policy/policy.go", "go-agent-runtime/services/tools/wire/wire.go"] for token in ["agent-cli", "internal/config", "webmcp"]),
+            "method": "direct source scan plus go list -deps import-path and directory scan",
+            "direct_forbidden": direct_forbidden,
+            "dependency_count": len(dependency_rows),
+            "forbidden_dependencies": forbidden_dependencies,
+            "passed": not direct_forbidden and not forbidden_dependencies,
         },
     }
 
 
-def inventory(run_dir: Path) -> dict[str, Any]:
+def inventory(run_dir: Path, budget: RunBudget) -> dict[str, Any]:
+    budget.require_time("inventory")
     report = production_inventory()
+    budget.require_time("inventory completion")
     require(report["ancestry"]["baseline_is_ancestor"], "required baseline is not an ancestor")
     require(report["ancestry"]["startup_is_ancestor"], "startup integration revision is not an ancestor")
     require(report["ancestry"]["origin_main_is_ancestor"], "origin/main is not an ancestor of candidate")
@@ -678,10 +814,37 @@ def inventory(run_dir: Path) -> dict[str, Any]:
     return report
 
 
+def cleanup_control(run_dir: Path, budget: RunBudget) -> dict[str, Any]:
+    """Prove the runner bounds a stubborn descendant and reaps its group."""
+    helper = (
+        "import signal, subprocess, sys, time; "
+        "subprocess.Popen([sys.executable, '-c', "
+        "'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)']); "
+        "sys.stdout.write('x' * (2 * 1024 * 1024)); sys.stdout.flush(); "
+        "time.sleep(30)"
+    )
+    record = run_command(
+        "cleanup-control",
+        [sys.executable, "-c", helper],
+        ROOT,
+        run_dir,
+        timeout_seconds=1,
+        budget=budget,
+    )
+    require(record["harness_verdict"] == "timed_out", "cleanup control did not hit its child deadline")
+    require(record["exit_code"] is not None and record["exit_code"] != 0, "cleanup control lacks native child failure")
+    require(record["termination_signals"] == ["SIGTERM", "SIGKILL"], "cleanup control did not use bounded TERM/KILL")
+    require(record["cleanup_timed_out"] is True, "cleanup control did not exercise the bounded reap path")
+    require(record["descendants_reaped"] is True, "cleanup control left a live descendant")
+    require(record["stdout_truncated"] is True, "cleanup control did not exercise the output cap")
+    return record
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("inventory", "consumer", "wrong-oracle", "public-policy", "replay-regression", "all"))
+    parser.add_argument("mode", choices=("inventory", "consumer", "wrong-oracle", "public-policy", "cleanup-control", "replay-regression", "all"))
     args = parser.parse_args()
+    budget = RunBudget(TOTAL_TIMEOUT_SECONDS)
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     run_dir = RUNS / f"run-{args.mode}-{stamp}-{os.getpid()}"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -697,27 +860,34 @@ def main() -> int:
     }
     try:
         if args.mode == "inventory":
-            outcome["inventory"] = inventory(run_dir)
+            outcome["inventory"] = inventory(run_dir, budget)
         elif args.mode == "consumer":
-            outcome["consumer"] = run_consumer_mode(run_dir)
+            outcome["consumer"] = run_consumer_mode(run_dir, budget)
         elif args.mode == "wrong-oracle":
-            outcome["wrong_oracle"] = run_consumer_mode(run_dir, wrong_oracle=True)
+            outcome["wrong_oracle"] = run_consumer_mode(run_dir, budget, wrong_oracle=True)
         elif args.mode == "public-policy":
-            outcome["public_policy"] = public_policy(run_dir)
+            outcome["public_policy"] = public_policy(run_dir, budget)
+        elif args.mode == "cleanup-control":
+            outcome["cleanup_control"] = cleanup_control(run_dir, budget)
         elif args.mode == "replay-regression":
-            outcome["replay_regression"] = replay_regression(run_dir)
+            outcome["replay_regression"] = replay_regression(run_dir, budget)
         else:
-            outcome["inventory"] = inventory(run_dir)
-            outcome["consumer"] = run_consumer_mode(run_dir)
-            outcome["wrong_oracle"] = run_consumer_mode(run_dir, wrong_oracle=True)
-            outcome["public_policy"] = public_policy(run_dir)
-            outcome["replay_regression"] = replay_regression(run_dir)
+            outcome["inventory"] = inventory(run_dir, budget)
+            outcome["consumer"] = run_consumer_mode(run_dir, budget)
+            outcome["wrong_oracle"] = run_consumer_mode(run_dir, budget, wrong_oracle=True)
+            outcome["public_policy"] = public_policy(run_dir, budget)
+            outcome["cleanup_control"] = cleanup_control(run_dir, budget)
+            outcome["replay_regression"] = replay_regression(run_dir, budget)
+        budget.require_time("mode completion")
         outcome["decision"] = "ACCEPTED"
     except (EvidenceFailure, OSError, subprocess.SubprocessError) as exc:
         outcome["error"] = str(exc)
+        outcome["aggregate_deadline_exceeded"] = budget.remaining() <= 0
+        outcome["aggregate_elapsed_seconds"] = round(time.monotonic() - budget.started, 6)
         write_json(run_dir / "outcome.json", outcome)
         print(json.dumps(outcome, indent=2), file=sys.stderr)
         return 1
+    outcome["aggregate_elapsed_seconds"] = round(time.monotonic() - budget.started, 6)
     write_json(run_dir / "outcome.json", outcome)
     print(json.dumps(outcome, indent=2))
     return 0

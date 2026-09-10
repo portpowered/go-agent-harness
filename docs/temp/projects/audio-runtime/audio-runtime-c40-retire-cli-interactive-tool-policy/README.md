@@ -14,11 +14,16 @@ rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-interactive-tool-policy/run.py consumer
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-interactive-tool-policy/run.py wrong-oracle
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-interactive-tool-policy/run.py public-policy
+rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-interactive-tool-policy/run.py cleanup-control
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-interactive-tool-policy/run.py replay-regression
 ```
 
 `run.py` records exact child argv, selected environment, cwd, exit status,
-elapsed time, and bounded stdout/stderr under `runs/`. It uses the accepted
+elapsed time, separate native exit/harness verdict, and bounded stdout/stderr
+under `runs/`. Every mode shares one monotonic 600-second aggregate deadline;
+each child is capped at 60 seconds and cleanup uses bounded TERM/KILL/reap.
+The `cleanup-control` mode deliberately leaves a SIGTERM-ignoring descendant
+so the runner's kill-group and reaping path is exercised. It uses the accepted
 C16 audio/tool and interruption fixtures read-only, and checks their recorded
 SHA-256 values before running the shipped YUI replay. The frozen audio
 oracles are 4800 bytes / `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`,
