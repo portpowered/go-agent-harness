@@ -10,8 +10,8 @@ and process cleanup state.
 
 - admitted task: `audio-runtime-c34-replay-terminal-integrity`
 - implementation merge checkpoint: `f3a230fd7f86b1fd990abea07305a6247a47771b`
-- evidence head: `953ad5ce9fbe01a1444659f8e0cf4b28b5ed4e47` (documentation-only
-  descendants; owned Go inputs are unchanged from the merge checkpoint)
+- evidence lineage: documentation-only descendants of the implementation merge
+  checkpoint; owned Go inputs are unchanged from that checkpoint
 - fresh `origin/main` merged into the candidate: `c95a2cb4f96fa8c14bd4655f5197a822c86a980c`
 - required startup revision ancestor: `8bdafc7f947a3a2c9856220abdc539437035bd21`
 - architecture baseline ancestor: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`

@@ -11,8 +11,8 @@
 
 This is the admitted `audio-runtime-c34-replay-terminal-integrity` task. The
 implementation merge checkpoint is
-`f3a230fd7f86b1fd990abea07305a6247a47771b`; the final evidence head is
-`953ad5ce9fbe01a1444659f8e0cf4b28b5ed4e47`. The candidate merged fresh
+`f3a230fd7f86b1fd990abea07305a6247a47771b`; subsequent evidence commits are
+documentation-only descendants with identical executable inputs. The candidate merged fresh
 `origin/main` at `c95a2cb4f96fa8c14bd4655f5197a822c86a980c`; ancestry probes also
 pass for startup `8bdafc7f947a3a2c9856220abdc539437035bd21` and architecture
 baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
