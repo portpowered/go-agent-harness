@@ -237,6 +237,7 @@ class AmendmentFixture:
 
     def prepare_reports(self, realtime_sessions=0, realtime_seconds=0):
         reports = {}
+        self.prepared_results = {}
         build = self.artifact("shared-build.bin")
         for role in ("customer", "engineering"):
             packet = self.prepare_packet(role, role)
@@ -248,6 +249,7 @@ class AmendmentFixture:
                 f"audio-runtime-c39-{role}-mission",
                 json.dumps(packet),
             )
+            self.prepared_results[role] = result
             mission_path = Path(result["directory"]) / "mission.json"
             mission = json.loads(mission_path.read_text(encoding="utf-8"))
             criteria = {
@@ -462,6 +464,10 @@ class ScopeAmendmentTests(unittest.TestCase):
         build, reports = self.fixture.prepare_reports()
         amendment = amendments.amendment_reference(self.root)
         for role, report_path in reports.items():
+            prepared = self.fixture.prepared_results[role]
+            self.assertEqual(prepared["project"], self.fixture.project)
+            self.assertEqual(prepared["buildIdentity"], build["identity"])
+            self.assertEqual(prepared["build"]["identity"], build["identity"])
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(report["amendment"], amendment)
             self.assertEqual(report["build"], build)
@@ -544,7 +550,10 @@ class ScopeAmendmentTests(unittest.TestCase):
                         "directory": "/tmp/c39-mission",
                         "validationWorkName": "audio-runtime-c39-customer-mission",
                         "missionSha256": "mission-sha",
-                        "build": {"sha256": "artifact-sha"},
+                        "build": {
+                            "identity": "build-v1",
+                            "sha256": "artifact-sha",
+                        },
                     }
                 )
             },
@@ -567,6 +576,7 @@ class ScopeAmendmentTests(unittest.TestCase):
                     mission_path="/tmp/c39-mission/mission.json",
                     mission_sha256="mission-sha",
                     artifact_sha256="artifact-sha",
+                    artifact_identity="build-v1",
                 )
 
         wrong_project = copy.deepcopy(expected)
@@ -589,18 +599,22 @@ class ScopeAmendmentTests(unittest.TestCase):
                     mission_path="/tmp/c39-mission/mission.json",
                     mission_sha256="mission-sha",
                     artifact_sha256="artifact-sha",
+                    artifact_identity="build-v1",
                 )
 
         wrong_mission = copy.deepcopy(expected)
         wrong_mission["tags"]["_last_output"] = json.dumps(
             {
-                "project": "audio-runtime",
-                "directory": "/tmp/c39-mission",
-                "validationWorkName": "audio-runtime-c39-customer-mission",
-                "missionSha256": "wrong-mission-sha",
-                "build": {"sha256": "artifact-sha"},
-            }
-        )
+                        "project": "audio-runtime",
+                        "directory": "/tmp/c39-mission",
+                        "validationWorkName": "audio-runtime-c39-customer-mission",
+                        "missionSha256": "wrong-mission-sha",
+                        "build": {
+                            "identity": "build-v1",
+                            "sha256": "artifact-sha",
+                        },
+                    }
+                )
         with mock.patch.object(
             PROJECT_CONTROL.subprocess,
             "run",
@@ -619,7 +633,75 @@ class ScopeAmendmentTests(unittest.TestCase):
                     mission_path="/tmp/c39-mission/mission.json",
                     mission_sha256="mission-sha",
                     artifact_sha256="artifact-sha",
+                    artifact_identity="build-v1",
                 )
+
+        missing_project = copy.deepcopy(expected)
+        del missing_project["project"]
+        with mock.patch.object(
+            PROJECT_CONTROL.subprocess,
+            "run",
+            return_value=response(missing_project),
+        ):
+            with self.assertRaisesRegex(
+                project_contract.ContractError,
+                "canonical validation Work project mismatch",
+            ):
+                PROJECT_CONTROL.completed_validation(
+                    "validation-customer",
+                    "session",
+                    "http://fixture.invalid",
+                    project="audio-runtime",
+                    work_name="audio-runtime-c39-customer-mission",
+                    mission_path="/tmp/c39-mission/mission.json",
+                    mission_sha256="mission-sha",
+                    artifact_sha256="artifact-sha",
+                    artifact_identity="build-v1",
+                )
+
+        mismatched_artifact = copy.deepcopy(expected)
+        staged = json.loads(mismatched_artifact["tags"]["_last_output"])
+        staged["build"]["identity"] = "different-build"
+        mismatched_artifact["tags"]["_last_output"] = json.dumps(staged)
+        with mock.patch.object(
+            PROJECT_CONTROL.subprocess,
+            "run",
+            return_value=response(mismatched_artifact),
+        ):
+            with self.assertRaisesRegex(
+                project_contract.ContractError,
+                "canonical validation Work artifact mismatch",
+            ):
+                PROJECT_CONTROL.completed_validation(
+                    "validation-customer",
+                    "session",
+                    "http://fixture.invalid",
+                    project="audio-runtime",
+                    work_name="audio-runtime-c39-customer-mission",
+                    mission_path="/tmp/c39-mission/mission.json",
+                    mission_sha256="mission-sha",
+                    artifact_sha256="artifact-sha",
+                    artifact_identity="build-v1",
+                )
+
+    def test_published_amendment_must_retain_canonical_bytes(self):
+        self.fixture.append()
+        stored = (
+            self.root
+            / amendments.AMENDMENTS_RELATIVE
+            / f"{amendments.AMENDMENT_ID}.json"
+        )
+        original = stored.read_bytes()
+        stored.chmod(0o600)
+        stored.write_bytes(original + b" \n")
+        stored.chmod(0o400)
+
+        result = self.fixture.run_cli(
+            SCRIPTS_DIR / "project-control.py",
+            "amendment-status",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("amendment record is not canonical", result.stderr)
 
     def test_probe_bounded_output_and_failure_evidence(self):
         yui = Path(self.temp_dir.name) / "controller-only-yui"

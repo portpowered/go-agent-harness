@@ -506,7 +506,10 @@ def _validated_record_path(root: Path, record_path: str) -> tuple[Path, dict[str
         raise ScopeAmendmentError("cannot read amendment record input") from error
     record = _load_json_bytes(data, "amendment record")
     validated = _validate_record_object(root, record)
-    return path, validated, canonical_bytes(validated)
+    canonical = canonical_bytes(validated)
+    if data != canonical:
+        raise ScopeAmendmentError("amendment record is not canonical")
+    return path, validated, data
 
 
 def create_record(root: Path) -> dict[str, Any]:

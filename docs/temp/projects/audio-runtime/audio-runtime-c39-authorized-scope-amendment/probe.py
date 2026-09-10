@@ -658,6 +658,12 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
         if prepared_result["exitCode"] != 0:
             raise ProbeError(f"amended preparation failed: {prepared_result['stderr']}")
         prepared[role] = json.loads(prepared_result["stdout"])
+        if (
+            prepared[role].get("project") != amendments.PROJECT
+            or prepared[role].get("buildIdentity") != build["identity"]
+            or prepared[role].get("build", {}).get("identity") != build["identity"]
+        ):
+            raise ProbeError("preparation omitted exact project/build identity")
         mission_path = Path(prepared[role]["directory"]) / "mission.json"
         mission = json.loads(mission_path.read_text(encoding="utf-8"))
         criteria = {
@@ -744,6 +750,7 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
                         "directory": str(mission_path.parent),
                         "project": mission["project"],
                         "build": mission["build"],
+                        "buildIdentity": mission["build"]["identity"],
                         "validationWorkName": mission["validationWorkName"],
                         "missionSha256": report["missionSha256"],
                     }
@@ -795,6 +802,45 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
     if completion["exitCode"] != 0:
         raise ProbeError(f"amended completion failed: {completion['stderr']}")
 
+    original_work_responses = copy.deepcopy(work_responses)
+    negative_validation = {}
+
+    def run_negative_validation(label, mutate):
+        candidate = copy.deepcopy(original_work_responses)
+        mutate(candidate)
+        work_map.write_text(_json(candidate), encoding="utf-8")
+        try:
+            result = _controller(
+                "project-control.py",
+                fixture,
+                "verify-completion",
+                "--name",
+                amendments.PROJECT,
+                fake_you=fake_you,
+            )
+        finally:
+            work_map.write_text(_json(original_work_responses), encoding="utf-8")
+        if result["exitCode"] == 0:
+            raise ProbeError(f"negative completion control was accepted: {label}")
+        negative_validation[label] = {
+            "exitCode": result["exitCode"],
+            "stderr": result["stderr"],
+        }
+
+    customer_work_id = next(iter(original_work_responses))
+    run_negative_validation(
+        "missing-work-project",
+        lambda candidate: candidate[customer_work_id].pop("project"),
+    )
+
+    def mutate_build_identity(candidate):
+        work = candidate[customer_work_id]
+        staged = json.loads(work["tags"]["_last_output"])
+        staged["build"]["identity"] = "c39-wrong-build"
+        work["tags"]["_last_output"] = json.dumps(staged)
+
+    run_negative_validation("mismatched-staged-build-identity", mutate_build_identity)
+
     forged = copy.deepcopy(amendments.create_record(fixture))
     forged["excludedSubproof"].append(
         {
@@ -824,6 +870,7 @@ def _record_controller_effects(fixture: Path, output: Path) -> dict[str, Any]:
         "prepared": prepared,
         "completion": completion,
         "negativeExpandedExclusion": rejection,
+        "negativeValidation": negative_validation,
         "protectedHashes": protected_after,
         "protectedHashesBefore": protected_before,
         "protectedHashesAfter": protected_after,

@@ -82,6 +82,7 @@ def completed_validation(
     mission_path=None,
     mission_sha256=None,
     artifact_sha256=None,
+    artifact_identity=None,
 ):
     result = subprocess.run(["you", "--server", server, "--json", "work", "show",
                              work_id, "--session", session_id], capture_output=True,
@@ -98,11 +99,17 @@ def completed_validation(
         raise ContractError("validation Work has not completed in canonical runtime state")
     if work_name is None:
         return
+    if not isinstance(project, str) or not project:
+        raise ContractError("canonical validation Work project identity is missing")
+    if not isinstance(artifact_identity, str) or not artifact_identity:
+        raise ContractError("canonical validation Work artifact identity is missing")
+    if not isinstance(artifact_sha256, str) or not artifact_sha256:
+        raise ContractError("canonical validation Work artifact digest is missing")
     if work.get("workId") != work_id:
         raise ContractError("canonical validation Work identity mismatch")
     if work.get("name") != work_name:
         raise ContractError("canonical validation Work name mismatch")
-    if work.get("project") not in {None, project}:
+    if work.get("project") != project:
         raise ContractError("canonical validation Work project mismatch")
     if not isinstance(project, str) or not work_name.startswith(project + "-c"):
         raise ContractError("canonical validation Work project mismatch")
@@ -114,7 +121,7 @@ def completed_validation(
         raise ContractError("canonical validation Work lacks staged mission identity")
     if staged.get("validationWorkName") != work_name:
         raise ContractError("canonical validation Work mission name mismatch")
-    if staged.get("project") not in {None, project}:
+    if staged.get("project") != project:
         raise ContractError("canonical validation Work mission project mismatch")
     if staged.get("missionSha256") != mission_sha256:
         raise ContractError("canonical validation Work mission digest mismatch")
@@ -125,6 +132,7 @@ def completed_validation(
     staged_build = staged.get("build")
     if (
         not isinstance(staged_build, dict)
+        or staged_build.get("identity") != artifact_identity
         or staged_build.get("sha256") != artifact_sha256
     ):
         raise ContractError("canonical validation Work artifact mismatch")
@@ -222,6 +230,7 @@ def verify_completion(root, name):
                 mission_path=report["missionPath"],
                 mission_sha256=report["missionSha256"],
                 artifact_sha256=build["sha256"],
+                artifact_identity=build["identity"],
             )
         seen.add(work_id)
     return {"status": "verified", "project": name, "build": build}

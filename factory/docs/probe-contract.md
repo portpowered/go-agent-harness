@@ -103,7 +103,10 @@ nonempty `sourceRevision`, and include the exact reference returned by
 ```
 
 Preparation stages this reference, the original manifest authority, the
-`sourceRevision`, and an immutable mission digest.  Both final project reports
+`sourceRevision`, and an immutable mission digest.  Its JSON result also repeats
+the admitted `project`, the complete staged `build` descriptor, and
+`buildIdentity`; consumers must carry those exact identities into canonical Work
+and report validation.  Both final project reports
 must repeat the exact reference and bind to their staged `mission.json`, its
 digest, the same artifact identity/hash, and the source revision.  Each report
 must provide explicit PASS evidence for the four retained software/device

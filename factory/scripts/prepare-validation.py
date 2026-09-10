@@ -144,8 +144,10 @@ def prepare(root, name, payload):
         raise
     return {
         "status": "ready",
+        "project": packet["project"],
         "directory": str(target),
         "build": packet["build"],
+        "buildIdentity": packet["build"]["identity"],
         "validationWorkName": name,
         "missionSha256": digest(target / "mission.json"),
         **({"amendment": amendment} if amendment is not None else {}),
