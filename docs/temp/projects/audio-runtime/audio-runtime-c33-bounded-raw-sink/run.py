@@ -31,6 +31,8 @@ ALLOCATION_BUDGET = 256 * 1024
 TOOL_FIXTURE = REPO_ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json"
 EXPECTED_RENDERED = (3200, "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805")
 EXPECTED_PROVIDER = (4800, "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502")
+EXPECTED_RAW = (6, "d68491246ad239fd17f4917785722e6cab3280a1dc3239a5372adacd3981d2b1")
+EXPECTED_RAW_HEX = "0080ff7fffff"
 CONSUMER_SOURCE = EVIDENCE / "consumer/main.go"
 CONSUMER_SOURCE_ROOTS = ("go-audio",)
 YUI_SOURCE_ROOTS = (
@@ -311,8 +313,25 @@ def reuse_consumer(binary: Path, identity: dict, inputs: dict) -> dict:
     }
 
 
-def run_consumer(binary: Path, mode: str, report_path: Path, source_revision: str, negative: bool = False) -> dict:
-    command = ["rtk", "proxy", str(binary), "--mode", mode, "--output", str(report_path)]
+def run_consumer(
+    binary: Path,
+    mode: str,
+    report_path: Path,
+    raw_file: Path,
+    source_revision: str,
+    negative: bool = False,
+) -> dict:
+    command = [
+        "rtk",
+        "proxy",
+        str(binary),
+        "--mode",
+        mode,
+        "--raw-file",
+        str(raw_file),
+        "--output",
+        str(report_path),
+    ]
     if negative:
         command.append("--negative-control")
     environment = os.environ.copy()
@@ -326,6 +345,30 @@ def run_consumer(binary: Path, mode: str, report_path: Path, source_revision: st
 def require_success(result: dict, label: str) -> None:
     if result["exit_code"] != 0:
         raise EvidenceError(f"{label} exited {result['exit_code']}: {result['stderr']}")
+
+
+def observe_raw_file(path: Path, existed_before: bool) -> dict:
+    if not path.is_file():
+        raise EvidenceError(f"public raw file missing after consumer exit: {path}")
+    payload = path.read_bytes()
+    tail = payload[-EXPECTED_RAW[0] :]
+    observation = {
+        "path": str(path),
+        "existed_before": existed_before,
+        "exists_after": True,
+        "bytes": len(payload),
+        "sha256": sha256_bytes(payload),
+        "hex": payload.hex(),
+        "final_tail_hex": tail.hex(),
+        "expected_bytes": EXPECTED_RAW[0],
+        "expected_sha256": EXPECTED_RAW[1],
+        "expected_hex": EXPECTED_RAW_HEX,
+    }
+    if existed_before or (observation["bytes"], observation["sha256"]) != EXPECTED_RAW or observation["hex"] != EXPECTED_RAW_HEX:
+        raise EvidenceError(f"public raw file observation mismatch: {observation}")
+    if observation["final_tail_hex"] != EXPECTED_RAW_HEX:
+        raise EvidenceError(f"public raw file tail mismatch: {observation}")
+    return observation
 
 
 def wait_for_path(path: Path, timeout: float) -> bool:
@@ -437,7 +480,19 @@ def run_public_mode(
     else:
         build_result = reuse_consumer(binary, identity, inputs)
     report_path = run_dir / f"consumer-{mode}.json"
-    execution = run_consumer(binary, mode, report_path, revision, negative)
+    raw_file = run_dir / f"raw-output-{mode}.pcm"
+    existed_before = raw_file.exists()
+    if existed_before:
+        raise EvidenceError(f"public raw output unexpectedly exists before consumer: {raw_file}")
+    execution = run_consumer(binary, mode, report_path, raw_file, revision, negative)
+    execution["raw_file_observation"] = observe_raw_file(raw_file, existed_before)
+    child_report = execution.get("report", {})
+    child_control = child_report.get("raw_file_control", {})
+    if child_control.get("passed") is not True:
+        raise EvidenceError(f"consumer did not pass raw file control: {child_report}")
+    for field in ("path", "bytes", "sha256", "hex", "final_tail_hex"):
+        if child_control.get(field) != execution["raw_file_observation"].get(field):
+            raise EvidenceError(f"consumer/raw observation mismatch for {field}: {child_report}")
     if negative:
         if execution["exit_code"] == 0 or "oracle" not in execution["stderr"].lower():
             raise EvidenceError(f"negative oracle control unexpectedly passed: {execution}")

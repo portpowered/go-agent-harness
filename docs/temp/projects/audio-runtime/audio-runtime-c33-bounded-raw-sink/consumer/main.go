@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -112,28 +113,71 @@ type oracleReport struct {
 }
 
 type report struct {
-	Version          string        `json:"version"`
-	Mode             string        `json:"mode"`
-	Source           string        `json:"source"`
-	GoVersion        string        `json:"go_version"`
-	ScratchBytes     int           `json:"scratch_bytes"`
-	AllocationBudget int           `json:"allocation_budget_bytes"`
-	ConstructorAlloc uint64        `json:"constructor_alloc_bytes"`
-	Measurements     []measurement `json:"measurements"`
-	Oracle           oracleReport  `json:"oracle"`
-	ResourceBound    bool          `json:"resource_bound"`
-	NegativeControl  bool          `json:"negative_control"`
-	CleanShutdown    bool          `json:"clean_shutdown"`
-	Error            string        `json:"error,omitempty"`
+	Version          string         `json:"version"`
+	Mode             string         `json:"mode"`
+	Source           string         `json:"source"`
+	GoVersion        string         `json:"go_version"`
+	ScratchBytes     int            `json:"scratch_bytes"`
+	AllocationBudget int            `json:"allocation_budget_bytes"`
+	ConstructorAlloc uint64         `json:"constructor_alloc_bytes"`
+	Measurements     []measurement  `json:"measurements"`
+	Oracle           oracleReport   `json:"oracle"`
+	RawFileControl   rawFileControl `json:"raw_file_control"`
+	ResourceBound    bool           `json:"resource_bound"`
+	NegativeControl  bool           `json:"negative_control"`
+	CleanShutdown    bool           `json:"clean_shutdown"`
+	Error            string         `json:"error,omitempty"`
+}
+
+type rawFileControl struct {
+	Path             string                 `json:"path"`
+	AbsenceChecked   bool                   `json:"absence_checked"`
+	ExistedBefore    bool                   `json:"existed_before"`
+	ExistsAfter      bool                   `json:"exists_after"`
+	Samples          int                    `json:"samples"`
+	Bytes            int                    `json:"bytes"`
+	SHA256           string                 `json:"sha256"`
+	Hex              string                 `json:"hex"`
+	FinalTailHex     string                 `json:"final_tail_hex"`
+	ExpectedHex      string                 `json:"expected_hex"`
+	ExpectedSHA256   string                 `json:"expected_sha256"`
+	WriteError       string                 `json:"write_error,omitempty"`
+	FirstCloseError  string                 `json:"first_close_error,omitempty"`
+	SecondCloseError string                 `json:"second_close_error,omitempty"`
+	ClosePassed      bool                   `json:"close_passed"`
+	Stdout           stdoutOwnershipControl `json:"stdout"`
+	Passed           bool                   `json:"passed"`
+}
+
+type stdoutOwnershipControl struct {
+	CloseCalls          int    `json:"close_calls"`
+	PostCloseWriteBytes int    `json:"post_close_write_bytes"`
+	Bytes               int    `json:"bytes"`
+	Hex                 string `json:"hex"`
+	WriteError          string `json:"write_error,omitempty"`
+	FirstCloseError     string `json:"first_close_error,omitempty"`
+	SecondCloseError    string `json:"second_close_error,omitempty"`
+	Passed              bool   `json:"passed"`
+}
+
+type ownershipWriter struct {
+	bytes.Buffer
+	closeCalls int
+}
+
+func (w *ownershipWriter) Close() error {
+	w.closeCalls++
+	return nil
 }
 
 func main() {
 	mode := flag.String("mode", "characterize", "characterize or verify")
 	negative := flag.Bool("negative-control", false, "mutate the independent oracle and require failure")
+	rawFile := flag.String("raw-file", "", "write and verify a fresh raw PCM file at this path")
 	output := flag.String("output", "", "write the JSON report to this path")
 	flag.Parse()
 
-	result, err := run(*mode, *negative)
+	result, err := run(*mode, *negative, *rawFile)
 	if result == nil {
 		result = &report{Version: measurementVersion, Mode: *mode, GoVersion: runtime.Version()}
 	}
@@ -152,7 +196,7 @@ func main() {
 	}
 }
 
-func run(mode string, negative bool) (*report, error) {
+func run(mode string, negative bool, rawPath string) (*report, error) {
 	if mode != "characterize" && mode != "verify" {
 		return nil, fmt.Errorf("unsupported mode %q", mode)
 	}
@@ -164,12 +208,17 @@ func run(mode string, negative bool) (*report, error) {
 		ScratchBytes:     scratchBytes,
 		AllocationBudget: allocationBudget,
 		NegativeControl:  negative,
-		CleanShutdown:    true,
+		CleanShutdown:    false,
 	}
 
 	measurements, constructorAlloc, err := measureSizes()
 	result.ConstructorAlloc = constructorAlloc
 	result.Measurements = measurements
+	if err != nil {
+		return result, err
+	}
+	result.RawFileControl, err = runRawFileControl(rawPath)
+	result.CleanShutdown = result.RawFileControl.Passed
 	if err != nil {
 		return result, err
 	}
@@ -189,6 +238,93 @@ func run(mode string, negative bool) (*report, error) {
 		result.ResourceBound = false
 	}
 	return result, nil
+}
+
+func runRawFileControl(path string) (rawFileControl, error) {
+	control := rawFileControl{
+		Path:           path,
+		Samples:        3,
+		ExpectedHex:    oracleTailHex,
+		ExpectedSHA256: oracleTailSHA256,
+	}
+	if path == "" {
+		return control, errors.New("raw-file is required for the public file control")
+	}
+	if _, err := os.Stat(path); err == nil {
+		control.ExistedBefore = true
+		return control, fmt.Errorf("raw output already exists before the public control: %s", path)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return control, fmt.Errorf("check raw output absence: %w", err)
+	}
+	control.AbsenceChecked = true
+
+	sink, err := audio.NewFileSink(path, nil)
+	if err != nil {
+		return control, err
+	}
+	writeErr := sink.WriteSamples(context.Background(), []int16{-32768, 32767, -1})
+	firstCloseErr := sink.Close()
+	secondCloseErr := sink.Close()
+	if writeErr != nil {
+		control.WriteError = writeErr.Error()
+	}
+	if firstCloseErr != nil {
+		control.FirstCloseError = firstCloseErr.Error()
+	}
+	if secondCloseErr != nil {
+		control.SecondCloseError = secondCloseErr.Error()
+	}
+	control.ClosePassed = firstCloseErr == nil && secondCloseErr == nil
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return control, fmt.Errorf("read raw output: %w", err)
+	}
+	control.ExistsAfter = true
+	control.Bytes = len(data)
+	control.SHA256 = hashBytes(data)
+	control.Hex = hex.EncodeToString(data)
+	tailStart := len(data) - len(oracleTailBytes)
+	if tailStart < 0 {
+		tailStart = 0
+	}
+	control.FinalTailHex = hex.EncodeToString(data[tailStart:])
+
+	stdout := &ownershipWriter{}
+	stdoutSink, err := audio.NewFileSink("-", stdout)
+	if err != nil {
+		return control, err
+	}
+	stdoutWriteErr := stdoutSink.WriteSamples(context.Background(), []int16{-32768})
+	stdoutFirstCloseErr := stdoutSink.Close()
+	stdoutSecondCloseErr := stdoutSink.Close()
+	postCloseWriteBytes, postCloseWriteErr := stdout.Write([]byte{0xaa})
+	if stdoutWriteErr != nil {
+		control.Stdout.WriteError = stdoutWriteErr.Error()
+	}
+	if stdoutFirstCloseErr != nil {
+		control.Stdout.FirstCloseError = stdoutFirstCloseErr.Error()
+	}
+	if stdoutSecondCloseErr != nil {
+		control.Stdout.SecondCloseError = stdoutSecondCloseErr.Error()
+	}
+	control.Stdout.CloseCalls = stdout.closeCalls
+	control.Stdout.PostCloseWriteBytes = postCloseWriteBytes
+	control.Stdout.Bytes = stdout.Len()
+	control.Stdout.Hex = hex.EncodeToString(stdout.Bytes())
+	control.Stdout.Passed = stdoutWriteErr == nil && stdoutFirstCloseErr == nil && stdoutSecondCloseErr == nil &&
+		postCloseWriteErr == nil && stdout.closeCalls == 0 && postCloseWriteBytes == 1 && control.Stdout.Hex == oracleOneSampleHex+"aa"
+	if postCloseWriteErr != nil {
+		control.Stdout.WriteError = postCloseWriteErr.Error()
+	}
+
+	control.Passed = writeErr == nil && control.ClosePassed && !control.ExistedBefore && control.ExistsAfter &&
+		control.Bytes == len(oracleTailBytes) && control.Hex == oracleTailHex &&
+		control.SHA256 == oracleTailSHA256 && control.FinalTailHex == oracleTailHex && control.Stdout.Passed
+	if !control.Passed {
+		return control, fmt.Errorf("raw file control mismatch: %+v", control)
+	}
+	return control, nil
 }
 
 func measureSizes() ([]measurement, uint64, error) {
@@ -378,6 +514,11 @@ func totalAlloc() uint64 {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
 	return stats.TotalAlloc
+}
+
+func hashBytes(payload []byte) string {
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:])
 }
 
 func writeReport(path string, result *report) error {

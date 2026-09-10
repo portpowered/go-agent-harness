@@ -11,6 +11,13 @@ The measured per-call allocation budget is 256 KiB, including fixed runtime and
 interface overhead but excluding caller-owned sample input and the writer's
 non-retaining hash state. Valid local PCM output has no remote codec payload cap.
 
+Each public consumer run also receives a fresh, previously absent raw-file path.
+It writes the literal three-sample tail `0080ff7fffff` through
+`NewFileSink(path, nil)`, closes twice, reads the resulting file, and verifies
+the exact byte count, full hash, and final tail. The same consumer checks that a
+caller-owned `NewFileSink("-", writer)` writer is not closed and remains writable
+after repeated sink close.
+
 Characterize the immutable pre-fix source:
 
 ```text
