@@ -456,6 +456,16 @@ def _input_provenance(
 ) -> dict[str, Any]:
     """Record every controller/probe executable input before it is launched."""
 
+    source_inputs = {}
+    for relative in (
+        amendments.MANIFEST_RELATIVE,
+        "factory/projects/audio-runtime/source-plan.md",
+        "factory/projects/audio-runtime/request.md",
+        "factory/projects/audio-runtime/acceptance.md",
+        "factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json",
+    ):
+        path = _regular_file(REPO_ROOT / relative, relative)
+        source_inputs[relative] = {"path": str(path), "sha256": _sha256(path)}
     script_inputs = {}
     for relative in (
         "factory/scripts/project-control.py",
@@ -466,7 +476,6 @@ def _input_provenance(
         script_inputs[relative] = {"path": str(path), "sha256": _sha256(path)}
     reviewed_inputs = {}
     for relative in (
-        amendments.MANIFEST_RELATIVE,
         amendments.AUTHORIZATION_RELATIVE,
         amendments.HISTORICAL_REPORT_RELATIVE,
     ):
@@ -498,6 +507,7 @@ def _input_provenance(
             "path": str(Path(__file__).resolve()),
             "sha256": _sha256(Path(__file__).resolve()),
         },
+        "sourceInputs": source_inputs,
         "controllerScripts": script_inputs,
         "reviewedInputs": reviewed_inputs,
         "yui": {"path": str(yui_path), "sha256Before": _sha256(yui_path)},

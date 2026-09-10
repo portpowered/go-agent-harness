@@ -102,6 +102,8 @@ def completed_validation(
         raise ContractError("canonical validation Work identity mismatch")
     if work.get("name") != work_name:
         raise ContractError("canonical validation Work name mismatch")
+    if work.get("project") not in {None, project}:
+        raise ContractError("canonical validation Work project mismatch")
     if not isinstance(project, str) or not work_name.startswith(project + "-c"):
         raise ContractError("canonical validation Work project mismatch")
     tags = work.get("tags")

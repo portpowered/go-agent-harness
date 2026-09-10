@@ -475,8 +475,8 @@ class ScopeAmendmentTests(unittest.TestCase):
         with mock.patch.object(
             PROJECT_CONTROL,
             "completed_validation",
-                side_effect=lambda *args, **kwargs: None,
-            ):
+            side_effect=lambda *args, **kwargs: None,
+        ):
             result = PROJECT_CONTROL.verify_completion(self.root, self.fixture.project)
         self.assertEqual(result["status"], "verified")
 
@@ -509,6 +509,18 @@ class ScopeAmendmentTests(unittest.TestCase):
                 "audio-runtime-c39-null-amendment",
                 json.dumps(packet),
             )
+
+        self.fixture.bind_runtime()
+        build, reports = self.fixture.prepare_reports()
+        completion = self.fixture.completion(build, reports)
+        record = json.loads(completion.read_text(encoding="utf-8"))
+        record["amendment"] = None
+        completion.write_text(json.dumps(record), encoding="utf-8")
+        with self.assertRaisesRegex(
+            project_contract.ContractError,
+            "amendment reference must be an object",
+        ):
+            PROJECT_CONTROL.verify_completion(self.root, self.fixture.project)
 
     def test_completed_validation_rejects_unrelated_work_name_and_mission(self):
         def response(work):
@@ -545,6 +557,28 @@ class ScopeAmendmentTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 project_contract.ContractError,
                 "canonical validation Work name mismatch",
+            ):
+                PROJECT_CONTROL.completed_validation(
+                    "validation-customer",
+                    "session",
+                    "http://fixture.invalid",
+                    project="audio-runtime",
+                    work_name="audio-runtime-c39-customer-mission",
+                    mission_path="/tmp/c39-mission/mission.json",
+                    mission_sha256="mission-sha",
+                    artifact_sha256="artifact-sha",
+                )
+
+        wrong_project = copy.deepcopy(expected)
+        wrong_project["project"] = "other-project"
+        with mock.patch.object(
+            PROJECT_CONTROL.subprocess,
+            "run",
+            return_value=response(wrong_project),
+        ):
+            with self.assertRaisesRegex(
+                project_contract.ContractError,
+                "canonical validation Work project mismatch",
             ):
                 PROJECT_CONTROL.completed_validation(
                     "validation-customer",

@@ -130,19 +130,28 @@ checks literal PCM/tool/healthy-follow-on oracles, replays the resulting
 bundle, and checks missing-timeline rejection.
 
 The probe uses only an isolated Git/admission fixture and a credential-free
-`yui --help` process smoke unless an existing replay fixture is available.  It
-records append/status/preparation/completion effects, negative exit codes,
-protected-file hashes, bounded child cleanup, and any replay result without
-promoting software replay to physical/acoustic evidence.
+`yui --help` process smoke unless an existing replay fixture is available. It
+records exact source, controller-script, reviewed-input, replay-fixture/config,
+and executable hashes before launch; append/status/preparation/completion
+effects; negative exit codes; protected-file hashes before and after the
+controller run; bounded child cleanup; and any replay result without promoting
+software replay to physical/acoustic evidence. Child output is capped while it
+is read, and a fresh output directory receives bounded `FAILED` evidence even
+when the probe aborts after creating that directory.
 
 The reviewed controller fixture result is `ACCEPTED`: authorized append and
-idempotent status passed; a widened exclusion exited nonzero; fresh amended
-customer and engineering missions completed against one artifact with distinct
-validation identities; and the protected manifest, authority, authorization,
-and FAILED/BLOCKED C32 report hashes were unchanged. The deterministic timeout
-control exited after TERM with bounded reap, and the supplied immutable yui
-`--help` exited `0` without changing its
-`db1f7de4881d9868859e546a2f66b0cd35e60ac5682c323b445254f3c2aaf628` SHA-256.
+idempotent status passed; a widened exclusion exited nonzero; explicit
+`amendment: null` was rejected; fresh amended customer and engineering missions
+completed against one artifact with distinct validation identities and exact
+canonical Work name/project/mission/artifact bindings; and the protected
+manifest, authority, authorization, and FAILED/BLOCKED C32 report hashes were
+unchanged before and after the run. The deterministic timeout control exited
+after TERM with bounded reap, and the supplied same-source immutable yui
+`--help` exited `0` without changing its recorded SHA-256. The replay controls
+also assert the interruption oracle (3,360 rendered PCM bytes and the expected
+healthy follow-on tail), so an older or mismatched executable fails rather than
+being accepted. C39 itself uses zero live Realtime sessions/seconds; amended
+missions retain, and validate, the original maximum of 3 sessions/120 seconds.
 The owned evidence directory contains the exact machine-readable report and
 source revision. These are controller/software controls only; they do not
 establish native Windows endpoint consumption or physical acoustic output.
@@ -160,7 +169,7 @@ the legacy project scope, while an explicit vertical scope is never final eviden
   "scope": "project",
   "role": "customer",
   "criteria": [{"id": "AUDIO", "rubric": "<every manifest rubric>"}],
-  "budget": {"timeSeconds": 1800, "realtimeSessions": 0, "realtimeSeconds": 0},
+  "budget": {"timeSeconds": 1800, "realtimeSessions": 3, "realtimeSeconds": 120},
   "mission": "Exercise the final public behavior against every manifest criterion.",
   "reportPath": "<absolute project evidence path>.json",
   "build": {"identity": "<id>", "path": "<absolute executable>", "sha256": "<digest>"},
