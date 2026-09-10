@@ -13,9 +13,99 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
+
+type pairedPrefixFailureCase struct {
+	name    string
+	audio   bool
+	failAt  int
+	failure func(*os.File, []byte) error
+}
+
+func TestDirectoryRecorderRollsBackPairedEvidenceOnAgentWriteFailure(t *testing.T) {
+	cases := []pairedPrefixFailureCase{
+		{name: "partial transcript", failAt: 4, failure: partialSpoolFailure},
+		{name: "zero-byte transcript", failAt: 4, failure: zeroByteSpoolFailure},
+		{name: "offset transcript", failAt: 4, failure: noOffsetSpoolFailure},
+		{name: "zero-byte audio", audio: true, failAt: 5, failure: zeroByteSpoolFailure},
+		{name: "offset audio", audio: true, failAt: 5, failure: noOffsetSpoolFailure},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) { runPairedPrefixFailure(t, tc) })
+	}
+}
+
+func runPairedPrefixFailure(t *testing.T, tc pairedPrefixFailureCase) {
+	t.Helper()
+	r := newEvidenceRecorder(t)
+	r.writeSpool = failingSpoolWriter(tc)
+	recordEvidenceText(t, r, "first complete")
+	if tc.audio {
+		recordFailedAudio(t, r)
+	} else {
+		recordEvidenceText(t, r, "second failed")
+	}
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); err == nil {
+		t.Fatal("agent write failure reported complete")
+	}
+	assertPairedTranscriptPrefix(t, r)
+	if tc.audio {
+		if _, err := os.Stat(filepath.Join(r.destination, "audio", "out-000.pcm")); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("failed audio retained bytes: %v", err)
+		}
+	}
+}
+
+func failingSpoolWriter(tc pairedPrefixFailureCase) func(*os.File, []byte) error {
+	writes := 0
+	return func(file *os.File, data []byte) error {
+		writes++
+		if writes == tc.failAt {
+			return tc.failure(file, data)
+		}
+		return writeAll(file, data)
+	}
+}
+
+func partialSpoolFailure(file *os.File, data []byte) error {
+	n := len(data) / 2
+	if n == 0 {
+		n = 1
+	}
+	if _, err := file.Write(data[:n]); err != nil {
+		return err
+	}
+	return io.ErrShortWrite
+}
+
+func zeroByteSpoolFailure(*os.File, []byte) error { return errors.New("fixture zero-byte agent write") }
+
+func noOffsetSpoolFailure(*os.File, []byte) error { return nil }
+
+func recordFailedAudio(t *testing.T, r *directoryRecorder) {
+	t.Helper()
+	frame := audio.PCMFrame{Samples: []int16{11, -12}, Format: audio.PCM16DeviceFormat(24000)}
+	if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{Direction: session.LiveRecordAgent, Timestamp: evidenceTime(), Frame: frame}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertPairedTranscriptPrefix(t *testing.T, r *directoryRecorder) {
+	t.Helper()
+	for _, name := range []string{"client.transcript.jsonl", "agent.transcript.jsonl"} {
+		lines := bytes.Split(bytes.TrimSpace(readEvidenceFile(t, r, name)), []byte{'\n'})
+		if len(lines) != 1 {
+			t.Fatalf("%s lines = %d, want one paired prefix", name, len(lines))
+		}
+		if _, err := transcript.Decode(lines[0]); err != nil {
+			t.Fatalf("%s retained invalid JSONL prefix: %v", name, err)
+		}
+	}
+}
 
 // Both streams preserve their own order, but either may run ahead. Enumerate
 // every interleaving of two media frames with four normalized response events.
@@ -80,6 +170,106 @@ func assertResponseAudioIndex(t *testing.T, r *directoryRecorder) {
 		}
 		if !entry.Response.Complete || entry.Response.Text != fmt.Sprintf("reply-%d", index) || entry.Response.AudioBytes != 2 || entry.Response.AudioOffsetBytes != uint64(index*2) {
 			t.Fatalf("response %d lost its audio association: %+v", index, entry.Response)
+		}
+	}
+}
+
+const testProviderCaptureAvailable = "available"
+
+func TestEvidenceResourceLimitsNormalizeProtectedDefaults(t *testing.T) {
+	smaller := recording.ResourceLimits{TranscriptBytes: 1, TranscriptItems: 1, AudioBytes: 1, AudioItems: 1, SidecarBytes: 1, SidecarItems: 1, MetadataBytes: 1, MetadataItems: 1, TerminalBytes: 1, TerminalItems: 1, ProviderBytes: 1, ProviderItems: 1}
+	budget, err := newEvidenceResourceBudget(smaller)
+	if err != nil || budget.limits != smaller {
+		t.Fatalf("smaller limits: budget=%+v err=%v", budget.limits, err)
+	}
+	larger := recording.ResourceLimits{TranscriptBytes: recording.DefaultTranscriptBytes + 1, TranscriptItems: recording.DefaultTranscriptItems + 1, AudioBytes: recording.DefaultAudioBytes + 1, AudioItems: recording.DefaultAudioItems + 1, SidecarBytes: recording.DefaultSidecarBytes + 1, SidecarItems: recording.DefaultSidecarItems + 1, MetadataBytes: recording.DefaultMetadataBytes + 1, MetadataItems: recording.DefaultMetadataItems + 1, TerminalBytes: recording.DefaultTerminalBytes + 1, TerminalItems: recording.DefaultTerminalItems + 1, ProviderBytes: recording.DefaultProviderBytes + 1, ProviderItems: recording.DefaultProviderItems + 1}
+	budget, err = newEvidenceResourceBudget(larger)
+	if err != nil || budget.limits.TranscriptBytes != recording.DefaultTranscriptBytes || budget.limits.ProviderItems != recording.DefaultProviderItems {
+		t.Fatalf("larger limits: budget=%+v err=%v", budget.limits, err)
+	}
+	if _, err := newEvidenceResourceBudget(recording.ResourceLimits{TranscriptBytes: -1}); err == nil {
+		t.Fatal("negative protected limit was accepted")
+	}
+}
+
+func TestDirectoryRecorderResourceUsageSeparatesQueueFromRetainedSummary(t *testing.T) {
+	r := newEvidenceRecorder(t)
+	if err := r.RecordMessage(t.Context(), session.LiveRecord{
+		Direction: session.LiveRecordAgent,
+		Timestamp: evidenceTime(),
+		Message:   messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("bounded usage")},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	usage := r.ResourceUsage()
+	if usage.QueueBytes != 0 || usage.QueueItems != 0 {
+		t.Fatalf("queue usage after finalize = %d/%d, want zero", usage.QueueBytes, usage.QueueItems)
+	}
+	if usage.PeakQueueBytes == 0 || usage.PeakQueueItems == 0 {
+		t.Fatalf("queue peak was not retained: %+v", usage)
+	}
+	if usage.AcceptedMessages != 1 || usage.AcceptedEvents != 1 || usage.ProcessedItems != 2 {
+		t.Fatalf("usage event counts = %+v", usage)
+	}
+	if usage.TranscriptBytes == 0 || usage.SummaryBytes == 0 || usage.SummaryBytes > directorySummaryMaxBytes {
+		t.Fatalf("cumulative/summary usage = %+v", usage)
+	}
+}
+
+func TestMinimalRecordingConfigRetainsProviderMarkerAndBoundedTerminal(t *testing.T) {
+	config := transcript.RecordingConfig{SessionLog: []byte(strings.Repeat("session-log ", 1024)), Metadata: transcript.RecordingMetadata{Transport: "runtime", Configuration: map[string]string{"provider_capture": testProviderCaptureAvailable, "oversized": strings.Repeat("metadata ", 1024)}}, Terminal: &transcript.RecordingTerminalSummary{Reason: strings.Repeat("reason ", 1024), Classification: strings.Repeat("classification ", 1024), TerminalReason: messages.TerminalReason(strings.Repeat("terminal ", 1024)), TerminalProvenance: messages.TerminalProvenance(strings.Repeat("provenance ", 1024)), OutputState: messages.TerminalOutputState(strings.Repeat("output ", 1024))}}
+	minimal := minimalRecordingConfig(config, nil)
+	if minimal.Metadata.Transport != "runtime" || minimal.Metadata.Configuration["provider_capture"] != testProviderCaptureAvailable || len(minimal.SessionLog) != 0 || minimal.Corpus != nil {
+		t.Fatalf("minimal metadata lost useful bounds/marker: %+v", minimal)
+	}
+	if minimal.RecordingStatus == nil || minimal.RecordingStatus.State != transcript.RecordingStatusPartial || minimal.Terminal == nil || len(minimal.Terminal.Reason) > recordingTerminalFallbackFieldLimit || len(minimal.Terminal.Classification) > recordingTerminalFallbackFieldLimit {
+		t.Fatalf("minimal metadata status/terminal = %+v/%+v", minimal.RecordingStatus, minimal.Terminal)
+	}
+}
+
+func TestPrepareBundleConfigFallsBackToMinimalMetadata(t *testing.T) {
+	r := &directoryRecorder{}
+	config := transcript.RecordingConfig{ClientTranscriptPath: "client.transcript.jsonl", AgentTranscriptPath: "agent.transcript.jsonl", Metadata: transcript.RecordingMetadata{Transport: "runtime", Model: strings.Repeat("model ", 2048), Configuration: map[string]string{"provider_capture": testProviderCaptureAvailable, "oversized": strings.Repeat("metadata ", 2048)}}, Terminal: &transcript.RecordingTerminalSummary{Reason: "complete", Classification: "complete", TerminalReason: messages.TerminalReasonProviderAuthoredCompletion, TerminalProvenance: messages.TerminalProvenanceProvider, OutputState: messages.TerminalOutputComplete}}
+	config = boundedRecordingConfig(config, nil)
+	result := errors.New("manifest metadata admission failed")
+	config.RecordingStatus = recordingStatusForError(result, nil)
+	fullBytes, err := recordingManifestBytes(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fallbackBytes, err := recordingManifestBytes(minimalRecordingConfig(config, nil))
+	if err != nil || fullBytes <= fallbackBytes {
+		t.Fatalf("fallback bytes: full=%d fallback=%d err=%v", fullBytes, fallbackBytes, err)
+	}
+	r.budget = evidenceResourceBudget{limits: recording.ResourceLimits{MetadataBytes: fallbackBytes, MetadataItems: 1}}
+	got, metadataErr, publish := r.prepareBundleConfig(config, result)
+	if !publish || metadataErr == nil || got.Metadata.Configuration["provider_capture"] != testProviderCaptureAvailable || got.RecordingStatus == nil || got.RecordingStatus.State != transcript.RecordingStatusPartial {
+		t.Fatalf("metadata fallback: publish=%v err=%v config=%+v", publish, metadataErr, got)
+	}
+}
+
+func TestRecordingManifestCountsConfiguredArtifactSources(t *testing.T) {
+	config := transcript.RecordingConfig{ManifestVersion: 2, ClientTranscript: []byte("client"), AgentTranscriptPath: "agent.transcript.jsonl", SessionLog: []byte("log"), InputSegments: [][]byte{{1}}, OutputSegmentPaths: []string{"output.pcm"}, BrowserArtifact: &transcript.BrowserArtifact{Format: transcript.BrowserEventsVersion}, AdditionalArtifacts: []transcript.RecordingArtifact{{Path: "extra.json"}}}
+	manifestBytes, err := recordingManifestBytes(config)
+	if err != nil || manifestBytes <= 0 {
+		t.Fatalf("manifest bytes = %d, err=%v", manifestBytes, err)
+	}
+	paths := recordingManifestArtifactPlaceholders(config)
+	paths = append(paths, recordingManifestArtifactPlaceholders(transcript.RecordingConfig{InputSegmentPaths: []string{"input.pcm"}, OutputSegments: [][]byte{{2}}})...)
+	for _, want := range []string{"client.transcript.jsonl", "agent.transcript.jsonl", "session-log.jsonl", "audio/in-000.pcm", "audio/out-000.pcm", transcript.BrowserArtifactDefaultPath, "extra.json"} {
+		found := false
+		for _, artifact := range paths {
+			if artifact.Path == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("manifest artifact placeholders missing %q: %+v", want, paths)
 		}
 	}
 }
