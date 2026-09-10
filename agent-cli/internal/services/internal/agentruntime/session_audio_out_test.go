@@ -51,7 +51,6 @@ func TestRunSessionWithAudioOut_RoutesAssistantDeltasToRawStdout(t *testing.T) {
 		t.Fatal("session inferencer was not connected")
 	}
 }
-
 func TestRunSessionWithAudioOut_FinalizesPlayableWAV(t *testing.T) {
 	first := sessionAudioFrame(300)
 	second := sessionAudioFrame(-500)
@@ -85,7 +84,6 @@ func TestRunSessionWithAudioOut_FinalizesPlayableWAV(t *testing.T) {
 		t.Fatalf("WAV samples = %d samples, want exact ordered response", len(samples))
 	}
 }
-
 func TestRunSessionWithAudioOut_S14ReplayMatchesWAVGoldenAndEnergy(t *testing.T) {
 	wantSamples := []int16{0, 1, -1, 32767, -32768, 1234, -2345}
 	replayPath := filepath.Join(t.TempDir(), "s14-audio.session.json")
@@ -131,7 +129,6 @@ func TestRunSessionWithAudioOut_S14ReplayMatchesWAVGoldenAndEnergy(t *testing.T)
 		t.Fatalf("S14 replay RMS = %.2f, want above VAD threshold %.2f", rms, audio.DefaultVADConfig.EnergyThreshold)
 	}
 }
-
 func TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas(t *testing.T) {
 	wantSamples := make([]int16, audio.FrameSize+7)
 	for index := range wantSamples {
@@ -158,7 +155,6 @@ func TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas(t *testing.T
 		t.Fatalf("split-delta raw output = %d bytes, want exact %d-byte PCM16 stream", len(data), len(wantSamples)*2)
 	}
 }
-
 func TestRunSessionWithAudioOut_GrowsAndParsesRegularWAVBeforeCompletion(t *testing.T) {
 	first := []int16{1200, 1201, 1202}
 	second := sessionAudioFrame(-1400)
@@ -373,25 +369,32 @@ func TestRunSessionWithAudioOut_GrowsBeforeSessionCompletes(t *testing.T) {
 }
 
 func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
-	first := sessionAudioFrame(800)
-	release := make(chan struct{})
-	path := filepath.Join(t.TempDir(), "interrupted-response.wav")
+	first, second := sessionAudioFrame(800), sessionAudioFrame(-900)
+	providerRelease, writerRelease := make(chan struct{}), make(chan struct{})
+	firstWritten := make(chan struct{})
+	writer := &growingSessionAudioWriter{firstWritten: firstWritten, release: writerRelease}
 	inf := &gatedSessionAudioInferencer{
 		first:   pcm16Bytes(first),
-		second:  pcm16Bytes(sessionAudioFrame(-900)),
-		release: release,
+		second:  pcm16Bytes(second),
+		release: providerRelease,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- RunSessionWithAudioOut(ctx, io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
+		errCh <- RunSessionWithAudioOut(ctx, writer, SessionRunOptions{ModelCatalog: testModelCatalog(),
 			ReplayPath:        "synthetic.json",
 			SessionInferencer: inf,
-		}, path)
+		}, "-")
 	}()
 
-	_ = waitForSessionAudioFileGrowth(t, path, sessionAudioWAVHeaderSize+len(first)*2)
+	select {
+	case <-firstWritten:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first audio delta did not reach the output barrier")
+	}
 	cancel()
+	close(providerRelease)
+	close(writerRelease)
 	select {
 	case err := <-errCh:
 		if !errors.Is(err, context.Canceled) {
@@ -400,16 +403,9 @@ func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("clean interrupt did not finalize the session")
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, samples, err := wavio.Read(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("read interrupted WAV: %v", err)
-	}
-	if !equalInt16(samples, first) {
-		t.Fatalf("interrupted WAV samples = %d, want complete first delta", len(samples))
+	want := append(pcm16Bytes(first), pcm16Bytes(second)...)
+	if got := writer.snapshot(); !bytes.Equal(got, want) {
+		t.Fatalf("interrupted PCM = %d bytes, want both accepted deltas (%d bytes)", len(got), len(want))
 	}
 }
 
@@ -627,14 +623,18 @@ type growingSessionAudioWriter struct {
 	mu           sync.Mutex
 	data         bytes.Buffer
 	firstWritten chan struct{}
+	release      <-chan struct{}
 	once         sync.Once
 }
 
 func (w *growingSessionAudioWriter) Write(data []byte) (int, error) {
+	if w.release != nil {
+		w.once.Do(func() { close(w.firstWritten); <-w.release })
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	n, err := w.data.Write(data)
-	if w.data.Len() > 0 {
+	if w.release == nil && w.data.Len() > 0 {
 		w.once.Do(func() { close(w.firstWritten) })
 	}
 	return n, err
