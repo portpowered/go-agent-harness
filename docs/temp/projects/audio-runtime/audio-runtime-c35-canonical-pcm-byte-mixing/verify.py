@@ -459,6 +459,12 @@ def make_public_directory(output_root: Path, label: str) -> Path:
     directory = output_root / "runs" / label
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "config").mkdir(exist_ok=True)
+    # The admitted tool fixture appends its marker to this relative path.
+    # Seed the hermetic replay directory so the accepted command has the same
+    # successful filesystem side effect as the captured run.
+    invocation_log = directory / "evidence/runs/exec-invocations-v4.log"
+    invocation_log.parent.mkdir(parents=True, exist_ok=True)
+    invocation_log.touch()
     return directory
 
 
