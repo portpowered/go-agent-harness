@@ -2,10 +2,12 @@ package roommedia
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"sort"
@@ -106,14 +108,19 @@ type FrameObservation struct {
 // software playback input, and terminal events. A nonmatching frame is never
 // silently discarded from this ledger.
 type RawEvent struct {
-	Kind          string  `json:"kind"`
-	Participant   string  `json:"participant"`
-	Target        string  `json:"target,omitempty"`
-	Epoch         uint64  `json:"epoch,omitempty"`
-	Sequence      uint64  `json:"sequence,omitempty"`
-	Samples       []int16 `json:"samples,omitempty"`
-	End           bool    `json:"end_of_response,omitempty"`
-	AfterTerminal bool    `json:"after_terminal,omitempty"`
+	Kind           string  `json:"kind"`
+	Participant    string  `json:"participant"`
+	Target         string  `json:"target,omitempty"`
+	Epoch          uint64  `json:"epoch"`
+	Sequence       uint64  `json:"sequence"`
+	Samples        []int16 `json:"samples,omitempty"`
+	End            bool    `json:"end_of_response,omitempty"`
+	AfterTerminal  bool    `json:"after_terminal,omitempty"`
+	Reason         string  `json:"reason,omitempty"`
+	Classification string  `json:"classification,omitempty"`
+	TerminalReason string  `json:"terminal_reason,omitempty"`
+	Provenance     string  `json:"provenance,omitempty"`
+	OutputState    string  `json:"output_state,omitempty"`
 }
 
 type TerminalObservation struct {
@@ -163,8 +170,11 @@ type CancellationReport struct {
 	Started          int               `json:"started"`
 	Waited           int               `json:"waited"`
 	Closed           int               `json:"closed"`
+	CloseCalls       int               `json:"close_calls"`
 	Joined           bool              `json:"joined"`
 	RunReturned      bool              `json:"run_returned"`
+	PublicServiceRun bool              `json:"public_service_run"`
+	ClosedByService  bool              `json:"closed_by_service"`
 	RepeatedCloseOK  bool              `json:"repeated_close_ok"`
 }
 
@@ -237,9 +247,10 @@ func (c *coordinator) noteStarted() {
 	c.mu.Unlock()
 }
 
-func (c *coordinator) recordInput(participant string, frame audio.PCMFrame) {
+func (c *coordinator) recordInput(participant string, frame audio.PCMFrame) error {
 	c.mu.Lock()
 	samples := append([]int16(nil), frame.Samples...)
+	afterTerminal := c.terminalSeen[participant]
 	c.inputs = append(c.inputs, InputObservation{
 		Participant: participant, Epoch: frame.Epoch, Sequence: frame.Sequence,
 		Samples: samples, End: frame.EndOfResponse,
@@ -247,9 +258,13 @@ func (c *coordinator) recordInput(participant string, frame audio.PCMFrame) {
 	c.rawEvents = append(c.rawEvents, RawEvent{
 		Kind: "source_audio", Participant: participant, Epoch: frame.Epoch,
 		Sequence: frame.Sequence, Samples: samples, End: frame.EndOfResponse,
-		AfterTerminal: c.terminalSeen[participant],
+		AfterTerminal: afterTerminal,
 	})
 	c.mu.Unlock()
+	if afterTerminal {
+		return fmt.Errorf("source audio for %s arrived after terminal", participant)
+	}
+	return nil
 }
 
 func (c *coordinator) register(handle *fakeHandle) {
@@ -260,16 +275,17 @@ func (c *coordinator) register(handle *fakeHandle) {
 
 func (c *coordinator) recordOutput(target string, frame audio.PCMFrame) error {
 	c.mu.Lock()
-	if c.terminalSeen[target] {
-		c.mu.Unlock()
-		return context.Canceled
-	}
 	copySamples := append([]int16(nil), frame.Samples...)
+	afterTerminal := c.terminalSeen[target]
 	c.rawEvents = append(c.rawEvents, RawEvent{
 		Kind: "peer_output", Participant: target, Target: target,
 		Epoch: frame.Epoch, Sequence: frame.Sequence, Samples: copySamples,
-		End: frame.EndOfResponse, AfterTerminal: c.terminalSeen[target],
+		End: frame.EndOfResponse, AfterTerminal: afterTerminal,
 	})
+	if afterTerminal {
+		c.mu.Unlock()
+		return fmt.Errorf("peer output for %s arrived after terminal", target)
+	}
 	if c.finished {
 		c.mu.Unlock()
 		return context.Canceled
@@ -277,10 +293,8 @@ func (c *coordinator) recordOutput(target string, frame audio.PCMFrame) error {
 	if frame.EndOfResponse {
 		c.outputEnded[target] = true
 	}
-	if len(frame.Samples) > 0 && !allZero(frame.Samples) {
-		c.outputs[target] = append(c.outputs[target], frame.Samples...)
-		c.outputFrames[target]++
-	}
+	c.outputs[target] = append(c.outputs[target], frame.Samples...)
+	c.outputFrames[target]++
 	c.mu.Unlock()
 	c.maybeFinish()
 	return nil
@@ -289,16 +303,21 @@ func (c *coordinator) recordOutput(target string, frame audio.PCMFrame) error {
 func (c *coordinator) recordPlayback(frame audio.PCMFrame) error {
 	c.mu.Lock()
 	copySamples := append([]int16(nil), frame.Samples...)
+	afterTerminal := c.terminalSeen["listener"]
 	c.rawEvents = append(c.rawEvents, RawEvent{
 		Kind: "playback_input", Participant: "listener", Target: "listener",
 		Epoch: frame.Epoch, Sequence: frame.Sequence, Samples: copySamples,
-		End: frame.EndOfResponse, AfterTerminal: c.terminalSeen["listener"],
+		End: frame.EndOfResponse, AfterTerminal: afterTerminal,
 	})
+	if afterTerminal {
+		c.mu.Unlock()
+		return errors.New("playback input arrived after terminal")
+	}
 	if c.finished {
 		c.mu.Unlock()
 		return context.Canceled
 	}
-	if len(frame.Samples) > 0 && !allZero(frame.Samples) {
+	if len(frame.Samples) > 0 {
 		c.playback = append(c.playback, frame.Samples...)
 		c.playbackFrames++
 	}
@@ -366,9 +385,18 @@ func (c *coordinator) snapshotRawEvents() []RawEvent {
 func (c *coordinator) recordTerminal(participant string, event session.LiveEvent) {
 	c.mu.Lock()
 	c.terminalSeen[participant] = true
-	c.rawEvents = append(c.rawEvents, RawEvent{
-		Kind: "terminal", Participant: participant, Sequence: event.Sequence,
-	})
+	if terminal := event.Terminal; terminal != nil {
+		c.rawEvents = append(c.rawEvents, RawEvent{
+			Kind: "terminal", Participant: participant, Sequence: event.Sequence,
+			Reason: terminal.Reason, Classification: terminal.Classification,
+			TerminalReason: string(terminal.TerminalReason),
+			Provenance:     string(terminal.TerminalProvenance), OutputState: string(terminal.OutputState),
+		})
+	} else {
+		c.rawEvents = append(c.rawEvents, RawEvent{
+			Kind: "terminal", Participant: participant, Sequence: event.Sequence,
+		})
+	}
 	c.mu.Unlock()
 }
 
@@ -407,15 +435,20 @@ type fakeHandle struct {
 	terminal      sync.Once
 	startCount    int
 	waitCount     int
+	waitReturned  int
 	closeCount    int
+	closeCalls    int
 	terminalEvent *session.LiveEvent
+	waitReady     chan struct{}
+	waitOnce      sync.Once
 }
 
 func newFakeHandle(id string, coord *coordinator) *fakeHandle {
 	return &fakeHandle{
 		id: id, coord: coord, events: make(chan session.LiveEvent, 8), done: make(chan struct{}),
-		inbound:  &scriptedInbound{id: id, frames: fixtureFrames(id), coord: coord},
-		outbound: &captureOutbound{id: id, coord: coord},
+		inbound:   &scriptedInbound{id: id, frames: fixtureFrames(id), coord: coord},
+		outbound:  &captureOutbound{id: id, coord: coord},
+		waitReady: make(chan struct{}),
 	}
 }
 
@@ -454,13 +487,20 @@ func (h *fakeHandle) Wait() error {
 	h.waitCount++
 	h.mu.Unlock()
 	<-h.done
+	h.mu.Lock()
+	h.waitReturned++
+	h.mu.Unlock()
+	h.waitOnce.Do(func() { close(h.waitReady) })
 	return nil
 }
 
 func (h *fakeHandle) Close() error {
 	h.mu.Lock()
 	h.closed = true
-	h.closeCount++
+	h.closeCalls++
+	if h.closeCount == 0 {
+		h.closeCount++
+	}
 	h.mu.Unlock()
 	h.closeDone.Do(func() { close(h.done) })
 	_ = h.inbound.Close()
@@ -516,7 +556,9 @@ func (s *scriptedInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error)
 	index := s.index
 	s.mu.Unlock()
 	if s.coord != nil {
-		s.coord.recordInput(s.id, frame)
+		if err := s.coord.recordInput(s.id, frame); err != nil {
+			return audio.PCMFrame{}, err
+		}
 		if index == 2 {
 			if err := s.coord.awaitHealthyInput(ctx); err != nil {
 				return audio.PCMFrame{}, err
@@ -538,6 +580,7 @@ type captureOutbound struct {
 	coord  *coordinator
 	mu     sync.Mutex
 	closed bool
+	ended  bool
 }
 
 func (o *captureOutbound) WriteFrame(ctx context.Context, frame audio.PCMFrame) error {
@@ -545,12 +588,23 @@ func (o *captureOutbound) WriteFrame(ctx context.Context, frame audio.PCMFrame) 
 		return err
 	}
 	o.mu.Lock()
-	closed := o.closed
+	closed, ended := o.closed, o.ended
 	o.mu.Unlock()
-	if closed {
+	if closed || ended {
+		// EndOfResponse is the public output boundary. Once the consumer has
+		// accepted it, the endpoint is complete and must not admit the mixer's
+		// cadence-sized silence that follows an exhausted source.
 		return context.Canceled
 	}
-	return o.coord.recordOutput(o.id, frame)
+	if err := o.coord.recordOutput(o.id, frame); err != nil {
+		return err
+	}
+	if frame.EndOfResponse {
+		o.mu.Lock()
+		o.ended = true
+		o.mu.Unlock()
+	}
+	return nil
 }
 
 func (o *captureOutbound) Close() error {
@@ -595,6 +649,9 @@ func (p *softwarePlayback) Pump(ctx context.Context, inbound audio.InboundMedia)
 			Samples: append([]int16(nil), frame.Samples...), End: frame.EndOfResponse,
 		})
 		p.mu.Unlock()
+		if err := p.coord.recordPlayback(frame); err != nil {
+			return err
+		}
 		if len(frame.Samples) == 0 || allZero(frame.Samples) {
 			continue
 		}
@@ -617,9 +674,6 @@ func (p *softwarePlayback) Pump(ctx context.Context, inbound audio.InboundMedia)
 		p.report.ZeroFilledSamples = stats.ZeroFilledSamples
 		p.report.ConsumedSamples = stats.RenderedSamples - stats.UnderflowSamples
 		p.mu.Unlock()
-		if err := p.coord.recordPlayback(frame); err != nil {
-			return err
-		}
 		<-p.coord.done
 		return context.Canceled
 	}
@@ -775,7 +829,7 @@ finished:
 	for id, handle := range liveHandles {
 		handle.mu.Lock()
 		report.Lifecycle.Started += handle.startCount
-		report.Lifecycle.Waited += handle.waitCount
+		report.Lifecycle.Waited += handle.waitReturned
 		report.Lifecycle.Closed += handle.closeCount
 		terminal := handle.terminalEvent
 		handle.mu.Unlock()
@@ -804,7 +858,125 @@ finished:
 		report.ReplayRejected = false
 		report.ReplayRejectReason = "partial output unexpectedly loaded as a replay plan"
 	}
+	if outcome.err == nil {
+		if validationErr := validateObservedReport(report); validationErr != nil {
+			report.Status = "failed"
+			report.Room.Error = validationErr.Error()
+			return report, validationErr
+		}
+	}
 	return report, outcome.err
+}
+
+func validateObservedReport(report Report) error {
+	if report.Status != "complete" {
+		return fmt.Errorf("room report status is %q", report.Status)
+	}
+	if len(report.RawEvents) == 0 {
+		return errors.New("room report has no raw observations")
+	}
+	sources := make(map[string][]InputObservation)
+	outputs := make(map[string][]RawEvent)
+	playback := make([]RawEvent, 0)
+	terminals := make(map[string]RawEvent)
+	for index, event := range report.RawEvents {
+		if event.AfterTerminal {
+			return fmt.Errorf("raw event %d arrived after terminal: %+v", index, event)
+		}
+		switch event.Kind {
+		case "source_audio":
+			sources[event.Participant] = append(sources[event.Participant], InputObservation{
+				Participant: event.Participant, Epoch: event.Epoch, Sequence: event.Sequence,
+				Samples: append([]int16(nil), event.Samples...), End: event.End,
+			})
+		case "peer_output":
+			if event.Target == "" || event.Target != event.Participant {
+				return fmt.Errorf("peer output has inconsistent participant/target: %+v", event)
+			}
+			outputs[event.Target] = append(outputs[event.Target], event)
+		case "playback_input":
+			playback = append(playback, event)
+		case "terminal":
+			if _, exists := terminals[event.Participant]; exists {
+				return fmt.Errorf("participant %s published duplicate terminal", event.Participant)
+			}
+			terminals[event.Participant] = event
+		default:
+			return fmt.Errorf("unknown raw observation kind %q", event.Kind)
+		}
+	}
+	if len(sources) != 2 || len(outputs) != 2 || len(terminals) != 2 {
+		return fmt.Errorf("raw participant observations incomplete: sources=%d outputs=%d terminals=%d", len(sources), len(outputs), len(terminals))
+	}
+	for _, participant := range []string{"alice", "bob"} {
+		if len(sources[participant]) != 2 {
+			return fmt.Errorf("participant %s source frame count = %d, want 2", participant, len(sources[participant]))
+		}
+		if len(outputs[participant]) != 1 {
+			return fmt.Errorf("participant %s output frame count = %d, want 1", participant, len(outputs[participant]))
+		}
+		output := outputs[participant][0]
+		if len(output.Samples) == 0 || !output.End || output.Epoch == 0 {
+			return fmt.Errorf("participant %s output is empty or missing epoch/end marker: %+v", participant, output)
+		}
+		for _, source := range sources[participant] {
+			if reflect.DeepEqual(output.Samples, source.Samples) {
+				return fmt.Errorf("participant %s output is a self-echo of source PCM", participant)
+			}
+		}
+	}
+	if len(playback) != 1 || len(playback[0].Samples) == 0 {
+		return fmt.Errorf("playback observation count = %d, want one nonempty frame", len(playback))
+	}
+	derivedOutputs := map[string][]int16{}
+	for participant, events := range outputs {
+		for _, event := range events {
+			derivedOutputs[participant] = append(derivedOutputs[participant], event.Samples...)
+		}
+	}
+	if !reflect.DeepEqual(report.PeerOutputs, derivedOutputs) {
+		return fmt.Errorf("peer output summary does not match raw observations: summary=%v raw=%v", report.PeerOutputs, derivedOutputs)
+	}
+	derivedInputs := make([]InputObservation, 0, len(sources["alice"])+len(sources["bob"]))
+	for _, participant := range []string{"alice", "bob"} {
+		derivedInputs = append(derivedInputs, sources[participant]...)
+	}
+	if !reflect.DeepEqual(report.SourceInputs, derivedInputs) {
+		return fmt.Errorf("source input summary does not match raw observations: summary=%v raw=%v", report.SourceInputs, derivedInputs)
+	}
+	derivedAdmission := AdmissionReport{}
+	for _, frames := range sources {
+		derivedAdmission.Frames += len(frames)
+		for _, frame := range frames {
+			derivedAdmission.Samples += len(frame.Samples)
+		}
+	}
+	if report.ProviderAdmission != derivedAdmission {
+		return fmt.Errorf("provider admission summary does not match raw observations: summary=%+v raw=%+v", report.ProviderAdmission, derivedAdmission)
+	}
+	observedPlayback := make([]FrameObservation, 0, len(playback))
+	for _, event := range playback {
+		observedPlayback = append(observedPlayback, FrameObservation{
+			Epoch: event.Epoch, Sequence: event.Sequence,
+			Samples: append([]int16(nil), event.Samples...), End: event.End,
+		})
+	}
+	if !reflect.DeepEqual(report.Playback.Observed, observedPlayback) {
+		return fmt.Errorf("playback summary does not match raw observations: summary=%v raw=%v", report.Playback.Observed, observedPlayback)
+	}
+	if !report.Epochs.EndBeforeTerminal {
+		return errors.New("room report did not prove end-of-response before terminal")
+	}
+	for _, participant := range []string{"alice", "bob"} {
+		terminal := report.Terminal[participant]
+		rawTerminal := terminals[participant]
+		if terminal.Sequence != rawTerminal.Sequence || terminal.Reason != rawTerminal.Reason ||
+			terminal.Classification != rawTerminal.Classification || terminal.TerminalReason != rawTerminal.TerminalReason ||
+			terminal.Provenance != rawTerminal.Provenance || terminal.OutputState != rawTerminal.OutputState {
+			return fmt.Errorf("terminal summary does not match raw observation for %s", participant)
+		}
+	}
+	return nil
 }
 
 func (s *fakeLiveService) handles() map[string]*fakeHandle {
@@ -843,10 +1015,14 @@ func epochReport(inputs []InputObservation, outputs map[string][]int16, events [
 	}
 	result.HealthyTail = append([]int16(nil), outputs["bob"]...)
 	endIndexes := make(map[string]int)
+	outputEndIndexes := make(map[string]int)
 	terminalIndexes := make(map[string]int)
 	for index, event := range events {
 		if event.Kind == "source_audio" && event.End {
 			endIndexes[event.Participant] = index
+		}
+		if event.Kind == "peer_output" && event.End {
+			outputEndIndexes[event.Participant] = index
 		}
 		if event.Kind == "terminal" {
 			terminalIndexes[event.Participant] = index
@@ -854,10 +1030,13 @@ func epochReport(inputs []InputObservation, outputs map[string][]int16, events [
 	}
 	aliceEnd, aliceHasEnd := endIndexes["alice"]
 	bobEnd, bobHasEnd := endIndexes["bob"]
+	aliceOutputEnd, aliceHasOutputEnd := outputEndIndexes["alice"]
+	bobOutputEnd, bobHasOutputEnd := outputEndIndexes["bob"]
 	aliceTerminal, aliceHasTerminal := terminalIndexes["alice"]
 	bobTerminal, bobHasTerminal := terminalIndexes["bob"]
-	result.EndBeforeTerminal = aliceHasEnd && bobHasEnd && aliceHasTerminal && bobHasTerminal &&
-		aliceEnd < aliceTerminal && bobEnd < bobTerminal
+	result.EndBeforeTerminal = aliceHasEnd && bobHasEnd && aliceHasOutputEnd && bobHasOutputEnd &&
+		aliceHasTerminal && bobHasTerminal && aliceEnd < aliceTerminal && bobEnd < bobTerminal &&
+		aliceOutputEnd < aliceTerminal && bobOutputEnd < bobTerminal
 	return result
 }
 
@@ -885,10 +1064,28 @@ func runPlaybackBoundaryProbe() (PlaybackReport, error) {
 		BeforeRender: before.RenderedSamples, CallbackCount: stats.CallbackCount,
 		RenderedSamples: stats.RenderedSamples, UnderflowSamples: stats.UnderflowSamples,
 		DiscardedSamples: stats.DiscardedSamples, AdmittedSamples: uint64(len(healthy)),
-		ConsumedSamples: uint64(len(healthy)), ZeroFilledSamples: stats.ZeroFilledSamples,
+		ConsumedSamples: stats.RenderedSamples - stats.UnderflowSamples, ZeroFilledSamples: stats.ZeroFilledSamples,
 		PhysicalDevice: false,
 		CapabilityGap:  "software queue proof only; no physical playback device was opened",
 	}, nil
+}
+
+func writeReport(outputDir string, report Report) error {
+	if outputDir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return fmt.Errorf("create report directory: %w", err)
+	}
+	encoded, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode report: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	if err := os.WriteFile(filepath.Join(outputDir, "report.json"), encoded, 0o644); err != nil {
+		return fmt.Errorf("write report: %w", err)
+	}
+	return nil
 }
 
 func Run(request Request) (Report, error) {
@@ -896,30 +1093,53 @@ func Run(request Request) (Report, error) {
 	case "positive", "boundary", "routing-epochs", "mutations", "partial-recording", "consumption", "lifecycle":
 		report, err := runLiveScenario(request.OutputDir, request.Mode)
 		if err != nil {
+			if writeErr := writeReport(request.OutputDir, report); writeErr != nil {
+				return report, errors.Join(err, writeErr)
+			}
 			return report, err
 		}
 		boundary, boundaryErr := runPlaybackBoundaryProbe()
 		if boundaryErr != nil {
-			return Report{}, boundaryErr
+			return report, boundaryErr
 		}
 		report.PlaybackBoundary = boundary
 		report.Playback.DiscardedStale = boundary.DiscardedStale
 		report.Playback.DiscardedSamples = boundary.DiscardedSamples
 		report.Playback.CapabilityGap = boundary.CapabilityGap
 		if request.Mode == "mutations" && request.Mutation != "" {
-			if err := compareMutationOracle(report, request.Mutation); err == nil {
+			candidate, mutationErr := mutatedReport(report, request.Mutation)
+			if mutationErr != nil {
+				return report, mutationErr
+			}
+			if writeErr := writeReport(request.OutputDir, candidate); writeErr != nil {
+				return candidate, writeErr
+			}
+			if err := compareMutationOracle(candidate); err == nil {
 				return Report{}, fmt.Errorf("mutation %q unexpectedly matched the frozen oracle", request.Mutation)
 			} else {
-				return Report{}, fmt.Errorf("literal oracle mismatch: %w", err)
+				return candidate, fmt.Errorf("literal oracle mismatch: %w", err)
 			}
+		}
+		if err := writeReport(request.OutputDir, report); err != nil {
+			return report, err
 		}
 		return report, nil
 	case "cancel-before-start", "cancel-active":
 		cancellation, err := runCancellationProbe(request.Mode, request.OutputDir)
+		report := Report{SchemaVersion: 1, Status: "complete", Mode: request.Mode, OutputDir: request.OutputDir, Cancellation: cancellation}
 		if err != nil {
-			return Report{}, err
+			report.Status = "failed"
+			if cancellation != nil {
+				report.Room = RoomObservation{Error: err.Error()}
+			}
 		}
-		return Report{SchemaVersion: 1, Status: "complete", Mode: request.Mode, OutputDir: request.OutputDir, Cancellation: cancellation}, nil
+		if writeErr := writeReport(request.OutputDir, report); writeErr != nil {
+			return report, errors.Join(err, writeErr)
+		}
+		if err != nil {
+			return report, err
+		}
+		return report, nil
 	default:
 		return Report{}, fmt.Errorf("unknown mode %q", request.Mode)
 	}
@@ -972,6 +1192,7 @@ func runCancellationProbe(mode, outputDir string) (*CancellationReport, error) {
 	report := &CancellationReport{
 		Mode: mode, RoomTermination: string(outcome.result.TerminationReason),
 		RoomError: outcome.result.Error, Participants: map[string]string{}, RunReturned: true,
+		PublicServiceRun: true,
 	}
 	for id, participant := range outcome.result.Participants {
 		report.Participants[id] = string(participant.TerminationReason)
@@ -980,34 +1201,53 @@ func runCancellationProbe(mode, outputDir string) (*CancellationReport, error) {
 		handle.mu.Lock()
 		report.Opened++
 		report.Started += handle.startCount
-		report.Waited += handle.waitCount
+		report.Waited += handle.waitReturned
 		report.Closed += handle.closeCount
 		handle.mu.Unlock()
 	}
-	report.Joined = report.RunReturned && (report.Opened == 0 || report.Waited == report.Opened)
+	for id, handle := range handles {
+		select {
+		case <-handle.waitReady:
+		case <-time.After(time.Second):
+			return report, fmt.Errorf("participant %s did not prove Wait returned", id)
+		}
+	}
+	report.Joined = report.RunReturned && report.Waited == report.Opened
+	report.ClosedByService = report.Closed == report.Opened
 	if mode == "cancel-before-start" {
 		if report.Started != 0 {
-			return nil, fmt.Errorf("pre-start cancellation unexpectedly started %d participants", report.Started)
+			return report, fmt.Errorf("pre-start cancellation unexpectedly started %d participants", report.Started)
 		}
 		report.StartError = "public room admission observed no start before cancellation"
-	} else if report.Started != report.Opened {
-		return nil, fmt.Errorf("active cancellation started %d of %d admitted participants", report.Started, report.Opened)
+	} else if report.Opened != 2 || report.Started != report.Opened {
+		return report, fmt.Errorf("active cancellation started %d of %d admitted participants", report.Started, report.Opened)
 	}
 	report.RepeatedCloseOK = true
 	for _, handle := range handles {
-		report.RepeatedCloseOK = report.RepeatedCloseOK && handle.Close() == nil && handle.Close() == nil
+		firstErr := handle.Close()
+		secondErr := handle.Close()
+		if firstErr != nil && report.FirstCloseError == "" {
+			report.FirstCloseError = firstErr.Error()
+		}
+		if secondErr != nil && report.SecondCloseError == "" {
+			report.SecondCloseError = secondErr.Error()
+		}
+		report.RepeatedCloseOK = report.RepeatedCloseOK && firstErr == nil && secondErr == nil
+		handle.mu.Lock()
+		report.CloseCalls += handle.closeCalls
+		handle.mu.Unlock()
 	}
 	if outcome.err != nil {
 		report.WaitError = outcome.err.Error()
 	}
-	if !report.Joined || !report.RepeatedCloseOK {
-		return nil, fmt.Errorf("public cancellation cleanup was not joined/idempotent: %+v", report)
+	if !report.PublicServiceRun || !report.RunReturned || !report.Joined || !report.ClosedByService || !report.RepeatedCloseOK {
+		return report, fmt.Errorf("public cancellation cleanup was not joined/service-owned/idempotent: %+v", report)
 	}
 	return report, nil
 }
 
-func compareMutationOracle(report Report, mutation string) error {
-	want := Report{
+func frozenReportOracle() Report {
+	return Report{
 		SourceInputs: []InputObservation{
 			{Participant: "alice", Epoch: 1, Sequence: 1, Samples: []int16{101, 102}},
 			{Participant: "alice", Epoch: 2, Sequence: 2, Samples: []int16{111, 112, 113, 114}, End: true},
@@ -1021,6 +1261,9 @@ func compareMutationOracle(report Report, mutation string) error {
 			"bob":   {Kind: "terminal", Sequence: 99, Reason: "fixture_complete", Classification: "fixture_complete", TerminalReason: "provider_close", Provenance: "provider", OutputState: "complete"},
 		},
 	}
+}
+
+func cloneReport(report Report) Report {
 	candidate := report
 	candidate.SourceInputs = append([]InputObservation(nil), report.SourceInputs...)
 	for index := range candidate.SourceInputs {
@@ -1035,34 +1278,85 @@ func compareMutationOracle(report Report, mutation string) error {
 	for participant, terminal := range report.Terminal {
 		candidate.Terminal[participant] = terminal
 	}
+	candidate.RawEvents = append([]RawEvent(nil), report.RawEvents...)
+	for index := range candidate.RawEvents {
+		candidate.RawEvents[index].Samples = append([]int16(nil), candidate.RawEvents[index].Samples...)
+	}
+	candidate.Playback.Admitted = append([]int16(nil), report.Playback.Admitted...)
+	candidate.Playback.Consumed = append([]int16(nil), report.Playback.Consumed...)
+	candidate.Playback.Underflow = append([]int16(nil), report.Playback.Underflow...)
+	candidate.Playback.DiscardedStale = append([]int16(nil), report.Playback.DiscardedStale...)
+	candidate.Playback.Observed = append([]FrameObservation(nil), report.Playback.Observed...)
+	for index := range candidate.Playback.Observed {
+		candidate.Playback.Observed[index].Samples = append([]int16(nil), candidate.Playback.Observed[index].Samples...)
+	}
+	candidate.PlaybackBoundary.Admitted = append([]int16(nil), report.PlaybackBoundary.Admitted...)
+	candidate.PlaybackBoundary.Consumed = append([]int16(nil), report.PlaybackBoundary.Consumed...)
+	candidate.PlaybackBoundary.Underflow = append([]int16(nil), report.PlaybackBoundary.Underflow...)
+	candidate.PlaybackBoundary.DiscardedStale = append([]int16(nil), report.PlaybackBoundary.DiscardedStale...)
+	return candidate
+}
+
+func mutatedReport(report Report, mutation string) (Report, error) {
+	candidate := cloneReport(report)
 	switch mutation {
 	case "peer-participant-key":
 		candidate.PeerOutputs["mallory"] = []int16{111, 112, 113, 114}
+		for index := range candidate.RawEvents {
+			if candidate.RawEvents[index].Kind == "peer_output" {
+				candidate.RawEvents[index].Participant = "mallory"
+				candidate.RawEvents[index].Target = "mallory"
+				break
+			}
+		}
 	case "source-order":
 		for left, right := 0, len(candidate.SourceInputs)-1; left < right; left, right = left+1, right-1 {
 			candidate.SourceInputs[left], candidate.SourceInputs[right] = candidate.SourceInputs[right], candidate.SourceInputs[left]
 		}
 	case "epoch":
 		candidate.Epochs.StalePendingSamples = 0
+		for index := range candidate.RawEvents {
+			if candidate.RawEvents[index].Kind == "source_audio" {
+				candidate.RawEvents[index].Epoch = 0
+				break
+			}
+		}
 	case "pcm":
 		candidate.PeerOutputs["alice"][0] = 999
+		for index := range candidate.RawEvents {
+			if candidate.RawEvents[index].Kind == "peer_output" && candidate.RawEvents[index].Participant == "alice" {
+				candidate.RawEvents[index].Samples[0] = 999
+				break
+			}
+		}
 	case "terminal":
 		terminal := candidate.Terminal["alice"]
 		terminal.Provenance = "replay"
 		candidate.Terminal["alice"] = terminal
+		for index := range candidate.RawEvents {
+			if candidate.RawEvents[index].Kind == "terminal" && candidate.RawEvents[index].Participant == "alice" {
+				candidate.RawEvents[index].Provenance = "replay"
+				break
+			}
+		}
 	default:
-		return fmt.Errorf("unknown mutation %q", mutation)
+		return Report{}, fmt.Errorf("unknown mutation %q", mutation)
 	}
-	if !reflect.DeepEqual(candidate.SourceInputs, want.SourceInputs) {
+	return candidate, nil
+}
+
+func compareMutationOracle(report Report) error {
+	want := frozenReportOracle()
+	if !reflect.DeepEqual(report.SourceInputs, want.SourceInputs) {
 		return errors.New("source input order or samples differ")
 	}
-	if !reflect.DeepEqual(candidate.PeerOutputs, want.PeerOutputs) {
+	if !reflect.DeepEqual(report.PeerOutputs, want.PeerOutputs) {
 		return errors.New("peer participant/PCM oracle differs")
 	}
-	if !reflect.DeepEqual(candidate.Epochs, want.Epochs) {
+	if !reflect.DeepEqual(report.Epochs, want.Epochs) {
 		return errors.New("epoch oracle differs")
 	}
-	if !reflect.DeepEqual(candidate.Terminal, want.Terminal) {
+	if !reflect.DeepEqual(report.Terminal, want.Terminal) {
 		return errors.New("terminal provenance oracle differs")
 	}
 	return nil

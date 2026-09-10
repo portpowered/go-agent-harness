@@ -1,6 +1,9 @@
 package roommedia
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -75,7 +78,8 @@ func TestLifecycleCancellationAndRepeatedClose(t *testing.T) {
 		}
 		if report.Cancellation == nil || !report.Cancellation.Joined ||
 			report.Cancellation.FirstCloseError != "" || report.Cancellation.SecondCloseError != "" ||
-			!report.Cancellation.RunReturned || !report.Cancellation.RepeatedCloseOK {
+			!report.Cancellation.RunReturned || !report.Cancellation.PublicServiceRun ||
+			!report.Cancellation.ClosedByService || !report.Cancellation.RepeatedCloseOK {
 			t.Fatalf("%s: cancellation evidence = %+v", mode, report.Cancellation)
 		}
 		if mode == "cancel-before-start" && (report.Cancellation.Opened != 0 || report.Cancellation.Started != 0) {
@@ -90,9 +94,21 @@ func TestLifecycleCancellationAndRepeatedClose(t *testing.T) {
 func TestMutationOracleRejectsThroughRoomSubprocessContract(t *testing.T) {
 	for _, mutation := range []string{"peer-participant-key", "source-order", "epoch", "pcm", "terminal"} {
 		t.Run(mutation, func(t *testing.T) {
-			_, err := Run(Request{Mode: "mutations", Mutation: mutation, OutputDir: t.TempDir()})
+			outputDir := t.TempDir()
+			_, err := Run(Request{Mode: "mutations", Mutation: mutation, OutputDir: outputDir})
 			if err == nil || !strings.Contains(err.Error(), "literal oracle mismatch") {
 				t.Fatalf("mutation error = %v, want literal oracle mismatch", err)
+			}
+			data, readErr := os.ReadFile(filepath.Join(outputDir, "report.json"))
+			if readErr != nil {
+				t.Fatalf("serialized mutation report: %v", readErr)
+			}
+			var report Report
+			if unmarshalErr := json.Unmarshal(data, &report); unmarshalErr != nil {
+				t.Fatalf("serialized mutation report is invalid JSON: %v", unmarshalErr)
+			}
+			if report.Status != "complete" || len(report.RawEvents) == 0 {
+				t.Fatalf("serialized mutation candidate = %+v, want complete raw evidence", report)
 			}
 		})
 	}

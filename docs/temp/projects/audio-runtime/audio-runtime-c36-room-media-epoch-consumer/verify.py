@@ -66,7 +66,10 @@ def write_json(path: pathlib.Path, value: Any) -> None:
 
 
 def selected_environment(env: dict[str, str]) -> dict[str, str]:
-    keys = ("PATH", "HOME", "GOWORK", "GOFLAGS", "FACTORY_ROOT", "FACTORY_SERVER_URL")
+    keys = (
+        "PATH", "HOME", "GOWORK", "GOFLAGS", "GOTOOLCHAIN", "GOEXPERIMENT",
+        "FACTORY_ROOT", "FACTORY_SERVER_URL",
+    )
     return {key: env.get(key, "") for key in keys}
 
 
@@ -98,6 +101,24 @@ def process_group_alive(pgid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def process_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def wait_for_process_gone(pid: int, deadline: float) -> bool:
+    while time.monotonic() < deadline:
+        if not process_alive(pid):
+            return True
+        time.sleep(min(0.02, max(0.001, deadline - time.monotonic())))
+    return not process_alive(pid)
 
 
 def wait_for_process_group_gone(pgid: int, deadline: float) -> bool:
@@ -260,12 +281,61 @@ def manifest_file_entries(root: pathlib.Path, relative_root: pathlib.Path, role:
         if not path.is_file():
             continue
         relative = path.relative_to(root)
-        if relative.parts and relative.parts[0] in {"evidence", "artifacts", "runs"}:
+        if relative.parts and relative.parts[0] in {"evidence", "artifacts", "runs", "__pycache__"}:
             continue
-        if any(part in {"evidence", "artifacts", "runs"} for part in relative.parts):
+        if any(part in {"evidence", "artifacts", "runs", "__pycache__"} for part in relative.parts):
+            continue
+        if path.suffix == ".pyc":
             continue
         entries.append({"path": str(relative), "sha256": sha256(path), "role": role})
     return entries
+
+
+def local_replacement_bindings(root: pathlib.Path, module: pathlib.Path) -> list[dict[str, Any]]:
+    go_mod = module / "go.mod"
+    if not go_mod.is_file():
+        raise EvidenceFailure(f"consumer go.mod is missing: {go_mod}")
+    directives: list[str] = []
+    in_block = False
+    for raw_line in go_mod.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line == "replace (":
+            in_block = True
+            continue
+        if in_block and line == ")":
+            in_block = False
+            continue
+        if line.startswith("replace "):
+            directives.append(line[len("replace "):])
+        elif in_block and line and not line.startswith("//"):
+            directives.append(line)
+    bindings: list[dict[str, Any]] = []
+    for directive in directives:
+        sides = re.split(r"\s+=>\s+", directive, maxsplit=1)
+        if len(sides) != 2:
+            raise EvidenceFailure(f"malformed replace directive: {directive}")
+        left, right = sides[0].split(), sides[1].split()
+        if not left or not right:
+            raise EvidenceFailure(f"malformed replace directive: {directive}")
+        replacement = right[0]
+        if not replacement.startswith("."):
+            continue
+        resolved = (module / replacement).resolve()
+        try:
+            relative = resolved.relative_to(root.resolve())
+        except ValueError as exc:
+            raise EvidenceFailure(f"local replacement escapes admitted workspace: {directive}") from exc
+        if not (resolved / "go.mod").is_file():
+            raise EvidenceFailure(f"local replacement has no go.mod: {relative}")
+        bindings.append({
+            "module": left[0],
+            "version": left[1] if len(left) > 1 else "",
+            "relative_path": str(relative),
+            "go_mod": str(relative / "go.mod"),
+            "go_mod_sha256": sha256(resolved / "go.mod"),
+        })
+    bindings.sort(key=lambda item: item["module"])
+    return bindings
 
 
 def input_manifest(root: pathlib.Path, module: pathlib.Path, evidence: pathlib.Path) -> dict[str, Any]:
@@ -288,6 +358,17 @@ def input_manifest(root: pathlib.Path, module: pathlib.Path, evidence: pathlib.P
         "schema": "c36-build-inputs-v2",
         "module": str(MODULE_PATH),
         "workspace_modules": [str(path) for path in WORKSPACE_MODULES],
+        "build_inputs": {
+            "room_media": {
+                "module": str(MODULE_PATH), "package": BUILD_PACKAGES["room_media"],
+                "workspace_modules": [str(path) for path in WORKSPACE_MODULES],
+            },
+            "yui": {
+                "module": "agent-cli", "package": BUILD_PACKAGES["yui"],
+                "workspace_modules": [str(path) for path in WORKSPACE_MODULES],
+            },
+        },
+        "replacement_modules": local_replacement_bindings(root, module),
         "files": entries,
     }
     manifest["manifest_sha256"] = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
@@ -333,7 +414,8 @@ def collect_toolchains(
             [
                 "rtk", "proxy", "go", "env", "-json",
                 "GOVERSION", "GOROOT", "GOOS", "GOARCH", "CGO_ENABLED",
-                "GOFLAGS", "GOWORK", "GOMOD",
+                "GOFLAGS", "GOWORK", "GOMOD", "GOMODCACHE", "GOTOOLCHAIN",
+                "GOEXPERIMENT", "GOTOOLDIR",
             ],
             cwd,
             evidence / "runs",
@@ -384,6 +466,8 @@ def prepare_binaries(
         "flags": BUILD_FLAGS,
         "packages": BUILD_PACKAGES,
         "workspace_modules": [str(path) for path in WORKSPACE_MODULES],
+        "build_inputs": build_context["build_inputs"],
+        "replacement_modules": build_context["replacement_modules"],
     }
     if no_build:
         if not build_path.is_file():
@@ -391,7 +475,7 @@ def prepare_binaries(
         previous = load_json(build_path)
         if previous.get("schema") != common["schema"]:
             raise EvidenceFailure("--no-build build.json is not a C36 verified build binding")
-        for key in ("source_revision", "source_archive_sha256", "input_manifest_sha256", "toolchains", "flags", "packages", "workspace_modules"):
+        for key in ("source_revision", "source_archive_sha256", "input_manifest_sha256", "toolchains", "flags", "packages", "workspace_modules", "build_inputs", "replacement_modules"):
             if previous.get(key) != common[key]:
                 raise EvidenceFailure(f"--no-build binding does not match current inputs: {key}")
         previous_archive = previous.get("source_archive")
@@ -514,10 +598,6 @@ def normalized_frame(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def all_zero_samples(samples: Any) -> bool:
-    return isinstance(samples, list) and all(sample == 0 for sample in samples)
-
-
 def validate_raw_observations(report: dict[str, Any]) -> None:
     raw_events = report.get("raw_events")
     if not isinstance(raw_events, list) or not raw_events:
@@ -545,8 +625,8 @@ def validate_raw_observations(report: dict[str, Any]) -> None:
         expect_equal(f"raw {participant} source frames", source_events, expected)
 
     expected_outputs = {
-        "alice": [211, 212, 213, 214],
-        "bob": [111, 112, 113, 114],
+        "alice": [{"epoch": 1, "sequence": 0, "samples": [211, 212, 213, 214], "end_of_response": True}],
+        "bob": [{"epoch": 1, "sequence": 0, "samples": [111, 112, 113, 114], "end_of_response": True}],
     }
     terminal_indexes: dict[str, int] = {}
     source_end_indexes: dict[str, int] = {}
@@ -554,6 +634,8 @@ def validate_raw_observations(report: dict[str, Any]) -> None:
     for index, event in enumerate(raw_events):
         if not isinstance(event, dict):
             raise EvidenceFailure(f"raw event {index} is not an object")
+        if event.get("kind") not in {"source_audio", "peer_output", "playback_input", "terminal"}:
+            raise EvidenceFailure(f"raw event {index} has unknown kind: {event!r}")
         participant = event.get("participant")
         if event.get("kind") == "source_audio" and event.get("end_of_response") is True:
             source_end_indexes[participant] = index
@@ -563,9 +645,19 @@ def validate_raw_observations(report: dict[str, Any]) -> None:
             if event.get("end_of_response") is True:
                 output_end_indexes[participant] = index
         if event.get("kind") == "terminal":
+            if participant in terminal_indexes:
+                raise EvidenceFailure(f"raw participant {participant} published duplicate terminal events")
             terminal_indexes[participant] = index
 
-    for target, expected_samples in expected_outputs.items():
+    expected_terminal = {
+        "sequence": 99,
+        "reason": "fixture_complete",
+        "classification": "fixture_complete",
+        "terminal_reason": "provider_close",
+        "provenance": "provider",
+        "output_state": "complete",
+    }
+    for target, expected_frames in expected_outputs.items():
         peer_events = [
             event for event in raw_events
             if isinstance(event, dict)
@@ -574,15 +666,8 @@ def validate_raw_observations(report: dict[str, Any]) -> None:
         ]
         if not peer_events:
             raise EvidenceFailure(f"raw peer output for {target} is missing")
-        nonempty = [
-            event.get("samples") for event in peer_events
-            if isinstance(event.get("samples"), list)
-            and event.get("samples")
-            and not all_zero_samples(event.get("samples"))
-        ]
-        expect_equal(f"raw {target} nonzero peer output", nonempty, [expected_samples])
-        if not any(event.get("end_of_response") is True for event in peer_events):
-            raise EvidenceFailure(f"raw peer output for {target} lacks end_of_response")
+        expect_equal(f"raw {target} peer frames", [normalized_frame(event) for event in peer_events], expected_frames)
+        nonempty = [event.get("samples") for event in peer_events if event.get("samples")]
         source_samples = {
             tuple(frame["samples"])
             for frame in expected_inputs[target]
@@ -595,19 +680,25 @@ def validate_raw_observations(report: dict[str, Any]) -> None:
             raise EvidenceFailure(f"raw {target} source end is not before terminal")
         if not output_end_indexes[target] < terminal_indexes[target]:
             raise EvidenceFailure(f"raw {target} output end is not before terminal")
+        terminal = next(
+            event for event in raw_events
+            if isinstance(event, dict) and event.get("kind") == "terminal" and event.get("participant") == target
+        )
+        for key, value in expected_terminal.items():
+            expect_equal(f"raw {target} terminal {key}", terminal.get(key), value)
 
     playback = report.get("playback")
     observed = playback.get("observed") if isinstance(playback, dict) else None
     if not isinstance(observed, list) or not observed:
         raise EvidenceFailure("software playback did not retain observed public frames")
-    nonempty_observed = [
-        normalized_frame(frame) for frame in observed
-        if isinstance(frame, dict)
-        and isinstance(frame.get("samples"), list)
-        and frame.get("samples")
-        and not all_zero_samples(frame.get("samples"))
+    expect_equal("software playback observed frames", [normalized_frame(frame) for frame in observed], [{
+        "epoch": 1, "sequence": 0, "samples": [322, 324, 326, 328], "end_of_response": False,
+    }])
+    playback_events = [
+        normalized_frame(event) for event in raw_events
+        if isinstance(event, dict) and event.get("kind") == "playback_input"
     ]
-    expect_equal("software playback observed nonzero frames", nonempty_observed, [{
+    expect_equal("raw playback frames", playback_events, [{
         "epoch": 1, "sequence": 0, "samples": [322, 324, 326, 328], "end_of_response": False,
     }])
 
@@ -1063,6 +1154,8 @@ def run_provenance(
     module: pathlib.Path,
     evidence: pathlib.Path,
     build: dict[str, Any],
+    deadline: float,
+    child_timeout: float,
 ) -> dict[str, Any]:
     if build.get("schema") != "c36-build-binding-v2":
         raise EvidenceFailure("build record is not the C36 input-bound schema")
@@ -1089,6 +1182,23 @@ def run_provenance(
     expect_equal("build flags", build.get("flags"), BUILD_FLAGS)
     expect_equal("build packages", build.get("packages"), BUILD_PACKAGES)
     expect_equal("build workspace modules", build.get("workspace_modules"), [str(path) for path in WORKSPACE_MODULES])
+    expect_equal("build inputs", build.get("build_inputs"), manifest.get("build_inputs"))
+    expect_equal("replacement module bindings", build.get("replacement_modules"), manifest.get("replacement_modules"))
+    replacements = manifest.get("replacement_modules")
+    if not isinstance(replacements, list) or len(replacements) != 5:
+        raise EvidenceFailure(f"input manifest does not bind all local replacement modules: {replacements!r}")
+    for replacement in replacements:
+        if not isinstance(replacement, dict):
+            raise EvidenceFailure(f"malformed local replacement binding: {replacement!r}")
+        relative = replacement.get("relative_path")
+        go_mod = replacement.get("go_mod")
+        expected_go_mod_hash = replacement.get("go_mod_sha256")
+        if not isinstance(relative, str) or not isinstance(go_mod, str) or not isinstance(expected_go_mod_hash, str):
+            raise EvidenceFailure(f"incomplete local replacement binding: {replacement!r}")
+        replacement_path = root / relative
+        go_mod_path = root / go_mod
+        if not replacement_path.is_dir() or not go_mod_path.is_file() or sha256(go_mod_path) != expected_go_mod_hash:
+            raise EvidenceFailure(f"local replacement changed after admission: {replacement!r}")
     files = manifest.get("files")
     if not isinstance(files, list) or not files:
         raise EvidenceFailure("input manifest has no files")
@@ -1136,36 +1246,73 @@ def run_provenance(
         if not isinstance(context.get("go_env"), dict) or not isinstance(context.get("environment"), dict):
             raise EvidenceFailure(f"toolchain environment is incomplete for {name}")
 
-    def reject_mutated_file(label: str, original: pathlib.Path, expected_hash: str) -> dict[str, Any]:
-        with tempfile.TemporaryDirectory(prefix="c36-provenance-") as temp:
-            mutated = pathlib.Path(temp) / original.name
-            shutil.copyfile(original, mutated)
-            with mutated.open("ab") as handle:
+    def reject_binding_in_subprocess(
+        label: str,
+        mutate_build: Any,
+        supplied_binary: pathlib.Path | None = None,
+        binary_name: str = "room_media",
+        action: str = "boundary",
+    ) -> dict[str, Any]:
+        case_dir = pathlib.Path(tempfile.mkdtemp(prefix=f"provenance-{label}-", dir=str(evidence / "runs")))
+        candidate = json.loads(json.dumps(build))
+        mutate_build(candidate)
+        write_json(case_dir / "artifacts" / "build.json", candidate)
+        if supplied_binary is not None:
+            original_binary = supplied_binary
+            supplied_binary = case_dir / f"mutated-{original_binary.name}"
+            shutil.copyfile(original_binary, supplied_binary)
+            with supplied_binary.open("ab") as handle:
                 handle.write(b"\nC36_MUTATION_CONTROL\n")
-            mutated_hash = sha256(mutated)
-            if mutated_hash == expected_hash:
-                raise EvidenceFailure(f"{label} mutation did not change the bound hash")
-            try:
-                if sha256(mutated) != expected_hash:
-                    raise EvidenceFailure(f"{label} hash differs from the admitted binding")
-            except EvidenceFailure as exc:
-                return {"original": str(original), "mutated_sha256": mutated_hash, "rejected": True, "reason": str(exc)}
-            raise EvidenceFailure(f"{label} mutation was accepted")
+        command = [
+            sys.executable, str(HERE / "verify.py"), "--action", action,
+            "--source", str(root), "--evidence", str(case_dir), "--no-build",
+            "--child-timeout", str(min(child_timeout, 60.0)), "--aggregate-timeout",
+            str(max(1.0, min(60.0, bounded_remaining(deadline, 60.0)))),
+        ]
+        if supplied_binary is not None:
+            flag = "--yui-binary" if binary_name == "yui" else "--room-binary"
+            command.extend([flag, str(supplied_binary)])
+        result = run_process(
+            f"provenance-binding-{label}", command, module, evidence / "runs", None,
+            deadline, bounded_remaining(deadline, child_timeout), dict(os.environ),
+        )
+        if (
+            result["timed_out"] or result["exit_code"] == 0 or not result["reaped"]
+            or not result["process_group_gone"] or not result["output_drained"]
+        ):
+            raise EvidenceFailure(f"{label} binding mutation was accepted or unbounded: {result}")
+        stderr = pathlib.Path(result["stderr_path"]).read_text(encoding="utf-8").strip()
+        stdout = pathlib.Path(result["stdout_path"]).read_text(encoding="utf-8").strip()
+        return {
+            "rejected": True,
+            "subprocess_exit_code": result["exit_code"],
+            "reason": stderr or stdout,
+            "case_dir": str(case_dir),
+            "run": result,
+        }
 
-    source_file = root / MODULE_PATH / "scenario.go"
     room_binding = binaries["room_media"]
     mutation_controls = {
-        "input_source": reject_mutated_file(
-            "consumer source", source_file,
-            next(entry["sha256"] for entry in files if entry.get("path") == str(MODULE_PATH / "scenario.go")),
+        "input_manifest_binding": reject_binding_in_subprocess(
+            "input-manifest", lambda candidate: candidate.update({"input_manifest_sha256": "0" * 64}),
         ),
-        "source_archive": reject_mutated_file("source archive", source_archive, expected_archive_hash),
-        "room_binary": reject_mutated_file("room binary", pathlib.Path(room_binding["path"]), room_binding["sha256"]),
+        "source_archive_binding": reject_binding_in_subprocess(
+            "source-archive", lambda candidate: candidate.update({"source_archive_sha256": "0" * 64}),
+        ),
     }
+    mutation_controls["room_binary_path_binding"] = reject_binding_in_subprocess(
+        "room-binary-path", lambda candidate: None, pathlib.Path(room_binding["path"]),
+    )
+    mutation_controls["room_binary_hash_binding"] = reject_binding_in_subprocess(
+        "room-binary-hash", lambda candidate: candidate["binaries"]["room_media"].update({"sha256": "0" * 64}),
+    )
     if "yui" in binaries:
         yui_binding = binaries["yui"]
-        mutation_controls["yui_binary"] = reject_mutated_file(
-            "yui binary", pathlib.Path(yui_binding["path"]), yui_binding["sha256"],
+        mutation_controls["yui_binary_path_binding"] = reject_binding_in_subprocess(
+            "yui-binary-path", lambda candidate: None, pathlib.Path(yui_binding["path"]), "yui", "parity",
+        )
+        mutation_controls["yui_binary_hash_binding"] = reject_binding_in_subprocess(
+            "yui-binary-hash", lambda candidate: candidate["binaries"]["yui"].update({"sha256": "0" * 64}), None, "yui", "parity",
         )
     result = {
         "revision": expected_revision,
@@ -1176,6 +1323,8 @@ def run_provenance(
         "toolchains": toolchains,
         "flags": BUILD_FLAGS,
         "packages": BUILD_PACKAGES,
+        "build_inputs": manifest.get("build_inputs"),
+        "replacement_modules": replacements,
         "mutation_controls": mutation_controls,
     }
     write_json(evidence / "artifacts" / "provenance.json", result)
@@ -1204,9 +1353,38 @@ def run_mutations(room: pathlib.Path, evidence: pathlib.Path, deadline: float, c
         stderr = pathlib.Path(result["stderr_path"]).read_text(encoding="utf-8")
         if "literal oracle mismatch" not in stderr:
             raise EvidenceFailure(f"mutation {label} failed without the rejecting literal oracle: {stderr!r}")
+        report_path = output_dir / "report.json"
+        if not report_path.is_file():
+            raise EvidenceFailure(f"mutation {label} did not serialize its mutated candidate report")
+        mutated = load_json(report_path)
+        raw_events = mutated.get("raw_events")
+        if not isinstance(raw_events, list):
+            raise EvidenceFailure(f"mutation {label} report has no raw event ledger")
+        if label == "peer-participant-key":
+            if "mallory" not in mutated.get("peer_outputs", {}) or not any(event.get("participant") == "mallory" for event in raw_events if event.get("kind") == "peer_output"):
+                raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
+        elif label == "source-order":
+            if mutated.get("source_inputs") == [
+                {"participant": "alice", "epoch": 1, "sequence": 1, "samples": [101, 102], "end_of_response": False},
+                {"participant": "alice", "epoch": 2, "sequence": 2, "samples": [111, 112, 113, 114], "end_of_response": True},
+                {"participant": "bob", "epoch": 1, "sequence": 1, "samples": [201, 202], "end_of_response": False},
+                {"participant": "bob", "epoch": 2, "sequence": 2, "samples": [211, 212, 213, 214], "end_of_response": True},
+            ]:
+                raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
+        elif label == "epoch":
+            if mutated.get("epochs", {}).get("stale_pending_samples") != 0 or not any(event.get("kind") == "source_audio" and event.get("epoch", 0) == 0 for event in raw_events):
+                raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
+        elif label == "pcm":
+            if mutated.get("peer_outputs", {}).get("alice", [None])[0] != 999 or not any(event.get("kind") == "peer_output" and event.get("participant") == "alice" and event.get("samples", [None])[0] == 999 for event in raw_events):
+                raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
+        elif label == "terminal":
+            if mutated.get("terminal", {}).get("alice", {}).get("provenance") != "replay" or not any(event.get("kind") == "terminal" and event.get("participant") == "alice" and event.get("provenance") == "replay" for event in raw_events):
+                raise EvidenceFailure(f"mutation {label} was not visible in the serialized report")
         rejected[label] = {
             "rejected": True,
             "error": stderr.strip(),
+            "report_path": str(report_path),
+            "report": mutated,
             "run": result,
         }
     outcome = {
@@ -1244,14 +1422,20 @@ def run_lifecycle(room: pathlib.Path, evidence: pathlib.Path, deadline: float, c
     for mode in ("cancel-before-start", "cancel-active"):
         cancellation, cancellation_run = room_run(room, mode, evidence, deadline, child_timeout)
         observed = cancellation.get("cancellation")
-        if not isinstance(observed, dict) or observed.get("joined") is not True:
-            raise EvidenceFailure(f"{mode} did not prove worker join")
+        if not isinstance(observed, dict) or observed.get("joined") is not True or observed.get("run_returned") is not True:
+            raise EvidenceFailure(f"{mode} did not prove public-service worker join/return")
+        if observed.get("public_service_run") is not True or observed.get("closed_by_service") is not True:
+            raise EvidenceFailure(f"{mode} did not prove cleanup was owned by rooms.Service.Run: {observed}")
+        if observed.get("repeated_close_ok") is not True or observed.get("close_calls", 0) < observed.get("opened", 0) * 3:
+            raise EvidenceFailure(f"{mode} did not prove repeated idempotent Close calls: {observed}")
         if observed.get("first_close_error") or observed.get("second_close_error") or observed.get("wait_error"):
             raise EvidenceFailure(f"{mode} close/wait was not idempotent: {observed}")
         if mode == "cancel-before-start" and not observed.get("start_error"):
             raise EvidenceFailure("cancel-before-start unexpectedly started")
         if mode == "cancel-active" and observed.get("start_error"):
             raise EvidenceFailure(f"cancel-active failed before cancellation: {observed}")
+        if mode == "cancel-active" and observed.get("waited") != observed.get("opened"):
+            raise EvidenceFailure(f"cancel-active did not prove every public handle Wait returned: {observed}")
         cancellations[mode] = {"run": cancellation_run, "report": cancellation}
     outcome = {"run": run, "report": report, "cancellations": cancellations}
     write_json(evidence / "artifacts" / "lifecycle.json", outcome)
@@ -1290,10 +1474,16 @@ def run_hang_control(evidence: pathlib.Path, deadline: float) -> dict[str, Any]:
         raise EvidenceFailure(f"hang control descendant evidence is malformed: {descendant!r}")
     if descendant["child_pgid"] != result["process_group_id"]:
         raise EvidenceFailure(f"hang control descendant escaped the process group: {descendant!r} vs {result!r}")
+    descendant_gone = wait_for_process_gone(
+        descendant["child_pid"], min(deadline, time.monotonic() + 2.0),
+    )
+    if not descendant_gone:
+        raise EvidenceFailure(f"hang control descendant remained alive after group cleanup: {descendant!r}")
     result["descendant"] = {
         "pid": descendant["child_pid"],
         "process_group_id": descendant["child_pgid"],
-        "same_process_group": True,
+        "same_process_group": descendant["child_pgid"] == result["process_group_id"],
+        "pid_gone": descendant_gone,
         "process_group_gone": result["process_group_gone"],
     }
     write_json(evidence / "artifacts" / "hang-control.json", result)
@@ -1362,7 +1552,7 @@ def run_actions(
         if name == "boundary":
             results[name] = run_boundary(root, module, room, evidence, deadline, child_timeout)
         elif name == "provenance":
-            results[name] = run_provenance(root, module, evidence, binaries["build"])
+            results[name] = run_provenance(root, module, evidence, binaries["build"], deadline, child_timeout)
         elif name == "routing-epochs":
             results[name] = run_routing_epochs(room, evidence, deadline, child_timeout)
         elif name == "mutations":
@@ -1415,6 +1605,8 @@ def main(argv: list[str]) -> int:
         "source_archive": archive,
         "input_manifest_sha256": manifest["manifest_sha256"],
         "toolchains": toolchains,
+        "build_inputs": manifest["build_inputs"],
+        "replacement_modules": manifest["replacement_modules"],
     }
     need_yui = args.action in ("parity", "all")
     binaries = prepare_binaries(
