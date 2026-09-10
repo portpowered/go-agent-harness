@@ -2758,3 +2758,49 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   exact-head repaired artifact/package provenance can be produced. Do not
   submit `ACCEPTED` to script CI with a stale artifact; after the new artifact
   and package checks pass, submit the changed same-task head without polling.
+
+# C38 exact-head repaired artifact and handoff checkpoint 2026-09-10T21:16Z
+
+- The documented compilation reserve is restored: `7.3 GiB` was available
+  before the bounded rebuild. The same admitted task remains on clean
+  `a3dffe91125c4777413eb923276cebb4e62d8226`; `origin/main=7b6ce8ce` is
+  integrated through `3d38427b`, and startup, baseline and C30 planning
+  ancestry remain verified. No host checkout, peer path, predecessor
+  checkpoint, second project, waiver or reset was touched.
+- Fresh exact-source artifact run
+  `repaired-20260910T211326Z-72729` returns `REPAIRED_ORACLE_PASS`. The yui
+  artifact is `50,860,658` bytes with SHA-256
+  `18b5c255ef8af0dc8c72242ef3be574777e76efa4f8cac800108ed0db9a07d1a` and
+  is built from source `a3dffe91`; its provider/rendered tool PCM is
+  `4,800`/`3,200` bytes with the frozen hashes, and its interruption PCM is
+  `3,840`/`3,360` bytes with the frozen hashes plus the exact `2,400`-byte
+  healthy tail. Both strict replays exit `0`, with `18` tool-wire/`1` tool
+  call and `15` interruption-wire/`0` tool calls respectively.
+- Current-head causal run `causal-20260910T211336Z-73001` passes the
+  deterministic cancellation barrier and records the owned
+  `session_audio_output_session.forward` boundary. The immutable
+  `original-20260910T211639Z-78540` run preserves the C30
+  `HISTORICAL_FAILURE_PRESERVED` record; its 21-case consumer and exit-1
+  negative control pass, and the live old-executable variation remains
+  historical only.
+- Current negative controls
+  `negative-controls-20260910T211354Z-73625` reject a same-length PCM/hash
+  mutation and missing timeline; cleanup
+  `cleanup-control-20260910T211358Z-73665` proves capped output, TERM/KILL,
+  reaping and no survivors. Focused
+  `focused-checks-20260910T211405Z-73902` passes normal/race audio-output
+  tests, vet, architecture (`182` packages/`1,880` files/`27,743` functions),
+  size and Wire. Pinned golangci-lint `v2.9.0` and staticcheck `2026.1` both
+  report zero issues across all workspace modules.
+- Package `package-manifest.json` is `PACKAGE_READY` for source `a3dffe91`
+  with clean provenance, fresh-main ancestry, architecture helper SHA-256
+  `debe7ca096d60db699974b7d9a37ba15d146ec3f26a860f45544f96a9e6d547f`, and
+  build-input manifest SHA-256
+  `9d93e3de3388fc3d9f42de8b7abfecab7a039346531a88f4777bc7a44af6af5c` over
+  `2,177` inputs. No CI, independent review, guarded merge, vertical
+  acceptance, physical/acoustic proof or project completion is claimed.
+- Exact next action: commit this checkpoint, push the same PR `#430`, update
+  its body with the review-219/229/245/249/258 repair map and exact-head
+  evidence, then hand the changed head to script-owned current-head CI and
+  return `ACCEPTED` without polling. Retain C38 ownership through `CONTINUE`
+  for any exact CI/review rejection or actionable repair.
