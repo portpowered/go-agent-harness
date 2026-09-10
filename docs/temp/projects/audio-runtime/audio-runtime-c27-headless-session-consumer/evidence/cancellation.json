@@ -1,0 +1,99 @@
+{
+  "no_sleep_synchronization": true,
+  "process": {
+    "argv": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/bin/headless-session"
+    ],
+    "cleanup_bounded": true,
+    "cleanup_error": "",
+    "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-cancel-s2cn_kt5/child/cwd",
+    "descendants_alive": false,
+    "descendants_killed": 0,
+    "descendants_seen": 0,
+    "duration_seconds": 0.008143,
+    "exit_code": 0,
+    "process_group_alive": false,
+    "reaped": true,
+    "stderr": "",
+    "stdout": "{\n  \"schema\": \"audio-runtime-c27-headless-session-consumer/v1\",\n  \"scenario\": \"cancellation\",\n  \"status\": \"ok\",\n  \"constructor_provider_calls\": 0,\n  \"provider_calls\": 1,\n  \"before_cancel\": {\n    \"label\": \"before-cancel\",\n    \"input\": \"must-not-call-provider\",\n    \"stream\": {\n      \"terminal_seen\": false,\n      \"outcome\": \"\",\n      \"partial\": false,\n      \"close_calls\": 0\n    },\n    \"persisted_history\": {\n      \"present\": false\n    },\n    \"loaded_history\": {\n      \"present\": false\n    },\n    \"constructor_provider_calls\": 0,\n    \"provider_calls\": 0,\n    \"stream_close_calls\": 0,\n    \"handle_close_calls\": 0,\n    \"saved\": false,\n    \"errors\": [\n      \"open: context canceled\"\n    ]\n  },\n  \"during_cancel\": {\n    \"label\": \"during-cancel\",\n    \"session_id\": \"1789029097994990000\",\n    \"input\": \"cancel-during-provider-wait\",\n    \"provider_requests\": [\n      {\n        \"instance\": \"during-cancel\",\n        \"messages\": [\n          {\n            \"role\": \"user\",\n            \"text\": \"cancel-during-provider-wait\"\n          }\n        ],\n        \"history_sha256\": \"a813ebb8fd09bcf38ebf6204a006b9077f47548a46bc63358ea80b2e10aea586\",\n        \"response\": \"provider=during-cancel input=\\\"cancel-during-provider-wait\\\" history=a813ebb8fd09bcf38ebf6204a006b9077f47548a46bc63358ea80b2e10aea586 count=1 call=1\",\n        \"call\": 1\n      }\n    ],\n    \"stream\": {\n      \"types\": [\n        \"MESSAGE.START\",\n        \"TEXT.START\",\n        \"TEXT.DELTA\",\n        \"ERROR\"\n      ],\n      \"text\": \"provider=during-\",\n      \"terminal_seen\": false,\n      \"outcome\": \"canceled\",\n      \"error\": \"context canceled\",\n      \"partial\": true,\n      \"close_calls\": 0\n    },\n    \"persisted_history\": {\n      \"present\": false\n    },\n    \"loaded_history\": {\n      \"present\": false\n    },\n    \"constructor_provider_calls\": 0,\n    \"provider_calls\": 1,\n    \"stream_close_calls\": 2,\n    \"handle_close_calls\": 2,\n    \"saved\": false\n  },\n  \"notes\": [\n    \"cancellation was driven by context and entry channels; no sleep-based synchronization\"\n  ]\n}\n",
+    "timed_out": false
+  },
+  "report": {
+    "before_cancel": {
+      "constructor_provider_calls": 0,
+      "errors": [
+        "open: context canceled"
+      ],
+      "handle_close_calls": 0,
+      "input": "must-not-call-provider",
+      "label": "before-cancel",
+      "loaded_history": {
+        "present": false
+      },
+      "persisted_history": {
+        "present": false
+      },
+      "provider_calls": 0,
+      "saved": false,
+      "stream": {
+        "close_calls": 0,
+        "outcome": "",
+        "partial": false,
+        "terminal_seen": false
+      },
+      "stream_close_calls": 0
+    },
+    "constructor_provider_calls": 0,
+    "during_cancel": {
+      "constructor_provider_calls": 0,
+      "handle_close_calls": 2,
+      "input": "cancel-during-provider-wait",
+      "label": "during-cancel",
+      "loaded_history": {
+        "present": false
+      },
+      "persisted_history": {
+        "present": false
+      },
+      "provider_calls": 1,
+      "provider_requests": [
+        {
+          "call": 1,
+          "history_sha256": "a813ebb8fd09bcf38ebf6204a006b9077f47548a46bc63358ea80b2e10aea586",
+          "instance": "during-cancel",
+          "messages": [
+            {
+              "role": "user",
+              "text": "cancel-during-provider-wait"
+            }
+          ],
+          "response": "provider=during-cancel input=\"cancel-during-provider-wait\" history=a813ebb8fd09bcf38ebf6204a006b9077f47548a46bc63358ea80b2e10aea586 count=1 call=1"
+        }
+      ],
+      "saved": false,
+      "session_id": "1789029097994990000",
+      "stream": {
+        "close_calls": 0,
+        "error": "context canceled",
+        "outcome": "canceled",
+        "partial": true,
+        "terminal_seen": false,
+        "text": "provider=during-",
+        "types": [
+          "MESSAGE.START",
+          "TEXT.START",
+          "TEXT.DELTA",
+          "ERROR"
+        ]
+      },
+      "stream_close_calls": 2
+    },
+    "notes": [
+      "cancellation was driven by context and entry channels; no sleep-based synchronization"
+    ],
+    "provider_calls": 1,
+    "scenario": "cancellation",
+    "schema": "audio-runtime-c27-headless-session-consumer/v1",
+    "status": "ok"
+  }
+}
