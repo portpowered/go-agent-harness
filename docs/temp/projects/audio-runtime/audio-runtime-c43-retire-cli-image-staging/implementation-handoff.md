@@ -234,3 +234,62 @@ record fresh provenance, update this handoff and PR #434, then submit the same
 task to script CI without polling. This remains an executor `CONTINUE` checkpoint;
 CI, independent review, guarded merge, vertical acceptance and project
 acceptance are not claimed.
+
+## Fresh exact-head verifier after storage recovery — 2026-09-10T22:05Z
+
+The verifier selector was corrected before this run: its live normal/race
+steps execute the existing `TestLiveCapabilityHandleOwnsLifecycleAndBrowserEvents`
+test instead of reporting a removed semantic-refresh test as green with
+`[no tests to run]`. The shipped process remains the causal control for
+semantic `tools_added`/navigation refresh.
+
+`rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused`
+passed as run `verify-20260910T220504Z-18231`, source
+`ba6fffadc76e392b6086c86128cb4ae889c2aedf`, with 18 steps: all expected
+positive steps exited 0, the deliberate wrong-oracle child exited 1 with
+`public read_image returned 70 bytes, oracle expected 71`, and no step timed
+out. The retained evidence files are force-archived with its commands,
+stdout/stderr, observations, recordings, source delta and provenance; the
+generated binaries and Chrome profiles were removed as reproducible scratch
+after their hashes and observations were verified.
+
+The normal/race live lifecycle checks, private imagestaging normal/race,
+CLI adapter normal/race, all tools regressions, in-process image regression,
+and credential-free replay regression passed. The built-process image case
+exited 0 with loopback provider `PASS`, Chrome page events `initial, refreshed`,
+`c43_refreshed_probe` in the refreshed tool catalog, exact 70-byte PNG/readback
+SHA-256 `4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5`,
+typed `input_image`, no staging leftovers and no CLI/provider/Chrome process
+survivors. The induced `--max-duration 2s` case exited 0 with
+`expected_timeout_client_close=true`, no staging leftovers and no survivors.
+Strict replay exited 0 with `PROBE_TOOL_MARKER_9182`,
+`strict replay continuation`, and no survivor.
+
+The run records Go `go1.26.7` on Darwin arm64, CLI SHA-256
+`330545ccf3727e1531640079b0971c30efa98199f620448e8fa39b014b350e37`, local
+provider SHA-256
+`7ac892d52f27bb1fcb426c6b83eb203f07bf5a1c3b08b1e5b1124e7961045c26`, provider
+source SHA-256 `f63381b1b55a10c095692938967a39a62bd77b6f50717c41278405aa97cd614a`,
+page source SHA-256
+`703a8c098f75de45957f932a5cb979b5326befb24f8d21f66d6645db6918f698`, and
+source inventory/delta SHA-256
+`94652a9bec7dd6ee8241229e4d4aee24c57bcb9c44683d3c051981894403d6d4`. The
+inventory confirms 142 baseline source lines to 71 final adapter lines;
+retired symbols are `sessionImageToolPathDescription`,
+`sessionImageStageExtension`, and `advertiseSessionImagePaths`, while
+`prepareSessionImageToolAccess` and `sessionImageStagingConfigDir` remain.
+
+Filesystem free space was `4,588,244 KiB` before and `3,739,048 KiB` after
+the bounded run; the retained run directory is `65,760 KiB`, and no cache,
+evidence, peer artifact or unrelated worktree was deleted. The 2 GiB reserve
+remained available after this run. This is executor evidence only: CI,
+independent review, guarded merge, post-merge vertical acceptance,
+physical/acoustic proof and project acceptance remain open.
+
+## Handoff
+
+Commit/push this evidence checkpoint, update PR #434 with the current run and
+review-254 repair map, and return `ACCEPTED` to the script-owned CI gate
+without polling it. On an exact CI rejection, inspect the failed check/log and
+repair this same task; retain ownership through `CONTINUE` while actionable
+repairs remain.

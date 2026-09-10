@@ -1,0 +1,16 @@
+
+DevTools listening on ws://127.0.0.1:57789/devtools/browser/acfe0cf7-6d5c-4add-9ef9-3df5329ccfd1
+Trying to load the allocator multiple times. This is *not* supported.
+[20328:127587352:0910/150550.053453:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[20328:127587352:0910/150550.054800:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[20328:127587352:0910/150550.054894:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[20328:127587352:0910/150550.054968:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[20328:127587352:0910/150550.055036:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[20328:127587352:0910/150550.572738:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[20328:127587352:0910/150552.557588:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[20328:127587352:0910/150552.625486:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[20328:127587352:0910/150552.658616:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[20328:127587352:0910/150552.710747:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[20323:127587266:0910/150552.748029:ERROR:content/browser/gpu/gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=15
+[20323:127587266:0910/150552.761136:ERROR:chrome/browser/web_applications/os_integration/os_integration_manager.cc:261] Can't perform OS integration while the browser is shutting down.
+[20323:127587266:0910/150552.768269:ERROR:chrome/browser/web_applications/externally_managed_app_manager.cc:680] https://docs.google.com/presentation/installwebapp?usp=chrome_default from install source 1 failed to install with reason 21

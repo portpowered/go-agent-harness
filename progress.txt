@@ -2991,3 +2991,57 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   followed by fresh provenance/handoff and PR #434 update, then submission of
   the changed same-task head to script CI without polling. Retain C43 through
   `CONTINUE` while this prerequisite is unavailable.
+
+# C43 fresh exact-head process and evidence handoff — 2026-09-10T22:05Z
+
+- Re-read the required Factory policy, implementation handoff, manifest,
+  progress and full canonical `~default` task/review inbox. Admission remains
+  `audio-runtime-c43-retire-cli-image-staging`; the isolated branch matches
+  `prd.json.branchName`, and the sole project/ownership/acceptance context is
+  preserved. Fetched `origin/main=5f14c45313cfdc71e000fda209e3408fcf863faf`
+  remains an ancestor through merge `ac77c076`; the running host checkout,
+  predecessor checkpoints, peer paths and generated Wire/baseline files were
+  not changed.
+- The latest concluded review finding was Review-254's missing shipped
+  executable/dynamic-refresh/timeout-cleanup proof and missing provenance/
+  142-to-71 symbol inventory. The candidate's bounded process harness and
+  handoff repair remain in place. I corrected its stale live test selector so
+  normal/race execute the existing `TestLiveCapabilityHandleOwnsLifecycleAndBrowserEvents`
+  test rather than returning `[no tests to run]`; semantic refresh remains
+  proven by the shipped process control.
+- The exact bounded command
+  `rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/verify.py --mode focused`
+  returned `PASS` as `verify-20260910T220504Z-18231` at source
+  `ba6fffadc76e392b6086c86128cb4ae889c2aedf`, with 18 steps, no timeouts,
+  all positive steps exit 0, and the deliberate wrong-oracle child exit 1
+  (`70` actual versus `71` expected). The run is force-archived with complete
+  logs, observations, recordings, source delta and build provenance.
+- Process image proof: CLI exit 0; loopback provider `PASS`; Chrome page events
+  `initial, refreshed`; refreshed `c43_refreshed_probe`; exact 70-byte PNG
+  SHA-256 `4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5`;
+  typed `input_image`; no staging leftovers; and no CLI/provider/Chrome
+  survivors. Induced `--max-duration 2s` exited 0 with
+  `expected_timeout_client_close=true` and no survivors. Credential-free
+  strict replay exited 0 with `PROBE_TOOL_MARKER_9182`,
+  `strict replay continuation`, and no survivor.
+- Provenance records CLI SHA-256
+  `330545ccf3727e1531640079b0971c30efa98199f620448e8fa39b014b350e37`, local
+  provider SHA-256
+  `7ac892d52f27bb1fcb426c6b83eb203f07bf5a1c3b08b1e5b1124e7961045c26`, page
+  SHA-256 `703a8c098f75de45957f932a5cb979b5326befb24f8d21f66d6645db6918f698`,
+  and source delta SHA-256
+  `94652a9bec7dd6ee8241229e4d4aee24c57bcb9c44683d3c051981894403d6d4`.
+  The inventory records baseline `142` lines, final adapter `71` lines,
+  retired `sessionImageToolPathDescription`, `sessionImageStageExtension`,
+  `advertiseSessionImagePaths`, and retained adapter symbols
+  `prepareSessionImageToolAccess` and `sessionImageStagingConfigDir`.
+- Free space measured `4,588,244 KiB` before and `3,739,048 KiB` after the
+  run; the retained run directory is `65,760 KiB`, and no cache, evidence,
+  peer artifact or unrelated worktree was deleted. The 2 GiB reserve remains
+  available. This is executor evidence only; CI, independent review, guarded
+  merge, vertical acceptance, physical/acoustic proof and project acceptance
+  remain open.
+- Next action: commit and push the verifier/evidence/handoff checkpoint,
+  update PR #434 with the exact run and Review-254 repair map, then return
+  `ACCEPTED` to the script-owned CI gate without polling. Retain C43 ownership
+  through `CONTINUE` for any exact CI rejection or actionable repair.

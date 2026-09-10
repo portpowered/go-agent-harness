@@ -5,6 +5,40 @@ contract. The public tools Wire/executor now owns staging, permission policy,
 path advertisement, refresh decoration, typed image projection, and cleanup;
 the CLI retains host configuration resolution and composition.
 
+## Latest executor checkpoint — fresh exact-source run `ba6fffad`
+
+- The prior Review-254 evidence gap is closed by the bounded process harness:
+  it builds the shipped `yui`, runs a deterministic loopback WebSocket provider
+  and real Chrome native WebMCP page, and records complete commands,
+  outputs/exit codes, observations, source/build/fixture hashes, dynamic
+  refresh, induced timeout, cleanup and process-survivor results.
+- After storage recovery, run `verify-20260910T220504Z-18231` passed all 18
+  focused steps at source `ba6fffadc76e392b6086c86128cb4ae889c2aedf`. The live
+  normal/race steps execute the existing
+  `TestLiveCapabilityHandleOwnsLifecycleAndBrowserEvents` test; the shipped
+  process proves the semantic `tools_added`/navigation refresh.
+- The image process exited 0 with provider `PASS`, page events
+  `initial, refreshed`, refreshed `c43_refreshed_probe`, exact 70-byte PNG
+  SHA-256 `4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5`,
+  typed `input_image`, zero staging leftovers and no CLI/provider/Chrome
+  survivors. The induced `--max-duration 2s` process and strict credential-free
+  replay also exited 0 with no survivors. The deliberate wrong-oracle child
+  exited 1 with the expected 70-versus-71 mismatch.
+- Fresh provenance records CLI SHA-256
+  `330545ccf3727e1531640079b0971c30efa98199f620448e8fa39b014b350e37`, local
+  provider SHA-256
+  `7ac892d52f27bb1fcb426c6b83eb203f07bf5a1c3b08b1e5b1124e7961045c26`, page
+  SHA-256 `703a8c098f75de45957f932a5cb979b5326befb24f8d21f66d6645db6918f698`,
+  and the source inventory’s 142-to-71 line report with retired symbols
+  `sessionImageToolPathDescription`, `sessionImageStageExtension`, and
+  `advertiseSessionImagePaths`.
+- This is an executor handoff only. CI, independent review, guarded merge,
+  post-merge vertical acceptance, physical/acoustic proof and project
+  acceptance remain open. The retained logs, observations, recordings and
+  provenance are force-archived in the task evidence directory; generated
+  binaries and Chrome profiles were removed as reproducible scratch after
+  hash verification. Submit this same PR head to script CI without polling.
+
 ## Latest executor checkpoint — pushed head `7a07f811`
 
 - Fetched `origin/main=5f14c45313cfdc71e000fda209e3408fcf863faf` and merged it

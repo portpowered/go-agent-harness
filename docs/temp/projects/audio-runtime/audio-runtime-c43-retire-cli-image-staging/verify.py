@@ -781,7 +781,7 @@ def consumer_steps(runner: Runner) -> None:
 
 def focused_runtime_steps(runner: Runner) -> None:
     runner.command(
-        "live-capability-refresh",
+        "live-capability-lifecycle",
         [
             "rtk",
             "proxy",
@@ -789,14 +789,14 @@ def focused_runtime_steps(runner: Runner) -> None:
             "test",
             "./go-agent-runtime/services/session/internal/live",
             "-run",
-            "TestCapabilityEventRequiresRefreshForSemanticCatalogMutations",
+            "TestLiveCapabilityHandleOwnsLifecycleAndBrowserEvents",
             "-count=1",
             "-timeout=45s",
         ],
         REPO_ROOT,
     )
     runner.command(
-        "live-capability-refresh-race",
+        "live-capability-lifecycle-race",
         [
             "rtk",
             "proxy",
@@ -805,7 +805,7 @@ def focused_runtime_steps(runner: Runner) -> None:
             "-race",
             "./go-agent-runtime/services/session/internal/live",
             "-run",
-            "TestCapabilityEventRequiresRefreshForSemanticCatalogMutations",
+            "TestLiveCapabilityHandleOwnsLifecycleAndBrowserEvents",
             "-count=1",
             "-timeout=45s",
         ],
