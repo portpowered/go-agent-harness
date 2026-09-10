@@ -54,6 +54,12 @@ script CI, independent review, guarded merge, and the post-merge exact-artifact
 vertical probe remain external gates. This software replay cannot establish
 physical/acoustic device consumption or broad project completion.
 
+The runner captures child stdout/stderr concurrently with a 64 KiB retained
+limit while draining the full pipes, and uses bounded TERM/KILL waits plus
+bounded reader cleanup. `--timeout-control` runs an ignored-SIGTERM,
+output-flooding child to prove the cap and bounded reaping path; its result is
+written under `runs/timeout-control-*/result.json`.
+
 ## Shipped yui regression
 
 `artifacts/yui-verification.json` records the same-source shipped `yui`

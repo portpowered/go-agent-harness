@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass, field
 import hashlib
 import json
 import os
@@ -12,6 +13,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Any
 
@@ -23,10 +25,159 @@ RUNS = EVIDENCE / "runs"
 CONSUMER = EVIDENCE / "consumer"
 BINARY = ARTIFACTS / "pcm16-frame-consumer"
 GO_AUDIO_MODULE = "github.com/portpowered/go-agent-harness/go-audio"
+CHILD_TIMEOUT_SECONDS = 10
+CHILD_TERM_GRACE_SECONDS = 2
+CHILD_KILL_GRACE_SECONDS = 2
+OUTPUT_CAPTURE_LIMIT = 64 * 1024
 
 
 class VerificationError(RuntimeError):
     pass
+
+
+@dataclass
+class CappedOutput:
+    limit: int
+    data: bytearray = field(default_factory=bytearray)
+    total_bytes: int = 0
+    truncated: bool = False
+    read_error: str = ""
+
+    def append(self, chunk: bytes) -> None:
+        self.total_bytes += len(chunk)
+        remaining = self.limit - len(self.data)
+        if remaining > 0:
+            self.data.extend(chunk[:remaining])
+        if self.total_bytes > self.limit:
+            self.truncated = True
+
+    def text(self) -> str:
+        output = bytes(self.data).decode("utf-8", errors="replace")
+        if self.truncated:
+            output += f"\n[output truncated after {self.limit} bytes; read {self.total_bytes} bytes]\n"
+        if self.read_error:
+            output += f"\n[output reader error: {self.read_error}]\n"
+        return output
+
+
+def read_capped(stream: Any, output: CappedOutput) -> None:
+    try:
+        while True:
+            chunk = stream.read(8192)
+            if not chunk:
+                return
+            output.append(chunk)
+    except (OSError, ValueError) as error:
+        output.read_error = str(error)
+
+
+def signal_process_group(process: subprocess.Popen[bytes], sig: signal.Signals) -> bool:
+    try:
+        if os.name == "posix":
+            os.killpg(process.pid, sig)
+        elif process.poll() is None:
+            process.send_signal(sig)
+        else:
+            return False
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def close_process_streams(process: subprocess.Popen[bytes]) -> None:
+    for stream in (process.stdout, process.stderr):
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError:
+                pass
+
+
+def run_bounded_process(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout_seconds: float,
+    term_grace_seconds: float = CHILD_TERM_GRACE_SECONDS,
+    kill_grace_seconds: float = CHILD_KILL_GRACE_SECONDS,
+    output_limit: int = OUTPUT_CAPTURE_LIMIT,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=False,
+        start_new_session=True,
+        preexec_fn=limit_child_resources,
+    )
+    stdout = CappedOutput(output_limit)
+    stderr = CappedOutput(output_limit)
+    readers = [
+        threading.Thread(target=read_capped, args=(process.stdout, stdout), name="c30-stdout-reader", daemon=True),
+        threading.Thread(target=read_capped, args=(process.stderr, stderr), name="c30-stderr-reader", daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+
+    timed_out = False
+    cleanup: dict[str, Any] = {
+        "sigterm_sent": False,
+        "sigkill_sent": False,
+        "reaped_after_sigterm": False,
+        "reaped_after_sigkill": False,
+        "reader_threads_stopped": False,
+    }
+    try:
+        try:
+            process.wait(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            cleanup["sigterm_sent"] = signal_process_group(process, signal.SIGTERM)
+            try:
+                process.wait(timeout=term_grace_seconds)
+                cleanup["reaped_after_sigterm"] = True
+            except subprocess.TimeoutExpired:
+                cleanup["sigkill_sent"] = signal_process_group(process, signal.SIGKILL)
+                try:
+                    process.wait(timeout=kill_grace_seconds)
+                    cleanup["reaped_after_sigkill"] = True
+                except subprocess.TimeoutExpired:
+                    cleanup["reap_error"] = f"process did not exit within {kill_grace_seconds}s after SIGKILL"
+    finally:
+        for reader in readers:
+            reader.join(timeout=kill_grace_seconds if timed_out else term_grace_seconds)
+        if any(reader.is_alive() for reader in readers):
+            cleanup["reader_threads_stopped"] = False
+            close_process_streams(process)
+            for reader in readers:
+                reader.join(timeout=0.25)
+        else:
+            cleanup["reader_threads_stopped"] = True
+        if process.poll() is None:
+            cleanup["reap_error"] = cleanup.get("reap_error", "process remained alive after bounded cleanup")
+        close_process_streams(process)
+
+    return {
+        "argv": command,
+        "cwd": str(cwd),
+        "duration_seconds": round(time.monotonic() - started, 6),
+        "exit_code": process.returncode,
+        "timed_out": timed_out,
+        "clean_shutdown": not timed_out and process.returncode is not None,
+        "stdout": stdout.text(),
+        "stderr": stderr.text(),
+        "stdout_bytes": stdout.total_bytes,
+        "stderr_bytes": stderr.total_bytes,
+        "stdout_truncated": stdout.truncated,
+        "stderr_truncated": stderr.truncated,
+        "output_limit_bytes": output_limit,
+        "cleanup": cleanup,
+    }
 
 
 def sha256_file(path: Path) -> str:
@@ -146,50 +297,92 @@ def run_child(source_root: Path, mode: str) -> dict[str, Any]:
     run_dir = Path(tempfile.mkdtemp(prefix=f"{mode}-", dir=RUNS))
     command = [str(BINARY), "--mode", mode]
     env = os.environ.copy()
-    started = time.monotonic()
-    process = subprocess.Popen(
+    process_record = run_bounded_process(
         command,
         cwd=run_dir,
         env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=True,
-        preexec_fn=limit_child_resources,
+        timeout_seconds=CHILD_TIMEOUT_SECONDS,
     )
-    try:
-        stdout, stderr = process.communicate(timeout=10)
-    except subprocess.TimeoutExpired as exc:
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
-            stdout, stderr = process.communicate(timeout=2)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            stdout, stderr = process.communicate()
-        raise VerificationError(f"{mode} timed out after 10s; stdout={stdout}; stderr={stderr}") from exc
     record = {
         "argv": command,
         "cwd": str(run_dir),
         "source_root": str(source_root),
         "source_module": str(source_root / "go-audio"),
         "source_revision": build_record["source_revision"],
-        "duration_seconds": round(time.monotonic() - started, 6),
-        "exit_code": process.returncode,
-        "stdout": stdout,
-        "stderr": stderr,
-        "clean_shutdown": process.returncode != -signal.SIGKILL,
+        "duration_seconds": process_record["duration_seconds"],
+        "exit_code": process_record["exit_code"],
+        "stdout": process_record["stdout"],
+        "stderr": process_record["stderr"],
+        "stdout_bytes": process_record["stdout_bytes"],
+        "stderr_bytes": process_record["stderr_bytes"],
+        "stdout_truncated": process_record["stdout_truncated"],
+        "stderr_truncated": process_record["stderr_truncated"],
+        "output_limit_bytes": process_record["output_limit_bytes"],
+        "timed_out": process_record["timed_out"],
+        "clean_shutdown": process_record["clean_shutdown"],
+        "cleanup": process_record["cleanup"],
         "executable": str(BINARY),
         "executable_sha256": sha256_file(BINARY),
         "fixture_sha256": fixture_hashes(),
     }
     (run_dir / "result.json").write_text(json.dumps(record, indent=2) + "\n")
+    if process_record["timed_out"]:
+        raise VerificationError(
+            f"{mode} timed out after {CHILD_TIMEOUT_SECONDS}s; "
+            f"bounded cleanup={process_record['cleanup']}; "
+            f"stdout={process_record['stdout']}; stderr={process_record['stderr']}"
+        )
+    if process_record["exit_code"] is None:
+        raise VerificationError(f"{mode} process was not reaped after bounded cleanup: {process_record['cleanup']}")
+    return record
+
+
+def run_timeout_control() -> dict[str, Any]:
+    if os.name != "posix":
+        raise VerificationError("timeout-control requires POSIX process-group signals")
+    RUNS.mkdir(parents=True, exist_ok=True)
+    run_dir = Path(tempfile.mkdtemp(prefix="timeout-control-", dir=RUNS))
+    child_script = (
+        "import signal, sys, time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        "payload = b'x' * (1024 * 1024); "
+        "sys.stdout.buffer.write(payload); sys.stdout.buffer.flush(); "
+        "sys.stderr.buffer.write(payload); sys.stderr.buffer.flush(); "
+        "time.sleep(60)"
+    )
+    command = [sys.executable, "-c", child_script]
+    process_record = run_bounded_process(
+        command,
+        cwd=run_dir,
+        env=os.environ.copy(),
+        timeout_seconds=0.25,
+        term_grace_seconds=0.25,
+        kill_grace_seconds=0.5,
+        output_limit=4096,
+    )
+    record = {
+        "control": "ignored-SIGTERM child with 1MiB stdout/stderr",
+        "argv": command,
+        "cwd": str(run_dir),
+        **process_record,
+    }
+    cleanup = process_record["cleanup"]
+    checks = {
+        "timed_out": process_record["timed_out"],
+        "stdout_capped": process_record["stdout_truncated"] and process_record["stdout_bytes"] >= 1024 * 1024,
+        "stderr_capped": process_record["stderr_truncated"] and process_record["stderr_bytes"] >= 1024 * 1024,
+        "sigterm_sent": cleanup.get("sigterm_sent", False),
+        "sigkill_sent": cleanup.get("sigkill_sent", False),
+        "reaped_after_sigkill": cleanup.get("reaped_after_sigkill", False),
+        "reader_threads_stopped": cleanup.get("reader_threads_stopped", False),
+        "process_reaped": process_record["exit_code"] is not None,
+        "bounded_duration": process_record["duration_seconds"] < 5,
+    }
+    record["checks"] = checks
+    (run_dir / "result.json").write_text(json.dumps(record, indent=2) + "\n")
+    if not all(checks.values()):
+        raise VerificationError(f"timeout control failed: {record}")
+    print(json.dumps({"status": "pass", "timeout_control": record}, indent=2))
     return record
 
 
@@ -294,11 +487,19 @@ def main() -> int:
     parser.add_argument("--build", action="store_true")
     parser.add_argument("--positive", action="store_true")
     parser.add_argument("--negative-control", action="store_true")
+    parser.add_argument("--timeout-control", action="store_true")
     parser.add_argument("--source-root", type=Path, default=REPO_ROOT)
     args = parser.parse_args()
     source_root = validate_source_root(args.source_root)
-    if not (args.build or args.positive or args.negative_control):
-        raise VerificationError("choose --build, --positive, or --negative-control")
+    selected_modes = sum(bool(mode) for mode in (args.build, args.positive, args.negative_control, args.timeout_control))
+    if selected_modes == 0:
+        raise VerificationError("choose --build, --positive, --negative-control, or --timeout-control")
+    if selected_modes > 1:
+        raise VerificationError("choose exactly one runner mode")
+
+    if args.timeout_control:
+        run_timeout_control()
+        return 0
 
     build_record = build(source_root) if args.build else None
     run_record = None
