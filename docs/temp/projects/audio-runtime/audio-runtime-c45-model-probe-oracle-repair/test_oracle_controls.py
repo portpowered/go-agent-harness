@@ -9,6 +9,7 @@ import json
 import pathlib
 import runpy
 import subprocess
+import sys
 import tempfile
 import time
 from typing import Any
@@ -189,6 +190,87 @@ def run_current_controls(module: dict[str, Any], root: pathlib.Path, started: fl
     }
 
 
+def run_staged_probe_success_path() -> dict[str, Any]:
+    staged_probe = runpy.run_path(str(HERE / "run_staged_probe.py"), run_name="c45_staged_probe_test")
+    with tempfile.TemporaryDirectory(prefix="c45-staged-success-") as temporary:
+        temporary_root = pathlib.Path(temporary)
+        staged_root = temporary_root / "staged"
+        staged_root.mkdir()
+        (staged_root / "artifact-3.json").write_text(
+            json.dumps({"schema": "c45-test-descriptor/v1", "mode": "reused", "decision": "ACCEPTED", "steps": []}),
+            encoding="utf-8",
+        )
+        evidence_root = temporary_root / "evidence"
+        fake_runs = evidence_root / "runs"
+        fixture_root = evidence_root / "fixtures"
+        artifact_facts = {
+            "artifact-0-yui": {"bytes": 3, "sha256": "a" * 64},
+            "artifact-1-consumer": {"bytes": 5, "sha256": "b" * 64},
+            "artifact-2-source-snapshot": {"bytes": 7, "sha256": "c" * 64},
+            "artifact-3-build-descriptor": {"bytes": 11, "sha256": "d" * 64},
+        }
+        controls = {"synthetic": "accepted"}
+
+        def fake_check_staged_artifacts(_staged_root: pathlib.Path) -> dict[str, Any]:
+            return artifact_facts
+
+        def fake_extract_required_fixtures(_archive: pathlib.Path, _destination: pathlib.Path) -> pathlib.Path:
+            fixture_root.mkdir(parents=True, exist_ok=True)
+            return fixture_root
+
+        def fake_import_verify() -> dict[str, Any]:
+            return {"_c45_forbidden_calls": []}
+
+        def fake_run_controls(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+            return controls
+
+        original_argv = sys.argv
+        sys.argv = [
+            str(HERE / "run_staged_probe.py"),
+            "--staged-root",
+            str(staged_root),
+            "--child-timeout",
+            "1",
+            "--total-timeout",
+            "30",
+            "--max-output-bytes",
+            "1024",
+            "--min-free-bytes",
+            str(2 * 1024 * 1024 * 1024),
+        ]
+        probe_globals = staged_probe["main"].__globals__
+        probe_globals["HERE"] = evidence_root
+        probe_globals["RUNS"] = fake_runs
+        probe_globals["free_bytes"] = lambda _path: 2 * 1024 * 1024 * 1024
+        probe_globals["check_staged_artifacts"] = fake_check_staged_artifacts
+        probe_globals["extract_required_fixtures"] = fake_extract_required_fixtures
+        probe_globals["import_verify"] = fake_import_verify
+        probe_globals["run_controls"] = fake_run_controls
+        try:
+            exit_code = staged_probe["main"]()
+        finally:
+            sys.argv = original_argv
+        assert exit_code == 0
+        report = json.loads((evidence_root / "latest-staged-probe.json").read_text(encoding="utf-8"))
+        expected_revision = subprocess.run(
+            ["rtk", "proxy", "git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
+        assert report["decision"] == "ACCEPTED"
+        assert report["controls"] == controls
+        assert report["tested_source_revision"] == expected_revision
+        assert report["artifact_input_equivalence"] is True
+        return {
+            "decision": report["decision"],
+            "tested_source_revision": report["tested_source_revision"],
+            "artifact_input_equivalence": report["artifact_input_equivalence"],
+        }
+
+
 def reproduce_original(revision: str, old_source: bytes, root: pathlib.Path) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="c45-old-verifier-") as temporary:
         temporary_root = pathlib.Path(temporary)
@@ -250,6 +332,7 @@ def main() -> int:
     old_source = git_show(args.original_revision)
     reproduction = reproduce_original(args.original_revision, old_source, HERE)
     module = load_verify(VERIFY)
+    success_path = run_staged_probe_success_path()
     with tempfile.TemporaryDirectory(prefix="c45-current-controls-") as temporary:
         controls = run_current_controls(module, pathlib.Path(temporary), started, args.total_timeout, args.child_timeout)
     if time.monotonic() - started > args.total_timeout:
@@ -262,6 +345,7 @@ def main() -> int:
                 "decision": "ACCEPTED",
                 "original_revision": args.original_revision,
                 "reproduction": reproduction,
+                "staged_probe_success_path": success_path,
                 "controls": controls,
                 "elapsed_seconds": round(time.monotonic() - started, 6),
             },
