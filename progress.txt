@@ -1673,3 +1673,56 @@ C18 direct cancellation-cause repair and final-source handoff checkpoint 2026-09
   external. Next action: commit/push this same task, update PR410 with the
   exact source/merge/evidence map, return `ACCEPTED` to the script CI gate
   without polling, and retain ownership for any exact-head rejection.
+
+C18 Review167 bounded-watchdog repair and current-main handoff checkpoint 2026-09-10
+
+- Admission was reverified with `factory/scripts/project-control.py
+  verify-work --type task --name audio-runtime-c18-public-strict-replay`,
+  returning `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c18-public-strict-replay"}`.
+  The isolated branch remains `codex/audio-runtime-c18-public-strict-replay`,
+  exactly matching `prd.json.branchName`; predecessor checkpoints, the running
+  host checkout, C05, and unrelated owner paths were preserved.
+- The previously integrated `origin/main=c95a2cb4` was refreshed to current
+  `origin/main=c61ee2774986c896560ee40a92441c914976000d` and merged without
+  conflict as `0059633bc0f9d613f082544a6d5daed897ff2e83`. The merge added only
+  current-main C25 evidence files. Startup `8bdafc7f`, immutable baseline
+  `3194edd9`, planning main `3bbd052b`, prior integrated main `c95a2cb4`, and
+  current origin main are all ancestors of the candidate.
+- Review167's exact defect was the unbounded `communicate()` after a timeout
+  and process-group kill. Commit `c4adde38954b2bba57debd5eb65398aa97fcfe0f`
+  changes only the owned public evidence runner/inventory: timeout cleanup now
+  captures partial output, bounds reaping, closes pipes before waiting, and
+  reports cleanup timeout/error fields. The new `watchdog` case launches an
+  escaped grandchild retaining inherited pipes and proves bounded cleanup:
+  `timed_out=true`, `cleanup_timed_out=true`, `cleanup_error=null`, exit `-9`,
+  duration `3.007628s`; report SHA256 is
+  `14ac3bab2d88723181fa7b75bac8609a6711ab5579515490520e920073dd2a59`.
+- Exact current-head source is `0059633bc0f9d613f082544a6d5daed897ff2e83`.
+  Rebuilt yui SHA256 is
+  `682560c0528f537d4a1d5c8277a9d4b7af17fa55c37bc0bc58c0e54e39de906e` and
+  the independent `GOWORK=off` consumer SHA256 is
+  `0f3c98371e30e8fe13724f51842f596317c03976c47c7a4cd03834dd01b2fb88`.
+  Fresh final public reports all pass: external `2`, strict `5`, provider
+  `7`, interruption `4`, ask `2`. Their report SHA256 values are, in that
+  order, `5a13171d34bff6cf1f2a624362c10d36d98d2208abbb77dae220be1c55c77421`,
+  `fcaf2f603b947a7fe0a18cb3124c2a1ebd17afc9aaeb5ae46bcf185a50c6ab87`,
+  `214a635a2fc4bf7b7726d63e6782cd8c3f154d9f246b97ec127245fa7dd1bf7c`,
+  `1b489a3a0ca3a2a3b2726a5f6ea6ab3a77ab2ca23a76e10c5ee1cc7cd9a2ce1d`, and
+  `f154ed8df25e8524ccb0ed0a5e4bb152f553fb0eb5ec6f8a2ae62eb39fb65b9d`.
+  The first c4 candidate interruption failures remain preserved in
+  `verify-public-interruption-c4adde38.json` and `...-repeat.json` (SHA256
+  `6850759f43e8d11c5e41f7f9fa356faf11753ea87c9a66a3df38542773af2df2` and
+  `cf1f4fd2b19e39ce7204c294b35c62f305879a54d07d1a61558a9f21d712cb07`).
+  A pre-main fdab binary also failed only under explicit `GOMAXPROCS=1`, while
+  the default scheduler passed; this characterizes the pre-existing
+  C20/main-owned output-forwarding race without editing outside C18 paths.
+- Post-merge focused checks passed: Python compile and diff check; normal and
+  race `Test.*AudioOut.*|Test.*Replay.*` runtime tests; Go vet on runtime,
+  replay, and wire; `GOWORK=off` consumer normal/race tests; and the
+  architecture-size gate (`182` packages, `1876` files, `27572` functions).
+  No script CI was polled or claimed green, and no review/merge/vertical or
+  project acceptance is claimed. Next exact action: force-add the six final
+  reports plus the two preserved first-failure reports, commit and push this
+  same task, update PR #410 with exact head/base/evidence, then return
+  `ACCEPTED` to script-owned current-head CI without polling; retain ownership
+  for any exact-head rejection.
