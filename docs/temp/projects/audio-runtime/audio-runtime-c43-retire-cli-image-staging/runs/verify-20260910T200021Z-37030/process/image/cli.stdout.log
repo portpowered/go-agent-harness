@@ -1,0 +1,8 @@
+Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c43-retire-cli-image-staging; additional_allowed_roots=none
+Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.
+Tools: read_image, show_page, webmcp_cancel, webmcp_get_context, webmcp_invoke, webmcp_list_tabs, webmcp_list_tools, webmcp_navigate_tab, webmcp_open_tab, webmcp_select_tab
+Tool result: {"version":2,"status":"success","mime_type":"image/png","byte_length":70,"sha256":"4ff6ab670a58c14270e034e2090d9a432caa263a14e0a25785386b0c12f880b5","typed_projection":"input_image"}
+Assistant: c43 shipped image workflow verified
+
+[session closed: fixture_complete]
+[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]

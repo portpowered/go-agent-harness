@@ -1,0 +1,35 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>C43 WebMCP refresh fixture</title>
+<body>C43 WebMCP dynamic refresh fixture</body>
+<script>
+(() => {
+  const modelContext = document.modelContext || navigator.modelContext;
+  const schema = {
+    type: "object",
+    properties: { value: { type: "string" } },
+    additionalProperties: false
+  };
+  const makeTool = (name, description) => ({
+    name,
+    description,
+    inputSchema: schema,
+    execute: async () => ({ content: [{ type: "text", text: name }] })
+  });
+  if (!modelContext || typeof modelContext.registerTool !== "function") {
+    document.body.dataset.c43Error = "native WebMCP registerTool unavailable";
+    return;
+  }
+  (async () => {
+    await modelContext.registerTool(makeTool("c43_initial_probe", "C43 initial native WebMCP probe"));
+    await fetch("/c43-status?state=initial");
+    window.setTimeout(async () => {
+      await modelContext.registerTool(makeTool("c43_refreshed_probe", "C43 dynamically refreshed native WebMCP probe"));
+      await fetch("/c43-status?state=refreshed");
+    }, 1200);
+  })().catch((error) => {
+    document.body.dataset.c43Error = String(error);
+    fetch("/c43-status?state=" + encodeURIComponent("initial-error:" + String(error)));
+  });
+})();
+</script>
