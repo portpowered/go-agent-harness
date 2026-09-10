@@ -1,6 +1,6 @@
 # C30 verification checkpoint
 
-Candidate source revision: `1e3a15e97179185750bc1531ff6d8b75ca7fa57b`
+Candidate source revision: `df08f066140aa16eef784cb862d124c129477c9a`
 Branch: `codex/audio-runtime-c30-frame-dimension-safety`
 Fetched `origin/main`: `1f82284abee0bd31a6680310444cea2e4c16ef00`
 Startup integration revision: `8bdafc7f947a3a2c9856220abdc539437035bd21`
@@ -62,13 +62,30 @@ The existing PCM16 framer implementation and regression were co-located with
 the new frame-sizing files so the maintained package-file count stays at the
 recorded 49; no architecture baseline or policy file was changed.
 
+## Script-static rejection repair
+
+The canonical task inbox returned PR #422 head
+`38f15d822ce265a0e9b4303d71a1a0f4911c39ad` to the executor because the hosted
+`CI (static)` job failed its `Run golangci-lint` step. Its gofmt, Wire,
+architecture/size, vet, and staticcheck steps succeeded. The pinned local
+`rtk make lint` reproduced the two `errcheck` findings in the new room test:
+the cleanup callbacks did not check `mixer.Close()` errors.
+
+Repair commit `df08f066140aa16eef784cb862d124c129477c9a` reports close errors
+through `t.Errorf` in both callbacks without changing production code or test
+deadlines. After the repair, `rtk make fmt`, `rtk make wire-check`,
+`rtk make architecture-size-check`, `rtk make vet`, `rtk make lint`, and
+`rtk make staticcheck` all exited 0; lint reported `0 issues` for every
+module, and the architecture gate remained at 181 packages, 1864 files, and
+27358 functions. No CI run was polled locally.
+
 ## Bounded public consumer
 
 The evidence-local module builds with `GOWORK=off` and does not modify any
 repository module manifest. The exact build and run records are in
 `artifacts/build.json`, `artifacts/artifact-manifest.json`, and the two result
 files below. All records use candidate source revision
-`1e3a15e97179185750bc1531ff6d8b75ca7fa57b`.
+`df08f066140aa16eef784cb862d124c129477c9a`.
 
 ```text
 command: rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/run.py --build --source-root .
@@ -78,12 +95,12 @@ status: pass
 command: rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/run.py --positive --source-root .
 exit code: 0
 status: pass; child exit_code=0; clean_shutdown=true
-result: runs/positive-o55l3f6m/result.json
+result: runs/positive-duxk8xod/result.json
 
 command: rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/run.py --negative-control --source-root .
 exit code: 0 (runner success; child intentionally exits 1)
 status: pass; child exit_code=1; clean_shutdown=true
-result: runs/negative-control-bwoilxph/result.json
+result: runs/negative-control-0ycza70a/result.json
 causal mismatch: actual_samples=480 mutated_expected=481
 ```
 
