@@ -1,7 +1,7 @@
 {
   "task": "audio-runtime-c20-bounded-recording-spools",
   "project": "audio-runtime",
-  "sourceRevision": "4d1913bbb0a1d3765677f79fea5b1316e0c6fed4",
+  "sourceRevision": "9eeb6cf1496dbe8e4e501aae694109d75983a23b",
   "baseRevision": "e4137eba6a6499142f50701609c1149afc71db84",
   "requiredAncestry": {
     "baseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -35,22 +35,22 @@
       "case": "many-small",
       "pacedEvents": 512,
       "status": "complete",
-      "totalBytes": 278013,
+      "totalBytes": 277959,
       "transcriptLines": 513,
       "notes": "Queue drains between observations; cumulative pre-fix transcript/metadata growth remains visible."
     },
     "candidateBaselinePair": {
       "case": "many-small",
       "status": "partial",
-      "totalBytes": 38293,
+      "totalBytes": 38297,
       "transcriptLines": 66,
       "finalizationErrorClass": "recording evidence budget exceeded / io.ErrShortBuffer",
       "candidateProviderBytes": 433,
       "terminalSidecarBytes": 448,
-      "sourceRevision": "4d1913bbb0a1d3765677f79fea5b1316e0c6fed4"
+      "sourceRevision": "9eeb6cf1496dbe8e4e501aae694109d75983a23b"
     },
     "normal": {
-      "sourceRevision": "4d1913bbb0a1d3765677f79fea5b1316e0c6fed4",
+      "sourceRevision": "9eeb6cf1496dbe8e4e501aae694109d75983a23b",
       "status": "complete",
       "totalBytes": 5240,
       "pcmBytes": 8,
@@ -59,7 +59,7 @@
       "transcriptLinesPerSide": 3
     },
     "largeRecord": {
-      "sourceRevision": "4d1913bbb0a1d3765677f79fea5b1316e0c6fed4",
+      "sourceRevision": "9eeb6cf1496dbe8e4e501aae694109d75983a23b",
       "status": "partial",
       "totalBytes": 3276,
       "transcriptLinesPerSide": 1,
@@ -67,13 +67,13 @@
       "terminalPreserved": true
     },
     "providerOverflow": {
-      "sourceRevision": "4d1913bbb0a1d3765677f79fea5b1316e0c6fed4",
+      "sourceRevision": "9eeb6cf1496dbe8e4e501aae694109d75983a23b",
       "providerError": "provider capture cumulative budget exceeded",
       "publishedProviderBytes": 0,
       "normalEnvelopePublished": false
     },
     "defaultOverflow": {
-      "sourceRevision": "4d1913bbb0a1d3765677f79fea5b1316e0c6fed4",
+      "sourceRevision": "9eeb6cf1496dbe8e4e501aae694109d75983a23b",
       "case": "default-overflow",
       "requestedLimits": {
         "transcriptBytes": 0,
@@ -85,8 +85,8 @@
       },
       "pacedRecords": 48,
       "status": "partial",
-      "totalBytes": 53487973,
-      "transcriptBytesPerSide": 26743250,
+      "totalBytes": 53487977,
+      "transcriptBytesPerSide": 26743253,
       "transcriptLinesPerSide": 19,
       "providerBytes": 439,
       "sidecarBytes": 448,
@@ -94,7 +94,7 @@
       "terminalPreserved": true,
       "recordedOutput": {
         "path": "default-overflow.json",
-        "sha256": "4dc78bf1b396bba263defcd7982970b87712bd57f62d2c7e20c9f12177426646"
+        "sha256": "8aabb88926f3ca20ad38eb43c3927cdc71d234c599a0a453af463fa44b10f642"
       }
     }
   },
@@ -103,6 +103,9 @@
     "goTestRecordingRace": "87 passed in 4 packages",
     "goVetRecording": "no issues",
     "coverageRecordingEvidence": "78 passed; 81.4% focused package coverage",
+    "familyA": "50 normal and 10 race repetitions passed",
+    "composition": "93 normal and 93 race tests passed",
+    "remoteIntegration": "18 focused normal tests passed",
     "architectureSize": "passed: 181 packages, 1860 files, 27410 functions",
     "diffCheck": "passed",
     "ci": "not polled; script-owned gate remains external",
