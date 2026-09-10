@@ -66,13 +66,14 @@ The owned repair is confined to
 `session_audio_out.go` and `session_audio_out_test.go`:
 
 - provider ingress is connected without the caller cancellation signal;
-- the wrapper drains the finite accepted provider buffer under a bounded,
-  non-cancellable teardown context, waiting for the shared straggler quiet
-  period before closing the underlying session;
+- the wrapper requests the underlying session close as a terminal barrier, then
+  drains the finite accepted provider buffer under a bounded, non-cancellable
+  teardown context until that barrier settles;
 - assistant PCM is written before best-effort public-buffer publication during
   teardown; and
-- clean interruption uses a barrier regression that cancels while the first
-  write is held, then accepts and verifies the healthy replacement in order.
+- clean interruption uses barrier regressions for both a delayed delta and a
+  cancellation that races session connection, then accepts and verifies the
+  healthy replacement in order.
 
 The regression preserves explicit cancellation, malformed-delta and sink-write
 error behavior. It does not preserve arbitrary stale messages: only accepted
@@ -103,8 +104,8 @@ against immutable artifacts, including strict directory replay. `causal` checks
 the source boundary and deterministic barrier regression. `repaired` rebuilds
 when no artifact is supplied, then requires every frozen PCM, trace, manifest,
 transcript, session-log, terminal, marker, and strict-replay oracle. The
-negative suite proves a mutated expected byte count is rejected even when its
-child exits zero, and that strict replay rejects a missing timeline. The
+negative suite mutates a real rendered PCM byte and proves the validator
+rejects its changed SHA-256, while strict replay rejects a missing timeline. The
 cleanup control verifies bounded TERM/KILL/reap with capped output and no
 surviving process group.
 

@@ -6,6 +6,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"io"
 	"math"
 	"os"
@@ -15,11 +19,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestRunSessionWithAudioOut_RoutesAssistantDeltasToRawStdout(t *testing.T) {
@@ -33,7 +32,6 @@ func TestRunSessionWithAudioOut_RoutesAssistantDeltasToRawStdout(t *testing.T) {
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(pcm16Bytes(second))},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}}
-
 	var stdout bytes.Buffer
 	err := RunSessionWithAudioOut(context.Background(), &stdout, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
@@ -42,7 +40,6 @@ func TestRunSessionWithAudioOut_RoutesAssistantDeltasToRawStdout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunSessionWithAudioOut: %v", err)
 	}
-
 	want := append(pcm16Bytes(first), pcm16Bytes(second)...)
 	if !bytes.Equal(stdout.Bytes(), want) {
 		t.Fatalf("raw stdout = %d bytes, want exact assistant PCM16 bytes", stdout.Len())
@@ -60,14 +57,12 @@ func TestRunSessionWithAudioOut_FinalizesPlayableWAV(t *testing.T) {
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm16Bytes(second))},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}}
-
 	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
 	}, path); err != nil {
 		t.Fatalf("RunSessionWithAudioOut: %v", err)
 	}
-
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +89,6 @@ func TestRunSessionWithAudioOut_S14ReplayMatchesWAVGoldenAndEnergy(t *testing.T)
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm16Bytes(wantSamples[3:]))},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	})
-
 	path := filepath.Join(t.TempDir(), "s14-response.wav")
 	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        replayPath,
@@ -103,7 +97,6 @@ func TestRunSessionWithAudioOut_S14ReplayMatchesWAVGoldenAndEnergy(t *testing.T)
 	if err != nil {
 		t.Fatalf("S14 replay: %v", err)
 	}
-
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +109,6 @@ func TestRunSessionWithAudioOut_S14ReplayMatchesWAVGoldenAndEnergy(t *testing.T)
 	if !bytes.Equal(data, wantGolden) {
 		t.Fatalf("S14 WAV differs from committed golden %s", goldenPath)
 	}
-
 	rate, gotSamples, err := wavio.Read(bytes.NewReader(data))
 	if err != nil {
 		t.Fatalf("read S14 WAV: %v", err)
@@ -140,7 +132,6 @@ func TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas(t *testing.T
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}}
 	path := filepath.Join(t.TempDir(), "split-response.raw")
-
 	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
@@ -178,7 +169,6 @@ func TestRunSessionWithAudioOut_GrowsAndParsesRegularWAVBeforeCompletion(t *test
 			SessionInferencer: inf,
 		}, path)
 	}()
-
 	data := waitForSessionAudioWAVSamples(t, path, first)
 	rate, samples, err := wavio.Read(bytes.NewReader(data))
 	if err != nil {
@@ -187,7 +177,6 @@ func TestRunSessionWithAudioOut_GrowsAndParsesRegularWAVBeforeCompletion(t *test
 	if rate != audio.SampleRate || !equalInt16(samples, first) {
 		t.Fatalf("streaming WAV before completion = rate %d samples %d, want first %d-sample delta", rate, len(samples), len(first))
 	}
-
 	close(release)
 	released = true
 	select {
@@ -210,14 +199,12 @@ func TestRunSessionWithAudioOut_GrowsAndParsesRegularWAVBeforeCompletion(t *test
 		t.Fatalf("final streaming WAV has %d samples, want exact ordered deltas", len(samples))
 	}
 }
-
 func TestRunSessionWithAudioOut_NoAudioRemovesEmptyWAV(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "silent.wav")
 	inf := &scriptedSessionInferencer{events: []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("silence")},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}}
-
 	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
@@ -228,11 +215,9 @@ func TestRunSessionWithAudioOut_NoAudioRemovesEmptyWAV(t *testing.T) {
 		t.Fatalf("silent WAV stat error = %v, want no corrupt output file", err)
 	}
 }
-
 func TestRunSessionWithAudioOut_PreflightsPathBeforeSessionConnect(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing", "response.wav")
 	inf := &scriptedSessionInferencer{}
-
 	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
@@ -244,14 +229,12 @@ func TestRunSessionWithAudioOut_PreflightsPathBeforeSessionConnect(t *testing.T)
 		t.Fatal("invalid audio output path connected to the session")
 	}
 }
-
 func TestRunSessionWithAudioOut_PreflightsDirectoryTargetBeforeSessionConnect(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "response.wav")
 	if err := os.Mkdir(path, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	inf := &scriptedSessionInferencer{}
-
 	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
@@ -267,7 +250,6 @@ func TestRunSessionWithAudioOut_PreflightsDirectoryTargetBeforeSessionConnect(t 
 		t.Fatal("directory audio output target connected to the session")
 	}
 }
-
 func TestRunSessionWithAudioOut_UnwritableFileFailsBeforeSessionConnect(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "readonly.wav")
 	if err := os.WriteFile(path, []byte("preserve"), 0o600); err != nil {
@@ -282,7 +264,6 @@ func TestRunSessionWithAudioOut_UnwritableFileFailsBeforeSessionConnect(t *testi
 		}
 	}()
 	inf := &scriptedSessionInferencer{}
-
 	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
@@ -294,7 +275,6 @@ func TestRunSessionWithAudioOut_UnwritableFileFailsBeforeSessionConnect(t *testi
 		t.Fatal("unwritable audio output target connected to the session")
 	}
 }
-
 func TestRunSessionWithAudioOut_DoesNotTruncateWhenSessionOptionsAreInvalid(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "preserved.wav")
 	want := []byte("do not truncate")
@@ -302,7 +282,6 @@ func TestRunSessionWithAudioOut_DoesNotTruncateWhenSessionOptionsAreInvalid(t *t
 		t.Fatal(err)
 	}
 	inf := &scriptedSessionInferencer{}
-
 	err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:        "record.json",
 		ReplayPath:        "replay.json",
@@ -322,7 +301,6 @@ func TestRunSessionWithAudioOut_DoesNotTruncateWhenSessionOptionsAreInvalid(t *t
 		t.Fatal("invalid session options connected to the session")
 	}
 }
-
 func TestRunSessionWithAudioOut_GrowsBeforeSessionCompletes(t *testing.T) {
 	first := []int16{1200, 1201, 1202}
 	second := sessionAudioFrame(-1400)
@@ -335,7 +313,6 @@ func TestRunSessionWithAudioOut_GrowsBeforeSessionCompletes(t *testing.T) {
 		second:  pcm16Bytes(second),
 		release: release,
 	}
-
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- RunSessionWithAudioOut(context.Background(), writer, SessionRunOptions{ModelCatalog: testModelCatalog(),
@@ -343,7 +320,6 @@ func TestRunSessionWithAudioOut_GrowsBeforeSessionCompletes(t *testing.T) {
 			SessionInferencer: inf,
 		}, "-")
 	}()
-
 	select {
 	case <-firstWritten:
 	case <-time.After(2 * time.Second):
@@ -353,7 +329,6 @@ func TestRunSessionWithAudioOut_GrowsBeforeSessionCompletes(t *testing.T) {
 		t.Fatalf("stdout after first delta = %d bytes, want exactly first delta", len(got))
 	}
 	close(release)
-
 	select {
 	case err := <-errCh:
 		if err != nil {
@@ -367,7 +342,6 @@ func TestRunSessionWithAudioOut_GrowsBeforeSessionCompletes(t *testing.T) {
 		t.Fatalf("completed stdout = %d bytes, want ordered multi-delta PCM16", len(got))
 	}
 }
-
 func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
 	first, second := sessionAudioFrame(800), sessionAudioFrame(-900)
 	providerRelease, writerRelease := make(chan struct{}), make(chan struct{})
@@ -386,7 +360,6 @@ func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
 			SessionInferencer: inf,
 		}, "-")
 	}()
-
 	select {
 	case <-firstWritten:
 	case <-time.After(2 * time.Second):
@@ -408,7 +381,39 @@ func TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt(t *testing.T) {
 		t.Fatalf("interrupted PCM = %d bytes, want both accepted deltas (%d bytes)", len(got), len(want))
 	}
 }
-
+func TestSessionAudioOutput_RetainsDelayedDeltaAcrossCancellationBarrier(t *testing.T) {
+	for index, cancelBeforeConnect := range []bool{false, true} {
+		t.Run([]string{"delayed-delta", "canceled-connect"}[index], func(t *testing.T) { runSessionAudioCancellationBarrier(t, cancelBeforeConnect) })
+	}
+}
+func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) {
+	ctx, cancel := context.WithCancel(context.Background())
+	provider := &sessionAudioTerminalBarrierSession{scriptedSession: newScriptedSession(), closeStarted: make(chan struct{}), releaseClose: make(chan struct{}), releaseConnect: make(chan struct{}), connectStarted: make(chan struct{})}
+	var output bytes.Buffer
+	sink, _ := newSessionAudioSinkAtRate("-", &output, audio.SampleRate)
+	connected := make(chan messages.Session, 1)
+	go func() {
+		connectedSession, _ := newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "").ConnectSession(ctx)
+		connected <- connectedSession
+	}()
+	waitForClosedTargetSignal(t, context.Background(), provider.connectStarted, "connect start")
+	if cancelBeforeConnect {
+		cancel()
+	}
+	close(provider.releaseConnect)
+	session := <-connected
+	cancel()
+	go func() { _ = session.Close() }()
+	waitForClosedTargetSignal(t, context.Background(), provider.closeStarted, "provider close start")
+	time.Sleep(2 * sessionStragglerDrainQuietPeriod)
+	want := pcm16Bytes(sessionAudioFrame(1200))
+	_ = provider.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(want)})
+	close(provider.releaseClose)
+	_ = session.Close()
+	if !bytes.Equal(output.Bytes(), want) {
+		t.Fatalf("retained PCM = %d bytes, want delayed delta %d bytes", output.Len(), len(want))
+	}
+}
 func TestRunSessionWithAudioOut_FinalizesOnMaxDuration(t *testing.T) {
 	first := sessionAudioFrame(1000)
 	release := make(chan struct{})
@@ -419,7 +424,6 @@ func TestRunSessionWithAudioOut_FinalizesOnMaxDuration(t *testing.T) {
 		second:  pcm16Bytes(sessionAudioFrame(-1100)),
 		release: release,
 	}
-
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- RunSessionWithAudioOutAndTextSeedAndMaxDuration(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
@@ -427,7 +431,6 @@ func TestRunSessionWithAudioOut_FinalizesOnMaxDuration(t *testing.T) {
 			SessionInferencer: inf,
 		}, path, 50*time.Millisecond, SessionTextSeed{})
 	}()
-
 	_ = waitForSessionAudioFileGrowth(t, path, sessionAudioWAVHeaderSize+len(first)*2)
 	select {
 	case err := <-errCh:
@@ -449,7 +452,6 @@ func TestRunSessionWithAudioOut_FinalizesOnMaxDuration(t *testing.T) {
 		t.Fatalf("max-duration WAV samples = %d, want complete first delta", len(samples))
 	}
 }
-
 func TestRunSessionWithAudioOut_TruncatesExistingRawFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "response.raw")
 	if err := os.WriteFile(path, []byte("stale output"), 0o600); err != nil {
@@ -458,7 +460,6 @@ func TestRunSessionWithAudioOut_TruncatesExistingRawFile(t *testing.T) {
 	inf := &scriptedSessionInferencer{events: []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}}
-
 	if err := RunSessionWithAudioOut(context.Background(), io.Discard, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
@@ -473,14 +474,12 @@ func TestRunSessionWithAudioOut_TruncatesExistingRawFile(t *testing.T) {
 		t.Fatalf("existing raw file retained %d stale bytes", len(data))
 	}
 }
-
 func TestRunSessionWithAudioOut_PreservesSinkWriteError(t *testing.T) {
 	wantErr := errors.New("stdout write failed")
 	inf := &scriptedSessionInferencer{events: []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(pcm16Bytes(sessionAudioFrame(700)))},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}}
-
 	err := RunSessionWithAudioOut(context.Background(), sessionAudioErrorWriter{err: wantErr}, SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.json",
 		SessionInferencer: inf,
@@ -489,7 +488,6 @@ func TestRunSessionWithAudioOut_PreservesSinkWriteError(t *testing.T) {
 		t.Fatalf("write error = %v, want underlying error", err)
 	}
 }
-
 func sessionAudioFrame(seed int16) []int16 {
 	frame := make([]int16, audio.FrameSize)
 	for index := range frame {
@@ -497,7 +495,6 @@ func sessionAudioFrame(seed int16) []int16 {
 	}
 	return frame
 }
-
 func pcm16Bytes(samples []int16) []byte {
 	data := make([]byte, len(samples)*2)
 	for index, sample := range samples {
@@ -505,7 +502,6 @@ func pcm16Bytes(samples []int16) []byte {
 	}
 	return data
 }
-
 func equalInt16(got, want []int16) bool {
 	if len(got) != len(want) {
 		return false
@@ -517,7 +513,6 @@ func equalInt16(got, want []int16) bool {
 	}
 	return true
 }
-
 func sessionAudioRMS(samples []int16) float64 {
 	if len(samples) == 0 {
 		return 0
@@ -529,7 +524,6 @@ func sessionAudioRMS(samples []int16) float64 {
 	}
 	return math.Sqrt(sum / float64(len(samples)))
 }
-
 func sessionAudioWAVGoldenPath(t *testing.T) string {
 	t.Helper()
 	_, sourcePath, _, ok := runtime.Caller(0)
@@ -538,7 +532,6 @@ func sessionAudioWAVGoldenPath(t *testing.T) string {
 	}
 	return filepath.Join(filepath.Dir(sourcePath), "..", "..", "..", "..", "..", "go-audio", "pkg", "wavio", "testdata", "pcm16-mono-16000.wav")
 }
-
 func writeSessionAudioReplayFixture(t *testing.T, path string, events []messages.StreamMessage) {
 	t.Helper()
 	records := make([]gwtesting.CapturedSessionEvent, len(events))
@@ -569,7 +562,6 @@ func writeSessionAudioReplayFixture(t *testing.T, path string, events []messages
 		t.Fatalf("write replay fixture: %v", err)
 	}
 }
-
 func waitForSessionAudioFileGrowth(t *testing.T, path string, wantSize int) []byte {
 	t.Helper()
 	deadline := time.NewTimer(2 * time.Second)
@@ -588,7 +580,6 @@ func waitForSessionAudioFileGrowth(t *testing.T, path string, wantSize int) []by
 		}
 	}
 }
-
 func waitForSessionAudioWAVSamples(t *testing.T, path string, want []int16) []byte {
 	t.Helper()
 	deadline := time.NewTimer(2 * time.Second)
@@ -611,13 +602,9 @@ func waitForSessionAudioWAVSamples(t *testing.T, path string, want []int16) []by
 	}
 }
 
-type sessionAudioErrorWriter struct {
-	err error
-}
+type sessionAudioErrorWriter struct{ err error }
 
-func (w sessionAudioErrorWriter) Write([]byte) (int, error) {
-	return 0, w.err
-}
+func (w sessionAudioErrorWriter) Write([]byte) (int, error) { return 0, w.err }
 
 type growingSessionAudioWriter struct {
 	mu           sync.Mutex
@@ -639,7 +626,6 @@ func (w *growingSessionAudioWriter) Write(data []byte) (int, error) {
 	}
 	return n, err
 }
-
 func (w *growingSessionAudioWriter) snapshot() []byte {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -651,7 +637,21 @@ type gatedSessionAudioInferencer struct {
 	second  []byte
 	release <-chan struct{}
 }
+type sessionAudioTerminalBarrierSession struct {
+	*scriptedSession
+	closeStarted, releaseClose, releaseConnect, connectStarted chan struct{}
+}
 
+func (s *sessionAudioTerminalBarrierSession) ConnectSession(context.Context) (messages.Session, error) {
+	close(s.connectStarted)
+	<-s.releaseConnect
+	return s, nil
+}
+func (s *sessionAudioTerminalBarrierSession) Close() error {
+	close(s.closeStarted)
+	<-s.releaseClose
+	return s.scriptedSession.Close()
+}
 func (i *gatedSessionAudioInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session := newScriptedSession()
 	go func() {

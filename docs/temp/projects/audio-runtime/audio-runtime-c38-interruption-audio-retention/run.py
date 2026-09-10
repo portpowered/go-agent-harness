@@ -1004,6 +1004,7 @@ def build_repaired_artifact(source_root: Path, evidence_dir: Path, run_dir: Path
     artifacts.mkdir(parents=True, exist_ok=True)
     artifact = artifacts / "yui-c38-repaired"
     source_revision = git_output(source_root, "rev-parse", "HEAD")
+    build_inputs = build_input_manifest(source_root)
     argv = ["go", "build", "-tags=nomicrophone", "-trimpath", "-o", str(artifact), "./agent-cli/cmd/yui"]
     env = os.environ.copy()
     env["GOWORK"] = ""
@@ -1016,6 +1017,7 @@ def build_repaired_artifact(source_root: Path, evidence_dir: Path, run_dir: Path
         "source_root": str(source_root),
         "source_revision": source_revision,
         "source_identity": source_identity(source_root),
+        "build_inputs": build_inputs,
         "result": result,
         "artifact": str(artifact),
         "artifact_sha256": sha256_file(artifact),
@@ -1115,7 +1117,8 @@ def run_causal(source_root: Path, fixtures: Path, evidence_dir: Path) -> dict[st
         "drainAfterCancellation",
         "forwardMessageWithContext",
         "closeRequested",
-        "sessionStragglerDrainQuietPeriod",
+        "closeInner",
+        "innerCloseDone",
     )
     if any(marker not in current_source for marker in expected_markers):
         raise EvidenceFailure("current session audio output source is missing one or more causal repair markers")
@@ -1128,7 +1131,7 @@ def run_causal(source_root: Path, fixtures: Path, evidence_dir: Path) -> dict[st
             "test",
             "./agent-cli/internal/services/internal/agentruntime",
             "-run",
-            "^TestRunSessionWithAudioOut_FinalizesOnCleanInterrupt$",
+            "^(TestRunSessionWithAudioOut_.*|TestSessionAudioOutput_RetainsDelayedDeltaAcrossCancellationBarrier)$",
             "-count=1",
             "-timeout",
             "120s",
@@ -1155,7 +1158,7 @@ def run_causal(source_root: Path, fixtures: Path, evidence_dir: Path) -> dict[st
             {
                 "question": "Does provider ingress stop before the output wrapper can retain accepted frames?",
                 "boundary": "sessionAudioOutputInferencer.ConnectSession",
-                "evidence": "The repaired wrapper connects the provider with a non-cancelled ingress context and drains until the shared straggler quiet period, bounded by wall safety, before underlying Close.",
+                "evidence": "The repaired wrapper connects the provider with a non-cancelled ingress context, requests the underlying Close as a terminal barrier, and drains accepted messages until that barrier settles, bounded by wall safety.",
                 "result": "resolved_in_owned_session_audio_output",
             },
             {
@@ -1181,21 +1184,46 @@ def run_causal(source_root: Path, fixtures: Path, evidence_dir: Path) -> dict[st
     return {"status": "pass", "decision": "CAUSAL_PROOF", "run_dir": str(run_dir), "report": report}
 
 
-def run_mutated_oracle_control(run_dir: Path) -> dict[str, Any]:
-    actual = run_dir / "oracle-input.pcm"
-    actual.write_bytes(bytes(3360))
+def run_mutated_oracle_control(run_dir: Path, pcm_path: Path) -> dict[str, Any]:
+    if not pcm_path.is_file():
+        raise EvidenceFailure(f"mutated-oracle source PCM is unavailable: {pcm_path}")
+    original = pcm_path.read_bytes()
+    if not original:
+        raise EvidenceFailure(f"mutated-oracle source PCM is empty: {pcm_path}")
+    original_path = run_dir / "oracle-input.pcm"
+    mutated_path = run_dir / "oracle-mutated.pcm"
+    original_path.write_bytes(original)
+    mutated = bytearray(original)
+    mutated[0] ^= 0x01
+    mutated_path.write_bytes(mutated)
+    original_sha256 = sha256_bytes(original)
     script = (
         "import hashlib, json, pathlib, sys; "
         "p=pathlib.Path(sys.argv[1]); b=p.read_bytes(); "
-        "print(json.dumps({'actual_bytes':len(b),'actual_sha256':hashlib.sha256(b).hexdigest(),'mutated_expected_bytes':len(b)+1})); "
-        "raise SystemExit(0)"
+        "observed={'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()}; print(json.dumps(observed)); "
+        "raise SystemExit(0 if observed['bytes']==int(sys.argv[2]) and observed['sha256']==sys.argv[3] else 1)"
     )
-    result = run_process("mutated-oracle-clean-child", [sys.executable, "-c", script, str(actual)], cwd=run_dir, run_dir=run_dir, timeout_seconds=CHILD_TIMEOUT_SECONDS)
-    require_exit(result, 0, "mutated-oracle clean child")
+    result = run_process(
+        "mutated-oracle-validator",
+        [sys.executable, "-c", script, str(mutated_path), str(len(original)), original_sha256],
+        cwd=run_dir,
+        run_dir=run_dir,
+        timeout_seconds=CHILD_TIMEOUT_SECONDS,
+    )
+    require_exit(result, 1, "mutated PCM/hash oracle")
     payload = json.loads(result["stdout"])
-    if payload.get("actual_bytes") == payload.get("mutated_expected_bytes"):
-        raise EvidenceFailure("mutated oracle unexpectedly matched")
-    record = {"child": result, "payload": payload, "outer_rejected": True, "reason": "expected byte count was mutated while child exited 0"}
+    mutated_sha256 = sha256_bytes(mutated)
+    if payload.get("bytes") != len(original) or payload.get("sha256") != mutated_sha256 or mutated_sha256 == original_sha256:
+        raise EvidenceFailure(f"mutated PCM/hash validator did not observe the real mutation: {payload}")
+    record = {
+        "child": result,
+        "source_pcm": str(pcm_path),
+        "original": {"path": str(original_path), "bytes": len(original), "sha256": original_sha256},
+        "mutated": {"path": str(mutated_path), "bytes": len(mutated), "sha256": mutated_sha256},
+        "payload": payload,
+        "outer_rejected": True,
+        "reason": "the validator rejected a same-length PCM mutation by SHA-256 while preserving the byte-count oracle",
+    }
     (run_dir / "mutated-oracle.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     return record
 
@@ -1206,7 +1234,8 @@ def run_negative_controls(source_root: Path, fixtures: Path, evidence_dir: Path)
     consumer = legacy_consumer_path()
     consumer_result = run_consumer_controls(consumer, source_root, run_dir / "consumer")
     public = run_public_matrix(yui, fixtures, run_dir / "public", enforce_pcm=False)
-    mutated = run_mutated_oracle_control(run_dir)
+    interruption_pcm = Path(public["cases"]["interruption"]["observation"]["manifest"]).parent.parent / "rendered.pcm"
+    mutated = run_mutated_oracle_control(run_dir, interruption_pcm)
     missing = public["missing_timeline_control"]
     return {
         "status": "pass",
@@ -1259,7 +1288,7 @@ def run_cleanup_control(evidence_dir: Path) -> dict[str, Any]:
 
 def run_focused_checks(source_root: Path, evidence_dir: Path) -> dict[str, Any]:
     run_dir = make_run_dir(evidence_dir, "focused-checks")
-    test_pattern = "^TestRunSessionWithAudioOut_.*$"
+    test_pattern = "^(TestRunSessionWithAudioOut_.*|TestSessionAudioOutput_RetainsDelayedDeltaAcrossCancellationBarrier)$"
     commands = [
         ("normal", ["go", "test", "./agent-cli/internal/services/internal/agentruntime", "-run", test_pattern, "-count=1", "-timeout", "120s"]),
         ("race", ["go", "test", "-race", "./agent-cli/internal/services/internal/agentruntime", "-run", test_pattern, "-count=1", "-timeout", "120s"]),
@@ -1353,10 +1382,32 @@ def run_package(source_root: Path, fixtures: Path, evidence_dir: Path, requested
     prd = load_json(source_root / "prd.json")
     if branch != prd.get("branchName"):
         raise EvidenceFailure(f"package branch={branch!r} does not match prd.branchName={prd.get('branchName')!r}")
+    status = git_output(source_root, "status", "--short", "--untracked-files=all")
+    if status:
+        raise EvidenceFailure(f"package requires a clean source tree before provenance capture: {status}")
+    source_revision = git_output(source_root, "rev-parse", "HEAD")
+    source_id = source_identity(source_root)
+    if source_id != source_revision:
+        raise EvidenceFailure(f"package source identity is unexpectedly dirty: {source_id}")
+    if requested_artifact is None:
+        raise RunnerBlocked("package mode requires --artifact for the exact rebuilt candidate")
+    artifact_info = assert_new_artifact(requested_artifact)
+    build_manifest = evidence_dir / "artifacts" / "repaired-build.json"
+    if not build_manifest.is_file():
+        raise RunnerBlocked(f"repaired build provenance is unavailable: {build_manifest}")
+    build_record = load_json(build_manifest)
+    if not isinstance(build_record, dict):
+        raise EvidenceFailure(f"repaired build provenance is not an object: {build_manifest}")
+    inputs = build_input_manifest(source_root)
+    if build_record.get("build_inputs") != inputs:
+        raise EvidenceFailure("repaired artifact build-input manifest does not match the clean package source")
+    if build_record.get("source_revision") != source_revision or build_record.get("source_identity") != source_revision:
+        raise EvidenceFailure(f"repaired build provenance source mismatch: {build_record}")
+    recorded_artifact = Path(str(build_record.get("artifact", ""))).expanduser().resolve()
+    if recorded_artifact != Path(artifact_info["path"]).resolve() or build_record.get("artifact_sha256") != artifact_info["sha256"] or build_record.get("artifact_bytes") != artifact_info["bytes"]:
+        raise EvidenceFailure(f"repaired artifact provenance mismatch: build={build_record} package={artifact_info}")
     helper = architecture_helper_reference()
     references = canonical_reference()
-    inputs = build_input_manifest(source_root)
-    status = git_output(source_root, "status", "--short", "--untracked-files=all")
     record = {
         "schema": "audio-runtime-c38-package.v1",
         "status": "pass",
@@ -1365,16 +1416,18 @@ def run_package(source_root: Path, fixtures: Path, evidence_dir: Path, requested
         "work": "audio-runtime-c38-interruption-audio-retention",
         "branch": branch,
         "source_root": str(source_root),
-        "source_revision": git_output(source_root, "rev-parse", "HEAD"),
-        "source_identity": source_identity(source_root),
+        "source_revision": source_revision,
+        "source_identity": source_id,
+        "source_clean": True,
         "ancestry": ancestry(source_root),
-        "working_tree_status": status.splitlines() if status else [],
+        "working_tree_status": [],
         "owned_paths": prd.get("ownedPaths", []),
         "build_inputs": inputs,
         "architecture_helper": helper,
         "canonical_c30": references,
         "fixtures": fixture_inventory(fixtures),
-        "artifact": assert_new_artifact(requested_artifact) if requested_artifact is not None else None,
+        "artifact": artifact_info,
+        "build_provenance": {"manifest": str(build_manifest), "source_revision": build_record["source_revision"], "build_inputs_sha256": build_record["build_inputs"]["sha256"]},
         "limits": {"child_seconds": CHILD_TIMEOUT_SECONDS, "targeted_seconds": TARGETED_TIMEOUT_SECONDS, "aggregate_seconds": AGGREGATE_TIMEOUT_SECONDS, "realtime_sessions": 0, "physical_device": False},
         "external_gates": ["script current-head CI", "independent Luna review", "guarded merge-reviewed.py", "fresh post-delivery vertical validation"],
     }
