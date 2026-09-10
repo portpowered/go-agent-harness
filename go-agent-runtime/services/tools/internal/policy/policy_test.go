@@ -192,7 +192,11 @@ func TestSnapshotCloneAndInputIsolation(t *testing.T) {
 		t.Fatalf("resolved policy changed after input mutation: %s", got)
 	}
 
-	clone := resolved.Clone().(*snapshot)
+	clonePolicy := resolved.Clone()
+	clone, ok := clonePolicy.(*snapshot)
+	if !ok {
+		t.Fatalf("Clone() returned %T, want *snapshot", clonePolicy)
+	}
 	clone.classes["read_file"] = public.InteractiveToolClassBoundedLongRunning
 	if got := resolved.ClassForTool("read_file"); got != public.InteractiveToolClassFastRead {
 		t.Fatalf("original changed after clone mutation: %s", got)
