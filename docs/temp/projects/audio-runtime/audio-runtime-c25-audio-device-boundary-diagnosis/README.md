@@ -236,7 +236,7 @@ Required baseline
 `1f82284abee0bd31a6680310444cea2e4c16ef00` remain ancestors.
 
 At tested source `8c61326167ceb6ed2017b46ff866656d99a711b7`, `verify.py --mode all`
-returned `ACCEPTED` in `16.424` seconds across `27` bounded commands, including `10`
+returned `ACCEPTED` in `16.671` seconds across `27` bounded commands, including `10`
 focused normal/race/vet regressions. `SOURCE_GAP_CONFIRMED`, the AST positive,
 negative, mutation and comment controls, fixture manifest, rebuilt/materialized
 archive, complete path allowlist, zero-test and child-hang cleanup controls all

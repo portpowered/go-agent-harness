@@ -287,7 +287,7 @@ candidate is `8c61326167ceb6ed2017b46ff866656d99a711b7`; the final metadata
 carrier is an evidence-only descendant with identical executable inputs.
 Baseline, startup integration, and accepted C26 ancestry remain preserved.
 
-The tested-source `verify.py --mode all` run returned `ACCEPTED` in `16.424s` across
+The tested-source `verify.py --mode all` run returned `ACCEPTED` in `16.671s` across
 `27` bounded commands, with `10` focused normal/race/vet regressions. Source
 gap, archive/fixture, AST positive/negative/mutation/comment controls,
 complete owned-path allowlist, zero-test, child-hang cleanup, and aggregate

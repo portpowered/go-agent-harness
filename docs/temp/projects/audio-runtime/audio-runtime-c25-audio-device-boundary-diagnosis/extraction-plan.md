@@ -153,7 +153,7 @@ and the tested evidence source candidate is
 evidence-only descendant with identical executable inputs. The required baseline, startup
 integration, and accepted C26 merge ancestry remain intact.
 
-The exact tested-source verifier run returned `ACCEPTED` in `16.424s` across `27`
+The exact tested-source verifier run returned `ACCEPTED` in `16.671s` across `27`
 bounded commands with `10` focused normal/race/vet regressions. The source gap,
 AST positive/negative/mutation/comment controls, fixture manifest, rebuilt and
 materialized archive, changed-path allowlist, zero-test handling, intentional

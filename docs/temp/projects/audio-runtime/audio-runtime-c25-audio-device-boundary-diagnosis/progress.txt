@@ -244,7 +244,7 @@ Current exact-head refresh after current-main integration
   `8c61326167ceb6ed2017b46ff866656d99a711b7`; the remaining metadata carrier
   is an evidence-only descendant with identical executable inputs.
 - `verify.py --mode all` at that tested source returned `ACCEPTED` in
-  `16.424s` across `27` bounded commands, including `10` focused normal/race/
+  `16.671s` across `27` bounded commands, including `10` focused normal/race/
   vet regressions. `SOURCE_GAP_CONFIRMED`, archive/fixture/AST/allowlist,
   zero-test and child-hang cleanup controls passed; no child survived. The
   rebuilt/materialized source archive is `57,067,520` bytes with SHA-256

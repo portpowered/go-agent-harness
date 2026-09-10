@@ -155,7 +155,7 @@
     "verdict": "ACCEPTED",
     "bounded_commands": 27,
     "focused_regressions": 10,
-    "aggregate_seconds": 16.424,
+    "aggregate_seconds": 16.671,
     "source_revision": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
     "source_archive_bytes": 56913920,
     "source_archive_sha256": "5e8cb07b1bc2ef3b999ca57458100bb6620697a0af481c28436493f8a3737a12",
