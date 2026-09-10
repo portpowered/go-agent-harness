@@ -81,6 +81,9 @@ on their existing session/provider graphs.
 - `docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/verify-public.py`:
   bounded external, strict/provider, interruption and local-SSE ask record/replay
   runner; it records literal child argv/cwd/raw output/status and fixture hashes.
+  Its `watchdog` regression launches an escaped grandchild that retains the
+  output pipes, proving timeout cleanup closes/reaps within bounded deadlines
+  rather than relying on unbounded `communicate()`.
 
 Required route residuals remain explicit: provider-only replay still owns its
 cwd/allow-path and executable-tool semantics; undeclared provider timeline/WAV

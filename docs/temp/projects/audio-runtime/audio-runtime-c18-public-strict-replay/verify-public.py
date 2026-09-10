@@ -2,11 +2,11 @@
 """Run bounded C18 public replay evidence without replacing the runtime.
 
 The runner launches the built consumer or yui executable against copied
-fixtures.  It records literal argv/cwd, complete stdout/stderr, exit status,
-timeouts, and artifact hashes.  Each child has its own process group so a
-timeout cannot leave a replay worker behind.  The ask case owns only a local
-deterministic HTTP fixture for the record half; the replay half runs after the
-fixture is stopped.
+fixtures.  It records literal argv/cwd, captured stdout/stderr, exit status,
+timeouts, and artifact hashes.  Each child has its own process group; timeout
+cleanup is bounded even when a descendant escapes that group while retaining a
+pipe.  The ask case owns only a local deterministic HTTP fixture for the record
+half; the replay half runs after the fixture is stopped.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NoReturn
 
 
 FACTORY_FIXTURE_ROOT = Path(
@@ -38,6 +38,9 @@ HEALTHY_TAIL_SHA256 = (
 RENDERED_PCM_SHA256 = "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
 PROMPT = "c18 deterministic ask"
 ASK_ANSWER = "c18 local answer"
+PROCESS_CLEANUP_TIMEOUT_SECONDS = 1.0
+WATCHDOG_TIMEOUT_SECONDS = 2.0
+WATCHDOG_CASE_LIMIT_SECONDS = WATCHDOG_TIMEOUT_SECONDS + (3 * PROCESS_CLEANUP_TIMEOUT_SECONDS) + 1.0
 
 
 class ProbeFailure(Exception):
@@ -85,6 +88,76 @@ def require_file(path: Path, label: str) -> Path:
     return path.resolve()
 
 
+def output_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return value
+
+
+def close_process_pipes(process: subprocess.Popen[str]) -> None:
+    for stream in (process.stdout, process.stderr):
+        if stream is None:
+            continue
+        try:
+            stream.close()
+        except OSError:
+            pass
+
+
+def update_partial_output(
+    stdout: str, stderr: str, error: subprocess.TimeoutExpired
+) -> tuple[str, str]:
+    if error.stdout is not None:
+        stdout = output_text(error.stdout)
+    if error.stderr is not None:
+        stderr = output_text(error.stderr)
+    return stdout, stderr
+
+
+def bounded_timeout_cleanup(
+    process: subprocess.Popen[str], stdout: str, stderr: str
+) -> tuple[str, str, bool, str | None]:
+    """Reap a killed child without waiting forever on inherited pipe handles."""
+
+    cleanup_timed_out = False
+    cleanup_error: str | None = None
+    try:
+        try:
+            remaining_stdout, remaining_stderr = process.communicate(
+                timeout=PROCESS_CLEANUP_TIMEOUT_SECONDS
+            )
+            stdout = output_text(remaining_stdout)
+            stderr = output_text(remaining_stderr)
+        except subprocess.TimeoutExpired as error:
+            cleanup_timed_out = True
+            stdout, stderr = update_partial_output(stdout, stderr, error)
+            # A descendant may have escaped the killed process group and still
+            # hold the inherited pipes.  Close our copies before waiting so
+            # that reaping the direct child cannot depend on those descendants.
+            close_process_pipes(process)
+        except OSError as error:
+            cleanup_error = f"bounded communicate failed: {error}"
+            close_process_pipes(process)
+
+        try:
+            process.wait(timeout=PROCESS_CLEANUP_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            cleanup_error = "direct child did not exit during bounded cleanup"
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                process.wait(timeout=PROCESS_CLEANUP_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                cleanup_error = "direct child remained alive after forced bounded cleanup"
+    finally:
+        close_process_pipes(process)
+    return stdout, stderr, cleanup_timed_out, cleanup_error
+
+
 def run_process(
     binary: Path,
     argv: list[str],
@@ -102,15 +175,21 @@ def run_process(
         start_new_session=True,
     )
     timed_out = False
+    cleanup_timed_out = False
+    cleanup_error: str | None = None
+    stdout = ""
+    stderr = ""
     try:
         stdout, stderr = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as error:
         timed_out = True
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        stdout, stderr = process.communicate()
+        stdout, stderr = update_partial_output(stdout, stderr, error)
+        kill_process_group(process.pid)
+        stdout, stderr, cleanup_timed_out, cleanup_error = bounded_timeout_cleanup(
+            process, stdout, stderr
+        )
+    finally:
+        close_process_pipes(process)
     return {
         "argv": [str(binary), *argv],
         "cwd": str(cwd),
@@ -118,9 +197,115 @@ def run_process(
         "duration_seconds": round(time.monotonic() - started, 6),
         "exit_code": process.returncode,
         "timed_out": timed_out,
+        "cleanup_timeout_seconds": PROCESS_CLEANUP_TIMEOUT_SECONDS if timed_out else None,
+        "cleanup_timed_out": cleanup_timed_out,
+        "cleanup_error": cleanup_error,
         "stdout": stdout,
         "stderr": stderr,
     }
+
+
+def kill_process_group(pid: int) -> bool:
+    try:
+        os.killpg(pid, signal.SIGKILL)
+        return True
+    except ProcessLookupError:
+        return False
+    except OSError:
+        try:
+            os.kill(pid, signal.SIGKILL)
+            return True
+        except ProcessLookupError:
+            return False
+
+
+def watchdog_grandchild() -> NoReturn:
+    while True:
+        time.sleep(1)
+
+
+def watchdog_child(pid_file: Path) -> NoReturn:
+    grandchild = subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()), "--watchdog-grandchild"],
+        cwd=Path.cwd(),
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    pid_file.write_text(str(grandchild.pid))
+    print("watchdog child started", flush=True)
+    while True:
+        time.sleep(1)
+
+
+def watchdog_mode() -> int | None:
+    mode = sys.argv[1:2]
+    if not mode:
+        return None
+    if mode[0] == "--watchdog-grandchild":
+        watchdog_grandchild()
+    if mode[0] == "--watchdog-child" and len(sys.argv) == 3:
+        watchdog_child(Path(sys.argv[2]))
+    if mode[0].startswith("--watchdog-"):
+        print("invalid watchdog invocation", file=sys.stderr)
+        return 2
+    return None
+
+
+def watchdog_case(repository: Path, results: list[dict[str, Any]]) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="audio-runtime-c18-watchdog-") as temporary:
+        pid_file = Path(temporary) / "escaped-grandchild.pid"
+        outcome: dict[str, Any] = {}
+
+        def invoke() -> None:
+            outcome["result"] = run_process(
+                Path(sys.executable),
+                [str(Path(__file__).resolve()), "--watchdog-child", str(pid_file)],
+                repository,
+                WATCHDOG_TIMEOUT_SECONDS,
+            )
+
+        worker = threading.Thread(target=invoke, daemon=True)
+        worker.start()
+        worker.join(WATCHDOG_CASE_LIMIT_SECONDS)
+        escaped_pid: int | None = None
+        if pid_file.is_file():
+            try:
+                escaped_pid = int(pid_file.read_text())
+            except ValueError as error:
+                raise ProbeFailure(f"watchdog child wrote an invalid PID: {error}") from error
+        descendant_signal_sent = False
+        if escaped_pid is not None:
+            descendant_signal_sent = kill_process_group(escaped_pid)
+        if worker.is_alive():
+            raise ProbeFailure(
+                "watchdog regression exceeded its bounded case deadline; "
+                f"escaped descendant signal sent={descendant_signal_sent}"
+            )
+        result = outcome.get("result")
+        if not isinstance(result, dict):
+            raise ProbeFailure("watchdog child did not produce a process result")
+        result["label"] = "watchdog/escaped-descendant-pipe"
+        result["escaped_descendant_pid"] = escaped_pid
+        result["escaped_descendant_signal_sent"] = descendant_signal_sent
+        result["passed"] = (
+            result["timed_out"]
+            and result["cleanup_timed_out"]
+            and result["cleanup_error"] is None
+            and result["exit_code"] is not None
+        )
+        if not result["passed"]:
+            result["failure"] = (
+                "escaped-descendant watchdog did not exercise bounded pipe cleanup: "
+                f"{result!r}"
+            )
+        results.append(result)
+        if not result["passed"]:
+            raise ProbeFailure(f"{result['label']}: {result['failure']}")
+        return {
+            "timeout_seconds": WATCHDOG_TIMEOUT_SECONDS,
+            "cleanup_timeout_seconds": PROCESS_CLEANUP_TIMEOUT_SECONDS,
+            "escaped_descendant_signal_sent": descendant_signal_sent,
+        }
 
 
 def run_checked(
@@ -627,7 +812,11 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--case", choices=("external", "strict", "provider", "interruption", "ask"), required=True)
+    parser.add_argument(
+        "--case",
+        choices=("external", "strict", "provider", "interruption", "ask", "watchdog"),
+        required=True,
+    )
     parser.add_argument("--consumer", type=Path, help="independent GOWORK=off consumer binary for --case external")
     parser.add_argument("--yui", type=Path, help="candidate yui binary for CLI cases")
     parser.add_argument("--fixture", type=Path, help="copied-ready audio/tool fixture root")
@@ -655,7 +844,9 @@ def main() -> int:
         "status": "running",
     }
     try:
-        if args.case == "external":
+        if args.case == "watchdog":
+            report["evidence"] = watchdog_case(repository, results)
+        elif args.case == "external":
             consumer = require_file((args.consumer or Path("docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/strict-replay")).resolve(), "external consumer")
             report["binary"] = str(consumer)
             report["binary_sha256"] = sha256_file(consumer)
@@ -718,4 +909,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    watchdog_exit = watchdog_mode()
+    if watchdog_exit is not None:
+        raise SystemExit(watchdog_exit)
     raise SystemExit(main())
