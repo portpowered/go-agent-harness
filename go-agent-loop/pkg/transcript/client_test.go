@@ -9,6 +9,59 @@ import (
 	"time"
 )
 
+func TestClientCaptureDefaultUsesCanonicalRealUTCTimestampAndZeroTick(t *testing.T) {
+	sink := &clientRecordSink{}
+	capture := NewClientCapture(sink, nil)
+	reader := capture.WrapDeviceInput(bytes.NewReader([]byte("client")))
+	buffer := make([]byte, len("client"))
+
+	before := time.Now().UTC()
+	n, err := reader.Read(buffer)
+	after := time.Now().UTC()
+	if n != len(buffer) || err != nil {
+		t.Fatalf("default device read = (%d, %v), want (%d, nil)", n, err, len(buffer))
+	}
+	if len(sink.records) != 1 {
+		t.Fatalf("default records = %d, want 1", len(sink.records))
+	}
+	record := sink.records[0]
+	if record.Tick != 0 {
+		t.Fatalf("default client tick = %d, want 0", record.Tick)
+	}
+	timestamp, err := time.Parse(time.RFC3339Nano, record.Timestamp)
+	if err != nil {
+		t.Fatalf("default client timestamp %q: %v", record.Timestamp, err)
+	}
+	if timestamp.Before(before) || timestamp.After(after) || timestamp.Location() != time.UTC {
+		t.Fatalf("default client timestamp = %s, want UTC between %s and %s", timestamp, before, after)
+	}
+}
+
+func TestClientCaptureNilSinkDoesNotReadSuppliedMetadata(t *testing.T) {
+	capture := NewClientCapture(nil, func() (uint64, time.Time) {
+		panic("nil-sink metadata was read")
+	})
+
+	reader := capture.WrapDeviceInput(bytes.NewReader([]byte("in")))
+	buffer := make([]byte, 2)
+	if n, err := reader.Read(buffer); n != 2 || err != nil {
+		t.Fatalf("nil-sink input = (%d, %v), want (2, nil)", n, err)
+	}
+	writer := capture.WrapDeviceOutput(io.Discard)
+	if n, err := writer.Write([]byte("out")); n != 3 || err != nil {
+		t.Fatalf("nil-sink output = (%d, %v), want (3, nil)", n, err)
+	}
+	webSocket := capture.WrapWebSocket(&scriptedWebSocket{
+		incoming: []scriptedWebSocketMessage{{messageType: 1, payload: []byte("in")}},
+	})
+	if err := webSocket.WriteMessage(1, []byte("out")); err != nil {
+		t.Fatalf("nil-sink websocket write: %v", err)
+	}
+	if _, _, err := webSocket.ReadMessage(); err != nil {
+		t.Fatalf("nil-sink websocket read: %v", err)
+	}
+}
+
 func TestClientCaptureRecordsOrderedDeviceAndWebSocketBoundaries(t *testing.T) {
 	base := time.Date(2026, time.August, 16, 19, 0, 0, 0, time.UTC)
 	metadataCalls := 0

@@ -1,0 +1,54 @@
+[
+  {
+    "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+    "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+    "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/parity-audio-tool/tool-record/manifest.json",
+    "manifest_sha256": "2866622d6c5cabeb3b63a2f760c10824d5fb4af035ca2dc4a544b021a8d9ca6d",
+    "pcm": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/parity-audio-tool/tool-record/audio/out-000.pcm",
+    "pcm_bytes": 4800,
+    "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+    "healthy_tail": {},
+    "terminal": {
+      "reason": "fixture_complete",
+      "classification": "provider_close",
+      "terminal_reason": "provider_close",
+      "terminal_provenance": "provider",
+      "output_state": "not_applicable"
+    },
+    "label": "audio-tool",
+    "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/yui-audio-tool.stdout",
+    "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/yui-audio-tool.stderr",
+    "audio_out": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/parity-audio-tool/audio.wav",
+    "audio_out_bytes": 3244,
+    "audio_out_sha256": "961bd1b82b54dcc2ada46e1f913b6e78bab172f1e3f5190be93747e7fe1e18dc",
+    "clean_shutdown": true
+  },
+  {
+    "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-interruption.session.json",
+    "fixture_sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206",
+    "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/parity-interruption/tool-record/manifest.json",
+    "manifest_sha256": "b41da8602ae4037b68807ce53541ea4599c0aff963c607cead08d1cebbb02cba",
+    "pcm": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/parity-interruption/tool-record/audio/out-000.pcm",
+    "pcm_bytes": 3840,
+    "pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
+    "healthy_tail": {
+      "offset_bytes": 1440,
+      "bytes": 2400,
+      "sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
+    },
+    "terminal": {
+      "reason": "replay_complete",
+      "classification": "replay_complete",
+      "terminal_reason": "replay_complete",
+      "terminal_provenance": "replay",
+      "output_state": "complete"
+    },
+    "label": "interruption",
+    "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/yui-interruption.stdout",
+    "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/yui-interruption.stderr",
+    "audio_out": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c37-canonical-transcript-clocks/docs/temp/projects/audio-runtime/audio-runtime-c37-canonical-transcript-clocks/runs/verify-20260910T102155Z-44157/parity-interruption/audio.wav",
+    "audio_out_bytes": 3404,
+    "audio_out_sha256": "5383d64f00998543e04931a3bbc548c6700a62d051b5801bdf806179111d349f",
+    "clean_shutdown": true
+  }
+]
