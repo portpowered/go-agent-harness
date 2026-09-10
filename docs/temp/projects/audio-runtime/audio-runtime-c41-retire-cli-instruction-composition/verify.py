@@ -113,8 +113,10 @@ def run_command(
         stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as error:
         timed_out = True
-        stdout = normalize_output(error.output)
-        stderr = normalize_output(error.stderr)
+        partial_stdout = normalize_output(error.output)
+        partial_stderr = normalize_output(error.stderr)
+        stdout = ""
+        stderr = ""
         deadline = time.monotonic() + CLEANUP_SECONDS
         try:
             if os.name == "nt":
@@ -133,10 +135,15 @@ def run_command(
             cleanup_errors.append(str(error))
         try:
             more_stdout, more_stderr = process.communicate(timeout=max(0.1, deadline - time.monotonic()))
-            stdout += normalize_output(more_stdout)
-            stderr += normalize_output(more_stderr)
+            # communicate() returns the complete captured stream after the
+            # kill. Do not append it to TimeoutExpired.output, which is also
+            # a prefix of that stream.
+            stdout = normalize_output(more_stdout)
+            stderr = normalize_output(more_stderr)
         except subprocess.TimeoutExpired:
             cleanup_errors.append("bounded final wait expired")
+            stdout = partial_stdout
+            stderr = partial_stderr
     duration = time.monotonic() - started
     return {
         "argv": argv,
