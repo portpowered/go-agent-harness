@@ -3,9 +3,7 @@
 package devices
 
 import (
-	"encoding/binary"
 	"fmt"
-	"math"
 	"runtime"
 	"sort"
 	"strings"
@@ -13,6 +11,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 const (
@@ -828,60 +828,33 @@ func wasapiCapturePacketEnergy(data unsafe.Pointer, frames, flags uint32, format
 	if byteCount > uint64(^uint(0)>>1) {
 		return 0, fmt.Errorf("WASAPI capture packet is too large: %d bytes", byteCount)
 	}
+	sampleFormat, err := format.sampleFormat()
+	if err != nil {
+		return 0, fmt.Errorf("WASAPI capture format is not measurable: %w", err)
+	}
 	raw := unsafe.Slice((*byte)(data), int(byteCount))
-	sampleBytes := int(format.bitsPerSample / 8)
-	frameStride := int(format.blockAlign)
-	var energy float64
-	for frame := uint32(0); frame < frames; frame++ {
-		frameOffset := int(frame) * frameStride
-		for channel := 0; channel < int(format.channels); channel++ {
-			offset := frameOffset + channel*sampleBytes
-			if offset < 0 || offset+sampleBytes > len(raw) {
-				return 0, fmt.Errorf("WASAPI capture frame exceeds packet: frame=%d channel=%d", frame, channel)
-			}
-			value, err := wasapiSampleValue(raw[offset:offset+sampleBytes], format)
-			if err != nil {
-				return 0, err
-			}
-			if math.IsNaN(value) || math.IsInf(value, 0) {
-				return 0, fmt.Errorf("WASAPI capture returned a non-finite sample")
-			}
-			energy += value * value
-		}
+	energy, err := codec.PacketEnergy(raw, int(frames), int(format.channels), int(format.blockAlign), sampleFormat)
+	if err != nil {
+		return 0, fmt.Errorf("WASAPI capture packet energy: %w", err)
 	}
 	return energy, nil
 }
 
-func wasapiSampleValue(raw []byte, format wasapiAudioFormat) (float64, error) {
-	if format.subFormat == wasapiSubtypeIEEEFloat {
-		switch format.bitsPerSample {
-		case 32:
-			return float64(math.Float32frombits(binary.LittleEndian.Uint32(raw))), nil
-		case 64:
-			return math.Float64frombits(binary.LittleEndian.Uint64(raw)), nil
-		default:
-			return 0, fmt.Errorf("unsupported WASAPI IEEE-float sample width %d", format.bitsPerSample)
-		}
-	}
-
-	switch format.bitsPerSample {
-	case 8:
-		return float64(int(raw[0])-128) / 128, nil
-	case 16:
-		return float64(int16(binary.LittleEndian.Uint16(raw))) / math.Ldexp(1, 15), nil
-	case 24:
-		value := int32(uint32(raw[0]) | uint32(raw[1])<<8 | uint32(raw[2])<<16)
-		if value&0x00800000 != 0 {
-			value |= ^int32(0x00ffffff)
-		}
-		return float64(value) / math.Ldexp(1, 23), nil
-	case 32:
-		return float64(int32(binary.LittleEndian.Uint32(raw))) / math.Ldexp(1, 31), nil
-	case 64:
-		return float64(int64(binary.LittleEndian.Uint64(raw))) / math.Ldexp(1, 63), nil
+func (f wasapiAudioFormat) sampleFormat() (codec.SampleFormat, error) {
+	var encoding codec.SampleEncoding
+	switch f.subFormat {
+	case wasapiSubtypePCM:
+		encoding = codec.SampleEncodingPCM
+	case wasapiSubtypeIEEEFloat:
+		encoding = codec.SampleEncodingIEEEFloat
 	default:
-		return 0, fmt.Errorf("unsupported WASAPI PCM sample width %d", format.bitsPerSample)
+		return codec.SampleFormat{}, fmt.Errorf("unsupported WASAPI audio subformat %v", f.subFormat)
 	}
+	return codec.SampleFormat{
+		Encoding:           encoding,
+		BitsPerSample:      int(f.bitsPerSample),
+		ValidBitsPerSample: int(f.validBitsPerSample),
+	}, nil
 }
 
 type wasapiPropertyKey struct {
