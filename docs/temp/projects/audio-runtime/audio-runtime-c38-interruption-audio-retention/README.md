@@ -167,3 +167,25 @@ handoff documentation/progress ledger.
 The remote-marker control also passes in normal and race modes at this pushed
 head. No CI, review, merge, vertical acceptance, or project-completion result
 is implied.
+
+## Current-main integration and latest CI rejection
+
+The current main baseline `aa31d6d0e7261f7dcfc07e8f14a7ad29501f542b` was
+fetched and merged into exact C38 head `01c8a8410f3a98d082f9285301fda3429d34602e`;
+the shared `progress.txt` conflict was resolved by retaining both append-only
+ledgers. Fresh exact-head `repaired-20260910T234538Z-94510` returns
+`REPAIRED_ORACLE_PASS`, and `package` returns `PACKAGE_READY`. The artifact is
+50,912,034 bytes with SHA-256
+`8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`; the
+2,185-input build manifest SHA-256 is
+`7689716a955acc5299b34c23aa3d600fa6c7829eed577c93232b2b0984716309`.
+
+Exact-head causal and focused checks pass, as do the normal/race remote-marker
+controls. The latest CI rejection is run `34541949856` / job `103086327724` at
+`bea84fd9`: `CI (coverage)=FAILURE` from
+`s2s_room_input_transcription_test.go:141`, where participant `alpha` emitted
+`[session.update input_audio_buffer.append]` instead of one initial
+`session.update`. The test passes 5/5 locally, and that file is outside C38's
+owned paths; it must be routed to its owner rather than changed in this task.
+No CI-green, review, merge, vertical-acceptance, physical, or project-complete
+claim is made.

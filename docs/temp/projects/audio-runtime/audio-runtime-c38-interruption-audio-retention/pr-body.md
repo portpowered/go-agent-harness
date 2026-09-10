@@ -5,7 +5,8 @@ Project: `audio-runtime` (`audio-runtime-v1`)
 This is the existing admitted task and existing PR #430. The isolated branch is
 `codex/audio-runtime-c38-interruption-audio-retention`; `prd.json.branchName`
 matches it. The candidate preserves startup, baseline, C30 planning, and current
-`origin/main=fdf3b2d98914f50577865e825c733e73520b9ef3` ancestry. No second
+`origin/main=aa31d6d0e7261f7dcfc07e8f14a7ad29501f542b` ancestry through merge
+`01c8a8410f3a98d082f9285301fda3429d34602e`. No second
 project, acceptance waiver, host-checkout reset, or predecessor mutation was
 used.
 
@@ -18,7 +19,7 @@ used.
   retention before `WriteSamples`, with a deterministic queued-delta regression.
 - Review 258: malformed-delta and sink-write paths join and report provider
   close errors, with sentinel tests.
-- Latest CI run 34539207051 / job 103077775076 (`CI (static)`) found the sole
+- Prior CI run 34539207051 / job 103077775076 (`CI (static)`) found the sole
   errcheck at `session_tool_audio_remote_oracle_test.go:32` for discarded
   `sink.Close()`. The deferred cleanup now reports close failure through the
   test. The repair is in checkpoint `83e31db1`.
@@ -96,3 +97,25 @@ race modes.
 This confirms executor readiness for the script-owned current-head CI gate; it
 does not claim CI success, independent review, guarded merge, vertical
 acceptance, or project completion.
+
+## Current-main integration and latest CI rejection — 2026-09-10T23:54Z
+
+Fresh exact-head `repaired-20260910T234538Z-94510` returns
+`REPAIRED_ORACLE_PASS`; `package` returns `PACKAGE_READY` for merge head
+`01c8a8410f3a98d082f9285301fda3429d34602e`. The yui artifact is 50,912,034
+bytes with SHA-256
+`8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`; the
+build-input manifest is SHA-256
+`7689716a955acc5299b34c23aa3d600fa6c7829eed577c93232b2b0984716309` over
+2,185 inputs. Exact-head causal/focused checks and remote-marker normal/race
+controls pass.
+
+The latest script-CI rejection is run `34541949856` / job `103086327724` at
+`bea84fd9`: only `CI (coverage)=FAILURE`. Its completed log reports
+`s2s_room_input_transcription_test.go:141`, where participant `alpha` emitted
+`[session.update input_audio_buffer.append]` rather than one initial
+`session.update`. The exact test passes 5/5 locally, and that source is outside
+the C38 owned paths. Do not mutate or retry that unchanged out-of-lease
+finding; route it to its owner for a reviewed repair or disposition. This PR
+update claims no CI success, independent review, guarded merge, vertical
+acceptance, physical/acoustic proof, or project completion.

@@ -3726,3 +3726,44 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   push the same PR `#432`, update its merge/provenance/finding map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   C39 ownership through `CONTINUE` for any exact rejection or actionable repair.
+
+# C38 current-main integration and coverage rejection checkpoint 2026-09-10T23:54Z
+
+- Admission remains valid for the sole `audio-runtime` project: `project-control.py
+  verify-work --type task --name audio-runtime-c38-interruption-audio-retention`
+  returns `admitted`, and the isolated branch still exactly matches
+  `prd.json.branchName`. Fetched `origin/main=aa31d6d0e7261f7dcfc07e8f14a7ad29501f542b`
+  was merged as `01c8a8410f3a98d082f9285301fda3429d34602e`; the only merge
+  conflict was `progress.txt`, with both ledgers preserved. Startup, baseline,
+  C30 planning, and fresh-main ancestry all remain intact.
+- A fresh exact-head yui build and replay produce
+  `repaired-20260910T234538Z-94510` = `REPAIRED_ORACLE_PASS` and
+  `package` = `PACKAGE_READY` for source `01c8a841`. The artifact is
+  `50,912,034` bytes with SHA-256
+  `8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`;
+  build-input SHA-256 remains
+  `7689716a955acc5299b34c23aa3d600fa6c7829eed577c93232b2b0984716309`
+  over `2,185` inputs. Frozen tool/interruption PCM, healthy-tail and strict
+  replay oracles pass.
+- Exact-head `causal-20260910T234858Z-97133` and
+  `focused-checks-20260910T234914Z-97260` pass: normal/race retention
+  regressions, vet, architecture/size (`184` packages, `1,888` files,
+  `27,806` functions), and Wire. The leased remote-marker control passes in
+  both normal and race modes; the exact rejected room test also passes 5/5
+  locally, and the worktree remains clean.
+- The latest script-CI rejection is run `34541949856`, job `103086327724`, at
+  prior head `bea84fd9be9391fe97ba5ea0b44c99ce2f457612`: only
+  `CI (coverage)=FAILURE`. The completed log identifies
+  `s2s_room_input_transcription_test.go:141`, participant `alpha` observing
+  `[session.update input_audio_buffer.append]` instead of one initial
+  `session.update`. This file is outside the C38 owned paths; the exact test
+  passes locally and no C38 source mutation is authorized. Do not retry that
+  unchanged rejection or claim CI green. The primary must route this room
+  handshake-ordering issue to its owner and provide a reviewed repair or
+  disposition before the same task is resubmitted.
+- No current CI success, independent review, guarded merge, post-delivery
+  vertical acceptance, physical/acoustic proof, or project completion is
+  claimed. Next action after this checkpoint: push the current-main/evidence
+  update and update PR `#430`; retain C38 ownership with `CONTINUE` until the
+  out-of-lease finding has an owner disposition, then submit the genuinely
+  changed same-task head to script CI once without polling.
