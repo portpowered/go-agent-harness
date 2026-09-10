@@ -110,3 +110,17 @@ consumer and `183d914db6b57691dc80a103f042b8246b205010283102f6f8897d2d48a67767`
 for shipped YUI. Focused provider and CLI normal/race tests and the architecture
 gate (`183` packages, `1884` files, `27754` functions) also pass. A clean-source
 rerun follows this checkpoint commit; the diagnostic artifact is not relabeled.
+
+The clean-source public rerun
+`verify-20260910T211705Z-79019` and negative-controls rerun
+`verify-20260910T211716Z-79149` both returned `ACCEPTED` from tested source
+`9f869d1dbb0a1724128f7c7d083a0054270def68` with `source_tree_dirty=false`.
+The public run completed in 6.410442s and the negative-controls run in
+4.839780s. Both retain the same consumer/YUI input manifests and artifact
+hashes listed above; the clean public run retains exact PCM, side-effect,
+wrong-oracle, and bounded-shutdown controls. `9f869d1` is an evidence-only
+descendant of implementation `f882566c`; the manifest hashes prove no
+executable inputs changed. The tracked summary is
+`current-head-validation-9f869d1.json`. This satisfies the provenance repair;
+the candidate is ready for the same PR's script-CI handoff, with CI/review,
+guarded merge, and primary post-merge validation still open.

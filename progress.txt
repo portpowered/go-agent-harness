@@ -2746,3 +2746,36 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   `183d914db6b57691dc80a103f042b8246b205010283102f6f8897d2d48a67767` over
   `2177` files. The diagnostic evidence is retained and will not be relabeled;
   the next bounded action is a clean-source public and negative-controls rerun.
+
+# C44 clean-source delivery evidence checkpoint 2026-09-10
+
+- Committed the inherited C44 progress/evidence checkpoint as `9f869d1`; it is
+  documentation-only over implementation `f882566c`. The clean public verifier
+  `verify-20260910T211705Z-79019` returned `ACCEPTED` in `6.410442s`, and the
+  clean negative-controls verifier `verify-20260910T211716Z-79149` returned
+  `ACCEPTED` in `4.839780s`. Both record source-tree cleanliness and the exact
+  source archive/input/artifact provenance in
+  `current-head-validation-9f869d1.json`.
+- `source_tree_dirty=false`; source archive SHA-256 is
+  `778fafb4fb0f8480f3fc8be93e38435adbf1bf89e286c1dd728def06585dd3b4`.
+  Consumer input manifest is `185fced2e7b6539a67e2620c54c317931505f7c9e81a825494cfbffea6b9d711`
+  over `1079` files and artifact is `6403602` bytes with SHA-256
+  `5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b`.
+  Shipped-YUI input manifest is
+  `183d914db6b57691dc80a103f042b8246b205010283102f6f8897d2d48a67767` over
+  `2177` files and artifact is `51042338` bytes with SHA-256
+  `d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe`.
+- Clean public controls preserve invalid session/self-play admission with no
+  provider/output side effects, exact audio-tool PCM `4800`/
+  `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`, exact
+  interruption PCM `3840`/`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`,
+  healthy tail `2400`/`16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`,
+  wrong PCM/marker rejection, and timeout TERM/reap with no survivors.
+  Provider and CLI normal/race plus architecture-size checks remain passed.
+- The exact accumulated review findings are now accounted for: the earlier
+  verifier-input identity gap is resolved by the clean runs; the latest
+  progress conflict is resolved by merge `f882566c`; no source or evidence
+  repair remains. Next action is to push `9f869d1` on the same PR #436 and
+  return `ACCEPTED` to SCRIPT CI without polling it. CI/review/guarded merge
+  and the primary's fresh post-merge vertical probe remain open; no project
+  completion is claimed.
