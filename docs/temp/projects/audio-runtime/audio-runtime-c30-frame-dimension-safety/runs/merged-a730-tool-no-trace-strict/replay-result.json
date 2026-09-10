@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
+    "-C",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-no-trace-strict/config",
+    "session",
+    "replay",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-no-trace-v2/bundle"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-no-trace-strict",
+  "duration_seconds": 0.045141,
+  "exit_code": 1,
+  "timed_out": false,
+  "clean_shutdown": true,
+  "stdout": "",
+  "stderr": "Error: replay bundle is incomplete: missing timeline.jsonl in /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-no-trace-v2/bundle or /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-no-trace-v2/bundle/audio-trace\n",
+  "stdout_bytes": 0,
+  "stderr_bytes": 539,
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "output_limit_bytes": 262144,
+  "cleanup": {
+    "sigterm_sent": false,
+    "sigkill_sent": false,
+    "reaped_after_sigterm": false,
+    "reaped_after_sigkill": false,
+    "reader_threads_stopped": true
+  },
+  "source_revision": "a7302e076768d730cce0cfac7997be6b4fc84969"
+}

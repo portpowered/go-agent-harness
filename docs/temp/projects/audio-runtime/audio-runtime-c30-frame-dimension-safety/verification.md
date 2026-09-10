@@ -1,3 +1,106 @@
+# C30 merged-main repair and exact-head verification
+
+Implementation source revision: `a7302e076768d730cce0cfac7997be6b4fc84969`
+(`fix: bound c30 consumer process cleanup`). Its parent merge
+`60f0d3073b09c043d95c3fb3e17b489261abc5d2` integrates fetched `origin/main`
+`b0acab1238d1aa6bf6bce5ca074451310c7eb039` into the admitted branch
+`codex/audio-runtime-c30-frame-dimension-safety`. The startup integration
+`8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline
+`3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain ancestors. The running host
+checkout was not merged or reset. `format.go` and `pcm16_convert_test.go` are
+byte-identical to `origin/main`.
+
+The amended C30 lease consolidates the unchanged PCM16 framer implementation
+and test into the owned frame-sizing source/test files, preserving all framer
+symbols and assertions while keeping the audio package at its immutable file
+budget. Checked canonical sizing still handles exact alignment, rate-duration
+intermediates, channel products, byte products, MaxInt boundaries and wide
+`Stats` duration arithmetic; legacy methods preserve `ErrMixerInvalidFormat`.
+
+## Causal and accumulated checks
+
+```text
+focused PCM16 frame/framer/dimension/queue/Stats tests: pass; 22 tests across 2 packages
+go test ./go-audio/pkg/audio ./agent-cli/internal/room -count=1 -timeout 60s: pass; 285 tests
+go test -race ./go-audio/pkg/audio ./agent-cli/internal/room -count=1 -timeout 60s: pass; 285 tests
+go vet ./go-audio/pkg/audio ./agent-cli/internal/room: pass; no issues
+make architecture-check size-check: pass; 181 packages, 1864 files, 27470 functions
+make fmt and git diff --check: pass
+```
+
+## Bounded runner repair and consumer evidence
+
+`run.py` now drains stdout/stderr concurrently while retaining at most 64 KiB
+per stream, records total bytes/truncation, bounds TERM and KILL waits, and
+bounds reader cleanup. The deterministic control at
+`runs/timeout-control-yunwms9u/result.json` intentionally floods each stream
+with 1 MiB and ignores SIGTERM: it retained 4096 bytes per stream, sent
+SIGTERM then SIGKILL, reaped after SIGKILL, stopped both readers and completed
+in `0.517546s`.
+
+The fresh standalone consumer was built and run from source
+`a7302e076768d730cce0cfac7997be6b4fc84969`:
+
+```text
+build: pass; executable SHA256 1fbf0b5ae564a67856ef7d5d505331c455e2a9999385d3acb5f0f049bc9f8cfc
+positive: pass; 21/21 literal and overflow/alignment cases; exit 0; clean shutdown
+negative-control: pass; child exit 1; actual_samples=480 mutated_expected=481; clean shutdown
+timeout-control: pass; child exit -9 by bounded SIGKILL; both 1 MiB streams capped; reaped
+```
+
+Fresh records are `artifacts/build.json`,
+`runs/positive-k021hpb7/result.json`,
+`runs/negative-control-kaaiabw_/result.json`, and
+`runs/timeout-control-yunwms9u/result.json`. Their SHA256 values are,
+respectively, `c76ecd8a59fd5af5430efa0ceb17ab2706d54454794f432daf981aad84b9bac6`,
+`40930a3f6879f17bf6aae5b4d1b7e613d96eaf2a3636fd90fb769582a49a5181`,
+`ca84a487734109acd2770ab3dc36d4226068192633c754eed2cbb1e1621cb4d3`, and
+`ed46966ee6290214b7297e55b2e635f8dcac7e9038ece599b88962ee3e494f8f`.
+`artifacts/artifact-manifest.json` is fresh at source `a7302e0` with SHA256
+`75f4de9eb7019eff1419a09dfa4bf0d475efed8f805029eac0f5c580706f4b91`.
+An explicit `--source-root $FACTORY_ROOT` run was rejected before execution
+with `build provenance source root mismatch`, confirming a different checkout
+cannot silently reuse this binary or relabel its source.
+
+## Same-source shipped yui audio/tool replay
+
+`artifacts/yui-verification.json` is fresh at source
+`a7302e076768d730cce0cfac7997be6b4fc84969`; the yui executable SHA256 is
+`6215fd5328131393167ed3bc0effa2e6f62d1d0d5272b1edac78c7c79621eec9`. Its
+tracked Go/module input digest covers 1922 files with
+`91615bcc684c8559cfa07d02a29289c7a43010b6f70eb3ab0eb4f3430a861c6a`; accepted
+fixture hashes remain artifact-2
+`38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169` and
+artifact-3 `154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206`.
+
+The fresh v2 tool-trace capture emits `PROBE_TOOL_MARKER_9182` and
+`fixture_complete`; directory replay verifies `18` wire events and `1` tool
+call. Provider PCM is 4800 bytes with SHA256
+`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`, and
+rendered PCM is 3200 bytes with SHA256
+`7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`.
+The interruption capture/replay verifies `15` wire events and `0` tool calls;
+provider PCM is 3840 bytes with SHA256
+`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`, and
+rendered PCM is 3360 bytes with SHA256
+`302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff`.
+The no-trace strict replay exits `1` with the expected missing
+`timeline.jsonl` diagnostic. Every fresh yui child returned within 60 seconds
+and reports bounded reader cleanup.
+
+The first merged-head tool attempts are preserved under
+`runs/merged-a730-tool-trace` and `runs/merged-a730-tool-no-trace`; they failed
+before source-valid replay because their copied fixture config referenced a
+missing `evidence/runs/exec-invocations-v4.log`. Fresh v2 runs restored that
+fixture-relative file and passed. This historical setup failure does not
+replace or weaken the required negative controls.
+
+No script-CI green result, independent review, guarded merge, post-merge
+vertical acceptance or project completion is claimed here. The next action is
+to commit the fresh evidence checkpoint, push the same branch, update PR #422
+with exact base/head/provenance, and return `ACCEPTED` to the script CI gate;
+do not poll CI locally.
+
 # C30 final repair verification
 
 Final candidate source revision: `4eb31919a0ad6a138dc5c9f88bc5bd03697adbb5`
