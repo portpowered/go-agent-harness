@@ -102,9 +102,8 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags, fileStoreFactory)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags, fileStoreFactory)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags, fileStoreFactory)
-	clockFactory := wire2.NewReplayClockFactory()
-	service2 := wire2.NewReplayService(clockFactory)
-	sessionReplayCommand := cli.NewSessionReplayCommand(service2)
+	strictService := wire2.NewReplayService()
+	sessionReplayCommand := cli.NewSessionReplayCommand(strictService)
 	scheduler := provideRoomClock(clockSource)
 	roomsService := wire2.NewRoomServiceWithDevices(liveService, devicesService, deviceRegistry, scheduler)
 	roomRunCommand := cli.NewRoomRunCommand(globalFlags, roomsService)
@@ -364,7 +363,7 @@ func provideSessionDependencies(clockSource Clock, resolver tools.Service, runti
 
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire4.NewSet(
-	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire2.DeviceSet, wire2.RoomSet, wire2.SessionSet, wire2.NewReplayClockFactory, wire2.NewReplayService, wire2.NewMetricsCollector, provideDefaultRuntimeToolService,
+	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire2.DeviceSet, wire2.RoomSet, wire2.SessionSet, wire2.NewReplayService, wire2.NewMetricsCollector, provideDefaultRuntimeToolService,
 	provideRuntimeToolService, wire.NewFileStoreFactory, provideRecordingService,
 	provideProviderCaptureService,
 	provideSessionBrowserCapabilityFactory,

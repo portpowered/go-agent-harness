@@ -1,0 +1,56 @@
+{
+  "project": "audio-runtime",
+  "work": "audio-runtime-c18-public-strict-replay",
+  "task": "work-task-24",
+  "pullRequest": 410,
+  "branch": "codex/audio-runtime-c18-public-strict-replay",
+  "testedSourceRevision": "2c2f364d1d37548cff46999e3427ed8cf1ee6f89",
+  "originMain": "4e6cfab5d8d53b7db93c723e0a4e955bdc1c6f1d",
+  "mergeBaseBeforeOriginMain": "84f0a9d308729e38da8479f87c3518f1634bad82",
+  "ancestry": {
+    "originMainIsAncestor": true,
+    "hostCheckoutUntouched": true,
+    "predecessorCheckpointsPreserved": true
+  },
+  "coverageRegistration": {
+    "status": "PASS",
+    "command": "make coverage-registration",
+    "workspacePackagesChecked": 172,
+    "modulesChecked": 6,
+    "strictPackage": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/strict",
+    "strictMeasuredCoverage": "74.9%",
+    "strictMinimum": "50.00",
+    "publicCliManifestUnchanged": true,
+    "publicCliMinimum": "80.00",
+    "stalePrivateReplayPackageTrackedFiles": 0
+  },
+  "focusedEvidence": {
+    "replayNormal": "PASS: 84 tests across 4 packages",
+    "clockNormal": "PASS: 23 tests",
+    "roomTerminalFocused": "PASS: 22 tests",
+    "cliReplayFocused": "PASS: 146 tests across 2 packages",
+    "embeddingNormal": "PASS: tests/embedding ./... with GOWORK=off",
+    "embeddingRace": "PASS: tests/embedding ./... with GOWORK=off",
+    "sessionRegressions": "PASS: normal, coverage and race at COUNT=1",
+    "wireCheck": "PASS",
+    "architectureSizeCheck": "PASS: 182 packages, 1878 files, 27653 functions",
+    "focusedVet": "PASS",
+    "diffCheck": "PASS"
+  },
+  "artifacts": {
+    "strictConsumerSha256": "055baac6e0da3111ab5b318c81b1551f0ce2dce6c92d3cd9108f3a3639e7fe8b",
+    "yuiSha256": "7754c07511a00b426674402a60a9b4bece7e767eb368ce6c6f9c887e62fe9aab",
+    "verifierSha256": "8dbdb8c3c3865d89172e7b22ea83c53c6ac28364334f5a2d74ef94dd334dd6dc"
+  },
+  "publicReports": [
+    {"file": "verify-public-external-2c2f364-final.json", "sha256": "c9419da053ef7482856a26366d81da1390347c0d145912f1256510ac09b5e4c4", "status": "passed", "results": 2},
+    {"file": "verify-public-strict-2c2f364-final.json", "sha256": "e6e50f743fb9db82af1acc2ee324c4cda0f33fe9e075a2abeee1758d225fb94a", "status": "passed", "results": 5},
+    {"file": "verify-public-provider-2c2f364-final.json", "sha256": "f055a6b6073b22ea0965f57b6d5b85ef54988e5b971c22f52701609b721d613a", "status": "passed", "results": 7},
+    {"file": "verify-public-interruption-2c2f364-final.json", "sha256": "1981aab2b697fcf943c7eb6eec3c5f26402303ad762e6826da2813da491132ee", "status": "passed", "results": 4},
+    {"file": "verify-public-ask-2c2f364-final.json", "sha256": "b196248c0be2b9a171b546211b80aa449c627c99427a288090837b14225ab0e2", "status": "passed", "results": 2},
+    {"file": "verify-public-watchdog-2c2f364-final.json", "sha256": "ceed6a9a9e5ce96ee89c517e1012ce895719f536244072e7f17ae1d7717cc7e9", "status": "passed", "results": 1}
+  ],
+  "ciStatus": "not polled; this evidence prepares the candidate for the script-owned current-head gate",
+  "reviewStatus": "not self-reviewed",
+  "nextAction": "Commit and push this evidence-only descendant, update PR #410, and return ACCEPTED to script CI; retain C18 ownership for any exact rejection."
+}
