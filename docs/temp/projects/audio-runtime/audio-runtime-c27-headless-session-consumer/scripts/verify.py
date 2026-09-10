@@ -52,6 +52,14 @@ CONFIG_SHA256 = {
     "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
     "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1",
 }
+REPLACEMENT_ROOTS = (
+    "agent-cli",
+    "go-agent-loop",
+    "go-agent-runtime",
+    "go-audio",
+    "go-device-gateway",
+    "go-llm-gateway",
+)
 
 
 class VerifyError(RuntimeError):
@@ -1062,10 +1070,7 @@ def run_package() -> dict[str, Any]:
             "consumer_build": consumer_build.as_dict(),
             "yui_build": yui_build.as_dict(),
         }
-    replacements = {
-        relative: source_tree_digest(REPO_ROOT / relative)
-        for relative in ("agent-cli", "go-agent-loop", "go-agent-runtime", "go-audio", "go-device-gateway", "go-llm-gateway")
-    }
+    replacements = {relative: source_tree_digest(REPO_ROOT / relative) for relative in REPLACEMENT_ROOTS}
     descriptor = {
         "schema": "audio-runtime-c27-package/v1",
         "source_revision": admission["head"],
@@ -1113,6 +1118,16 @@ def descriptor_path(value: str, root: Path = MODULE_DIR) -> Path:
     return root / candidate
 
 
+def load_descriptor(path: Path) -> dict[str, Any]:
+    require(path.is_file(), f"artifact descriptor is missing: {path}")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"artifact descriptor cannot be read: {path}: {error}")
+    require(isinstance(value, dict), f"artifact descriptor is not an object: {path}")
+    return value
+
+
 def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[str, Any]:
     source_revision = value.get("source_revision")
     require(isinstance(source_revision, str) and source_revision, "artifact descriptor omitted source revision")
@@ -1131,30 +1146,94 @@ def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[st
             not source_changes,
             f"artifact source revision {source_revision} is stale; source files changed through {current_head}: {source_changes}",
         )
+
+    module = value.get("module")
+    require(isinstance(module, dict), "artifact descriptor omitted module metadata")
+    module_source_digest = module.get("source_tree_sha256")
+    require(isinstance(module_source_digest, str) and module_source_digest, "artifact descriptor omitted module source tree digest")
+    actual_module_source_digest = source_tree_digest(root)
+    require(
+        actual_module_source_digest == module_source_digest,
+        f"module source tree digest mismatch: declared {module_source_digest}, observed {actual_module_source_digest}",
+    )
+
+    declared_graph_hashes = value.get("dependency_graph")
+    require(isinstance(declared_graph_hashes, dict), "artifact descriptor omitted dependency graph hashes")
+    graph_hashes = graph_boundary()["graph_hashes"]
+    require(set(declared_graph_hashes) == set(graph_hashes), "artifact descriptor dependency graph hash set changed")
+    for name, actual_digest in graph_hashes.items():
+        declared_digest = declared_graph_hashes.get(name)
+        require(
+            isinstance(declared_digest, str) and declared_digest == actual_digest,
+            f"dependency graph digest mismatch for {name}: declared {declared_digest}, observed {actual_digest}",
+        )
+
+    declared_replacements = value.get("replacement_source_tree_sha256")
+    require(isinstance(declared_replacements, dict), "artifact descriptor omitted replacement source tree digests")
+    replacement_digests = {relative: source_tree_digest(REPO_ROOT / relative) for relative in REPLACEMENT_ROOTS}
+    require(set(declared_replacements) == set(replacement_digests), "artifact descriptor replacement digest set changed")
+    for relative, actual_digest in replacement_digests.items():
+        declared_digest = declared_replacements.get(relative)
+        require(
+            isinstance(declared_digest, str) and declared_digest == actual_digest,
+            f"replacement source tree digest mismatch for {relative}: declared {declared_digest}, observed {actual_digest}",
+        )
+
     checked: list[dict[str, Any]] = []
     artifact_values: list[dict[str, Any]] = []
-    artifact_values.append(value["source_archive"])
-    artifact_values.extend(value["executables"].values())
-    artifact_values.extend(value["fixtures"].values())
+    source_archive = value.get("source_archive")
+    require(isinstance(source_archive, dict), "artifact descriptor omitted source archive")
+    artifact_values.append(source_archive)
+    executables = value.get("executables")
+    require(isinstance(executables, dict) and set(executables) == {"consumer", "yui"}, "artifact descriptor omitted executables")
+    artifact_values.extend(executables.values())
+    fixtures = value.get("fixtures")
+    require(isinstance(fixtures, dict) and "c07_audio_tool_traced" in fixtures, "artifact descriptor omitted fixtures")
+    artifact_values.extend(fixtures.values())
     regression_inputs = value.get("regression_inputs")
     require(isinstance(regression_inputs, dict), "artifact descriptor omitted regression inputs")
     config = regression_inputs.get("config")
     require(isinstance(config, dict) and set(config) == set(CONFIG_SHA256), "artifact descriptor omitted hash-pinned replay config")
+    fixture = fixtures["c07_audio_tool_traced"]
+    require(isinstance(fixture, dict) and fixture.get("sha256") == TOOL_FIXTURE_SHA256, "artifact descriptor changed required C07 fixture digest")
+    for name, expected_digest in CONFIG_SHA256.items():
+        declared_config = config.get(name)
+        require(isinstance(declared_config, dict), f"artifact descriptor omitted replay config file: {name}")
+        require(
+            declared_config.get("sha256") == expected_digest,
+            f"artifact descriptor changed immutable replay config digest: {name}",
+        )
     artifact_values.extend(config.values())
-    artifact_values.append(value["module"]["go_mod"])
-    artifact_values.append(value["module"]["go_sum"])
-    artifact_values.append(value["runner"])
+    for name in ("go_mod", "go_sum"):
+        module_file = module.get(name)
+        require(isinstance(module_file, dict), f"artifact descriptor omitted module file: {name}")
+        artifact_values.append(module_file)
+    runner = value.get("runner")
+    require(isinstance(runner, dict), "artifact descriptor omitted verifier runner")
+    artifact_values.append(runner)
     for artifact in artifact_values:
-        path = descriptor_path(str(artifact["path"]), root)
+        require(isinstance(artifact, dict), "artifact descriptor contains a non-object file descriptor")
+        path_value = artifact.get("path")
+        declared_size = artifact.get("size")
+        declared_sha = artifact.get("sha256")
+        require(isinstance(path_value, str), "artifact descriptor file entry omitted path")
+        require(isinstance(declared_size, int) and declared_size >= 0, f"artifact descriptor file entry has invalid size: {path_value}")
+        require(isinstance(declared_sha, str) and declared_sha, f"artifact descriptor file entry omitted digest: {path_value}")
+        path = descriptor_path(path_value, root)
         require(path.is_file(), f"declared artifact is missing: {path}")
         actual_size = path.stat().st_size
         actual_sha = sha256_file(path)
-        require(actual_size == artifact["size"], f"artifact size mismatch: {artifact['path']}")
-        require(actual_sha == artifact["sha256"], f"artifact digest mismatch: {artifact['path']}")
-        checked.append({"path": artifact["path"], "size": actual_size, "sha256": actual_sha})
+        require(actual_size == declared_size, f"artifact size mismatch: {path_value}")
+        require(actual_sha == declared_sha, f"artifact digest mismatch: {path_value}")
+        checked.append({"path": path_value, "size": actual_size, "sha256": actual_sha})
     return {
         "checked": checked,
         "all_digests_match": True,
+        "verified_digests": {
+            "module_source_tree_sha256": actual_module_source_digest,
+            "dependency_graph": graph_hashes,
+            "replacement_source_tree_sha256": replacement_digests,
+        },
         "provenance": {
             "source_revision": source_revision,
             "current_head": current_head,
@@ -1165,30 +1244,66 @@ def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[st
     }
 
 
+def verify_descriptor_file(path: Path, root: Path = MODULE_DIR) -> dict[str, Any]:
+    return verify_descriptor(load_descriptor(path), root=root)
+
+
 def run_verify_artifacts() -> dict[str, Any]:
     descriptor_file = EVIDENCE_DIR / "package.json"
-    require(descriptor_file.is_file(), "package descriptor is missing; run package first")
-    descriptor = json.loads(descriptor_file.read_text(encoding="utf-8"))
+    descriptor = load_descriptor(descriptor_file)
     verified = verify_descriptor(descriptor)
     missing_descriptor_error = ""
     try:
-        missing = EVIDENCE_DIR / "package.missing.json"
-        json.loads(missing.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError) as error:
+        verify_descriptor_file(EVIDENCE_DIR / "package.missing.json")
+    except VerifyError as error:
         missing_descriptor_error = str(error)
     require(missing_descriptor_error, "missing descriptor control was not rejected")
-    with tempfile.TemporaryDirectory(prefix="c27-tamper-") as temporary:
-        tamper_root = Path(temporary)
-        tampered_path = tamper_root / "artifact"
-        shutil.copyfile(MODULE_DIR / descriptor["executables"]["consumer"].get("path"), tampered_path)
-        with tampered_path.open("ab") as handle:
-            handle.write(b"tampered")
-        tampered_error = ""
-        expected = descriptor["executables"]["consumer"]
-        if sha256_file(tampered_path) != expected["sha256"] or tampered_path.stat().st_size != expected["size"]:
-            tampered_error = "tampered artifact digest/size rejected"
-        require(tampered_error, "tampered artifact control was not rejected")
-    evidence = {"descriptor": file_descriptor(descriptor_file, MODULE_DIR), "verified": verified, "missing_descriptor_control": missing_descriptor_error, "tamper_control": tampered_error}
+
+    tamper_controls: dict[str, str] = {}
+
+    def expect_descriptor_rejection(name: str, mutate: Callable[[dict[str, Any]], None]) -> None:
+        tampered = json.loads(json.dumps(descriptor))
+        mutate(tampered)
+        try:
+            verify_descriptor(tampered)
+        except VerifyError as error:
+            tamper_controls[name] = str(error)
+            return
+        fail(f"descriptor tamper control was not rejected: {name}")
+
+    expect_descriptor_rejection(
+        "module_source_tree_sha256",
+        lambda tampered: tampered["module"].update(source_tree_sha256="0" * 64),
+    )
+    expect_descriptor_rejection(
+        "dependency_graph_packages_sha256",
+        lambda tampered: tampered["dependency_graph"].update(packages_sha256="0" * 64),
+    )
+    expect_descriptor_rejection(
+        "replacement_source_tree_sha256",
+        lambda tampered: tampered["replacement_source_tree_sha256"].update({"go-audio": "0" * 64}),
+    )
+    expect_descriptor_rejection(
+        "consumer_artifact_sha256",
+        lambda tampered: tampered["executables"]["consumer"].update(sha256="0" * 64),
+    )
+    missing_artifact = json.loads(json.dumps(descriptor))
+    missing_artifact["executables"]["consumer"]["path"] = "evidence/artifacts/missing-headless-session.archive"
+    try:
+        verify_descriptor(missing_artifact)
+    except VerifyError as error:
+        tamper_controls["missing_declared_artifact"] = str(error)
+    else:
+        fail("descriptor missing-artifact control was not rejected")
+
+    evidence = {
+        "descriptor": file_descriptor(descriptor_file, MODULE_DIR),
+        "verified": verified,
+        "missing_descriptor_control": missing_descriptor_error,
+        "missing_artifact_control": tamper_controls["missing_declared_artifact"],
+        "tamper_control": tamper_controls["consumer_artifact_sha256"],
+        "tamper_controls": tamper_controls,
+    }
     write_json(EVIDENCE_DIR / "artifact-verification.json", evidence)
     return evidence
 
@@ -1196,7 +1311,7 @@ def run_verify_artifacts() -> dict[str, Any]:
 def run_regression() -> dict[str, Any]:
     if not (EVIDENCE_DIR / "package.json").is_file():
         run_package()
-    descriptor = json.loads((EVIDENCE_DIR / "package.json").read_text(encoding="utf-8"))
+    descriptor = load_descriptor(EVIDENCE_DIR / "package.json")
     verify_descriptor(descriptor)
     yui = MODULE_DIR / descriptor["executables"]["yui"]["path"]
     fixture = MODULE_DIR / descriptor["fixtures"]["c07_audio_tool_traced"]["path"]
