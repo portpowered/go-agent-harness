@@ -1,27 +1,27 @@
 {
-  "binary": "5c57319cfa8def02bc1c9b10a1a2bdf8504eff080b48a3efe2dd1188d4d27f72",
+  "binary": "d690f0a13c187f89f213bcac50e51aa12127353839489b28a3be44c0f0fff61f",
   "case": "default-overflow",
   "result": {
     "case": "default-overflow",
     "disk_usage": {
-      "final_bytes": 65374520,
-      "peak_final_bytes": 65374520,
-      "peak_owned_bytes": 130989358,
-      "peak_staging_bytes": 65374520,
+      "final_bytes": 65374522,
+      "peak_final_bytes": 65374522,
+      "peak_owned_bytes": 130989360,
+      "peak_staging_bytes": 65374522,
       "peak_temporary_bytes": 65614838,
-      "samples": 444
+      "samples": 443
     },
     "file_bytes": {
       "agent.transcript.jsonl": 32686354,
       "client.transcript.jsonl": 32686354,
-      "manifest.json": 1057,
+      "manifest.json": 1059,
       "provider.json": 755
     },
     "finalization": {
-      "allocated_bytes": 301002752,
-      "duration_ms": 232,
-      "heap_alloc_after": 1871136,
-      "heap_alloc_before": 2025680
+      "allocated_bytes": 292050880,
+      "duration_ms": 167,
+      "heap_alloc_after": 1886088,
+      "heap_alloc_before": 2377784
     },
     "finalization_error": "transcript: recording admit transcript evidence: recording evidence budget exceeded: transcript bytes=68342320/67108864 items=23/1048576",
     "limits_applied": {
@@ -76,7 +76,7 @@
       "accepted_messages": 128,
       "audio_bytes": 0,
       "audio_items": 0,
-      "metadata_bytes": 1057,
+      "metadata_bytes": 1059,
       "metadata_items": 1,
       "peak_provider_bytes": 0,
       "peak_provider_items": 0,
@@ -106,16 +106,16 @@
       "summary_items": 0
     },
     "sidecar_bytes": 448,
-    "source_revision": "e11297ddb1d3d5ef7c3b239a0ec61f4eb968d3ed",
+    "source_revision": "db0252ed81b4d235a658ca1c39e788caa38a11b7",
     "status": "partial",
-    "total_bytes": 65374520,
+    "total_bytes": 65374522,
     "transcript_lines": {
       "agent.transcript.jsonl": 23,
       "client.transcript.jsonl": 23
     },
     "transcript_sha256": {
-      "agent.transcript.jsonl": "46d767a0972886cf82b57766867d057385ce061d42d61d012a4566777f353dc1",
-      "client.transcript.jsonl": "7d501c5cb6111c63dc3210bd1b3719d4d34299e5182097bc73b1a84610d32cd7"
+      "agent.transcript.jsonl": "61451db11e39b8f5acf70bd47645a257836b2993f5241544f490ba351fd3786b",
+      "client.transcript.jsonl": "113437f1dc4207bd7fc9a11b018823d4d3ea54debabdde748968c1a0aa58180c"
     }
   }
 }
