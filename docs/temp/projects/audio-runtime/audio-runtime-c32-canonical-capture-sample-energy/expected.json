@@ -1,0 +1,345 @@
+{
+  "schema": "audio-runtime-c32-capture-sample-energy-expected.v1",
+  "deadline_seconds": 10,
+  "cases": {
+    "pcm8-zero": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "00",
+      "bits_per_sample": 8,
+      "valid_bits_per_sample": 8,
+      "expected_samples": [-1],
+      "expected_negative_zero": [false]
+    },
+    "pcm8-midpoint": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "80",
+      "bits_per_sample": 8,
+      "valid_bits_per_sample": 8,
+      "expected_samples": [0],
+      "expected_negative_zero": [false]
+    },
+    "pcm8-maximum": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "ff",
+      "bits_per_sample": 8,
+      "valid_bits_per_sample": 8,
+      "expected_samples": [0.9921875],
+      "expected_negative_zero": [false]
+    },
+    "pcm16-minimum": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "0080",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 16,
+      "expected_samples": [-1],
+      "expected_negative_zero": [false]
+    },
+    "pcm16-maximum": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "ff7f",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 16,
+      "expected_samples": [0.999969482421875],
+      "expected_negative_zero": [false]
+    },
+    "pcm24-negative-one": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "ffffff",
+      "bits_per_sample": 24,
+      "valid_bits_per_sample": 24,
+      "expected_samples": [-0.00000011920928955078125],
+      "expected_negative_zero": [false]
+    },
+    "pcm24-maximum": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "ffff7f",
+      "bits_per_sample": 24,
+      "valid_bits_per_sample": 24,
+      "expected_samples": [0.9999998807907104],
+      "expected_negative_zero": [false]
+    },
+    "pcm32-maximum": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "ffffff7f",
+      "bits_per_sample": 32,
+      "valid_bits_per_sample": 32,
+      "expected_samples": [0.9999999995343387],
+      "expected_negative_zero": [false]
+    },
+    "pcm64-maximum-rounds-to-one": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "ffffffffffffff7f",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "expected_samples": [1],
+      "expected_negative_zero": [false]
+    },
+    "pcm16-reduced-valid-padding": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "0140",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 12,
+      "expected_samples": [0.500030517578125],
+      "expected_negative_zero": [false]
+    },
+    "pcm8-short": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "",
+      "bits_per_sample": 8,
+      "valid_bits_per_sample": 8,
+      "expected_error_kind": "ErrSampleInputTooShort"
+    },
+    "pcm16-short": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "00",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 16,
+      "expected_error_kind": "ErrSampleInputTooShort"
+    },
+    "pcm24-short": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "0000",
+      "bits_per_sample": 24,
+      "valid_bits_per_sample": 24,
+      "expected_error_kind": "ErrSampleInputTooShort"
+    },
+    "pcm32-short": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "000000",
+      "bits_per_sample": 32,
+      "valid_bits_per_sample": 32,
+      "expected_error_kind": "ErrSampleInputTooShort"
+    },
+    "pcm64-short": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "00000000000000",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "expected_error_kind": "ErrSampleInputTooShort"
+    },
+    "float32-short": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "000000",
+      "bits_per_sample": 32,
+      "valid_bits_per_sample": 32,
+      "expected_error_kind": "ErrSampleInputTooShort"
+    },
+    "float64-short": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "00000000000000",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "expected_error_kind": "ErrSampleInputTooShort"
+    },
+    "unsupported-encoding": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "0000",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 16,
+      "expected_error_kind": "ErrUnsupportedSampleEncoding"
+    },
+    "unsupported-pcm-width": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "0000000000",
+      "bits_per_sample": 40,
+      "valid_bits_per_sample": 40,
+      "expected_error_kind": "ErrUnsupportedSampleWidth"
+    },
+    "invalid-valid-bits-zero": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "0000",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 0,
+      "expected_error_kind": "ErrInvalidSampleFormat"
+    },
+    "invalid-valid-bits-too-large": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "0000",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 17,
+      "expected_error_kind": "ErrInvalidSampleFormat"
+    },
+    "float32-positive-zero": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "00000000",
+      "bits_per_sample": 32,
+      "valid_bits_per_sample": 32,
+      "expected_samples": [0],
+      "expected_negative_zero": [false]
+    },
+    "float32-negative-zero": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "00000080",
+      "bits_per_sample": 32,
+      "valid_bits_per_sample": 32,
+      "expected_samples": [0],
+      "expected_negative_zero": [true]
+    },
+    "float32-half": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "0000003f",
+      "bits_per_sample": 32,
+      "valid_bits_per_sample": 32,
+      "expected_samples": [0.5],
+      "expected_negative_zero": [false]
+    },
+    "float32-outside-range": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "00002040",
+      "bits_per_sample": 32,
+      "valid_bits_per_sample": 32,
+      "expected_samples": [2.5],
+      "expected_negative_zero": [false]
+    },
+    "float64-negative-half": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "000000000000e0bf",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "expected_samples": [-0.5],
+      "expected_negative_zero": [false]
+    },
+    "float64-outside-range": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "00000000000004c0",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "expected_samples": [-2.5],
+      "expected_negative_zero": [false]
+    },
+    "float32-nan": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "0100c07f",
+      "bits_per_sample": 32,
+      "valid_bits_per_sample": 32,
+      "expected_error_kind": "ErrNonFiniteSample"
+    },
+    "float64-positive-infinity": {
+      "api": "codec.DecodeSampleValue",
+      "input_hex": "000000000000f07f",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "expected_error_kind": "ErrNonFiniteSample"
+    },
+    "pcm16-stereo-padded-energy": {
+      "api": "audio.PacketEnergy",
+      "input_hex": "004000c0aabb00000080ccdd",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 16,
+      "frames": 2,
+      "channels": 2,
+      "frame_stride": 6,
+      "expected_samples": [0.5, -0.5, 0, -1],
+      "expected_negative_zero": [false, false, false, false],
+      "expected_energy": 1.5
+    },
+    "pcm8-mono-energy": {
+      "api": "audio.PacketEnergy",
+      "input_hex": "0080ff",
+      "bits_per_sample": 8,
+      "valid_bits_per_sample": 8,
+      "frames": 3,
+      "channels": 1,
+      "frame_stride": 1,
+      "expected_samples": [-1, 0, 0.9921875],
+      "expected_negative_zero": [false, false, false],
+      "expected_energy": 1.98443603515625
+    },
+    "float32-stereo-energy": {
+      "api": "audio.PacketEnergy",
+      "input_hex": "0000003f000000bf0000004000000000",
+      "bits_per_sample": 32,
+      "valid_bits_per_sample": 32,
+      "frames": 2,
+      "channels": 2,
+      "frame_stride": 8,
+      "expected_samples": [0.5, -0.5, 2, 0],
+      "expected_negative_zero": [false, false, false, false],
+      "expected_energy": 4.5
+    },
+    "float64-mono-energy": {
+      "api": "audio.PacketEnergy",
+      "input_hex": "000000000000f83f00000000000000c0",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "frames": 2,
+      "channels": 1,
+      "frame_stride": 8,
+      "expected_samples": [1.5, -2],
+      "expected_negative_zero": [false, false],
+      "expected_energy": 6.25
+    },
+    "zero-frames": {
+      "api": "audio.PacketEnergy",
+      "input_hex": "",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 16,
+      "frames": 0,
+      "channels": 1,
+      "frame_stride": 2,
+      "expected_samples": [],
+      "expected_negative_zero": [],
+      "expected_energy": 0
+    },
+    "short-final-frame": {
+      "api": "audio.PacketEnergy",
+      "input_hex": "0000000000",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 16,
+      "frames": 2,
+      "channels": 1,
+      "frame_stride": 3,
+      "expected_error_kind": "ErrPacketInputTooShort"
+    },
+    "invalid-channel-stride": {
+      "api": "audio.PacketEnergy",
+      "input_hex": "0000",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 16,
+      "frames": 1,
+      "channels": 2,
+      "frame_stride": 2,
+      "expected_error_kind": "ErrInvalidPacketDimensions"
+    },
+    "invalid-frame-overflow": {
+      "api": "audio.PacketEnergy",
+      "input_hex": "00",
+      "bits_per_sample": 16,
+      "valid_bits_per_sample": 16,
+      "frames": "max_int",
+      "channels": 1,
+      "frame_stride": 2,
+      "expected_error_kind": "ErrInvalidPacketDimensions"
+    },
+    "float-nan-energy": {
+      "api": "audio.PacketEnergy",
+      "input_hex": "010000000000f87f",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "frames": 1,
+      "channels": 1,
+      "frame_stride": 8,
+      "expected_error_kind": "ErrNonFiniteSample"
+    },
+    "float-square-overflow": {
+      "api": "audio.PacketEnergy",
+      "input_hex": "ffffffffffffef7f",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "frames": 1,
+      "channels": 1,
+      "frame_stride": 8,
+      "expected_error_kind": "ErrPacketEnergyOverflow"
+    },
+    "float-sum-overflow": {
+      "api": "audio.PacketEnergy",
+      "input_hex": "f15f096bdfdde75ff15f096bdfdde75f",
+      "bits_per_sample": 64,
+      "valid_bits_per_sample": 64,
+      "frames": 2,
+      "channels": 1,
+      "frame_stride": 8,
+      "expected_error_kind": "ErrPacketEnergyOverflow"
+    }
+  }
+}
