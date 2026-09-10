@@ -13,9 +13,9 @@ The predecessor and baseline checkpoints were preserved:
 | --- | --- |
 | startup integration revision | `8bdafc7f947a3a2c9856220abdc539437035bd21` |
 | required baseline | `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` |
-| freshly fetched `origin/main` | `b0acab1238d1aa6bf6bce5ca074451310c7eb039` |
+| freshly fetched `origin/main` | `431fc96c14f0e0045629d9c36f98ee61ff06e840` |
 | pre-change isolated HEAD | `1f82284abee0bd31a6680310444cea2e4c16ef00` |
-| current-main integration merge | `ce9a795192bc5433811de4f37824cc579fa0daa8` |
+| current-main integration merge | `a85ebbd374d8264f33a79d551b9cea8aff9b36ab` |
 | initial candidate implementation revision | `6f82c046dd19a52ce57a8be895f0df43921db8da` |
 | cleanup-error repair revision | `9efd435177b58db8a9508b92b8b96202021b6e89` |
 | final candidate revision | `e0ee33f0c161f8031fd074397a46ad0316c4b4fb` |
@@ -24,7 +24,7 @@ The predecessor and baseline checkpoints were preserved:
 
 `git merge-base --is-ancestor` passed for the startup integration revision,
 the required baseline, and fetched `origin/main`. The current-main integration
-was a no-ff merge at `ce9a795192bc5433811de4f37824cc579fa0daa8`; no reset was
+was a no-ff merge at `a85ebbd374d8264f33a79d551b9cea8aff9b36ab`; no reset was
 used and the running host checkout was not touched.
 
 ## CI rejection accounting
@@ -43,10 +43,12 @@ were repaired in `9efd435` with checked cleanup/error joins; the resulting
 403-line source-file budget regression was repaired in `e0ee33f` by moving the
 WAV-specific rate-error constructor into the owned streaming WAV source.
 
-The current candidate evidence below is generated from clean source revision
-`f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c`, which contains the reviewed source
-repairs and the C31 review-150 evidence repairs. Broad CI has not been rerun or
-claimed green, and the script gate retains ownership of the current-head check.
+The current candidate evidence below is generated from clean merged source
+revision `a85ebbd374d8264f33a79d551b9cea8aff9b36ab`, whose first parent is the
+review-150 repair checkpoint `f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c` and
+whose second parent is the freshly fetched `origin/main`. Broad CI has not been
+rerun or claimed green, and the script gate retains ownership of the current-head
+check.
 
 ## Review-140 repair accounting
 
@@ -88,8 +90,8 @@ growth.
 `characterize-before.json` records the old source failing the oracle: small
 fixture values were 74136 bytes and the large fixture median was 26624552 bytes
 (maximum 26629840). `characterize-after.json` records the same consumer and
-oracle after WAV reads delegate to the canonical streaming source; the current
-the final source run measured small- and large-fixture allocations of
+oracle after WAV reads delegate to the canonical streaming source; the final
+source run measured small- and large-fixture allocations of
 `[488,488,488,488,488]` bytes. Both maxima and medians are 488 bytes, and
 median growth is zero.
 
@@ -130,6 +132,14 @@ integrates that exact fetched main in merge `ce9a795192bc5433811de4f37824cc579fa
 and regenerates the executable reports from the merged source; no old green
 checks or artifacts are reused.
 
+The latest concluded review-157 finding identified the next stale-base boundary:
+PR `#423` was still based on `b0acab1238d1aa6bf6bce5ca074451310c7eb039` while
+the freshly fetched `origin/main` was `431fc96c14f0e0045629d9c36f98ee61ff06e840`.
+The current checkpoint merges that main as `a85ebbd374d8264f33a79d551b9cea8aff9b36ab`
+and regenerates the consumer, yui, workflow, timeout, regression, and source
+characterization reports from that exact revision. The old Family-A and C20
+remote failures remain preserved as external, non-waived findings.
+
 ## Behavioral controls
 
 The positive consumer checks literal samples, one shared mixed-read cursor,
@@ -167,13 +177,13 @@ replay checks, not acoustic or physical-device proof.
 ## Exact-source provenance
 
 `artifact-manifest.json` records tested source revision
-`f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c`, consumer build-input SHA256
-`5937d4f0267788326bf89675f327c3bc8e475c22b90e8a8d46c848b71ccf0eaf`, and yui
+`a85ebbd374d8264f33a79d551b9cea8aff9b36ab`, consumer build-input SHA256
+`a28b1c178a2021d2fcb1ca7b8586f4972ebdf4617c2f2641c1ad0b749106ec1b`, and yui
 build-input SHA256
-`5e67ad2ec36475895f2eedd9f5a98d73eb1d3ea7e0f961fd548ea60038cbba78`. The
+`9d1612bd877f70699d35641c134ceefa4083727df048c221debb3f1bb551835c`. The
 current consumer and yui artifact hashes are respectively
-`468edf567377db9c57b88bd416d51e241dba466af93457f62dce31140ce23e59` and
-`b9da73df35aecfbef051fe2f2ab7c696b4b54e91e8d4c07ae28088bffc688a18`.
+`a8fd583252450bfbebef79e3ffd7745a4a4032a9148e79ab74c0c3eb06b4aa85` and
+`dfa157096bd1110e71eda70d1c19055899c8f7da452a4c375fc5d254a84e5252`.
 Any later evidence-only descendant must preserve these input hashes and change
 only the owned evidence directory; no executable is relabeled as current
 without a source/build-input match.

@@ -1,15 +1,15 @@
 {
   "schema": "audio-runtime-c31-artifact-manifest.v2",
-  "source": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
-  "tested_source_revision": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
+  "source": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
+  "tested_source_revision": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
   "build_inputs": {
     "consumer": {
       "path_prefixes": [
         "go-audio",
         "docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/consumer"
       ],
-      "file_count": 123,
-      "sha256": "5937d4f0267788326bf89675f327c3bc8e475c22b90e8a8d46c848b71ccf0eaf"
+      "file_count": 125,
+      "sha256": "a28b1c178a2021d2fcb1ca7b8586f4972ebdf4617c2f2641c1ad0b749106ec1b"
     },
     "yui": {
       "path_prefixes": [
@@ -22,23 +22,23 @@
         "go.work",
         "go.work.sum"
       ],
-      "file_count": 2157,
-      "sha256": "5e67ad2ec36475895f2eedd9f5a98d73eb1d3ea7e0f961fd548ea60038cbba78"
+      "file_count": 2159,
+      "sha256": "9d1612bd877f70699d35641c134ceefa4083727df048c221debb3f1bb551835c"
     }
   },
   "go_version": "go version go1.26.7 darwin/arm64",
   "artifacts": {
     "consumer": {
       "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/wav-consumer",
-      "sha256": "468edf567377db9c57b88bd416d51e241dba466af93457f62dce31140ce23e59",
-      "tested_source_revision": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
-      "build_inputs_sha256": "5937d4f0267788326bf89675f327c3bc8e475c22b90e8a8d46c848b71ccf0eaf"
+      "sha256": "a8fd583252450bfbebef79e3ffd7745a4a4032a9148e79ab74c0c3eb06b4aa85",
+      "tested_source_revision": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
+      "build_inputs_sha256": "a28b1c178a2021d2fcb1ca7b8586f4972ebdf4617c2f2641c1ad0b749106ec1b"
     },
     "yui": {
       "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/yui",
-      "sha256": "b9da73df35aecfbef051fe2f2ab7c696b4b54e91e8d4c07ae28088bffc688a18",
-      "tested_source_revision": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
-      "build_inputs_sha256": "5e67ad2ec36475895f2eedd9f5a98d73eb1d3ea7e0f961fd548ea60038cbba78"
+      "sha256": "dfa157096bd1110e71eda70d1c19055899c8f7da452a4c375fc5d254a84e5252",
+      "tested_source_revision": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
+      "build_inputs_sha256": "9d1612bd877f70699d35641c134ceefa4083727df048c221debb3f1bb551835c"
     }
   }
 }

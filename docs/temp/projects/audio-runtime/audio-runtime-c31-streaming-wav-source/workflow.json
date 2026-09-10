@@ -1,9 +1,9 @@
 {
   "schema": "audio-runtime-c31-file-input-workflow.v1",
-  "source": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
-  "tested_source_revision": "f88eda244ae2c8d8bc7cebc85aa5c2f99a9df57c",
-  "yui_build_inputs_sha256": "5e67ad2ec36475895f2eedd9f5a98d73eb1d3ea7e0f961fd548ea60038cbba78",
-  "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789020350801261000/audio-input.session.json",
+  "source": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
+  "tested_source_revision": "a85ebbd374d8264f33a79d551b9cea8aff9b36ab",
+  "yui_build_inputs_sha256": "9d1612bd877f70699d35641c134ceefa4083727df048c221debb3f1bb551835c",
+  "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789022775083025000/audio-input.session.json",
   "fixture_sha256": "86b3c56effa6da7bb43fdf4536d75b55884c28c7aa46eabd71f2187fd7791bdc",
   "fixture_source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/agent-cli/test/integration/testdata/s2s-e2e-vision-describe/s2s_e2e_vision_describe.session.json",
   "fixture_source_sha256": "1c0d4049ad5cd2f14e13f82e62ec8f5435172628259d76879680eb00a3b48458",
@@ -11,7 +11,7 @@
   "exit_code": 0,
   "clean_shutdown": true,
   "input": {
-    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789020350801261000/input.wav",
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789022775083025000/input.wav",
     "sample_rate": 16000,
     "samples": [
       -32768,
@@ -27,16 +27,16 @@
     "frame_bytes": 960,
     "frame_sha256": "ac805529ca3da1fcb3e687cb5f30949d1eaa03a0185a8c21301d03d8f8313e6d",
     "recorded_files": [
-      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789020350801261000/recording/audio/in-000.pcm"
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789022775083025000/recording/audio/in-000.pcm"
     ],
     "recorded_payload_bytes": 960,
     "recorded_payload_sha256": "ac805529ca3da1fcb3e687cb5f30949d1eaa03a0185a8c21301d03d8f8313e6d",
     "exact": true
   },
   "recording": {
-    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789020350801261000/recording",
-    "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789020350801261000/recording/manifest.json",
-    "manifest_sha256": "86deab5077a824bd2a03bcfcc89a69e651f49febb0f7051e5e1f0bebea3b3cc8",
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789022775083025000/recording",
+    "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789022775083025000/recording/manifest.json",
+    "manifest_sha256": "bc746647cb4f355ac17edc1288832b9995b638448fdf65ee6d28ec996556908e",
     "terminal": {
       "reason": "fixture_complete",
       "classification": "provider_close",
@@ -46,7 +46,7 @@
     }
   },
   "output": {
-    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789020350801261000/output.wav",
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/runs/workflow-1789022775083025000/output.wav",
     "bytes": 1004,
     "sha256": "acacb4a3a1613f22edb97beb39c5cb5bc72e8af801bf1023accb954a479e2c58",
     "expected_pcm_payload_bytes": 960,

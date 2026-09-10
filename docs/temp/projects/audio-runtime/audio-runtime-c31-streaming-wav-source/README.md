@@ -44,7 +44,7 @@ stdout/stderr and cleanup records remain under the ignored `runs/` evidence.
 
 The JSON reports identify the clean merged implementation revision that was
 tested as `tested_source_revision`
-(`ce9a795192bc5433811de4f37824cc579fa0daa8`) and include a SHA256 over their
+(`a85ebbd374d8264f33a79d551b9cea8aff9b36ab`) and include a SHA256 over their
 scoped build inputs.
 The final evidence checkpoint may be a docs-only descendant of that revision;
 the descendant is valid only when `git diff --name-status` shows evidence paths
