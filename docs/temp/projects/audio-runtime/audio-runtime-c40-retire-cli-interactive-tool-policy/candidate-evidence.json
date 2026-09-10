@@ -23,6 +23,9 @@
   },
   "current_executor_validation": {
     "candidate_revision": "903445c215e8fae7947da1feafe6a0cf7e4bdf4f",
+    "evidence_commit": "d599fd4e98c2d72f0121a80e2cabe0061be4e552",
+    "evidence_only_descendant": true,
+    "executable_inputs_revision": "903445c215e8fae7947da1feafe6a0cf7e4bdf4f",
     "origin_main": "7b6ce8cecee80d3f78b7aad02760067387853ade",
     "admission": {
       "status": "admitted",
