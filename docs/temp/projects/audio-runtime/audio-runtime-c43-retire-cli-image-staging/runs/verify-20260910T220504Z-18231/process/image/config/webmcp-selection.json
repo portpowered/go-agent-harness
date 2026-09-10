@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "endpoint_id": "browser-2811b30afec85ba27cbc4710",
+  "browser_id": "browser-2811b30afec85ba27cbc4710",
+  "browser_instance_id": "incarnation-481680f210eeadb59c4442bb",
+  "target_id": "target-7a2f57da946af8b30c9b7e2d",
+  "origin": "http://127.0.0.1:57735",
+  "continuity_marker": "continuity-6c7910fbb0d3191a3c028f94",
+  "generation": 1,
+  "selected_at": "2026-09-10T22:05:48.529457Z"
+}
