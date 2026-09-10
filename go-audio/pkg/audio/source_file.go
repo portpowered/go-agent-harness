@@ -177,9 +177,8 @@ type FileSource struct {
 
 	reader io.Reader
 	closer io.Closer
+	wav    *WAVSource
 
-	samples  []int16
-	position int
 	done     bool
 	termErr  error
 	closed   bool
@@ -211,26 +210,28 @@ func NewFileSource(path string, stdin io.Reader) (*FileSource, error) {
 
 	source := &FileSource{path: path, format: format, reader: file, closer: file}
 	if format == formatWAV {
-		rate, samples, readErr := wavio.Read(file)
+		wav, readErr := NewWAVSource(path, file)
 		if readErr != nil {
 			_ = file.Close()
 			return nil, newStreamError("read", path, format, readErr)
 		}
-		if rate != SampleRate {
-			_ = file.Close()
+		if wav.SampleRate() != SampleRate {
+			_ = wav.Close()
 			return nil, &FormatError{
 				Path:      path,
 				Extension: ".wav",
 				Format:    format.String(),
-				Reason:    fmt.Sprintf("sample rate is %d Hz; want exactly %d Hz", rate, SampleRate),
+				Reason:    fmt.Sprintf("sample rate is %d Hz; want exactly %d Hz", wav.SampleRate(), SampleRate),
 				Err: &wavio.UnsupportedError{
 					Property:  "sample rate",
-					Observed:  rate,
+					Observed:  wav.SampleRate(),
 					Supported: "16000 Hz",
 				},
 			}
 		}
-		source.samples = samples
+		source.wav = wav
+		source.reader = nil
+		source.closer = nil
 	}
 	return source, nil
 }
@@ -258,7 +259,11 @@ func (s *FileSource) ReadFrame(ctx context.Context, buf []int16) error {
 		return io.EOF
 	}
 	if s.format == formatWAV {
-		return s.readDecodedFrame(buf)
+		err := s.wav.ReadFrame(ctx, buf)
+		if errors.Is(err, io.EOF) {
+			s.done = true
+		}
+		return err
 	}
 	return s.readRawFrame(buf)
 }
@@ -281,30 +286,63 @@ func (s *FileSource) ReadSamples(ctx context.Context, buf []int16) (int, error) 
 		return 0, err
 	}
 	if s.format == formatWAV {
-		return s.readWAVSamples(buf)
+		count, err := s.wav.ReadSamples(ctx, buf)
+		if errors.Is(err, io.EOF) {
+			s.done = true
+		}
+		return count, err
 	}
 	return s.readRawSamples(buf)
 }
 
-func (s *FileSource) readDecodedFrame(buf []int16) error {
-	if s.position >= len(s.samples) {
-		s.done = true
+func (s *FileSource) readStateError() error {
+	if s.closed {
+		return &ClosedError{Operation: "read", Path: s.path}
+	}
+	if s.termErr != nil {
+		return s.termErr
+	}
+	if s.done {
 		return io.EOF
-	}
-
-	clear(buf)
-	count := len(s.samples) - s.position
-	if count > FrameSize {
-		count = FrameSize
-	}
-	copy(buf, s.samples[s.position:s.position+count])
-	s.position += count
-	if count < FrameSize {
-		s.done = true
 	}
 	return nil
 }
 
+func (s *FileSource) readRawSamples(buf []int16) (int, error) {
+	encoded := make([]byte, len(buf)*2)
+	count, err := io.ReadFull(s.reader, encoded)
+	if markerErr := rawEndOfTurnError(s, count, err); markerErr != nil {
+		return 0, markerErr
+	}
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return 0, newStreamError("read", s.path, s.format, err)
+	}
+	if count == 0 {
+		s.done = true
+		return 0, io.EOF
+	}
+	if count%2 != 0 {
+		s.termErr = &TruncatedPCMError{Path: s.path, Bytes: count % 2}
+		return 0, s.termErr
+	}
+	if decodeErr := codec.DecodePCM16Into(buf[:count/2], encoded[:count]); decodeErr != nil {
+		return 0, newStreamError("read", s.path, s.format, decodeErr)
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		s.done = true
+	}
+	return count / 2, nil
+}
+
+func rawEndOfTurnError(s *FileSource, count int, err error) error {
+	if !errors.Is(err, ErrEndOfTurn) {
+		return nil
+	}
+	if count != 0 {
+		return newStreamError("read", s.path, s.format, fmt.Errorf("end-of-turn marker after %d PCM bytes", count))
+	}
+	return ErrEndOfTurn
+}
 func (s *FileSource) readRawFrame(buf []int16) error {
 	var encoded [rawFrameBytes]byte
 	count, err := io.ReadFull(s.reader, encoded[:])
@@ -348,6 +386,10 @@ func (s *FileSource) Close() error {
 		return s.closeErr
 	}
 	s.closed = true
+	if s.wav != nil {
+		s.closeErr = s.wav.Close()
+		return s.closeErr
+	}
 	if s.closer == nil {
 		return nil
 	}

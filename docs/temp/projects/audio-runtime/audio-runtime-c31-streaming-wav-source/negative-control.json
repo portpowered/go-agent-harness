@@ -1,0 +1,17 @@
+{
+  "schema": "audio-runtime-c31-streaming-wav-source-consumer.v1",
+  "case": "negative-control",
+  "source": "1f82284abee0bd31a6680310444cea2e4c16ef00+dirty-4d21fe7aa2228093",
+  "goos": "darwin",
+  "goarch": "arm64",
+  "started_at": "2026-09-10T02:56:22.667097Z",
+  "duration_ms": 0,
+  "clean_shutdown": true,
+  "negative_control": {
+    "expected_sample": 12346,
+    "actual_sample": 12345,
+    "mismatch": "sample[1] = 12345, want mutated expectation 12346",
+    "pass": false
+  },
+  "error": "sample[1] = 12345, want mutated expectation 12346"
+}

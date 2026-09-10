@@ -1,0 +1,67 @@
+{
+  "schema": "audio-runtime-c31-streaming-wav-source-consumer.v1",
+  "case": "verify",
+  "source": "1f82284abee0bd31a6680310444cea2e4c16ef00+dirty-4d21fe7aa2228093",
+  "goos": "darwin",
+  "goarch": "arm64",
+  "started_at": "2026-09-10T02:56:19.37126Z",
+  "duration_ms": 2,
+  "clean_shutdown": true,
+  "io": {
+    "open_read_bytes": 44,
+    "open_payload_read_bytes": 0,
+    "sample_read_bytes": 14,
+    "sample_payload_read_bytes": 14,
+    "frame_read_bytes": 20,
+    "frame_payload_read_bytes": 20,
+    "close_count": 2,
+    "open_bound_pass": true,
+    "sample_bound_pass": true,
+    "frame_bound_pass": true,
+    "pass": true
+  },
+  "checks": [
+    {
+      "name": "literal-samples",
+      "pass": true
+    },
+    {
+      "name": "mixed-read-cursor",
+      "pass": true
+    },
+    {
+      "name": "sample-tail-and-untouched-buffer",
+      "pass": true
+    },
+    {
+      "name": "frame-tail-zero-padding",
+      "pass": true
+    },
+    {
+      "name": "empty-wav-eof",
+      "pass": true
+    },
+    {
+      "name": "cancellation-before-read",
+      "pass": true
+    },
+    {
+      "name": "upfront-error-identities",
+      "pass": true
+    },
+    {
+      "name": "streaming-mutation-visible",
+      "pass": true,
+      "detail": "streaming mutation observed (snapshot isolation is intentionally not promised)"
+    },
+    {
+      "name": "post-open-truncation-errors",
+      "pass": true,
+      "detail": "first read reports *audio.TruncatedPCMError; subsequent reads are terminal"
+    },
+    {
+      "name": "caller-owned-stdin",
+      "pass": true
+    }
+  ]
+}

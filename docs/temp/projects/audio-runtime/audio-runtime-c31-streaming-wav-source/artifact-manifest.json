@@ -1,0 +1,15 @@
+{
+  "schema": "audio-runtime-c31-artifact-manifest.v1",
+  "source": "1f82284abee0bd31a6680310444cea2e4c16ef00+dirty-4d21fe7aa2228093",
+  "go_version": "go version go1.26.7 darwin/arm64",
+  "artifacts": {
+    "consumer": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/wav-consumer",
+      "sha256": "4fc382bd7631110b926d39ff780c5723b191580521c103552e0117dc8671b423"
+    },
+    "yui": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/yui",
+      "sha256": "3628723e73a5285277a4b154b3ab92e91d69a918d742b75fa706afe4aff80885"
+    }
+  }
+}
