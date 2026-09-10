@@ -9356,16 +9356,6 @@
       "rule": "cognitive-complexity",
       "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
-      "file": "pkg/devices/device_windows.go",
-      "symbol": "wasapiCapturePacketEnergy",
-      "value": 20,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
-      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_windows_test.go",
       "symbol": "TestWASAPIDeviceRegistryConformance",
       "value": 25,
@@ -17095,16 +17085,6 @@
     {
       "rule": "cyclomatic-complexity",
       "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
-      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
-      "file": "pkg/devices/device_windows.go",
-      "symbol": "wasapiCapturePacketEnergy",
-      "value": 16,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime",
       "file": "pkg/runtime/rtc_device.go",
       "symbol": "*RTCDeviceSource.pumpWithUploadedObserver",
@@ -19851,7 +19831,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_windows.go",
-      "value": 989,
+      "value": 962,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
