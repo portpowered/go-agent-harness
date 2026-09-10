@@ -5,8 +5,9 @@ Branch: `codex/audio-runtime-c31-streaming-wav-source`
 Isolated worktree: `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source`
 
 Admission used the sole `audio-runtime` project manifest and the exact
-`~default` board task. The task had no C31 review or CI rejection feedback at
-admission. The predecessor and baseline checkpoints were preserved:
+`~default` board task. The original admission had no C31 review or CI rejection
+feedback; the current board feedback and its repairs are accounted for below.
+The predecessor and baseline checkpoints were preserved:
 
 | checkpoint | revision |
 | --- | --- |
@@ -17,6 +18,7 @@ admission. The predecessor and baseline checkpoints were preserved:
 | initial candidate implementation revision | `6f82c046dd19a52ce57a8be895f0df43921db8da` |
 | cleanup-error repair revision | `9efd435177b58db8a9508b92b8b96202021b6e89` |
 | final candidate revision | `e0ee33f0c161f8031fd074397a46ad0316c4b4fb` |
+| current review-repair implementation | `ee971c0f8a8a62ac17d85181f013a88dfc16502` |
 
 `git merge-base --is-ancestor` passed for the startup integration revision,
 the required baseline, and fetched `origin/main`. No merge or reset was used;
@@ -38,9 +40,24 @@ were repaired in `9efd435` with checked cleanup/error joins; the resulting
 403-line source-file budget regression was repaired in `e0ee33f` by moving the
 WAV-specific rate-error constructor into the owned streaming WAV source.
 
-The final candidate evidence below is generated from `e0ee33f`; broad CI has
-not been rerun or claimed green, and the script gate retains ownership of the
-current-head check.
+The current candidate evidence below is generated from clean implementation
+revision `ee971c0f8a8a62ac17d85181f013a88dfc16502`. Broad CI has not been rerun
+or claimed green, and the script gate retains ownership of the current-head
+check.
+
+## Review-140 repair accounting
+
+The concluded review-140 feedback identified four C31 defects. `NewFileSource`
+now uses an internal metadata-only WAV constructor so valid 44.1 kHz input is
+reported as the historical path-aware `FormatError` wrapping
+`wavio.UnsupportedError`, while public `NewWAVSource` still rejects that rate
+directly. `WAVSource.ReadSamples` now uses the byte count returned by
+`io.ReadFull`; the owned regression and consumer assert `Bytes == 1` after a
+one-byte post-open truncation. The workflow runner validates the emitted WAV
+header/data length and compares actual PCM bytes and SHA256 with the scripted
+response. All reports now include the clean tested revision and scoped
+consumer/yui build-input hashes, distinguishing them from a later docs-only
+evidence descendant.
 
 ## Frozen characterization
 
@@ -55,7 +72,8 @@ growth.
 fixture values were 74136 bytes and the large fixture median was 26624552 bytes
 (maximum 26629840). `characterize-after.json` records the same consumer and
 oracle after WAV reads delegate to the canonical streaming source; both fixture
-maxima are below 65536 bytes and median growth is zero.
+maxima are below 65536 bytes and median growth is zero. The repaired run
+measured 488 bytes for both fixture sizes and zero median growth.
 
 The public `NewWAVSource` counter records metadata-only open reads (44 bytes,
 zero payload), exactly 14 payload bytes for `ReadSamples(7)`, and no more than
@@ -89,10 +107,11 @@ reconciliation.
 
 The positive consumer checks literal samples, one shared mixed-read cursor,
 exact sample tails, zero-padded frame tails, empty input and repeated EOF,
-pre-cancelled reads, malformed/truncated/unsupported error identity, in-place
-payload mutation, post-open truncation, and caller-owned stdin ownership. The
-negative control changes the expected `12345` sample to `12346`; it exits
-nonzero with the causal mismatch.
+pre-cancelled reads, malformed/truncated/unsupported error identity (including
+the 44.1 kHz `FormatError`), in-place payload mutation, post-open truncation
+with the actual one-byte count, and caller-owned stdin ownership. The negative
+control changes the expected `12345` sample to `12346`; it exits nonzero with
+the causal mismatch.
 
 The source now validates the RIFF layout and physical extent at open, retains
 no decoded payload, and delegates both `ReadFrame` and `ReadSamples` to the
@@ -108,7 +127,8 @@ from the shipped credential-free vision-describe capture. The seven authored
 samples are recorded as one exact 960-byte frame (short-frame zero padding),
 the scripted response is emitted, the recording manifest is complete, and the
 process exits cleanly with `fixture_complete`. `workflow.json` records the
-literal input/output and manifest hashes.
+literal input/output and manifest hashes, and its runner compares the observed
+output PCM payload byte-for-byte against the expected scripted response.
 
 `--regression` invokes the existing C21 verifier controls read-only with the
 C31-built `yui` artifact. It asserts the exact audio-tool and interruption PCM
@@ -116,3 +136,15 @@ hashes, provider event bytes/order, tool marker/content, transcript/session-log
 terminal results, manifest hashes, and healthy interruption tail. `regression.json`
 records the reused control path and resulting artifacts. These are software
 replay checks, not acoustic or physical-device proof.
+
+## Exact-source provenance
+
+`artifact-manifest.json` records tested source revision
+`ee971c0f8a8a62ac17d85181f013a88dfc16502`, consumer build-input SHA256
+`07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0`, and yui
+build-input SHA256
+`033108552462292338a50f799675f1976299c3779000e9488f72dcccd19c13c4`. The
+consumer and yui artifact hashes are recorded beside those inputs. Any later
+evidence-only descendant must preserve these input hashes and change only the
+owned evidence directory; no executable is relabeled as current without a
+source/build-input match.

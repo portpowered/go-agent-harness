@@ -13,6 +13,9 @@ every measured constructor and 16384 bytes for median large-minus-small growth.
 The same consumer checks the public `audio.NewWAVSource` metadata/read bounds:
 open reads at most 64 bytes and no payload, `ReadSamples(7)` reads exactly 14
 payload bytes, and one `ReadFrame` reads at most `FrameSize*2` payload bytes.
+It also checks that `NewFileSource` keeps its historical path-level
+`FormatError`/`wavio.UnsupportedError` identity for a valid but incompatible
+44.1 kHz WAV, while direct `NewWAVSource` rate validation remains intact.
 
 Run commands from the isolated worktree root:
 
@@ -31,6 +34,13 @@ the identical oracle must pass. Generated binaries, process records, and JSON
 reports record exact source identity and are retained as task evidence when
 they are committed.
 
+The JSON reports identify the clean implementation revision that was tested as
+`tested_source_revision` and include a SHA256 over their scoped build inputs.
+The final evidence checkpoint may be a docs-only descendant of that revision;
+the descendant is valid only when `git diff --name-status` shows evidence paths
+and the recorded build-input hashes are unchanged. This separates executable
+provenance from the later evidence ledger commit.
+
 `characterize-before.json` records the unfixed `origin/main` source
 (`1f82284abee0bd31a6680310444cea2e4c16ef00`): the 4096-byte fixture measured
 74136 bytes per constructor and the 4194304-byte fixture measured a median
@@ -46,7 +56,9 @@ fixture. The literal input WAV is 16 kHz mono PCM16 with samples
 path records one 960-byte `FrameSize*2` frame with the remaining bytes zero
 padded, emits the deterministic scripted response, and exits with
 `fixture_complete`. `workflow.json` records the exact fixture, input-frame,
-recording, output, and clean-shutdown hashes. This is software replay evidence,
+recording, output, and clean-shutdown hashes. The runner compares the emitted
+WAV PCM payload byte-for-byte with the expected 480-sample response and records
+both expected and observed payload hashes. This is software replay evidence,
 not acoustic or physical-device proof.
 
 The regression mode reuses the existing C21 verifier controls read-only. It
@@ -62,6 +74,6 @@ the exact read-only controls and outputs.
 After opening, the WAV header and physical extent are fixed but payload bytes
 are intentionally streamed from the owned file descriptor: an in-place rewrite
 can be observed by a later read, while a post-open physical truncation reports
-`*audio.TruncatedPCMError` on the first affected read and terminal EOF on later
-reads. Snapshot isolation is not promised; the constructor still rejects an
-already-truncated file before any payload read.
+`*audio.TruncatedPCMError{Bytes: 1}` on the one-byte first affected read and
+terminal EOF on later reads. Snapshot isolation is not promised; the constructor
+still rejects an already-truncated file before any payload read.

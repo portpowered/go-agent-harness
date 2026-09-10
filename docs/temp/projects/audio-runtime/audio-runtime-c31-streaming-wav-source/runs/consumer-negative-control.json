@@ -7,7 +7,7 @@
   ],
   "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source",
   "exit_code": 1,
-  "elapsed_ms": 33,
-  "stdout": "{\n  \"schema\": \"audio-runtime-c31-streaming-wav-source-consumer.v1\",\n  \"case\": \"negative-control\",\n  \"source\": \"6717dd5add3d613b0adf24516d679dd63293495b\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"started_at\": \"2026-09-10T03:50:34.978799Z\",\n  \"duration_ms\": 0,\n  \"clean_shutdown\": true,\n  \"negative_control\": {\n    \"expected_sample\": 12346,\n    \"actual_sample\": 12345,\n    \"mismatch\": \"sample[1] = 12345, want mutated expectation 12346\",\n    \"pass\": false\n  },\n  \"error\": \"sample[1] = 12345, want mutated expectation 12346\"\n}\n",
+  "elapsed_ms": 6,
+  "stdout": "{\n  \"schema\": \"audio-runtime-c31-streaming-wav-source-consumer.v1\",\n  \"case\": \"negative-control\",\n  \"source\": \"ee971c0f8a8a62ac17d85181f013a88dfc16502a\",\n  \"source_inputs_sha256\": \"07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"started_at\": \"2026-09-10T04:41:38.554359Z\",\n  \"duration_ms\": 1,\n  \"clean_shutdown\": true,\n  \"negative_control\": {\n    \"expected_sample\": 12346,\n    \"actual_sample\": 12345,\n    \"mismatch\": \"sample[1] = 12345, want mutated expectation 12346\",\n    \"pass\": false\n  },\n  \"error\": \"sample[1] = 12345, want mutated expectation 12346\"\n}\n",
   "stderr": "sample[1] = 12345, want mutated expectation 12346\n"
 }

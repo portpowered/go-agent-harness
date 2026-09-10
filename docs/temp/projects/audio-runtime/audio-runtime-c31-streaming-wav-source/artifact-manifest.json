@@ -1,15 +1,44 @@
 {
-  "schema": "audio-runtime-c31-artifact-manifest.v1",
-  "source": "6717dd5add3d613b0adf24516d679dd63293495b",
+  "schema": "audio-runtime-c31-artifact-manifest.v2",
+  "source": "ee971c0f8a8a62ac17d85181f013a88dfc16502a",
+  "tested_source_revision": "ee971c0f8a8a62ac17d85181f013a88dfc16502a",
+  "build_inputs": {
+    "consumer": {
+      "path_prefixes": [
+        "go-audio",
+        "docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/consumer"
+      ],
+      "file_count": 123,
+      "sha256": "07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0"
+    },
+    "yui": {
+      "path_prefixes": [
+        "agent-cli",
+        "go-agent-loop",
+        "go-agent-runtime",
+        "go-audio",
+        "go-device-gateway",
+        "go-llm-gateway",
+        "go.work",
+        "go.work.sum"
+      ],
+      "file_count": 2157,
+      "sha256": "033108552462292338a50f799675f1976299c3779000e9488f72dcccd19c13c4"
+    }
+  },
   "go_version": "go version go1.26.7 darwin/arm64",
   "artifacts": {
     "consumer": {
       "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/wav-consumer",
-      "sha256": "bacc4a8081dbf4b7aeef37e4aeee8d416bbcf5ce1512ca0fcf2538ae0892891f"
+      "sha256": "bdc0da3c7fd81255c6c073c18e85bc9e9647cc454c7151c926505496f52d87f6",
+      "tested_source_revision": "ee971c0f8a8a62ac17d85181f013a88dfc16502a",
+      "build_inputs_sha256": "07b94135e3aacf6cc0cb1f36629b8e5d6491ace4cb14da1fad7af87e39c114c0"
     },
     "yui": {
       "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/yui",
-      "sha256": "2f5b8ecefea2981f50ceb9ede7ae9c113ebee9fa68378d1e36dba57ff1013a5d"
+      "sha256": "5926ed933a58e8d1e026be60df41f60897954fac2dc94b78c15881618f4a7dfc",
+      "tested_source_revision": "ee971c0f8a8a62ac17d85181f013a88dfc16502a",
+      "build_inputs_sha256": "033108552462292338a50f799675f1976299c3779000e9488f72dcccd19c13c4"
     }
   }
 }
