@@ -180,6 +180,9 @@ func TestServiceComposeUsesNormalizedToolIdentifierAndBrowserState(t *testing.T)
 	if !strings.Contains(withCustomSight, "Sight routing requirements:") {
 		t.Fatalf("custom page-sight identifier did not enable sight policy: %q", withCustomSight)
 	}
+	if !strings.Contains(withCustomSight, "use custom_sight") || strings.Contains(withCustomSight, "use show_page") {
+		t.Fatalf("custom page-sight identifier was not substituted in policy: %q", withCustomSight)
+	}
 	withoutBrowser := service.Compose(session.InstructionComposition{
 		Instructions:           "customer",
 		ToolDefinitions:        []messages.ToolDefinition{{Name: "show_page"}},

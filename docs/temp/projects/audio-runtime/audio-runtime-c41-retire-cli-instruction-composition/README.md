@@ -18,11 +18,11 @@ and runs it against an in-process deterministic RFC 6455 provider. The
 provider observes the initial tool-enabled `session.update` before the first
 user turn, drives a `read_file` function call, checks the marker effect and
 continuation response, and requires a clean `session.closed`/process shutdown.
-This is intentionally the handoff's unchanged-output live-host control: the
-shipped yui command uses the LiveService bootstrap, so its raw configured
-prompt is recorded as raw. The migrated C41 composition is asserted separately
-by the public session Wire consumer and the focused provider-instruction test;
-the report never relabels the live bootstrap as composed policy.
+This is the handoff's live-host control: the shipped yui command uses the
+LiveService bootstrap, and the provider-observed instructions must exactly
+match the standalone Wire-composed oracle. The report records the observed and
+expected instruction hashes rather than relabeling a standalone result as live
+evidence.
 
 `regression` rebuilds the same yui binary and runs the committed offline replay
 fixture. Reports record the source revision, module/build inputs,

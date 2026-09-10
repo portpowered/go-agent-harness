@@ -257,6 +257,41 @@ def policy_block_from_print_oracle(print_report: dict) -> str:
     return block
 
 
+def run_instruction_controls() -> dict:
+    commands = [
+        (
+            [
+                "go",
+                "test",
+                "./internal/transport/cli/internal/livehost",
+                "-run",
+                "TestBuildRequest(UsesWireInstructionCompositionBeforeProviderStartup|PreservesEmptyAndRejectsInvalidWorkspace)$",
+                "-count=1",
+                "-timeout=120s",
+            ],
+            AGENT_CLI,
+        ),
+        (
+            [
+                "go",
+                "test",
+                "./services/session/internal/instructions",
+                "-run",
+                "TestServiceComposeUsesNormalizedToolIdentifierAndBrowserState$",
+                "-count=1",
+                "-timeout=120s",
+            ],
+            REPO_ROOT / "go-agent-runtime",
+        ),
+    ]
+    results = []
+    for argv, cwd in commands:
+        result = run_command(argv, cwd, environment=command_environment(for_go=True))
+        require(result["exit_code"] == 0 and not result["timed_out"], f"focused instruction control failed: {result}")
+        results.append(result)
+    return {"status": "accepted", "commands": results}
+
+
 class DeterministicRealtimeProvider:
     """Minimal local RFC 6455 provider for the shipped CLI evidence path."""
 
@@ -269,6 +304,7 @@ class DeterministicRealtimeProvider:
             f"{PUBLIC_SYSTEM_PROMPT}\n\nFilesystem scope: workdir={self.workspace}; "
             "additional_allowed_roots=none. Relative filesystem-tool paths resolve from this workdir."
         )
+        self.expected_composed = self.expected_resolved + "\n\n" + policy_block
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listener.bind(("127.0.0.1", 0))
@@ -289,6 +325,7 @@ class DeterministicRealtimeProvider:
         self.tool_result: dict = {}
         self.user_turn: dict = {}
         self.response_create_count = 0
+        self.initial_instructions = ""
 
     def start(self) -> None:
         self.thread = threading.Thread(target=self._serve, name="c41-deterministic-provider", daemon=True)
@@ -327,10 +364,12 @@ class DeterministicRealtimeProvider:
                 "route": "shipped-yui-live-host-bootstrap",
                 "mode": "unchanged-output",
                 "initial_session_update_before_user_turn": True,
-                "initial_instructions": PUBLIC_SYSTEM_PROMPT,
-                "initial_instructions_sha256": hashlib.sha256(PUBLIC_SYSTEM_PROMPT.encode()).hexdigest(),
+                "initial_instructions": self.initial_instructions,
+                "initial_instructions_sha256": hashlib.sha256(self.initial_instructions.encode()).hexdigest(),
+                "expected_composed_instructions_sha256": hashlib.sha256(self.expected_composed.encode()).hexdigest(),
+                "composed_instructions_match": self.initial_instructions == self.expected_composed,
                 "standalone_c41_policy_oracle_sha256": hashlib.sha256(self.policy_block.encode()).hexdigest(),
-                "standalone_c41_policy_oracle_used_for_live_request": False,
+                "standalone_c41_policy_oracle_used_for_live_request": self.initial_instructions == self.expected_composed,
             },
             "standalone_expected_resolved": self.expected_resolved,
             "scenario_complete": self.scenario_complete,
@@ -502,6 +541,8 @@ class DeterministicRealtimeProvider:
         return bytes(data)
 
     def _read_frame(self, connection: socket.socket) -> bytes | None:
+        fragments = bytearray()
+        message_opcode = None
         while True:
             header = self._recv_exact(connection, 2)
             if header is None:
@@ -535,8 +576,15 @@ class DeterministicRealtimeProvider:
                 continue
             if opcode == 0x8:
                 return None
-            require(fin and opcode in (0x1, 0x2), f"unsupported WebSocket frame opcode={opcode} fin={fin}")
-            return payload
+            if message_opcode is None:
+                require(opcode in (0x1, 0x2), f"unsupported WebSocket frame opcode={opcode} fin={fin}")
+                message_opcode = opcode
+            else:
+                require(opcode == 0x0, f"unsupported fragmented WebSocket frame opcode={opcode}")
+            fragments.extend(payload)
+            require(len(fragments) <= 4 * 1024 * 1024, "WebSocket message exceeded bounded provider payload size")
+            if fin:
+                return bytes(fragments)
 
     def _read_event(self, connection: socket.socket) -> dict:
         payload = self._read_frame(connection)
@@ -572,10 +620,12 @@ class DeterministicRealtimeProvider:
         session = event.get("session")
         require(isinstance(session, dict), "session.update did not contain a session object")
         instructions = session.get("instructions")
+        self.initial_instructions = instructions if isinstance(instructions, str) else ""
         require(
-            instructions == PUBLIC_SYSTEM_PROMPT,
-            "shipped CLI bootstrap session.update did not preserve the literal configured prompt",
+            instructions == self.expected_composed,
+            "shipped CLI bootstrap session.update did not use the Wire-composed instructions",
         )
+        require("Tool-grounding requirements:" in instructions, "shipped CLI bootstrap omitted the composed tool policy")
         require(session.get("model") == "gpt-realtime-2.1", f"shipped CLI selected an unexpected model: {session.get('model')!r}")
         tools = session.get("tools")
         require(isinstance(tools, list) and tools, "shipped CLI session.update did not advertise tools")
@@ -670,11 +720,13 @@ def run_yui_public_session(binary: Path, policy_block: str) -> dict:
             "resolved_instructions": observation["standalone_expected_resolved"],
             "composed_instructions_sha256": hashlib.sha256((observation["standalone_expected_resolved"] + "\n\n" + policy_block).encode()).hexdigest(),
             "policy_block_sha256": hashlib.sha256(policy_block.encode()).hexdigest(),
-            "used_for_shipped_live_request": False,
+            "used_for_shipped_live_request": observation["instruction_observation"]["standalone_c41_policy_oracle_used_for_live_request"],
         },
         "shipped_bootstrap": {
-            "instructions": PUBLIC_SYSTEM_PROMPT,
-            "instructions_sha256": hashlib.sha256(PUBLIC_SYSTEM_PROMPT.encode()).hexdigest(),
+            "instructions": observation["instruction_observation"]["initial_instructions"],
+            "instructions_sha256": observation["instruction_observation"]["initial_instructions_sha256"],
+            "expected_composed_instructions_sha256": observation["instruction_observation"]["expected_composed_instructions_sha256"],
+            "composed_instructions_match": observation["instruction_observation"]["composed_instructions_match"],
             "observed_before_user_turn": observation["instruction_observation"]["initial_session_update_before_user_turn"],
             "tool_name": "read_file",
             "prompt": PUBLIC_PROMPT,
@@ -828,6 +880,7 @@ def main() -> int:
         }
         result["direct_imports"] = direct_imports()
         result["build"] = build()
+        result["focused_instruction_controls"] = run_instruction_controls()
         yui_binary = None
         if args.mode in ("public-session", "regression"):
             result["cli_build"] = build_yui()

@@ -180,7 +180,8 @@ func appendSightPolicy(blocks []string, instructions string, definitions []messa
 		pageSightID = defaultPageSightToolID
 	}
 	if hasTool(definitions, pageSightID) {
-		return appendMissingPolicy(blocks, instructions, sightGroundingPolicy)
+		policy := strings.ReplaceAll(sightGroundingPolicy, defaultPageSightToolID, pageSightID)
+		return appendMissingPolicy(blocks, instructions, policy)
 	}
 	return blocks
 }
