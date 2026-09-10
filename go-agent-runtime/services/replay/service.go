@@ -3,12 +3,29 @@ package replay
 
 import (
 	"context"
-	"errors"
+	"io"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-var ErrCaptureUnavailable = errors.New("replay capture is unavailable")
+type errorCode string
+
+func (e errorCode) Error() string { return string(e) }
+
+const (
+	ErrCaptureUnavailable         errorCode = "replay capture is unavailable"
+	ErrBundleIncomplete           errorCode = "replay bundle is incomplete"
+	ErrBundleMismatch             errorCode = "replay bundle evidence mismatch"
+	ErrToolMismatch               errorCode = "replay tool invocation mismatch"
+	ErrToolFailure                errorCode = "recorded tool execution failed"
+	ErrDeterministicClockRequired errorCode = "offline replay requires an injected deterministic clock"
+	ErrRuntimeFactoryRequired     errorCode = "offline replay runtime factory is required"
+)
 
 // CaptureKind identifies the protocol represented by an admitted capture.
 // Turn captures are consumed by the ordinary session replay service; realtime
@@ -56,3 +73,85 @@ type Service interface {
 	// provider service.
 	ResolveCapturePath(context.Context, string) (string, error)
 }
+
+// CaptureAdmission is the narrow admission dependency used by strict replay.
+// Keeping it separate from Service lets the strict implementation reuse the
+// canonical manifest/path validator without constructing its own Wire graph.
+type CaptureAdmission interface {
+	ResolveCapturePath(context.Context, string) (string, error)
+}
+
+// StrictRequest identifies a canonical finalized recording bundle. Provider
+// selects the offline protocol adapter and Model, when supplied, is checked
+// against the captured provider handshake. No credentials, device selectors,
+// or executable tool factories belong in this request.
+type StrictRequest struct {
+	BundlePath string
+	Provider   string
+	Model      string
+}
+
+// StrictPrepared is the read-only public view of one hermetic headless
+// preparation. The concrete value and completion witness remain private to
+// the strict service, so callers cannot construct a prepared value that
+// certifies arbitrary fake evidence. Hosts should obtain it from Prepare or
+// use Run through the generated public Wire service.
+type StrictPrepared interface {
+	Capture() testing.SessionCapture
+	Dialer() transport.Dialer
+	ToolExecutor() messages.ToolExecutor
+	Audio() *recording.Replay
+	Clock() clock.Scheduler
+	Scope() StrictEvidenceScope
+	WireEvents() int
+	ToolCalls() int
+	ValidateComplete() error
+	Close() error
+}
+
+// StrictEvidenceScope describes what a credential-free headless run can
+// substantiate. Recorded PCM/render fields describe evidence availability, not
+// physical device consumption or acoustic output.
+type StrictEvidenceScope struct {
+	Protocol             bool
+	Tools                bool
+	RecordedPCM          bool
+	RecordedRender       bool
+	RenderTapUnavailable bool
+	DeviceExecution      bool
+}
+
+// StrictRuntime is the headless core runtime invoked by strict replay.
+type StrictRuntime interface {
+	Run(context.Context, io.Writer) error
+}
+
+// StrictRuntimeFactory constructs one isolated runtime from one prepared
+// bundle. It must use only the prepared dialer, recorded executor, and clock.
+type StrictRuntimeFactory interface {
+	New(StrictPrepared) (StrictRuntime, error)
+}
+
+// StrictResult is returned only after runtime and exact-evidence validation
+// complete successfully.
+type StrictResult struct {
+	Capture    testing.SessionCapture
+	Scope      StrictEvidenceScope
+	WireEvents int
+	ToolCalls  int
+}
+
+// StrictService prepares and runs the complete public strict replay workflow.
+type StrictService interface {
+	Prepare(context.Context, StrictRequest) (StrictPrepared, error)
+	Run(context.Context, io.Writer, StrictRequest) (StrictResult, error)
+}
+
+// Compatibility aliases keep the existing CLI adapter source-compatible while
+// the runtime package owns the canonical strict contracts.
+type Request = StrictRequest
+type Prepared = StrictPrepared
+type EvidenceScope = StrictEvidenceScope
+type Runtime = StrictRuntime
+type RuntimeFactory = StrictRuntimeFactory
+type Result = StrictResult

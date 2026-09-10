@@ -1,0 +1,39 @@
+{
+  "binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay/docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/yui",
+  "binary_sha256": "682560c0528f537d4a1d5c8277a9d4b7af17fa55c37bc0bc58c0e54e39de906e",
+  "case": "interruption",
+  "failure": "interruption rendered PCM length=2400, want 3360",
+  "results": [
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay/docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/yui",
+        "--workdir",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-provider-mzqg9wv3/fixture",
+        "--allow-path",
+        "evidence",
+        "-C",
+        "config",
+        "session",
+        "--replay",
+        "run/bundle",
+        "--audio-out",
+        "run/provider-output.pcm"
+      ],
+      "cleanup_error": null,
+      "cleanup_timed_out": false,
+      "cleanup_timeout_seconds": null,
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-provider-mzqg9wv3/fixture",
+      "duration_seconds": 0.839007,
+      "exit_code": 0,
+      "label": "interruption/provider-relative-bundle",
+      "passed": true,
+      "stderr": "",
+      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-provider-mzqg9wv3/fixture; additional_allowed_roots=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-provider-mzqg9wv3/fixture/evidence\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n",
+      "timed_out": false,
+      "timeout_seconds": 50.0
+    }
+  ],
+  "source_revision": "c4adde38954b2bba57debd5eb65398aa97fcfe0f",
+  "status": "failed",
+  "timeout_seconds": 50.0
+}

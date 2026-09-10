@@ -1,0 +1,43 @@
+{
+  "job": {
+    "id": 102369544184,
+    "run_id": 34321690774,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "head_sha": "d9211ec594ae9a899d8baa8d87b8f9ebd1d5671e",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T07:00:19Z",
+    "started_at": "2026-09-09T07:00:21Z",
+    "completed_at": "2026-09-09T07:09:29Z",
+    "name": "CI (coverage)",
+    "steps": [
+      {"name": "Set up job", "status": "completed", "conclusion": "success"},
+      {"name": "Check out repository", "status": "completed", "conclusion": "success"},
+      {"name": "Set up Go", "status": "completed", "conclusion": "success"},
+      {"name": "Run coverage profiles and coverage gate", "status": "completed", "conclusion": "failure"},
+      {"name": "Post Set up Go", "status": "completed", "conclusion": "skipped"},
+      {"name": "Post Check out repository", "status": "completed", "conclusion": "success"},
+      {"name": "Complete job", "status": "completed", "conclusion": "success"}
+    ],
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34321690774/job/102369544184"
+  },
+  "board_feedback": "CI checks failed for PR #410 at head d9211ec594ae9a899d8baa8d87b8f9ebd1d5671e: required checks failed on current head d9211ec594ae9a899d8baa8d87b8f9ebd1d5671e: CI (coverage)=FAILURE; checks: CI (coverage)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34321690774/job/102369544184). Return this task to the executor with the listed failures.",
+  "full_log_command": "gh run view 34321690774 --job 102369544184 --log-failed",
+  "extracted_failure": [
+    "coverage gate found manifest packages without measured coverage:",
+    "- github.com/portpowered/go-agent-harness/agent-cli/internal/services/replay",
+    "coverage gate found coverage floor violations:",
+    "- github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay: expected minimum 95.00%, actual 80.00%, delta -15.00%",
+    "make: *** [Makefile:303: coverage] Error 1"
+  ],
+  "repair": {
+    "manifest": "The CLI package is now compatibility aliases only, so its old 80.00% floor is replaced with an explicit no-measurable-statements exception.",
+    "public_contract_test": "StrictPrepared.ValidateComplete now has a direct public-contract regression for an unprepared value returning ErrBundleIncomplete; focused coverage is 100.00%.",
+    "validation": [
+      "go test ./go-agent-runtime/services/replay/... -coverpkg=./go-agent-runtime/services/replay -coverprofile=/tmp/c18-replay-coverage-after.out -timeout=60s",
+      "make coverage-registration",
+      "COUNT=1 bash scripts/test-session-ci-regressions.sh all"
+    ]
+  }
+}

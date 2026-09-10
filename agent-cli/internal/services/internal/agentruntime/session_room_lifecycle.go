@@ -263,6 +263,10 @@ func (l *roomParticipantLifecycle) markConnected(err error) {
 	l.mu.Lock()
 	l.connected = err == nil
 	l.connectErr = err
+	// Preserve real connection failures across cancellation ordering.
+	if err != nil && !roomCancellationOnly(err) && !l.boundCancellation {
+		l.recordFailureLocked(err)
+	}
 	l.signalLocked()
 	l.mu.Unlock()
 }
@@ -354,10 +358,8 @@ func (l *roomParticipantLifecycle) markTerminalLocked(reason ParticipantTerminat
 	l.terminalErr = err
 }
 
-// markParticipantFailure records a fault owned by this participant without
-// changing the room's terminal state. The first observed participant terminal
-// cause remains authoritative; a later cancellation or cleanup observation
-// must not replace it.
+// markParticipantFailure records the first participant fault without changing
+// room state; later cancellation or cleanup cannot replace it.
 func (l *roomParticipantLifecycle) markParticipantFailure(err error) {
 	if l == nil {
 		return
@@ -925,10 +927,8 @@ func (l *roomParticipantLifecycle) transportHasEnded() bool {
 	return false
 }
 
-// markCoordinatorStopping records intentional room teardown before the
-// coordinator cancels participant contexts. A transport that is already done
-// at this boundary is causal; one that closes afterwards belongs to the
-// coordinator's teardown and must not be reported as a provider disconnect.
+// markCoordinatorStopping records teardown before participant contexts are
+// canceled; a later transport close belongs to coordinator teardown.
 func (l *roomParticipantLifecycle) markCoordinatorStopping(bound bool, reason ...RoomTerminationReason) {
 	if l == nil {
 		return
