@@ -860,6 +860,8 @@ def main() -> int:
     report_parser.add_argument("--require-complete-provenance", action="store_true")
     self_parser = subparsers.add_parser("self-check", help="run deliberate negative controls")
     self_parser.add_argument("--negative-controls", required=True)
+    self_parser.add_argument("--child-timeout-seconds", type=float, default=60)
+    self_parser.add_argument("--total-timeout-seconds", type=float, default=600)
     args = parser.parse_args()
     try:
         if args.command == "prepare":
