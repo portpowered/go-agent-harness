@@ -12,10 +12,10 @@
 This is the admitted `audio-runtime-c34-replay-terminal-integrity` task. The
 implementation merge checkpoint is
 `f3a230fd7f86b1fd990abea07305a6247a47771b`. The current-main integration
-checkpoint is `71302110fe1506233df0f64a0f2541b9200ad658`; subsequent evidence
+checkpoint is `b72aa34ef612463abfcafb00d53bf60e41d9a32b`; subsequent evidence
 commits are documentation-only descendants with identical executable inputs. The
 candidate merged fresh `origin/main` at
-`d5012004c15c4df613fd5fc7d8c220f2c7252822`; ancestry probes also
+`2525da44053e5bfe7e2d8fccc55463a645107e29`; ancestry probes also
 pass for startup `8bdafc7f947a3a2c9856220abdc539437035bd21` and architecture
 baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
 
@@ -31,19 +31,21 @@ The evidence runner also repairs the previously non-causal controls: it runs a
 real valid-audio trace mutated after its first close, tests missing-timeline and
 corrupt-audio bundle failures, and asserts bounded process-group cleanup and
 bounded output capture. Candidate verification and runtime reports were generated
-at `71302110fe1506233df0f64a0f2541b9200ad658`. These are source-pinned to the
+at `b72aa34ef612463abfcafb00d53bf60e41d9a32b`. These are source-pinned to the
 current-main integration checkpoint. The rebuilt consumer source hash is
 `ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3` and its
-binary hash is `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d`.
+binary hash is `d70195e5b292f4d49f8cbfa3fe6b0256dad966e618537075819452d984857081`.
 
 ## Validation
 
 - `go test -C go-audio ./pkg/recording -count=1` — PASS
 - `go test -C go-audio -race ./pkg/recording -count=1` — PASS
 - `go vet -C go-audio ./pkg/recording` — PASS
-- `make architecture-check size-check` — PASS: 181 packages, 1,866 files,
-  27,511 functions
+- `make architecture-size-check` — PASS: 181 packages, 1,867 files,
+  27,567 functions
 - pinned `make lint` — PASS: 0 issues in every module
+- pinned `make staticcheck` — PASS
+- `make wire-check` — PASS; generated Wire files unchanged
 - Public consumer verification — PASS: valid empty/audio-runtime sessions
   accepted to EOF; eight malformed lifecycle fixtures returned `ErrIncomplete`
   with `replay_exposed=false`.
@@ -56,14 +58,14 @@ binary hash is `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d
   diagnostics and no descendant leak.
 
 The stale-head review rejection was reconciled by merging current `origin/main`
-at `d5012004c15c4df613fd5fc7d8c220f2c7252822` after the earlier `c61ee277`
+at `2525da44053e5bfe7e2d8fccc55463a645107e29` after the earlier `c61ee277`
 checkpoint. Candidate reports record source
-`71302110fe1506233df0f64a0f2541b9200ad658`, origin-main/base revisions,
+`b72aa34ef612463abfcafb00d53bf60e41d9a32b`, origin-main/base revisions,
 consumer source hash
 `ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3`, consumer
-binary hash `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d`,
+binary hash `d70195e5b292f4d49f8cbfa3fe6b0256dad966e618537075819452d984857081`,
 the mutated fixture hashes, the source-bundle file hashes, and rebuilt same-source
-YUI hash `68dc30f39196160de41c2909c7c3748430cc5506040a0af2c12b858cfa93b7c4`.
+YUI hash `d6911accbf52f34ecf7be676837045d649792ac1451dfa020d1f9c86ebfa48aa`.
 
 The saved CI rejection was run `34435976492`, job `102741003399`
 (`https://github.com/portpowered/go-agent-harness/actions/runs/34435976492/job/102741003399`),

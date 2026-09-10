@@ -10,20 +10,23 @@ and process cleanup state.
 
 - admitted task: `audio-runtime-c34-replay-terminal-integrity`
 - implementation merge checkpoint: `f3a230fd7f86b1fd990abea07305a6247a47771b`
-- current-main integration checkpoint: `71302110fe1506233df0f64a0f2541b9200ad658`
+- current-main integration checkpoint: `b72aa34ef612463abfcafb00d53bf60e41d9a32b`
 - evidence lineage: documentation-only descendants of the current-main
   integration checkpoint; owned Go inputs are unchanged from that checkpoint
-- fresh `origin/main` merged into the candidate: `d5012004c15c4df613fd5fc7d8c220f2c7252822`
+- fresh `origin/main` merged into the candidate: `2525da44053e5bfe7e2d8fccc55463a645107e29`
 - required startup revision ancestor: `8bdafc7f947a3a2c9856220abdc539437035bd21`
 - architecture baseline ancestor: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`
 
 The reports record successful ancestry probes for the fresh main and both required
 startup/baseline revisions. Candidate verification and the runtime regression were
-generated at source `71302110fe1506233df0f64a0f2541b9200ad658`; both report only
-the preserved untracked operator note as dirty. The final evidence head does not
-alter executable inputs. The rebuilt public consumer has source hash
-`ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3` and binary
-hash `e0f74a57980a2a6a66ce90c409e993bbbf445e205c1595bdcf66e3e0e844ff5d`.
+generated at source `b72aa34ef612463abfcafb00d53bf60e41d9a32b`, with
+`origin_main_revision=2525da44053e5bfe7e2d8fccc55463a645107e29`. The source
+candidate verification began with only the preserved untracked operator note as
+dirty; subsequent report runs observed the earlier report files as bookkeeping
+changes. The final evidence head does not alter executable inputs. The rebuilt
+public consumer has
+source hash `ac95b4ad6f53fad552984a597f96d5280e5df28979c661eb7502fa36cf865ee3`
+and binary hash `d70195e5b292f4d49f8cbfa3fe6b0256dad966e618537075819452d984857081`.
 The operator's untracked `meta-operator-throughput-feedback.md` remains
 untouched and is outside the admitted owned paths.
 
@@ -87,9 +90,9 @@ rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c34-replay-term
   --output docs/temp/projects/audio-runtime/audio-runtime-c34-replay-terminal-integrity/runtime-regression.json
 ```
 
-The tested YUI is `/private/tmp/audio-runtime-c34-yui-eUBacy/yui` with SHA-256
-`68dc30f39196160de41c2909c7c3748430cc5506040a0af2c12b858cfa93b7c4`. It was
-rebuilt from the exact source used by the runtime report. Both
+The tested YUI is `/tmp/audio-runtime-c34-yui-K6gh9D/yui` with SHA-256
+`d6911accbf52f34ecf7be676837045d649792ac1451dfa020d1f9c86ebfa48aa`. It was
+rebuilt from the exact integrated source used by the runtime report. Both
 positive replay invocations passed; one reported `15 wire events, 0 tool calls`
 and the terminal replay completed with `output_state=complete`. Rendered PCM is
 3,360 bytes with SHA-256
@@ -114,7 +117,7 @@ The latest board finding identified committed evidence based on `origin/main`
 `c61ee2774986c896560ee40a92441c914976000d`, with
 `contains_origin_main=false`. Remote main advanced again while the PR was being
 updated; the candidate then merged exact tip
-`d5012004c15c4df613fd5fc7d8c220f2c7252822` and regenerated the source-pinned
+`2525da44053e5bfe7e2d8fccc55463a645107e29` and regenerated the source-pinned
 reports with `contains_origin_main=true`. The runner includes the requested real
 mutated-valid-audio control, missing-timeline and corrupt-audio controls, bounded
 output capture, and descendant process-group cleanup assertions; all pass.
@@ -126,5 +129,8 @@ four OpenReplay architecture-size baseline drifts and pinned `goconst` findings
 in `replay.go` and `replay_lifecycle_test.go`; the focused architecture and lint
 gates now pass locally. The full raw run JSON and job log remain in this evidence
 directory. The later board green checks were for superseded head `d0d4358c` and
-are not reused. This changed candidate is ready for the script-owned CI gate to
-run current-head checks again.
+are not reused. The refreshed candidate, dedicated negative-control, and runtime
+reports are in `runs/replay-lifecycle-67b9rx1y`,
+`runs/replay-lifecycle-yunppmjl`, and `runs/replay-lifecycle-irurzrv8`.
+This changed candidate is ready for the script-owned CI gate to run current-head
+checks again.
