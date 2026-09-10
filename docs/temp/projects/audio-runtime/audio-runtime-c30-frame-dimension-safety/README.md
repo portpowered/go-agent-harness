@@ -78,11 +78,11 @@ acoustic device proof.
 ## Current integrated source
 
 The regenerated yui report is from tested source
-`154d2543ad4e3d310bb7e4861027c7d826674a9f`, a merge of fetched `origin/main`
-`c61ee2774986c896560ee40a92441c914976000d`. It pins the current C21 fixture
-paths and hashes plus 1,929 tracked Go/module inputs. Tool capture/replay passes
-18 wire events and one tool call; interruption capture/replay passes 15 wire
-events and zero tool calls. The first fresh tool run's missing-directory setup
-failure is retained at `runs/current-154d-tool-trace/failure.json`; the corrected
-v2 run passes. See `artifacts/yui-verification.json` and the `current-154d-*`
-run records.
+`81b0f580bec44cb9695af9bfabe32d4d79aa03d2`, a merge of fetched `origin/main`
+`d5012004c15c4df613fd5fc7d8c220f2c7252822`. It pins the current C21 fixture
+paths and hashes plus 1,933 tracked Go/module inputs with aggregate SHA256
+`15b82edf066603f2df8b0b9e16353765a300f4a985d38d6d5d24ce26cf437a39`. Tool
+capture/replay passes 18 wire events and one tool call; interruption
+capture/replay passes 15 wire events and zero tool calls. The no-trace strict
+replay exits 1 for the expected missing `timeline.jsonl` diagnostic. See
+`artifacts/yui-verification.json` and the `current-81b-v2-*` run records.

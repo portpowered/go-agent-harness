@@ -673,3 +673,83 @@ next action is to commit and push this changed same-task candidate, update PR
 #422 with the current-main ancestry and fresh hashes, and return `ACCEPTED` to
 the script-owned CI gate without polling it; any exact CI rejection remains
 with this executor for `CONTINUE` repair.
+
+# C30 current merged-main candidate — 2026-09-10
+
+The required `git fetch origin main` resolved
+`d5012004c15c4df613fd5fc7d8c220f2c7252822`. It was integrated into the
+preserved C30 branch as merge commit
+`81b0f580bec44cb9695af9bfabe32d4d79aa03d2`; the startup integration
+`8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline
+`3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain ancestors. The isolated
+worktree and branch match `prd.json`; the untracked user file
+`meta-operator-throughput-feedback.md` remains untouched. No host checkout was
+merged or reset. `format.go` and `pcm16_convert_test.go` remain unchanged, and
+the C30 diff remains limited to the amended framing/room paths and this evidence
+directory.
+
+## Focused and structural evidence
+
+```text
+go test ./go-audio/pkg/audio ./agent-cli/internal/room -count=1 -timeout 60s: pass; 293 tests
+go test -race ./go-audio/pkg/audio ./agent-cli/internal/room -count=1 -timeout 60s: pass; 293 tests
+go vet ./go-audio/pkg/audio ./agent-cli/internal/room: pass; no issues
+make architecture-check size-check: pass; 181 packages, 1866 files, 27532 functions
+git diff --check: pass
+```
+
+The focused regressions retain the rate-duration intermediate, channel-product,
+sample/byte MaxInt, tiny-frame/large-queue, constructor side-effect, wide-rate
+Stats, zero-default and legacy-sentinel controls. The canonical consumer was
+rebuilt from `81b0f580`; its positive 21-case literal/error matrix passed, the
+mutated `480 -> 481` oracle exited 1 with the causal mismatch, and the
+1 MiB-per-stream ignored-SIGTERM timeout control capped both streams, sent
+TERM/KILL, reaped the child and stopped readers in under five seconds.
+
+## Exact-source shipped yui regression
+
+`artifacts/yui-verification.json` records the same-source `yui` build with
+executable SHA256
+`963720da43bbd04e26192edffb2a2048374eb0fba064b4a6da1adcbbb566b7f6` and 1,933
+tracked Go/module inputs with aggregate SHA256
+`15b82edf066603f2df8b0b9e16353765a300f4a985d38d6d5d24ce26cf437a39`.
+`yui --help` exits cleanly. The credential-free C21 audio-tool fixture captures
+and replays 18 wire events/one tool call with 4,800-byte provider PCM SHA256
+`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502` and
+3,200-byte rendered PCM SHA256
+`7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`. The
+interruption fixture captures and replays 15 wire events/zero tool calls with
+3,840-byte provider PCM SHA256
+`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22` and
+3,360-byte rendered PCM SHA256
+`302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff`. The
+strict replay of the no-trace bundle exits 1 for the expected missing
+`timeline.jsonl` diagnostic. Each child uses a direct 60-second bounded process
+group with 2-second TERM and KILL cleanup; no Realtime or physical device was
+used.
+
+## Prior CI rejection disposition
+
+The complete latest PR #422 rejection at head `42968170dd86eb5273336056b12711ced24c194f`
+was inspected from run `34457295829`. Agent-cli hermetic packages passed; the
+only failing gate was the unrelated, out-of-lease
+`go-agent-loop/test/functional/sessions/TestConcurrentSessionsPerEventOrderingUnderInterleaving`,
+which hung for its unchanged two-minute deadline and caused 40 discovered
+functional selectors to report the same stuck-session failure. No C30 source
+path is involved, and no unrelated repair, timeout increase, assertion change,
+or acceptance waiver was made.
+
+The raw run JSON and full failed-job log were saved privately as
+`/tmp/audio-runtime-c30-ci-rejection-34457295829.json` (SHA256
+`d62d14a124abedaa8952614f847d42f87abb6acfffebc7a3278d408d264a2d46`,
+16,158 bytes) and
+`/tmp/audio-runtime-c30-ci-hermetic-34457295829.log` (SHA256
+`bf5ae694332a819b77c2d27877c8912d1952c9c109359b99c1bb63c19c8d2d79`,
+200 lines, 49,442 bytes).
+
+No current-head script-CI success, independent review, guarded merge,
+post-merge vertical acceptance or project completion is claimed. The next
+action is to commit and push this changed same-task candidate, update PR #422
+with the merged-main ancestry, review map and exact hashes, then return
+`ACCEPTED` to the script-owned CI gate without polling it; any exact rejection
+remains with this executor for `CONTINUE` repair.

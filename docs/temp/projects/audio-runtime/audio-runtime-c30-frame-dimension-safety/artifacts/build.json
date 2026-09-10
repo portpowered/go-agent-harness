@@ -3,18 +3,18 @@
     "go",
     "build",
     "-trimpath",
-    "-ldflags=-X main.compiledSourceRevision=154d2543ad4e3d310bb7e4861027c7d826674a9f",
+    "-ldflags=-X main.compiledSourceRevision=81b0f580bec44cb9695af9bfabe32d4d79aa03d2",
     "-modfile",
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c30-mod-056fbe17/go.mod",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c30-mod-80oqc9g7/go.mod",
     "-o",
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c30-build-tc17duvu/pcm16-frame-consumer",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c30-build-rs5pr3vz/pcm16-frame-consumer",
     "."
   ],
   "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/consumer",
   "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety",
   "source_module": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/go-audio",
-  "source_revision": "154d2543ad4e3d310bb7e4861027c7d826674a9f",
-  "duration_seconds": 0.171946,
+  "source_revision": "81b0f580bec44cb9695af9bfabe32d4d79aa03d2",
+  "duration_seconds": 0.330418,
   "exit_code": 0,
   "stdout": "",
   "stderr": "",
@@ -24,6 +24,6 @@
     "consumer/main.go": "347c3110dd1ccdc838fca16fbb986059cda21cd2c890bf0c6a41c092e12ddd38"
   },
   "executable": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/pcm16-frame-consumer",
-  "executable_sha256": "9dec8109925ff9447c4863413b2fa5f50697ee277a65a7af092e3c056e995ae0",
+  "executable_sha256": "bba826b75a3c0a894e5f0dea03120f5c6c273adeddac1c1852c9e36d173bba20",
   "executable_bytes": 2958242
 }

@@ -1,11 +1,11 @@
 {
-  "schema": "audio-runtime-c30-yui-regression.v5",
+  "schema": "audio-runtime-c30-yui-regression.v6",
   "project": "audio-runtime",
   "work": "audio-runtime-c30-frame-dimension-safety",
   "decision": "PASS",
-  "tested_source_revision": "154d2543ad4e3d310bb7e4861027c7d826674a9f",
-  "integrated_base_revision": "c61ee2774986c896560ee40a92441c914976000d",
-  "merge_base": "c61ee2774986c896560ee40a92441c914976000d",
+  "tested_source_revision": "81b0f580bec44cb9695af9bfabe32d4d79aa03d2",
+  "integrated_base_revision": "d5012004c15c4df613fd5fc7d8c220f2c7252822",
+  "merge_base": "d5012004c15c4df613fd5fc7d8c220f2c7252822",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety",
@@ -22,8 +22,8 @@
     "executable_sha256": "963720da43bbd04e26192edffb2a2048374eb0fba064b4a6da1adcbbb566b7f6",
     "go_version": "go version go1.26.7 darwin/arm64",
     "go_build_inputs": {
-      "file_count": 1929,
-      "sha256": "e7e0b8eea8008bf0e1c0d2451b27f5557fc587863985294559cfc9dbed6e1ca6",
+      "file_count": 1933,
+      "sha256": "15b82edf066603f2df8b0b9e16353765a300f4a985d38d6d5d24ce26cf437a39",
       "method": "sha256(relative-path NUL content for tracked Go/module inputs in lexical order, including go.work and go.work.sum)"
     }
   },
@@ -39,18 +39,18 @@
   },
   "limits": {
     "child_max_duration": "60s",
-    "outer_testtimeout": "90s",
+    "outer_testtimeout": "60s bounded runner; TERM 2s; KILL 2s",
     "realtime_sessions": 0,
     "physical_device": false
   },
   "results": {
-    "tool_trace_capture": "runs/current-154d-tool-trace-v2/capture-result.json",
-    "tool_trace_replay": "runs/current-154d-tool-trace-v2-replay/replay-result.json",
-    "tool_no_trace_capture": "runs/current-154d-tool-no-trace/capture-result.json",
-    "tool_no_trace_strict_negative": "runs/current-154d-tool-no-trace-strict/replay-result.json",
-    "interruption_capture": "runs/current-154d-interruption/capture-result.json",
-    "interruption_replay": "runs/current-154d-interruption-replay/replay-result.json",
-    "first_tool_attempt": "runs/current-154d-tool-trace/failure.json"
+    "help": "runs/current-81b-v2-yui-help/help-result.json",
+    "tool_trace_capture": "runs/current-81b-v2-tool-trace/capture-result.json",
+    "tool_trace_replay": "runs/current-81b-v2-tool-trace-replay/replay-result.json",
+    "tool_no_trace_capture": "runs/current-81b-v2-tool-no-trace/capture-result.json",
+    "tool_no_trace_strict_negative": "runs/current-81b-v2-tool-no-trace-strict/replay-result.json",
+    "interruption_capture": "runs/current-81b-v2-interruption/capture-result.json",
+    "interruption_replay": "runs/current-81b-v2-interruption-replay/replay-result.json"
   },
   "summary": {
     "tool_provider_pcm_bytes": 4800,
@@ -69,6 +69,6 @@
   },
   "residuals": [
     "Software/file replay only; physical and acoustic device proof remains unavailable.",
-    "The first fresh tool run failed because its evidence/runs directory was not provisioned; the failure is retained at runs/current-154d-tool-trace/failure.json and the corrected v2 run passed."
+    "The exact merged source revision and all 1933 tracked Go/module input hashes are recorded; no physical or acoustic device claim is made."
   ]
 }
