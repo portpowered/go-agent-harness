@@ -1,0 +1,36 @@
+{
+  "argv": [
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/pcm16-frame-consumer",
+    "--mode",
+    "negative-control"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/negative-control-kaaiabw_",
+  "source_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety",
+  "source_module": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/go-audio",
+  "source_revision": "a7302e076768d730cce0cfac7997be6b4fc84969",
+  "duration_seconds": 0.007853,
+  "exit_code": 1,
+  "stdout": "{\n  \"schema\": \"audio-runtime-c30-frame-dimension-consumer.v1\",\n  \"mode\": \"negative-control\",\n  \"source\": \"a7302e076768d730cce0cfac7997be6b4fc84969\",\n  \"goos\": \"darwin\",\n  \"goarch\": \"arm64\",\n  \"int_bits\": 64,\n  \"started_at\": \"2026-09-10T05:36:02.317872Z\",\n  \"duration_ms\": 0,\n  \"negative_control\": {\n    \"name\": \"mutated-24000-mono-20ms\",\n    \"actual_samples\": 480,\n    \"mutated_expected\": 481,\n    \"passed\": true\n  },\n  \"clean_shutdown\": true,\n  \"passed\": true,\n  \"error\": \"negative-control causal mismatch: actual_samples=480 mutated_expected=481; child rejects mutated answer\"\n}\n",
+  "stderr": "negative-control causal mismatch: actual_samples=480 mutated_expected=481; child rejects mutated answer\n",
+  "stdout_bytes": 581,
+  "stderr_bytes": 104,
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "output_limit_bytes": 65536,
+  "timed_out": false,
+  "clean_shutdown": true,
+  "cleanup": {
+    "sigterm_sent": false,
+    "sigkill_sent": false,
+    "reaped_after_sigterm": false,
+    "reaped_after_sigkill": false,
+    "reader_threads_stopped": true
+  },
+  "executable": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/pcm16-frame-consumer",
+  "executable_sha256": "1fbf0b5ae564a67856ef7d5d505331c455e2a9999385d3acb5f0f049bc9f8cfc",
+  "fixture_sha256": {
+    "consumer/go.mod": "5ea71077ade9ef97a00666347af21a9ac1928ae3ecd2531e44657531230ed060",
+    "consumer/go.sum": "2ab5bab01b0637952a659bcdf79ca2e54754d2fce4fd743305f8ca9e792e419d",
+    "consumer/main.go": "347c3110dd1ccdc838fca16fbb986059cda21cd2c890bf0c6a41c092e12ddd38"
+  }
+}

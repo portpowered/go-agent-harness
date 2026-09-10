@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
+    "-C",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-trace-replay/config",
+    "session",
+    "replay",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-trace-v2/bundle"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-trace-replay",
+  "duration_seconds": 0.146438,
+  "exit_code": 0,
+  "timed_out": false,
+  "clean_shutdown": true,
+  "stdout": "strict replay continuation",
+  "stderr": "Replay verified: 18 wire events, 1 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+  "stdout_bytes": 26,
+  "stderr_bytes": 108,
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "output_limit_bytes": 262144,
+  "cleanup": {
+    "sigterm_sent": false,
+    "sigkill_sent": false,
+    "reaped_after_sigterm": false,
+    "reaped_after_sigkill": false,
+    "reader_threads_stopped": true
+  },
+  "source_revision": "a7302e076768d730cce0cfac7997be6b4fc84969"
+}

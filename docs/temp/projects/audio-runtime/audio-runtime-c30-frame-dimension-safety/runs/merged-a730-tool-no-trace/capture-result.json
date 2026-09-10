@@ -1,0 +1,36 @@
+{
+  "argv": [
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/artifacts/yui",
+    "-C",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-no-trace/config",
+    "session",
+    "--replay",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c12-interruption-replay-vertical-probe/artifact-2.json",
+    "--audio-out",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-no-trace/rendered.pcm",
+    "--record-dir",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-no-trace/bundle",
+    "--max-duration",
+    "60s"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-no-trace",
+  "duration_seconds": 0.048889,
+  "exit_code": 1,
+  "timed_out": false,
+  "clean_shutdown": true,
+  "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c30-frame-dimension-safety/docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/runs/merged-a730-tool-no-trace; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nSTDERR:\nsh: evidence/runs/exec-invocations-v4.log: No such file or directory\n\n\n[session closed: provider_closed]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=session output_state=not_applicable]\nlive session terminated: session error: replay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected ...(truncated)PROBE_TOOL_MARKER_9182\\n\", actual ...(truncated)PROBE_TOOL_MARKER_9182\\n\\nSTDERR:\\nsh: evidence/...(truncated)\nreplay mismatch\nreplay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected ...(truncated)PROBE_TOOL_MARKER_9182\\n\", actual ...(truncated)PROBE_TOOL_MARKER_9182\\n\\nSTDERR:\\nsh: evidence/...(truncated)\nreplay mismatch\n",
+  "stderr": "Error: session error: replay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected ...(truncated)PROBE_TOOL_MARKER_9182\\n\", actual ...(truncated)PROBE_TOOL_MARKER_9182\\n\\nSTDERR:\\nsh: evidence/...(truncated)\nreplay mismatch\nreplay mismatch: expected event type \"conversation.item.create\" at sequence 9, actual event type \"conversation.item.create\" at sequence 9: JSON pointer /item/output: expected ...(truncated)PROBE_TOOL_MARKER_9182\\n\", actual ...(truncated)PROBE_TOOL_MARKER_9182\\n\\nSTDERR:\\nsh: evidence/...(truncated)\nreplay mismatch\n",
+  "stdout_bytes": 1511,
+  "stderr_bytes": 654,
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "output_limit_bytes": 262144,
+  "cleanup": {
+    "sigterm_sent": false,
+    "sigkill_sent": false,
+    "reaped_after_sigterm": false,
+    "reaped_after_sigkill": false,
+    "reader_threads_stopped": true
+  },
+  "source_revision": "a7302e076768d730cce0cfac7997be6b4fc84969"
+}

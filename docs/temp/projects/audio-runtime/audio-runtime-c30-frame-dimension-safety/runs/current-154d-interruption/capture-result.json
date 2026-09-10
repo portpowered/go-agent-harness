@@ -1,0 +1,26 @@
+{
+  "schema": "audio-runtime-c30-yui-capture.v1",
+  "tested_source_revision": "154d2543ad4e3d310bb7e4861027c7d826674a9f",
+  "base_revision": "c61ee2774986c896560ee40a92441c914976000d",
+  "executable_sha256": "963720da43bbd04e26192edffb2a2048374eb0fba064b4a6da1adcbbb566b7f6",
+  "wire_events": 15,
+  "tool_calls": 0,
+  "provider_pcm": {
+    "bytes": 3840,
+    "sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"
+  },
+  "rendered_pcm": {
+    "bytes": 3360,
+    "sha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff"
+  },
+  "terminal": {
+    "reason": "replay_complete",
+    "classification": "replay_complete",
+    "terminal_reason": "replay_complete",
+    "terminal_provenance": "replay",
+    "output_state": "complete"
+  },
+  "clean_shutdown": true,
+  "timed_out": false,
+  "bundle_manifest_sha256": "92c06508bac8acef1d04c29809857b9d0587237fed403f645b4e0ef42ade55b5"
+}
