@@ -35,6 +35,9 @@ BINARY = MODULE_DIR / "bin" / "headless-session"
 MODULE_PATH = "example.com/audio-runtime-c27-headless-session-consumer"
 MODULE_REL = Path("docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer")
 MAX_CHILD_TIMEOUT_SECONDS = 60.0
+CLEANUP_TIMEOUT_SECONDS = 5.0
+PROCESS_SCAN_TIMEOUT_SECONDS = 1.0
+PROCESS_POLL_INTERVAL_SECONDS = 0.02
 
 STARTUP_COMMIT = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 BASELINE_COMMIT = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
@@ -44,9 +47,11 @@ PCM_SHA256 = "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
 TOOL_FIXTURE_SOURCE = Path(
     "docs/temp/probes/audio-runtime-c15-relative-bundle-path-vertical-probe/artifact-2.json"
 )
-CONFIG_SOURCE = Path(
-    "docs/temp/probes/audio-runtime-c15-relative-bundle-path-vertical-probe/evidence/fresh-audio-tool/config"
-)
+CONFIG_REL = Path("fixtures/yui-config")
+CONFIG_SHA256 = {
+    "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+    "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1",
+}
 
 
 class VerifyError(RuntimeError):
@@ -64,6 +69,11 @@ class CommandResult:
     timed_out: bool
     reaped: bool
     process_group_alive: bool
+    descendants_seen: int = 0
+    descendants_killed: int = 0
+    descendants_alive: bool = False
+    cleanup_bounded: bool = True
+    cleanup_error: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -76,6 +86,11 @@ class CommandResult:
             "timed_out": self.timed_out,
             "reaped": self.reaped,
             "process_group_alive": self.process_group_alive,
+            "descendants_seen": self.descendants_seen,
+            "descendants_killed": self.descendants_killed,
+            "descendants_alive": self.descendants_alive,
+            "cleanup_bounded": self.cleanup_bounded,
+            "cleanup_error": self.cleanup_error,
         }
 
 
@@ -140,6 +155,116 @@ def base_environment(root: Path, *, include_go_cache: bool = False) -> dict[str,
     return environment
 
 
+def descendant_pids(root_pid: int) -> tuple[list[int], str]:
+    """Snapshot descendants before killing a timed-out process group.
+
+    A child can deliberately create a new session, so killing only the original
+    process group is insufficient.  The snapshot is taken while the direct
+    child is still present and is used only for this one cleanup operation.
+    """
+
+    if os.name == "nt":
+        return [], "process-tree snapshot is delegated to taskkill on Windows"
+    try:
+        listing = subprocess.run(
+            ["ps", "-eo", "pid=,ppid="],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+            timeout=PROCESS_SCAN_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        return [], f"process-tree snapshot failed: {error}"
+    if listing.returncode != 0:
+        return [], f"process-tree snapshot exited {listing.returncode}: {listing.stderr.strip()}"
+    children: dict[int, list[int]] = {}
+    for line in listing.stdout.splitlines():
+        fields = line.split()
+        if len(fields) != 2:
+            continue
+        try:
+            pid, parent = (int(field) for field in fields)
+        except ValueError:
+            continue
+        children.setdefault(parent, []).append(pid)
+    found: list[int] = []
+    pending = [root_pid]
+    visited = {root_pid}
+    while pending:
+        parent = pending.pop()
+        for child in children.get(parent, []):
+            if child in visited:
+                continue
+            visited.add(child)
+            found.append(child)
+            pending.append(child)
+    return sorted(found), ""
+
+
+def pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def wait_for_pids_exit(pids: list[int], deadline: float) -> list[int]:
+    remaining = set(pids)
+    while remaining and time.monotonic() < deadline:
+        remaining = {pid for pid in remaining if pid_alive(pid)}
+        if remaining:
+            time.sleep(min(PROCESS_POLL_INTERVAL_SECONDS, max(0.0, deadline - time.monotonic())))
+    return sorted(remaining)
+
+
+def kill_process_tree(process: subprocess.Popen[bytes], pids: list[int], deadline: float) -> tuple[int, list[str]]:
+    killed = 0
+    errors: list[str] = []
+    if os.name == "nt":
+        remaining = max(0.01, min(PROCESS_SCAN_TIMEOUT_SECONDS, deadline - time.monotonic()))
+        try:
+            taskkill = subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+                timeout=remaining,
+            )
+            if taskkill.returncode not in (0, 128):
+                errors.append(f"taskkill exited {taskkill.returncode}: {taskkill.stderr.strip()}")
+        except (OSError, subprocess.SubprocessError) as error:
+            errors.append(f"taskkill failed: {error}")
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError as error:
+            errors.append(f"process-group kill failed: {error}")
+        for pid in reversed(pids):
+            try:
+                os.kill(pid, signal.SIGKILL)
+                killed += 1
+            except ProcessLookupError:
+                pass
+            except OSError as error:
+                errors.append(f"descendant {pid} kill failed: {error}")
+    return killed, errors
+
+
+def close_process_pipes(process: subprocess.Popen[bytes]) -> None:
+    for stream in (process.stdin, process.stdout, process.stderr):
+        if stream is not None:
+            stream.close()
+
+
 def run_command(
     argv: Iterable[str],
     cwd: Path,
@@ -165,19 +290,53 @@ def run_command(
         start_new_session=True,
     )
     timed_out = False
+    descendants: list[int] = []
+    descendants_killed = 0
+    descendants_alive = False
+    cleanup_bounded = True
+    cleanup_errors: list[str] = []
+    stdout = b""
+    stderr = b""
     try:
         stdout, stderr = process.communicate(input=input_data, timeout=timeout)
     except subprocess.TimeoutExpired as error:
         timed_out = True
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        try:
-            stdout, stderr = process.communicate(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            stdout, stderr = process.communicate()
+        cleanup_deadline = time.monotonic() + CLEANUP_TIMEOUT_SECONDS
+        descendants, snapshot_error = descendant_pids(process.pid)
+        if snapshot_error:
+            cleanup_errors.append(snapshot_error)
+        descendants_killed, kill_errors = kill_process_tree(process, descendants, cleanup_deadline)
+        cleanup_errors.extend(kill_errors)
+        stdout = error.output or b""
+        stderr = error.stderr or b""
+        remaining = cleanup_deadline - time.monotonic()
+        if remaining > 0:
+            try:
+                stdout, stderr = process.communicate(timeout=remaining)
+            except subprocess.TimeoutExpired as cleanup_error:
+                cleanup_bounded = False
+                cleanup_errors.append("bounded communicate expired after process-tree kill")
+                stdout = cleanup_error.output or stdout
+                stderr = cleanup_error.stderr or stderr
+        if process.poll() is None:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+            except OSError as error:
+                cleanup_errors.append(f"direct child kill failed: {error}")
+            remaining = cleanup_deadline - time.monotonic()
+            if remaining > 0:
+                try:
+                    process.wait(timeout=remaining)
+                except subprocess.TimeoutExpired:
+                    cleanup_bounded = False
+                    cleanup_errors.append("bounded direct-child reap expired")
+        descendants_alive = bool(wait_for_pids_exit(descendants, cleanup_deadline))
+        if descendants_alive:
+            cleanup_bounded = False
+            cleanup_errors.append("known descendant remained alive after bounded cleanup")
+        close_process_pipes(process)
         if not stdout and error.output:
             stdout = error.output
         if not stderr and error.stderr:
@@ -185,7 +344,7 @@ def run_command(
     duration = time.monotonic() - started
     reaped = process.poll() is not None
     group_alive = False
-    if process.returncode is not None:
+    if process.returncode is not None and os.name != "nt":
         try:
             os.killpg(process.pid, 0)
             group_alive = True
@@ -203,6 +362,11 @@ def run_command(
         timed_out=timed_out,
         reaped=reaped,
         process_group_alive=group_alive,
+        descendants_seen=len(descendants),
+        descendants_killed=descendants_killed,
+        descendants_alive=descendants_alive,
+        cleanup_bounded=cleanup_bounded,
+        cleanup_error="; ".join(cleanup_errors),
     )
 
 
@@ -288,7 +452,13 @@ def run_child(
         timeout=MAX_CHILD_TIMEOUT_SECONDS,
     )
     require(result.exit_code == expected_exit, f"child exit={result.exit_code}, expected {expected_exit}: {result.as_dict()}")
-    require(result.reaped and not result.process_group_alive, f"child cleanup failed: {result.as_dict()}")
+    require(
+        result.reaped
+        and not result.process_group_alive
+        and not result.descendants_alive
+        and result.cleanup_bounded,
+        f"child cleanup failed: {result.as_dict()}",
+    )
     return result, parse_child_json(result)
 
 
@@ -689,7 +859,47 @@ def run_cleanup() -> dict[str, Any]:
         }
         process, child = run_child(config, fresh_child_root(root, "child"))
         validate_turn(child["turn"], [], config["input"])
-        evidence = {"process": process.as_dict(), "report": child, "child_timeout_seconds": 60, "clean_process_group": True}
+        timeout_root = fresh_child_root(root, "escaped-timeout")
+        escaped_script = (
+            "import os, subprocess, sys, time\n"
+            "if os.name == 'nt':\n"
+            "    subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
+            "    time.sleep(30)\n"
+            "else:\n"
+            "    pid = os.fork()\n"
+            "    if pid == 0:\n"
+            "        os.setsid()\n"
+            "        time.sleep(30)\n"
+            "    else:\n"
+            "        time.sleep(30)\n"
+        )
+        timeout_control = run_command(
+            [sys.executable, "-c", escaped_script],
+            timeout_root / "cwd",
+            environment=base_environment(timeout_root),
+            timeout=0.25,
+        )
+        require(timeout_control.timed_out, f"escaped-descendant control did not time out: {timeout_control.as_dict()}")
+        require(timeout_control.reaped, f"escaped-descendant direct child was not reaped: {timeout_control.as_dict()}")
+        require(not timeout_control.process_group_alive, f"escaped-descendant process group survived: {timeout_control.as_dict()}")
+        if os.name != "nt":
+            require(timeout_control.descendants_seen >= 1, f"escaped-descendant control found no descendant: {timeout_control.as_dict()}")
+            require(timeout_control.descendants_killed >= 1, f"escaped-descendant was not individually killed: {timeout_control.as_dict()}")
+        require(not timeout_control.descendants_alive, f"escaped-descendant survived bounded cleanup: {timeout_control.as_dict()}")
+        require(timeout_control.cleanup_bounded, f"escaped-descendant cleanup was unbounded: {timeout_control.as_dict()}")
+        require(timeout_control.duration_seconds < 10.0, f"escaped-descendant cleanup exceeded its bounded envelope: {timeout_control.as_dict()}")
+        evidence = {
+            "process": process.as_dict(),
+            "report": child,
+            "child_timeout_seconds": 60,
+            "clean_process_group": True,
+            "timeout_cleanup_control": {
+                "command": [sys.executable, "-c", "<escaped-process-group control>"],
+                "result": timeout_control.as_dict(),
+                "descendant_group_escape_tested": os.name != "nt",
+                "bounded_cleanup_seconds": CLEANUP_TIMEOUT_SECONDS,
+            },
+        }
     write_json(EVIDENCE_DIR / "cleanup.json", evidence)
     return evidence
 
@@ -779,6 +989,17 @@ def source_tree_digest(path: Path) -> str:
     return sha256_bytes(json.dumps(entries, sort_keys=True, separators=(",", ":")).encode())
 
 
+def config_descriptors(root: Path = MODULE_DIR) -> dict[str, dict[str, Any]]:
+    descriptors: dict[str, dict[str, Any]] = {}
+    for name, expected_sha256 in CONFIG_SHA256.items():
+        path = root / CONFIG_REL / name
+        require(path.is_file(), f"credential-free replay config fixture is unavailable: {path}")
+        actual_sha256 = sha256_file(path)
+        require(actual_sha256 == expected_sha256, f"credential-free replay config fixture digest mismatch: {path}")
+        descriptors[name] = file_descriptor(path, root)
+    return descriptors
+
+
 def copy_fixture() -> dict[str, Any]:
     source = FACTORY_ROOT / TOOL_FIXTURE_SOURCE
     require(source.is_file(), f"required C07 fixture is unavailable: {source}")
@@ -799,6 +1020,7 @@ def run_package() -> dict[str, Any]:
     admission = verify_admission()
     graph = graph_boundary()
     build = ensure_binary()
+    config = config_descriptors()
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     archive_path = ARTIFACT_DIR / "source.tar.gz"
     archive = create_source_archive(archive_path)
@@ -863,6 +1085,7 @@ def run_package() -> dict[str, Any]:
             "yui": file_descriptor(ARTIFACT_DIR / "yui.archive", MODULE_DIR),
         },
         "fixtures": {"c07_audio_tool_traced": fixtures["published"]},
+        "regression_inputs": {"config": config},
         "dependency_graph": graph["graph_hashes"],
         "replacement_source_tree_sha256": replacements,
         "go": {"version": go_version(), "platform": {"system": platform.system(), "release": platform.release(), "machine": platform.machine()}, "gowork": "off"},
@@ -913,6 +1136,11 @@ def verify_descriptor(value: dict[str, Any], root: Path = MODULE_DIR) -> dict[st
     artifact_values.append(value["source_archive"])
     artifact_values.extend(value["executables"].values())
     artifact_values.extend(value["fixtures"].values())
+    regression_inputs = value.get("regression_inputs")
+    require(isinstance(regression_inputs, dict), "artifact descriptor omitted regression inputs")
+    config = regression_inputs.get("config")
+    require(isinstance(config, dict) and set(config) == set(CONFIG_SHA256), "artifact descriptor omitted hash-pinned replay config")
+    artifact_values.extend(config.values())
     artifact_values.append(value["module"]["go_mod"])
     artifact_values.append(value["module"]["go_sum"])
     artifact_values.append(value["runner"])
@@ -974,8 +1202,8 @@ def run_regression() -> dict[str, Any]:
     fixture = MODULE_DIR / descriptor["fixtures"]["c07_audio_tool_traced"]["path"]
     require(yui.is_file() and fixture.is_file(), "published same-source yui or fixture is missing")
     require(sha256_file(fixture) == TOOL_FIXTURE_SHA256, "published regression fixture digest mismatch")
-    config_source = FACTORY_ROOT / CONFIG_SOURCE
-    require((config_source / "config.yaml").is_file() and (config_source / "models.yaml").is_file(), "credential-free replay config fixture is unavailable")
+    config_source = MODULE_DIR / CONFIG_REL
+    config_inputs = config_descriptors()
     with tempfile.TemporaryDirectory(prefix="c27-regression-") as temporary:
         root = Path(temporary)
         config = root / "config"
@@ -1016,6 +1244,7 @@ def run_regression() -> dict[str, Any]:
         require(bundle_files, "recorded replay bundle is empty")
         evidence = {
             "fixture": {"path": descriptor["fixtures"]["c07_audio_tool_traced"]["path"], "sha256": sha256_file(fixture)},
+            "config": {"root": CONFIG_REL.as_posix(), "files": config_inputs, "included_in_source_archive": True},
             "replay": {"command": replay_command, "result": replay.as_dict(), "audio": {"size": audio.stat().st_size, "sha256": sha256_file(audio)}, "bundle_files": bundle_files},
             "strict_replay": {"command": strict_command, "result": strict.as_dict()},
             "credentials": {"environment_allowlist": True, "network_or_provider_credentials": False, "config_directory": str(config)},
