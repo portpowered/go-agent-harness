@@ -30,7 +30,7 @@
           "GOTOOLCHAIN": "",
           "GOWORK": "off",
           "HOME": "/Users/abdifamily",
-          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+          "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
         },
         "go_env": {
           "CGO_ENABLED": "1",
@@ -82,7 +82,7 @@
           "GOTOOLCHAIN": "",
           "GOWORK": "",
           "HOME": "/Users/abdifamily",
-          "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+          "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
         },
         "go_env": {
           "CGO_ENABLED": "1",
@@ -184,11 +184,11 @@
   "schema": "c36-build-binding-v2",
   "source_archive": {
     "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c36-room-media-epoch-consumer/docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/evidence/current-main-ad2bac0/artifacts/build-inputs.tar",
-    "revision": "907e732b97e7abf1d2abe0bb90cd04dd547ce17c",
+    "revision": "f6e6ec221a8050889b5a5ec3487e75d6dcb3bc95",
     "sha256": "b5ff9103be9e22878d7a9a268f232fcfe54d1cb0d5ca0409cfb638e6ca3159bf"
   },
   "source_archive_sha256": "b5ff9103be9e22878d7a9a268f232fcfe54d1cb0d5ca0409cfb638e6ca3159bf",
-  "source_revision": "907e732b97e7abf1d2abe0bb90cd04dd547ce17c",
+  "source_revision": "f6e6ec221a8050889b5a5ec3487e75d6dcb3bc95",
   "toolchains": {
     "room_media": {
       "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer",
@@ -201,7 +201,7 @@
         "GOTOOLCHAIN": "",
         "GOWORK": "off",
         "HOME": "/Users/abdifamily",
-        "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+        "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
       },
       "go_env": {
         "CGO_ENABLED": "1",
@@ -231,7 +231,7 @@
         "GOTOOLCHAIN": "",
         "GOWORK": "",
         "HOME": "/Users/abdifamily",
-        "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
+        "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0GoMhet:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources"
       },
       "go_env": {
         "CGO_ENABLED": "1",

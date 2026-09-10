@@ -1,7 +1,7 @@
 # C36 current-head evidence
 
 These machine-readable summaries were generated from exact submitted source
-revision `907e732b97e7abf1d2abe0bb90cd04dd547ce17c`, which includes current
+revision `f6e6ec221a8050889b5a5ec3487e75d6dcb3bc95`, which includes current
 `origin/main=926ded7bfa8f3c3e42115192d03aa1240c4806db`. The required baseline
 `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, startup
 `8bdafc7f947a3a2c9856220abdc539437035bd21`, and observed main
@@ -17,7 +17,7 @@ rtk proxy python3 verify.py --action all \
   --child-timeout 60 --aggregate-timeout 600
 ```
 
-It returned `accepted` in 8.997228 seconds. The room-media executable SHA-256
+It returned `accepted` in 8.813212 seconds. The room-media executable SHA-256
 is `6c49d7fba55deff469c501427f2ac12b6d92f035f9353b864747be3ffde942de`; the
 same-source yui executable SHA-256 is
 `85f084aa019bf09020a791b85df46a8475aa39d86393245315c92f2d70d8499e`; the

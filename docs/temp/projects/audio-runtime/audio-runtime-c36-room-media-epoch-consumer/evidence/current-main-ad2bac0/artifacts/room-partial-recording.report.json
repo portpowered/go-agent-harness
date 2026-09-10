@@ -121,33 +121,20 @@
     {
       "epoch": 1,
       "kind": "source_audio",
-      "participant": "alice",
-      "samples": [
-        101,
-        102
-      ],
-      "sequence": 1
-    },
-    {
-      "end_of_response": true,
-      "epoch": 2,
-      "kind": "source_audio",
-      "participant": "alice",
-      "samples": [
-        111,
-        112,
-        113,
-        114
-      ],
-      "sequence": 2
-    },
-    {
-      "epoch": 1,
-      "kind": "source_audio",
       "participant": "bob",
       "samples": [
         201,
         202
+      ],
+      "sequence": 1
+    },
+    {
+      "epoch": 1,
+      "kind": "source_audio",
+      "participant": "alice",
+      "samples": [
+        101,
+        102
       ],
       "sequence": 1
     },
@@ -166,17 +153,16 @@
     },
     {
       "end_of_response": true,
-      "epoch": 1,
-      "kind": "peer_output",
-      "participant": "bob",
+      "epoch": 2,
+      "kind": "source_audio",
+      "participant": "alice",
       "samples": [
         111,
         112,
         113,
         114
       ],
-      "sequence": 0,
-      "target": "bob"
+      "sequence": 2
     },
     {
       "epoch": 1,
@@ -204,6 +190,20 @@
       ],
       "sequence": 0,
       "target": "alice"
+    },
+    {
+      "end_of_response": true,
+      "epoch": 1,
+      "kind": "peer_output",
+      "participant": "bob",
+      "samples": [
+        111,
+        112,
+        113,
+        114
+      ],
+      "sequence": 0,
+      "target": "bob"
     },
     {
       "classification": "fixture_complete",
