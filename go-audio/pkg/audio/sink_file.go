@@ -124,6 +124,10 @@ func (s *FileSink) writeSamples(ctx context.Context, samples []int16) error {
 		return nil
 	}
 
+	return s.writeRawSamples(ctx, samples)
+}
+
+func (s *FileSink) writeRawSamples(ctx context.Context, samples []int16) error {
 	var scratch [rawSinkScratchBytes]byte
 	for len(samples) > 0 {
 		if err := ContextError(ctx); err != nil {

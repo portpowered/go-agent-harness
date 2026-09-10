@@ -46,78 +46,78 @@ func TestFileSinkBoundedRawLiteralTailsAndChunks(t *testing.T) {
 	}
 }
 
-func TestFileSinkBoundedRawWriteFailures(t *testing.T) {
+func TestFileSinkBoundedRawShortWrites(t *testing.T) {
+	samples := []int16{-32768, -1, 0, 1, 32767, 12, 34}
+	writer := &boundedShortWriter{max: 3}
+	sink := &FileSink{path: "-", format: formatRaw, writer: writer}
+	if err := sink.WriteSamples(context.Background(), samples); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(writer.Bytes(), literalPCM16(samples)) {
+		t.Fatalf("short-write bytes = %x", writer.Bytes())
+	}
+}
+
+func TestFileSinkBoundedRawZeroAndInvalidWrites(t *testing.T) {
+	samples := []int16{-32768, -1, 0, 1, 32767, 12, 34}
+	for name, writer := range map[string]io.Writer{
+		"zero":      boundedZeroWriter{},
+		"negative":  boundedInvalidCountWriter{delta: -1},
+		"too-large": boundedInvalidCountWriter{delta: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sink := &FileSink{path: "-", format: formatRaw, writer: writer}
+			if !errors.Is(sink.WriteSamples(context.Background(), samples), io.ErrShortWrite) {
+				t.Fatal("WriteSamples() did not preserve io.ErrShortWrite")
+			}
+		})
+	}
+}
+
+func TestFileSinkBoundedRawPartialWriteError(t *testing.T) {
 	samples := []int16{-32768, -1, 0, 1, 32767, 12, 34}
 	want := literalPCM16(samples)
+	wantErr := errors.New("bounded writer failed")
+	writer := &boundedPartialErrorWriter{max: 5, err: wantErr}
+	sink := &FileSink{path: "-", format: formatRaw, writer: writer}
+	err := sink.WriteSamples(context.Background(), samples)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("WriteSamples() = %v, want sentinel", err)
+	}
+	var streamErr *StreamError
+	if !errors.As(err, &streamErr) || streamErr.Operation != "write" {
+		t.Fatalf("error = %v, want write StreamError", err)
+	}
+	if !bytes.Equal(writer.Bytes(), want[:5]) {
+		t.Fatalf("partial bytes = %x, want %x", writer.Bytes(), want[:5])
+	}
+}
 
-	t.Run("odd short writes complete", func(t *testing.T) {
-		writer := &boundedShortWriter{max: 3}
-		sink := &FileSink{path: "-", format: formatRaw, writer: writer}
-		if err := sink.WriteSamples(context.Background(), samples); err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(writer.Bytes(), want) {
-			t.Fatalf("short-write bytes = %x, want %x", writer.Bytes(), want)
-		}
-	})
+func TestFileSinkBoundedRawChunkFailureStopsAtPrefix(t *testing.T) {
+	wantErr := errors.New("second chunk failed")
+	writer := &boundedFailAfterWriter{err: wantErr}
+	samples := repeatSamples(boundedSinkChunkSamples+1, 7)
+	sink := &FileSink{path: "-", format: formatRaw, writer: writer}
+	if err := sink.WriteSamples(context.Background(), samples); !errors.Is(err, wantErr) {
+		t.Fatalf("WriteSamples() = %v, want sentinel", err)
+	}
+	wantPrefix := literalPCM16(samples[:boundedSinkChunkSamples])
+	if !bytes.Equal(writer.Bytes(), wantPrefix) {
+		t.Fatalf("prefix bytes = %d, want %d", writer.Len(), len(wantPrefix))
+	}
+	if writer.calls != 2 {
+		t.Fatalf("writer calls = %d, want one accepted chunk and one failing chunk", writer.calls)
+	}
+}
 
-	t.Run("zero and invalid counts preserve short write", func(t *testing.T) {
-		for name, writer := range map[string]io.Writer{
-			"zero":      boundedZeroWriter{},
-			"negative":  boundedInvalidCountWriter{delta: -1},
-			"too-large": boundedInvalidCountWriter{delta: 1},
-		} {
-			t.Run(name, func(t *testing.T) {
-				sink := &FileSink{path: "-", format: formatRaw, writer: writer}
-				if !errors.Is(sink.WriteSamples(context.Background(), samples), io.ErrShortWrite) {
-					t.Fatalf("WriteSamples() did not preserve io.ErrShortWrite")
-				}
-			})
-		}
-	})
-
-	t.Run("partial bytes and sentinel error are preserved", func(t *testing.T) {
-		wantErr := errors.New("bounded writer failed")
-		writer := &boundedPartialErrorWriter{max: 5, err: wantErr}
-		sink := &FileSink{path: "-", format: formatRaw, writer: writer}
-		err := sink.WriteSamples(context.Background(), samples)
-		if !errors.Is(err, wantErr) {
-			t.Fatalf("WriteSamples() = %v, want sentinel", err)
-		}
-		var streamErr *StreamError
-		if !errors.As(err, &streamErr) || streamErr.Operation != "write" {
-			t.Fatalf("error = %v, want write StreamError", err)
-		}
-		if !bytes.Equal(writer.Bytes(), want[:5]) {
-			t.Fatalf("partial bytes = %x, want %x", writer.Bytes(), want[:5])
-		}
-	})
-
-	t.Run("failure after an accepted chunk stops at exact prefix", func(t *testing.T) {
-		wantErr := errors.New("second chunk failed")
-		writer := &boundedFailAfterWriter{err: wantErr}
-		samples := repeatSamples(boundedSinkChunkSamples+1, 7)
-		sink := &FileSink{path: "-", format: formatRaw, writer: writer}
-		if err := sink.WriteSamples(context.Background(), samples); !errors.Is(err, wantErr) {
-			t.Fatalf("WriteSamples() = %v, want sentinel", err)
-		}
-		wantPrefix := literalPCM16(samples[:boundedSinkChunkSamples])
-		if !bytes.Equal(writer.Bytes(), wantPrefix) {
-			t.Fatalf("prefix bytes = %d, want %d", writer.Len(), len(wantPrefix))
-		}
-		if writer.calls != 2 {
-			t.Fatalf("writer calls = %d, want one accepted chunk and one failing chunk", writer.calls)
-		}
-	})
-
-	t.Run("invalid count wins over writer error", func(t *testing.T) {
-		wantErr := errors.New("should not escape invalid count")
-		sink := &FileSink{path: "-", format: formatRaw, writer: boundedInvalidCountWriter{delta: 1, err: wantErr}}
-		err := sink.WriteSamples(context.Background(), samples)
-		if !errors.Is(err, io.ErrShortWrite) || errors.Is(err, wantErr) {
-			t.Fatalf("WriteSamples() = %v, want only io.ErrShortWrite", err)
-		}
-	})
+func TestFileSinkBoundedRawInvalidCountPrecedesError(t *testing.T) {
+	samples := []int16{-32768, -1, 0, 1, 32767, 12, 34}
+	wantErr := errors.New("should not escape invalid count")
+	sink := &FileSink{path: "-", format: formatRaw, writer: boundedInvalidCountWriter{delta: 1, err: wantErr}}
+	err := sink.WriteSamples(context.Background(), samples)
+	if !errors.Is(err, io.ErrShortWrite) || errors.Is(err, wantErr) {
+		t.Fatalf("WriteSamples() = %v, want only io.ErrShortWrite", err)
+	}
 }
 
 func TestFileSinkBoundedRawCancellationBetweenChunks(t *testing.T) {
@@ -251,6 +251,32 @@ func TestFileSinkBoundedWAVCheckpointAndCloseIdentity(t *testing.T) {
 	secondClose := empty.Close()
 	if !errors.Is(firstClose, wavio.ErrEmptySamples) || !errors.Is(secondClose, wavio.ErrEmptySamples) || firstClose.Error() != secondClose.Error() {
 		t.Fatalf("empty close errors = %v, %v; want stable ErrEmptySamples", firstClose, secondClose)
+	}
+}
+
+// TestClampInt16Bounds exercises clampInt16's saturation branches directly.
+// applyGain's peak-safety ceiling keeps normal normalizer output well inside
+// int16 range, so these extremes are a defensive belt-and-suspenders bound
+// that is otherwise unreachable through the public API; testing the
+// unexported helper directly is the only way to cover them.
+func TestClampInt16Bounds(t *testing.T) {
+	cases := []struct {
+		name  string
+		value float64
+		want  int16
+	}{
+		{"above positive full scale", 40000, 32767},
+		{"exactly positive full scale", 32767, 32767},
+		{"below negative full scale", -40000, -32768},
+		{"exactly negative full scale", -32768, -32768},
+		{"mid-range rounds", 100.4, 100},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := clampInt16(tc.value); got != tc.want {
+				t.Fatalf("clampInt16(%v) = %d, want %d", tc.value, got, tc.want)
+			}
+		})
 	}
 }
 
