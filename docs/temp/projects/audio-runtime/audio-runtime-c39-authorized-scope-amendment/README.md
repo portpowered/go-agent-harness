@@ -95,3 +95,10 @@ uses yui `/tmp/audio-runtime-c39-yui-5671366` with SHA-256
 `71bb89baf3ebaf10557ca4224165ad70d26cdeb0b5882f4d7a10e65a92d0067b` and
 passes the controller, audio/tool replay, interruption replay, negative
 controls, protected-hash and bounded child-cleanup checks.
+
+The current-main merge checkpoint is archived at
+`evidence-merge-b98e5e7/probe-report.json` for tested source
+`b98e5e7c149b3394b520f3af59bf4ebff8f0f77a`. Its yui is
+`/tmp/audio-runtime-c39-yui-b98e5e7` (SHA-256
+`c99078de28b992b60f1c238376f8dd0ed1207288f7ece732119fd966c5319683`), and
+`resource-usage.json` records the bounded storage measurements and provenance.
