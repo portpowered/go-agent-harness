@@ -152,3 +152,18 @@ free before the build and about 3.5 GiB remained afterward, above the required
 
 These are executor handoff results only. Script CI, independent review,
 guarded merge, and the primary's exact-artifact vertical probe remain open.
+
+## Pushed-head provenance confirmation
+
+After the handoff ledger commit, the exact pushed head
+`8bce982045d81696348188b1e28194d005c25a8d` was rebuilt and packaged. Run
+`repaired-20260910T232125Z-80573` returns `REPAIRED_ORACLE_PASS` with the same
+artifact SHA-256 and frozen PCM results, and `package` returns
+`PACKAGE_READY` for that exact source identity. The build-input manifest remains
+`7689716a955acc5299b34c23aa3d600fa6c7829eed577c93232b2b0984716309` over
+`2,185` inputs; the only delta from the prior tested source was the tracked
+handoff documentation/progress ledger.
+
+The remote-marker control also passes in normal and race modes at this pushed
+head. No CI, review, merge, vertical acceptance, or project-completion result
+is implied.

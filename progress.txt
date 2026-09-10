@@ -3443,3 +3443,26 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   `ACCEPTED` to the script-owned current-head CI gate without polling. Retain
   C38 ownership through `CONTINUE` for any exact CI/review rejection or
   actionable repair.
+
+# C38 pushed-head rebuild and final executor handoff 2026-09-10T23:23Z
+
+- The handoff checkpoint was pushed as `8bce982045d81696348188b1e28194d005c25a8d`.
+  Because that commit is ledger/documentation-only, the candidate was rebuilt
+  rather than relabeling the parent artifact. Exact run
+  `repaired-20260910T232125Z-80573` returns `REPAIRED_ORACLE_PASS` for source
+  `8bce982`; the artifact remains `50,912,034` bytes with SHA-256
+  `8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42` and
+  the frozen tool/interruption PCM, healthy-tail and strict-replay oracles
+  pass. Exact `package` returns `PACKAGE_READY` for `8bce982` itself.
+- The build-input manifest is unchanged at SHA-256
+  `7689716a955acc5299b34c23aa3d600fa6c7829eed577c93232b2b0984716309` over
+  `2,185` inputs; the source delta after the prior run is limited to the
+  tracked C38 README/PR-body/progress handoff ledger. Current-head remote
+  marker normal and race controls both pass. The post-build free-space
+  measurement remains about `3.4 GiB`, above the required `2 GiB` reserve.
+- No current-head CI success, independent review, guarded merge,
+  post-delivery vertical acceptance, physical/acoustic proof or project
+  completion is claimed. Exact next action: update PR `#430` with this pushed
+  head/evidence and return `ACCEPTED` to the script-owned current-head CI gate
+  without polling. Retain C38 ownership through `CONTINUE` for any exact CI or
+  review rejection or actionable repair.

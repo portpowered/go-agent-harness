@@ -79,3 +79,20 @@ claim CI success, independent review, guarded merge, vertical acceptance, or
 project completion. Submit the changed same-task head once without polling;
 retain C38 ownership through `CONTINUE` for any exact rejection or actionable
 repair.
+
+## Pushed-head provenance confirmation — 2026-09-10T23:23Z
+
+The exact pushed head is `8bce982045d81696348188b1e28194d005c25a8d`.
+`repaired-20260910T232125Z-80573` returns `REPAIRED_ORACLE_PASS` and
+`package` returns `PACKAGE_READY` for that exact source identity. The new yui
+artifact remains 50,912,034 bytes with SHA-256
+`8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`; the
+frozen tool/interruption PCM and strict replay results remain exact. The
+build-input manifest is unchanged at SHA-256
+`7689716a955acc5299b34c23aa3d600fa6c7829eed577c93232b2b0984716309` over
+`2,185` inputs. The remote-marker control passes at this head in normal and
+race modes.
+
+This confirms executor readiness for the script-owned current-head CI gate; it
+does not claim CI success, independent review, guarded merge, vertical
+acceptance, or project completion.
