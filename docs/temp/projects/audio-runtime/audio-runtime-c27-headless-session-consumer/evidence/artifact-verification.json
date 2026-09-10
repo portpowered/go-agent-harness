@@ -1,8 +1,8 @@
 {
   "descriptor": {
     "path": "evidence/package.json",
-    "sha256": "c48a042c3820eeff7d9da9aedc316631a763c964d8d2aecaa3646b4dd87ad080",
-    "size": 11297
+    "sha256": "676e24f587e366371e8e980449a3791db65968e6e7cedc1f138b87a5ac0823a0",
+    "size": 11777
   },
   "missing_descriptor_control": "[Errno 2] No such file or directory: '/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/package.missing.json'",
   "tamper_control": "tampered artifact digest/size rejected",
@@ -11,18 +11,18 @@
     "checked": [
       {
         "path": "evidence/artifacts/source.tar.gz",
-        "sha256": "3a47af9c4153192a8df9ee7f365e571a2237d33ce8f94762de37db408d0b29f9",
-        "size": 7539659
+        "sha256": "97ccc19a0617d211805b873bd81d5f737ee7afa20d6be846949cedb467c7ab8a",
+        "size": 7553891
       },
       {
         "path": "evidence/artifacts/headless-session.archive",
-        "sha256": "1f5668a0446d208a8a327042ffc5e3e433396f41dde151de9d738e2c567ca389",
-        "size": 9207602
+        "sha256": "7712ed8e874dc6a20bed408d956b7de81b2c672ac802b80347cc38f29453de51",
+        "size": 9207794
       },
       {
         "path": "evidence/artifacts/yui.archive",
-        "sha256": "a6e1d99a8f48b0d4e7992fead48cf24591d43eb496e5a7880ecb42f06a019bb5",
-        "size": 52440082
+        "sha256": "795c052e715dde1624834d1e9f49dc8ce45f6b02711f18122e967a6e928f8871",
+        "size": 52548242
       },
       {
         "path": "evidence/fixtures/c07-audio-tool-traced.session.json",
@@ -41,15 +41,15 @@
       },
       {
         "path": "scripts/verify.py",
-        "sha256": "2cae2b3ac0000b2f60fca92e403024f6a6ab7afecb2dbb3556aa0d7ba3fbe396",
-        "size": 50351
+        "sha256": "09f38408123086f0dc4e39263c5b03ad87f0bc07f9f4de5aa80f0a76c9d96ddb",
+        "size": 50468
       }
     ],
     "provenance": {
       "current_branch": "codex/audio-runtime-c27-headless-session-consumer",
-      "current_head": "14c3d73566c70974939f3a319e6b35206a637948",
+      "current_head": "7135f038819c1c7ca58c71db8ab544448129abd9",
       "source_changes_since_source_revision": [],
-      "source_revision": "14c3d73566c70974939f3a319e6b35206a637948",
+      "source_revision": "7135f038819c1c7ca58c71db8ab544448129abd9",
       "source_revision_matches_current_head": true
     }
   }

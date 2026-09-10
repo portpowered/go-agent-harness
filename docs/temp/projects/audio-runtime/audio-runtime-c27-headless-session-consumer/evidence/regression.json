@@ -1,6 +1,6 @@
 {
   "credentials": {
-    "config_directory": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d/config",
+    "config_directory": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282/config",
     "environment_allowlist": true,
     "network_or_provider_credentials": false
   },
@@ -26,65 +26,65 @@
     "command": [
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/yui.archive",
       "-C",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d/config",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282/config",
       "session",
       "--replay",
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/fixtures/c07-audio-tool-traced.session.json",
       "--audio-out",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d/run/out.pcm",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282/run/out.pcm",
       "--record-dir",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d/run/bundle",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282/run/bundle",
       "--trace-audio"
     ],
     "result": {
       "argv": [
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/yui.archive",
         "-C",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/fixtures/c07-audio-tool-traced.session.json",
         "--audio-out",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d/run/out.pcm",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282/run/out.pcm",
         "--record-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d/run/bundle",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282/run/bundle",
         "--trace-audio"
       ],
-      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d",
-      "duration_seconds": 0.53001,
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282",
+      "duration_seconds": 0.440985,
       "exit_code": 0,
       "process_group_alive": false,
       "reaped": true,
       "stderr": "",
-      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
       "timed_out": false
     }
   },
   "same_source_yui": {
     "path": "evidence/artifacts/yui.archive",
-    "sha256": "a6e1d99a8f48b0d4e7992fead48cf24591d43eb496e5a7880ecb42f06a019bb5",
-    "size": 52440082
+    "sha256": "795c052e715dde1624834d1e9f49dc8ce45f6b02711f18122e967a6e928f8871",
+    "size": 52548242
   },
   "strict_replay": {
     "command": [
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/yui.archive",
       "-C",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d/config",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282/config",
       "session",
       "replay",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d/run/bundle"
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282/run/bundle"
     ],
     "result": {
       "argv": [
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c27-headless-session-consumer/docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/evidence/artifacts/yui.archive",
         "-C",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282/config",
         "session",
         "replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d/run/bundle"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282/run/bundle"
       ],
-      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-wb_6xt7d",
-      "duration_seconds": 0.022135,
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c27-regression-0tkhb282",
+      "duration_seconds": 0.022019,
       "exit_code": 0,
       "process_group_alive": false,
       "reaped": true,
