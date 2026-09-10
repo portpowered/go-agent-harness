@@ -861,7 +861,7 @@ func validateToolMatrix(result *report, turns int, terminalSeen bool) error {
 	if !result.TraceComplete || result.Events.OverflowDrops != 0 {
 		return errors.New("bounded live event trace was incomplete or overflowed")
 	}
-	if !terminalSeen || !completionTerminal(result.Terminal) {
+	if !terminalSeen || !completionTerminal(result.Terminal, string(messages.TerminalReasonProviderAuthoredCompletion)) {
 		return fmt.Errorf("live terminal evidence is not an exact provider completion: %+v", result.Terminal)
 	}
 	if len(result.ToolCalls) != turns*2 || len(result.ToolResults) != turns*2 {
@@ -927,10 +927,10 @@ func validateToolMatrix(result *report, turns int, terminalSeen bool) error {
 	return nil
 }
 
-func completionTerminal(value terminalRecord) bool {
+func completionTerminal(value terminalRecord, classification string) bool {
 	return value.Kind == string(session.LiveEventTerminal) &&
 		value.Reason == string(messages.TerminalReasonProviderAuthoredCompletion) &&
-		value.Classification == string(messages.TerminalReasonProviderAuthoredCompletion) &&
+		value.Classification == classification &&
 		value.Provenance == string(messages.TerminalProvenanceProvider) &&
 		value.OutputState == string(messages.TerminalOutputComplete)
 }
@@ -1030,7 +1030,7 @@ func runInterruption(artifactRoot string) (*report, error) {
 	if waitErr != nil {
 		return result, waitErr
 	}
-	if !interrupt.CancelSent || !interrupt.CancellationTerminalObserved || interrupt.HealthyResponseID == "" || interrupt.ForbiddenPostCancelAudio || !interrupt.HealthyTailNonEmpty || !terminalSeen || !completionTerminal(result.Terminal) {
+	if !interrupt.CancelSent || !interrupt.CancellationTerminalObserved || interrupt.HealthyResponseID == "" || interrupt.ForbiddenPostCancelAudio || !interrupt.HealthyTailNonEmpty || !terminalSeen || !completionTerminal(result.Terminal, "fixture") {
 		return result, errors.New("interruption recovery proof is incomplete")
 	}
 	return result, nil

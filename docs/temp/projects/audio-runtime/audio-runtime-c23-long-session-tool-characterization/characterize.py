@@ -52,6 +52,13 @@ EXPECTED_COMPLETION_TERMINAL = {
     "provenance": "provider",
     "output_state": "complete",
 }
+EXPECTED_INTERRUPTION_TERMINAL = {
+    "kind": "terminal",
+    "reason": "provider_authored_completion",
+    "classification": "fixture",
+    "provenance": "provider",
+    "output_state": "complete",
+}
 EXPECTED_NEGATIVE_TERMINAL = {
     "kind": "terminal",
     "reason": "terminal_failure",
@@ -591,7 +598,7 @@ def validate_interruption_report(report: dict[str, Any], fixture_sha: str) -> No
     require(report.get("scenario") == "interruption", "interruption scenario identity changed")
     require(report.get("fixture_sha256") == fixture_sha, "interruption fixture digest does not match provenance")
     require(report.get("clean_shutdown") is True and report.get("trace_complete") is True, "interruption did not shut down with complete trace")
-    validate_terminal(report, EXPECTED_COMPLETION_TERMINAL, "interruption recovery")
+    validate_terminal(report, EXPECTED_INTERRUPTION_TERMINAL, "interruption recovery")
     validate_recording_usage(report)
     interruption = report.get("interruption", {})
     require(interruption.get("cancel_sent") is True, "response.cancel was not admitted")
