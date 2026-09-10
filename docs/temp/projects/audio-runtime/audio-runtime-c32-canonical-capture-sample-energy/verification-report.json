@@ -1,9 +1,57 @@
 {
-  "base_revision": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+  "base_revision": "b0acab1238d1aa6bf6bce5ca074451310c7eb039",
+  "bounded_controls": {
+    "output_overflow": {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-c",
+        "import sys; payload = b'x' * (1048576 + 4096); sys.stdout.buffer.write(payload); sys.stdout.buffer.flush(); sys.stderr.buffer.write(payload); sys.stderr.buffer.flush()"
+      ],
+      "captured_output_bytes": {
+        "stderr": 65536,
+        "stdout": 1048576
+      },
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c32-canonical-capture-sample-energy/docs/temp/projects/audio-runtime/audio-runtime-c32-canonical-capture-sample-energy",
+      "deadline_seconds": 10,
+      "elapsed_seconds": 0.020517,
+      "exit_code": -15,
+      "output_exceeded": true,
+      "reap_bounded": true,
+      "reaped": true,
+      "termination_signals": [
+        "SIGTERM"
+      ],
+      "timed_out": false
+    },
+    "per_stream_output_limit_bytes": 1048576,
+    "sigkill_reap": {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-c",
+        "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)"
+      ],
+      "captured_output_bytes": {
+        "stderr": 0,
+        "stdout": 0
+      },
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c32-canonical-capture-sample-energy/docs/temp/projects/audio-runtime/audio-runtime-c32-canonical-capture-sample-energy",
+      "deadline_seconds": 0.25,
+      "elapsed_seconds": 0.306153,
+      "exit_code": -9,
+      "output_exceeded": false,
+      "reap_bounded": true,
+      "reaped": true,
+      "termination_signals": [
+        "SIGTERM",
+        "SIGKILL"
+      ],
+      "timed_out": true
+    }
+  },
   "case_count": 40,
   "clean_shutdown": true,
   "consumer": {
-    "path": "/private/tmp/c32-capture-consumer-6784-full",
+    "path": "/private/tmp/c32-capture-consumer-final",
     "sha256": "92f906085aa769a68760dd0f7d75721205a8467d2b621591d4491bd11ebc302f",
     "source_sha256": "2c79888b21d03bbc2004444926b6d2297d8744b84f97e32e1f12b221a9a8abad"
   },
@@ -14,15 +62,23 @@
     "reason": "pcm16-stereo-padded-energy.energy: got 1.5, want 1.25",
     "rejected": true
   },
-  "origin_main": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+  "origin_main": "b0acab1238d1aa6bf6bce5ca074451310c7eb039",
   "process": {
     "argv": [
-      "/private/tmp/c32-capture-consumer-6784-full"
+      "/private/tmp/c32-capture-consumer-final"
     ],
+    "captured_output_bytes": {
+      "stderr": 0,
+      "stdout": 18352
+    },
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c32-canonical-capture-sample-energy/docs/temp/projects/audio-runtime/audio-runtime-c32-canonical-capture-sample-energy",
     "deadline_seconds": 10,
-    "elapsed_seconds": 0.005222,
+    "elapsed_seconds": 0.00386,
     "exit_code": 0,
+    "output_exceeded": false,
+    "reap_bounded": true,
+    "reaped": true,
+    "termination_signals": [],
     "timed_out": false
   },
   "required_ancestors": {
@@ -32,7 +88,7 @@
     },
     "fetchedOriginMain": {
       "is_ancestor": true,
-      "revision": "1f82284abee0bd31a6680310444cea2e4c16ef00"
+      "revision": "b0acab1238d1aa6bf6bce5ca074451310c7eb039"
     },
     "planningMain": {
       "is_ancestor": true,
@@ -46,10 +102,12 @@
   "resource_bounds": {
     "child_deadline_seconds": 10,
     "max_output_bytes": 1048576,
-    "packet_scratch_allocation": "none in canonical helpers"
+    "packet_scratch_allocation": "none in canonical helpers",
+    "reap_timeout_seconds": 2,
+    "terminate_grace_seconds": 2
   },
   "schema": "audio-runtime-c32-capture-sample-energy-verification.v1",
-  "source_revision": "6784be7de7d4ea89065a404221b050cf4c62f50a",
+  "source_revision": "ff93f53b583bfb3d92f90c51eafe606dab61a579",
   "source_sha256": {
     "docs/temp/projects/audio-runtime/audio-runtime-c32-canonical-capture-sample-energy/consumer/main.go": "2c79888b21d03bbc2004444926b6d2297d8744b84f97e32e1f12b221a9a8abad",
     "go-audio/pkg/codec/sample_value.go": "4fc9b6b85bb1162b42fbacb60cc24326f4bbe312c5ec7109185320172aaac49a",
