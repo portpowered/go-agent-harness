@@ -137,16 +137,20 @@
         "/opt/homebrew/opt/python@3.14/bin/python3.14",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/scripts/project-control.py",
         "--root",
-        "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-zvlnqi25/controller-fixture",
+        "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-7i4e1kpw/controller-fixture",
         "verify-completion",
         "--name",
         "audio-runtime"
       ],
-      "durationSeconds": 0.360997,
+      "durationSeconds": 0.537304,
       "exitCode": 0,
       "reaped": true,
       "stderr": "",
-      "stdout": "{\"status\": \"verified\", \"project\": \"audio-runtime\", \"build\": {\"identity\": \"c39-controller-build\", \"path\": \"/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-zvlnqi25/controller-fixture/artifacts/c39-build.bin\", \"sha256\": \"f1a93b68b067e3052a1d22e04b121d9a39db3a686f48cf4a5a811c1450707ec9\"}}\n",
+      "stderrBytesRetained": 0,
+      "stderrTruncated": false,
+      "stdout": "{\"status\": \"verified\", \"project\": \"audio-runtime\", \"build\": {\"identity\": \"c39-controller-build\", \"path\": \"/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-7i4e1kpw/controller-fixture/artifacts/c39-build.bin\", \"sha256\": \"f1a93b68b067e3052a1d22e04b121d9a39db3a686f48cf4a5a811c1450707ec9\"}}\n",
+      "stdoutBytesRetained": 320,
+      "stdoutTruncated": false,
       "timedOut": false
     },
     "negativeExpandedExclusion": {
@@ -155,16 +159,20 @@
         "/opt/homebrew/opt/python@3.14/bin/python3.14",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/scripts/project-control.py",
         "--root",
-        "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-zvlnqi25/controller-fixture",
+        "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-7i4e1kpw/controller-fixture",
         "amendment-append",
         "--record",
-        "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-zvlnqi25/controller-fixture/forged-record.json"
+        "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-7i4e1kpw/controller-fixture/forged-record.json"
       ],
-      "durationSeconds": 0.094044,
+      "durationSeconds": 0.122981,
       "exitCode": 1,
       "reaped": true,
       "stderr": "excludedSubproof may contain only the two reviewed physical subproofs\n",
+      "stderrBytesRetained": 70,
+      "stderrTruncated": false,
       "stdout": "",
+      "stdoutBytesRetained": 0,
+      "stdoutTruncated": false,
       "timedOut": false
     },
     "prepared": {
@@ -215,11 +223,11 @@
         },
         "build": {
           "identity": "c39-controller-build",
-          "path": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-zvlnqi25/controller-fixture/docs/temp/probes/audio-runtime-c39-customer-mission/artifact-0.bin",
+          "path": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-7i4e1kpw/controller-fixture/docs/temp/probes/audio-runtime-c39-customer-mission/artifact-0.bin",
           "sha256": "f1a93b68b067e3052a1d22e04b121d9a39db3a686f48cf4a5a811c1450707ec9"
         },
-        "directory": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-zvlnqi25/controller-fixture/docs/temp/probes/audio-runtime-c39-customer-mission",
-        "missionSha256": "4f08c1ac59a5f4beea773743efec934ddd182baa446a6341080a221b61d5376e",
+        "directory": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-7i4e1kpw/controller-fixture/docs/temp/probes/audio-runtime-c39-customer-mission",
+        "missionSha256": "6873794dbd13141fdb7dd5a0e56eb8120520cdcb959b0a1232fc90279cf91b09",
         "status": "ready",
         "validationWorkName": "audio-runtime-c39-customer-mission"
       },
@@ -270,11 +278,11 @@
         },
         "build": {
           "identity": "c39-controller-build",
-          "path": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-zvlnqi25/controller-fixture/docs/temp/probes/audio-runtime-c39-engineering-mission/artifact-0.bin",
+          "path": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-7i4e1kpw/controller-fixture/docs/temp/probes/audio-runtime-c39-engineering-mission/artifact-0.bin",
           "sha256": "f1a93b68b067e3052a1d22e04b121d9a39db3a686f48cf4a5a811c1450707ec9"
         },
-        "directory": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-zvlnqi25/controller-fixture/docs/temp/probes/audio-runtime-c39-engineering-mission",
-        "missionSha256": "f9aca3c644a142061203f3a8d0c7a8f43d4fadc1cf21124b8436ef990ebc20bf",
+        "directory": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-7i4e1kpw/controller-fixture/docs/temp/probes/audio-runtime-c39-engineering-mission",
+        "missionSha256": "79518f400a84b28331590f0dbcc0d5ef4d54be79d9046fb82a6c37730a3ff094",
         "status": "ready",
         "validationWorkName": "audio-runtime-c39-engineering-mission"
       }
@@ -287,6 +295,23 @@
       "factory/projects/audio-runtime/request.md": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
       "factory/projects/audio-runtime/source-plan.md": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
     },
+    "protectedHashesAfter": {
+      "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+      "docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
+      "factory/projects/audio-runtime/acceptance.md": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5",
+      "factory/projects/audio-runtime/manifest.json": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+      "factory/projects/audio-runtime/request.md": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
+      "factory/projects/audio-runtime/source-plan.md": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+    },
+    "protectedHashesBefore": {
+      "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+      "docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
+      "factory/projects/audio-runtime/acceptance.md": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5",
+      "factory/projects/audio-runtime/manifest.json": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+      "factory/projects/audio-runtime/request.md": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
+      "factory/projects/audio-runtime/source-plan.md": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+    },
+    "protectedHashesUnchanged": true,
     "status": {
       "amendment": {
         "authority": {
@@ -335,7 +360,94 @@
       "status": "present"
     }
   },
-  "durationSeconds": 2.094804,
+  "durationSeconds": 2.986903,
+  "inputProvenance": {
+    "controllerScripts": {
+      "factory/scripts/prepare-validation.py": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/scripts/prepare-validation.py",
+        "sha256": "6678557b6f0ae034743b55997cf8c54c7562c5f059b817fc50231ffce88d13d0"
+      },
+      "factory/scripts/project-control.py": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/scripts/project-control.py",
+        "sha256": "235cdf3027b9670cfa2eb448ed87e725fffb5abfcaa74963705081526ad165a5"
+      },
+      "factory/scripts/project_scope_amendment.py": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/scripts/project_scope_amendment.py",
+        "sha256": "92777917e62e07018524a54973810755237fd046dad1c7bd399cc4594edb36c6"
+      }
+    },
+    "probeScript": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/probe.py",
+      "sha256": "ed14d94593d427c2860b63faec3e2277796065d8b692a77461a6d1aa256e8d5d"
+    },
+    "replayInputs": [
+      {
+        "config": {
+          "files": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
+          },
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/evidence/public-regression-1789022761931054000/audio-tool/config"
+        },
+        "fixture": {
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/artifact-3.json",
+          "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+        },
+        "label": "audio-tool"
+      },
+      {
+        "config": {
+          "files": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
+          },
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/evidence/public-regression-1789022761931054000/interruption/config"
+        },
+        "fixture": {
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/artifact-4.json",
+          "sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206"
+        },
+        "label": "interruption"
+      }
+    ],
+    "reviewedInputs": {
+      "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json",
+        "sha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960"
+      },
+      "docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json",
+        "sha256": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413"
+      }
+    },
+    "sourceInputs": {
+      "factory/projects/audio-runtime/acceptance.md": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/projects/audio-runtime/acceptance.md",
+        "sha256": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5"
+      },
+      "factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json",
+        "sha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa"
+      },
+      "factory/projects/audio-runtime/manifest.json": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/projects/audio-runtime/manifest.json",
+        "sha256": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d"
+      },
+      "factory/projects/audio-runtime/request.md": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/projects/audio-runtime/request.md",
+        "sha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0"
+      },
+      "factory/projects/audio-runtime/source-plan.md": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/projects/audio-runtime/source-plan.md",
+        "sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+      }
+    },
+    "sourceRepository": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment",
+    "sourceRevision": "1326a586dda6a694d22e1b1909349eea3199ea9a",
+    "yui": {
+      "path": "/tmp/audio-runtime-c39-yui-1326a58",
+      "sha256After": "2d48f35c1876d801eabd1fbe0ff8b18c2686e4a947b308fce3a5d1994b61f6db",
+      "sha256Before": "2d48f35c1876d801eabd1fbe0ff8b18c2686e4a947b308fce3a5d1994b61f6db"
+    }
+  },
   "limits": {
     "childSeconds": 60,
     "realtimeSeconds": 0,
@@ -349,7 +461,7 @@
   ],
   "schema": "audio-runtime-c39-controller-probe.v1",
   "sourceRepository": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment",
-  "sourceRevision": "789c7031b1068e1acea09d1cbadce5bbe31adb04",
+  "sourceRevision": "1326a586dda6a694d22e1b1909349eea3199ea9a",
   "status": "ACCEPTED",
   "timeoutControl": {
     "cleanup": "term",
@@ -358,84 +470,105 @@
       "-c",
       "import time; time.sleep(120)"
     ],
-    "durationSeconds": 0.503991,
+    "durationSeconds": 0.503481,
     "exitCode": -15,
     "reaped": true,
     "stderr": "",
+    "stderrBytesRetained": 0,
+    "stderrTruncated": false,
     "stdout": "",
+    "stdoutBytesRetained": 0,
+    "stdoutTruncated": false,
     "timedOut": true
   },
   "yui": {
     "help": {
       "cleanup": "none",
       "command": [
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/artifact-0",
+        "/tmp/audio-runtime-c39-yui-1326a58",
         "--help"
       ],
-      "durationSeconds": 0.020526,
+      "durationSeconds": 0.56928,
       "exitCode": 0,
       "reaped": true,
       "stderr": "",
+      "stderrBytesRetained": 0,
+      "stderrTruncated": false,
       "stdout": "Yui is a cross-platform voice-agent CLI for realtime conversations, local tools, recordings, replay, and structured WebMCP browser control.\n\nSet an OpenAI key, then start the default microphone and speaker session:\n\n  export OPENAI_API_KEY=\"your-openai-api-key\"\n  yui session\n\nRun `yui session --help` for audio, model, voice, recording, and browser options.\n\nUsage:\n  yui [command]\n\nExamples:\n  # Start a voice session in the current project\n  yui --workdir \"$PWD\" session\n\n  # Open a page and expose its WebMCP tools\n  yui session --browser-tools webmcp --browser-open https://example.com/\n\nAvailable Commands:\n  ask         Ask the agent a question and get a response\n  chat        Start an interactive chat session with the agent\n  completion  Generate the autocompletion script for the specified shell\n  config      Configuration management commands\n  devices     Discover available audio devices\n  help        Help about any command\n  interaction Inspect provider-neutral gateway interactions\n  media       Inspect external media sources\n  probe       Run deterministic offline probes\n  room        Run participant rooms\n  session     Run or manage agent sessions\n  tool        Invoke a tool directly by name and key=value args (for debugging)\n  webmcp      Inspect WebMCP browser readiness\n\nFlags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n  -h, --help                     help for yui\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui [command] --help\" for more information about a command.\n",
+      "stdoutBytesRetained": 1906,
+      "stdoutTruncated": false,
       "timedOut": false
     },
-    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/artifact-0",
+    "path": "/tmp/audio-runtime-c39-yui-1326a58",
     "replays": {
       "audio-tool": {
         "capture": {
           "cleanup": "none",
           "command": [
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/artifact-0",
+            "/tmp/audio-runtime-c39-yui-1326a58",
             "-C",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/config",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/config",
             "session",
             "--replay",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/audio-tool.fixture.json",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/audio-tool.fixture.json",
             "--audio-out",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/rendered.pcm",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/rendered.pcm",
             "--record-dir",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/bundle",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/bundle",
             "--trace-audio",
             "--workdir",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool",
             "--allow-path",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool",
             "--max-duration",
             "60s"
           ],
-          "durationSeconds": 0.146006,
+          "durationSeconds": 0.071946,
           "exitCode": 0,
           "reaped": true,
           "stderr": "",
-          "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+          "stderrBytesRetained": 0,
+          "stderrTruncated": false,
+          "stdout": "Filesystem scope: workdir=/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+          "stdoutBytesRetained": 655,
+          "stdoutTruncated": false,
           "timedOut": false
         },
-        "config": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c27-probe-acceptance/fresh-evidence/c21-runs/verify-20260910T091938Z-611/parity-audio-tool/config",
+        "config": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/evidence/public-regression-1789022761931054000/audio-tool/config",
         "configHashes": {
-          "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
-          "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
+        },
+        "configSourceHashes": {
+          "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
         },
         "directoryReplay": {
           "configHashes": {
-            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
-            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
+          },
+          "configPath": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/evidence/public-regression-1789022761931054000/audio-tool/config",
+          "configSourceHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
           },
           "phrase": "Replay verified: 18 wire events, 1 tool calls",
           "result": {
             "cleanup": "none",
             "command": [
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/artifact-0",
+              "/tmp/audio-runtime-c39-yui-1326a58",
               "-C",
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/audio-tool-directory-replay/config",
+              "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/audio-tool-directory-replay/config",
               "session",
               "replay",
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/bundle"
+              "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/bundle"
             ],
-            "durationSeconds": 0.021846,
+            "durationSeconds": 0.036575,
             "exitCode": 0,
             "reaped": true,
             "stderr": "Replay verified: 18 wire events, 1 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+            "stderrBytesRetained": 108,
+            "stderrTruncated": false,
             "stdout": "strict replay continuation",
+            "stdoutBytesRetained": 26,
+            "stdoutTruncated": false,
             "timedOut": false
           }
         },
@@ -444,36 +577,43 @@
         "label": "audio-tool",
         "missingTimelineControl": {
           "configHashes": {
-            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
-            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
+          },
+          "configPath": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/evidence/public-regression-1789022761931054000/audio-tool/config",
+          "configSourceHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
           },
           "expected": "nonzero missing timeline",
           "result": {
             "cleanup": "none",
             "command": [
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/artifact-0",
+              "/tmp/audio-runtime-c39-yui-1326a58",
               "-C",
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/audio-tool-missing-timeline-replay/config",
+              "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/audio-tool-missing-timeline-replay/config",
               "session",
               "replay",
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/audio-tool-missing-timeline-bundle"
+              "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/audio-tool-missing-timeline-bundle"
             ],
-            "durationSeconds": 0.026527,
+            "durationSeconds": 0.044824,
             "exitCode": 1,
             "reaped": true,
-            "stderr": "Error: replay bundle is incomplete: missing timeline.jsonl in /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/audio-tool-missing-timeline-bundle or /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/audio-tool-missing-timeline-bundle/audio-trace\n",
+            "stderr": "Error: replay bundle is incomplete: missing timeline.jsonl in /private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/audio-tool-missing-timeline-bundle or /private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/audio-tool-missing-timeline-bundle/audio-trace\n",
+            "stderrBytesRetained": 287,
+            "stderrTruncated": false,
             "stdout": "",
+            "stdoutBytesRetained": 0,
+            "stdoutTruncated": false,
             "timedOut": false
           }
         },
         "provider": {
           "bytes": 4800,
-          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/bundle/audio/out-000.pcm",
+          "path": "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/bundle/audio/out-000.pcm",
           "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
         },
         "rendered": {
           "bytes": 3200,
-          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/rendered.pcm",
+          "path": "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/rendered.pcm",
           "sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
         },
         "sessionLog": [
@@ -515,7 +655,7 @@
         ],
         "toolSideEffect": {
           "bytes": 23,
-          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-audio-tool/evidence/runs/exec-invocations-v4.log",
+          "path": "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-audio-tool/evidence/runs/exec-invocations-v4.log",
           "sha256": "f91134b50758e6d4418ab08f6a3afa9f2acceb91117c3f67d0db515b762eb43e"
         }
       },
@@ -527,57 +667,70 @@
         "capture": {
           "cleanup": "none",
           "command": [
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/artifact-0",
+            "/tmp/audio-runtime-c39-yui-1326a58",
             "-C",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/config",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/config",
             "session",
             "--replay",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/interruption.fixture.json",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/interruption.fixture.json",
             "--audio-out",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/rendered.pcm",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/rendered.pcm",
             "--record-dir",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/bundle",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/bundle",
             "--trace-audio",
             "--workdir",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption",
             "--allow-path",
-            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption",
+            "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption",
             "--max-duration",
             "60s"
           ],
-          "durationSeconds": 0.05032,
+          "durationSeconds": 0.075,
           "exitCode": 0,
           "reaped": true,
           "stderr": "",
-          "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n",
+          "stderrBytesRetained": 0,
+          "stderrTruncated": false,
+          "stdout": "Filesystem scope: workdir=/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n",
+          "stdoutBytesRetained": 567,
+          "stdoutTruncated": false,
           "timedOut": false
         },
-        "config": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c27-probe-acceptance/fresh-evidence/c21-runs/verify-20260910T091938Z-611/parity-interruption/config",
+        "config": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/evidence/public-regression-1789022761931054000/interruption/config",
         "configHashes": {
-          "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
-          "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
+        },
+        "configSourceHashes": {
+          "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
         },
         "directoryReplay": {
           "configHashes": {
-            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
-            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
+          },
+          "configPath": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/evidence/public-regression-1789022761931054000/interruption/config",
+          "configSourceHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
           },
           "phrase": "Replay verified: 15 wire events, 0 tool calls",
           "result": {
             "cleanup": "none",
             "command": [
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/artifact-0",
+              "/tmp/audio-runtime-c39-yui-1326a58",
               "-C",
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/interruption-directory-replay/config",
+              "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/interruption-directory-replay/config",
               "session",
               "replay",
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/bundle"
+              "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/bundle"
             ],
-            "durationSeconds": 0.021321,
+            "durationSeconds": 0.036958,
             "exitCode": 0,
             "reaped": true,
             "stderr": "Replay verified: 15 wire events, 0 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+            "stderrBytesRetained": 108,
+            "stderrTruncated": false,
             "stdout": "",
+            "stdoutBytesRetained": 0,
+            "stdoutTruncated": false,
             "timedOut": false
           }
         },
@@ -590,36 +743,43 @@
         "label": "interruption",
         "missingTimelineControl": {
           "configHashes": {
-            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
-            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
+          },
+          "configPath": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/evidence/public-regression-1789022761931054000/interruption/config",
+          "configSourceHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
           },
           "expected": "nonzero missing timeline",
           "result": {
             "cleanup": "none",
             "command": [
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c32-capture-energy-vertical-probe/artifact-0",
+              "/tmp/audio-runtime-c39-yui-1326a58",
               "-C",
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/interruption-missing-timeline-replay/config",
+              "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/interruption-missing-timeline-replay/config",
               "session",
               "replay",
-              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/interruption-missing-timeline-bundle"
+              "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/interruption-missing-timeline-bundle"
             ],
-            "durationSeconds": 0.021912,
+            "durationSeconds": 0.045269,
             "exitCode": 1,
             "reaped": true,
-            "stderr": "Error: replay bundle is incomplete: missing timeline.jsonl in /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/interruption-missing-timeline-bundle or /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/interruption-missing-timeline-bundle/audio-trace\n",
+            "stderr": "Error: replay bundle is incomplete: missing timeline.jsonl in /private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/interruption-missing-timeline-bundle or /private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/interruption-missing-timeline-bundle/audio-trace\n",
+            "stderrBytesRetained": 295,
+            "stderrTruncated": false,
             "stdout": "",
+            "stdoutBytesRetained": 0,
+            "stdoutTruncated": false,
             "timedOut": false
           }
         },
         "provider": {
           "bytes": 3840,
-          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/bundle/audio/out-000.pcm",
+          "path": "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/bundle/audio/out-000.pcm",
           "sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"
         },
         "rendered": {
           "bytes": 3360,
-          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-replay/public-replay-interruption/rendered.pcm",
+          "path": "/private/tmp/audio-runtime-c39-probe-1326a58/public-replay-interruption/rendered.pcm",
           "sha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff"
         },
         "sessionLog": [
@@ -662,7 +822,7 @@
         ]
       }
     },
-    "sha256After": "db1f7de4881d9868859e546a2f66b0cd35e60ac5682c323b445254f3c2aaf628",
-    "sha256Before": "db1f7de4881d9868859e546a2f66b0cd35e60ac5682c323b445254f3c2aaf628"
+    "sha256After": "2d48f35c1876d801eabd1fbe0ff8b18c2686e4a947b308fce3a5d1994b61f6db",
+    "sha256Before": "2d48f35c1876d801eabd1fbe0ff8b18c2686e4a947b308fce3a5d1994b61f6db"
   }
 }
