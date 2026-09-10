@@ -1,0 +1,81 @@
+{
+  "binary": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay/docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/yui",
+  "binary_sha256": "682560c0528f537d4a1d5c8277a9d4b7af17fa55c37bc0bc58c0e54e39de906e",
+  "case": "ask",
+  "evidence": {
+    "capture_sha256": "1cab46a9097d76271af8db900afdf1c571868d070f9a820820c78b32bf34a468",
+    "record_stdout": "c18 local answer",
+    "replay_stdout": "c18 local answer"
+  },
+  "results": [
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay/docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/yui",
+        "-C",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-xre5jqyj/config",
+        "ask",
+        "--stream",
+        "--system-prompt",
+        "none",
+        "--no-system-information",
+        "--provider",
+        "local",
+        "--model",
+        "c18-capture-model",
+        "--base-url",
+        "http://127.0.0.1:63538/v1",
+        "--record",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-xre5jqyj/capture.json",
+        "c18 deterministic ask"
+      ],
+      "cleanup_error": null,
+      "cleanup_timed_out": false,
+      "cleanup_timeout_seconds": null,
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-xre5jqyj",
+      "duration_seconds": 0.375661,
+      "exit_code": 0,
+      "label": "ask/record-local-sse",
+      "passed": true,
+      "stderr": "",
+      "stdout": "c18 local answer",
+      "timed_out": false,
+      "timeout_seconds": 50.0
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c18-public-strict-replay/docs/temp/projects/audio-runtime/audio-runtime-c18-public-strict-replay/yui",
+        "-C",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-xre5jqyj/config",
+        "ask",
+        "--stream",
+        "--system-prompt",
+        "none",
+        "--no-system-information",
+        "--provider",
+        "local",
+        "--model",
+        "c18-capture-model",
+        "--base-url",
+        "http://127.0.0.1:63538/v1",
+        "--replay",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-xre5jqyj/capture.json",
+        "c18 deterministic ask"
+      ],
+      "cleanup_error": null,
+      "cleanup_timed_out": false,
+      "cleanup_timeout_seconds": null,
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c18-ask-xre5jqyj",
+      "duration_seconds": 0.022372,
+      "exit_code": 0,
+      "label": "ask/replay-after-helper-stop",
+      "passed": true,
+      "stderr": "",
+      "stdout": "c18 local answer",
+      "timed_out": false,
+      "timeout_seconds": 50.0
+    }
+  ],
+  "source_revision": "0059633bc0f9d613f082544a6d5daed897ff2e83",
+  "status": "passed",
+  "timeout_seconds": 50.0
+}

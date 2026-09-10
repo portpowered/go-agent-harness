@@ -1,0 +1,62 @@
+{
+  "raw_job_response": {
+    "id": 102426027492,
+    "run_id": 34339298146,
+    "workflow_name": "CI",
+    "head_branch": "codex/audio-runtime-c18-public-strict-replay",
+    "run_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/runs/34339298146",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOSy_FQs8AAAAX2REl5A",
+    "head_sha": "8f769888c7621d04d1fd13636592c327636541e1",
+    "url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102426027492",
+    "html_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34339298146/job/102426027492",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-09-09T10:16:05Z",
+    "started_at": "2026-09-09T10:16:07Z",
+    "completed_at": "2026-09-09T10:25:18Z",
+    "name": "CI (coverage)",
+    "steps": [
+      {"name": "Set up job", "status": "completed", "conclusion": "success", "number": 1, "started_at": "2026-09-09T10:16:08Z", "completed_at": "2026-09-09T10:16:09Z"},
+      {"name": "Check out repository", "status": "completed", "conclusion": "success", "number": 2, "started_at": "2026-09-09T10:16:09Z", "completed_at": "2026-09-09T10:16:12Z"},
+      {"name": "Set up Go", "status": "completed", "conclusion": "success", "number": 3, "started_at": "2026-09-09T10:16:12Z", "completed_at": "2026-09-09T10:16:16Z"},
+      {"name": "Run coverage profiles and coverage gate", "status": "completed", "conclusion": "failure", "number": 4, "started_at": "2026-09-09T10:16:16Z", "completed_at": "2026-09-09T10:25:15Z"},
+      {"name": "Post Set up Go", "status": "skipped", "conclusion": "skipped", "number": 7, "started_at": "2026-09-09T10:25:15Z", "completed_at": "2026-09-09T10:25:15Z"},
+      {"name": "Post Check out repository", "status": "completed", "conclusion": "success", "number": 8, "started_at": "2026-09-09T10:25:15Z", "completed_at": "2026-09-09T10:25:16Z"},
+      {"name": "Complete job", "status": "completed", "conclusion": "success", "number": 9, "started_at": "2026-09-09T10:25:16Z", "completed_at": "2026-09-09T10:25:16Z"}
+    ],
+    "check_run_url": "https://api.github.com/repos/portpowered/go-agent-harness/check-runs/102426027492",
+    "labels": ["ubuntu-latest"],
+    "runner_id": 1000208604,
+    "runner_name": "GitHub Actions 1000208604",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "board_feedback": "CI checks failed for PR #410 at head 8f769888c7621d04d1fd13636592c327636541e1: required checks failed on current head 8f769888c7621d04d1fd13636592c327636541e1: CI (coverage)=FAILURE; checks: CI (coverage)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34339298146/job/102426027492). Return this task to the executor with the listed failures.",
+  "full_log_command": "gh api repos/portpowered/go-agent-harness/actions/jobs/102426027492/logs",
+  "extracted_failure": [
+    "coverage gate found coverage floor violations:",
+    "- github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay: expected minimum 95.00%, actual 71.90%, delta -23.10%",
+    "make: *** [Makefile:303: coverage] Error 1"
+  ],
+  "full_log_observation": {
+    "line_count": 437,
+    "last_failure_lines": [
+      "2026-09-09T10:25:15.8516487Z coverage gate found coverage floor violations:",
+      "2026-09-09T10:25:15.8517601Z - github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay: expected minimum 95.00%, actual 71.90%, delta -23.10%",
+      "2026-09-09T10:25:15.8518582Z exit status 1",
+      "2026-09-09T10:25:15.8538719Z make: *** [Makefile:303: coverage] Error 1"
+    ],
+    "preceding_checks": "All package test output completed successfully; no additional C18 replay test failure was reported in the full log."
+  },
+  "repair": {
+    "source": "go-agent-runtime/services/replay/service_test.go",
+    "change": "Add public-boundary regressions for exact completion accounting and dial/read/write/close/tool failure handling, including nil receivers and first-failure retention.",
+    "validation": [
+      "GOWORK=off go test ./services/replay -tags=nomicrophone -coverprofile=/tmp/c18-public-only-after.out: 97.8%",
+      "GOWORK=off go test ./... -tags=nomicrophone -coverpkg=./... -coverprofile=/tmp/c18-runtime-module-after.out: all runtime packages pass; replay service functions 100.0%",
+      "go test ./services/replay/... -count=1 -timeout=120s",
+      "go test -race ./services/replay/... -count=1 -timeout=120s"
+    ]
+  }
+}
