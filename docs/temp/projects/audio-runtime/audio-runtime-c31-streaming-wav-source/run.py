@@ -643,6 +643,16 @@ def timeout_control() -> None:
         ),
     }
     save_run("timeout-control", result)
+    summary = {
+        "schema": "audio-runtime-c31-timeout-control.v1",
+        "source": source_identity(),
+        "tested_source_revision": source_identity(),
+        "timeout_seconds": TIMEOUT_CONTROL_SECONDS,
+        "cleanup_timeout_seconds": PROCESS_CLEANUP_TIMEOUT_SECONDS,
+        "result": result,
+        "pass": result["control"]["pass"],
+    }
+    (HERE / "timeout-control.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     if not result["control"]["pass"]:
         raise EvidenceError(f"timeout cleanup control failed: {result}")
 

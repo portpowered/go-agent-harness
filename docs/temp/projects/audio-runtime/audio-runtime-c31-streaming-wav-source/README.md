@@ -39,6 +39,8 @@ reports record exact source identity and are retained as task evidence when
 they are committed. `--timeout-control` uses a deterministic POSIX child that
 detaches while holding inherited pipes; it records the signal, bounded reap,
 pipe closure, and wall-time evidence without waiting for the detached holder.
+The committed `timeout-control.json` is the exact-source summary; detailed
+stdout/stderr and cleanup records remain under the ignored `runs/` evidence.
 
 The JSON reports identify the clean merged implementation revision that was
 tested as `tested_source_revision`

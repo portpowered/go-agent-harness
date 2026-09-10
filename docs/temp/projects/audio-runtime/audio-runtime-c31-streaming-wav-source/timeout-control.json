@@ -1,0 +1,38 @@
+{
+  "schema": "audio-runtime-c31-timeout-control.v1",
+  "source": "036b4a7b20efe31779b1387003abf3b067568f4a",
+  "tested_source_revision": "036b4a7b20efe31779b1387003abf3b067568f4a",
+  "timeout_seconds": 0.1,
+  "cleanup_timeout_seconds": 0.25,
+  "result": {
+    "name": "detached-pipe-timeout-control",
+    "argv": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-c",
+      "import os, time\ndetached = os.fork()\nif detached == 0:\n    os.setsid()\n    time.sleep(2.0)\n    os._exit(0)\nwhile True:\n    time.sleep(1)\n"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source",
+    "exit_code": -9,
+    "elapsed_ms": 103,
+    "stdout": "",
+    "stderr": "",
+    "timed_out": true,
+    "timeout_seconds": 0.1,
+    "cleanup_timeout_seconds": 0.25,
+    "cleanup": {
+      "attempted": true,
+      "signal": "SIGKILL",
+      "signal_sent": true,
+      "reaped": true,
+      "reap_timed_out": false,
+      "pipes_closed": true,
+      "elapsed_ms": 1
+    },
+    "control": {
+      "detached_pipe_holder_seconds": 2.0,
+      "max_elapsed_ms": 850,
+      "pass": true
+    }
+  },
+  "pass": true
+}
