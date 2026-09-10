@@ -1,0 +1,807 @@
+CI (static)	Set up job	﻿2026-09-10T04:08:05.8240444Z Current runner version: '2.337.0'
+CI (static)	Set up job	2026-09-10T04:08:05.8266969Z ##[group]Runner Image Provisioner
+CI (static)	Set up job	2026-09-10T04:08:05.8267961Z Hosted Compute Agent
+CI (static)	Set up job	2026-09-10T04:08:05.8268589Z Version: 20260828.587
+CI (static)	Set up job	2026-09-10T04:08:05.8269213Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+CI (static)	Set up job	2026-09-10T04:08:05.8270020Z Build Date: 2026-08-28T16:44:25Z
+CI (static)	Set up job	2026-09-10T04:08:05.8270711Z Worker ID: {d079a4f4-950e-4746-aac0-9ad9450ae2a8}
+CI (static)	Set up job	2026-09-10T04:08:05.8271536Z Azure Region: northcentralus
+CI (static)	Set up job	2026-09-10T04:08:05.8272148Z ##[endgroup]
+CI (static)	Set up job	2026-09-10T04:08:05.8273617Z ##[group]Operating System
+CI (static)	Set up job	2026-09-10T04:08:05.8274370Z Ubuntu
+CI (static)	Set up job	2026-09-10T04:08:05.8274900Z 24.04.4
+CI (static)	Set up job	2026-09-10T04:08:05.8275438Z LTS
+CI (static)	Set up job	2026-09-10T04:08:05.8275992Z ##[endgroup]
+CI (static)	Set up job	2026-09-10T04:08:05.8276540Z ##[group]Runner Image
+CI (static)	Set up job	2026-09-10T04:08:05.8277541Z Image: ubuntu-24.04
+CI (static)	Set up job	2026-09-10T04:08:05.8278124Z Version: 20260831.293.1
+CI (static)	Set up job	2026-09-10T04:08:05.8279271Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260831.293/images/ubuntu/Ubuntu2404-Readme.md
+CI (static)	Set up job	2026-09-10T04:08:05.8281028Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260831.293
+CI (static)	Set up job	2026-09-10T04:08:05.8282049Z ##[endgroup]
+CI (static)	Set up job	2026-09-10T04:08:05.8283176Z ##[group]GITHUB_TOKEN Permissions
+CI (static)	Set up job	2026-09-10T04:08:05.8285225Z Contents: read
+CI (static)	Set up job	2026-09-10T04:08:05.8285853Z Metadata: read
+CI (static)	Set up job	2026-09-10T04:08:05.8286482Z ##[endgroup]
+CI (static)	Set up job	2026-09-10T04:08:05.8288967Z Secret source: Actions
+CI (static)	Set up job	2026-09-10T04:08:05.8289900Z Cache mode: write
+CI (static)	Set up job	2026-09-10T04:08:05.8290833Z Prepare workflow directory
+CI (static)	Set up job	2026-09-10T04:08:05.8742588Z Prepare all required actions
+CI (static)	Set up job	2026-09-10T04:08:05.8814154Z Getting action download info
+CI (static)	Set up job	2026-09-10T04:08:06.1313891Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+CI (static)	Set up job	2026-09-10T04:08:06.2320150Z Download action repository 'actions/setup-go@v5' (SHA:40f1582b2485089dde7abd97c1529aa768e1baff)
+CI (static)	Set up job	2026-09-10T04:08:06.5905730Z Download action repository 'actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809' (SHA:0400d5f644dc74513175e3cd8d07132dd4860809)
+CI (static)	Set up job	2026-09-10T04:08:06.8940134Z Complete job name: CI (static)
+CI (static)	Check out repository	﻿2026-09-10T04:08:06.9920570Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+CI (static)	Check out repository	2026-09-10T04:08:06.9931941Z ##[group]Run actions/checkout@v4
+CI (static)	Check out repository	2026-09-10T04:08:06.9933187Z with:
+CI (static)	Check out repository	2026-09-10T04:08:06.9933970Z   fetch-depth: 0
+CI (static)	Check out repository	2026-09-10T04:08:06.9934891Z   repository: portpowered/go-agent-harness
+CI (static)	Check out repository	2026-09-10T04:08:06.9944603Z   token: ***
+CI (static)	Check out repository	2026-09-10T04:08:06.9945429Z   ssh-strict: true
+CI (static)	Check out repository	2026-09-10T04:08:06.9946251Z   ssh-user: git
+CI (static)	Check out repository	2026-09-10T04:08:06.9947222Z   persist-credentials: true
+CI (static)	Check out repository	2026-09-10T04:08:06.9948155Z   clean: true
+CI (static)	Check out repository	2026-09-10T04:08:06.9948992Z   sparse-checkout-cone-mode: true
+CI (static)	Check out repository	2026-09-10T04:08:06.9950005Z   fetch-tags: false
+CI (static)	Check out repository	2026-09-10T04:08:06.9950846Z   show-progress: true
+CI (static)	Check out repository	2026-09-10T04:08:06.9951725Z   lfs: false
+CI (static)	Check out repository	2026-09-10T04:08:06.9952525Z   submodules: false
+CI (static)	Check out repository	2026-09-10T04:08:06.9953441Z   set-safe-directory: true
+CI (static)	Check out repository	2026-09-10T04:08:06.9954414Z   allow-unsafe-pr-checkout: false
+CI (static)	Check out repository	2026-09-10T04:08:06.9955697Z ##[endgroup]
+CI (static)	Check out repository	2026-09-10T04:08:07.1024147Z Syncing repository: portpowered/go-agent-harness
+CI (static)	Check out repository	2026-09-10T04:08:07.1027267Z ##[group]Getting Git version info
+CI (static)	Check out repository	2026-09-10T04:08:07.1028841Z Working directory is '/home/runner/work/go-agent-harness/go-agent-harness'
+CI (static)	Check out repository	2026-09-10T04:08:07.1031049Z [command]/usr/bin/git version
+CI (static)	Check out repository	2026-09-10T04:08:07.1394520Z git version 2.55.0
+CI (static)	Check out repository	2026-09-10T04:08:07.1420955Z ##[endgroup]
+CI (static)	Check out repository	2026-09-10T04:08:07.1438669Z Temporarily overriding HOME='/home/runner/work/_temp/0c3c9122-ab35-4fbd-90a3-56a408d0188e' before making global git config changes
+CI (static)	Check out repository	2026-09-10T04:08:07.1442597Z Adding repository directory to the temporary git global config as a safe directory
+CI (static)	Check out repository	2026-09-10T04:08:07.1446766Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/go-agent-harness/go-agent-harness
+CI (static)	Check out repository	2026-09-10T04:08:07.1503885Z Deleting the contents of '/home/runner/work/go-agent-harness/go-agent-harness'
+CI (static)	Check out repository	2026-09-10T04:08:07.1513156Z ##[group]Initializing the repository
+CI (static)	Check out repository	2026-09-10T04:08:07.1518522Z [command]/usr/bin/git init /home/runner/work/go-agent-harness/go-agent-harness
+CI (static)	Check out repository	2026-09-10T04:08:07.1637122Z hint: Using 'master' as the name for the initial branch. This default branch name
+CI (static)	Check out repository	2026-09-10T04:08:07.1640365Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+CI (static)	Check out repository	2026-09-10T04:08:07.1643767Z hint: to use in all of your new repositories, which will suppress this warning,
+CI (static)	Check out repository	2026-09-10T04:08:07.1645903Z hint: call:
+CI (static)	Check out repository	2026-09-10T04:08:07.1647131Z hint:
+CI (static)	Check out repository	2026-09-10T04:08:07.1648409Z hint: 	git config --global init.defaultBranch <name>
+CI (static)	Check out repository	2026-09-10T04:08:07.1649777Z hint:
+CI (static)	Check out repository	2026-09-10T04:08:07.1651448Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+CI (static)	Check out repository	2026-09-10T04:08:07.1653919Z hint: 'development'. The just-created branch can be renamed via this command:
+CI (static)	Check out repository	2026-09-10T04:08:07.1655693Z hint:
+CI (static)	Check out repository	2026-09-10T04:08:07.1656916Z hint: 	git branch -m <name>
+CI (static)	Check out repository	2026-09-10T04:08:07.1658119Z hint:
+CI (static)	Check out repository	2026-09-10T04:08:07.1659488Z hint: Disable this message with "git config set advice.defaultBranchName false"
+CI (static)	Check out repository	2026-09-10T04:08:07.1663009Z Initialized empty Git repository in /home/runner/work/go-agent-harness/go-agent-harness/.git/
+CI (static)	Check out repository	2026-09-10T04:08:07.1668385Z [command]/usr/bin/git remote add origin https://github.com/portpowered/go-agent-harness
+CI (static)	Check out repository	2026-09-10T04:08:07.1716991Z ##[endgroup]
+CI (static)	Check out repository	2026-09-10T04:08:07.1719331Z ##[group]Disabling automatic garbage collection
+CI (static)	Check out repository	2026-09-10T04:08:07.1721356Z [command]/usr/bin/git config --local gc.auto 0
+CI (static)	Check out repository	2026-09-10T04:08:07.1765091Z ##[endgroup]
+CI (static)	Check out repository	2026-09-10T04:08:07.1767795Z ##[group]Setting up auth
+CI (static)	Check out repository	2026-09-10T04:08:07.1771784Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+CI (static)	Check out repository	2026-09-10T04:08:07.1813495Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+CI (static)	Check out repository	2026-09-10T04:08:07.2198004Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+CI (static)	Check out repository	2026-09-10T04:08:07.2237159Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+CI (static)	Check out repository	2026-09-10T04:08:07.2463802Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+CI (static)	Check out repository	2026-09-10T04:08:07.2505607Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+CI (static)	Check out repository	2026-09-10T04:08:07.2738695Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+CI (static)	Check out repository	2026-09-10T04:08:07.2777750Z ##[endgroup]
+CI (static)	Check out repository	2026-09-10T04:08:07.2779615Z ##[group]Fetching the repository
+CI (static)	Check out repository	2026-09-10T04:08:07.2790448Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +d8ee6d8a9d0c3c56b1589894a73a57b008daa204:refs/remotes/pull/426/merge
+CI (static)	Check out repository	2026-09-10T04:08:11.1193560Z From https://github.com/portpowered/go-agent-harness
+CI (static)	Check out repository	2026-09-10T04:08:11.1199197Z  * [new branch]        audio-input-rate-24k                     -> origin/audio-input-rate-24k
+CI (static)	Check out repository	2026-09-10T04:08:11.1200475Z  * [new branch]        ci-coverage-gate-ergonomics              -> origin/ci-coverage-gate-ergonomics
+CI (static)	Check out repository	2026-09-10T04:08:11.1202005Z  * [new branch]        ci-executable-prepush-gate               -> origin/ci-executable-prepush-gate
+CI (static)	Check out repository	2026-09-10T04:08:11.1202875Z  * [new branch]        ci-parallelize-jobs                      -> origin/ci-parallelize-jobs
+CI (static)	Check out repository	2026-09-10T04:08:11.1203717Z  * [new branch]        ci-single-coverage-pass-and-fast-tools   -> origin/ci-single-coverage-pass-and-fast-tools
+CI (static)	Check out repository	2026-09-10T04:08:11.1290021Z  * [new branch]        codex/audio-runtime-c01-baseline         -> origin/codex/audio-runtime-c01-baseline
+CI (static)	Check out repository	2026-09-10T04:08:11.1292516Z  * [new branch]        codex/audio-runtime-c04-baseline-publish-recovery -> origin/codex/audio-runtime-c04-baseline-publish-recovery
+CI (static)	Check out repository	2026-09-10T04:08:11.1294515Z  * [new branch]        codex/audio-runtime-c07-session-update-feedback-recovery -> origin/codex/audio-runtime-c07-session-update-feedback-recovery
+CI (static)	Check out repository	2026-09-10T04:08:11.1296369Z  * [new branch]        codex/audio-runtime-c08-recorded-bundle-roundtrip -> origin/codex/audio-runtime-c08-recorded-bundle-roundtrip
+CI (static)	Check out repository	2026-09-10T04:08:11.1298456Z  * [new branch]        codex/audio-runtime-c09-baseline-history-continuity -> origin/codex/audio-runtime-c09-baseline-history-continuity
+CI (static)	Check out repository	2026-09-10T04:08:11.1300488Z  * [new branch]        codex/audio-runtime-c10-preserve-rename-validation -> origin/codex/audio-runtime-c10-preserve-rename-validation
+CI (static)	Check out repository	2026-09-10T04:08:11.1302019Z  * [new branch]        codex/audio-runtime-c11-hermetic-package-profile -> origin/codex/audio-runtime-c11-hermetic-package-profile
+CI (static)	Check out repository	2026-09-10T04:08:11.1303107Z  * [new branch]        codex/audio-runtime-c12-interruption-replay-progress -> origin/codex/audio-runtime-c12-interruption-replay-progress
+CI (static)	Check out repository	2026-09-10T04:08:11.1304164Z  * [new branch]        codex/audio-runtime-c13-recorded-pcm-integrity -> origin/codex/audio-runtime-c13-recorded-pcm-integrity
+CI (static)	Check out repository	2026-09-10T04:08:11.1305442Z  * [new branch]        codex/audio-runtime-c14-replay-boundary-audit -> origin/codex/audio-runtime-c14-replay-boundary-audit
+CI (static)	Check out repository	2026-09-10T04:08:11.1306376Z  * [new branch]        codex/audio-runtime-c15-relative-bundle-path -> origin/codex/audio-runtime-c15-relative-bundle-path
+CI (static)	Check out repository	2026-09-10T04:08:11.1307747Z  * [new branch]        codex/audio-runtime-c16-sample-only-device-sink -> origin/codex/audio-runtime-c16-sample-only-device-sink
+CI (static)	Check out repository	2026-09-10T04:08:11.1308691Z  * [new branch]        codex/audio-runtime-c17-canonical-clock-pong -> origin/codex/audio-runtime-c17-canonical-clock-pong
+CI (static)	Check out repository	2026-09-10T04:08:11.1309567Z  * [new branch]        codex/audio-runtime-c18-public-strict-replay -> origin/codex/audio-runtime-c18-public-strict-replay
+CI (static)	Check out repository	2026-09-10T04:08:11.1311116Z  * [new branch]        codex/audio-runtime-c19-bounded-conversation-summary -> origin/codex/audio-runtime-c19-bounded-conversation-summary
+CI (static)	Check out repository	2026-09-10T04:08:11.1312880Z  * [new branch]        codex/audio-runtime-c20-bounded-recording-spools -> origin/codex/audio-runtime-c20-bounded-recording-spools
+CI (static)	Check out repository	2026-09-10T04:08:11.1313938Z  * [new branch]        codex/audio-runtime-c21-correlated-device-consumption -> origin/codex/audio-runtime-c21-correlated-device-consumption
+CI (static)	Check out repository	2026-09-10T04:08:11.1314995Z  * [new branch]        codex/audio-runtime-c22-config-permission-causal-repair -> origin/codex/audio-runtime-c22-config-permission-causal-repair
+CI (static)	Check out repository	2026-09-10T04:08:11.1316102Z  * [new branch]        codex/audio-runtime-c23-long-session-tool-characterization -> origin/codex/audio-runtime-c23-long-session-tool-characterization
+CI (static)	Check out repository	2026-09-10T04:08:11.1317423Z  * [new branch]        codex/audio-runtime-c24-ci-conflict-return -> origin/codex/audio-runtime-c24-ci-conflict-return
+CI (static)	Check out repository	2026-09-10T04:08:11.1318412Z  * [new branch]        codex/audio-runtime-c25-audio-device-boundary-diagnosis -> origin/codex/audio-runtime-c25-audio-device-boundary-diagnosis
+CI (static)	Check out repository	2026-09-10T04:08:11.1319362Z  * [new branch]        codex/audio-runtime-c26-shared-pcm-mixing -> origin/codex/audio-runtime-c26-shared-pcm-mixing
+CI (static)	Check out repository	2026-09-10T04:08:11.1320259Z  * [new branch]        codex/audio-runtime-c27-headless-session-consumer -> origin/codex/audio-runtime-c27-headless-session-consumer
+CI (static)	Check out repository	2026-09-10T04:08:11.1321322Z  * [new branch]        codex/audio-runtime-c28-pcm-conversion-size-safety -> origin/codex/audio-runtime-c28-pcm-conversion-size-safety
+CI (static)	Check out repository	2026-09-10T04:08:11.1322430Z  * [new branch]        codex/audio-runtime-c29-bounded-validation-budget -> origin/codex/audio-runtime-c29-bounded-validation-budget
+CI (static)	Check out repository	2026-09-10T04:08:11.1323570Z  * [new branch]        codex/audio-runtime-c30-frame-dimension-safety -> origin/codex/audio-runtime-c30-frame-dimension-safety
+CI (static)	Check out repository	2026-09-10T04:08:11.1325567Z  * [new branch]        codex/audio-runtime-c31-streaming-wav-source -> origin/codex/audio-runtime-c31-streaming-wav-source
+CI (static)	Check out repository	2026-09-10T04:08:11.1327816Z  * [new branch]        codex/audio-runtime-c32-canonical-capture-sample-energy -> origin/codex/audio-runtime-c32-canonical-capture-sample-energy
+CI (static)	Check out repository	2026-09-10T04:08:11.1329647Z  * [new branch]        codex/audio-runtime-c33-bounded-raw-sink -> origin/codex/audio-runtime-c33-bounded-raw-sink
+CI (static)	Check out repository	2026-09-10T04:08:11.1331300Z  * [new branch]        codex/audio-runtime-c34-replay-terminal-integrity -> origin/codex/audio-runtime-c34-replay-terminal-integrity
+CI (static)	Check out repository	2026-09-10T04:08:11.1333032Z  * [new branch]        codex/audio-subsystem-device-gateway     -> origin/codex/audio-subsystem-device-gateway
+CI (static)	Check out repository	2026-09-10T04:08:11.1334478Z  * [new branch]        codex/audio-timing-coordination          -> origin/codex/audio-timing-coordination
+CI (static)	Check out repository	2026-09-10T04:08:11.1335781Z  * [new branch]        codex/browser-audio-regressions          -> origin/codex/browser-audio-regressions
+CI (static)	Check out repository	2026-09-10T04:08:11.1337388Z  * [new branch]        codex/fifo-tool-audio-playback           -> origin/codex/fifo-tool-audio-playback
+CI (static)	Check out repository	2026-09-10T04:08:11.1338688Z  * [new branch]        codex/fix-audio-out-live-session         -> origin/codex/fix-audio-out-live-session
+CI (static)	Check out repository	2026-09-10T04:08:11.1340046Z  * [new branch]        codex/fix-realtime-hold-tone-truncation  -> origin/codex/fix-realtime-hold-tone-truncation
+CI (static)	Check out repository	2026-09-10T04:08:11.1341360Z  * [new branch]        codex/live-playback-drain                -> origin/codex/live-playback-drain
+CI (static)	Check out repository	2026-09-10T04:08:11.1342840Z  * [new branch]        codex/managed-browser-stale-recovery     -> origin/codex/managed-browser-stale-recovery
+CI (static)	Check out repository	2026-09-10T04:08:11.1343629Z  * [new branch]        codex/realtime-2-1-lossless              -> origin/codex/realtime-2-1-lossless
+CI (static)	Check out repository	2026-09-10T04:08:11.1344360Z  * [new branch]        codex/realtime-timing-harness            -> origin/codex/realtime-timing-harness
+CI (static)	Check out repository	2026-09-10T04:08:11.1345162Z  * [new branch]        codex/test42-echo-vad-install-versions   -> origin/codex/test42-echo-vad-install-versions
+CI (static)	Check out repository	2026-09-10T04:08:11.1346163Z  * [new branch]        codex/test46-high-rate-audit             -> origin/codex/test46-high-rate-audit
+CI (static)	Check out repository	2026-09-10T04:08:11.1347260Z  * [new branch]        factory-setup-worktree-prep-hardening    -> origin/factory-setup-worktree-prep-hardening
+CI (static)	Check out repository	2026-09-10T04:08:11.1348017Z  * [new branch]        feat/x-webmcp-video                      -> origin/feat/x-webmcp-video
+CI (static)	Check out repository	2026-09-10T04:08:11.1348752Z  * [new branch]        fix/room-playback-diagnostics-wiring     -> origin/fix/room-playback-diagnostics-wiring
+CI (static)	Check out repository	2026-09-10T04:08:11.1349566Z  * [new branch]        fix/rtc-feedback-actually-suppress       -> origin/fix/rtc-feedback-actually-suppress
+CI (static)	Check out repository	2026-09-10T04:08:11.1350297Z  * [new branch]        fix/s2s-dead-air-hold-tone               -> origin/fix/s2s-dead-air-hold-tone
+CI (static)	Check out repository	2026-09-10T04:08:11.1351498Z  * [new branch]        fix/session-optional-record-replay       -> origin/fix/session-optional-record-replay
+CI (static)	Check out repository	2026-09-10T04:08:11.1352723Z  * [new branch]        main                                     -> origin/main
+CI (static)	Check out repository	2026-09-10T04:08:11.1353593Z  * [new branch]        phase-1-authoritative-checkout-convergence-validator -> origin/phase-1-authoritative-checkout-convergence-validator
+CI (static)	Check out repository	2026-09-10T04:08:11.1354628Z  * [new branch]        phase-1-authoritative-checkout-reconciliation -> origin/phase-1-authoritative-checkout-reconciliation
+CI (static)	Check out repository	2026-09-10T04:08:11.1355578Z  * [new branch]        phase-1-authoritative-workspace-convergence -> origin/phase-1-authoritative-workspace-convergence
+CI (static)	Check out repository	2026-09-10T04:08:11.1356538Z  * [new branch]        phase-1-dependency-contracts-and-api-gap-audit -> origin/phase-1-dependency-contracts-and-api-gap-audit
+CI (static)	Check out repository	2026-09-10T04:08:11.1357845Z  * [new branch]        phase-1-land-workspace-validation-baseline -> origin/phase-1-land-workspace-validation-baseline
+CI (static)	Check out repository	2026-09-10T04:08:11.1358768Z  * [new branch]        phase-1-readme-package-map-getting-started -> origin/phase-1-readme-package-map-getting-started
+CI (static)	Check out repository	2026-09-10T04:08:11.1359857Z  * [new branch]        phase-1-workspace-validation-entrypoints -> origin/phase-1-workspace-validation-entrypoints
+CI (static)	Check out repository	2026-09-10T04:08:11.1360736Z  * [new branch]        phase-2-constructor-ownership-boundaries -> origin/phase-2-constructor-ownership-boundaries
+CI (static)	Check out repository	2026-09-10T04:08:11.1361601Z  * [new branch]        phase-2-constructor-ownership-validator  -> origin/phase-2-constructor-ownership-validator
+CI (static)	Check out repository	2026-09-10T04:08:11.1362454Z  * [new branch]        phase-2-factory-worktree-hygiene-repair  -> origin/phase-2-factory-worktree-hygiene-repair
+CI (static)	Check out repository	2026-09-10T04:08:11.1363369Z  * [new branch]        phase-2-factory-worktree-hygiene-validator -> origin/phase-2-factory-worktree-hygiene-validator
+CI (static)	Check out repository	2026-09-10T04:08:11.1364314Z  * [new branch]        phase-2-session-fixture-ownership-boundary -> origin/phase-2-session-fixture-ownership-boundary
+CI (static)	Check out repository	2026-09-10T04:08:11.1365229Z  * [new branch]        phase-2-session-fixture-ownership-validator -> origin/phase-2-session-fixture-ownership-validator
+CI (static)	Check out repository	2026-09-10T04:08:11.1366141Z  * [new branch]        phase-2-session-runtime-ownership-repair -> origin/phase-2-session-runtime-ownership-repair
+CI (static)	Check out repository	2026-09-10T04:08:11.1367288Z  * [new branch]        phase-2-session-runtime-ownership-validator -> origin/phase-2-session-runtime-ownership-validator
+CI (static)	Check out repository	2026-09-10T04:08:11.1368170Z  * [new branch]        phase-3-authoritative-checkout-sync      -> origin/phase-3-authoritative-checkout-sync
+CI (static)	Check out repository	2026-09-10T04:08:11.1368979Z  * [new branch]        phase-3-gateway-runtime-decoupling       -> origin/phase-3-gateway-runtime-decoupling
+CI (static)	Check out repository	2026-09-10T04:08:11.1369770Z  * [new branch]        phase-3-library-independence-proof       -> origin/phase-3-library-independence-proof
+CI (static)	Check out repository	2026-09-10T04:08:11.1370583Z  * [new branch]        phase-3-library-independence-validator   -> origin/phase-3-library-independence-validator
+CI (static)	Check out repository	2026-09-10T04:08:11.1371488Z  * [new branch]        phase-3-library-independence-validator-landing -> origin/phase-3-library-independence-validator-landing
+CI (static)	Check out repository	2026-09-10T04:08:11.1372359Z  * [new branch]        phase-3-shared-contract-decision         -> origin/phase-3-shared-contract-decision
+CI (static)	Check out repository	2026-09-10T04:08:11.1373287Z  * [new branch]        phase-3-shared-contract-validator        -> origin/phase-3-shared-contract-validator
+CI (static)	Check out repository	2026-09-10T04:08:11.1374129Z  * [new branch]        phase-3-shared-contract-validator-landing -> origin/phase-3-shared-contract-validator-landing
+CI (static)	Check out repository	2026-09-10T04:08:11.1374948Z  * [new branch]        phase-4-api-audit-reconciliation         -> origin/phase-4-api-audit-reconciliation
+CI (static)	Check out repository	2026-09-10T04:08:11.1375737Z  * [new branch]        phase-4-api-contract-repair-validator    -> origin/phase-4-api-contract-repair-validator
+CI (static)	Check out repository	2026-09-10T04:08:11.1376530Z  * [new branch]        phase-4-api-contract-validator           -> origin/phase-4-api-contract-validator
+CI (static)	Check out repository	2026-09-10T04:08:11.1377602Z  * [new branch]        phase-4-audit-validator-015-reconciliation -> origin/phase-4-audit-validator-015-reconciliation
+CI (static)	Check out repository	2026-09-10T04:08:11.1378456Z  * [new branch]        phase-4-authoritative-baseline-sync      -> origin/phase-4-authoritative-baseline-sync
+CI (static)	Check out repository	2026-09-10T04:08:11.1379420Z  * [new branch]        phase-4-dependency-result-context-lifecycle-contract -> origin/phase-4-dependency-result-context-lifecycle-contract
+CI (static)	Check out repository	2026-09-10T04:08:11.1380401Z  * [new branch]        phase-4-dependency-result-contract-repair -> origin/phase-4-dependency-result-contract-repair
+CI (static)	Check out repository	2026-09-10T04:08:11.1381246Z  * [new branch]        phase-4-exported-api-contract-audit      -> origin/phase-4-exported-api-contract-audit
+CI (static)	Check out repository	2026-09-10T04:08:11.1382015Z  * [new branch]        phase-4-gateway-error-taxonomy           -> origin/phase-4-gateway-error-taxonomy
+CI (static)	Check out repository	2026-09-10T04:08:11.1382955Z  * [new branch]        phase-4-provider-capabilities-local-validation-contract -> origin/phase-4-provider-capabilities-local-validation-contract
+CI (static)	Check out repository	2026-09-10T04:08:11.1383953Z  * [new branch]        phase-4-provider-capabilities-validation -> origin/phase-4-provider-capabilities-validation
+CI (static)	Check out repository	2026-09-10T04:08:11.1384867Z  * [new branch]        phase-4-provider-capability-validation-repair -> origin/phase-4-provider-capability-validation-repair
+CI (static)	Check out repository	2026-09-10T04:08:11.1385878Z  * [new branch]        phase-4-typed-errors-stream-repair       -> origin/phase-4-typed-errors-stream-repair
+CI (static)	Check out repository	2026-09-10T04:08:11.1386993Z  * [new branch]        phase-4-typed-errors-stream-terminal-contract -> origin/phase-4-typed-errors-stream-terminal-contract
+CI (static)	Check out repository	2026-09-10T04:08:11.1388011Z  * [new branch]        phase-4-typed-terminal-authoritative-reconciliation -> origin/phase-4-typed-terminal-authoritative-reconciliation
+CI (static)	Check out repository	2026-09-10T04:08:11.1388792Z  * [new branch]        pnig                                     -> origin/pnig
+CI (static)	Check out repository	2026-09-10T04:08:11.1389424Z  * [new branch]        room-participant-browser-tools           -> origin/room-participant-browser-tools
+CI (static)	Check out repository	2026-09-10T04:08:11.1390104Z  * [new branch]        s2s-acc-fleet-gate                       -> origin/s2s-acc-fleet-gate
+CI (static)	Check out repository	2026-09-10T04:08:11.1390786Z  * [new branch]        s2s-acc-probe-friction-report            -> origin/s2s-acc-probe-friction-report
+CI (static)	Check out repository	2026-09-10T04:08:11.1391502Z  * [new branch]        s2s-acc-probe-goal-catalog               -> origin/s2s-acc-probe-goal-catalog
+CI (static)	Check out repository	2026-09-10T04:08:11.1392209Z  * [new branch]        s2s-acc-probe-stuck-detection            -> origin/s2s-acc-probe-stuck-detection
+CI (static)	Check out repository	2026-09-10T04:08:11.1393195Z  * [new branch]        s2s-agent-cli-suite-is-at-80-percent-of-its-ci-timeout-budget -> origin/s2s-agent-cli-suite-is-at-80-percent-of-its-ci-timeout-budget
+CI (static)	Check out repository	2026-09-10T04:08:11.1394266Z  * [new branch]        s2s-artifact-integrity-and-write-conflicts -> origin/s2s-artifact-integrity-and-write-conflicts
+CI (static)	Check out repository	2026-09-10T04:08:11.1395173Z  * [new branch]        s2s-audio-in-turn-detection-null-vad-20260901 -> origin/s2s-audio-in-turn-detection-null-vad-20260901
+CI (static)	Check out repository	2026-09-10T04:08:11.1396082Z  * [new branch]        s2s-audio-interrupt-on-tool-never-releases -> origin/s2s-audio-interrupt-on-tool-never-releases
+CI (static)	Check out repository	2026-09-10T04:08:11.1397695Z  * [new branch]        s2s-audio-out-and-audio-out-device-cannot-be-combined-so-device-output-is-unverifiable -> origin/s2s-audio-out-and-audio-out-device-cannot-be-combined-so-device-output-is-unverifiable
+CI (static)	Check out repository	2026-09-10T04:08:11.1399249Z  * [new branch]        s2s-audio-property-assertions-and-golden-fixtures -> origin/s2s-audio-property-assertions-and-golden-fixtures
+CI (static)	Check out repository	2026-09-10T04:08:11.1400195Z  * [new branch]        s2s-audio-turn-tool-loop-never-completes -> origin/s2s-audio-turn-tool-loop-never-completes
+CI (static)	Check out repository	2026-09-10T04:08:11.1400991Z  * [new branch]        s2s-b0-realtime-model-allowlist          -> origin/s2s-b0-realtime-model-allowlist
+CI (static)	Check out repository	2026-09-10T04:08:11.1401723Z  * [new branch]        s2s-b1-cov-agent-executor-core           -> origin/s2s-b1-cov-agent-executor-core
+CI (static)	Check out repository	2026-09-10T04:08:11.1402482Z  * [new branch]        s2s-b1-cov-cli-ask-and-tool-commands     -> origin/s2s-b1-cov-cli-ask-and-tool-commands
+CI (static)	Check out repository	2026-09-10T04:08:11.1403221Z  * [new branch]        s2s-b1-cov-cli-chat-command              -> origin/s2s-b1-cov-cli-chat-command
+CI (static)	Check out repository	2026-09-10T04:08:11.1403983Z  * [new branch]        s2s-b1-cov-cli-config-and-interaction    -> origin/s2s-b1-cov-cli-config-and-interaction
+CI (static)	Check out repository	2026-09-10T04:08:11.1404747Z  * [new branch]        s2s-b1-cov-cli-root-and-routes           -> origin/s2s-b1-cov-cli-root-and-routes
+CI (static)	Check out repository	2026-09-10T04:08:11.1405433Z  * [new branch]        s2s-b1-cov-logger-routing                -> origin/s2s-b1-cov-logger-routing
+CI (static)	Check out repository	2026-09-10T04:08:11.1406172Z  * [new branch]        s2s-b1-cov-messages-buffers-property     -> origin/s2s-b1-cov-messages-buffers-property
+CI (static)	Check out repository	2026-09-10T04:08:11.1407264Z  * [new branch]        s2s-b1-cov-messages-reconstruction-golden -> origin/s2s-b1-cov-messages-reconstruction-golden
+CI (static)	Check out repository	2026-09-10T04:08:11.1408094Z  * [new branch]        s2s-b1-cov-models-session-contract       -> origin/s2s-b1-cov-models-session-contract
+CI (static)	Check out repository	2026-09-10T04:08:11.1408901Z  * [new branch]        s2s-b1-cov-providers-error-taxonomy      -> origin/s2s-b1-cov-providers-error-taxonomy
+CI (static)	Check out repository	2026-09-10T04:08:11.1409721Z  * [new branch]        s2s-b1-cov-services-ask-and-autocomplete -> origin/s2s-b1-cov-services-ask-and-autocomplete
+CI (static)	Check out repository	2026-09-10T04:08:11.1410640Z  * [new branch]        s2s-b1-cov-services-chat-core            -> origin/s2s-b1-cov-services-chat-core
+CI (static)	Check out repository	2026-09-10T04:08:11.1411344Z  * [new branch]        s2s-b1-cov-session-storage               -> origin/s2s-b1-cov-session-storage
+CI (static)	Check out repository	2026-09-10T04:08:11.1412085Z  * [new branch]        s2s-b1-cov-tools-filesystem-and-edit     -> origin/s2s-b1-cov-tools-filesystem-and-edit
+CI (static)	Check out repository	2026-09-10T04:08:11.1412863Z  * [new branch]        s2s-b1-cov-tools-registry-contract       -> origin/s2s-b1-cov-tools-registry-contract
+CI (static)	Check out repository	2026-09-10T04:08:11.1413684Z  * [new branch]        s2s-b1-cov-tools-screen-and-mouse-platform -> origin/s2s-b1-cov-tools-screen-and-mouse-platform
+CI (static)	Check out repository	2026-09-10T04:08:11.1414542Z  * [new branch]        s2s-b1-cov-tools-shell-injected-process  -> origin/s2s-b1-cov-tools-shell-injected-process
+CI (static)	Check out repository	2026-09-10T04:08:11.1415322Z  * [new branch]        s2s-b1-cov-workspace-agents-md           -> origin/s2s-b1-cov-workspace-agents-md
+CI (static)	Check out repository	2026-09-10T04:08:11.1416035Z  * [new branch]        s2s-b1-coverage-manifest-gate            -> origin/s2s-b1-coverage-manifest-gate
+CI (static)	Check out repository	2026-09-10T04:08:11.1417004Z  * [new branch]        s2s-b1-file-and-func-size-lint           -> origin/s2s-b1-file-and-func-size-lint
+CI (static)	Check out repository	2026-09-10T04:08:11.1417726Z  * [new branch]        s2s-b1-hermetic-test-target              -> origin/s2s-b1-hermetic-test-target
+CI (static)	Check out repository	2026-09-10T04:08:11.1418422Z  * [new branch]        s2s-b1-split-agent-executor              -> origin/s2s-b1-split-agent-executor
+CI (static)	Check out repository	2026-09-10T04:08:11.1419168Z  * [new branch]        s2s-b1-split-messages-agent-messages     -> origin/s2s-b1-split-messages-agent-messages
+CI (static)	Check out repository	2026-09-10T04:08:11.1419909Z  * [new branch]        s2s-b1-split-openai-session              -> origin/s2s-b1-split-openai-session
+CI (static)	Check out repository	2026-09-10T04:08:11.1420583Z  * [new branch]        s2s-b1-split-services-chat               -> origin/s2s-b1-split-services-chat
+CI (static)	Check out repository	2026-09-10T04:08:11.1421275Z  * [new branch]        s2s-b1-split-services-session            -> origin/s2s-b1-split-services-session
+CI (static)	Check out repository	2026-09-10T04:08:11.1422045Z  * [new branch]        s2s-b1-split-services-session-runtime    -> origin/s2s-b1-split-services-session-runtime
+CI (static)	Check out repository	2026-09-10T04:08:11.1422939Z  * [new branch]        s2s-b1-wallclock-budget-gate             -> origin/s2s-b1-wallclock-budget-gate
+CI (static)	Check out repository	2026-09-10T04:08:11.1423664Z  * [new branch]        s2s-b1-wire-composition-boundary         -> origin/s2s-b1-wire-composition-boundary
+CI (static)	Check out repository	2026-09-10T04:08:11.1424407Z  * [new branch]        s2s-b2-audio-corpus-generator            -> origin/s2s-b2-audio-corpus-generator
+CI (static)	Check out repository	2026-09-10T04:08:11.1425174Z  * [new branch]        s2s-b2-audio-device-source-and-sink      -> origin/s2s-b2-audio-device-source-and-sink
+CI (static)	Check out repository	2026-09-10T04:08:11.1425889Z  * [new branch]        s2s-b2-audio-resampler                   -> origin/s2s-b2-audio-resampler
+CI (static)	Check out repository	2026-09-10T04:08:11.1426771Z  * [new branch]        s2s-b2-audio-source-and-sink             -> origin/s2s-b2-audio-source-and-sink
+CI (static)	Check out repository	2026-09-10T04:08:11.1427486Z  * [new branch]        s2s-b2-audiofixture-loader               -> origin/s2s-b2-audiofixture-loader
+CI (static)	Check out repository	2026-09-10T04:08:11.1428185Z  * [new branch]        s2s-b2-buffer-crossing-logs              -> origin/s2s-b2-buffer-crossing-logs
+CI (static)	Check out repository	2026-09-10T04:08:11.1428892Z  * [new branch]        s2s-b2-device-linux-alsa-pulse           -> origin/s2s-b2-device-linux-alsa-pulse
+CI (static)	Check out repository	2026-09-10T04:08:11.1429610Z  * [new branch]        s2s-b2-device-macos-coreaudio            -> origin/s2s-b2-device-macos-coreaudio
+CI (static)	Check out repository	2026-09-10T04:08:11.1430336Z  * [new branch]        s2s-b2-device-registry-contract          -> origin/s2s-b2-device-registry-contract
+CI (static)	Check out repository	2026-09-10T04:08:11.1431091Z  * [new branch]        s2s-b2-device-selection-and-fallback     -> origin/s2s-b2-device-selection-and-fallback
+CI (static)	Check out repository	2026-09-10T04:08:11.1431842Z  * [new branch]        s2s-b2-device-virtual-loopback           -> origin/s2s-b2-device-virtual-loopback
+CI (static)	Check out repository	2026-09-10T04:08:11.1432549Z  * [new branch]        s2s-b2-device-windows-wasapi             -> origin/s2s-b2-device-windows-wasapi
+CI (static)	Check out repository	2026-09-10T04:08:11.1433475Z  * [new branch]        s2s-b2-fixture-validator-shapes          -> origin/s2s-b2-fixture-validator-shapes
+CI (static)	Check out repository	2026-09-10T04:08:11.1434202Z  * [new branch]        s2s-b2-functional-time-harness           -> origin/s2s-b2-functional-time-harness
+CI (static)	Check out repository	2026-09-10T04:08:11.1434884Z  * [new branch]        s2s-b2-logging-alloc-gate                -> origin/s2s-b2-logging-alloc-gate
+CI (static)	Check out repository	2026-09-10T04:08:11.1435540Z  * [new branch]        s2s-b2-metrics-package                   -> origin/s2s-b2-metrics-package
+CI (static)	Check out repository	2026-09-10T04:08:11.1436169Z  * [new branch]        s2s-b2-platform-clock                    -> origin/s2s-b2-platform-clock
+CI (static)	Check out repository	2026-09-10T04:08:11.1437069Z  * [new branch]        s2s-b2-transcript-agent-side             -> origin/s2s-b2-transcript-agent-side
+CI (static)	Check out repository	2026-09-10T04:08:11.1437777Z  * [new branch]        s2s-b2-transcript-client-side            -> origin/s2s-b2-transcript-client-side
+CI (static)	Check out repository	2026-09-10T04:08:11.1438501Z  * [new branch]        s2s-b2-transcript-frame-format           -> origin/s2s-b2-transcript-frame-format
+CI (static)	Check out repository	2026-09-10T04:08:11.1439303Z  * [new branch]        s2s-b2-transcript-manifest-and-artifacts -> origin/s2s-b2-transcript-manifest-and-artifacts
+CI (static)	Check out repository	2026-09-10T04:08:11.1440105Z  * [new branch]        s2s-b2-transcript-writer-and-tee         -> origin/s2s-b2-transcript-writer-and-tee
+CI (static)	Check out repository	2026-09-10T04:08:11.1440825Z  * [new branch]        s2s-b2-transport-grok-retype             -> origin/s2s-b2-transport-grok-retype
+CI (static)	Check out repository	2026-09-10T04:08:11.1441508Z  * [new branch]        s2s-b2-transport-interface               -> origin/s2s-b2-transport-interface
+CI (static)	Check out repository	2026-09-10T04:08:11.1442199Z  * [new branch]        s2s-b2-transport-openai-retype           -> origin/s2s-b2-transport-openai-retype
+CI (static)	Check out repository	2026-09-10T04:08:11.1442863Z  * [new branch]        s2s-b2-wavio-package                     -> origin/s2s-b2-wavio-package
+CI (static)	Check out repository	2026-09-10T04:08:11.1443517Z  * [new branch]        s2s-b2-wire-mock-injection               -> origin/s2s-b2-wire-mock-injection
+CI (static)	Check out repository	2026-09-10T04:08:11.1444175Z  * [new branch]        s2s-b2-wire-ports-audio                  -> origin/s2s-b2-wire-ports-audio
+CI (static)	Check out repository	2026-09-10T04:08:11.1444846Z  * [new branch]        s2s-b2-wire-ports-transport              -> origin/s2s-b2-wire-ports-transport
+CI (static)	Check out repository	2026-09-10T04:08:11.1445655Z  * [new branch]        s2s-b3-agents-md-profiles                -> origin/s2s-b3-agents-md-profiles
+CI (static)	Check out repository	2026-09-10T04:08:11.1446305Z  * [new branch]        s2s-b3-audioin-truthing                  -> origin/s2s-b3-audioin-truthing
+CI (static)	Check out repository	2026-09-10T04:08:11.1447187Z  * [new branch]        s2s-b3-devices-list-command              -> origin/s2s-b3-devices-list-command
+CI (static)	Check out repository	2026-09-10T04:08:11.1447938Z  * [new branch]        s2s-b3-duplex-functional-time-fixture    -> origin/s2s-b3-duplex-functional-time-fixture
+CI (static)	Check out repository	2026-09-10T04:08:11.1448757Z  * [new branch]        s2s-b3-functional-layout-and-quarantine  -> origin/s2s-b3-functional-layout-and-quarantine
+CI (static)	Check out repository	2026-09-10T04:08:11.1449541Z  * [new branch]        s2s-b3-parity-compare-and-report         -> origin/s2s-b3-parity-compare-and-report
+CI (static)	Check out repository	2026-09-10T04:08:11.1450276Z  * [new branch]        s2s-b3-parity-normalize-agent            -> origin/s2s-b3-parity-normalize-agent
+CI (static)	Check out repository	2026-09-10T04:08:11.1450989Z  * [new branch]        s2s-b3-parity-normalize-client           -> origin/s2s-b3-parity-normalize-client
+CI (static)	Check out repository	2026-09-10T04:08:11.1451677Z  * [new branch]        s2s-b3-parity-projection                 -> origin/s2s-b3-parity-projection
+CI (static)	Check out repository	2026-09-10T04:08:11.1452325Z  * [new branch]        s2s-b3-probe-cli-surface                 -> origin/s2s-b3-probe-cli-surface
+CI (static)	Check out repository	2026-09-10T04:08:11.1453020Z  * [new branch]        s2s-b3-probe-dead-session-guard          -> origin/s2s-b3-probe-dead-session-guard
+CI (static)	Check out repository	2026-09-10T04:08:11.1453716Z  * [new branch]        s2s-b3-probe-expectations                -> origin/s2s-b3-probe-expectations
+CI (static)	Check out repository	2026-09-10T04:08:11.1454448Z  * [new branch]        s2s-b3-probe-logical-time-sequencing     -> origin/s2s-b3-probe-logical-time-sequencing
+CI (static)	Check out repository	2026-09-10T04:08:11.1455203Z  * [new branch]        s2s-b3-probe-replay-transport            -> origin/s2s-b3-probe-replay-transport
+CI (static)	Check out repository	2026-09-10T04:08:11.1456025Z  * [new branch]        s2s-b3-probe-runner-jsonl                -> origin/s2s-b3-probe-runner-jsonl
+CI (static)	Check out repository	2026-09-10T04:08:11.1456925Z  * [new branch]        s2s-b3-probe-scenario-model              -> origin/s2s-b3-probe-scenario-model
+CI (static)	Check out repository	2026-09-10T04:08:11.1457599Z  * [new branch]        s2s-b3-session-agents-md                 -> origin/s2s-b3-session-agents-md
+CI (static)	Check out repository	2026-09-10T04:08:11.1458275Z  * [new branch]        s2s-b3-session-audio-out-file            -> origin/s2s-b3-session-audio-out-file
+CI (static)	Check out repository	2026-09-10T04:08:11.1458993Z  * [new branch]        s2s-b3-session-harness-extension         -> origin/s2s-b3-session-harness-extension
+CI (static)	Check out repository	2026-09-10T04:08:11.1459698Z  * [new branch]        s2s-b3-session-image-input               -> origin/s2s-b3-session-image-input
+CI (static)	Check out repository	2026-09-10T04:08:11.1460370Z  * [new branch]        s2s-b3-session-max-duration              -> origin/s2s-b3-session-max-duration
+CI (static)	Check out repository	2026-09-10T04:08:11.1461067Z  * [new branch]        s2s-b3-session-recording-flags           -> origin/s2s-b3-session-recording-flags
+CI (static)	Check out repository	2026-09-10T04:08:11.1461764Z  * [new branch]        s2s-b3-session-text-prompt               -> origin/s2s-b3-session-text-prompt
+CI (static)	Check out repository	2026-09-10T04:08:11.1462491Z  * [new branch]        s2s-b3-session-tool-executor-wiring      -> origin/s2s-b3-session-tool-executor-wiring
+CI (static)	Check out repository	2026-09-10T04:08:11.1463247Z  * [new branch]        s2s-b3-session-turn-management           -> origin/s2s-b3-session-turn-management
+CI (static)	Check out repository	2026-09-10T04:08:11.1463918Z  * [new branch]        s2s-b4-fault-injection                   -> origin/s2s-b4-fault-injection
+CI (static)	Check out repository	2026-09-10T04:08:11.1464549Z  * [new branch]        s2s-b4-fleet-composer                    -> origin/s2s-b4-fleet-composer
+CI (static)	Check out repository	2026-09-10T04:08:11.1465214Z  * [new branch]        s2s-b4-rtc-audio-track-egress            -> origin/s2s-b4-rtc-audio-track-egress
+CI (static)	Check out repository	2026-09-10T04:08:11.1465948Z  * [new branch]        s2s-b4-rtc-audio-track-ingress           -> origin/s2s-b4-rtc-audio-track-ingress
+CI (static)	Check out repository	2026-09-10T04:08:11.1466825Z  * [new branch]        s2s-b4-rtc-cli-surface                   -> origin/s2s-b4-rtc-cli-surface
+CI (static)	Check out repository	2026-09-10T04:08:11.1467491Z  * [new branch]        s2s-b4-rtc-device-binding                -> origin/s2s-b4-rtc-device-binding
+CI (static)	Check out repository	2026-09-10T04:08:11.1468340Z  * [new branch]        s2s-b4-rtc-external-media-source         -> origin/s2s-b4-rtc-external-media-source
+CI (static)	Check out repository	2026-09-10T04:08:11.1469110Z  * [new branch]        s2s-b4-rtc-peerconnection-lifecycle      -> origin/s2s-b4-rtc-peerconnection-lifecycle
+CI (static)	Check out repository	2026-09-10T04:08:11.1469807Z  * [new branch]        s2s-b4-rtc-signaling                     -> origin/s2s-b4-rtc-signaling
+CI (static)	Check out repository	2026-09-10T04:08:11.1470477Z  * [new branch]        s2s-b4-rtc-transport-contract            -> origin/s2s-b4-rtc-transport-contract
+CI (static)	Check out repository	2026-09-10T04:08:11.1471183Z  * [new branch]        s2s-b4-rtc-transport-parity              -> origin/s2s-b4-rtc-transport-parity
+CI (static)	Check out repository	2026-09-10T04:08:11.1471909Z  * [new branch]        s2s-bare-room-run-default-devices        -> origin/s2s-bare-room-run-default-devices
+CI (static)	Check out repository	2026-09-10T04:08:11.1472657Z  * [new branch]        s2s-bare-session-default-devices         -> origin/s2s-bare-session-default-devices
+CI (static)	Check out repository	2026-09-10T04:08:11.1473490Z  * [new branch]        s2s-barge-in-audio-interrupt-actually-fires -> origin/s2s-barge-in-audio-interrupt-actually-fires
+CI (static)	Check out repository	2026-09-10T04:08:11.1474398Z  * [new branch]        s2s-browser-selection-ask-vs-act-calibration -> origin/s2s-browser-selection-ask-vs-act-calibration
+CI (static)	Check out repository	2026-09-10T04:08:11.1475263Z  * [new branch]        s2s-chat-hangs-and-silent-input-drops    -> origin/s2s-chat-hangs-and-silent-input-drops
+CI (static)	Check out repository	2026-09-10T04:08:11.1476098Z  * [new branch]        s2s-chatcore-typed-slash-command-contract -> origin/s2s-chatcore-typed-slash-command-contract
+CI (static)	Check out repository	2026-09-10T04:08:11.1477099Z  * [new branch]        s2s-cli-polish-batch                     -> origin/s2s-cli-polish-batch
+CI (static)	Check out repository	2026-09-10T04:08:11.1477846Z  * [new branch]        s2s-conversational-customer-sim-harness  -> origin/s2s-conversational-customer-sim-harness
+CI (static)	Check out repository	2026-09-10T04:08:11.1478698Z  * [new branch]        s2s-deflake-active-scheduled-bargein-test -> origin/s2s-deflake-active-scheduled-bargein-test
+CI (static)	Check out repository	2026-09-10T04:08:11.1479739Z  * [new branch]        s2s-deflake-corrupt-audio-delta-rejected -> origin/s2s-deflake-corrupt-audio-delta-rejected
+CI (static)	Check out repository	2026-09-10T04:08:11.1480582Z  * [new branch]        s2s-deflake-room-speech-overlap-cancel   -> origin/s2s-deflake-room-speech-overlap-cancel
+CI (static)	Check out repository	2026-09-10T04:08:11.1481394Z  * [new branch]        s2s-deflake-rtc-media-source-deadline    -> origin/s2s-deflake-rtc-media-source-deadline
+CI (static)	Check out repository	2026-09-10T04:08:11.1482149Z  * [new branch]        s2s-e2e-audio-roundtrip-proof            -> origin/s2s-e2e-audio-roundtrip-proof
+CI (static)	Check out repository	2026-09-10T04:08:11.1482892Z  * [new branch]        s2s-e2e-conversation-observability       -> origin/s2s-e2e-conversation-observability
+CI (static)	Check out repository	2026-09-10T04:08:11.1483654Z  * [new branch]        s2s-e2e-customer-acceptance-probe        -> origin/s2s-e2e-customer-acceptance-probe
+CI (static)	Check out repository	2026-09-10T04:08:11.1484390Z  * [new branch]        s2s-e2e-multiturn-conversation           -> origin/s2s-e2e-multiturn-conversation
+CI (static)	Check out repository	2026-09-10T04:08:11.1485110Z  * [new branch]        s2s-e2e-tool-call-conversation           -> origin/s2s-e2e-tool-call-conversation
+CI (static)	Check out repository	2026-09-10T04:08:11.1485799Z  * [new branch]        s2s-e2e-vision-describe                  -> origin/s2s-e2e-vision-describe
+CI (static)	Check out repository	2026-09-10T04:08:11.1486527Z  * [new branch]        s2s-enable-input-audio-transcription     -> origin/s2s-enable-input-audio-transcription
+CI (static)	Check out repository	2026-09-10T04:08:11.1487758Z  * [new branch]        s2s-errored-session-discards-recording-and-drops-the-error -> origin/s2s-errored-session-discards-recording-and-drops-the-error
+CI (static)	Check out repository	2026-09-10T04:08:11.1488765Z  * [new branch]        s2s-exit-code-must-mean-the-work-happened -> origin/s2s-exit-code-must-mean-the-work-happened
+CI (static)	Check out repository	2026-09-10T04:08:11.1489564Z  * [new branch]        s2s-file-tools-session-coverage          -> origin/s2s-file-tools-session-coverage
+CI (static)	Check out repository	2026-09-10T04:08:11.1490303Z  * [new branch]        s2s-fix-read-image-itemid-length         -> origin/s2s-fix-read-image-itemid-length
+CI (static)	Check out repository	2026-09-10T04:08:11.1491131Z  * [new branch]        s2s-frontier-grok-transport-retype-widened -> origin/s2s-frontier-grok-transport-retype-widened
+CI (static)	Check out repository	2026-09-10T04:08:11.1492109Z  * [new branch]        s2s-goal-concurrent-session-capacity     -> origin/s2s-goal-concurrent-session-capacity
+CI (static)	Check out repository	2026-09-10T04:08:11.1492901Z  * [new branch]        s2s-goal-land-session-audio-in-file      -> origin/s2s-goal-land-session-audio-in-file
+CI (static)	Check out repository	2026-09-10T04:08:11.1493700Z  * [new branch]        s2s-goal-session-failure-diagnosability  -> origin/s2s-goal-session-failure-diagnosability
+CI (static)	Check out repository	2026-09-10T04:08:11.1494481Z  * [new branch]        s2s-goal-tts-test-audio-corpus           -> origin/s2s-goal-tts-test-audio-corpus
+CI (static)	Check out repository	2026-09-10T04:08:11.1495250Z  * [new branch]        s2s-hygiene-prd-scaffolding-gitignore    -> origin/s2s-hygiene-prd-scaffolding-gitignore
+CI (static)	Check out repository	2026-09-10T04:08:11.1496078Z  * [new branch]        s2s-input-transcription-turn-attribution -> origin/s2s-input-transcription-turn-attribution
+CI (static)	Check out repository	2026-09-10T04:08:11.1497257Z  * [new branch]        s2s-integration-suite-intermittent-failures -> origin/s2s-integration-suite-intermittent-failures
+CI (static)	Check out repository	2026-09-10T04:08:11.1498137Z  * [new branch]        s2s-interactive-tool-timeout-budget      -> origin/s2s-interactive-tool-timeout-budget
+CI (static)	Check out repository	2026-09-10T04:08:11.1498915Z  * [new branch]        s2s-lai-gateway-localai-provider         -> origin/s2s-lai-gateway-localai-provider
+CI (static)	Check out repository	2026-09-10T04:08:11.1499655Z  * [new branch]        s2s-lai-local-tier-conformance           -> origin/s2s-lai-local-tier-conformance
+CI (static)	Check out repository	2026-09-10T04:08:11.1500416Z  * [new branch]        s2s-lai-realtime-client-lib-decision     -> origin/s2s-lai-realtime-client-lib-decision
+CI (static)	Check out repository	2026-09-10T04:08:11.1501183Z  * [new branch]        s2s-lai-realtime-server-fixture          -> origin/s2s-lai-realtime-server-fixture
+CI (static)	Check out repository	2026-09-10T04:08:11.1501908Z  * [new branch]        s2s-lai-tts-gguf-format-check            -> origin/s2s-lai-tts-gguf-format-check
+CI (static)	Check out repository	2026-09-10T04:08:11.1502602Z  * [new branch]        s2s-live-barge-in-proof-v3               -> origin/s2s-live-barge-in-proof-v3
+CI (static)	Check out repository	2026-09-10T04:08:11.1503555Z  * [new branch]        s2s-live-max-duration-artifact-inconsistency -> origin/s2s-live-max-duration-artifact-inconsistency
+CI (static)	Check out repository	2026-09-10T04:08:11.1504749Z  * [new branch]        s2s-live-max-duration-record-dir-bundle-missing-terminal-classification -> origin/s2s-live-max-duration-record-dir-bundle-missing-terminal-classification
+CI (static)	Check out repository	2026-09-10T04:08:11.1506287Z  * [new branch]        s2s-live-mic-and-speaker-session-feeds-back-into-itself-with-no-gating-or-warning -> origin/s2s-live-mic-and-speaker-session-feeds-back-into-itself-with-no-gating-or-warning
+CI (static)	Check out repository	2026-09-10T04:08:11.1508028Z  * [new branch]        s2s-live-read-image-tool-result-empty-and-default-lifecycle-cuts-off -> origin/s2s-live-read-image-tool-result-empty-and-default-lifecycle-cuts-off
+CI (static)	Check out repository	2026-09-10T04:08:11.1509225Z  * [new branch]        s2s-live-record-dir-audio-in-turn-zero-segments -> origin/s2s-live-record-dir-audio-in-turn-zero-segments
+CI (static)	Check out repository	2026-09-10T04:08:11.1510449Z  * [new branch]        s2s-live-session-audio-plays-back-at-16khz-while-the-provider-emits-24khz -> origin/s2s-live-session-audio-plays-back-at-16khz-while-the-provider-emits-24khz
+CI (static)	Check out repository	2026-09-10T04:08:11.1511590Z  * [new branch]        s2s-live-session-no-tool-definitions     -> origin/s2s-live-session-no-tool-definitions
+CI (static)	Check out repository	2026-09-10T04:08:11.1512470Z  * [new branch]        s2s-live-tool-result-orphaned-on-session-close -> origin/s2s-live-tool-result-orphaned-on-session-close
+CI (static)	Check out repository	2026-09-10T04:08:11.1513340Z  * [new branch]        s2s-live-turn-boundary-commit-races      -> origin/s2s-live-turn-boundary-commit-races
+CI (static)	Check out repository	2026-09-10T04:08:11.1514200Z  * [new branch]        s2s-live-vad-auto-commit-still-races-after-228 -> origin/s2s-live-vad-auto-commit-still-races-after-228
+CI (static)	Check out repository	2026-09-10T04:08:11.1515068Z  * [new branch]        s2s-mixed-modality-residual-plumbing     -> origin/s2s-mixed-modality-residual-plumbing
+CI (static)	Check out repository	2026-09-10T04:08:11.1515859Z  * [new branch]        s2s-mixed-modality-voice-plus-image      -> origin/s2s-mixed-modality-voice-plus-image
+CI (static)	Check out repository	2026-09-10T04:08:11.1517124Z  * [new branch]        s2s-no-liveness-detector-for-a-provider-that-goes-silent-midturn -> origin/s2s-no-liveness-detector-for-a-provider-that-goes-silent-midturn
+CI (static)	Check out repository	2026-09-10T04:08:11.1518330Z  * [new branch]        s2s-normalize-loudness-across-voices     -> origin/s2s-normalize-loudness-across-voices
+CI (static)	Check out repository	2026-09-10T04:08:11.1519162Z  * [new branch]        s2s-normalize-loudness-across-voices-fix -> origin/s2s-normalize-loudness-across-voices-fix
+CI (static)	Check out repository	2026-09-10T04:08:11.1520103Z  * [new branch]        s2s-one-participant-failure-kills-the-entire-room -> origin/s2s-one-participant-failure-kills-the-entire-room
+CI (static)	Check out repository	2026-09-10T04:08:11.1521148Z  * [new branch]        s2s-page-tool-schema-anyof-must-not-kill-the-session -> origin/s2s-page-tool-schema-anyof-must-not-kill-the-session
+CI (static)	Check out repository	2026-09-10T04:08:11.1522300Z  * [new branch]        s2s-participant-dies-in-tool-continuation-seconds-into-a-room -> origin/s2s-participant-dies-in-tool-continuation-seconds-into-a-room
+CI (static)	Check out repository	2026-09-10T04:08:11.1523753Z  * [new branch]        s2s-peer-audio-still-auto-cancels-ordinary-responses-suppressing-ai-to-ai-overlap -> origin/s2s-peer-audio-still-auto-cancels-ordinary-responses-suppressing-ai-to-ai-overlap
+CI (static)	Check out repository	2026-09-10T04:08:11.1525007Z  * [new branch]        s2s-playback-overflow-diagnostics-unwired -> origin/s2s-playback-overflow-diagnostics-unwired
+CI (static)	Check out repository	2026-09-10T04:08:11.1525825Z  * [new branch]        s2s-post-barge-turn-dispatch-gap         -> origin/s2s-post-barge-turn-dispatch-gap
+CI (static)	Check out repository	2026-09-10T04:08:11.1526917Z  * [new branch]        s2s-postdrain-pr-closure-and-status-doc-reconcile -> origin/s2s-postdrain-pr-closure-and-status-doc-reconcile
+CI (static)	Check out repository	2026-09-10T04:08:11.1527832Z  * [new branch]        s2s-prereq-media-root-look-contract      -> origin/s2s-prereq-media-root-look-contract
+CI (static)	Check out repository	2026-09-10T04:08:11.1528630Z  * [new branch]        s2s-prereq-session-config-tool-filter    -> origin/s2s-prereq-session-config-tool-filter
+CI (static)	Check out repository	2026-09-10T04:08:11.1529503Z  * [new branch]        s2s-prereq-session-final-metrics-observation -> origin/s2s-prereq-session-final-metrics-observation
+CI (static)	Check out repository	2026-09-10T04:08:11.1530523Z  * [new branch]        s2s-prereq-session-rtc-runtime-consumer  -> origin/s2s-prereq-session-rtc-runtime-consumer
+CI (static)	Check out repository	2026-09-10T04:08:11.1531357Z  * [new branch]        s2s-provider-wire-tool-result-delivery   -> origin/s2s-provider-wire-tool-result-delivery
+CI (static)	Check out repository	2026-09-10T04:08:11.1532099Z  * [new branch]        s2s-rate-limit-turn-retry                -> origin/s2s-rate-limit-turn-retry
+CI (static)	Check out repository	2026-09-10T04:08:11.1532820Z  * [new branch]        s2s-record-replay-diagnosis-loop         -> origin/s2s-record-replay-diagnosis-loop
+CI (static)	Check out repository	2026-09-10T04:08:11.1533582Z  * [new branch]        s2s-recut-tool-executor-wiring-pr83      -> origin/s2s-recut-tool-executor-wiring-pr83
+CI (static)	Check out repository	2026-09-10T04:08:11.1534380Z  * [new branch]        s2s-repair-audioin-elicits-no-response   -> origin/s2s-repair-audioin-elicits-no-response
+CI (static)	Check out repository	2026-09-10T04:08:11.1535157Z  * [new branch]        s2s-repair-audioin-hermetic-race         -> origin/s2s-repair-audioin-hermetic-race
+CI (static)	Check out repository	2026-09-10T04:08:11.1535970Z  * [new branch]        s2s-repair-audioin-still-broken-after-152 -> origin/s2s-repair-audioin-still-broken-after-152
+CI (static)	Check out repository	2026-09-10T04:08:11.1537099Z  * [new branch]        s2s-repair-audioin-stream-truncates-before-eof -> origin/s2s-repair-audioin-stream-truncates-before-eof
+CI (static)	Check out repository	2026-09-10T04:08:11.1538120Z  * [new branch]        s2s-repair-coveragegate-manifest-fixture-invariants -> origin/s2s-repair-coveragegate-manifest-fixture-invariants
+CI (static)	Check out repository	2026-09-10T04:08:11.1539074Z  * [new branch]        s2s-repair-factory-script-test-invocation -> origin/s2s-repair-factory-script-test-invocation
+CI (static)	Check out repository	2026-09-10T04:08:11.1539876Z  * [new branch]        s2s-repair-fixture-manifest-158          -> origin/s2s-repair-fixture-manifest-158
+CI (static)	Check out repository	2026-09-10T04:08:11.1540737Z  * [new branch]        s2s-repair-main-red-fixture-manifest-recurrence -> origin/s2s-repair-main-red-fixture-manifest-recurrence
+CI (static)	Check out repository	2026-09-10T04:08:11.1541583Z  * [new branch]        s2s-repair-main-timeharness-red          -> origin/s2s-repair-main-timeharness-red
+CI (static)	Check out repository	2026-09-10T04:08:11.1542443Z  * [new branch]        s2s-repair-media-probe-go2rtc-frame-observation -> origin/s2s-repair-media-probe-go2rtc-frame-observation
+CI (static)	Check out repository	2026-09-10T04:08:11.1543476Z  * [new branch]        s2s-repair-participants-coverage-floor   -> origin/s2s-repair-participants-coverage-floor
+CI (static)	Check out repository	2026-09-10T04:08:11.1544417Z  * [new branch]        s2s-repair-production-cli-rtc-runtime-composition -> origin/s2s-repair-production-cli-rtc-runtime-composition
+CI (static)	Check out repository	2026-09-10T04:08:11.1545286Z  * [new branch]        s2s-repair-rtc-opus-codec-owner          -> origin/s2s-repair-rtc-opus-codec-owner
+CI (static)	Check out repository	2026-09-10T04:08:11.1546039Z  * [new branch]        s2s-repair-rtc-supported-race-gate       -> origin/s2s-repair-rtc-supported-race-gate
+CI (static)	Check out repository	2026-09-10T04:08:11.1547115Z  * [new branch]        s2s-repair-text-seed-wire-leak           -> origin/s2s-repair-text-seed-wire-leak
+CI (static)	Check out repository	2026-09-10T04:08:11.1547917Z  * [new branch]        s2s-repair-v3b-bargein-pr164-conflict    -> origin/s2s-repair-v3b-bargein-pr164-conflict
+CI (static)	Check out repository	2026-09-10T04:08:11.1548738Z  * [new branch]        s2s-replay-audio-turn-self-completion    -> origin/s2s-replay-audio-turn-self-completion
+CI (static)	Check out repository	2026-09-10T04:08:11.1549608Z  * [new branch]        s2s-replay-selfdriving-wire-order-mismatch -> origin/s2s-replay-selfdriving-wire-order-mismatch
+CI (static)	Check out repository	2026-09-10T04:08:11.1550721Z  * [new branch]        s2s-restore-participant-isolation-for-synthesized-terminal-errors -> origin/s2s-restore-participant-isolation-for-synthesized-terminal-errors
+CI (static)	Check out repository	2026-09-10T04:08:11.1551744Z  * [new branch]        s2s-restore-recordreplay-retype          -> origin/s2s-restore-recordreplay-retype
+CI (static)	Check out repository	2026-09-10T04:08:11.1552476Z  * [new branch]        s2s-room-cancel-not-active-race          -> origin/s2s-room-cancel-not-active-race
+CI (static)	Check out repository	2026-09-10T04:08:11.1553221Z  * [new branch]        s2s-room-empty-response-regression       -> origin/s2s-room-empty-response-regression
+CI (static)	Check out repository	2026-09-10T04:08:11.1553984Z  * [new branch]        s2s-room-fix-modalities-rejection        -> origin/s2s-room-fix-modalities-rejection
+CI (static)	Check out repository	2026-09-10T04:08:11.1555095Z  * [new branch]        s2s-room-participant-ends-in-error-on-long-conversations -> origin/s2s-room-participant-ends-in-error-on-long-conversations
+CI (static)	Check out repository	2026-09-10T04:08:11.1556129Z  * [new branch]        s2s-room-participant-tool-selection-collides -> origin/s2s-room-participant-tool-selection-collides
+CI (static)	Check out repository	2026-09-10T04:08:11.1557296Z  * [new branch]        s2s-room-participants-deaf-while-speaking -> origin/s2s-room-participants-deaf-while-speaking
+CI (static)	Check out repository	2026-09-10T04:08:11.1558167Z  * [new branch]        s2s-room-pcm-mixer-input-buffer-overflow -> origin/s2s-room-pcm-mixer-input-buffer-overflow
+CI (static)	Check out repository	2026-09-10T04:08:11.1558969Z  * [new branch]        s2s-room-realtime-replay-harness         -> origin/s2s-room-realtime-replay-harness
+CI (static)	Check out repository	2026-09-10T04:08:11.1559667Z  * [new branch]        s2s-room-record-replay                   -> origin/s2s-room-record-replay
+CI (static)	Check out repository	2026-09-10T04:08:11.1560356Z  * [new branch]        s2s-room-recording-completeness          -> origin/s2s-room-recording-completeness
+CI (static)	Check out repository	2026-09-10T04:08:11.1561241Z  * [new branch]        s2s-room-replay-recorder-emits-events-and-capture -> origin/s2s-room-replay-recorder-emits-events-and-capture
+CI (static)	Check out repository	2026-09-10T04:08:11.1562215Z  * [new branch]        s2s-room-run-replay-roundtrip-schema-mismatch -> origin/s2s-room-run-replay-roundtrip-schema-mismatch
+CI (static)	Check out repository	2026-09-10T04:08:11.1563069Z  * [new branch]        s2s-room-tool-wielding-participants      -> origin/s2s-room-tool-wielding-participants
+CI (static)	Check out repository	2026-09-10T04:08:11.1563770Z  * [new branch]        s2s-room-vision-tool                     -> origin/s2s-room-vision-tool
+CI (static)	Check out repository	2026-09-10T04:08:11.1564428Z  * [new branch]        s2s-room-voice-configuration             -> origin/s2s-room-voice-configuration
+CI (static)	Check out repository	2026-09-10T04:08:11.1565214Z  * [new branch]        s2s-scheduled-turn-continuation-crediting -> origin/s2s-scheduled-turn-continuation-crediting
+CI (static)	Check out repository	2026-09-10T04:08:11.1566095Z  * [new branch]        s2s-scheduled-turns-cannot-express-barge-in -> origin/s2s-scheduled-turns-cannot-express-barge-in
+CI (static)	Check out repository	2026-09-10T04:08:11.1567160Z  * [new branch]        s2s-screen-permission-preflight          -> origin/s2s-screen-permission-preflight
+CI (static)	Check out repository	2026-09-10T04:08:11.1568051Z  * [new branch]        s2s-screen-show-actually-works           -> origin/s2s-screen-show-actually-works
+CI (static)	Check out repository	2026-09-10T04:08:11.1569240Z  * [new branch]        s2s-screenshot-backend-split-and-operator-instruction-leaks-into-customer-speech -> origin/s2s-screenshot-backend-split-and-operator-instruction-leaks-into-customer-speech
+CI (static)	Check out repository	2026-09-10T04:08:11.1570904Z  * [new branch]        s2s-session-browser-tools-minimal-invocation-silently-opens-and-closes-with-no-output -> origin/s2s-session-browser-tools-minimal-invocation-silently-opens-and-closes-with-no-output
+CI (static)	Check out repository	2026-09-10T04:08:11.1572587Z  * [new branch]        s2s-session-provider-default-inherits-wrong-openrouter-default-for-realtime-paths -> origin/s2s-session-provider-default-inherits-wrong-openrouter-default-for-realtime-paths
+CI (static)	Check out repository	2026-09-10T04:08:11.1573866Z  * [new branch]        s2s-session-silent-stop-and-prompt-path-fixes -> origin/s2s-session-silent-stop-and-prompt-path-fixes
+CI (static)	Check out repository	2026-09-10T04:08:11.1574815Z  * [new branch]        s2s-show-always-advertised-preflight-at-invoke -> origin/s2s-show-always-advertised-preflight-at-invoke
+CI (static)	Check out repository	2026-09-10T04:08:11.1575715Z  * [new branch]        s2s-sigint-clean-cancel-during-tool-work -> origin/s2s-sigint-clean-cancel-during-tool-work
+CI (static)	Check out repository	2026-09-10T04:08:11.1576848Z  * [new branch]        s2s-silent-all-agent-room-reports-false-success -> origin/s2s-silent-all-agent-room-reports-false-success
+CI (static)	Check out repository	2026-09-10T04:08:11.1577722Z  * [new branch]        s2s-split-high-churn-session-files       -> origin/s2s-split-high-churn-session-files
+CI (static)	Check out repository	2026-09-10T04:08:11.1578583Z  * [new branch]        s2s-stabilize-agent-cli-integration-ci-budget -> origin/s2s-stabilize-agent-cli-integration-ci-budget
+CI (static)	Check out repository	2026-09-10T04:08:11.1579499Z  * [new branch]        s2s-stabilize-room-mesh-done-close-ordering -> origin/s2s-stabilize-room-mesh-done-close-ordering
+CI (static)	Check out repository	2026-09-10T04:08:11.1580436Z  * [new branch]        s2s-stabilize-room-startup-and-terminal-ordering -> origin/s2s-stabilize-room-startup-and-terminal-ordering
+CI (static)	Check out repository	2026-09-10T04:08:11.1581519Z  * [new branch]        s2s-stabilize-selfplay-turn-target-counting -> origin/s2s-stabilize-selfplay-turn-target-counting
+CI (static)	Check out repository	2026-09-10T04:08:11.1582537Z  * [new branch]        s2s-terminal-announcement-regressions-from-the-drain-fix -> origin/s2s-terminal-announcement-regressions-from-the-drain-fix
+CI (static)	Check out repository	2026-09-10T04:08:11.1583451Z  * [new branch]        s2s-terminal-display-honesty             -> origin/s2s-terminal-display-honesty
+CI (static)	Check out repository	2026-09-10T04:08:11.1584512Z  * [new branch]        s2s-terminal-exit-drain-policy-is-unwritten-and-applied-unevenly -> origin/s2s-terminal-exit-drain-policy-is-unwritten-and-applied-unevenly
+CI (static)	Check out repository	2026-09-10T04:08:11.1585823Z  * [new branch]        s2s-tilde-config-path-silently-writes-to-a-bogus-literal-directory -> origin/s2s-tilde-config-path-silently-writes-to-a-bogus-literal-directory
+CI (static)	Check out repository	2026-09-10T04:08:11.1587144Z  * [new branch]        s2s-tool-path-confinement-and-cwd-semantics -> origin/s2s-tool-path-confinement-and-cwd-semantics
+CI (static)	Check out repository	2026-09-10T04:08:11.1588159Z  * [new branch]        s2s-tool-results-computed-but-never-delivered-to-model -> origin/s2s-tool-results-computed-but-never-delivered-to-model
+CI (static)	Check out repository	2026-09-10T04:08:11.1589028Z  * [new branch]        s2s-turn-to-turn-dead-air                -> origin/s2s-turn-to-turn-dead-air
+CI (static)	Check out repository	2026-09-10T04:08:11.1589774Z  * [new branch]        s2s-two-agent-selfplay-harness-phase1    -> origin/s2s-two-agent-selfplay-harness-phase1
+CI (static)	Check out repository	2026-09-10T04:08:11.1590504Z  * [new branch]        s2s-v1-text-in-audio-out                 -> origin/s2s-v1-text-in-audio-out
+CI (static)	Check out repository	2026-09-10T04:08:11.1591185Z  * [new branch]        s2s-v10-webrtc-external-source           -> origin/s2s-v10-webrtc-external-source
+CI (static)	Check out repository	2026-09-10T04:08:11.1591851Z  * [new branch]        s2s-v2a-audio-in-basic                   -> origin/s2s-v2a-audio-in-basic
+CI (static)	Check out repository	2026-09-10T04:08:11.1592473Z  * [new branch]        s2s-v2b-audio-in-long                    -> origin/s2s-v2b-audio-in-long
+CI (static)	Check out repository	2026-09-10T04:08:11.1593111Z  * [new branch]        s2s-v2c-audio-in-silence                 -> origin/s2s-v2c-audio-in-silence
+CI (static)	Check out repository	2026-09-10T04:08:11.1593931Z  * [new branch]        s2s-v2c-audio-in-silence-recut           -> origin/s2s-v2c-audio-in-silence-recut
+CI (static)	Check out repository	2026-09-10T04:08:11.1594652Z  * [new branch]        s2s-v2d-audio-in-multi-utterance         -> origin/s2s-v2d-audio-in-multi-utterance
+CI (static)	Check out repository	2026-09-10T04:08:11.1595372Z  * [new branch]        s2s-v2d-multi-utterance-recut            -> origin/s2s-v2d-multi-utterance-recut
+CI (static)	Check out repository	2026-09-10T04:08:11.1596054Z  * [new branch]        s2s-v2e-audio-in-truncated               -> origin/s2s-v2e-audio-in-truncated
+CI (static)	Check out repository	2026-09-10T04:08:11.1596997Z  * [new branch]        s2s-v2e-audio-in-truncated-recut         -> origin/s2s-v2e-audio-in-truncated-recut
+CI (static)	Check out repository	2026-09-10T04:08:11.1597686Z  * [new branch]        s2s-v3a-barge-in-basic                   -> origin/s2s-v3a-barge-in-basic
+CI (static)	Check out repository	2026-09-10T04:08:11.1598370Z  * [new branch]        s2s-v3b-barge-in-during-tool-call        -> origin/s2s-v3b-barge-in-during-tool-call
+CI (static)	Check out repository	2026-09-10T04:08:11.1599077Z  * [new branch]        s2s-v3c-barge-in-repeated                -> origin/s2s-v3c-barge-in-repeated
+CI (static)	Check out repository	2026-09-10T04:08:11.1599728Z  * [new branch]        s2s-v4a-tool-single-call                 -> origin/s2s-v4a-tool-single-call
+CI (static)	Check out repository	2026-09-10T04:08:11.1600398Z  * [new branch]        s2s-v4b-tool-parallel-calls              -> origin/s2s-v4b-tool-parallel-calls
+CI (static)	Check out repository	2026-09-10T04:08:11.1601033Z  * [new branch]        s2s-v4c-tool-error                       -> origin/s2s-v4c-tool-error
+CI (static)	Check out repository	2026-09-10T04:08:11.1601629Z  * [new branch]        s2s-v4d-tool-timeout                     -> origin/s2s-v4d-tool-timeout
+CI (static)	Check out repository	2026-09-10T04:08:11.1602228Z  * [new branch]        s2s-v4e-tool-unknown                     -> origin/s2s-v4e-tool-unknown
+CI (static)	Check out repository	2026-09-10T04:08:11.1602855Z  * [new branch]        s2s-v4f-tool-during-audio                -> origin/s2s-v4f-tool-during-audio
+CI (static)	Check out repository	2026-09-10T04:08:11.1603539Z  * [new branch]        s2s-v5a-default-toolset-active           -> origin/s2s-v5a-default-toolset-active
+CI (static)	Check out repository	2026-09-10T04:08:11.1604350Z  * [new branch]        s2s-v5b-toolset-subset                   -> origin/s2s-v5b-toolset-subset
+CI (static)	Check out repository	2026-09-10T04:08:11.1604974Z  * [new branch]        s2s-v5c-toolset-none                     -> origin/s2s-v5c-toolset-none
+CI (static)	Check out repository	2026-09-10T04:08:11.1605565Z  * [new branch]        s2s-v6a-error-auth                       -> origin/s2s-v6a-error-auth
+CI (static)	Check out repository	2026-09-10T04:08:11.1606181Z  * [new branch]        s2s-v6b-error-disconnect                 -> origin/s2s-v6b-error-disconnect
+CI (static)	Check out repository	2026-09-10T04:08:11.1607062Z  * [new branch]        s2s-v6c-error-rate-limit                 -> origin/s2s-v6c-error-rate-limit
+CI (static)	Check out repository	2026-09-10T04:08:11.1607755Z  * [new branch]        s2s-v6d-error-malformed-recut            -> origin/s2s-v6d-error-malformed-recut
+CI (static)	Check out repository	2026-09-10T04:08:11.1608513Z  * [new branch]        s2s-v6d-error-malformed-response         -> origin/s2s-v6d-error-malformed-response
+CI (static)	Check out repository	2026-09-10T04:08:11.1609218Z  * [new branch]        s2s-v7a-metrics-modality                 -> origin/s2s-v7a-metrics-modality
+CI (static)	Check out repository	2026-09-10T04:08:11.1609859Z  * [new branch]        s2s-v7b-buffer-logs                      -> origin/s2s-v7b-buffer-logs
+CI (static)	Check out repository	2026-09-10T04:08:11.1610497Z  * [new branch]        s2s-v7c-metrics-reconcile                -> origin/s2s-v7c-metrics-reconcile
+CI (static)	Check out repository	2026-09-10T04:08:11.1611140Z  * [new branch]        s2s-v8-duplex-overlap                    -> origin/s2s-v8-duplex-overlap
+CI (static)	Check out repository	2026-09-10T04:08:11.1611809Z  * [new branch]        s2s-v9-webrtc-device-roundtrip           -> origin/s2s-v9-webrtc-device-roundtrip
+CI (static)	Check out repository	2026-09-10T04:08:11.1612662Z  * [new branch]        s2s-validate-async-tool-result-interrupts-speech -> origin/s2s-validate-async-tool-result-interrupts-speech
+CI (static)	Check out repository	2026-09-10T04:08:11.1613557Z  * [new branch]        s2s-validate-live-shaped-barge-in-v2     -> origin/s2s-validate-live-shaped-barge-in-v2
+CI (static)	Check out repository	2026-09-10T04:08:11.1614381Z  * [new branch]        s2s-validate-multiturn-duplex-multiplex  -> origin/s2s-validate-multiturn-duplex-multiplex
+CI (static)	Check out repository	2026-09-10T04:08:11.1615194Z  * [new branch]        s2s-vertical-pr-disposition-triage       -> origin/s2s-vertical-pr-disposition-triage
+CI (static)	Check out repository	2026-09-10T04:08:11.1616204Z  * [new branch]        s2s-vision-tool-continuation-token-overflow -> origin/s2s-vision-tool-continuation-token-overflow
+CI (static)	Check out repository	2026-09-10T04:08:11.1617260Z  * [new branch]        s2s-voice-honest-failure-grounding       -> origin/s2s-voice-honest-failure-grounding
+CI (static)	Check out repository	2026-09-10T04:08:11.1617994Z  * [new branch]        s2s-voice-tool-grounding-v2              -> origin/s2s-voice-tool-grounding-v2
+CI (static)	Check out repository	2026-09-10T04:08:11.1619127Z  * [new branch]        s2s-webmcp-select-is-blocked-by-the-very-stale-selection-it-exists-to-replace -> origin/s2s-webmcp-select-is-blocked-by-the-very-stale-selection-it-exists-to-replace
+CI (static)	Check out repository	2026-09-10T04:08:11.1620252Z  * [new branch]        s2s-webrtc-customer-audio-path           -> origin/s2s-webrtc-customer-audio-path
+CI (static)	Check out repository	2026-09-10T04:08:11.1621361Z  * [new branch]        s2s-write-file-temp-rename-shrinks-filename-limit-with-a-confusing-error -> origin/s2s-write-file-temp-rename-shrinks-filename-limit-with-a-confusing-error
+CI (static)	Check out repository	2026-09-10T04:08:11.1622457Z  * [new branch]        virtual-device-loopback-harness          -> origin/virtual-device-loopback-harness
+CI (static)	Check out repository	2026-09-10T04:08:11.1623345Z  * [new branch]        webmcp-ambiguous-tab-exact-id-rejected-and-silent -> origin/webmcp-ambiguous-tab-exact-id-rejected-and-silent
+CI (static)	Check out repository	2026-09-10T04:08:11.1624406Z  * [new branch]        webmcp-ambiguous-tab-hides-page-tools-agent-fabricates -> origin/webmcp-ambiguous-tab-hides-page-tools-agent-fabricates
+CI (static)	Check out repository	2026-09-10T04:08:11.1625287Z  * [new branch]        webmcp-c0-contract-freeze                -> origin/webmcp-c0-contract-freeze
+CI (static)	Check out repository	2026-09-10T04:08:11.1626070Z  * [new branch]        webmcp-classification-contract-conformance -> origin/webmcp-classification-contract-conformance
+CI (static)	Check out repository	2026-09-10T04:08:11.1627103Z  * [new branch]        webmcp-conversational-customer-sim       -> origin/webmcp-conversational-customer-sim
+CI (static)	Check out repository	2026-09-10T04:08:11.1627915Z  * [new branch]        webmcp-cross-process-cancel-real-chrome  -> origin/webmcp-cross-process-cancel-real-chrome
+CI (static)	Check out repository	2026-09-10T04:08:11.1628821Z  * [new branch]        webmcp-diagnostics-honesty               -> origin/webmcp-diagnostics-honesty
+CI (static)	Check out repository	2026-09-10T04:08:11.1629515Z  * [new branch]        webmcp-i1-production-wiring              -> origin/webmcp-i1-production-wiring
+CI (static)	Check out repository	2026-09-10T04:08:11.1630183Z  * [new branch]        webmcp-in-session-attach                 -> origin/webmcp-in-session-attach
+CI (static)	Check out repository	2026-09-10T04:08:11.1630952Z  * [new branch]        webmcp-invoke-error-envelope-and-cancel-ux -> origin/webmcp-invoke-error-envelope-and-cancel-ux
+CI (static)	Check out repository	2026-09-10T04:08:11.1631814Z  * [new branch]        webmcp-lane-a-go126-workspace-upgrade    -> origin/webmcp-lane-a-go126-workspace-upgrade
+CI (static)	Check out repository	2026-09-10T04:08:11.1632593Z  * [new branch]        webmcp-lane-b-discovery-selection        -> origin/webmcp-lane-b-discovery-selection
+CI (static)	Check out repository	2026-09-10T04:08:11.1633302Z  * [new branch]        webmcp-lane-c-broker-core                -> origin/webmcp-lane-c-broker-core
+CI (static)	Check out repository	2026-09-10T04:08:11.1633990Z  * [new branch]        webmcp-lane-d-chrome-adapter             -> origin/webmcp-lane-d-chrome-adapter
+CI (static)	Check out repository	2026-09-10T04:08:11.1634757Z  * [new branch]        webmcp-lane-f-testkit-fixture-replay     -> origin/webmcp-lane-f-testkit-fixture-replay
+CI (static)	Check out repository	2026-09-10T04:08:11.1635555Z  * [new branch]        webmcp-lane-g-cli-config-composition     -> origin/webmcp-lane-g-cli-config-composition
+CI (static)	Check out repository	2026-09-10T04:08:11.1636325Z  * [new branch]        webmcp-lane-h-topology-recovery          -> origin/webmcp-lane-h-topology-recovery
+CI (static)	Check out repository	2026-09-10T04:08:11.1637384Z  * [new branch]        webmcp-lane-i-realtime-session-integration -> origin/webmcp-lane-i-realtime-session-integration
+CI (static)	Check out repository	2026-09-10T04:08:11.1638179Z  * [new branch]        webmcp-lane-k-probe-evidence             -> origin/webmcp-lane-k-probe-evidence
+CI (static)	Check out repository	2026-09-10T04:08:11.1638908Z  * [new branch]        webmcp-late-catalog-reevaluation         -> origin/webmcp-late-catalog-reevaluation
+CI (static)	Check out repository	2026-09-10T04:08:11.1639918Z  * [new branch]        webmcp-live-session-tool-invocation-returns-stale-empty-result -> origin/webmcp-live-session-tool-invocation-returns-stale-empty-result
+CI (static)	Check out repository	2026-09-10T04:08:11.1641070Z  * [new branch]        webmcp-managed-default-browser           -> origin/webmcp-managed-default-browser
+CI (static)	Check out repository	2026-09-10T04:08:11.1641792Z  * [new branch]        webmcp-mid-session-tab-switch            -> origin/webmcp-mid-session-tab-switch
+CI (static)	Check out repository	2026-09-10T04:08:11.1642484Z  * [new branch]        webmcp-o0-toolchain-gate                 -> origin/webmcp-o0-toolchain-gate
+CI (static)	Check out repository	2026-09-10T04:08:11.1643173Z  * [new branch]        webmcp-page-tools-first-class            -> origin/webmcp-page-tools-first-class
+CI (static)	Check out repository	2026-09-10T04:08:11.1643925Z  * [new branch]        webmcp-pagetool-timeout-cold-attach      -> origin/webmcp-pagetool-timeout-cold-attach
+CI (static)	Check out repository	2026-09-10T04:08:11.1644713Z  * [new branch]        webmcp-prereq-go126-vet-slice-format     -> origin/webmcp-prereq-go126-vet-slice-format
+CI (static)	Check out repository	2026-09-10T04:08:11.1645451Z  * [new branch]        webmcp-residual-stub-paths               -> origin/webmcp-residual-stub-paths
+CI (static)	Check out repository	2026-09-10T04:08:11.1646197Z  * [new branch]        webmcp-select-hang-on-browser-death      -> origin/webmcp-select-hang-on-browser-death
+CI (static)	Check out repository	2026-09-10T04:08:11.1647263Z  * [new branch]        webmcp-selection-connectivity-voice-path -> origin/webmcp-selection-connectivity-voice-path
+CI (static)	Check out repository	2026-09-10T04:08:11.1648152Z  * [new branch]        webmcp-session-update-missing-session-type -> origin/webmcp-session-update-missing-session-type
+CI (static)	Check out repository	2026-09-10T04:08:11.1649102Z  * [new branch]        webmcp-stale-persisted-selection-hides-page-tools -> origin/webmcp-stale-persisted-selection-hides-page-tools
+CI (static)	Check out repository	2026-09-10T04:08:11.1649995Z  * [new branch]        webmcp-watch-cross-process-events        -> origin/webmcp-watch-cross-process-events
+CI (static)	Check out repository	2026-09-10T04:08:11.1650643Z  * [new tag]           agent-cli/v0.0.1                         -> agent-cli/v0.0.1
+CI (static)	Check out repository	2026-09-10T04:08:11.1651173Z  * [new tag]           agent-cli/v0.0.2                         -> agent-cli/v0.0.2
+CI (static)	Check out repository	2026-09-10T04:08:11.1651674Z  * [new tag]           agent-cli/v0.0.3                         -> agent-cli/v0.0.3
+CI (static)	Check out repository	2026-09-10T04:08:11.1652313Z  * [new tag]           agent-cli/v0.0.4                         -> agent-cli/v0.0.4
+CI (static)	Check out repository	2026-09-10T04:08:11.1652850Z  * [new tag]           go-agent-loop/v0.0.1                     -> go-agent-loop/v0.0.1
+CI (static)	Check out repository	2026-09-10T04:08:11.1653400Z  * [new tag]           go-agent-loop/v0.0.2                     -> go-agent-loop/v0.0.2
+CI (static)	Check out repository	2026-09-10T04:08:11.1653935Z  * [new tag]           go-agent-loop/v0.0.3                     -> go-agent-loop/v0.0.3
+CI (static)	Check out repository	2026-09-10T04:08:11.1654464Z  * [new tag]           go-agent-loop/v0.0.4                     -> go-agent-loop/v0.0.4
+CI (static)	Check out repository	2026-09-10T04:08:11.1655006Z  * [new tag]           go-llm-gateway/v0.0.1                    -> go-llm-gateway/v0.0.1
+CI (static)	Check out repository	2026-09-10T04:08:11.1655550Z  * [new tag]           go-llm-gateway/v0.0.2                    -> go-llm-gateway/v0.0.2
+CI (static)	Check out repository	2026-09-10T04:08:11.1656091Z  * [new tag]           go-llm-gateway/v0.0.3                    -> go-llm-gateway/v0.0.3
+CI (static)	Check out repository	2026-09-10T04:08:11.1656958Z  * [new tag]           go-llm-gateway/v0.0.4                    -> go-llm-gateway/v0.0.4
+CI (static)	Check out repository	2026-09-10T04:08:11.1657546Z  * [new tag]           v0.0.1                                   -> v0.0.1
+CI (static)	Check out repository	2026-09-10T04:08:11.1658165Z  * [new tag]           v0.0.2                                   -> v0.0.2
+CI (static)	Check out repository	2026-09-10T04:08:11.1658871Z  * [new tag]           v0.0.3                                   -> v0.0.3
+CI (static)	Check out repository	2026-09-10T04:08:11.1659611Z  * [new tag]           v0.0.4                                   -> v0.0.4
+CI (static)	Check out repository	2026-09-10T04:08:11.1660479Z  * [new ref]           d8ee6d8a9d0c3c56b1589894a73a57b008daa204 -> pull/426/merge
+CI (static)	Check out repository	2026-09-10T04:08:11.1662964Z ##[endgroup]
+CI (static)	Check out repository	2026-09-10T04:08:11.1663704Z ##[group]Determining the checkout info
+CI (static)	Check out repository	2026-09-10T04:08:11.1664218Z ##[endgroup]
+CI (static)	Check out repository	2026-09-10T04:08:11.1664535Z [command]/usr/bin/git sparse-checkout disable
+CI (static)	Check out repository	2026-09-10T04:08:11.1665370Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+CI (static)	Check out repository	2026-09-10T04:08:11.1666432Z ##[group]Checking out the ref
+CI (static)	Check out repository	2026-09-10T04:08:11.1667107Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/426/merge
+CI (static)	Check out repository	2026-09-10T04:08:11.7064399Z Note: switching to 'refs/remotes/pull/426/merge'.
+CI (static)	Check out repository	2026-09-10T04:08:11.7065002Z 
+CI (static)	Check out repository	2026-09-10T04:08:11.7065372Z You are in 'detached HEAD' state. You can look around, make experimental
+CI (static)	Check out repository	2026-09-10T04:08:11.7066212Z changes and commit them, and you can discard any commits you make in this
+CI (static)	Check out repository	2026-09-10T04:08:11.7067318Z state without impacting any branches by switching back to a branch.
+CI (static)	Check out repository	2026-09-10T04:08:11.7067776Z 
+CI (static)	Check out repository	2026-09-10T04:08:11.7068093Z If you want to create a new branch to retain commits you create, you may
+CI (static)	Check out repository	2026-09-10T04:08:11.7068802Z do so (now or later) by using -c with the switch command. Example:
+CI (static)	Check out repository	2026-09-10T04:08:11.7069219Z 
+CI (static)	Check out repository	2026-09-10T04:08:11.7069417Z   git switch -c <new-branch-name>
+CI (static)	Check out repository	2026-09-10T04:08:11.7069710Z 
+CI (static)	Check out repository	2026-09-10T04:08:11.7070001Z Or undo this operation with:
+CI (static)	Check out repository	2026-09-10T04:08:11.7070271Z 
+CI (static)	Check out repository	2026-09-10T04:08:11.7070407Z   git switch -
+CI (static)	Check out repository	2026-09-10T04:08:11.7070602Z 
+CI (static)	Check out repository	2026-09-10T04:08:11.7070994Z Turn off this advice by setting config variable advice.detachedHead to false
+CI (static)	Check out repository	2026-09-10T04:08:11.7071524Z 
+CI (static)	Check out repository	2026-09-10T04:08:11.7072146Z HEAD is now at d8ee6d8a Merge ee15be2f0e4093e12c06c32df4e7a8ed4219861d into 1f82284abee0bd31a6680310444cea2e4c16ef00
+CI (static)	Check out repository	2026-09-10T04:08:11.7150437Z ##[endgroup]
+CI (static)	Check out repository	2026-09-10T04:08:11.7154936Z [command]/usr/bin/git log -1 --format=%H
+CI (static)	Check out repository	2026-09-10T04:08:11.7197712Z d8ee6d8a9d0c3c56b1589894a73a57b008daa204
+CI (static)	Set up Go	﻿2026-09-10T04:08:11.7452781Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+CI (static)	Set up Go	2026-09-10T04:08:11.7454476Z ##[group]Run actions/setup-go@v5
+CI (static)	Set up Go	2026-09-10T04:08:11.7454720Z with:
+CI (static)	Set up Go	2026-09-10T04:08:11.7454906Z   go-version: 1.26.7
+CI (static)	Set up Go	2026-09-10T04:08:11.7455108Z   cache: true
+CI (static)	Set up Go	2026-09-10T04:08:11.7456059Z   cache-dependency-path: go.work.sum
+CI (static)	Set up Go	agent-cli/go.sum
+CI (static)	Set up Go	go-agent-loop/go.sum
+CI (static)	Set up Go	go-llm-gateway/go.sum
+CI (static)	Set up Go	go-audio/go.sum
+CI (static)	Set up Go	go-device-gateway/go.sum
+CI (static)	Set up Go	go-agent-runtime/go.sum
+CI (static)	Set up Go	tools/architecturegate/go.sum
+CI (static)	Set up Go	tests/embedding/go.sum
+CI (static)	Set up Go	
+CI (static)	Set up Go	2026-09-10T04:08:11.7457276Z   check-latest: false
+CI (static)	Set up Go	2026-09-10T04:08:11.7459934Z   token: ***
+CI (static)	Set up Go	2026-09-10T04:08:11.7460134Z ##[endgroup]
+CI (static)	Set up Go	2026-09-10T04:08:11.8779913Z Setup go version spec 1.26.7
+CI (static)	Set up Go	2026-09-10T04:08:11.8798522Z Found in cache @ /opt/hostedtoolcache/go/1.26.7/x64
+CI (static)	Set up Go	2026-09-10T04:08:11.8800267Z (node:2305) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+CI (static)	Set up Go	2026-09-10T04:08:11.8801510Z (Use `node --trace-deprecation ...` to show where the warning was created)
+CI (static)	Set up Go	2026-09-10T04:08:11.8804554Z Added go to the path
+CI (static)	Set up Go	2026-09-10T04:08:11.8809135Z Successfully set up Go version 1.26.7
+CI (static)	Set up Go	2026-09-10T04:08:13.2709052Z [command]/opt/hostedtoolcache/go/1.26.7/x64/bin/go env GOMODCACHE
+CI (static)	Set up Go	2026-09-10T04:08:13.2745990Z [command]/opt/hostedtoolcache/go/1.26.7/x64/bin/go env GOCACHE
+CI (static)	Set up Go	2026-09-10T04:08:13.2779088Z /home/runner/go/pkg/mod
+CI (static)	Set up Go	2026-09-10T04:08:13.2807009Z /home/runner/.cache/go-build
+CI (static)	Set up Go	2026-09-10T04:08:13.4565518Z Cache hit for: setup-go-Linux-x64-ubuntu24-go-1.26.7-452240fe38adb059428305881a4f431b44a621f07db879f8a9f8107e18051550
+CI (static)	Set up Go	2026-09-10T04:08:13.4682607Z (node:2305) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+CI (static)	Set up Go	2026-09-10T04:08:14.5737657Z Received 134217728 of 193794498 (69.3%), 125.6 MBs/sec
+CI (static)	Set up Go	2026-09-10T04:08:14.8957008Z Received 193794498 of 193794498 (100.0%), 137.7 MBs/sec
+CI (static)	Set up Go	2026-09-10T04:08:14.8958598Z Cache Size: ~185 MB (193794498 B)
+CI (static)	Set up Go	2026-09-10T04:08:14.8994761Z [command]/usr/bin/tar -xf /home/runner/work/_temp/eb7cd290-1a44-4ee4-9a96-8d7c66844f86/cache.tzst -P -C /home/runner/work/go-agent-harness/go-agent-harness --use-compress-program unzstd
+CI (static)	Set up Go	2026-09-10T04:08:16.4875271Z Cache restored successfully
+CI (static)	Set up Go	2026-09-10T04:08:16.4965448Z Cache restored from key: setup-go-Linux-x64-ubuntu24-go-1.26.7-452240fe38adb059428305881a4f431b44a621f07db879f8a9f8107e18051550
+CI (static)	Set up Go	2026-09-10T04:08:16.4986959Z go version go1.26.7 linux/amd64
+CI (static)	Set up Go	2026-09-10T04:08:16.4987187Z 
+CI (static)	Set up Go	2026-09-10T04:08:16.4987536Z ##[group]go env
+CI (static)	Set up Go	2026-09-10T04:08:16.5471363Z AR='ar'
+CI (static)	Set up Go	2026-09-10T04:08:16.5471814Z CC='gcc'
+CI (static)	Set up Go	2026-09-10T04:08:16.5472161Z CGO_CFLAGS='-O2 -g'
+CI (static)	Set up Go	2026-09-10T04:08:16.5472475Z CGO_CPPFLAGS=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5472754Z CGO_CXXFLAGS='-O2 -g'
+CI (static)	Set up Go	2026-09-10T04:08:16.5473016Z CGO_ENABLED='1'
+CI (static)	Set up Go	2026-09-10T04:08:16.5473246Z CGO_FFLAGS='-O2 -g'
+CI (static)	Set up Go	2026-09-10T04:08:16.5473510Z CGO_LDFLAGS='-O2 -g'
+CI (static)	Set up Go	2026-09-10T04:08:16.5473744Z CXX='g++'
+CI (static)	Set up Go	2026-09-10T04:08:16.5473956Z GCCGO='gccgo'
+CI (static)	Set up Go	2026-09-10T04:08:16.5474188Z GO111MODULE=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5474408Z GOAMD64='v1'
+CI (static)	Set up Go	2026-09-10T04:08:16.5474624Z GOARCH='amd64'
+CI (static)	Set up Go	2026-09-10T04:08:16.5474845Z GOAUTH='netrc'
+CI (static)	Set up Go	2026-09-10T04:08:16.5475067Z GOBIN=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5475308Z GOCACHE='/home/runner/.cache/go-build'
+CI (static)	Set up Go	2026-09-10T04:08:16.5475623Z GOCACHEPROG=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5475840Z GODEBUG=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5476072Z GOENV='/home/runner/.config/go/env'
+CI (static)	Set up Go	2026-09-10T04:08:16.5476356Z GOEXE=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5476859Z GOEXPERIMENT=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5477103Z GOFIPS140='off'
+CI (static)	Set up Go	2026-09-10T04:08:16.5477319Z GOFLAGS=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5478052Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build2958636794=/tmp/go-build -gno-record-gcc-switches'
+CI (static)	Set up Go	2026-09-10T04:08:16.5479078Z GOHOSTARCH='amd64'
+CI (static)	Set up Go	2026-09-10T04:08:16.5479314Z GOHOSTOS='linux'
+CI (static)	Set up Go	2026-09-10T04:08:16.5479539Z GOINSECURE=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5479769Z GOMOD='/dev/null'
+CI (static)	Set up Go	2026-09-10T04:08:16.5480025Z GOMODCACHE='/home/runner/go/pkg/mod'
+CI (static)	Set up Go	2026-09-10T04:08:16.5480319Z GONOPROXY=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5480540Z GONOSUMDB=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5480748Z GOOS='linux'
+CI (static)	Set up Go	2026-09-10T04:08:16.5480960Z GOPATH='/home/runner/go'
+CI (static)	Set up Go	2026-09-10T04:08:16.5481200Z GOPRIVATE=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5481470Z GOPROXY='https://proxy.golang.org,direct'
+CI (static)	Set up Go	2026-09-10T04:08:16.5481982Z GOROOT='/opt/hostedtoolcache/go/1.26.7/x64'
+CI (static)	Set up Go	2026-09-10T04:08:16.5482309Z GOSUMDB='sum.golang.org'
+CI (static)	Set up Go	2026-09-10T04:08:16.5482556Z GOTELEMETRY='local'
+CI (static)	Set up Go	2026-09-10T04:08:16.5482837Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+CI (static)	Set up Go	2026-09-10T04:08:16.5483157Z GOTMPDIR=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5483368Z GOTOOLCHAIN='auto'
+CI (static)	Set up Go	2026-09-10T04:08:16.5483699Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.7/x64/pkg/tool/linux_amd64'
+CI (static)	Set up Go	2026-09-10T04:08:16.5484120Z GOVCS=''
+CI (static)	Set up Go	2026-09-10T04:08:16.5484324Z GOVERSION='go1.26.7'
+CI (static)	Set up Go	2026-09-10T04:08:16.5484676Z GOWORK='/home/runner/work/go-agent-harness/go-agent-harness/go.work'
+CI (static)	Set up Go	2026-09-10T04:08:16.5485090Z PKG_CONFIG='pkg-config'
+CI (static)	Set up Go	2026-09-10T04:08:16.5485236Z 
+CI (static)	Set up Go	2026-09-10T04:08:16.5485662Z ##[endgroup]
+CI (static)	Cache pinned analyzer binaries	﻿2026-09-10T04:08:16.5722564Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.5723929Z ##[group]Run actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.5724270Z with:
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.5724507Z   path: ~/.cache/go-agent-harness/ci-analyzers
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.5724920Z   key: ci-analyzers-Linux-X64-golangci-lint-v2.9.0-staticcheck-2026.1
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.5725317Z   enableCrossOsArchive: false
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.5725578Z   fail-on-cache-miss: false
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.5725819Z   lookup-only: false
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.5726026Z   save-always: false
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.5726228Z ##[endgroup]
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.6817423Z (node:2358) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.6818353Z (Use `node --trace-deprecation ...` to show where the warning was created)
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.7878875Z Cache hit for: ci-analyzers-Linux-X64-golangci-lint-v2.9.0-staticcheck-2026.1
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:16.8027519Z (node:2358) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:17.4230113Z Received 23445110 of 23445110 (100.0%), 44.4 MBs/sec
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:17.4230918Z Cache Size: ~22 MB (23445110 B)
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:17.4261395Z [command]/usr/bin/tar -xf /home/runner/work/_temp/5bc0be03-52c9-417e-9f51-057535cc0115/cache.tzst -P -C /home/runner/work/go-agent-harness/go-agent-harness --use-compress-program unzstd
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:17.5235896Z Cache restored successfully
+CI (static)	Cache pinned analyzer binaries	2026-09-10T04:08:17.5325327Z Cache restored from key: ci-analyzers-Linux-X64-golangci-lint-v2.9.0-staticcheck-2026.1
+CI (static)	Install golangci-lint	﻿2026-09-10T04:08:17.5450747Z ##[group]Run bash scripts/install-ci-analyzer.sh golangci-lint
+CI (static)	Install golangci-lint	2026-09-10T04:08:17.5451295Z [36;1mbash scripts/install-ci-analyzer.sh golangci-lint[0m
+CI (static)	Install golangci-lint	2026-09-10T04:08:17.5492983Z shell: /usr/bin/bash -e {0}
+CI (static)	Install golangci-lint	2026-09-10T04:08:17.5493279Z env:
+CI (static)	Install golangci-lint	2026-09-10T04:08:17.5493488Z   GOLANGCI_LINT_VERSION: v2.9.0
+CI (static)	Install golangci-lint	2026-09-10T04:08:17.5493747Z ##[endgroup]
+CI (static)	Install golangci-lint	2026-09-10T04:08:17.5605287Z install-ci-analyzer: using cached golangci-lint at /home/runner/.cache/go-agent-harness/ci-analyzers/bin/golangci-lint
+CI (static)	Install golangci-lint	2026-09-10T04:08:17.6686139Z golangci-lint has version 2.9.0 built with go1.26.0 from 72798d34 on 2026-02-10T23:13:22Z
+CI (static)	Install golangci-lint	2026-09-10T04:08:17.6687605Z install-ci-analyzer: golangci-lint v2.9.0 is ready at /home/runner/.cache/go-agent-harness/ci-analyzers/bin/golangci-lint
+CI (static)	Install staticcheck	﻿2026-09-10T04:08:17.6726215Z ##[group]Run bash scripts/install-ci-analyzer.sh staticcheck
+CI (static)	Install staticcheck	2026-09-10T04:08:17.6727068Z [36;1mbash scripts/install-ci-analyzer.sh staticcheck[0m
+CI (static)	Install staticcheck	2026-09-10T04:08:17.6766062Z shell: /usr/bin/bash -e {0}
+CI (static)	Install staticcheck	2026-09-10T04:08:17.6766329Z env:
+CI (static)	Install staticcheck	2026-09-10T04:08:17.6766544Z   STATICCHECK_VERSION: 2026.1
+CI (static)	Install staticcheck	2026-09-10T04:08:17.6767083Z ##[endgroup]
+CI (static)	Install staticcheck	2026-09-10T04:08:17.6853827Z install-ci-analyzer: using cached staticcheck at /home/runner/.cache/go-agent-harness/ci-analyzers/bin/staticcheck
+CI (static)	Install staticcheck	2026-09-10T04:08:17.6911605Z staticcheck 2026.1 (v0.7.0)
+CI (static)	Install staticcheck	2026-09-10T04:08:17.6912863Z install-ci-analyzer: staticcheck 2026.1 is ready at /home/runner/.cache/go-agent-harness/ci-analyzers/bin/staticcheck
+CI (static)	Run gofmt check	﻿2026-09-10T04:08:17.6948080Z ##[group]Run make fmt
+CI (static)	Run gofmt check	2026-09-10T04:08:17.6948360Z [36;1mmake fmt[0m
+CI (static)	Run gofmt check	2026-09-10T04:08:17.6985375Z shell: /usr/bin/bash -e {0}
+CI (static)	Run gofmt check	2026-09-10T04:08:17.6985638Z ##[endgroup]
+CI (static)	Run gofmt check	2026-09-10T04:08:17.7084333Z ==> fmt agent-cli
+CI (static)	Run gofmt check	2026-09-10T04:08:18.5581326Z ==> fmt go-agent-loop
+CI (static)	Run gofmt check	2026-09-10T04:08:18.7263347Z ==> fmt go-llm-gateway
+CI (static)	Run gofmt check	2026-09-10T04:08:18.8304385Z ==> fmt go-audio
+CI (static)	Run gofmt check	2026-09-10T04:08:18.8830316Z ==> fmt go-device-gateway
+CI (static)	Run gofmt check	2026-09-10T04:08:18.9229349Z ==> fmt go-agent-runtime
+CI (static)	Run gofmt check	2026-09-10T04:08:19.0424326Z ==> fmt tests/embedding
+CI (static)	Run gofmt check	2026-09-10T04:08:19.0524869Z ==> fmt tools/architecturegate
+CI (static)	Run gofmt check	2026-09-10T04:08:19.0657296Z ==> fmt tools/analyzergate
+CI (static)	Run gofmt check	2026-09-10T04:08:19.0719420Z ==> fmt tools/coveragegate
+CI (static)	Run gofmt check	2026-09-10T04:08:19.0805296Z ==> fmt tools/rtc-race-gate
+CI (static)	Run gofmt check	2026-09-10T04:08:19.0853226Z ==> fmt tools/session-race-gate
+CI (static)	Run gofmt check	2026-09-10T04:08:19.0904169Z ==> fmt tools/timingate
+CI (static)	Run gofmt check	2026-09-10T04:08:19.0956255Z ==> fmt scripts/webmcp-o0
+CI (static)	Run gofmt check	2026-09-10T04:08:19.1038668Z ==> fmt test/localai
+CI (static)	Verify generated service composition	﻿2026-09-10T04:08:19.1135176Z ##[group]Run make wire-check
+CI (static)	Verify generated service composition	2026-09-10T04:08:19.1135499Z [36;1mmake wire-check[0m
+CI (static)	Verify generated service composition	2026-09-10T04:08:19.1171982Z shell: /usr/bin/bash -e {0}
+CI (static)	Verify generated service composition	2026-09-10T04:08:19.1172253Z ##[endgroup]
+CI (static)	Verify generated service composition	2026-09-10T04:08:19.1700441Z ==> Wire agent-cli/internal/wire
+CI (static)	Verify generated service composition	2026-09-10T04:08:19.2741468Z go: downloading github.com/gen2brain/malgo v0.11.24
+CI (static)	Verify generated service composition	2026-09-10T04:08:19.5142167Z go: downloading github.com/google/subcommands v1.2.0
+CI (static)	Verify generated service composition	2026-09-10T04:08:19.5142757Z go: downloading golang.org/x/tools v0.41.0
+CI (static)	Verify generated service composition	2026-09-10T04:08:19.8945403Z go: downloading golang.org/x/sync v0.19.0
+CI (static)	Verify generated service composition	2026-09-10T04:08:19.8965269Z go: downloading golang.org/x/mod v0.32.0
+CI (static)	Verify generated service composition	2026-09-10T04:08:45.9695931Z wire: github.com/portpowered/go-agent-harness/agent-cli/internal/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/agent-cli/internal/wire/wire_gen.go
+CI (static)	Verify generated service composition	2026-09-10T04:08:46.0233737Z ==> Wire go-agent-runtime/services/devices/wire
+CI (static)	Verify generated service composition	2026-09-10T04:08:47.4808926Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/devices/wire/wire_gen.go
+CI (static)	Verify generated service composition	2026-09-10T04:08:47.4866856Z ==> Wire go-agent-runtime/services/providers/wire
+CI (static)	Verify generated service composition	2026-09-10T04:08:48.7259499Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/providers/wire/wire_gen.go
+CI (static)	Verify generated service composition	2026-09-10T04:08:48.7313521Z ==> Wire go-agent-runtime/services/session/wire
+CI (static)	Verify generated service composition	2026-09-10T04:08:49.9739077Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/session/wire/wire_gen.go
+CI (static)	Verify generated service composition	2026-09-10T04:08:49.9787382Z ==> Wire go-agent-runtime/services/rooms/wire
+CI (static)	Verify generated service composition	2026-09-10T04:08:50.9380537Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/rooms/wire/wire_gen.go
+CI (static)	Verify generated service composition	2026-09-10T04:08:50.9433503Z ==> Wire go-agent-runtime/services/tools/wire
+CI (static)	Verify generated service composition	2026-09-10T04:08:52.2898302Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/tools/wire/wire_gen.go
+CI (static)	Verify generated service composition	2026-09-10T04:08:52.2972339Z ==> Wire go-agent-runtime/services/replay/wire
+CI (static)	Verify generated service composition	2026-09-10T04:08:53.5299026Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/replay/wire/wire_gen.go
+CI (static)	Verify generated service composition	2026-09-10T04:08:53.5327556Z ==> Wire go-agent-runtime/services/recording/wire
+CI (static)	Verify generated service composition	2026-09-10T04:08:54.7725378Z wire: github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire: wrote /home/runner/work/go-agent-harness/go-agent-harness/go-agent-runtime/services/recording/wire/wire_gen.go
+CI (static)	Verify service architecture and size budgets	﻿2026-09-10T04:08:54.7988299Z ##[group]Run make architecture-size-check
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:08:54.7988783Z [36;1mmake architecture-size-check[0m
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:08:54.8025782Z shell: /usr/bin/bash -e {0}
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:08:54.8026062Z ##[endgroup]
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:08:54.8180608Z go: downloading github.com/fzipp/gocyclo v0.6.0
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:08:54.8181884Z go: downloading github.com/uudashr/gocognit v1.2.1
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:08:54.8182965Z go: downloading golang.org/x/tools v0.42.0
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:08:55.1907991Z go: downloading golang.org/x/mod v0.33.0
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:09:37.9065649Z architecture gate failed with 4 issue(s)
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:09:37.9066372Z architecture gate found 4 issue(s) across 181 package(s):
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:09:37.9068104Z - baseline-drift pkg/recording/replay.go:OpenReplay (46 > 36): baseline value is 36 but current value is 46; lower the baseline after a reduction and investigate increases
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:09:37.9070012Z - baseline-drift pkg/recording/replay.go:OpenReplay (77 > 62): baseline value is 62 but current value is 77; lower the baseline after a reduction and investigate increases
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:09:37.9072271Z - baseline-drift pkg/recording/replay.go:OpenReplay (86 > 72): baseline value is 72 but current value is 86; lower the baseline after a reduction and investigate increases
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:09:37.9074147Z - baseline-drift pkg/recording/replay.go:OpenReplay (117 > 94): baseline value is 94 but current value is 117; lower the baseline after a reduction and investigate increases
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:09:37.9515419Z exit status 1
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:09:37.9602839Z make: *** [Makefile:185: architecture-size-check] Error 1
+CI (static)	Verify service architecture and size budgets	2026-09-10T04:09:37.9623382Z ##[error]Process completed with exit code 2.
+CI (static)	Run go vet	﻿2026-09-10T04:09:37.9673727Z ##[group]Run make vet
+CI (static)	Run go vet	2026-09-10T04:09:37.9674014Z [36;1mmake vet[0m
+CI (static)	Run go vet	2026-09-10T04:09:37.9710738Z shell: /usr/bin/bash -e {0}
+CI (static)	Run go vet	2026-09-10T04:09:37.9711018Z ##[endgroup]
+CI (static)	Run go vet	2026-09-10T04:09:37.9799679Z ==> vet agent-cli
+CI (static)	Run go vet	2026-09-10T04:10:36.5424730Z ==> vet go-agent-loop
+CI (static)	Run go vet	2026-09-10T04:10:38.7337885Z ==> vet go-llm-gateway
+CI (static)	Run go vet	2026-09-10T04:10:52.6510634Z ==> vet go-audio
+CI (static)	Run go vet	2026-09-10T04:10:53.3243525Z ==> vet go-device-gateway
+CI (static)	Run go vet	2026-09-10T04:10:54.2491027Z ==> vet go-agent-runtime
+CI (static)	Run go vet	2026-09-10T04:10:55.0303147Z ==> vet tests/embedding
+CI (static)	Run go vet	2026-09-10T04:10:55.2378939Z ==> vet tools/architecturegate
+CI (static)	Run go vet	2026-09-10T04:10:56.6000605Z ==> vet tools/analyzergate
+CI (static)	Run go vet	2026-09-10T04:10:56.6803500Z ==> vet tools/coveragegate
+CI (static)	Run go vet	2026-09-10T04:10:56.7690596Z ==> vet tools/rtc-race-gate
+CI (static)	Run go vet	2026-09-10T04:10:56.8388953Z ==> vet tools/session-race-gate
+CI (static)	Run go vet	2026-09-10T04:10:56.9162312Z ==> vet tools/timingate
+CI (static)	Run go vet	2026-09-10T04:10:56.9920062Z ==> vet scripts/webmcp-o0
+CI (static)	Run go vet	2026-09-10T04:10:57.1592788Z ==> vet test/localai
+CI (static)	Run golangci-lint	﻿2026-09-10T04:10:57.2856200Z ##[group]Run make lint
+CI (static)	Run golangci-lint	2026-09-10T04:10:57.2856505Z [36;1mmake lint[0m
+CI (static)	Run golangci-lint	2026-09-10T04:10:57.2894590Z shell: /usr/bin/bash -e {0}
+CI (static)	Run golangci-lint	2026-09-10T04:10:57.2894862Z ##[endgroup]
+CI (static)	Run golangci-lint	2026-09-10T04:10:57.5540293Z ==> lint using /home/runner/.cache/go-agent-harness/ci-analyzers/bin/golangci-lint (pinned v2.9.0)
+CI (static)	Run golangci-lint	2026-09-10T04:10:57.5540891Z ==> lint agent-cli
+CI (static)	Run golangci-lint	2026-09-10T04:11:26.7694717Z 0 issues.
+CI (static)	Run golangci-lint	2026-09-10T04:11:26.7730088Z ==> lint go-agent-loop
+CI (static)	Run golangci-lint	2026-09-10T04:11:33.3157256Z 0 issues.
+CI (static)	Run golangci-lint	2026-09-10T04:11:33.3190293Z ==> lint go-llm-gateway
+CI (static)	Run golangci-lint	2026-09-10T04:11:41.0685704Z 0 issues.
+CI (static)	Run golangci-lint	2026-09-10T04:11:41.0719330Z ==> lint go-audio
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8696481Z ##[error]go-audio/pkg/recording/replay.go:83:8: string `audio` has 5 occurrences, make it a constant (goconst)
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8698212Z 		case "audio", "runtime":
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8698500Z 		     ^
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8699485Z ##[error]go-audio/pkg/recording/replay_lifecycle_test.go:27:93: string `recording_started` has 4 occurrences, make it a constant (goconst)
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8700797Z 	if event, frame, nextErr := replay.Next(); nextErr != nil || frame != nil || event.Kind != "recording_started" {
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8702257Z 	                                                                                           ^
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8703459Z ##[error]go-audio/pkg/recording/replay_lifecycle_test.go:30:93: string `runtime` has 4 occurrences, make it a constant (goconst)
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8704666Z 	if event, frame, nextErr := replay.Next(); nextErr != nil || frame != nil || event.Kind != "runtime" {
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8706077Z 	                                                                                           ^
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8707318Z ##[error]go-audio/pkg/recording/replay_lifecycle_test.go:33:93: string `recording_closed` has 6 occurrences, make it a constant (goconst)
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8709405Z 	if event, frame, nextErr := replay.Next(); nextErr != nil || frame != nil || event.Kind != "recording_closed" {
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8711723Z 	                                                                                           ^
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8712337Z 4 issues:
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8712598Z * goconst: 4
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8712873Z make: *** [Makefile:101: lint] Error 1
+CI (static)	Run golangci-lint	2026-09-10T04:11:43.8718194Z ##[error]Process completed with exit code 2.
+CI (static)	Run staticcheck	﻿2026-09-10T04:11:43.8746396Z ##[group]Run make staticcheck
+CI (static)	Run staticcheck	2026-09-10T04:11:43.8747474Z [36;1mmake staticcheck[0m
+CI (static)	Run staticcheck	2026-09-10T04:11:43.8784418Z shell: /usr/bin/bash -e {0}
+CI (static)	Run staticcheck	2026-09-10T04:11:43.8784700Z ##[endgroup]
+CI (static)	Run staticcheck	2026-09-10T04:11:43.9363230Z ==> staticcheck using /home/runner/.cache/go-agent-harness/ci-analyzers/bin/staticcheck (pinned 2026.1)
+CI (static)	Run staticcheck	2026-09-10T04:11:43.9364235Z ==> staticcheck agent-cli
+CI (static)	Run staticcheck	2026-09-10T04:12:05.4921913Z ==> staticcheck go-agent-loop
+CI (static)	Run staticcheck	2026-09-10T04:12:08.0722253Z ==> staticcheck go-llm-gateway
+CI (static)	Run staticcheck	2026-09-10T04:12:12.9888960Z ==> staticcheck go-audio
+CI (static)	Run staticcheck	2026-09-10T04:12:14.0585711Z ==> staticcheck go-device-gateway
+CI (static)	Run staticcheck	2026-09-10T04:12:15.2487014Z ==> staticcheck go-agent-runtime
+CI (static)	Run staticcheck	2026-09-10T04:12:21.4395649Z ==> staticcheck tests/embedding
+CI (static)	Run staticcheck	2026-09-10T04:12:22.0855567Z ==> staticcheck tools/architecturegate
+CI (static)	Run staticcheck	2026-09-10T04:12:25.3944705Z ==> staticcheck tools/analyzergate
+CI (static)	Run staticcheck	2026-09-10T04:12:25.6932407Z ==> staticcheck tools/coveragegate
+CI (static)	Run staticcheck	2026-09-10T04:12:26.1667592Z ==> staticcheck tools/rtc-race-gate
+CI (static)	Run staticcheck	2026-09-10T04:12:26.4085723Z ==> staticcheck tools/session-race-gate
+CI (static)	Run staticcheck	2026-09-10T04:12:26.7118796Z ==> staticcheck tools/timingate
+CI (static)	Run staticcheck	2026-09-10T04:12:26.9669297Z ==> staticcheck scripts/webmcp-o0
+CI (static)	Run staticcheck	2026-09-10T04:12:27.6872165Z ==> staticcheck test/localai
+CI (static)	Post Check out repository	﻿2026-09-10T04:12:28.0561049Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+CI (static)	Post Check out repository	2026-09-10T04:12:28.0562305Z Post job cleanup.
+CI (static)	Post Check out repository	2026-09-10T04:12:28.1435498Z [command]/usr/bin/git version
+CI (static)	Post Check out repository	2026-09-10T04:12:28.1479248Z git version 2.55.0
+CI (static)	Post Check out repository	2026-09-10T04:12:28.1519849Z Temporarily overriding HOME='/home/runner/work/_temp/b2866c42-1e7d-4d6e-a255-d83f631e3068' before making global git config changes
+CI (static)	Post Check out repository	2026-09-10T04:12:28.1521532Z Adding repository directory to the temporary git global config as a safe directory
+CI (static)	Post Check out repository	2026-09-10T04:12:28.1525779Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/go-agent-harness/go-agent-harness
+CI (static)	Post Check out repository	2026-09-10T04:12:28.1573110Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+CI (static)	Post Check out repository	2026-09-10T04:12:28.1615699Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+CI (static)	Post Check out repository	2026-09-10T04:12:28.1888512Z fatal: No url found for submodule path 'docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-59f370b/source-identity/source-repo' in .gitmodules
+CI (static)	Post Check out repository	2026-09-10T04:12:28.1934601Z ##[warning]The process '/usr/bin/git' failed with exit code 128
+CI (static)	Complete job	﻿2026-09-10T04:12:28.2055643Z Cleaning up orphan processes
+CI (static)	Complete job	2026-09-10T04:12:28.2376218Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809, actions/checkout@v4, actions/setup-go@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
