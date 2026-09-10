@@ -1,0 +1,99 @@
+{
+  "schema": "audio-runtime-c28-pcm-consumer.v1",
+  "case": "characterize",
+  "source": "98ce636dd67349ba64f22cd7916dd370cf4ba484",
+  "goos": "darwin",
+  "goarch": "arm64",
+  "int_bits": 64,
+  "started_at": "2026-09-09T23:02:30.813062Z",
+  "duration_ms": 0,
+  "cases": [
+    {
+      "name": "empty-max-source-channels",
+      "api": "ConvertPCM16Bytes",
+      "input_rate": 16000,
+      "output_rate": 16000,
+      "source_channels": 9223372036854775807,
+      "target_channels": 1,
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": false,
+      "passed": false
+    },
+    {
+      "name": "tiny-max-source-channels",
+      "api": "ConvertPCM16Bytes",
+      "input_bytes": 2,
+      "input_rate": 16000,
+      "output_rate": 16000,
+      "source_channels": 9223372036854775807,
+      "target_channels": 9223372036854775807,
+      "actual_bytes": 2,
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": false,
+      "passed": false
+    },
+    {
+      "name": "tiny-first-wrapped-frame-size",
+      "api": "ConvertPCM16Bytes",
+      "input_bytes": 2,
+      "input_rate": 16000,
+      "output_rate": 16000,
+      "source_channels": 4611686018427387904,
+      "target_channels": 1,
+      "actual_error": "PCM16 conversion payload is not frame-aligned: got 2 bytes, frame size -9223372036854775808",
+      "error_is_expected": false,
+      "panicked": false,
+      "returned_nil": true,
+      "passed": false
+    },
+    {
+      "name": "float-length-boundary",
+      "api": "ResamplePCM16",
+      "input_samples": [
+        1
+      ],
+      "input_rate": 1,
+      "output_rate": 9223372036854775807,
+      "error_is_expected": false,
+      "panicked": true,
+      "panic": "runtime error: makeslice: len out of range",
+      "returned_nil": true,
+      "passed": false
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "source-frame-boundary",
+      "word_bits": 64,
+      "source_channels": 4611686018427387904,
+      "doubled_source_channels": -9223372036854775808,
+      "doubled_source_representable": false,
+      "positive_zero_wrap_reachable": false,
+      "zero_wrap_proof": "positive int channels are at most 2^(64-1)-1; doubling them is at most 2^64-2, so zero modulo 2^64 is unreachable",
+      "target_channels": 0,
+      "output_frames": 0,
+      "output_sample_bytes": "",
+      "output_bytes_representable": false,
+      "public_call": false,
+      "resource_bounded": true
+    },
+    {
+      "name": "target-sample-byte-boundary",
+      "word_bits": 64,
+      "source_channels": 0,
+      "doubled_source_channels": 0,
+      "doubled_source_representable": false,
+      "positive_zero_wrap_reachable": false,
+      "zero_wrap_proof": "",
+      "target_channels": 4611686018427387904,
+      "output_frames": 1,
+      "output_sample_bytes": "9223372036854775808",
+      "output_bytes_representable": false,
+      "public_call": false,
+      "resource_bounded": true
+    }
+  ],
+  "clean_shutdown": true
+}

@@ -79,8 +79,17 @@ def prepare(root, name, payload):
     scope = _validation_scope(packet)
     _criteria(packet, contract, scope)
     budget = packet.get("budget", {})
-    if budget.get("timeSeconds") != 1800 or not isinstance(packet.get("mission"), str):
-        raise ContractError("mission requires a 1800-second budget and description")
+    time_seconds = budget.get("timeSeconds") if isinstance(budget, dict) else None
+    if (
+        not isinstance(budget, dict)
+        or isinstance(time_seconds, bool)
+        or not isinstance(time_seconds, int)
+        or not 1 <= time_seconds <= 1800
+        or not isinstance(packet.get("mission"), str)
+    ):
+        raise ContractError(
+            "mission requires an integer budget from 1 to 1800 seconds and description"
+        )
     for key, maximum in (("realtimeSessions", 3), ("realtimeSeconds", 120)):
         value = budget.get(key)
         if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= maximum:

@@ -60,12 +60,21 @@ def _check(state="SUCCESS", head_name="Verification", link=CHECK_LINK):
     }
 
 
-def _view(number=100, head=HEAD, state="OPEN", checks=None):
+def _view(
+    number=100,
+    head=HEAD,
+    state="OPEN",
+    checks=None,
+    mergeable="MERGEABLE",
+    merge_state_status="CLEAN",
+):
     return {
         "number": number,
         "state": state,
         "headRefOid": head,
         "statusCheckRollup": [_rollup()] if checks is None else checks,
+        "mergeable": mergeable,
+        "mergeStateStatus": merge_state_status,
     }
 
 
@@ -85,8 +94,18 @@ class CIWaitTests(unittest.TestCase):
     def setUp(self):
         self.module = _load_module()
 
-    def _invoke(self, pr_number, observations, *, pr_state="OPEN", deadline=300,
-                no_checks_grace=300, list_responses=None, policy=("Verification",)):
+    def _invoke(
+        self,
+        pr_number,
+        observations,
+        *,
+        pr_state="OPEN",
+        deadline=300,
+        no_checks_grace=300,
+        list_responses=None,
+        policy=("Verification",),
+        monotonic_values=None,
+    ):
         responses = [item for observation in observations for item in observation]
         calls = []
         sleeps = []
@@ -128,7 +147,18 @@ class CIWaitTests(unittest.TestCase):
                     self.module.sys, "argv", [str(SCRIPT_PATH), "codex/work-ci"]
                 )
             )
-            stack.enter_context(patch.object(self.module.time, "monotonic", return_value=0))
+            if monotonic_values is None:
+                stack.enter_context(
+                    patch.object(self.module.time, "monotonic", return_value=0)
+                )
+            else:
+                stack.enter_context(
+                    patch.object(
+                        self.module.time,
+                        "monotonic",
+                        side_effect=iter(monotonic_values),
+                    )
+                )
             stack.enter_context(patch.object(self.module.time, "sleep", side_effect=sleeps.append))
             stack.enter_context(patch.object(self.module, "DEADLINE_SECONDS", deadline))
             stack.enter_context(
@@ -296,6 +326,10 @@ class CIWaitTests(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertIn("checks failed", stderr)
         self.assertIn("FAILURE", stderr)
+        self.assertEqual(self.module.last_failure.kind, "checks-failed")
+        self.assertEqual(self.module.last_failure.head_ref_oid, HEAD)
+        self.assertEqual(self.module.last_failure.pr, 101)
+        self.assertEqual(self.module.last_failure.checks[0]["link"], CHECK_LINK)
         self.assertEqual(sleeps, [])
 
     def test_pending_check_times_out_without_becoming_false_green(self):
@@ -310,6 +344,9 @@ class CIWaitTests(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertIn("timed out", stderr)
         self.assertNotIn("checks-terminal", stdout)
+        self.assertEqual(self.module.last_failure.kind, "infrastructure")
+        self.assertEqual(self.module.last_failure.head_ref_oid, HEAD)
+        self.assertEqual(self.module.last_failure.checks[0]["name"], "Verification")
         self.assertEqual(sleeps, [])
 
     def test_empty_checks_fail_even_when_grace_is_zero(self):
@@ -323,6 +360,127 @@ class CIWaitTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertEqual(stdout, "")
         self.assertIn("no required checks reported", stderr)
+        self.assertEqual(sleeps, [])
+
+    def test_explicit_current_head_conflict_fails_without_missing_check_poll(self):
+        view = _view(number=115, checks=[], mergeable="CONFLICTING", merge_state_status="DIRTY")
+        exit_code, stdout, stderr, sleeps, _ = self._invoke(
+            115,
+            [_observation(view, [])],
+            deadline=300,
+            no_checks_grace=0,
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("mergeable=CONFLICTING", stderr)
+        self.assertEqual(sleeps, [])
+        self.assertEqual(self.module.last_failure.kind, "conflicting")
+        self.assertEqual(self.module.last_failure.head_ref_oid, HEAD)
+        self.assertEqual(self.module.last_failure.pr, 115)
+
+    def test_unknown_mergeability_remains_bounded_uncertainty(self):
+        view = _view(number=116, checks=[], mergeable="UNKNOWN", merge_state_status="UNKNOWN")
+        exit_code, stdout, stderr, sleeps, _ = self._invoke(
+            116,
+            [_observation(view, []), _observation(view, [])],
+            deadline=240,
+            monotonic_values=[0, 0, 120],
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("unknown-mergeable", stderr)
+        self.assertNotIn("mergeable=CONFLICTING", stderr)
+        self.assertEqual(sleeps, [self.module.POLL_INTERVAL_SECONDS])
+        self.assertEqual(self.module.last_failure.kind, "infrastructure")
+
+    def test_missing_mergeability_never_becomes_green_or_conflict(self):
+        view = _view(number=117, checks=[])
+        del view["mergeable"]
+        exit_code, stdout, stderr, sleeps, _ = self._invoke(
+            117,
+            [_observation(view, [])],
+            deadline=0,
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("missing-mergeable", stderr)
+        self.assertNotIn("mergeable=CONFLICTING", stderr)
+        self.assertEqual(sleeps, [])
+
+    def test_mergeability_change_during_observation_is_uncertain(self):
+        before = _view(number=118, checks=[], mergeable="CONFLICTING", merge_state_status="DIRTY")
+        after = _view(number=118, checks=[], mergeable="MERGEABLE", merge_state_status="CLEAN")
+        exit_code, stdout, stderr, sleeps, _ = self._invoke(
+            118,
+            [_observation(before, [], after)],
+            deadline=0,
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("mergeability-changed-during-observation", stderr)
+        self.assertNotIn("mergeable=CONFLICTING", stderr)
+        self.assertEqual(sleeps, [])
+
+    def test_conflict_with_inconsistent_merge_state_is_uncertain(self):
+        view = _view(number=119, checks=[], mergeable="CONFLICTING", merge_state_status="CLEAN")
+        exit_code, stdout, stderr, sleeps, _ = self._invoke(
+            119,
+            [_observation(view, [])],
+            deadline=0,
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("inconsistent-mergeability", stderr)
+        self.assertNotIn("mergeable=CONFLICTING", stderr)
+        self.assertEqual(sleeps, [])
+
+    def test_invalid_mergeable_value_is_uncertain(self):
+        view = _view(number=120, checks=[], mergeable="CONFLICTED")
+        exit_code, stdout, stderr, sleeps, _ = self._invoke(
+            120,
+            [_observation(view, [])],
+            deadline=0,
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("unknown-mergeable", stderr)
+        self.assertNotIn("mergeable=CONFLICTING", stderr)
+        self.assertEqual(sleeps, [])
+
+    def test_conflict_with_pr_identity_mismatch_is_uncertain(self):
+        before = _view(number=999, checks=[], mergeable="CONFLICTING", merge_state_status="DIRTY")
+        after = _view(number=121, checks=[], mergeable="CONFLICTING", merge_state_status="DIRTY")
+        exit_code, stdout, stderr, sleeps, _ = self._invoke(
+            121,
+            [_observation(before, [], after)],
+            deadline=0,
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("before-pr-number-mismatch", stderr)
+        self.assertNotIn("mergeable=CONFLICTING", stderr)
+        self.assertEqual(sleeps, [])
+
+    def test_conflict_with_head_change_is_uncertain(self):
+        before = _view(number=122, head=HEAD, checks=[], mergeable="CONFLICTING", merge_state_status="DIRTY")
+        after = _view(number=122, head=NEXT_HEAD, checks=[], mergeable="CONFLICTING", merge_state_status="DIRTY")
+        exit_code, stdout, stderr, sleeps, _ = self._invoke(
+            122,
+            [_observation(before, [], after)],
+            deadline=0,
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("head-changed-during-observation", stderr)
+        self.assertNotIn("mergeable=CONFLICTING", stderr)
         self.assertEqual(sleeps, [])
 
     def test_head_change_during_observation_is_uncertain_and_fails_closed(self):
