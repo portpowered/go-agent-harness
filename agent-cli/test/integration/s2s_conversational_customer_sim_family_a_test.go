@@ -32,7 +32,7 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 	fixture := newFamilyAProviderFixture(scenario)
 	defer fixture.Close()
 	startedAt := time.Now()
-	fixture.SetStartedAt(startedAt)
+	fixture.startedAt = startedAt
 	configDir := filepath.Join(t.TempDir(), "config")
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		t.Fatalf("create config directory: %v", err)
@@ -86,7 +86,7 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 			{ID: "turn-3-speech", PCM16: familyAFrame(3), WaitForOutputBytes: 8, Before: captureCheckpoint(1)},
 			{ID: "turn-3-silence", SilenceFor: 5 * time.Millisecond},
 			{ID: "turn-4-speech", PCM16: familyAFrame(4), WaitForOutputBytes: 12, Before: captureFinalStateBoundaries},
-			{ID: "turn-4-silence", SilenceFor: 5 * time.Millisecond},
+			{ID: "turn-4-silence", SilenceFor: 5 * time.Millisecond, WaitForOutputBytes: 16},
 		},
 	})
 
@@ -233,7 +233,6 @@ type familyAProviderFixture struct {
 	pendingCallStarted    time.Duration
 	pendingResult         bool
 	awaitingFinalSilence  bool
-	finalSilenceSeen      bool
 }
 
 func newFamilyAProviderFixture(scenario probe.CustomerScenario) *familyAProviderFixture {
@@ -243,11 +242,6 @@ func newFamilyAProviderFixture(scenario probe.CustomerScenario) *familyAProvider
 	}
 	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
 	return fixture
-}
-func (f *familyAProviderFixture) SetStartedAt(startedAt time.Time) {
-	f.mu.Lock()
-	f.startedAt = startedAt
-	f.mu.Unlock()
 }
 func (f *familyAProviderFixture) WebSocketURL() string {
 	return strings.Replace(f.server.URL, "http://", "ws://", 1)
@@ -335,10 +329,10 @@ func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *htt
 						return
 					}
 				case "input_audio_buffer.commit":
-					if err := f.handleAudioCommit(connection); err != nil {
-						f.failProtocol(err.Error())
-						return
-					}
+					// Wait for the child-owned commit before publishing terminal
+					// close; this preserves final input ordering at the provider
+					// boundary without timing-based coordination.
+					f.handleAudioCommit(connection)
 				case "response.create":
 					if err := f.handleContinuation(connection); err != nil {
 						f.failProtocol(err.Error())
@@ -366,30 +360,20 @@ func (f *familyAProviderFixture) handleAudioSilence(connection *websocket.Conn) 
 	if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {
 		return err
 	}
-	if err := f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}); err != nil {
-		return err
-	}
-	f.mu.Lock()
-	closeAfterFinalSilence := f.awaitingFinalSilence
-	f.awaitingFinalSilence = false
-	if closeAfterFinalSilence {
-		f.finalSilenceSeen = true
-	}
-	f.mu.Unlock()
-	return nil
+	return f.send(connection, map[string]string{"type": "input_audio_buffer.committed"})
 }
-func (f *familyAProviderFixture) handleAudioCommit(connection *websocket.Conn) error {
+func (f *familyAProviderFixture) handleAudioCommit(connection *websocket.Conn) {
 	f.mu.Lock()
-	finalSilenceSeen := f.finalSilenceSeen
-	f.finalSilenceSeen = false
-	if finalSilenceSeen {
-		f.closedAfterFinalInput = true
-	}
+	closeAfterFinalInput := f.awaitingFinalSilence
+	f.awaitingFinalSilence = false
+	f.closedAfterFinalInput = closeAfterFinalInput
 	f.mu.Unlock()
-	if !finalSilenceSeen {
-		return nil
+	if !closeAfterFinalInput {
+		return
 	}
-	return f.send(connection, map[string]string{"type": "session.closed", "reason": "family_a_complete"})
+	if err := f.send(connection, map[string]string{"type": "session.closed", "reason": "family_a_complete"}); err != nil {
+		f.failProtocol(err.Error())
+	}
 }
 func (f *familyAProviderFixture) handleToolResultEvent(itemType, callID, output string) error {
 	if itemType != "function_call_output" {
