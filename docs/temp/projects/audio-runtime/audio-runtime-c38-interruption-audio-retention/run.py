@@ -999,10 +999,11 @@ def run_public_matrix(artifact: Path, fixtures: Path, run_dir: Path, *, enforce_
     return {"help": help_result, "cases": cases, "missing_timeline_control": missing}
 
 
-def build_repaired_artifact(source_root: Path, evidence_dir: Path, run_dir: Path) -> tuple[Path, dict[str, Any]]:
+def build_repaired_artifact(source_root: Path, evidence_dir: Path, run_dir: Path, requested_artifact: Path | None = None) -> tuple[Path, dict[str, Any]]:
     artifacts = evidence_dir / "artifacts"
     artifacts.mkdir(parents=True, exist_ok=True)
-    artifact = artifacts / "yui-c38-repaired"
+    artifact = (requested_artifact.expanduser().resolve() if requested_artifact is not None else artifacts / "yui-c38-repaired")
+    artifact.parent.mkdir(parents=True, exist_ok=True)
     source_revision = git_output(source_root, "rev-parse", "HEAD")
     build_inputs = build_input_manifest(source_root)
     argv = ["go", "build", "-p=1", "-tags=nomicrophone", "-trimpath", "-o", str(artifact), "./agent-cli/cmd/yui"]
@@ -1079,9 +1080,13 @@ def run_original(source_root: Path, fixtures: Path, evidence_dir: Path) -> dict[
     }
 
 
-def run_repaired(source_root: Path, fixtures: Path, evidence_dir: Path, requested_artifact: Path | None) -> dict[str, Any]:
+def run_repaired(source_root: Path, fixtures: Path, evidence_dir: Path, requested_artifact: Path | None, build_artifact: Path | None) -> dict[str, Any]:
     run_dir = make_run_dir(evidence_dir, "repaired")
-    if requested_artifact is None:
+    if requested_artifact is not None and build_artifact is not None:
+        raise EvidenceFailure("repaired mode accepts either --artifact or --build-artifact, not both")
+    if build_artifact is not None:
+        artifact, build = build_repaired_artifact(source_root, evidence_dir, run_dir / "build", build_artifact)
+    elif requested_artifact is None:
         artifact, build = build_repaired_artifact(source_root, evidence_dir, run_dir / "build")
     else:
         artifact = requested_artifact.expanduser().resolve()
@@ -1451,6 +1456,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("original", "causal", "repaired", "negative-controls", "cleanup-control", "focused-checks", "package"), required=True)
     parser.add_argument("--artifact", type=Path, help="exact yui artifact for repaired mode")
+    parser.add_argument("--build-artifact", type=Path, help="output path for a newly built repaired yui artifact")
     parser.add_argument("--source-root", type=Path, default=ROOT)
     parser.add_argument("--fixtures", type=Path, default=DEFAULT_FIXTURES)
     parser.add_argument("--evidence-dir", type=Path, default=DEFAULT_EVIDENCE)
@@ -1467,7 +1473,7 @@ def main() -> int:
         elif args.mode == "causal":
             outcome = run_causal(source_root, fixtures, evidence_dir)
         elif args.mode == "repaired":
-            outcome = run_repaired(source_root, fixtures, evidence_dir, args.artifact)
+            outcome = run_repaired(source_root, fixtures, evidence_dir, args.artifact, args.build_artifact)
         elif args.mode == "negative-controls":
             outcome = run_negative_controls(source_root, fixtures, evidence_dir)
         elif args.mode == "cleanup-control":

@@ -94,6 +94,7 @@ wire/timeline order, artifacts, and process-group cleanup in a timestamped
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/run.py --mode original
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/run.py --mode causal
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/run.py --mode repaired --artifact <new-exact-source-yui> --fixtures <frozen-C21-copies>
+rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/run.py --mode repaired --build-artifact <new-artifact-path> --fixtures <frozen-C21-copies>
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/run.py --mode negative-controls
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/run.py --mode cleanup-control
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/run.py --mode focused-checks --source-root <candidate-source>
