@@ -6,7 +6,7 @@
   "factory_server": "http://127.0.0.1:7439",
   "branch": "codex/audio-runtime-c35-canonical-pcm-byte-mixing",
   "base_at_dispatch": "d5012004c15c4df613fd5fc7d8c220f2c7252822",
-  "execution_current_main": "84f0a9d308729e38da8479f87c3518f1634bad82",
+  "execution_current_main": "4e6cfab5d8d53b7db93c723e0a4e955bdc1c6f1d",
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "planning_revision": "c61ee2774986c896560ee40a92441c914976000d",
