@@ -4,6 +4,7 @@ package instructions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -66,7 +67,7 @@ var _ session.InstructionService = (*Service)(nil)
 // resolved host requests share one composition boundary.
 func (s *Service) Resolve(ctx context.Context, request session.InstructionRequest) (session.InstructionResult, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return session.InstructionResult{}, errors.New("instruction resolution context is required")
 	}
 	if err := ctx.Err(); err != nil {
 		return session.InstructionResult{}, err
@@ -110,17 +111,17 @@ func resolveExplicitPrompt(ctx context.Context, value string, loader session.Ins
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	if err := loader.Stat(value); err != nil {
-		return value, nil
+	if err := loader.Stat(value); err == nil {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		data, err := loader.ReadFile(value)
+		if err != nil {
+			return "", fmt.Errorf("read system prompt %s: %w", value, err)
+		}
+		return string(data), nil
 	}
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	data, err := loader.ReadFile(value)
-	if err != nil {
-		return "", fmt.Errorf("read system prompt %s: %w", value, err)
-	}
-	return string(data), nil
+	return value, nil
 }
 
 func resolveWorkspacePrompt(ctx context.Context, workspaceDir string, loader session.InstructionLoader) (string, error) {
