@@ -310,6 +310,7 @@ def source_inputs(source_root: Path) -> list[Path]:
         Path("agent-cli/internal/room/mixer.go"),
         Path("agent-cli/cmd/yui/main.go"),
         CONSUMER_DIR_REL / "go.mod",
+        CONSUMER_DIR_REL / "go.sum",
         CONSUMER_DIR_REL / "cmd/pcm/main.go",
     ]
     return [source_root / path for path in relative_paths if (source_root / path).is_file()]
