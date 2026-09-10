@@ -1,0 +1,856 @@
+{
+  "controller": {
+    "admission": {
+      "admitted": true,
+      "contractRevision": "audio-runtime-v1",
+      "contract_revision": "audio-runtime-v1",
+      "project": "audio-runtime",
+      "projectID": "audio-runtime",
+      "project_id": "audio-runtime",
+      "schema": "factory.project-admission.v1",
+      "server": "http://fixture.invalid",
+      "session": {
+        "endpoint": {
+          "server": "http://fixture.invalid"
+        },
+        "id": "c39-controller-session",
+        "server": "http://fixture.invalid",
+        "sessionId": "c39-controller-session",
+        "session_id": "c39-controller-session"
+      },
+      "sessionId": "c39-controller-session",
+      "status": "active",
+      "version": 1
+    },
+    "append": {
+      "amendmentId": "user-windows-hardware-scope-20260910",
+      "contentSha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa",
+      "path": "factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json",
+      "record": {
+        "amendmentId": "user-windows-hardware-scope-20260910",
+        "authority": {
+          "acceptance": {
+            "path": "factory/projects/audio-runtime/acceptance.md",
+            "sha256": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5"
+          },
+          "request": {
+            "path": "factory/projects/audio-runtime/request.md",
+            "sha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0"
+          },
+          "sourcePlan": {
+            "path": "factory/projects/audio-runtime/source-plan.md",
+            "sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+          }
+        },
+        "authorization": {
+          "path": "docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json",
+          "provenance": "Explicit user direction in wake user-scope-service-decomposition-20260910 and factory/docs/operating-policy.md#user-scope-amendment--2026-09-10",
+          "sha256": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413"
+        },
+        "contractRevision": "audio-runtime-v1",
+        "criteria": [
+          {
+            "id": "AUDIO",
+            "rubric": "One independently testable audio subsystem owns packet parsing, formats, clocks, sample timing, DSP and buffer operations; the core loop uses buffers without direct device IO."
+          },
+          {
+            "id": "DEVICE",
+            "rubric": "The adjacent device gateway owns physical device abstractions and lifecycle; playback evidence distinguishes actual consumption from queue admission."
+          },
+          {
+            "id": "EMBED",
+            "rubric": "A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization."
+          },
+          {
+            "id": "SERVICE",
+            "rubric": "Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction; CLI transport delegates business behavior."
+          },
+          {
+            "id": "TRACE",
+            "rubric": "Correlated device capture/playback, provider send/receive, tool lifecycle, cancellation, queues/drops and terminal evidence use explicit timing domains and bounded recording resources."
+          },
+          {
+            "id": "REPLAY",
+            "rubric": "Credential-free replay preserves recorded audio packets, ordering, tool events, interruption and termination; hardware and external nondeterminism limits are explicit."
+          },
+          {
+            "id": "FAILURES",
+            "rubric": "Truncated/no playback, barge-in failure, long-conversation slowdown and tool-continuation collisions have reproducible characterization, fixes where demonstrated, and exact residual limitations without false completion claims."
+          },
+          {
+            "id": "QUALITY",
+            "rubric": "Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions."
+          },
+          {
+            "id": "PARITY",
+            "rubric": "Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits."
+          }
+        ],
+        "excludedSubproof": [
+          {
+            "criterionId": "DEVICE",
+            "subproof": "Native Windows hardware/endpoints testing",
+            "verdict": "OUT_OF_SCOPE"
+          },
+          {
+            "criterionId": "PARITY",
+            "subproof": "Physical acoustic testing",
+            "verdict": "OUT_OF_SCOPE"
+          }
+        ],
+        "historicalReport": {
+          "canonicalState": "failed",
+          "decision": "FAILED",
+          "deviceVerdict": "BLOCKED",
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json",
+          "sha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960"
+        },
+        "manifest": {
+          "path": "factory/projects/audio-runtime/manifest.json",
+          "sha256": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d"
+        },
+        "project": "audio-runtime",
+        "realtimeBudget": {
+          "sessionsPerMission": 3,
+          "totalSecondsPerMission": 120
+        },
+        "retainedProof": [
+          "Windows software execution and compilation CI",
+          "Hermetic capture-energy/codec tests",
+          "All nine architectural and software criteria",
+          "Original Realtime budget",
+          "Fresh independent scoped and final artifact evidence"
+        ],
+        "schema": "factory.project-scope-amendment.v1"
+      },
+      "status": "appended"
+    },
+    "appendRepeat": {
+      "amendmentId": "user-windows-hardware-scope-20260910",
+      "contentSha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa",
+      "path": "factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json",
+      "status": "already-present"
+    },
+    "completion": {
+      "cleanup": "none",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/scripts/project-control.py",
+        "--root",
+        "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-5a4aedey/controller-fixture",
+        "verify-completion",
+        "--name",
+        "audio-runtime"
+      ],
+      "durationSeconds": 0.540183,
+      "exitCode": 0,
+      "reaped": true,
+      "stderr": "",
+      "stderrBytesRetained": 0,
+      "stderrTruncated": false,
+      "stdout": "{\"status\": \"verified\", \"project\": \"audio-runtime\", \"build\": {\"identity\": \"c39-controller-build\", \"path\": \"/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-5a4aedey/controller-fixture/artifacts/c39-build.bin\", \"sha256\": \"f1a93b68b067e3052a1d22e04b121d9a39db3a686f48cf4a5a811c1450707ec9\"}}\n",
+      "stdoutBytesRetained": 320,
+      "stdoutTruncated": false,
+      "timedOut": false
+    },
+    "negativeExpandedExclusion": {
+      "cleanup": "none",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/scripts/project-control.py",
+        "--root",
+        "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-5a4aedey/controller-fixture",
+        "amendment-append",
+        "--record",
+        "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-5a4aedey/controller-fixture/forged-record.json"
+      ],
+      "durationSeconds": 0.133499,
+      "exitCode": 1,
+      "reaped": true,
+      "stderr": "excludedSubproof may contain only the two reviewed physical subproofs\n",
+      "stderrBytesRetained": 70,
+      "stderrTruncated": false,
+      "stdout": "",
+      "stdoutBytesRetained": 0,
+      "stdoutTruncated": false,
+      "timedOut": false
+    },
+    "negativeValidation": {
+      "mismatched-staged-build-identity": {
+        "exitCode": 1,
+        "stderr": "canonical validation Work artifact mismatch\n"
+      },
+      "missing-work-project": {
+        "exitCode": 1,
+        "stderr": "canonical validation Work project mismatch\n"
+      }
+    },
+    "prepared": {
+      "customer": {
+        "amendment": {
+          "authority": {
+            "acceptance": {
+              "path": "factory/projects/audio-runtime/acceptance.md",
+              "sha256": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5"
+            },
+            "request": {
+              "path": "factory/projects/audio-runtime/request.md",
+              "sha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0"
+            },
+            "sourcePlan": {
+              "path": "factory/projects/audio-runtime/source-plan.md",
+              "sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+            }
+          },
+          "authorization": {
+            "path": "docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json",
+            "provenance": "Explicit user direction in wake user-scope-service-decomposition-20260910 and factory/docs/operating-policy.md#user-scope-amendment--2026-09-10",
+            "sha256": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413"
+          },
+          "contentSha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa",
+          "excludedSubproof": [
+            {
+              "criterionId": "DEVICE",
+              "subproof": "Native Windows hardware/endpoints testing",
+              "verdict": "OUT_OF_SCOPE"
+            },
+            {
+              "criterionId": "PARITY",
+              "subproof": "Physical acoustic testing",
+              "verdict": "OUT_OF_SCOPE"
+            }
+          ],
+          "historicalReport": {
+            "canonicalState": "failed",
+            "decision": "FAILED",
+            "deviceVerdict": "BLOCKED",
+            "path": "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json",
+            "sha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960"
+          },
+          "id": "user-windows-hardware-scope-20260910",
+          "manifestSha256": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+          "path": "factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json"
+        },
+        "build": {
+          "identity": "c39-controller-build",
+          "path": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-5a4aedey/controller-fixture/docs/temp/probes/audio-runtime-c39-customer-mission/artifact-0.bin",
+          "sha256": "f1a93b68b067e3052a1d22e04b121d9a39db3a686f48cf4a5a811c1450707ec9"
+        },
+        "buildIdentity": "c39-controller-build",
+        "directory": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-5a4aedey/controller-fixture/docs/temp/probes/audio-runtime-c39-customer-mission",
+        "missionSha256": "592cf2e3abb852042e90aa8c8993e131d722f6f6cddad990c6acff3ab83e3b61",
+        "project": "audio-runtime",
+        "status": "ready",
+        "validationWorkName": "audio-runtime-c39-customer-mission"
+      },
+      "engineering": {
+        "amendment": {
+          "authority": {
+            "acceptance": {
+              "path": "factory/projects/audio-runtime/acceptance.md",
+              "sha256": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5"
+            },
+            "request": {
+              "path": "factory/projects/audio-runtime/request.md",
+              "sha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0"
+            },
+            "sourcePlan": {
+              "path": "factory/projects/audio-runtime/source-plan.md",
+              "sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+            }
+          },
+          "authorization": {
+            "path": "docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json",
+            "provenance": "Explicit user direction in wake user-scope-service-decomposition-20260910 and factory/docs/operating-policy.md#user-scope-amendment--2026-09-10",
+            "sha256": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413"
+          },
+          "contentSha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa",
+          "excludedSubproof": [
+            {
+              "criterionId": "DEVICE",
+              "subproof": "Native Windows hardware/endpoints testing",
+              "verdict": "OUT_OF_SCOPE"
+            },
+            {
+              "criterionId": "PARITY",
+              "subproof": "Physical acoustic testing",
+              "verdict": "OUT_OF_SCOPE"
+            }
+          ],
+          "historicalReport": {
+            "canonicalState": "failed",
+            "decision": "FAILED",
+            "deviceVerdict": "BLOCKED",
+            "path": "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json",
+            "sha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960"
+          },
+          "id": "user-windows-hardware-scope-20260910",
+          "manifestSha256": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+          "path": "factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json"
+        },
+        "build": {
+          "identity": "c39-controller-build",
+          "path": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-5a4aedey/controller-fixture/docs/temp/probes/audio-runtime-c39-engineering-mission/artifact-0.bin",
+          "sha256": "f1a93b68b067e3052a1d22e04b121d9a39db3a686f48cf4a5a811c1450707ec9"
+        },
+        "buildIdentity": "c39-controller-build",
+        "directory": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c39-probe-5a4aedey/controller-fixture/docs/temp/probes/audio-runtime-c39-engineering-mission",
+        "missionSha256": "72a9d908dc70bfbd725a0aebe3c159abca24f3e52f87c778fd20cc92da9ffc3c",
+        "project": "audio-runtime",
+        "status": "ready",
+        "validationWorkName": "audio-runtime-c39-engineering-mission"
+      }
+    },
+    "protectedHashes": {
+      "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+      "docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
+      "factory/projects/audio-runtime/acceptance.md": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5",
+      "factory/projects/audio-runtime/manifest.json": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+      "factory/projects/audio-runtime/request.md": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
+      "factory/projects/audio-runtime/source-plan.md": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+    },
+    "protectedHashesAfter": {
+      "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+      "docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
+      "factory/projects/audio-runtime/acceptance.md": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5",
+      "factory/projects/audio-runtime/manifest.json": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+      "factory/projects/audio-runtime/request.md": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
+      "factory/projects/audio-runtime/source-plan.md": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+    },
+    "protectedHashesBefore": {
+      "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+      "docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
+      "factory/projects/audio-runtime/acceptance.md": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5",
+      "factory/projects/audio-runtime/manifest.json": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+      "factory/projects/audio-runtime/request.md": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
+      "factory/projects/audio-runtime/source-plan.md": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+    },
+    "protectedHashesUnchanged": true,
+    "status": {
+      "amendment": {
+        "authority": {
+          "acceptance": {
+            "path": "factory/projects/audio-runtime/acceptance.md",
+            "sha256": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5"
+          },
+          "request": {
+            "path": "factory/projects/audio-runtime/request.md",
+            "sha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0"
+          },
+          "sourcePlan": {
+            "path": "factory/projects/audio-runtime/source-plan.md",
+            "sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+          }
+        },
+        "authorization": {
+          "path": "docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json",
+          "provenance": "Explicit user direction in wake user-scope-service-decomposition-20260910 and factory/docs/operating-policy.md#user-scope-amendment--2026-09-10",
+          "sha256": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413"
+        },
+        "contentSha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa",
+        "excludedSubproof": [
+          {
+            "criterionId": "DEVICE",
+            "subproof": "Native Windows hardware/endpoints testing",
+            "verdict": "OUT_OF_SCOPE"
+          },
+          {
+            "criterionId": "PARITY",
+            "subproof": "Physical acoustic testing",
+            "verdict": "OUT_OF_SCOPE"
+          }
+        ],
+        "historicalReport": {
+          "canonicalState": "failed",
+          "decision": "FAILED",
+          "deviceVerdict": "BLOCKED",
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json",
+          "sha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960"
+        },
+        "id": "user-windows-hardware-scope-20260910",
+        "manifestSha256": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+        "path": "factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json"
+      },
+      "status": "present"
+    }
+  },
+  "durationSeconds": 3.290539,
+  "inputProvenance": {
+    "controllerScripts": {
+      "factory/scripts/prepare-validation.py": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/scripts/prepare-validation.py",
+        "sha256": "81f0bc19856f133ac799672a4abb43f6be786d0283f41c01c17a324b8921f7d4"
+      },
+      "factory/scripts/project-control.py": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/scripts/project-control.py",
+        "sha256": "a7bbac6b09ab5a7c9182155a090ab822ac2b0aa8d7215e42bd1b42085e376d1c"
+      },
+      "factory/scripts/project_scope_amendment.py": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/scripts/project_scope_amendment.py",
+        "sha256": "4b66b92c91cb7b3bfbc4f0b0f105fdfb9391d7a4d312ef8142e8457cc71c72b0"
+      }
+    },
+    "probeScript": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/probe.py",
+      "sha256": "c1d7ccce4ab394ddb978706bef3e790e60694a759cc20fd2abc95e06d7802ae6"
+    },
+    "replayInputs": [
+      {
+        "config": {
+          "files": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          },
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-audio-tool/config"
+        },
+        "fixture": {
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-audio-tool/audio-tool.fixture.json",
+          "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+        },
+        "label": "audio-tool"
+      },
+      {
+        "config": {
+          "files": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          },
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-interruption/config"
+        },
+        "fixture": {
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-interruption/interruption.fixture.json",
+          "sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206"
+        },
+        "label": "interruption"
+      }
+    ],
+    "reviewedInputs": {
+      "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json",
+        "sha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960"
+      },
+      "docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/user-scope-service-decomposition-20260910/scope-amendment-authority.json",
+        "sha256": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413"
+      }
+    },
+    "sourceInputs": {
+      "factory/projects/audio-runtime/acceptance.md": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/projects/audio-runtime/acceptance.md",
+        "sha256": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5"
+      },
+      "factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json",
+        "sha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa"
+      },
+      "factory/projects/audio-runtime/manifest.json": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/projects/audio-runtime/manifest.json",
+        "sha256": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d"
+      },
+      "factory/projects/audio-runtime/request.md": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/projects/audio-runtime/request.md",
+        "sha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0"
+      },
+      "factory/projects/audio-runtime/source-plan.md": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/factory/projects/audio-runtime/source-plan.md",
+        "sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+      }
+    },
+    "sourceRepository": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment",
+    "sourceRevision": "9f0d3d36c2e01a4278e6f52c4aababfe194911d0",
+    "yui": {
+      "path": "/tmp/audio-runtime-c39-yui-9f0d3d3",
+      "sha256After": "2ac1795c1b9b481d5bf4b50b5b5fed7c22b33f3fa7375d2d430044b970b0a2fd",
+      "sha256Before": "2ac1795c1b9b481d5bf4b50b5b5fed7c22b33f3fa7375d2d430044b970b0a2fd"
+    }
+  },
+  "limits": {
+    "childSeconds": 60,
+    "realtimeSeconds": 0,
+    "realtimeSessions": 0,
+    "totalSeconds": 600
+  },
+  "residuals": [
+    "This controller probe does not prove native Windows endpoint consumption or physical acoustic output.",
+    "The historical C32 report remains FAILED with DEVICE BLOCKED and is not relabeled.",
+    "A replay result is software/file evidence only; final project acceptance still needs fresh customer and engineering reports."
+  ],
+  "schema": "audio-runtime-c39-controller-probe.v1",
+  "sourceRepository": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment",
+  "sourceRevision": "9f0d3d36c2e01a4278e6f52c4aababfe194911d0",
+  "status": "ACCEPTED",
+  "timeoutControl": {
+    "cleanup": "term",
+    "command": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-c",
+      "import time; time.sleep(120)"
+    ],
+    "durationSeconds": 0.508375,
+    "exitCode": -15,
+    "reaped": true,
+    "stderr": "",
+    "stderrBytesRetained": 0,
+    "stderrTruncated": false,
+    "stdout": "",
+    "stdoutBytesRetained": 0,
+    "stdoutTruncated": false,
+    "timedOut": true
+  },
+  "yui": {
+    "help": {
+      "cleanup": "none",
+      "command": [
+        "/tmp/audio-runtime-c39-yui-9f0d3d3",
+        "--help"
+      ],
+      "durationSeconds": 0.577526,
+      "exitCode": 0,
+      "reaped": true,
+      "stderr": "",
+      "stderrBytesRetained": 0,
+      "stderrTruncated": false,
+      "stdout": "Yui is a cross-platform voice-agent CLI for realtime conversations, local tools, recordings, replay, and structured WebMCP browser control.\n\nSet an OpenAI key, then start the default microphone and speaker session:\n\n  export OPENAI_API_KEY=\"your-openai-api-key\"\n  yui session\n\nRun `yui session --help` for audio, model, voice, recording, and browser options.\n\nUsage:\n  yui [command]\n\nExamples:\n  # Start a voice session in the current project\n  yui --workdir \"$PWD\" session\n\n  # Open a page and expose its WebMCP tools\n  yui session --browser-tools webmcp --browser-open https://example.com/\n\nAvailable Commands:\n  ask         Ask the agent a question and get a response\n  chat        Start an interactive chat session with the agent\n  completion  Generate the autocompletion script for the specified shell\n  config      Configuration management commands\n  devices     Discover available audio devices\n  help        Help about any command\n  interaction Inspect provider-neutral gateway interactions\n  media       Inspect external media sources\n  probe       Run deterministic offline probes\n  room        Run participant rooms\n  session     Run or manage agent sessions\n  tool        Invoke a tool directly by name and key=value args (for debugging)\n  webmcp      Inspect WebMCP browser readiness\n\nFlags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n  -h, --help                     help for yui\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui [command] --help\" for more information about a command.\n",
+      "stdoutBytesRetained": 1906,
+      "stdoutTruncated": false,
+      "timedOut": false
+    },
+    "path": "/tmp/audio-runtime-c39-yui-9f0d3d3",
+    "replays": {
+      "audio-tool": {
+        "capture": {
+          "cleanup": "none",
+          "command": [
+            "/tmp/audio-runtime-c39-yui-9f0d3d3",
+            "-C",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/config",
+            "session",
+            "--replay",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/audio-tool.fixture.json",
+            "--audio-out",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/rendered.pcm",
+            "--record-dir",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/bundle",
+            "--trace-audio",
+            "--workdir",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool",
+            "--allow-path",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool",
+            "--max-duration",
+            "60s"
+          ],
+          "durationSeconds": 0.080882,
+          "exitCode": 0,
+          "reaped": true,
+          "stderr": "",
+          "stderrBytesRetained": 0,
+          "stderrTruncated": false,
+          "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+          "stdoutBytesRetained": 837,
+          "stdoutTruncated": false,
+          "timedOut": false
+        },
+        "config": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-audio-tool/config",
+        "configHashes": {
+          "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+          "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+        },
+        "configSourceHashes": {
+          "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+          "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+        },
+        "directoryReplay": {
+          "configHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          },
+          "configPath": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-audio-tool/config",
+          "configSourceHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          },
+          "phrase": "Replay verified: 18 wire events, 1 tool calls",
+          "result": {
+            "cleanup": "none",
+            "command": [
+              "/tmp/audio-runtime-c39-yui-9f0d3d3",
+              "-C",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/audio-tool-directory-replay/config",
+              "session",
+              "replay",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/bundle"
+            ],
+            "durationSeconds": 0.048287,
+            "exitCode": 0,
+            "reaped": true,
+            "stderr": "Replay verified: 18 wire events, 1 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+            "stderrBytesRetained": 108,
+            "stderrTruncated": false,
+            "stdout": "strict replay continuation",
+            "stdoutBytesRetained": 26,
+            "stdoutTruncated": false,
+            "timedOut": false
+          }
+        },
+        "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-audio-tool/audio-tool.fixture.json",
+        "fixtureSha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+        "label": "audio-tool",
+        "missingTimelineControl": {
+          "configHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          },
+          "configPath": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-audio-tool/config",
+          "configSourceHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          },
+          "expected": "nonzero missing timeline",
+          "result": {
+            "cleanup": "none",
+            "command": [
+              "/tmp/audio-runtime-c39-yui-9f0d3d3",
+              "-C",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/audio-tool-missing-timeline-replay/config",
+              "session",
+              "replay",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/audio-tool-missing-timeline-bundle"
+            ],
+            "durationSeconds": 0.022174,
+            "exitCode": 1,
+            "reaped": true,
+            "stderr": "Error: replay bundle is incomplete: missing timeline.jsonl in /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/audio-tool-missing-timeline-bundle or /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/audio-tool-missing-timeline-bundle/audio-trace\n",
+            "stderrBytesRetained": 651,
+            "stderrTruncated": false,
+            "stdout": "",
+            "stdoutBytesRetained": 0,
+            "stdoutTruncated": false,
+            "timedOut": false
+          }
+        },
+        "provider": {
+          "bytes": 4800,
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/bundle/audio/out-000.pcm",
+          "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
+        },
+        "rendered": {
+          "bytes": 3200,
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/rendered.pcm",
+          "sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805"
+        },
+        "sessionLog": [
+          {
+            "input": {
+              "audio_bytes": 0,
+              "audio_offset_bytes": 0,
+              "committed": false,
+              "text": "probe PROBE_TOOL_MARKER_9182"
+            },
+            "response": {
+              "audio_bytes": 4800,
+              "audio_offset_bytes": 0,
+              "audio_segments": [
+                "audio/out-000.pcm"
+              ],
+              "complete": true,
+              "text": "strict replay continuation"
+            },
+            "tool_events": [
+              {
+                "arguments": "{\"command\":\"echo PROBE_TOOL_MARKER_9182 \\u003e\\u003e \\\"evidence/runs/exec-invocations-v4.log\\\"; echo PROBE_TOOL_MARKER_9182\"}",
+                "sequence": 1,
+                "tool_call_id": "call-c07-tool",
+                "tool_name": "exec",
+                "type": "tool_call"
+              },
+              {
+                "content": "PROBE_TOOL_MARKER_9182\n",
+                "sequence": 2,
+                "status": "completed",
+                "tool_call_id": "call-c07-tool",
+                "tool_name": "exec",
+                "type": "tool_result"
+              }
+            ],
+            "turn_index": 1
+          }
+        ],
+        "toolSideEffect": {
+          "bytes": 23,
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-audio-tool/evidence/runs/exec-invocations-v4.log",
+          "sha256": "f91134b50758e6d4418ab08f6a3afa9f2acceb91117c3f67d0db515b762eb43e"
+        }
+      },
+      "interruption": {
+        "audioBytes": [
+          1440,
+          2400
+        ],
+        "capture": {
+          "cleanup": "none",
+          "command": [
+            "/tmp/audio-runtime-c39-yui-9f0d3d3",
+            "-C",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/config",
+            "session",
+            "--replay",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/interruption.fixture.json",
+            "--audio-out",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/rendered.pcm",
+            "--record-dir",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/bundle",
+            "--trace-audio",
+            "--workdir",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption",
+            "--allow-path",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption",
+            "--max-duration",
+            "60s"
+          ],
+          "durationSeconds": 0.077225,
+          "exitCode": 0,
+          "reaped": true,
+          "stderr": "",
+          "stderrBytesRetained": 0,
+          "stderrTruncated": false,
+          "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n",
+          "stdoutBytesRetained": 749,
+          "stdoutTruncated": false,
+          "timedOut": false
+        },
+        "config": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-interruption/config",
+        "configHashes": {
+          "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+          "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+        },
+        "configSourceHashes": {
+          "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+          "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+        },
+        "directoryReplay": {
+          "configHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          },
+          "configPath": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-interruption/config",
+          "configSourceHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          },
+          "phrase": "Replay verified: 15 wire events, 0 tool calls",
+          "result": {
+            "cleanup": "none",
+            "command": [
+              "/tmp/audio-runtime-c39-yui-9f0d3d3",
+              "-C",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/interruption-directory-replay/config",
+              "session",
+              "replay",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/bundle"
+            ],
+            "durationSeconds": 0.024868,
+            "exitCode": 0,
+            "reaped": true,
+            "stderr": "Replay verified: 15 wire events, 0 tool calls. Recorded render audio: false; render tap unavailable: false.\n",
+            "stderrBytesRetained": 108,
+            "stderrTruncated": false,
+            "stdout": "",
+            "stdoutBytesRetained": 0,
+            "stdoutTruncated": false,
+            "timedOut": false
+          }
+        },
+        "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-interruption/interruption.fixture.json",
+        "fixtureSha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206",
+        "healthyFollowOnTail": {
+          "bytes": 2400,
+          "sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
+        },
+        "label": "interruption",
+        "missingTimelineControl": {
+          "configHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          },
+          "configPath": "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-merge-5671366/public-replay-interruption/config",
+          "configSourceHashes": {
+            "config.yaml": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd",
+            "models.yaml": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+          },
+          "expected": "nonzero missing timeline",
+          "result": {
+            "cleanup": "none",
+            "command": [
+              "/tmp/audio-runtime-c39-yui-9f0d3d3",
+              "-C",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/interruption-missing-timeline-replay/config",
+              "session",
+              "replay",
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/interruption-missing-timeline-bundle"
+            ],
+            "durationSeconds": 0.028022,
+            "exitCode": 1,
+            "reaped": true,
+            "stderr": "Error: replay bundle is incomplete: missing timeline.jsonl in /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/interruption-missing-timeline-bundle or /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/interruption-missing-timeline-bundle/audio-trace\n",
+            "stderrBytesRetained": 659,
+            "stderrTruncated": false,
+            "stdout": "",
+            "stdoutBytesRetained": 0,
+            "stdoutTruncated": false,
+            "timedOut": false
+          }
+        },
+        "provider": {
+          "bytes": 3840,
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/bundle/audio/out-000.pcm",
+          "sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22"
+        },
+        "rendered": {
+          "bytes": 3360,
+          "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c39-authorized-scope-amendment/docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/evidence-repair-9f0d3d3-run1/public-replay-interruption/rendered.pcm",
+          "sha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff"
+        },
+        "sessionLog": [
+          {
+            "input": {
+              "audio_bytes": 0,
+              "audio_offset_bytes": 0,
+              "committed": false,
+              "text": "c07 interruption"
+            },
+            "response": {
+              "audio_bytes": 1440,
+              "audio_offset_bytes": 0,
+              "audio_segments": [
+                "audio/out-000.pcm"
+              ],
+              "complete": true,
+              "text": ""
+            },
+            "turn_index": 1
+          },
+          {
+            "input": {
+              "audio_bytes": 0,
+              "audio_offset_bytes": 0,
+              "committed": false,
+              "text": ""
+            },
+            "response": {
+              "audio_bytes": 2400,
+              "audio_offset_bytes": 1440,
+              "audio_segments": [
+                "audio/out-000.pcm"
+              ],
+              "complete": true,
+              "text": ""
+            },
+            "turn_index": 2
+          }
+        ]
+      }
+    },
+    "sha256After": "2ac1795c1b9b481d5bf4b50b5b5fed7c22b33f3fa7375d2d430044b970b0a2fd",
+    "sha256Before": "2ac1795c1b9b481d5bf4b50b5b5fed7c22b33f3fa7375d2d430044b970b0a2fd"
+  }
+}
