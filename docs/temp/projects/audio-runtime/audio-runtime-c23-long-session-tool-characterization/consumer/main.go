@@ -53,6 +53,7 @@ const (
 	maxRecordingTerminalItems   = 16
 	maxRecordingProviderBytes   = 4 << 20
 	maxRecordingProviderItems   = 8192
+	recordingFixturePace        = 2 * time.Millisecond
 )
 
 type report struct {
@@ -787,7 +788,9 @@ func runToolMatrix(turns int, recordingEnabled bool, artifactRoot string, toolCo
 	advance := func() { base.Advance() }
 	var pace func()
 	if recordingEnabled {
-		pace = func() { time.Sleep(500 * time.Microsecond) }
+		// Keep the bounded recording worker ahead of the deterministic fixture
+		// without changing its messages, ordering, or semantic expectations.
+		pace = func() { time.Sleep(recordingFixturePace) }
 	}
 	provider := newFixtureSession("matrix", turns, advance, pace, toolControl)
 	toolExecutor := &fixtureToolExecutor{control: toolControl}
