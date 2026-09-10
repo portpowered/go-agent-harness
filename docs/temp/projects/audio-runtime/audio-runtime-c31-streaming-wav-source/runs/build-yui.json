@@ -1,0 +1,16 @@
+{
+  "name": "build-yui",
+  "argv": [
+    "go",
+    "build",
+    "-trimpath",
+    "-o",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source/docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/artifacts/yui",
+    "./agent-cli/cmd/yui"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c31-streaming-wav-source",
+  "exit_code": 0,
+  "elapsed_ms": 253,
+  "stdout": "",
+  "stderr": ""
+}

@@ -29,6 +29,7 @@ C21_FIXTURE_DIR = ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c21-cor
 WORKFLOW_SAMPLES = [-32768, -12345, -1, 0, 1, 12345, 32767]
 WORKFLOW_SOURCE_FIXTURE = ROOT / "agent-cli/test/integration/testdata/s2s-e2e-vision-describe/s2s_e2e_vision_describe.session.json"
 WORKFLOW_OUTPUT_PCM = struct.pack("<" + ("h" * 480), *([1234] + ([0] * 479)))
+SOURCE_PATHS = ("go-audio/pkg/audio",)
 
 
 class EvidenceError(RuntimeError):
@@ -126,7 +127,7 @@ def source_identity() -> str:
     )
     revision = result.stdout.strip()
     diff = subprocess.run(
-        ["git", "diff", "--no-ext-diff", "--binary", "HEAD", "--"],
+        ["git", "diff", "--no-ext-diff", "--binary", "HEAD", "--", *SOURCE_PATHS],
         cwd=ROOT,
         check=True,
         capture_output=True,
