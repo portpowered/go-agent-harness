@@ -1,0 +1,37 @@
+{
+  "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
+  "project": "audio-runtime",
+  "ownedPaths": [
+    "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/"
+  ],
+  "productionPathsModified": [],
+  "sharedModulePathsModified": [],
+  "baselinePathsModified": [],
+  "realtimeOrDeviceAccess": false,
+  "candidateHeadAtCheckpoint": "8c61326167ceb6ed2017b46ff866656d99a711b7",
+  "sourceRevisionAtCheckpoint": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+  "originMainAtCheckpoint": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+  "pullRequest": 417,
+  "latestCIRejection": {
+    "run": "34413969081",
+    "job": "102674534021",
+    "check": "CI (coverage)",
+    "head": "b061bf852076d4b36526600377ad916751e32b4b",
+    "failure": "agent-cli/internal/wire/composition_test.go:417 expected the RTC media-capability error after preflight, observed nil",
+    "localFocusedControl": "same test with coverage instrumentation passed in 0.563s",
+    "resolved_on_current_main": "The focused composition assertion passes on current origin/main=c95a2cb4; the hosted rejection remains historical and no hosted CI-green claim is made.",
+    "nextAction": "Submit this pushed changed C25 task to script CI; retain C20 ownership of the separate test46/provider_burst repair and do not poll CI."
+  },
+  "chosenDependency": "legacy room clock/format/device-output boundary",
+  "chosenDependencyPlan": "extraction-plan.md",
+  "diagnosisScope": "SOURCE_GAP_CONFIRMED; source/package evidence only; no runtime, provider, physical-device, or acoustic PASS",
+  "adjacentOwners": {
+    "c18": "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go, session_room_coordinator.go, session_room_terminal.go and their tests",
+    "c21": "session duplex overlap and remaining gateway/room/duplex regression paths",
+    "c20": "recording/live paths and test46/provider_burst remain separately owned; the composition assertion repair is now present on current origin/main",
+    "c23": "evidence characterization; read-only dependency",
+    "c24": "isolated script/fixture capacity",
+    "serviceTest": "agent-cli/internal/services/servicetest/runtime.go imports the legacy implementation but exports no RunRoom at lines 109-112"
+  },
+  "handoffRule": "Candidate diagnosis may identify the extraction owner and plan, but no production repair is included in C25. C20 retains test46/provider_burst and recording/live repairs; C26's accepted merge eliminates the old DSP operation; C21 retains room/gateway/duplex; C18 retains exact lifecycle files."
+}

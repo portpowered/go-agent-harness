@@ -1,0 +1,177 @@
+{
+  "schema": 1,
+  "task": "audio-runtime-c25-audio-device-boundary-diagnosis",
+  "current_candidate_revision": "8c61326167ceb6ed2017b46ff866656d99a711b7",
+  "current_origin_main": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+  "current_main_integration": {
+    "isolated_merge_candidate": "8c61326167ceb6ed2017b46ff866656d99a711b7",
+    "c20_composition_repair_merge": "b0acab1238d1aa6bf6bce5ca074451310c7eb039",
+    "c26_accepted_dsp_merge": "1f82284abee0bd31a6680310444cea2e4c16ef00",
+    "composition_focus": {
+      "command": "go test ./agent-cli/internal/wire -tags=nomicrophone -run '^TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession$' -count=1 -timeout=60s",
+      "verdict": "PASS",
+      "interpretation": "The former coverage assertion passes on current origin/main=c95a2cb4; this is local focused evidence, not a hosted CI result."
+    },
+    "c26_shared_dsp_focus": {
+      "command": "go test ./agent-cli/internal/room -run '^TestPCMMixLegacy(UsesSharedFinalClipAndSortedAttribution|KeepsFullCadenceZeroPadding|RejectsOutputBoundBeforeDecoding)$' -count=1 -timeout=45s",
+      "verdict": "PASS",
+      "tests": 3
+    }
+  },
+  "candidate_at_ci_submission": "1040f92478bd1da6450f0f9a1fc1f4532ff34937",
+  "ci": {
+    "run": "34397773527",
+    "job": "102621627290",
+    "pr": 417,
+    "head": "1040f92478bd1da6450f0f9a1fc1f4532ff34937",
+    "check": "CI (integration)",
+    "raw_log": "/tmp/factory-c25-ci-integration-34397773527.log",
+    "raw_log_bytes": 43401,
+    "raw_log_sha256": "22092c58d28a21040259b7317c695c94d4bbd8b18fe38ef31aa9c22bda580b02",
+    "make_target": "test-integration",
+    "job_started_at": "2026-09-09T19:53:55.8886012Z",
+    "failure_at": "2026-09-09T19:59:03.6943356Z"
+  },
+  "latest_ci_rejection": {
+    "run": "34413969081",
+    "job": "102674534021",
+    "pr": 417,
+    "head": "b061bf852076d4b36526600377ad916751e32b4b",
+    "check": "CI (coverage)",
+    "raw_job_json": "docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/ci-rejection-34413969081-job-102674534021.json",
+    "raw_log_url": "https://api.github.com/repos/portpowered/go-agent-harness/actions/jobs/102674534021/logs",
+    "raw_log_bytes": 31872,
+    "raw_log_sha256": "07a0eb388e05ca832306dfdcd0191d8c9a71ecc2c6c53e5528684a4f117a8c6e",
+    "make_target": "coverage",
+    "job_started_at": "2026-09-09T22:48:00Z",
+    "failure_at": "2026-09-09T22:53:46.1243764Z",
+    "failure": {
+      "test": "TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession",
+      "source": "agent-cli/internal/wire/composition_test.go",
+      "reported_line": 417,
+      "expected": "an error wrapping runtimeSession.ErrLiveMediaUnavailable after preflight",
+      "observed": "composed session error = <nil>",
+      "native_go_test_exit": 1,
+      "make_exit": 2,
+      "first_failed_control": "coverage package test failed before coverage aggregation; the assertion was the only reported test failure in the job log"
+    },
+    "resolution_on_current_main": "The C20 composition repair is included in origin/main=c95a2cb4; the focused assertion passes locally. The historical hosted rejection remains preserved; no hosted CI-green claim is made.",
+    "completed_adjacent_checks": [
+      "CI (static)=SUCCESS",
+      "CI (unit)=SUCCESS",
+      "CI (race)=SUCCESS",
+      "CI (WebMCP Chrome)=SUCCESS",
+      "CI (macOS audio release)=SUCCESS",
+      "CI (Windows audio portable)=SUCCESS"
+    ],
+    "local_focused_control": {
+      "command": "go test ./agent-cli/internal/wire -tags=nomicrophone -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile=/tmp/factory-c25-wire-coverage-c95.out -run '^TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession$' -count=1 -timeout=60s -v",
+      "verdict": "PASS",
+      "duration_seconds": 0.555,
+      "coverage": "4.5% of statements"
+    },
+    "ownership": {
+      "c25": "evidence-only; no leased production or composition-test path",
+      "c20": "existing PR412 lease owns agent-cli/internal/wire/composition_test.go and the recording/live repair path",
+      "c21": "remote integration fixture and gateway/duplex lease; not implicated by this coverage assertion",
+      "next_action": "C25 submits this changed evidence-only head to the script CI gate; C20 retains the separate test46/provider_burst repair."
+    },
+    "interpretation": "The hosted coverage rejection is an external composition-path failure after the C25 verifier passed. The focused local reproduction, including coverage instrumentation, passed; this does not establish a C25 verifier or selected legacy-boundary failure."
+  },
+  "failure": {
+    "test": "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst",
+    "source": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go",
+    "reported_line": 182,
+    "phase": "waitForRemoteToolAudio",
+    "operation": "ReadRemoteDeviceServerSnapshot",
+    "endpoint": "/v1/audio-device/control/snapshot",
+    "error": "context deadline exceeded",
+    "scenario_deadline_seconds": 30,
+    "observed_duration_seconds": 30.04,
+    "first_failed_control": "snapshot evidence request did not return before the existing scenario context expired"
+  },
+  "source_order": [
+    {
+      "event": "provider allResponsesSent",
+      "source": "session_tool_audio_remote_e2e_test.go:301-304",
+      "meaning": "all provider responses are written before the evidence phase"
+    },
+    {
+      "event": "callback clock stop and join",
+      "source": "session_tool_audio_remote_e2e_test.go:334-341",
+      "meaning": "the background callback driver is stopped and joined before the non-closing snapshot path"
+    },
+    {
+      "event": "snapshot request",
+      "source": "session_tool_audio_remote_e2e_test.go:350-352 and :522-545",
+      "meaning": "the test advances callbacks and requests the full remote snapshot before validating the final marker"
+    },
+    {
+      "event": "provider close and child shutdown",
+      "source": "session_tool_audio_remote_e2e_test.go:366-376",
+      "meaning": "for provider_burst, ReleaseClose and the final child wait occur after snapshot validation; the hosted failure did not reach this normal close assertion"
+    }
+  ],
+  "adjacent_ci_controls": {
+    "production_binary_audio_device_replay": {
+      "verdict": "PASS",
+      "duration_seconds": 80.567
+    },
+    "committed_replay_fixture_regressions": {
+      "verdict": "PASS",
+      "duration_seconds": 9.617
+    }
+  },
+  "local_controls": [
+    {
+      "command": "go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio$/^test46/provider_burst$' -count=1 -timeout=90s -v",
+      "verdict": "PASS",
+      "subtest_duration_seconds": 12.38,
+      "package_duration_seconds": 21.896,
+      "raw_log": "/tmp/factory-c25-local-test46-provider-burst-raw.log",
+      "raw_log_bytes": 602,
+      "raw_log_sha256": "1bf92f54005fa0eb4d32fea0288b409ade41d8267dc2978385ae4858f9fa695f"
+    },
+    {
+      "command": "go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio$' -count=1 -timeout=90s -v",
+      "verdict": "PASS",
+      "subtest": "12-subtest test45/test46 plus matched healthy controls",
+      "test46_provider_burst_seconds": 12.44,
+      "package_duration_seconds": 29.362,
+      "raw_log": "/tmp/factory-c25-local-test45-48-matrix-raw.log",
+      "raw_log_bytes": 5046,
+      "raw_log_sha256": "7460f44f141f64518282d7dbf90bb5d0a73dda88ef3e0f411727d7149d1023cf"
+    }
+  ],
+  "interpretation": "The hosted failure is localized to the remote snapshot evidence phase after provider completion and callback-clock shutdown. Local focused controls do not reproduce it. The evidence does not distinguish server-lock starvation, snapshot serialization, or client scheduling, and does not prove PCM loss or EOF loss.",
+  "ownership": {
+    "c25": "read-only diagnosis and verifier/evidence folder",
+    "c20": "production and fixture repair for session_tool_audio_remote_e2e_test.go/live-session path",
+    "next_action": "C20 captures bounded server/snapshot phase timing on its same task; primary resumes C25 after any reviewed main change to refresh exact-source evidence and submit a changed head through script CI."
+  },
+  "owned_exact_head_refresh": {
+    "candidate": "8c61326167ceb6ed2017b46ff866656d99a711b7",
+    "command": "python3 docs/temp/projects/audio-runtime/audio-runtime-c25-audio-device-boundary-diagnosis/verify.py --mode all",
+    "verdict": "ACCEPTED",
+    "bounded_commands": 27,
+    "focused_regressions": 10,
+    "aggregate_seconds": 16.671,
+    "source_revision": "c95a2cb4f96fa8c14bd4655f5197a822c86a980c",
+    "source_archive_bytes": 56913920,
+    "source_archive_sha256": "5e8cb07b1bc2ef3b999ca57458100bb6620697a0af481c28436493f8a3737a12",
+    "source_gap": "SOURCE_GAP_CONFIRMED",
+    "c26_dsp_reconciliation": "ELIMINATED_BY_ACCEPTED_C26; shared bounds at mixer.go:725 and shared mix at mixer.go:751; no legacy accumulation or final-clip loop",
+    "clean_shutdown": true,
+    "outside_allowed_paths": [],
+    "production_paths_modified": false
+  },
+  "current_main_focused_composition_control": {
+    "candidate": "74ef3dae92bbc82dfa0ca4a27facec52e04e9625",
+    "command": "go test ./agent-cli/internal/wire -tags=nomicrophone -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile=/tmp/factory-c25-wire-coverage-current-main.out -run '^TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession$' -count=1 -timeout=60s -v",
+    "verdict": "PASS",
+    "package_duration_seconds": 0.573,
+    "test_duration_seconds": 0.01,
+    "coverage": "4.7% of statements",
+    "interpretation": "The focused local composition seam still produces the expected live-media-unavailable error and passes; hosted CI's C20 failure remains an external coverage-path discrepancy."
+  }
+}
