@@ -1,0 +1,18 @@
+{
+  "action": "parity",
+  "agent_complete_record_count": 1,
+  "agent_partial_record_count": 0,
+  "agent_reporter_calls": 1,
+  "client_close_calls": 1,
+  "client_copy_payload_hex": "1100ee",
+  "client_partial": {
+    "accepted": 2,
+    "payload_hex": "01ff"
+  },
+  "client_rejected_record_count": 0,
+  "client_zero_record_count": 0,
+  "close_error_authoritative": true,
+  "nil_sink_clock_reads": 0,
+  "ok": true,
+  "sink_failure_isolated": true
+}

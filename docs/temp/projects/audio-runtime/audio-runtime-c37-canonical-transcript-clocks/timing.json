@@ -1,0 +1,57 @@
+{
+  "action": "timing",
+  "advance_delta": "20ms",
+  "base": "2026-01-02T03:04:05Z",
+  "default_controls": {
+    "agent_ticks": [
+      1,
+      2
+    ],
+    "client_tick": 0,
+    "client_timestamp": "2026-09-10T10:21:55.949587Z",
+    "host_timestamp_utc": true
+  },
+  "now_only": {
+    "tick": 1,
+    "timestamp": "2026-01-02T03:04:05.123Z"
+  },
+  "observations": [
+    {
+      "side": "client",
+      "tick": 0,
+      "timestamp": "2026-01-02T03:04:05Z",
+      "peer": "client",
+      "direction": "in",
+      "stream": "device-in",
+      "payload_hex": "00ff01"
+    },
+    {
+      "side": "client",
+      "tick": 1,
+      "timestamp": "2026-01-02T03:04:05.02Z",
+      "peer": "client",
+      "direction": "out",
+      "stream": "ws",
+      "payload_hex": "7f80"
+    },
+    {
+      "side": "agent",
+      "tick": 0,
+      "timestamp": "2026-01-02T03:04:05Z",
+      "peer": "agent",
+      "direction": "in",
+      "stream": "ws",
+      "payload_hex": "1000"
+    },
+    {
+      "side": "agent",
+      "tick": 1,
+      "timestamp": "2026-01-02T03:04:05.02Z",
+      "peer": "agent",
+      "direction": "out",
+      "stream": "ws",
+      "payload_hex": "01fe"
+    }
+  ],
+  "ok": true
+}

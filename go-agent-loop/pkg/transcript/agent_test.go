@@ -90,6 +90,74 @@ func TestAgentCaptureRecordsFixedBidirectionalScenario(t *testing.T) {
 	}
 }
 
+func TestAgentCaptureDefaultUsesCanonicalRealTimestampAndLocalSequence(t *testing.T) {
+	sink := &retainingRecordSink{}
+	capture := NewAgentCapture(sink, nil)
+
+	before := time.Now().UTC()
+	for _, payload := range [][]byte{[]byte("first"), []byte("second")} {
+		if n, err := capture.Inbound(StreamWS, payload, func(data []byte) (int, error) {
+			return len(data), nil
+		}); n != len(payload) || err != nil {
+			t.Fatalf("default inbound = (%d, %v), want (%d, nil)", n, err, len(payload))
+		}
+	}
+	after := time.Now().UTC()
+
+	if len(sink.records) != 2 {
+		t.Fatalf("default records = %d, want 2", len(sink.records))
+	}
+	for index, wantTick := range []uint64{1, 2} {
+		record := sink.records[index]
+		if record.Tick != wantTick {
+			t.Errorf("default record %d tick = %d, want %d", index, record.Tick, wantTick)
+		}
+		timestamp, err := time.Parse(time.RFC3339Nano, record.Timestamp)
+		if err != nil {
+			t.Fatalf("default record %d timestamp %q: %v", index, record.Timestamp, err)
+		}
+		if timestamp.Before(before) || timestamp.After(after) || timestamp.Location() != time.UTC {
+			t.Errorf("default record %d timestamp = %s, want UTC between %s and %s", index, timestamp, before, after)
+		}
+	}
+}
+
+func TestAgentCaptureNilSinkDoesNotReadSuppliedClock(t *testing.T) {
+	clock := panicAgentClock{}
+	capture := NewAgentCapture(nil, clock)
+
+	if n, err := capture.Inbound(StreamWS, []byte("in"), func(data []byte) (int, error) {
+		return len(data), nil
+	}); n != 2 || err != nil {
+		t.Fatalf("nil-sink inbound = (%d, %v), want (2, nil)", n, err)
+	}
+	if n, err := capture.Outbound(StreamWS, []byte("out"), func(data []byte) (int, error) {
+		return len(data), nil
+	}); n != 3 || err != nil {
+		t.Fatalf("nil-sink outbound = (%d, %v), want (3, nil)", n, err)
+	}
+}
+
+func TestAgentCaptureNowOnlyClockKeepsLocalSequence(t *testing.T) {
+	wantTimestamp := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
+	sink := &retainingRecordSink{}
+	capture := NewAgentCapture(sink, timestampOnlyAgentClock{timestamp: wantTimestamp})
+
+	for _, payload := range [][]byte{[]byte("a"), []byte("b")} {
+		if _, err := capture.Inbound(StreamWS, payload, nil); err != nil {
+			t.Fatalf("now-only inbound: %v", err)
+		}
+	}
+	for index, record := range sink.records {
+		if record.Tick != uint64(index+1) {
+			t.Errorf("now-only record %d tick = %d, want %d", index, record.Tick, index+1)
+		}
+		if record.Timestamp != wantTimestamp.Format(time.RFC3339Nano) {
+			t.Errorf("now-only record %d timestamp = %q, want %q", index, record.Timestamp, wantTimestamp.Format(time.RFC3339Nano))
+		}
+	}
+}
+
 func TestAgentCaptureCorrelatesWithClientCrossingsAndRejectsMutations(t *testing.T) {
 	base := time.Unix(1_750_000_000, 123).UTC()
 	logicalClock := clock.NewDeterministic(base, 10*time.Millisecond)
@@ -382,6 +450,14 @@ type retainingRecordSink struct {
 	records []Record
 	err     error
 }
+
+type panicAgentClock struct{}
+
+func (panicAgentClock) Now() time.Time { panic("nil-sink clock was read") }
+
+type timestampOnlyAgentClock struct{ timestamp time.Time }
+
+func (c timestampOnlyAgentClock) Now() time.Time { return c.timestamp }
 
 func (sink *retainingRecordSink) Write(record Record) error {
 	sink.mu.Lock()
