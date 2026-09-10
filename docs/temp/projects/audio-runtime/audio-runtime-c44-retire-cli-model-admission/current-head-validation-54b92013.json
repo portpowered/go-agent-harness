@@ -1,0 +1,52 @@
+{
+  "schema": "audio-runtime-c44-current-head-validation/v1",
+  "task": "audio-runtime-c44-retire-cli-model-admission",
+  "tested_source_revision": "54b920136220b9e9fe1c027104addf05d6b1cee6",
+  "source_tree_dirty": false,
+  "runs": {
+    "public": {
+      "run_dir": "runs/verify-20260910T193922Z-16355",
+      "decision": "ACCEPTED"
+    },
+    "negative_controls": {
+      "run_dir": "runs/verify-20260910T193938Z-16512",
+      "decision": "ACCEPTED"
+    }
+  },
+  "artifacts": {
+    "external_consumer": {
+      "bytes": 6403602,
+      "sha256": "6bba2d1f914ed50e54c12df8e4e827809e86d5916e872225eb10990b82bdf3d3"
+    },
+    "shipped_yui_nomicrophone": {
+      "bytes": 51038146,
+      "sha256": "fb72039514a2721bcd04fa171c6361906d949950272e2c26c0bd7418f6b99255"
+    }
+  },
+  "build_inputs": {
+    "external_consumer": {
+      "file_count": 1076,
+      "manifest_sha256": "5ae620e01eb64745dfc036d945fb8d6ad65495dd4e6c7fdff2b134b52f74741e"
+    },
+    "shipped_yui": {
+      "file_count": 2174,
+      "manifest_sha256": "28058a55b6f7cb97dcdb23b8f0f2103b15b6b8325b09a56546c9607394509528"
+    }
+  },
+  "controls": {
+    "consumer_normal": "passed",
+    "consumer_race": "passed",
+    "invalid_bare_session_before_provider_effect": "passed",
+    "invalid_self_play_before_output_creation": "passed",
+    "audio_tool_exact_pcm_and_marker": "passed",
+    "interruption_exact_pcm_and_healthy_tail": "passed",
+    "wrong_pcm_oracle_rejected": "passed",
+    "wrong_marker_oracle_rejected": "passed",
+    "forced_timeout_term_reap_no_survivors": "passed"
+  },
+  "provenance": {
+    "source_archive_sha256": "d1079bafa6d3597eccd8ea723b706e74417248466abc9aac8c6504f6d9cd0455",
+    "consumer_source_sha256": "435a1eec7c82d42d82c7f21bd226078449be66d0894c096450e9c98902cff28f",
+    "evidence_descendant_compiled_inputs_unchanged": true
+  }
+}
