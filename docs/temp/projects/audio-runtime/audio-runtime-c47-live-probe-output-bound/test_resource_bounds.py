@@ -546,6 +546,100 @@ def staging_controls() -> dict[str, Any]:
         }
 
 
+def refresh_controls() -> dict[str, Any]:
+    module = runpy.run_path(str(HERE / "refresh_live_evidence.py"), run_name="c47_refresh_controls")
+    repository_root = HERE.parents[4]
+    with tempfile.TemporaryDirectory(prefix="c47-refresh-", dir=HERE) as temporary:
+        root = pathlib.Path(temporary)
+        output_root = root / "private-output"
+        run_dir = output_root / "runs" / "refresh-01"
+        run_dir.mkdir(parents=True)
+        stderr_path = run_dir / "invalid-self-play-admission.stderr"
+        stderr_path.write_bytes(b"invalid\n\n")
+        stderr_reference = str(stderr_path)
+        (run_dir / "invalid-self-play-admission.json").write_text(
+            json.dumps({"stderr_path": stderr_reference, "stderr_bytes": 0, "stderr_sha256": "stale"}) + "\n",
+            encoding="utf-8",
+        )
+        (run_dir / "outcome.json").write_text(
+            json.dumps(
+                {
+                    "stderr_path": stderr_reference,
+                    "report_bytes": 0,
+                    "latest_report_bytes": 0,
+                    "decision": "ACCEPTED",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        latest_path = output_root / "latest-staged-probe.json"
+        latest_path.write_text(
+            json.dumps(
+                {
+                    "stderr_path": stderr_reference,
+                    "report_bytes": 0,
+                    "latest_report_bytes": 0,
+                    "decision": "ACCEPTED",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        refreshed = module["refresh_run"](run_dir)
+        outcome = json.loads((run_dir / "outcome.json").read_text(encoding="utf-8"))
+        latest = json.loads(latest_path.read_text(encoding="utf-8"))
+        measured_report = module["tree_bytes"](run_dir)
+        measured_latest = latest_path.stat().st_size
+        assert outcome["report_bytes"] == measured_report
+        assert outcome["latest_report_bytes"] == measured_latest
+        assert latest["report_bytes"] == measured_report
+        assert latest["latest_report_bytes"] == measured_latest
+        assert refreshed["report_bytes"] == measured_report
+        assert refreshed["latest_report_bytes"] == measured_latest
+        assert outcome["stderr_bytes"] == len(b"invalid\n")
+        assert latest["stderr_sha256"] == hashlib.sha256(b"invalid\n").hexdigest()
+
+        for forbidden in (
+            repository_root / "progress.txt",
+            HERE.parent / "audio-runtime-c45-model-probe-oracle-repair" / "runs" / "foreign-run",
+        ):
+            try:
+                module["refresh_run"](forbidden)
+            except ValueError as exc:
+                assert "C47-owned" in str(exc)
+            else:
+                raise AssertionError(f"foreign evidence path accepted: {forbidden}")
+
+        escape_link = root / "escape"
+        escape_link.symlink_to(HERE.parent, target_is_directory=True)
+        try:
+            module["refresh_run"](escape_link / "runs" / "foreign-run")
+        except ValueError as exc:
+            assert "C47-owned" in str(exc)
+        else:
+            raise AssertionError("symlink escape accepted")
+
+        historical_bytes = (repository_root / "progress.txt").read_bytes()
+        latest_path.unlink()
+        latest_path.symlink_to(repository_root / "progress.txt")
+        try:
+            module["refresh_run"](run_dir)
+        except ValueError as exc:
+            assert "symlink" in str(exc)
+        else:
+            raise AssertionError("symlink latest report accepted")
+        assert (repository_root / "progress.txt").read_bytes() == historical_bytes
+
+        return {
+            "report_bytes": measured_report,
+            "latest_report_bytes": measured_latest,
+            "foreign_paths_rejected": True,
+            "symlink_escape_rejected": True,
+        }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--group", choices=("capture", "staging", "all"), default="all")
@@ -563,6 +657,7 @@ def main() -> int:
         results["capture"] = capture_controls(timeout)
     if args.group in ("staging", "all"):
         results["staging"] = staging_controls()
+        results["refresh"] = refresh_controls()
     elapsed = time.monotonic() - started
     if elapsed > args.total_timeout:
         raise SystemExit(f"C47 synthetic aggregate deadline exceeded: {elapsed:.3f}s")

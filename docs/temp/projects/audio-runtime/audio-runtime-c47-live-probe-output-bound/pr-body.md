@@ -63,3 +63,17 @@ Candidate commit `cc0841b433ca3a00029cf6d0e89b435e713bfb93` records and pushes t
 - The immutable YUI/consumer/source-snapshot/descriptor hashes remain the PRD values with `artifact_input_equivalence=true`; APFS clone staging, projected growth `174966628`, minimum free space `130562568192`, `binary_output_bytes=4718`, `report_bytes=380955`, latest report `66340`, and scratch cleanup `57472980 -> 0` with no errors were observed. No executable was rebuilt and no forbidden helper was called.
 
 Executor evidence only: script CI, independent review, guarded merge, post-merge vertical acceptance and project acceptance remain external. This changed same-task head is ready for the script CI gate; CI is not polled here.
+
+## Refresh helper repair
+
+The latest canonical C47 rejection identified an owned evidence-refresh defect: arbitrary paths could be written, symlink escapes were not fail-closed, and `latest_report_bytes` could remain stale after the run report changed.
+
+This candidate adds canonical C47 `runs/<run>` path validation, rejects foreign and symlink-backed run/report targets before mutation, validates JSON objects, and stabilizes both `report_bytes` and `latest_report_bytes` in the run and latest reports. The C47 resource suite adds positive convergence and negative foreign-path, escaping-symlink, symlinked-latest-report, and historical-sentinel controls.
+
+Focused repair evidence on this candidate:
+
+- `test_resource_bounds.py --group all --child-timeout 10 --total-timeout 120`: `ACCEPTED` in `7.271088s`; deterministic reserve shortfall remains `BLOCKED` before launch.
+- `run_c45_regressions.py --original-revision 5f14c45313cfdc71e000fda209e3408fcf863faf --child-timeout 60 --total-timeout 300`: `ACCEPTED`, including the original negative, aggregate-output and deadline controls.
+- `check_python_sources.py`: `ACCEPTED` for all seven sources; `git diff --check`: pass.
+
+The final committed-head exact staged mission and its immutable input/provenance hashes will be recorded below after the bounded run. This remains executor evidence only; CI, independent review, guarded merge, vertical acceptance and project acceptance are external.
