@@ -560,3 +560,27 @@ C23 causal negative-control repair checkpoint — 2026-09-11T23:30:37Z
   wait for reviewed recording/media repair to reach `origin/main` before
   rebinding provenance and rerunning the complete bounded sequence; return
   `ACCEPTED` only after that fresh full sequence passes.
+
+C23 causal repair handoff checkpoint — 2026-09-11T23:32:58Z
+
+- Commit `d8225b537d3901e8ead54a2dc361a7447761184a` is pushed on the admitted
+  branch and PR #415 now points to that head. The PR body records the native
+  runtime-boundary negative controls, clean-candidate provenance, focused test
+  evidence, and the known C53/C56 prerequisite without claiming CI green.
+- Post-commit `prepare --source-revision
+  d5d6f84363d8569d5dc1a59985f8d45cf50e1d06 --child-timeout-seconds 60` passed
+  on the clean candidate. It records 951 build inputs with digest
+  `05e9d0ee4b1c8a563935b94f4f5157e6b536a6068a5ee1c541496753f1150aab`,
+  consumer SHA-256
+  `5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17`,
+  same-source YUI SHA-256
+  `ab769e04aa8029ede164a4f7b88e3363b02316c3d165fa13051a333a1a81280c`, and
+  fixture SHA-256
+  `7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e`.
+  Tampered-fixture provenance verification passed.
+- The next action remains externally gated: after reviewed recording/media
+  repair reaches `origin/main` or primary issues an ownership decision, fetch
+  that exact main, rebuild/rebind provenance, rerun the complete bounded C23
+  sequence plus C21 regressions, and submit this same task to script CI only
+  after the changed sequence passes. Current disposition is `CONTINUE`; do not
+  poll CI or relabel the preserved recording failure.
