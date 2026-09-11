@@ -563,7 +563,7 @@ type sessionAudioOutputSession struct {
 	seedValue      string
 	receive        *messages.TypedBuffer[messages.StreamMessage]
 	done           chan struct{}
-	once           sync.Once
+	drainStarted   chan struct{}
 	closeRequested chan struct{}
 	closeOnce      sync.Once
 	innerCloseOnce sync.Once
@@ -583,6 +583,7 @@ func newSessionAudioOutputSession(ctx context.Context, inner messages.Session, o
 		seedValue:      seedValue,
 		receive:        messages.NewTypedBuffer[messages.StreamMessage](sessionAudioOutputBufferSize),
 		done:           make(chan struct{}),
+		drainStarted:   make(chan struct{}),
 		closeRequested: make(chan struct{}),
 		innerCloseDone: make(chan struct{}),
 	}
@@ -649,7 +650,10 @@ func (s *sessionAudioOutputSession) TerminalError() error {
 }
 
 func (s *sessionAudioOutputSession) forward() {
-	defer s.once.Do(func() { close(s.done) })
+	defer func() {
+		s.closeInner()
+		close(s.done)
+	}()
 	input := s.Session.Receive()
 	for {
 		if s.ctx.Err() != nil {
@@ -661,6 +665,12 @@ func (s *sessionAudioOutputSession) forward() {
 		}
 		if s.ctx.Err() != nil {
 			s.drainAfterCancellation(input)
+		} else {
+			select {
+			case <-s.closeRequested:
+				s.drainAfterCancellation(input)
+			default:
+			}
 		}
 		return
 	}
@@ -676,7 +686,6 @@ func (s *sessionAudioOutputSession) forwardNext(input *messages.TypedBuffer[mess
 			s.drain(input, s.ctx, false)
 		}
 	case <-s.closeRequested:
-		s.drainAfterCancellation(input)
 	case <-s.ctx.Done():
 	}
 	return false
@@ -693,6 +702,7 @@ func (s *sessionAudioOutputSession) drain(input *messages.TypedBuffer[messages.S
 	}
 }
 func (s *sessionAudioOutputSession) drainAfterCancellation(input *messages.TypedBuffer[messages.StreamMessage]) {
+	close(s.drainStarted)
 	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
 	defer cancel()
 	terminal := time.NewTimer(sessionStragglerDrainWallSafety)
@@ -747,20 +757,10 @@ func (s *sessionAudioOutputSession) finishInnerClose() {
 func (s *sessionAudioOutputSession) Close() error {
 	s.closeOnce.Do(func() {
 		close(s.closeRequested)
-		s.closeInner()
 		<-s.done
 		<-s.innerCloseDone
 	})
 	return s.closeErr
-}
-
-func (s *sessionAudioOutputSession) forwardMessage(msg messages.StreamMessage) bool {
-	if s.ctx.Err() != nil {
-		retainCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
-		defer cancel()
-		return s.forwardMessageWithContext(retainCtx, msg, true)
-	}
-	return s.forwardMessageWithContext(s.ctx, msg, false)
 }
 
 func (s *sessionAudioOutputSession) forwardMessageWithContext(ctx context.Context, msg messages.StreamMessage, retaining bool) bool {
