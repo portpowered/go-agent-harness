@@ -8,5 +8,5 @@
   "pairwise_destination_disjoint": true,
   "pairwise_source_disjoint": true,
   "schema_version": "c50-candidate-validation-v1",
-  "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3"
+  "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710"
 }

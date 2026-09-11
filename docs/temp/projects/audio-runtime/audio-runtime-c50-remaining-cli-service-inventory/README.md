@@ -2,7 +2,7 @@
 
 This directory is evidence-only for `audio-runtime-c50-remaining-cli-service-inventory`.
 The inspected source is the clean integrated `origin/main` snapshot
-`6b4f32b5940d43192774e86f05e3c7c9293c71e3`, which is a descendant of the
+`2456a5d1594e73faf85e1132d6050735bc3e4710`, which is a descendant of the
 planning snapshot `7f73c8b3b4ebc99b55b8bb5e802beff024385407`. The startup
 integration checkpoint is `8bdafc7f947a3a2c9856220abdc539437035bd21`.
 The branch is

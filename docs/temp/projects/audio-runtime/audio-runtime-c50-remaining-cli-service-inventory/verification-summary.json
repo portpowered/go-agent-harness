@@ -1,15 +1,16 @@
 {
   "aggregate_deadline_seconds": 600,
   "all_project_criteria": "OPEN",
-  "candidate_revision": "acd072e991962defeae59a0ab80f58b0fe322d18",
+  "candidate_revision": "530defefe307cda5a06249d9f287d338885d3c68",
   "checksum_note": "SHA256SUMS intentionally excludes this summary because the summary records the manifest digest; all other task-local evidence is covered without a self-referential digest cycle.",
-  "elapsed_seconds": 35.211644,
+  "elapsed_seconds": 35.68593,
   "reports": {
     "accumulated-regressions": {
-      "candidate_revision": "fa3eacc0e8d317fabff5c1feb85ad7435b2abd6c",
+      "candidate_revision": "530defefe307cda5a06249d9f287d338885d3c68",
       "ci_polling": "not performed",
       "command": "COUNT=3 scripts/test-session-ci-regressions.sh all",
       "credentials": "not used",
+      "executable_inputs_unchanged_from_prior_report": true,
       "exit_code": 0,
       "modes": [
         "normal",
@@ -17,19 +18,29 @@
         "race"
       ],
       "negative_controls": "Expected replay mismatch and later-turn PCM/transcript rejection diagnostics remained asserted; all selected tests passed.",
-      "observed_at": "2026-09-11T08:20:05Z",
+      "observed_at": "2026-09-11T08:58:28Z",
       "packages": [
         "agent-cli/internal/transport/cli",
         "agent-cli/test/integration",
         "go-device-gateway/pkg/devices",
         "go-llm-gateway/pkg/providers/openai"
       ],
+      "prior_report_candidate_revision": "fa3eacc0e8d317fabff5c1feb85ad7435b2abd6c",
+      "rerun_candidate_revision": "acd072e991962defeae59a0ab80f58b0fe322d18",
       "schema_version": "c50-accumulated-regressions-v1",
-      "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+      "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+      "source_revision_equivalence": {
+        "from": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+        "production_and_build_inputs_unchanged": true,
+        "to": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+        "verification": "git diff --quiet acd072e991962defeae59a0ab80f58b0fe322d18 530defefe307cda5a06249d9f287d338885d3c68 -- agent-cli go-agent-runtime go-agent-loop go-audio go-device-gateway go-llm-gateway tests go.work go.work.sum"
+      },
       "stderr_bytes": 0,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stdout_bytes": 133049,
-      "stdout_sha256": "82d1a98236b3fd063612348c0b2b68cd39c531227c13b506c94332345361c29a"
+      "stdout_sha256": "82d1a98236b3fd063612348c0b2b68cd39c531227c13b506c94332345361c29a",
+      "tested_candidate_revision": "acd072e991962defeae59a0ab80f58b0fe322d18",
+      "tested_source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3"
     },
     "candidates": {
       "active_owner_paths_excluded": true,
@@ -41,7 +52,7 @@
       "pairwise_destination_disjoint": true,
       "pairwise_source_disjoint": true,
       "schema_version": "c50-candidate-validation-v1",
-      "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3"
+      "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710"
     },
     "checksum_manifest": {
       "entries": 91,
@@ -49,7 +60,7 @@
         "verification-summary.json"
       ],
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/SHA256SUMS",
-      "sha256": "46ac72b878069ca48db4e17eaec0df52fe5afe511f658808cbe4085161ef84f8"
+      "sha256": "d3951fe1f15c0c0e70603084ade4606b08946bc1fea7161853b172479d505bd1"
     },
     "focused-regressions": {
       "full_ci_suite": "not run; executor handoff does not duplicate CI",
@@ -67,7 +78,7 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/agent-cli",
           "deadline_seconds": 60,
-          "elapsed_seconds": 0.218128,
+          "elapsed_seconds": 0.217458,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -88,8 +99,8 @@
           "label": "room-normal",
           "output_cap_bytes_per_stream": 2097152,
           "output_limited": false,
-          "owned_output_bytes_after": 27290269,
-          "owned_output_bytes_before": 27290269,
+          "owned_output_bytes_after": 27318519,
+          "owned_output_bytes_before": 27318519,
           "owned_output_limited": false,
           "owned_output_quota_bytes": 134217728,
           "passed_tests": [
@@ -100,7 +111,7 @@
             "TestMeshRemovalClosesOnlyRemovedPairAndLeavesSurvivors"
           ],
           "process_group_gone": true,
-          "process_group_id": 69924,
+          "process_group_id": 73963,
           "stderr_bytes": 0,
           "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/focused-regressions/room-normal.stderr",
           "stdout_bytes": 787,
@@ -122,7 +133,7 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/agent-cli",
           "deadline_seconds": 60,
-          "elapsed_seconds": 0.222177,
+          "elapsed_seconds": 0.2263,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -140,8 +151,8 @@
           "label": "room-race",
           "output_cap_bytes_per_stream": 2097152,
           "output_limited": false,
-          "owned_output_bytes_after": 27290272,
-          "owned_output_bytes_before": 27290272,
+          "owned_output_bytes_after": 27318519,
+          "owned_output_bytes_before": 27318519,
           "owned_output_limited": false,
           "owned_output_quota_bytes": 134217728,
           "passed_tests": [
@@ -149,7 +160,7 @@
             "TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair"
           ],
           "process_group_gone": true,
-          "process_group_id": 69929,
+          "process_group_id": 73968,
           "stderr_bytes": 0,
           "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/focused-regressions/room-race.stderr",
           "stdout_bytes": 821,
@@ -170,7 +181,7 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/agent-cli",
           "deadline_seconds": 60,
-          "elapsed_seconds": 0.427993,
+          "elapsed_seconds": 0.444129,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -189,8 +200,8 @@
           "label": "agentruntime-normal",
           "output_cap_bytes_per_stream": 2097152,
           "output_limited": false,
-          "owned_output_bytes_after": 27290274,
-          "owned_output_bytes_before": 27290272,
+          "owned_output_bytes_after": 27318517,
+          "owned_output_bytes_before": 27318517,
           "owned_output_limited": false,
           "owned_output_quota_bytes": 134217728,
           "passed_tests": [
@@ -199,7 +210,7 @@
             "TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration"
           ],
           "process_group_gone": true,
-          "process_group_id": 69934,
+          "process_group_id": 73973,
           "stderr_bytes": 0,
           "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/focused-regressions/agentruntime-normal.stderr",
           "stdout_bytes": 1901,
@@ -209,10 +220,10 @@
         }
       ],
       "schema_version": "c50-focused-regressions-v1",
-      "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3"
+      "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710"
     },
     "gates": {
-      "architecture_base": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+      "architecture_base": "2456a5d1594e73faf85e1132d6050735bc3e4710",
       "architecture_baseline_sha256": {
         "docs/architecture/architecture-policy.json": "da6a5d12c69d2a0556cc9ec232897448439b5a789108f67d23fe893fa016be73",
         "docs/architecture/architecture-size-baseline.json": "c1e2cf8b97753b13aeca9200e45d5f77205eb511d428c6b225ba3ea36287853d"
@@ -232,7 +243,7 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
           "deadline_seconds": 60,
-          "elapsed_seconds": 0.04117,
+          "elapsed_seconds": 0.131328,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -246,12 +257,12 @@
           "label": "diff-check",
           "output_cap_bytes_per_stream": 2097152,
           "output_limited": false,
-          "owned_output_bytes_after": 27290279,
-          "owned_output_bytes_before": 27290279,
+          "owned_output_bytes_after": 27318513,
+          "owned_output_bytes_before": 27318513,
           "owned_output_limited": false,
           "owned_output_quota_bytes": 134217728,
           "process_group_gone": true,
-          "process_group_id": 69968,
+          "process_group_id": 73986,
           "stderr_bytes": 0,
           "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/diff-check.stderr",
           "stdout_bytes": 0,
@@ -265,11 +276,11 @@
           "argv": [
             "make",
             "architecture-check",
-            "ARCHITECTURE_BASE=6b4f32b5940d43192774e86f05e3c7c9293c71e3"
+            "ARCHITECTURE_BASE=2456a5d1594e73faf85e1132d6050735bc3e4710"
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
           "deadline_seconds": 60,
-          "elapsed_seconds": 12.336406,
+          "elapsed_seconds": 12.916566,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -283,12 +294,12 @@
           "label": "architecture-check",
           "output_cap_bytes_per_stream": 2097152,
           "output_limited": false,
-          "owned_output_bytes_after": 27290278,
-          "owned_output_bytes_before": 27290278,
+          "owned_output_bytes_after": 27318513,
+          "owned_output_bytes_before": 27318513,
           "owned_output_limited": false,
           "owned_output_quota_bytes": 134217728,
           "process_group_gone": true,
-          "process_group_id": 69969,
+          "process_group_id": 73987,
           "stderr_bytes": 0,
           "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/architecture-check.stderr",
           "stdout_bytes": 82,
@@ -302,11 +313,11 @@
           "argv": [
             "make",
             "size-check",
-            "ARCHITECTURE_BASE=6b4f32b5940d43192774e86f05e3c7c9293c71e3"
+            "ARCHITECTURE_BASE=2456a5d1594e73faf85e1132d6050735bc3e4710"
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
           "deadline_seconds": 60,
-          "elapsed_seconds": 2.458617,
+          "elapsed_seconds": 2.551524,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -320,12 +331,12 @@
           "label": "size-check",
           "output_cap_bytes_per_stream": 2097152,
           "output_limited": false,
-          "owned_output_bytes_after": 27290279,
-          "owned_output_bytes_before": 27290279,
+          "owned_output_bytes_after": 27318513,
+          "owned_output_bytes_before": 27318513,
           "owned_output_limited": false,
           "owned_output_quota_bytes": 134217728,
           "process_group_gone": true,
-          "process_group_id": 70169,
+          "process_group_id": 75386,
           "stderr_bytes": 0,
           "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/size-check.stderr",
           "stdout_bytes": 82,
@@ -342,7 +353,7 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
           "deadline_seconds": 60,
-          "elapsed_seconds": 5.511833,
+          "elapsed_seconds": 5.315715,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -356,12 +367,12 @@
           "label": "wire-check",
           "output_cap_bytes_per_stream": 2097152,
           "output_limited": false,
-          "owned_output_bytes_after": 27290279,
-          "owned_output_bytes_before": 27290279,
+          "owned_output_bytes_after": 27318514,
+          "owned_output_bytes_before": 27318514,
           "owned_output_limited": false,
           "owned_output_quota_bytes": 134217728,
           "process_group_gone": true,
-          "process_group_id": 70257,
+          "process_group_id": 75459,
           "stderr_bytes": 2112,
           "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/wire-check.stderr",
           "stdout_bytes": 368,
@@ -373,7 +384,7 @@
       "production_source_changed": false,
       "refreshed_origin_main_is_recorded_in_provenance": true,
       "schema_version": "c50-gates-v1",
-      "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+      "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
       "unrelated_dirty_paths": [],
       "write_scope_enforced": true
     },
@@ -462,23 +473,23 @@
       "determinism": {
         "call-paths.json": {
           "equal": true,
-          "first_sha256": "7194208f6c3a8faa16e4c374872b00e6441696ae25c14afaaaf2d7181edca839",
-          "second_sha256": "7194208f6c3a8faa16e4c374872b00e6441696ae25c14afaaaf2d7181edca839"
+          "first_sha256": "0f8e3e11d59168b0f4acf31639d3b6d3a569436e231ef8477fefa8b22c62b698",
+          "second_sha256": "0f8e3e11d59168b0f4acf31639d3b6d3a569436e231ef8477fefa8b22c62b698"
         },
         "classifications.json": {
           "equal": true,
-          "first_sha256": "019cb2e58832aa1dd616f71bb19f8f2291d92eed06493bb6f28a8a6882c3ad85",
-          "second_sha256": "019cb2e58832aa1dd616f71bb19f8f2291d92eed06493bb6f28a8a6882c3ad85"
+          "first_sha256": "ce1c7a52ef7c5772440584ac37ab5414d0e932be3243539932eeba769e27c32d",
+          "second_sha256": "ce1c7a52ef7c5772440584ac37ab5414d0e932be3243539932eeba769e27c32d"
         },
         "inventory.json": {
           "equal": true,
-          "first_sha256": "1764223c45a99168be123c509a981fa4132cafba1b28ccee5ce2ff5abcf8d4f9",
-          "second_sha256": "1764223c45a99168be123c509a981fa4132cafba1b28ccee5ce2ff5abcf8d4f9"
+          "first_sha256": "f3fa9d6a841478ee1613ccc47a31994f2bf40269036df669e9a7ba98de62b715",
+          "second_sha256": "f3fa9d6a841478ee1613ccc47a31994f2bf40269036df669e9a7ba98de62b715"
         },
         "inventory.md": {
           "equal": true,
-          "first_sha256": "e8cfdff3e712a3b7d6f454ee36f4127e78470e2f65032396990bffa914a3f1aa",
-          "second_sha256": "e8cfdff3e712a3b7d6f454ee36f4127e78470e2f65032396990bffa914a3f1aa"
+          "first_sha256": "eefa005b98279e2be6fadb0f3a54d6b07b39b87d951fc45f67bbe522d6b80334",
+          "second_sha256": "eefa005b98279e2be6fadb0f3a54d6b07b39b87d951fc45f67bbe522d6b80334"
         }
       },
       "historical_observation": {
@@ -487,7 +498,7 @@
         "production_files": 107
       },
       "schema_version": "c50-inventory-validation-v1",
-      "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+      "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
       "totals": {
         "physical_lines": 46563,
         "production_files": 120,
@@ -508,7 +519,7 @@
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
         "deadline_seconds": 10,
-        "elapsed_seconds": 0.038069,
+        "elapsed_seconds": 0.041538,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -522,12 +533,12 @@
         "label": "output-cap",
         "output_cap_bytes_per_stream": 65536,
         "output_limited": true,
-        "owned_output_bytes_after": 27290277,
-        "owned_output_bytes_before": 27290277,
+        "owned_output_bytes_after": 27318514,
+        "owned_output_bytes_before": 27318514,
         "owned_output_limited": false,
         "owned_output_quota_bytes": 134217728,
         "process_group_gone": true,
-        "process_group_id": 69964,
+        "process_group_id": 73983,
         "stderr_bytes": 0,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/negative-controls/output-cap.stderr",
         "stdout_bytes": 65536,
@@ -543,7 +554,7 @@
       "owned_output_quota_enforced": true,
       "schema_version": "c50-negative-controls-v1",
       "shared_aggregate_deadline": true,
-      "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+      "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
       "timeout_descendant_cleanup": {
         "aggregate_deadline_hit": false,
         "aggregate_deadline_seconds": 600,
@@ -554,7 +565,7 @@
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
         "deadline_seconds": 2,
-        "elapsed_seconds": 2.010603,
+        "elapsed_seconds": 2.01172,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -568,12 +579,12 @@
         "label": "timeout-descendant-cleanup",
         "output_cap_bytes_per_stream": 2097152,
         "output_limited": false,
-        "owned_output_bytes_after": 27290277,
-        "owned_output_bytes_before": 27290277,
+        "owned_output_bytes_after": 27318515,
+        "owned_output_bytes_before": 27318515,
         "owned_output_limited": false,
         "owned_output_quota_bytes": 134217728,
         "process_group_gone": true,
-        "process_group_id": 69942,
+        "process_group_id": 73981,
         "stderr_bytes": 0,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/negative-controls/timeout-descendant-cleanup.stderr",
         "stdout_bytes": 0,
@@ -607,31 +618,31 @@
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/factory/projects/audio-runtime/manifest.json": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/factory/projects/audio-runtime/source-plan.md": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
         "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analyzer/main.go": "ca1e0f31ca2d8b39afd272fe37808cdb477cfb48bc1c3bcf54122679ed3316ee",
-        "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/canonical-board.json": "86e9e7eedc721b5d78c551b1425594ce3e1ca3e5dbc4721a1be3ca1168c81b2a",
-        "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/extraction-candidates.json": "611d45b16e6421102c2329a4c14a889c15f56ee069da10cf80e5a248e0d8d8f2",
+        "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/canonical-board.json": "34e518ad5659297be98d932ac3b4e071f88bb5f612d8c1f5564bb34aa334f4ee",
+        "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/extraction-candidates.json": "5a1df5c91f895fbc6566ef7acc9dce730a18e0e96f9da3f28c65bc4d0152869b",
         "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/verify.py": "daae59027a1629b413e29df1705e9b0539adc8826594395fbaa003f792faae4c",
         "prd.json": "2606ae91baa82a1d0739d14dfbb3b10d29d112167d306292fbbeaea71cd44d51",
         "progress.txt": "4ce380ea1a579cdf16b6e3b6706db47daa31a83899d9228d37a00e066e89941d"
       },
       "ancestry": {
         "integrated_main": {
-          "ancestor": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
-          "descendant": "acd072e991962defeae59a0ab80f58b0fe322d18",
+          "ancestor": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+          "descendant": "530defefe307cda5a06249d9f287d338885d3c68",
           "passed": true
         },
         "manifest_baseline": {
           "ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
-          "descendant": "acd072e991962defeae59a0ab80f58b0fe322d18",
+          "descendant": "530defefe307cda5a06249d9f287d338885d3c68",
           "passed": true
         },
         "planning_main": {
           "ancestor": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-          "descendant": "acd072e991962defeae59a0ab80f58b0fe322d18",
+          "descendant": "530defefe307cda5a06249d9f287d338885d3c68",
           "passed": true
         },
         "startup_integration": {
           "ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-          "descendant": "acd072e991962defeae59a0ab80f58b0fe322d18",
+          "descendant": "530defefe307cda5a06249d9f287d338885d3c68",
           "passed": true
         }
       },
@@ -655,7 +666,7 @@
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
         "deadline_seconds": 60,
-        "elapsed_seconds": 0.10467,
+        "elapsed_seconds": 0.107331,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -669,20 +680,20 @@
         "label": "factory-board-list",
         "output_cap_bytes_per_stream": 2097152,
         "output_limited": false,
-        "owned_output_bytes_after": 27277826,
-        "owned_output_bytes_before": 27268413,
+        "owned_output_bytes_after": 27318549,
+        "owned_output_bytes_before": 27318549,
         "owned_output_limited": false,
         "owned_output_quota_bytes": 134217728,
         "process_group_gone": true,
-        "process_group_id": 69858,
+        "process_group_id": 73887,
         "stderr_bytes": 0,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/provenance/factory-board-list.stderr",
-        "stdout_bytes": 195212,
+        "stdout_bytes": 208581,
         "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/provenance/factory-board-list.stdout",
         "termination": null,
         "timed_out": false
       },
-      "board_sha256": "86e9e7eedc721b5d78c551b1425594ce3e1ca3e5dbc4721a1be3ca1168c81b2a",
+      "board_sha256": "34e518ad5659297be98d932ac3b4e071f88bb5f612d8c1f5564bb34aa334f4ee",
       "build_inputs": {
         "command": [
           "git",
@@ -2906,7 +2917,7 @@
           "tests/embedding/tools_test.go": "89265dcb29d2e96b88214d9cd83d378cf9caf3bf49f1de1d26b45de703fcf921"
         },
         "manifest_sha256": "ee9f56ae4cb060f182f9edf161280c7055d36979134b95c7502f408786cd18d4",
-        "revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+        "revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
         "roots": [
           "agent-cli",
           "go-agent-runtime",
@@ -2920,13 +2931,13 @@
         ]
       },
       "candidate_branch": "codex/audio-runtime-c50-remaining-cli-service-inventory",
-      "candidate_revision_at_run": "acd072e991962defeae59a0ab80f58b0fe322d18",
-      "evidence_base_revision": "acd072e991962defeae59a0ab80f58b0fe322d18",
+      "candidate_revision_at_run": "530defefe307cda5a06249d9f287d338885d3c68",
+      "evidence_base_revision": "530defefe307cda5a06249d9f287d338885d3c68",
       "evidence_must_remain_descendant_of_reviewed_candidate": true,
       "hardware_and_physical_acoustics": "OUT_OF_SCOPE",
-      "integrated_source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+      "integrated_source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
       "manifest_baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
-      "origin_main_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+      "origin_main_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
       "ownership_report": "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/ownership.json",
       "planning_main_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
       "progress_ledger": {
@@ -2939,7 +2950,7 @@
       "refreshed_main_lineage": {
         "planning_main": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
         "planning_main_is_ancestor_of_refreshed_origin_main": true,
-        "refreshed_origin_main": "6b4f32b5940d43192774e86f05e3c7c9293c71e3"
+        "refreshed_origin_main": "2456a5d1594e73faf85e1132d6050735bc3e4710"
       },
       "refreshed_origin_main": {
         "aggregate_deadline_hit": false,
@@ -2952,7 +2963,7 @@
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
         "deadline_seconds": 60,
-        "elapsed_seconds": 0.605485,
+        "elapsed_seconds": 0.49773,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -2966,12 +2977,12 @@
         "label": "fetch-origin-main",
         "output_cap_bytes_per_stream": 2097152,
         "output_limited": false,
-        "owned_output_bytes_after": 27268412,
-        "owned_output_bytes_before": 27268412,
+        "owned_output_bytes_after": 27318551,
+        "owned_output_bytes_before": 27318551,
         "owned_output_limited": false,
         "owned_output_quota_bytes": 134217728,
         "process_group_gone": true,
-        "process_group_id": 69838,
+        "process_group_id": 73867,
         "stderr_bytes": 576,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/provenance/fetch-origin-main.stderr",
         "stdout_bytes": 0,
@@ -2979,18 +2990,18 @@
         "termination": null,
         "timed_out": false
       },
-      "reviewed_candidate_revision": "acd072e991962defeae59a0ab80f58b0fe322d18",
+      "reviewed_candidate_revision": "530defefe307cda5a06249d9f287d338885d3c68",
       "schema_version": "c50-provenance-v1",
       "server": "http://127.0.0.1:7439",
       "session": "~default",
       "source_archive": {
-        "archive_sha256": "6b52f97ce499c5c76334747f08b884ce97fe2701ea14873a2bb7f9904aad6243",
+        "archive_sha256": "c985f7f9b32ee8b6cee237a0703a6b9f1dafa76cd0d372b5a5cc5e2fcfb3d5dd",
         "bytes": 4044800,
         "command": [
           "git",
           "archive",
           "--format=tar",
-          "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+          "2456a5d1594e73faf85e1132d6050735bc3e4710",
           "--",
           "agent-cli/internal/services/internal/agentruntime",
           "agent-cli/internal/transport/cli/internal/livehost",
@@ -3004,9 +3015,9 @@
           "agent-cli/internal/transport/cli/internal/livehost",
           "agent-cli/internal/room"
         ],
-        "revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3"
+        "revision": "2456a5d1594e73faf85e1132d6050735bc3e4710"
       },
-      "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+      "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
       "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
       "target_source_changed_from_planning_main": true,
       "target_source_clean_against_integrated_main": true,
@@ -3026,7 +3037,7 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
           "deadline_seconds": 60,
-          "elapsed_seconds": 0.016216,
+          "elapsed_seconds": 0.018725,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -3040,12 +3051,12 @@
           "label": "go-env",
           "output_cap_bytes_per_stream": 2097152,
           "output_limited": false,
-          "owned_output_bytes_after": 27290285,
-          "owned_output_bytes_before": 27290285,
+          "owned_output_bytes_after": 27318549,
+          "owned_output_bytes_before": 27318549,
           "owned_output_limited": false,
           "owned_output_quota_bytes": 134217728,
           "process_group_gone": true,
-          "process_group_id": 69861,
+          "process_group_id": 73890,
           "stderr_bytes": 0,
           "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/provenance/go-env.stderr",
           "stdout_bytes": 164,
@@ -3063,7 +3074,7 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
           "deadline_seconds": 60,
-          "elapsed_seconds": 0.017102,
+          "elapsed_seconds": 0.018317,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -3077,12 +3088,12 @@
           "label": "go-version",
           "output_cap_bytes_per_stream": 2097152,
           "output_limited": false,
-          "owned_output_bytes_after": 27290285,
-          "owned_output_bytes_before": 27290285,
+          "owned_output_bytes_after": 27318549,
+          "owned_output_bytes_before": 27318549,
           "owned_output_limited": false,
           "owned_output_quota_bytes": 134217728,
           "process_group_gone": true,
-          "process_group_id": 69860,
+          "process_group_id": 73889,
           "stderr_bytes": 0,
           "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/provenance/go-version.stderr",
           "stdout_bytes": 33,
@@ -3102,7 +3113,7 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
           "deadline_seconds": 60,
-          "elapsed_seconds": 0.043046,
+          "elapsed_seconds": 0.032397,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -3116,12 +3127,12 @@
           "label": "go-module-list",
           "output_cap_bytes_per_stream": 2097152,
           "output_limited": false,
-          "owned_output_bytes_after": 27290285,
-          "owned_output_bytes_before": 27290285,
+          "owned_output_bytes_after": 27318550,
+          "owned_output_bytes_before": 27318550,
           "owned_output_limited": false,
           "owned_output_quota_bytes": 134217728,
           "process_group_gone": true,
-          "process_group_id": 69862,
+          "process_group_id": 73891,
           "stderr_bytes": 0,
           "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/provenance/go-module-list.stderr",
           "stdout_bytes": 8354,
@@ -5361,7 +5372,7 @@
           "tests/embedding/tools_test.go": "89265dcb29d2e96b88214d9cd83d378cf9caf3bf49f1de1d26b45de703fcf921"
         },
         "manifest_sha256": "ee9f56ae4cb060f182f9edf161280c7055d36979134b95c7502f408786cd18d4",
-        "revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+        "revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
         "roots": [
           "agent-cli",
           "go-agent-runtime",
@@ -5374,7 +5385,7 @@
           "go.work.sum"
         ]
       },
-      "candidate_revision": "acd072e991962defeae59a0ab80f58b0fe322d18",
+      "candidate_revision": "530defefe307cda5a06249d9f287d338885d3c68",
       "credential_free_environment": true,
       "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
       "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
@@ -5401,7 +5412,7 @@
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/public/replay",
         "deadline_seconds": 60,
-        "elapsed_seconds": 0.066573,
+        "elapsed_seconds": 0.076314,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -5415,12 +5426,12 @@
         "label": "yui-local-replay",
         "output_cap_bytes_per_stream": 2097152,
         "output_limited": false,
-        "owned_output_bytes_after": 78221629,
-        "owned_output_bytes_before": 78072008,
+        "owned_output_bytes_after": 78249881,
+        "owned_output_bytes_before": 78100271,
         "owned_output_limited": false,
         "owned_output_quota_bytes": 134217728,
         "process_group_gone": true,
-        "process_group_id": 69920,
+        "process_group_id": 73959,
         "stderr_bytes": 0,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/public/yui-local-replay.stderr",
         "stdout_bytes": 812,
@@ -5428,7 +5439,7 @@
         "termination": null,
         "timed_out": false
       },
-      "replay_owned_output_bytes": 149621,
+      "replay_owned_output_bytes": 149610,
       "replay_owned_output_quota_bytes": 16777216,
       "replay_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "replay_stdout_sha256": "fe8d1b4b5d053a38a5387384bb0023b242763aa580946c01c6cd8b8c9f2a0e5a",
@@ -5445,7 +5456,7 @@
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
         "deadline_seconds": 60,
-        "elapsed_seconds": 0.026837,
+        "elapsed_seconds": 0.025283,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -5459,12 +5470,12 @@
         "label": "yui-session-help",
         "output_cap_bytes_per_stream": 2097152,
         "output_limited": false,
-        "owned_output_bytes_after": 78221647,
-        "owned_output_bytes_before": 78221647,
+        "owned_output_bytes_after": 78249916,
+        "owned_output_bytes_before": 78249916,
         "owned_output_limited": false,
         "owned_output_quota_bytes": 134217728,
         "process_group_gone": true,
-        "process_group_id": 69919,
+        "process_group_id": 73958,
         "stderr_bytes": 0,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/public/yui-session-help.stderr",
         "stdout_bytes": 11281,
@@ -5489,7 +5500,7 @@
         ]
       },
       "session_log_sha256": "039d49adc0239cb447de0bf28e3fe009a4601e1618ebd5449553e2d903cb4cf3",
-      "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+      "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
       "terminal_manifest": {
         "classification": "provider_close",
         "output_state": "not_applicable",
@@ -5507,7 +5518,7 @@
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
         "deadline_seconds": 60,
-        "elapsed_seconds": 0.524952,
+        "elapsed_seconds": 0.522331,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -5521,12 +5532,12 @@
         "label": "yui-help",
         "output_cap_bytes_per_stream": 2097152,
         "output_limited": false,
-        "owned_output_bytes_after": 78221647,
-        "owned_output_bytes_before": 78221647,
+        "owned_output_bytes_after": 78249916,
+        "owned_output_bytes_before": 78249916,
         "owned_output_limited": false,
         "owned_output_quota_bytes": 134217728,
         "process_group_gone": true,
-        "process_group_id": 69918,
+        "process_group_id": 73957,
         "stderr_bytes": 0,
         "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/public/yui-help.stderr",
         "stdout_bytes": 1906,

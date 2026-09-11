@@ -83,23 +83,23 @@
   "determinism": {
     "call-paths.json": {
       "equal": true,
-      "first_sha256": "7194208f6c3a8faa16e4c374872b00e6441696ae25c14afaaaf2d7181edca839",
-      "second_sha256": "7194208f6c3a8faa16e4c374872b00e6441696ae25c14afaaaf2d7181edca839"
+      "first_sha256": "0f8e3e11d59168b0f4acf31639d3b6d3a569436e231ef8477fefa8b22c62b698",
+      "second_sha256": "0f8e3e11d59168b0f4acf31639d3b6d3a569436e231ef8477fefa8b22c62b698"
     },
     "classifications.json": {
       "equal": true,
-      "first_sha256": "019cb2e58832aa1dd616f71bb19f8f2291d92eed06493bb6f28a8a6882c3ad85",
-      "second_sha256": "019cb2e58832aa1dd616f71bb19f8f2291d92eed06493bb6f28a8a6882c3ad85"
+      "first_sha256": "ce1c7a52ef7c5772440584ac37ab5414d0e932be3243539932eeba769e27c32d",
+      "second_sha256": "ce1c7a52ef7c5772440584ac37ab5414d0e932be3243539932eeba769e27c32d"
     },
     "inventory.json": {
       "equal": true,
-      "first_sha256": "1764223c45a99168be123c509a981fa4132cafba1b28ccee5ce2ff5abcf8d4f9",
-      "second_sha256": "1764223c45a99168be123c509a981fa4132cafba1b28ccee5ce2ff5abcf8d4f9"
+      "first_sha256": "f3fa9d6a841478ee1613ccc47a31994f2bf40269036df669e9a7ba98de62b715",
+      "second_sha256": "f3fa9d6a841478ee1613ccc47a31994f2bf40269036df669e9a7ba98de62b715"
     },
     "inventory.md": {
       "equal": true,
-      "first_sha256": "e8cfdff3e712a3b7d6f454ee36f4127e78470e2f65032396990bffa914a3f1aa",
-      "second_sha256": "e8cfdff3e712a3b7d6f454ee36f4127e78470e2f65032396990bffa914a3f1aa"
+      "first_sha256": "eefa005b98279e2be6fadb0f3a54d6b07b39b87d951fc45f67bbe522d6b80334",
+      "second_sha256": "eefa005b98279e2be6fadb0f3a54d6b07b39b87d951fc45f67bbe522d6b80334"
     }
   },
   "historical_observation": {
@@ -108,7 +108,7 @@
     "production_files": 107
   },
   "schema_version": "c50-inventory-validation-v1",
-  "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+  "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
   "totals": {
     "physical_lines": 46563,
     "production_files": 120,

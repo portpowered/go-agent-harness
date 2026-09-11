@@ -4,11 +4,11 @@
   "argv": [
     "make",
     "size-check",
-    "ARCHITECTURE_BASE=6b4f32b5940d43192774e86f05e3c7c9293c71e3"
+    "ARCHITECTURE_BASE=2456a5d1594e73faf85e1132d6050735bc3e4710"
   ],
   "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
   "deadline_seconds": 60,
-  "elapsed_seconds": 2.458617,
+  "elapsed_seconds": 2.551524,
   "environment": {
     "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
     "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -22,12 +22,12 @@
   "label": "size-check",
   "output_cap_bytes_per_stream": 2097152,
   "output_limited": false,
-  "owned_output_bytes_after": 27290279,
-  "owned_output_bytes_before": 27290279,
+  "owned_output_bytes_after": 27318513,
+  "owned_output_bytes_before": 27318513,
   "owned_output_limited": false,
   "owned_output_quota_bytes": 134217728,
   "process_group_gone": true,
-  "process_group_id": 70169,
+  "process_group_id": 75386,
   "stderr_bytes": 0,
   "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/size-check.stderr",
   "stdout_bytes": 82,

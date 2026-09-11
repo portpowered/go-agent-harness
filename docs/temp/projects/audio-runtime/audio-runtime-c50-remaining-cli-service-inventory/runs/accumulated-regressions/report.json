@@ -1,10 +1,18 @@
 {
   "schema_version": "c50-accumulated-regressions-v1",
-  "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
-  "candidate_revision": "acd072e991962defeae59a0ab80f58b0fe322d18",
+  "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+  "tested_source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+  "candidate_revision": "530defefe307cda5a06249d9f287d338885d3c68",
+  "tested_candidate_revision": "acd072e991962defeae59a0ab80f58b0fe322d18",
   "rerun_candidate_revision": "acd072e991962defeae59a0ab80f58b0fe322d18",
   "prior_report_candidate_revision": "fa3eacc0e8d317fabff5c1feb85ad7435b2abd6c",
   "executable_inputs_unchanged_from_prior_report": true,
+  "source_revision_equivalence": {
+    "from": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+    "to": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+    "production_and_build_inputs_unchanged": true,
+    "verification": "git diff --quiet acd072e991962defeae59a0ab80f58b0fe322d18 530defefe307cda5a06249d9f287d338885d3c68 -- agent-cli go-agent-runtime go-agent-loop go-audio go-device-gateway go-llm-gateway tests go.work go.work.sum"
+  },
   "command": "COUNT=3 scripts/test-session-ci-regressions.sh all",
   "exit_code": 0,
   "modes": [

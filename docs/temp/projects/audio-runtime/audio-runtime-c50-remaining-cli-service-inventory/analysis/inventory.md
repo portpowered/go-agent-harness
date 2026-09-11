@@ -1,6 +1,6 @@
 # C50 remaining CLI service inventory
 
-This report is generated from exact source revision `6b4f32b5940d43192774e86f05e3c7c9293c71e3`. Counts are inventory only; no migration percentage is inferred.
+This report is generated from exact source revision `2456a5d1594e73faf85e1132d6050735bc3e4710`. Counts are inventory only; no migration percentage is inferred.
 
 ## Scope and totals
 

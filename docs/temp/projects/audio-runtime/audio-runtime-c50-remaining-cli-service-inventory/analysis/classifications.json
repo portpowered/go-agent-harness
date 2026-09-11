@@ -6,7 +6,7 @@
     "The class is a reviewable structural classification; its evidence cites package/file role, imports, declaration form and resolved callers."
   ],
   "schema_version": "c50-classifications-v1",
-  "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+  "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
   "symbols": [
     {
       "id": "agent-cli/internal/room/browser_tools.go:21:var:github.com/portpowered/go-agent-harness/agent-cli/internal/room.ErrInvalidBrowserTools",

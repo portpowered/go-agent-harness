@@ -21,6 +21,22 @@
       "workTypeName": "project"
     },
     {
+      "chainingTraceDepth": 14,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c51-audio-device-boundary-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-58",
+      "workTypeName": "thoughts"
+    },
+    {
       "chainingTraceDepth": 8,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "name": "audio-runtime-c23-long-session-tool-characterization",
@@ -114,38 +130,6 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "batch-audio-runtime-c50-c51-characterization-20260911T0438Z-audio-runtime-c50-remaining-cli-service-inventory",
-      "workTypeName": "idea"
-    },
-    {
-      "chainingTraceDepth": 11,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c51-audio-device-boundary-characterization",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "relations": [
-        {
-          "sourceWorkName": "audio-runtime-c51-audio-device-boundary-characterization",
-          "targetWorkId": "work-thoughts-19",
-          "targetWorkName": "audio-runtime-c49-c46-wire-generation-repair",
-          "type": "PARENT_CHILD"
-        }
-      ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
-      "state": {
-        "name": "to-complete",
-        "type": "PROCESSING"
-      },
-      "tags": {
-        "_parent_request_id": "audio-runtime-c49-c46-wire-generation-repair-20260911T0354Z",
-        "_parent_work_id": "work-thoughts-19",
-        "_source_dispatch_id": "9a528b1b-a59b-46fe-8289-58ff29d406c9",
-        "_source_transition_id": "ideafy",
-        "_work_name": "audio-runtime-c51-audio-device-boundary-characterization",
-        "_work_type": "idea"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "batch-audio-runtime-c50-c51-characterization-20260911T0438Z-audio-runtime-c51-audio-device-boundary-characterization",
       "workTypeName": "idea"
     },
     {
@@ -245,36 +229,36 @@
       "workTypeName": "idea"
     },
     {
-      "chainingTraceDepth": 9,
+      "chainingTraceDepth": 12,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c52-hermetic-room-liveness-characterization",
+      "name": "audio-runtime-c53-provider-close-terminal-drain",
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c52-hermetic-room-liveness-characterization-20260911T0611Z",
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c53-provider-close-terminal-drain",
+          "targetWorkId": "work-thoughts-57",
+          "targetWorkName": "audio-runtime-c23-long-session-tool-characterization",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c53-provider-close-terminal-drain-20260911T0852Z",
       "state": {
         "name": "init",
         "type": "PROCESSING"
       },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-review-52",
-      "workTypeName": "review"
-    },
-    {
-      "chainingTraceDepth": 14,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c51-audio-device-boundary-characterization",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
+      "tags": {
+        "_parent_request_id": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
+        "_parent_work_id": "work-thoughts-57",
+        "_source_dispatch_id": "99a00bac-1025-4c77-a21f-19e2b259c713",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c53-provider-close-terminal-drain",
+        "_work_type": "idea"
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-review-55",
-      "workTypeName": "review"
+      "workId": "batch-audio-runtime-c53-provider-close-terminal-drain-20260911T0852Z-audio-runtime-c53-provider-close-terminal-drain",
+      "workTypeName": "idea"
     },
     {
       "chainingTraceDepth": 5,
@@ -322,32 +306,6 @@
       "chainingTraceDepth": 13,
       "content": [
         {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization\", \"branch\": \"codex/audio-runtime-c51-audio-device-boundary-characterization\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
-          "type": "text"
-        }
-      ],
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c51-audio-device-boundary-characterization",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
-      "state": {
-        "name": "in-review",
-        "type": "PROCESSING"
-      },
-      "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization\", \"branch\": \"codex/audio-runtime-c51-audio-device-boundary-characterization\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
-        "_rejection_feedback": "PR #441 head 097f87c3 has all required checks green, and independent consumer, wrong-oracle, provenance, boundary, and shipped PCM/WAV replay checks passed. Residual blockers: verify.py:136-137 skips process-group termination once the parent exits; a reproduced parent-exits-with-descendant case raised the reader-survival error while leaving the descendant alive. Disk/WAV limits are also post-hoc only (verify.py:284-285, 1034-1071); a 40 MiB child write completed before rejection against the 32 MiB limit. Harden group cleanup and enforce bounds during execution, with deterministic negative controls. boundary-map.json still labels non-call sites as production callers (lines 97, 114, 133, 152, 170-171); verify.py:897 only rejects comment lines, contrary to its schema claim. Replace these with exact reachable callers and make invalid field/declaration citations fail closed. The build manifest filters only Go/module files (verify.py:461-482) but yui transitively embeds local JS/JSON inputs, including siteadapter extensions and go-agent-loop/pkg/probe/testdata/goal_catalog.json; include those hashes and regenerate shipped-build, regression, and provenance evidence. Fix the same PR, rerun focused controls and direct shipped replay, commit/push the changed head, then resubmit to SCRIPT CI. Do not merge 097f87c3."
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-task-22",
-      "workTypeName": "task"
-    },
-    {
-      "chainingTraceDepth": 13,
-      "content": [
-        {
           "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory\", \"branch\": \"codex/audio-runtime-c50-remaining-cli-service-inventory\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
           "type": "text"
         }
@@ -386,32 +344,16 @@
       ],
       "requestId": "audio-runtime-c52-hermetic-room-liveness-characterization-20260911T0611Z",
       "state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization\", \"branch\": \"codex/audio-runtime-c52-hermetic-room-liveness-characterization\", \"baseRevision\": \"bb29005d0bb545db5e08ffda0205929b021d4fc1\", \"reused\": false}",
-        "_rejection_feedback": "PR #443 head 833ee443 has green required checks and independent focused lifecycle/ race tests pass, but it is stale: origin/main is cdf416a8, 16 commits beyond candidate base bb29005d. Merge current main into the same branch, preserve both fixed comparison revisions, refresh provenance/evidence and hashes, rerun focused checks and bounded verification, then commit/push and resubmit to SCRIPT CI. Also fix run.py:506-526, which forwards ambient environment variables; fix verify.py:479-482, whose order-sensitive condition is tautological and accepts both failing orders; and fix run.py:230-238, where normal parent exit skips process-group cleanup (reproduced: exit 0, empty cleanup, no reader survivor, live descendant). Add deterministic controls for these cases, rerun the complete C52 evidence matrix, and request fresh review. Do not merge the current head."
+        "_rejection_feedback": "PR #443 at eddfc7df has green current-head checks; independent 22/22 matrix, direct normal/race tests, and cleanup probe pass. Evidence verifier defects remain: run_regressions.py:58 omits group_survivor, term_error, and kill_error; verify.py:176-182 records but does not validate metadata_sha256 (tampering copied CI metadata still passes); verify.py:252-274 trusts embedded selection counts instead of raw stdout (changing a count to 1 still passes); verify.py:331-381 accepts duplicate/transformed checkpoints (duplicating terminal_observed still passes), contrary to C52-03. run.py:127-147 also reuses pre-existing archives without validating contents against the fixed revision. Previously reported stale-main, ambient-environment, order-check, and parent-exit issues appear addressed. Fix these fail-closed checks, rebuild archives, regenerate the complete matrix/regression/evidence bundle, rerun verify.py --mode all and focused checks, commit/push the same branch, and resubmit to SCRIPT CI. Do not merge this head."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-33",
       "workTypeName": "task"
-    },
-    {
-      "chainingTraceDepth": 11,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c23-long-session-tool-characterization",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-thoughts-57",
-      "workTypeName": "thoughts"
     },
     {
       "chainingTraceDepth": 5,
@@ -621,6 +563,25 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-review-47",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 9,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c52-hermetic-room-liveness-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c52-hermetic-room-liveness-characterization-20260911T0611Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #443 at eddfc7df has green current-head checks; independent 22/22 matrix, direct normal/race tests, and cleanup probe pass. Evidence verifier defects remain: run_regressions.py:58 omits group_survivor, term_error, and kill_error; verify.py:176-182 records but does not validate metadata_sha256 (tampering copied CI metadata still passes); verify.py:252-274 trusts embedded selection counts instead of raw stdout (changing a count to 1 still passes); verify.py:331-381 accepts duplicate/transformed checkpoints (duplicating terminal_observed still passes), contrary to C52-03. run.py:127-147 also reuses pre-existing archives without validating contents against the fixed revision. Previously reported stale-main, ambient-environment, order-check, and parent-exit issues appear addressed. Fix these fail-closed checks, rebuild archives, regenerate the complete matrix/regression/evidence bundle, rerun verify.py --mode all and focused checks, commit/push the same branch, and resubmit to SCRIPT CI. Do not merge this head."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-52",
       "workTypeName": "review"
     },
     {
@@ -885,6 +846,38 @@
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "batch-audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911-audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
       "workTypeName": "validation"
+    },
+    {
+      "chainingTraceDepth": 11,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c51-audio-device-boundary-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c51-audio-device-boundary-characterization",
+          "targetWorkId": "work-thoughts-19",
+          "targetWorkName": "audio-runtime-c49-c46-wire-generation-repair",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_parent_request_id": "audio-runtime-c49-c46-wire-generation-repair-20260911T0354Z",
+        "_parent_work_id": "work-thoughts-19",
+        "_source_dispatch_id": "9a528b1b-a59b-46fe-8289-58ff29d406c9",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c51-audio-device-boundary-characterization",
+        "_work_type": "idea"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c50-c51-characterization-20260911T0438Z-audio-runtime-c51-audio-device-boundary-characterization",
+      "workTypeName": "idea"
     },
     {
       "chainingTraceDepth": 2,
@@ -1249,6 +1242,22 @@
       "workTypeName": "review"
     },
     {
+      "chainingTraceDepth": 14,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c51-audio-device-boundary-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-55",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 4,
       "content": [
         {
@@ -1272,6 +1281,32 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-12",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 13,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization\", \"branch\": \"codex/audio-runtime-c51-audio-device-boundary-characterization\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c51-audio-device-boundary-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization\", \"branch\": \"codex/audio-runtime-c51-audio-device-boundary-characterization\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
+        "_rejection_feedback": "PR #441 head 097f87c3 has all required checks green, and independent consumer, wrong-oracle, provenance, boundary, and shipped PCM/WAV replay checks passed. Residual blockers: verify.py:136-137 skips process-group termination once the parent exits; a reproduced parent-exits-with-descendant case raised the reader-survival error while leaving the descendant alive. Disk/WAV limits are also post-hoc only (verify.py:284-285, 1034-1071); a 40 MiB child write completed before rejection against the 32 MiB limit. Harden group cleanup and enforce bounds during execution, with deterministic negative controls. boundary-map.json still labels non-call sites as production callers (lines 97, 114, 133, 152, 170-171); verify.py:897 only rejects comment lines, contrary to its schema claim. Replace these with exact reachable callers and make invalid field/declaration citations fail closed. The build manifest filters only Go/module files (verify.py:461-482) but yui transitively embeds local JS/JSON inputs, including siteadapter extensions and go-agent-loop/pkg/probe/testdata/goal_catalog.json; include those hashes and regenerate shipped-build, regression, and provenance evidence. Fix the same PR, rerun focused controls and direct shipped replay, commit/push the changed head, then resubmit to SCRIPT CI. Do not merge 097f87c3."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-22",
       "workTypeName": "task"
     },
     {
@@ -1723,6 +1758,31 @@
       },
       "traceId": "trace-request-time-475cb0c0365469c673240a1d7115c9ce",
       "workId": "work-thoughts-54",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 11,
+      "content": [
+        {
+          "text": "{\"request\":{\"requestId\":\"audio-runtime-c53-provider-close-terminal-drain-20260911T0852Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c53-provider-close-terminal-drain\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Preserve the final provider response across provider-close teardown\",\"requestedOutcome\":\"Repair the one newly demonstrated C23 current-main regression without broad replanning. Start from freshly fetched origin/main containing accepted C48 and C40 (observed 6b4f32b5940d43192774e86f05e3c7c9293c71e3). The immutable C23 evidence at branch head 6677465e00c9fd052a7c6b6bc69cc17f8e32e02f proves that after an interruption, delayed provider audio is correctly rejected and healthy TEXT.DELTA is published, but a provider SESSION.CLOSE can trigger graceful cancellation before the already preceding healthy assistant MESSAGE.END reaches public LiveHandle.Events; the result is loop partial_output instead of provider-authored completion. First reproduce that exact ordering with a deterministic failing control and retain it. Then make the smallest causal repair in the live-session terminal/drain owner so provider close, provider Done and loop cancellation cannot overtake an already admitted response terminal. Preserve eager bounded cleanup for close-without-pending-output, explicit cancellation, transport failure and stalled-provider cases; do not create an unbounded wait or synthesize a false MESSAGE.END. C23 remains evidence-only and blocked on this repair: do not edit its branch or relabel its artifacts. C05's dirty session_adapter.go and all other worktrees are read-only and must remain untouched. Deliver focused normal/race controls plus a task-local public consumer showing ordered healthy MESSAGE.END before the final terminal, provider-authored complete output, exact interruption audio effects and clean shutdown; recheck an existing shipped credential-free YUI audio/tool/interruption replay. This is process/software replay, not device consumption or acoustic proof. Commit and push only the owned paths, use script-owned current-head CI, retain actionable repairs through CONTINUE, require fresh independent review and guarded merge, and leave exact immutable-artifact scope=vertical validation to the primary after merge.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"go-agent-runtime/services/session/internal/live/observation.go\",\"go-agent-runtime/services/session/internal/live/start_support.go\",\"go-agent-runtime/services/session/internal/live/lifecycle.go\",\"go-agent-runtime/services/session/internal/live/control.go\",\"go-agent-runtime/services/session/internal/live/service.go\",\"go-agent-runtime/services/session/internal/live/policies_test.go\",\"go-agent-runtime/services/session/internal/live/terminal_drain_test.go\",\"docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/\"],\"verification\":[\"Before mutation, fetch origin/main, confirm the exact base and active ownership, verify C05's dirty session_adapter.go is outside this lease, and preserve the C23 first-failure report and child trace byte-for-byte as read-only causal input.\",\"Add a deterministic negative control that queues healthy assistant TEXT.DELTA and MESSAGE.END with provider SESSION.CLOSE/Done at the teardown boundary and proves the pre-repair public stream loses MESSAGE.END or reports partial_output. Preserve the first failure; do not retry it unchanged or weaken ordering, terminal-source, output-state or timeout assertions.\",\"After repair, require public LiveHandle.Events to expose the real provider-authored healthy MESSAGE.END before its final terminal, retain the concrete provider close metadata, report complete output, return Wait/Close cleanly, and leave no goroutine/process survivor. Prove close-without-pending-response remains prompt and bounded, explicit cancel and transport errors remain causal, and no terminal is synthesized when the provider never authored one.\",\"Run focused go-agent-runtime live package normal and race tests with bounded deadlines, plus relevant go-agent-loop publication/barrier regressions read-only. Launch a task-local public consumer for the exact interruption sequence and re-run an existing same-source shipped YUI credential-free audio/tool/interruption replay with exact PCM/order/terminal effects and clean shutdown; no credentials, Realtime sessions, physical device or acoustic claims.\",\"Enforce per-child <=60 seconds and aggregate <=600 seconds, sanitized environments, bounded output/disk use and process-group cleanup. Run gofmt, vet/static/lint and architecture/coverage checks relevant to changed files, clean diff/scope/provenance checks, then push, submit once to SCRIPT CI and request independent review on the changed head. After guarded merge, primary must issue a fresh Luna engineering scope=vertical TRACE/REPLAY/FAILURES/QUALITY/PARITY probe of the exact immutable executable before accepting C53 or resuming C23.\"],\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c23-long-session-tool-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"request\":{\"requestId\":\"audio-runtime-c53-provider-close-terminal-drain-20260911T0852Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c53-provider-close-terminal-drain\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Preserve the final provider response across provider-close teardown\",\"requestedOutcome\":\"Repair the one newly demonstrated C23 current-main regression without broad replanning. Start from freshly fetched origin/main containing accepted C48 and C40 (observed 6b4f32b5940d43192774e86f05e3c7c9293c71e3). The immutable C23 evidence at branch head 6677465e00c9fd052a7c6b6bc69cc17f8e32e02f proves that after an interruption, delayed provider audio is correctly rejected and healthy TEXT.DELTA is published, but a provider SESSION.CLOSE can trigger graceful cancellation before the already preceding healthy assistant MESSAGE.END reaches public LiveHandle.Events; the result is loop partial_output instead of provider-authored completion. First reproduce that exact ordering with a deterministic failing control and retain it. Then make the smallest causal repair in the live-session terminal/drain owner so provider close, provider Done and loop cancellation cannot overtake an already admitted response terminal. Preserve eager bounded cleanup for close-without-pending-output, explicit cancellation, transport failure and stalled-provider cases; do not create an unbounded wait or synthesize a false MESSAGE.END. C23 remains evidence-only and blocked on this repair: do not edit its branch or relabel its artifacts. C05's dirty session_adapter.go and all other worktrees are read-only and must remain untouched. Deliver focused normal/race controls plus a task-local public consumer showing ordered healthy MESSAGE.END before the final terminal, provider-authored complete output, exact interruption audio effects and clean shutdown; recheck an existing shipped credential-free YUI audio/tool/interruption replay. This is process/software replay, not device consumption or acoustic proof. Commit and push only the owned paths, use script-owned current-head CI, retain actionable repairs through CONTINUE, require fresh independent review and guarded merge, and leave exact immutable-artifact scope=vertical validation to the primary after merge.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"go-agent-runtime/services/session/internal/live/observation.go\",\"go-agent-runtime/services/session/internal/live/start_support.go\",\"go-agent-runtime/services/session/internal/live/lifecycle.go\",\"go-agent-runtime/services/session/internal/live/control.go\",\"go-agent-runtime/services/session/internal/live/service.go\",\"go-agent-runtime/services/session/internal/live/policies_test.go\",\"go-agent-runtime/services/session/internal/live/terminal_drain_test.go\",\"docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/\"],\"verification\":[\"Before mutation, fetch origin/main, confirm the exact base and active ownership, verify C05's dirty session_adapter.go is outside this lease, and preserve the C23 first-failure report and child trace byte-for-byte as read-only causal input.\",\"Add a deterministic negative control that queues healthy assistant TEXT.DELTA and MESSAGE.END with provider SESSION.CLOSE/Done at the teardown boundary and proves the pre-repair public stream loses MESSAGE.END or reports partial_output. Preserve the first failure; do not retry it unchanged or weaken ordering, terminal-source, output-state or timeout assertions.\",\"After repair, require public LiveHandle.Events to expose the real provider-authored healthy MESSAGE.END before its final terminal, retain the concrete provider close metadata, report complete output, return Wait/Close cleanly, and leave no goroutine/process survivor. Prove close-without-pending-response remains prompt and bounded, explicit cancel and transport errors remain causal, and no terminal is synthesized when the provider never authored one.\",\"Run focused go-agent-runtime live package normal and race tests with bounded deadlines, plus relevant go-agent-loop publication/barrier regressions read-only. Launch a task-local public consumer for the exact interruption sequence and re-run an existing same-source shipped YUI credential-free audio/tool/interruption replay with exact PCM/order/terminal effects and clean shutdown; no credentials, Realtime sessions, physical device or acoustic claims.\",\"Enforce per-child <=60 seconds and aggregate <=600 seconds, sanitized environments, bounded output/disk use and process-group cleanup. Run gofmt, vet/static/lint and architecture/coverage checks relevant to changed files, clean diff/scope/provenance checks, then push, submit once to SCRIPT CI and request independent review on the changed head. After guarded merge, primary must issue a fresh Luna engineering scope=vertical TRACE/REPLAY/FAILURES/QUALITY/PARITY probe of the exact immutable executable before accepting C53 or resuming C23.\"],\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-57",
       "workTypeName": "thoughts"
     },
     {
