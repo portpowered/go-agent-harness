@@ -374,3 +374,31 @@ C23 current-head rejection verification and external-owner continuation — 2026
 - Fresh bounded owned rechecks pass: Python compilation, `git diff --check`, direct normal/overflow/deadline process fixtures, and accumulated C21 `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` (`go test` normal `-count=5`: 15 passed; `-race` `-count=1`: 3 passed). No process-control child was left running. The current-main C53 recording defect remains preserved and out of lease: recording-on 16-turn evidence has provider completion/clean shutdown but `accepted_audio=0`, `audio_bytes=0`, and no `audio/out-000.pcm`, versus the pre-C53 identical fixture’s `accepted_audio=32` and `audio_bytes=2048`.
 - Existing `provenance.json`, `report.json`, and generated run artifacts are not relabeled: they bind older candidate/source revisions and the C53-red attempt. No unchanged full controls/matrix was rerun, no production or peer path was changed, and no acceptance waiver or second project was introduced. The open PR #415 already records the current head and failure map; this checkpoint is not ready for script CI.
 - Disposition remains `CONTINUE`, not `ACCEPTED`: C53/primary must provide a reviewed media/recording repair, and C47 must repair or disposition the WebMCP/static failures. After reviewed main advances, fetch it, rebuild and rebind exact provenance, rerun the complete bounded controls/matrix/shipped-regressions/self-check/report sequence plus C21 regressions, then update and submit the same PR to script CI without polling. Retain this task for any exact C23-owned rejection.
+
+C23 bounded ownership checkpoint — 2026-09-11T16:25Z
+
+- Reverified the admitted `audio-runtime` task and preserved clean HEAD
+  `aa2fc930cfda16e79c283bf80dc6b3b01309956d` on branch
+  `codex/audio-runtime-c23-long-session-tool-characterization`; fetched
+  `origin/main=904e1f4c3be6c1e629138632573bd2fb55d50938`, which is already an
+  ancestor. Startup `8bdafc7f947a3a2c9856220abdc539437035bd21` and project
+  baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain ancestors. The
+  candidate still changes only the seven admitted C23 evidence paths.
+- The canonical task feedback still identifies no actionable C23 repair. The
+  C56 recording-orchestration repair is an active, unreviewed external task;
+  no reviewed C53 media/recording repair has reached `origin/main`. The
+  current-main C53 regression remains preserved, not retried or waived:
+  `artifacts/runs/20260910T123004Z-controls-on-16/consumer-report.json` has
+  provider completion and clean shutdown but `accepted_audio=0`,
+  `audio_bytes=0`, and no `audio/out-000.pcm`, versus the pre-C53 same-fixture
+  report's `accepted_audio=32` and `audio_bytes=2048`.
+- Read-only focused checks pass: Python compilation, `git diff --check`, and
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` normal
+  `-count=5` (`12.776s`) and race `-count=1` (`11.744s`). No C23 matrix,
+  shipped replay, or known C53-red full sequence was retried.
+- Disposition remains `CONTINUE`, not `ACCEPTED`. After a reviewed recording
+  repair reaches main, fetch/integrate that exact main, rebuild and rebind
+  provenance, rerun prepare/provenance/controls/matrix/shipped-regressions/
+  self-check/report plus the accumulated C21 controls, then commit/push the
+  same PR #415 and submit the changed head to script CI without polling. Do
+  not edit C53/C47/C45 production paths or resubmit the known-red candidate.
