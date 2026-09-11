@@ -124,3 +124,99 @@ func newLoopSessionCloseValue(sessionID, reason string) *messages.SessionCloseVa
 		messages.TerminalOutputNotApplicable,
 	)
 }
+
+func (c *Coordinator) resetModelDeltaWindow(curr *state.LoopState) {
+	curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
+	curr.History.CurrentModelDeltaCount = 0
+}
+
+func (c *Coordinator) modelResponseAssemblyForDelta(delta messages.StreamMessage) (*modelResponseAssembly, error) {
+	if delta.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		return nil, nil
+	}
+	assembly, err := c.startModelResponse(delta)
+	if err != nil || assembly != nil {
+		return assembly, err
+	}
+	return c.modelResponseForDelta(delta)
+}
+
+func isTerminalOnlyModelError(delta messages.StreamMessage) bool {
+	if delta.Type != messages.StreamTypeMessageEnd {
+		return false
+	}
+	value, ok := delta.Value.(*messages.MessageEndValue)
+	return ok && value != nil && (value.Status != "" || value.ProviderErrorCode != "" || value.ProviderErrorMessage != "")
+}
+
+func (c *Coordinator) hasSessionCloseControl(curr *state.LoopState) bool {
+	for _, msg := range curr.Inputs.UserControlPlaneMessage {
+		if cpType := extractControlPlaneType(msg); cpType == messages.ControlPlaneMessageTypeSessionClose || cpType == messages.ControlPlaneMessageTypeStop {
+			c.logInfo("Coordinator: session close requested via control plane", logging.Field{Key: "type", Value: string(cpType)})
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Coordinator) nextToolBatchPass(curr *state.LoopState) int {
+	if curr.Mode == state.DuplexSession {
+		return c.ensureSessionPass(curr)
+	}
+	curr.History.CurrentPassID++
+	return curr.History.CurrentPassID
+}
+
+func (c *Coordinator) nextToolContinuationPass(curr *state.LoopState) int {
+	if curr.Mode == state.DuplexSession {
+		return c.ensureSessionPass(curr)
+	}
+	curr.History.CurrentPassID++
+	return curr.History.CurrentPassID
+}
+
+func (c *Coordinator) ensureSessionPass(curr *state.LoopState) int {
+	if curr.History.CurrentPassID == 0 {
+		curr.History.CurrentPassID = 1
+	}
+	return curr.History.CurrentPassID
+}
+
+// replaceEngineModelOutputs swaps the engine's single-window reconstruction
+// for completed response-scoped assemblies while retaining trace metadata.
+func (c *Coordinator) replaceEngineModelOutputs(curr *state.LoopState, completed []messages.Message) {
+	engineOutputs := curr.Inputs.ModelOutputMessage
+	if c.engineOutputsAtHistoryTail(curr, engineOutputs) {
+		curr.History.ConversationBuffer = curr.History.ConversationBuffer[:len(curr.History.ConversationBuffer)-len(engineOutputs)]
+	}
+	curr.Inputs.ModelOutputMessage = curr.Inputs.ModelOutputMessage[:0]
+	for index, message := range completed {
+		if index < len(engineOutputs) {
+			copyModelMetadata(&message, engineOutputs[index])
+		}
+		curr.Inputs.ModelOutputMessage = append(curr.Inputs.ModelOutputMessage, message)
+		curr.History.ConversationBuffer = append(curr.History.ConversationBuffer, message)
+	}
+}
+
+func (c *Coordinator) engineOutputsAtHistoryTail(curr *state.LoopState, outputs []messages.Message) bool {
+	if len(outputs) == 0 || len(curr.History.ConversationBuffer) < len(outputs) {
+		return false
+	}
+	start := len(curr.History.ConversationBuffer) - len(outputs)
+	for index, message := range outputs {
+		historyMessage := curr.History.ConversationBuffer[start+index]
+		if historyMessage.GlobalIndex != message.GlobalIndex || historyMessage.ActorID != message.ActorID {
+			return false
+		}
+	}
+	return true
+}
+
+func copyModelMetadata(target *messages.Message, source messages.Message) {
+	target.GlobalIndex = source.GlobalIndex
+	target.ActorProvidedID = source.ActorProvidedID
+	target.ActorProvidedIndex = source.ActorProvidedIndex
+	target.ActorStreamID = source.ActorStreamID
+	target.ActorID = source.ActorID
+}
