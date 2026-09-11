@@ -1486,6 +1486,7 @@ def verify_shipped_regression(yui: str, build_manifest: str, child_timeout: floa
         disk_after, disk_delta = assert_disk_budget(temp, disk_before, MAX_RUN_DISK_BYTES, "shipped replay temporary outputs")
         report = {
             "status": "verified",
+            "schema": "audio-runtime-c51.shipped-regression.v2",
             "classification": "SOFTWARE_REPLAY_PROCESS_ONLY",
             "sourceRevision": SOURCE_REVISION,
             "testedSourceRevision": pinned_build["testedRevision"],
@@ -1511,6 +1512,7 @@ def verify_shipped_regression(yui: str, build_manifest: str, child_timeout: floa
                 "inputTreeSha256": pinned_build["inputTreeSha256"],
                 "inputSelection": pinned_build["inputSelection"],
                 "inputCount": len(pinned_build["inputs"]),
+                "nonGoInputCount": len(pinned_build["nonGoInputs"]),
                 "nonGoInputs": pinned_build["nonGoInputs"],
                 "toolchain": pinned_build["toolchain"],
                 "replayFixtures": pinned_build["replayFixtures"],
