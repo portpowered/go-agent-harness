@@ -1,0 +1,195 @@
+{
+  "schema": "audio-runtime-c62-submission-evidence.v1",
+  "task": "audio-runtime-c62-validation-contract-anchor-repair",
+  "candidateStatus": "READY_FOR_SCRIPT_CI",
+  "candidate": {
+    "branch": "codex/audio-runtime-c62-validation-contract-anchor-repair",
+    "revision": "3f47cfbf5edeaca0b1f9e9a883963cbe6c8157b7",
+    "pullRequest": 453,
+    "pullRequestUrl": "https://github.com/portpowered/go-agent-harness/pull/453",
+    "baselineOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "worktreeStatus": "clean",
+    "ancestry": {
+      "startupIntegrationIsAncestor": true,
+      "originMainIsAncestor": true,
+      "fetchCommand": "rtk git fetch origin main"
+    }
+  },
+  "admission": {
+    "command": "rtk proxy python3 factory/scripts/project-control.py verify-work --type task --name audio-runtime-c62-validation-contract-anchor-repair",
+    "result": {
+      "status": "admitted",
+      "project": "audio-runtime",
+      "name": "audio-runtime-c62-validation-contract-anchor-repair"
+    },
+    "project": "audio-runtime",
+    "contractRevision": "audio-runtime-v1",
+    "branchNameMatchesWorktree": true
+  },
+  "preFix": {
+    "evidencePath": "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/pre-fix-anchor-failure.json",
+    "evidenceSha256": "0c1b6178ccf421d6c0a7d5279da9a3de14df799db32a642b465a9a10c2d8c01e",
+    "sourceRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "currentManifestSha256": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
+    "trustedOriginalManifestSha256": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+    "diagnostic": "project_contract.ContractError: original manifest digest is not the reviewed anchor",
+    "validatorDispatch": false,
+    "probeDirectoryCreated": false,
+    "reportPathsCreated": []
+  },
+  "reviewedTransition": {
+    "onlyManifestDigests": [
+      "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+      "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34"
+    ],
+    "changedAuthority": {
+      "path": "factory/projects/audio-runtime/acceptance.md",
+      "originalSha256": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5",
+      "successorSha256": "edd1f5cbca1de8b49f96cdf8f039732d28a0082ef3718015e10535ff2e6a441a"
+    },
+    "unchangedAuthority": {
+      "sourcePlanSha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
+      "requestSha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0"
+    },
+    "changedCriterion": "SERVICE at authoritative index 3; the strengthened successor rubric is recorded verbatim in pre-fix-anchor-failure.json",
+    "unchangedCriterionIds": [
+      "AUDIO",
+      "DEVICE",
+      "EMBED",
+      "TRACE",
+      "REPLAY",
+      "FAILURES",
+      "QUALITY",
+      "PARITY"
+    ],
+    "unchangedCriteriaCanonicalSha256": "99f7093c18fe84e22d93f108340427824cfadd571c701eeb0b5758ae2cbeef53",
+    "project": "audio-runtime",
+    "contractRevision": "audio-runtime-v1",
+    "realtimeBudget": {
+      "sessionsPerMission": 3,
+      "totalSecondsPerMission": 120
+    },
+    "excludedSubproofs": [
+      "Native Windows hardware/endpoints testing",
+      "Physical acoustic testing"
+    ],
+    "historicalReport": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json",
+      "sha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+      "state": "FAILED/BLOCKED"
+    }
+  },
+  "preservedInputs": {
+    "amendmentId": "user-windows-hardware-scope-20260910",
+    "amendmentSha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa",
+    "authorizationSha256": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
+    "preparedBatchPath": "docs/temp/projects/audio-runtime/c47-c55-vertical-probes-batch.json",
+    "preparedBatchSha256": "b03c30d1225e2fd1d533c90524e5aac9ab256627b39cc3ae4a1ce71d98361a3f",
+    "buildSha256": "2bf087d1f9fef4df0ba85847a594bc8d67292c5e6d3ce44923cc3e64d53d92d7",
+    "fixtureSha256": "780a5a3ca7dc9b3a8039cf78e1052656eb2e28cb73fc300b1ecea999cfd1ce6f"
+  },
+  "preflight": {
+    "productionEntryPoint": "factory/scripts/prepare-validation.py:prepare",
+    "packets": [
+      "audio-runtime-c47-output-bound-vertical-probe",
+      "audio-runtime-c54-room-document-admission-vertical-probe",
+      "audio-runtime-c55-room-participant-mesh-vertical-probe"
+    ],
+    "result": "all three exact packets reached the intercepted target-directory creation boundary",
+    "stagingReached": false,
+    "artifactCopyReached": false,
+    "missionJsonCreated": false,
+    "reportCreated": false,
+    "sourceInventoryUnchanged": true,
+    "mutationControls": [
+      "SERVICE rubric",
+      "project-scope criterion membership",
+      "manifest criterion order",
+      "project identity",
+      "Realtime budget",
+      "build digest",
+      "fixture digest",
+      "report path",
+      "amendment authority reference",
+      "historical FAILED/BLOCKED state"
+    ],
+    "realtimeSessionsUsed": 0,
+    "realtimeSecondsUsed": 0,
+    "validatorsLaunched": false
+  },
+  "changedFiles": {
+    "factory/scripts/project_scope_amendment.py": "00dfe7fef8dd08fa18e32579922e10b74d6ac191eeb3d62ca6621c19db439bd8",
+    "factory/scripts/tests/test_prepare_validation.py": "0211bf0c1daca3e390f8c90e65a1bcab3940cdf007dbd5a56cca2d1b493965f2",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/pre-fix-anchor-failure.json": "0c1b6178ccf421d6c0a7d5279da9a3de14df799db32a642b465a9a10c2d8c01e"
+  },
+  "checks": [
+    {
+      "command": "rtk proxy env -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_project_control factory.scripts.tests.test_prepare_validation factory.scripts.tests.test_prepare_validation_budget",
+      "result": "PASS",
+      "tests": 37
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_PROJECT_MANIFEST make test-factory-scripts",
+      "result": "PASS",
+      "tests": 76
+    },
+    {
+      "command": "factory script target command-contract child",
+      "result": "PASS",
+      "tests": 4
+    },
+    {
+      "command": "rtk proxy env PYTHONDONTWRITEBYTECODE=1 python3 -B -m py_compile factory/scripts/project_scope_amendment.py factory/scripts/tests/test_prepare_validation.py factory/scripts/tests/test_project_scope_amendment.py factory/scripts/tests/test_project_control.py factory/scripts/tests/test_prepare_validation_budget.py",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "deferredGates": {
+    "AUDIO": "OPEN",
+    "DEVICE": "OPEN",
+    "EMBED": "OPEN",
+    "SERVICE": "OPEN",
+    "TRACE": "OPEN",
+    "REPLAY": "OPEN",
+    "FAILURES": "OPEN",
+    "QUALITY": "OPEN",
+    "PARITY": "OPEN"
+  },
+  "handoff": {
+    "scriptCi": {
+      "owner": "SCRIPT",
+      "status": "PENDING",
+      "pollingByExecutor": false,
+      "nextAction": "Run the broad required checks for PR 453 at exact head 3f47cfbf5edeaca0b1f9e9a883963cbe6c8157b7. On rejection, return the same task to this executor with exact logs."
+    },
+    "independentReview": "PENDING_SCRIPT_CI_GREEN",
+    "guardedMerge": "PENDING_INDEPENDENT_REVIEW",
+    "noRestartDeployment": {
+      "owner": "primary/meta after guarded merge",
+      "status": "PENDING_MERGED_SHA",
+      "reason": "The running factory imports project_scope_amendment.py from FACTORY_ROOT/factory/scripts in each controller process; no factory restart is required.",
+      "commands": [
+        "MERGED_SHA=<guarded-merge-sha>",
+        "rtk git -C \"$FACTORY_ROOT\" fetch origin main",
+        "rtk git -C \"$FACTORY_ROOT\" cat-file -e \"$MERGED_SHA^{commit}\"",
+        "STAGED_SCRIPT=\"$FACTORY_ROOT/factory/scripts/.project_scope_amendment.py.$MERGED_SHA.tmp\"",
+        "rtk git -C \"$FACTORY_ROOT\" show \"$MERGED_SHA:factory/scripts/project_scope_amendment.py\" > \"$STAGED_SCRIPT\"",
+        "rtk proxy chmod 0644 \"$STAGED_SCRIPT\"",
+        "rtk proxy sha256sum \"$STAGED_SCRIPT\"",
+        "rtk proxy mv -f \"$STAGED_SCRIPT\" \"$FACTORY_ROOT/factory/scripts/project_scope_amendment.py\"",
+        "rtk proxy sha256sum \"$FACTORY_ROOT/factory/scripts/project_scope_amendment.py\"",
+        "rtk proxy env FACTORY_ROOT=\"$FACTORY_ROOT\" FACTORY_PROJECT_MANIFEST=\"$FACTORY_ROOT/factory/projects/audio-runtime/manifest.json\" PYTHONPATH=\"$FACTORY_ROOT/factory/scripts\" python3 -c 'import os, json; from pathlib import Path; import project_scope_amendment as a; root=Path(os.environ[\"FACTORY_ROOT\"]); c=a.admitted_contract(root); assert c[\"project\"] == \"audio-runtime\" and c[\"contractRevision\"] == \"audio-runtime-v1\" and c[\"criteria\"][3][\"rubric\"] == a.SUCCESSOR_SERVICE_RUBRIC; print(json.dumps({\"status\":\"read-only-admitted-success\",\"revision\":os.environ.get(\"MERGED_SHA\", \"recorded-above\")}, sort_keys=True))'",
+        "rtk git -C \"$FACTORY_ROOT\" status --short --branch"
+      ],
+      "safety": [
+        "Preserve all existing dirty running-root paths; do not use git reset, git checkout, merge, restart, Work mutation, or probe launch in FACTORY_ROOT.",
+        "Primary records the expected merged controller hash and confirms only the owned controller inode changed.",
+        "Primary/meta may then resume the preserved C47/C54/C55 packets through normal validation; C62 does not launch them."
+      ]
+    }
+  }
+}
