@@ -1,0 +1,145 @@
+{
+  "active_owner_rows": {
+    "audio-runtime-c38-interruption-audio-retention": [
+      {
+        "last_output": "\nIndependent normal/race audio, room, remote-oracle, causal, cleanup, and built-executable replay pass. PR #430 head is 41d00f4c with green checks, but provenance is invalid: package/build records identify 4bd514e6 and artifact SHA 79eb1e\u2026, while the referenced artifact currently hashes 8e5eb0\u2026; no verifiable artifact matches the reviewed head. run.py:1083-1104 accepts --artifact with build=null and can report REPAIRED_ORACLE_PASS without build provenance; run.py:1421-1429 records PACKAGE_READY without failing false ancestry checks; AGGREGATE_TIMEOUT_SECONDS is only recorded, not enforced around run_public_matrix. Patch these gates fail-closed, rebuild a uniquely retained artifact from clean HEAD 41d00f4c, rerun repaired/package evidence with matching hashes and refreshed handoff records, then push/update PR and rerun current-head CI. Do not merge until this is independently reviewed.",
+        "state": "fin",
+        "work_id": "work-review-25",
+        "work_type": "review"
+      },
+      {
+        "last_output": "\n",
+        "state": "complete",
+        "work_id": "work-review-29",
+        "work_type": "review"
+      },
+      {
+        "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c38-interruption-audio-retention\", \"branch\": \"codex/audio-runtime-c38-interruption-audio-retention\", \"baseRevision\": \"2b745919bdccd314ac178cc1f6f7386329a277ac\", \"reused\": true}\nIndependent normal/race audio, room, remote-oracle, causal, cleanup, and built-executable replay pass. PR #430 head is 41d00f4c with green checks, but provenance is invalid: package/build records identify 4bd514e6 and artifact SHA 79eb1e\u2026, while the referenced artifact currently hashes 8e5eb0\u2026; no verifiable artifact matches the reviewed head. run.py:1083-1104 accepts --artifact with build=null and can report REPAIRED_ORACLE_PASS without build provenance; run.py:1421-1429 records PACKAGE_READY without failing false ancestry checks; AGGREGATE_TIMEOUT_SECONDS is only recorded, not enforced around run_public_matrix. Patch these gates fail-closed, rebuild a uniquely retained artifact from clean HEAD 41d00f4c, rerun repaired/package evidence with matching hashes and refreshed handoff records, then push/update PR and rerun current-head CI. Do not merge until this is independently reviewed.\n{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c38-interruption-audio-retention\", \"branch\": \"codex/audio-runtime-c38-interruption-audio-retention\", \"baseRevision\": \"2b745919bdccd314ac178cc1f6f7386329a277ac\", \"reused\": true}",
+        "state": "complete",
+        "work_id": "work-task-9",
+        "work_type": "task"
+      }
+    ],
+    "audio-runtime-c46-retire-cli-terminal-policy": [
+      {
+        "last_output": "\n",
+        "state": "fin",
+        "work_id": "work-review-14",
+        "work_type": "review"
+      },
+      {
+        "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c46-retire-cli-terminal-policy\", \"branch\": \"codex/audio-runtime-c46-retire-cli-terminal-policy\", \"baseRevision\": \"c861d1ff78d21106a37029dbdeb05f2e3e8de4cb\", \"reused\": true}\nCI checks failed for PR #438 at head 823bd350fe5d11782c38bda87d7b7bfd7d89d7cd: required checks failed on current head 823bd350fe5d11782c38bda87d7b7bfd7d89d7cd: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34562579355/job/103148160889). Return this task to the executor with the listed failures.\n{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c46-retire-cli-terminal-policy\", \"branch\": \"codex/audio-runtime-c46-retire-cli-terminal-policy\", \"baseRevision\": \"c861d1ff78d21106a37029dbdeb05f2e3e8de4cb\", \"reused\": true}",
+        "state": "failed",
+        "work_id": "work-task-10",
+        "work_type": "task"
+      }
+    ],
+    "audio-runtime-c47-live-probe-output-bound": [
+      {
+        "last_output": "\nIndependent current-head probes passed, but actionable defects remain. verify.py:462-474 handles unexpected post-Popen errors by killing/reaping only the parent; an injected reader-start failure left a forked descendant alive until external group cleanup, violating whole-group cleanup and no-survivor requirements. Add group termination, bounded inspection, fail-closed reporting, and a regression. run_staged_probe.py:366-397 preflights only stdout/stderr cap plus fixed report reserve, omitting replay outputs and actual report/metadata growth required by C47-02; include these in projected growth and negative-space coverage. The canonical live-07 report records tested_source_revision=98ec09a4 while PR head is d4c9c01d, and does not separately record required original revisions 9f869d1d and 5f14c453; regenerate evidence on the final head with explicit provenance. Required verification drivers run_c45_regressions.py and check_python_sources.py are absent despite prd.json:113-114. Finally, git diff --check fails at both live-04 and live-07 invalid-self-play-admission.stderr:21 due to a blank line at EOF; regenerate/normalize those artifacts and refresh dependent hashes, byte counts, and report_bytes. Executor must implement these repairs, rerun focused and exact staged evidence, achieve clean diff-check, and resubmit the resulting head to script CI; no CI polling or merge was performed.",
+        "state": "fin",
+        "work_id": "work-review-13",
+        "work_type": "review"
+      },
+      {
+        "last_output": "\nIndependent proof on head 94527e2 passed the C47 resource suite, private C45 regressions, 7-source compilation, and diff check. PR #439 checks are green, but only against base bb29005d. Remote main is cdf416a8 after C48/#440, and HEAD is not its ancestor. Executor must fetch and merge cdf416a8 into the preserved branch, resolve conflicts, rerun focused checks and the exact staged probe with unchanged immutable binaries, refresh current-head provenance/evidence, commit/push, and resubmit to script CI. Do not run ci-wait.py or poll. No merge was performed. The requested implementation-handoff.md is absent; available progress, PR body, and factory review records were used without fabricating evidence.",
+        "state": "fin",
+        "work_id": "work-review-42",
+        "work_type": "review"
+      },
+      {
+        "last_output": "\nIndependent C47 resource, C45 regression, source-compile, diff-check, and exact staged-probe behavior passed on head e7ae3ec667829f406d65d89e62dacceedbfc6f33; all 9 PR checks are green. The required current-main integration gate is unmet: origin/main is 6b4f32b5940d43192774e86f05e3c7c9293c71e3 and is not an ancestor of the candidate (PR base remains cdf416a8). Executor must merge the latest origin/main into the preserved branch, resolve conflicts, refresh current-source/provenance evidence, rerun focused bounds, pinned C45 regressions, Python checks, diff check, and the exact immutable-artifact staged probe, then commit/push and resubmit to script CI without polling. Do not merge the current head; preserve prior C47 regression coverage.",
+        "state": "fin",
+        "work_id": "work-review-47",
+        "work_type": "review"
+      },
+      {
+        "last_output": "\nIndependent C47 resource controls, private C45 regressions, and Python compilation passed; PR #439 head af5874c9 has 9/9 required checks green. Defect: refresh_live_evidence.py:37-79 accepts arbitrary paths and writes historical/peer evidence without C47 containment or symlink-escape checks. It also updates report_bytes but leaves latest_report_bytes stale; a temp run produced declared 0 versus actual 304 bytes. Add fail-closed C47 path validation, refresh both byte fields with stabilization, add negative tests, rerun C47 evidence and required checks, then resubmit. No merge performed.",
+        "state": "fin",
+        "work_id": "work-review-56",
+        "work_type": "review"
+      },
+      {
+        "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}\nCI checks failed for PR #439 at head 5efc6a1e0f5e7d1c65debf562b53758b8b931125: required checks failed on current head 5efc6a1e0f5e7d1c65debf562b53758b8b931125: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34584105269/job/103214186726). Return this task to the executor with the listed failures.\n{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
+        "state": "failed",
+        "work_id": "work-task-11",
+        "work_type": "task"
+      }
+    ],
+    "audio-runtime-c48-overlapping-tool-continuation": [
+      {
+        "last_output": "\nReviewed ca4e5f9a. Public C48 driver passed with exact current-head evidence at artifacts/runs/20260911T044340Z-642755000/positive/report.json; focused normal/race tests also passed. Actionable defects remain: coordinator.go:279-288 routes late/duplicate explicit events from a completed response into the sole live sibling; reject unknown explicit IDs and add a regression. coordinator.go:207-232 assembles ToolAcknowledgement deltas despite engine/ordering.go:236-241 excluding them, causing acknowledgement output to be dispatched as a model turn; filter them and add overlap-plus-ack coverage. observation.go:331-363 uses singular responseActive and clears it when any sibling ends, so control.go can miss an active peer during replay/cancellation; track response ownership per ID and gate finish/cancel on remaining peers. The new pendingToolCallResponses map has no finite admission bound and is not cleared on cancel/shutdown; add bounded overflow and cleanup tests. Rebuild and rerun the public driver, focused normal/race tests, refresh exact provenance/evidence, then resubmit the repaired head to CI.",
+        "state": "fin",
+        "work_id": "work-review-20",
+        "work_type": "review"
+      },
+      {
+        "last_output": "\n",
+        "state": "complete",
+        "work_id": "work-review-37",
+        "work_type": "review"
+      },
+      {
+        "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c48-overlapping-tool-continuation\", \"branch\": \"codex/audio-runtime-c48-overlapping-tool-continuation\", \"baseRevision\": \"98d369683457495083308ead14ac87bf2201a110\", \"reused\": true}\nCI checks failed for PR #440 at head 72a638b7dba22b6ed2cd912a15ae2a115993c71f: required checks failed on current head 72a638b7dba22b6ed2cd912a15ae2a115993c71f: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34569402086/job/103168088465). Return this task to the executor with the listed failures.\n{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c48-overlapping-tool-continuation\", \"branch\": \"codex/audio-runtime-c48-overlapping-tool-continuation\", \"baseRevision\": \"98d369683457495083308ead14ac87bf2201a110\", \"reused\": true}",
+        "state": "complete",
+        "work_id": "work-task-12",
+        "work_type": "task"
+      }
+    ]
+  },
+  "board_sha256": "1f2faac796cc90568357ea105b8306077166d0900bdef8c2ac79ddf8dacf7e4c",
+  "previous_review_findings_are_accounted_for": true,
+  "prior_c50_reviews": [
+    {
+      "state": "fin",
+      "text": "\nPR #442 head f6fbaa97fb7bc85166b256878e1b39ec01394ae7 has all nine required checks SUCCESS. Independent fresh yui build/replay, focused tests, and deterministic analyzer reruns passed. Rejecting for actionable evidence defects: provenance omits the required source-archive and build-input hashes and records 7f73c8b3 as candidate_revision instead of reviewed head f6fbaa97; verification-summary records checksum-manifest hash ea026565... while current SHA256SUMS hashes to 75bcc52f...; analyzer method-call resolution misses mesh.Join/Remove/Close, classifications contradict the committed inventory, Peers has no production caller, cited callers are type/wrapper declarations rather than exact calls, and all 96 public call paths are target-local because the prefix validation is too broad; verifier accepts no-test runs by matching only ok, rejects its documented timeout/binary flags, lacks a shared aggregate deadline and owned-output quota, and does not assert required help literals. Exact executor action: repair analyzer, call-path/classification evidence, provenance, and verifier bounds/assertions while retaining the origin/main source scope; regenerate the complete evidence bundle with candidate head f6fbaa97, make checksum records self-consistent, rerun the full verification and required checks through the CI script, push the replacement head, and request fresh review. Do not merge this head.",
+      "work_id": "work-review-28"
+    },
+    {
+      "state": "fin",
+      "text": "\nPR #442 current head is 262cdbfafa0d31df67612788096eda1bac960081 with all 9 required checks green, but review found actionable defects. Evidence remains bound to f030d8a875d3fd84c2c30082946c7ff7f5cefb23 in provenance.json, verification-summary.json, and runs/public/report.json; rebind all evidence and checksums to the actual head. Also fix verify.py:146-179: a SIGTERM-exiting parent with a SIGTERM-ignoring descendant leaves the process group alive (independent probe: timed_out=true, exit=-15, group_gone=false, survivor=true). Add bounded residual-group SIGKILL/reap handling and a deterministic ignoring-descendant negative control. Then rerun full bounded verification and accumulated regressions, commit/push, resubmit current-head CI, and request fresh review. Independent analyzer, fresh YUI replay, focused tests, and prior analyzer/fixture findings otherwise pass; do not merge this head.",
+      "work_id": "work-review-3"
+    },
+    {
+      "state": "fin",
+      "text": "\nPR #442 head 7a8ca37a712ede40d85f0ad0116ab08e41f81703 has green required checks, but provenance.json, verification-summary.json, and public/report.json remain bound to 3acf11ab0aab6d8972d51ad3d03b07a85b2004aa. Refresh final-head evidence and hashes with verify.py --mode all --child-timeout 60 --total-timeout 600, commit/push it, rerun SCRIPT CI on the new head, then request fresh review. Independent analyzer and yui replay probes passed; no source defect found.",
+      "work_id": "work-review-34"
+    },
+    {
+      "state": "fin",
+      "text": "\nIndependent analyzer and fresh exact-source YUI help/replay passed, including expected 4,800-byte PCM and clean shutdown. Actionable defects remain: provenance.json, verification-summary.json, and runs/public/report.json are bound to baf0dfed2d57a30cfaab58e315758ad20430d364, not submitted HEAD 7b0775ddb9409635696ad6ae4fb9fdb67204c264; this repeats the prior final-head finding. git diff --no-renames also deletes the shared C38 fixture outside C50 scope and hides it as a byte-identical rename to C50 runs/public/replay/tool-record/provider.json. Remove the generated unchecksummed __pycache__/verify.cpython-314.pyc. Restore the C38 fixture, regenerate and consistently rebind all evidence on the repaired candidate, commit/push, rerun SCRIPT CI, then request fresh review; do not merge.",
+      "work_id": "work-review-53"
+    }
+  ],
+  "prior_review_feedback_sha256": [
+    {
+      "sha256": "d70018ac3c3a0e321b0da5872e48f751fc89d33277b0abba3b511a3c7e53950e",
+      "work_id": "work-review-28"
+    },
+    {
+      "sha256": "b64f6be1dc37c2f6f612c30f8bd5e1ad4d5e37f2fc29dac2ecda737af6aae965",
+      "work_id": "work-review-3"
+    },
+    {
+      "sha256": "07bc373e02a1d8a47f308b24441ddfde5c36a6ec0714948561f4bc860a801d50",
+      "work_id": "work-review-34"
+    },
+    {
+      "sha256": "356607a39a7e1fdc19fc5aaf59347d9a670caf9e74c74eeb1f9370e535614f22",
+      "work_id": "work-review-53"
+    }
+  ],
+  "project": "audio-runtime",
+  "schema_version": "c50-ownership-v1",
+  "server": "http://127.0.0.1:7439",
+  "session": "~default",
+  "task": {
+    "branch": "codex/audio-runtime-c50-remaining-cli-service-inventory",
+    "state": "init",
+    "work_id": "work-task-24",
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory"
+  },
+  "write_scope": [
+    "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/"
+  ]
+}
