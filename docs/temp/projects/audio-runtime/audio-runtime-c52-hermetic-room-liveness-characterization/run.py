@@ -204,9 +204,20 @@ def archive_revision(repo: Path, revision: str, destination: Path) -> dict[str, 
     }
 
 
+def remove_readonly_path(function: object, path: str, _exc_info: object) -> None:
+    try:
+        os.chmod(path, 0o700)
+        function(path)
+    except OSError:
+        # The caller verifies the path after rmtree and fails closed if this
+        # retry did not remove it.
+        return
+
+
 def remove_run_cache(cache_root: Path) -> None:
     for _ in range(3):
-        shutil.rmtree(cache_root, ignore_errors=True)
+        if cache_root.exists():
+            shutil.rmtree(cache_root, onerror=remove_readonly_path)
         if not cache_root.exists():
             return
         time.sleep(0.05)
