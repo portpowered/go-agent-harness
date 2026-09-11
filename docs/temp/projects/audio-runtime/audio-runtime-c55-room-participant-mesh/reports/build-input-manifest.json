@@ -1,5 +1,5 @@
 {
-  "candidate_revision": "571ad7455295545197dda828c34f46b4924cb134",
+  "candidate_revision": "bd3510f4089b65c639e0a48e474acef32f5666ae",
   "entries": [
     {
       "bytes": 18,
@@ -7642,9 +7642,9 @@
       "sha256": "0c92bf67463d191db6eec0086a9d317cedf6c5ccb8c1bfbaf0f23b68cf6c2302"
     },
     {
-      "bytes": 11106,
+      "bytes": 12920,
       "path": "go-agent-runtime/services/rooms/internal/lifecycle/browser_parity_test.go",
-      "sha256": "63ef205c11ce4d7f64ba13527dbb32045e9a253dbd3888b4a0de232001bd5de5"
+      "sha256": "7f794346c68c72225471dd61656c8aab442ad6ac0dbed613ca60b78c52877d42"
     },
     {
       "bytes": 1944,
@@ -7652,9 +7652,9 @@
       "sha256": "c4d8e85e88775899f906716d7b74b7e7a39790c6c3ad9375d7437056332c5f70"
     },
     {
-      "bytes": 6050,
+      "bytes": 6407,
       "path": "go-agent-runtime/services/rooms/internal/lifecycle/events.go",
-      "sha256": "3faed7e3795bc3a64df52dbac392e4327acf20b4ec0e01f8aeccc97353fdbc50"
+      "sha256": "f91a71d42687cc0f4347d16a1062c9b7f0c02b26a6dfcbe29c097f24dd5557d3"
     },
     {
       "bytes": 10395,
@@ -7707,9 +7707,9 @@
       "sha256": "6adbbe14ac35bc15684a57199a474c22dbc72ad79e636caddc11def3981b01c9"
     },
     {
-      "bytes": 11291,
+      "bytes": 11389,
       "path": "go-agent-runtime/services/rooms/internal/lifecycle/state.go",
-      "sha256": "b9aa0912f1b677f0ee1ea573612fb4f7698eff4ea6145acea2b6ad2a69518962"
+      "sha256": "2e61161d44f76e425b7b10324699aa47cca5bca07a9f9109c61e26959bdcac78"
     },
     {
       "bytes": 6566,
@@ -10958,5 +10958,5 @@
     }
   ],
   "schema": "audio-runtime.c55.build-inputs.v1",
-  "sha256": "8fc22e853a4ee9ccd730d3192004527c745b555132340e3e1e1dc64968ca4282"
+  "sha256": "c3f671554a112fa99631b44492d364ccc8fd89623d737d03d710bdaf0c847a9c"
 }
