@@ -3967,3 +3967,61 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
 - Clean executable candidate `4bd514e6f1980532a331e0f51b3d66fde08eeecb` produced `REPAIRED_ORACLE_PASS` in `repaired-20260911T043825Z-52250`. The yui artifact is `50,895,362` bytes with SHA-256 `79eb1eb02e813a9b427164a4938199f03c18c430b51b99c791ed2a8af20ec831`; frozen tool/interruption wire, PCM, rendered, healthy-tail, strict replay, mutation-rejection, and missing-timeline controls remain exact.
 - `package-20260911T043835Z-52326` returns `PACKAGE_READY` for that clean source. The build covers `2,185` inputs with SHA-256 `b3ff27ac38d91183097cf162de890e0486e1804c0ec5e2d7f7b66a4ac9fe2fc4`, and startup, baseline, planning, and fresh `origin/main=7f73c8b3b4ebc99b55b8bb5e802beff024385407` ancestry verify. The final ledger commit is documentation-only; no executable build input or oracle changed after this exact replay.
 - Exact next action: push the same admitted task branch, update PR `#430`, and return `ACCEPTED` to the script-owned current-head CI gate without polling. CI, independent review, guarded merge, post-delivery vertical validation, physical/acoustic proof, and project acceptance remain external gates; retain C38 ownership through `CONTINUE` for any exact rejection or actionable repair.
+
+# C38 fail-closed provenance/deadline repair and handoff checkpoint 2026-09-11T05:43Z
+
+- Admission remains valid for the sole `audio-runtime` project and task
+  `audio-runtime-c38-interruption-audio-retention`; the isolated branch still
+  matches `prd.branchName`, and predecessor checkpoints plus required startup,
+  baseline, planning and fresh-main ancestry are preserved. `origin/main` is
+  `7f73c8b3b4ebc99b55b8bb5e802beff024385407`.
+- The latest canonical work-review-25/task-9 finding was read in full. It
+  identified stale package/build provenance (`4bd514e6` versus reviewed
+  `41d00f4c` and conflicting artifact hashes), an `--artifact` path that could
+  pass without build provenance, package emitting `PACKAGE_READY` after false
+  ancestry checks, and an aggregate timeout that was recorded but not
+  enforced.
+- Commit `4f449e960e43d7db474f22661445a4e86662e978` repairs those exact gates in
+  the owned runner only. `--build-artifact` and `--artifact` now require a
+  clean current source revision/identity, matching `repaired-build.json`,
+  recomputed 2,185-input manifest, artifact byte count/SHA-256 and build
+  inputs. Package fails closed before `PACKAGE_READY` on any false ancestry
+  result. `AggregateDeadline` enforces the 600-second public matrix budget,
+  passing residual child time and reserving cleanup overhead. No production
+  code, fixture, oracle, ownership boundary, architecture threshold or
+  acceptance timeout was weakened.
+- The stale retained artifact
+  `artifacts/yui-c38-repaired-4bd514e` exits 1 with
+  `repaired build provenance source mismatch`; this is the negative evidence
+  for the former false-pass path.
+- Exact-source focused runner evidence at `4f449e96`:
+  `causal-20260911T053615Z-91234` is `CAUSAL_PROOF` (causal regression exit 0,
+  parent reaped, no survivors); `focused-checks-20260911T053628Z-91298` passes
+  normal/race, vet, architecture/size (`184/1,888/27,817`), Wire and diff;
+  `negative-controls-20260911T053711Z-91820` passes all 21 C30 consumer cases,
+  expected exit-1, same-length real PCM/hash mutation rejection and missing
+  timeline; `cleanup-control-20260911T053715Z-91862` passes capped output,
+  TERM/KILL, reap and no survivors. `COUNT=1
+  scripts/test-session-ci-regressions.sh all` passes normal, coverage and
+  race accumulated session regressions.
+- Fresh repaired replay `repaired-20260911T054047Z-94425` returns
+  `REPAIRED_ORACLE_PASS` from uniquely retained artifact
+  `yui-c38-repaired-4f449e9` (`50,895,362` bytes, SHA-256
+  `79eb1eb02e813a9b427164a4938199f03c18c430b51b99c791ed2a8af20ec831`), with
+  source/build revision `4f449e96`, build-input SHA-256
+  `b3ff27ac38d91183097cf162de890e0486e1804c0ec5e2d7f7b66a4ac9fe2fc4`, and
+  aggregate `1.083s/600s`. The frozen tool/interruption wire and
+  `4,800/3,200`, `3,840/3,360` PCM/rendered oracles, exact `2,400`-byte
+  healthy tail, strict replay and missing-timeline control pass. The paired
+  `original-20260911T054047Z-94426` returns
+  `HISTORICAL_FAILURE_PRESERVED`. `package-20260911T054007Z-93973` returns
+  `PACKAGE_READY` with clean source and all four ancestry checks true.
+- The ledger-only follow-up commit has no executable/build-input change; the
+  final clean-head artifact/package binding is reserved at
+  `artifacts/yui-c38-repaired-final`. This is executor evidence only. No
+  current-head script-CI success, independent review, guarded merge,
+  post-delivery vertical validation, physical/acoustic proof or project
+  acceptance is claimed. Exact next action after the final binding is push the
+  same branch, update PR `#430`, and return `ACCEPTED` to script-owned
+  current-head CI without polling; retain C38 ownership through `CONTINUE` for
+  any exact rejection or actionable repair.

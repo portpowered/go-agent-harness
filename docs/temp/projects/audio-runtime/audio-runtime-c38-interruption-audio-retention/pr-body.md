@@ -331,3 +331,33 @@ PR `#430` and return `ACCEPTED` to script-owned current-head CI without
 polling; CI, independent review, guarded merge, post-delivery vertical
 validation, physical/acoustic proof, and project acceptance remain external
 gates.
+
+## Current review repair and provenance handoff — 2026-09-11T05:43Z
+
+The latest review finding was repaired in
+`4f449e960e43d7db474f22661445a4e86662e978`. The C38 runner now fails closed
+unless the current clean source revision and identity, rebuilt-input manifest,
+artifact bytes/SHA-256, and build record all match; package fails before
+`PACKAGE_READY` on false ancestry; and the 600-second aggregate public-matrix
+deadline is enforced with residual child/cleanup budget. The stale
+`yui-c38-repaired-4bd514e` artifact exits 1 with a source provenance mismatch.
+
+Focused exact-source evidence: causal, normal/race/vet/architecture/size/Wire,
+21-case consumer plus negative controls, and cleanup controls all pass; the
+accumulated `COUNT=1 scripts/test-session-ci-regressions.sh all` passes normal,
+coverage and race. Fresh repaired replay `repaired-20260911T054047Z-94425`
+returns `REPAIRED_ORACLE_PASS` with artifact `yui-c38-repaired-4f449e9`,
+50,895,362 bytes, SHA-256
+`79eb1eb02e813a9b427164a4938199f03c18c430b51b99c791ed2a8af20ec831`, current
+source `4f449e96`, build-input SHA-256
+`b3ff27ac38d91183097cf162de890e0486e1804c0ec5e2d7f7b66a4ac9fe2fc4`, and
+aggregate `1.083s/600s`. The original replay preserves
+`HISTORICAL_FAILURE_PRESERVED`; package `package-20260911T054007Z-93973`
+returns `PACKAGE_READY` with clean startup/baseline/planning/fresh-main
+ancestry. The final post-ledger clean-head artifact is retained at
+`artifacts/yui-c38-repaired-final`.
+
+No current-head script-CI result, independent review, guarded merge,
+post-delivery vertical validation, physical/acoustic proof or project
+acceptance is claimed. Please run the script-owned current-head CI gate for
+this same PR; do not merge until its checks and independent review complete.

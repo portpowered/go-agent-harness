@@ -371,3 +371,63 @@ PR `#430` and return `ACCEPTED` to script-owned current-head CI without
 polling; CI, independent review, guarded merge, post-delivery vertical
 validation, physical/acoustic proof, and project acceptance remain external
 gates.
+
+## Fail-closed provenance and aggregate deadline repair — 2026-09-11T05:43Z
+
+The latest canonical independent-review finding for work-review-25/task-9 on
+PR `#430` rejected the prior candidate because its retained package/build
+records named `4bd514e6` while the reviewed head was `41d00f4c`, the referenced
+artifacts disagreed on SHA-256, `--artifact` could pass without build
+provenance, package could emit `PACKAGE_READY` after false ancestry checks, and
+the public aggregate timeout was only recorded. The finding required a
+fail-closed repair and a fresh artifact from the clean candidate.
+
+Commit `4f449e960e43d7db474f22661445a4e86662e978` changes only the C38 runner.
+It requires current clean source revision/identity, a matching
+`repaired-build.json`, recomputed build-input manifest, artifact size and
+SHA-256 for both `--build-artifact` and `--artifact`; package now fails before
+`PACKAGE_READY` on any false startup/baseline/planning/fresh-main ancestry
+check; and `AggregateDeadline` enforces the 600-second public matrix budget,
+including per-child residual time and cleanup reserve. No oracle, fixture,
+production ownership, architecture threshold, or timeout acceptance was
+weakened.
+
+The stale retained artifact at
+`artifacts/yui-c38-repaired-4bd514e` now exits 1 with
+`repaired build provenance source mismatch`, proving the former provenance
+gap cannot report a repaired pass. Current exact-source evidence at `4f449e96`
+is:
+
+- `causal-20260911T053615Z-91234`: `CAUSAL_PROOF`, causal regression exit 0,
+  parent reaped and no surviving process group.
+- `focused-checks-20260911T053628Z-91298`: normal/race, vet, architecture,
+  size, Wire and diff checks pass (`184` packages, `1,888` files,
+  `27,817` functions).
+- `negative-controls-20260911T053711Z-91820`: all 21 C30 consumer cases,
+  expected exit-1 control, real same-length PCM mutation rejection and
+  missing-timeline rejection pass.
+- `cleanup-control-20260911T053715Z-91862`: capped output, TERM/KILL,
+  reap and no survivors pass.
+- `COUNT=1 scripts/test-session-ci-regressions.sh all`: normal, coverage and
+  race accumulated session regressions pass.
+- `repaired-20260911T054047Z-94425`: `REPAIRED_ORACLE_PASS` using the uniquely
+  retained `artifacts/yui-c38-repaired-4f449e9`, `50,895,362` bytes,
+  SHA-256 `79eb1eb02e813a9b427164a4938199f03c18c430b51b99c791ed2a8af20ec831`,
+  source/build revision `4f449e96`, and build-input SHA-256
+  `b3ff27ac38d91183097cf162de890e0486e1804c0ec5e2d7f7b66a4ac9fe2fc4`.
+  Aggregate replay is `1.083s/600s`; frozen tool/interruption wire and
+  `4,800/3,200`, `3,840/3,360` PCM/rendered oracles, exact `2,400`-byte
+  healthy tail, strict replay, and missing-timeline control pass.
+- `original-20260911T054047Z-94426`: `HISTORICAL_FAILURE_PRESERVED`.
+- `package-20260911T054007Z-93973`: `PACKAGE_READY`; source is clean and the
+  startup, baseline, planning and fresh `origin/main=7f73c8b3b4ebc99b55b8bb5e802beff024385407`
+  ancestry checks are true.
+
+The ledger-only follow-up commit carries no executable or build-input change;
+the final clean-head artifact/package binding is retained at
+`artifacts/yui-c38-repaired-final` before handoff. This remains executor
+evidence only: current-head script CI, independent review, guarded merge,
+post-delivery vertical validation, physical/acoustic proof and project
+acceptance remain external gates. The next action is push/update PR `#430` and
+return `ACCEPTED` to script-owned current-head CI without polling; retain C38
+ownership through `CONTINUE` for any exact rejection or actionable repair.
