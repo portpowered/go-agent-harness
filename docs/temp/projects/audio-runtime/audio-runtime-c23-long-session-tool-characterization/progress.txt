@@ -502,3 +502,29 @@ C23 fresh-head characterization and preserved first failure — 2026-09-11T23:00
   and push the same task branch, update PR #415, and return `ACCEPTED` to
   script-owned CI without polling. CI, review, merge, vertical, device,
   acoustic and project-completion claims remain open.
+
+C23 current-head bounded regression checkpoint — 2026-09-11T23:13:37Z
+
+- Admission remains valid for the sole `audio-runtime` project and task; the
+  isolated branch matches `prd.json.branchName`, and clean HEAD
+  `967b270a4cd55d59b6f1d95700d5f631b22468af` is pushed to PR #415. A fresh
+  `git fetch origin main` still resolves `origin/main` to
+  `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`, already an ancestor of HEAD;
+  startup and project-baseline ancestry remain intact.
+- The accumulated C21 control passed again without changing C21/shared paths:
+  normal `-count=5` reported 15/15 passed and race `-count=1` reported 3/3
+  passed. `git diff --check`, the required ancestry checks, and the
+  `characterize.py` command interface check also pass; the worktree is clean.
+- The preserved C23 first failure is not retried: current-main recording-on/16
+  still has complete provider/public PCM and clean shutdown but recording
+  usage `accepted_audio=0`, `audio_bytes=0`, and no `audio/out-000.pcm`. The
+  required repair remains the unreviewed C56 recording-service candidate PR448
+  at `9f089bfa703a0e024844b5f0fdbe62b4c44720d8`; it has not reached
+  `origin/main`, so no C23 evidence is relabeled and no C23 production path is
+  mutated.
+- Disposition remains `CONTINUE`, not `ACCEPTED`. Exact next action: after the
+  reviewed recording/media repair reaches `origin/main` or primary issues an
+  ownership decision, fetch that changed main, rebuild/rebind provenance, run
+  the complete bounded C23 sequence and C21 regressions, then update and submit
+  the changed same PR to script CI without polling. CI, review, merge, vertical,
+  device, acoustic, and project-completion claims remain open.
