@@ -1,7 +1,7 @@
 {
   "schema": "audio-runtime.c55.quality-gates.v1",
-  "candidate_revision": "bd3510f4089b65c639e0a48e474acef32f5666ae",
-  "refresh_note": "The lifecycle repair passed the focused normal/race checks and accumulated regressions; the final candidate adds only a comment-only size-budget adjustment after the listed structural gates.",
+  "candidate_revision": "968da5a9ad1345b3da1d08ba1f2759735adb9504",
+  "refresh_note": "Exact candidate 968da5a9 includes the lifecycle registration repair and passes focused rooms/mesh normal and race checks, repeated liveness/terminal controls, Wire regeneration/check, and accumulated regressions. The architecture gate retains exactly eight shared/stale findings without a C55 baseline edit.",
   "passed": [
     {"command": "make fmt", "exit_code": 0},
     {"command": "make wire-check", "exit_code": 0},
