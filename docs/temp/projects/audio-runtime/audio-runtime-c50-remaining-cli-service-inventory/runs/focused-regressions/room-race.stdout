@@ -1,1 +1,10 @@
+=== RUN   TestMeshContextCancellationClosesAllPairsAndRepeatedCloseIsSafe
+--- PASS: TestMeshContextCancellationClosesAllPairsAndRepeatedCloseIsSafe (0.00s)
+=== RUN   TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair
+=== RUN   TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair/explicit_close_first
+=== RUN   TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair/parent_cancellation_first
+--- PASS: TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair (0.00s)
+    --- PASS: TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair/explicit_close_first (0.00s)
+    --- PASS: TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair/parent_cancellation_first (0.00s)
+PASS
 ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/room	(cached)

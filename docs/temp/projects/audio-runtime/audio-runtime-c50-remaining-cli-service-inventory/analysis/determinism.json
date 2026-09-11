@@ -1,21 +1,59 @@
 {
   "call_paths": {
-    "entry_prefixes": [
-      "agent-cli/cmd/",
-      "agent-cli/internal/cli/",
-      "agent-cli/internal/transport/cli/",
-      "agent-cli/internal/wire/"
+    "entry_source_files": [
+      "agent-cli/internal/transport/cli/session_observability.go"
     ],
-    "public_entry_call_sites": 96,
-    "target_call_edges": 3183
+    "entry_source_roots": [
+      "agent-cli/cmd/yui",
+      "agent-cli/internal/cli",
+      "agent-cli/internal/transport/cli",
+      "agent-cli/internal/wire"
+    ],
+    "mesh_method_evidence": {
+      "Close": [
+        {
+          "callee": "agent-cli/internal/room/mesh.go:549:method:github.com/portpowered/go-agent-harness/agent-cli/internal/room.(Mesh).Close",
+          "expression": "mesh.Close",
+          "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+          "line": 109
+        }
+      ],
+      "Join": [
+        {
+          "callee": "agent-cli/internal/room/mesh.go:259:method:github.com/portpowered/go-agent-harness/agent-cli/internal/room.(Mesh).Join",
+          "expression": "mesh.Join",
+          "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+          "line": 123
+        }
+      ],
+      "Peers": [
+        {
+          "callee": "agent-cli/internal/room/mesh.go:458:method:github.com/portpowered/go-agent-harness/agent-cli/internal/room.(Mesh).Peers",
+          "expression": "m.Peers",
+          "file": "agent-cli/internal/room/mesh.go",
+          "line": 492
+        }
+      ],
+      "Remove": [
+        {
+          "callee": "agent-cli/internal/room/mesh.go:387:method:github.com/portpowered/go-agent-harness/agent-cli/internal/room.(Mesh).Remove",
+          "expression": "mesh.Remove",
+          "file": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+          "line": 762
+        }
+      ]
+    },
+    "public_entry_call_sites": 5,
+    "target_call_edges": 3852,
+    "target_local_entry_call_sites": 0
   },
   "classification": {
     "class_counts": {
-      "BUSINESS_POLICY": 115,
-      "COMPOSITION_WIRING": 6,
-      "DEAD_OR_UNCERTAIN": 1942,
-      "REUSABLE_RUNTIME_BEHAVIOR": 726,
-      "THIN_TRANSPORT_DELEGATION": 80
+      "BUSINESS_POLICY": 166,
+      "COMPOSITION_WIRING": 9,
+      "DEAD_OR_UNCERTAIN": 1519,
+      "REUSABLE_RUNTIME_BEHAVIOR": 1105,
+      "THIN_TRANSPORT_DELEGATION": 70
     },
     "rules": [
       "Every inventoried symbol has exactly one primary class.",
@@ -45,23 +83,23 @@
   "determinism": {
     "call-paths.json": {
       "equal": true,
-      "first_sha256": "e818a324ef3a56c0d9438e62d1d18c629eeea61dcf6a8626525cbbb9bd1247c1",
-      "second_sha256": "e818a324ef3a56c0d9438e62d1d18c629eeea61dcf6a8626525cbbb9bd1247c1"
+      "first_sha256": "ffcf19c2bce3e9e7a702804734ced61005887d17bdf66bed9230c4ab050d82d8",
+      "second_sha256": "ffcf19c2bce3e9e7a702804734ced61005887d17bdf66bed9230c4ab050d82d8"
     },
     "classifications.json": {
       "equal": true,
-      "first_sha256": "d0ddeba5aa4fe2f72e4ed0de25a0b8a41ea80bc24e5ab2b9cb16c11b99b3f527",
-      "second_sha256": "d0ddeba5aa4fe2f72e4ed0de25a0b8a41ea80bc24e5ab2b9cb16c11b99b3f527"
+      "first_sha256": "fd4643ce10415f53bb081c8e11ebe7d7be8683129edc19c985a7021cfcee587c",
+      "second_sha256": "fd4643ce10415f53bb081c8e11ebe7d7be8683129edc19c985a7021cfcee587c"
     },
     "inventory.json": {
       "equal": true,
-      "first_sha256": "29d5f75c10a9c041d0655ddf1ec724d2da205a43ca0033d211a1e9e53d8cdf44",
-      "second_sha256": "29d5f75c10a9c041d0655ddf1ec724d2da205a43ca0033d211a1e9e53d8cdf44"
+      "first_sha256": "7aaf50810ed9ab4bb73cc1632b2ba3070ffa63b604faf08b8aa7dc936e1f202f",
+      "second_sha256": "7aaf50810ed9ab4bb73cc1632b2ba3070ffa63b604faf08b8aa7dc936e1f202f"
     },
     "inventory.md": {
       "equal": true,
-      "first_sha256": "9b00fd3961daf8bccf1ca4ba7026b67b4f1717af62ae630c7abf7616cef960f8",
-      "second_sha256": "9b00fd3961daf8bccf1ca4ba7026b67b4f1717af62ae630c7abf7616cef960f8"
+      "first_sha256": "433e4340196013ab458755dcc9923221dc015e916aff3e96bed5b77a287285b3",
+      "second_sha256": "433e4340196013ab458755dcc9923221dc015e916aff3e96bed5b77a287285b3"
     }
   },
   "historical_observation": {
