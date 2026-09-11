@@ -24,6 +24,18 @@ cross-run identity, and changed peer boundaries fail closed.
 - Classification: `NON_REPRODUCED` within the exact 22-cell matrix; the immutable source report remains FAILED and is not relabelled.
 - Replay: immutable artifact-0/C16 software-file positive parity and real mutated-fixture rejection PASS in run `replay-20260911T155154Z-33813` in 0.203247 seconds; positive exit 0, mutated-fixture exit 1, exact 4800-byte PCM and clean process groups; no credentials/live Realtime/native or acoustic claim.
 
+## Bounded PR439 occurrence attribution
+
+The combined PR439 coverage job `103345550039` at head `e0d4ba24` failed only
+the separate `agent-cli/internal/transport/cli/internal/events` timeout fixture
+at `room_live_liveness_test.go:40`, after its own 3-second `waitForLiveness`
+guard. The complete job-log SHA-256 is recorded in
+`ci-room-liveness-attribution.json`. The exact test passes with raw Go
+`Action=pass` under both hermetic normal and coverage instrumentation on C60
+head `79754c85`; the hosted log has no C52 action/trace identity. This remains
+`FAIL_CLOSED_UNRESOLVED`, not a C52 recurrence, report relabel, production
+repair, or acceptance waiver; C47/C55 own the transport fixture follow-up.
+
 The final local evidence gate is `verify.py --mode all`. The prior script-CI
 run `34613973921` tested head `efde4d49` and rejected only the static baseline
 drift plus the coverage/hermetic WebMCP composite-reference test. Those paths

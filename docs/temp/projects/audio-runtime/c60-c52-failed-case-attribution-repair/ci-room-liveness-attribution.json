@@ -1,0 +1,111 @@
+{
+  "schema": "audio-runtime-c60-ci-room-liveness-attribution-v1",
+  "status": "FAIL_CLOSED_UNRESOLVED",
+  "observed_at": "2026-09-11T10:21:55-07:00",
+  "candidate": {
+    "task": "audio-runtime-c60-c52-failed-case-attribution-repair",
+    "head": "79754c85b85673a23a9145655d7e3ddd04f1494f",
+    "origin_main": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+    "owned_scope": [
+      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/**",
+      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/**"
+    ],
+    "production_mutated": false
+  },
+  "combined_ci_occurrence": {
+    "pull_request": 439,
+    "head": "e0d4ba241b8018ae77857969cad08b6d578abd8f",
+    "run_id": "34624302582",
+    "job_id": "103345550039",
+    "check": "CI (coverage)",
+    "started_at": "2026-09-11T16:50:37Z",
+    "completed_at": "2026-09-11T16:57:43Z",
+    "log_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34624302582/job/103345550039",
+    "log_sha256": "f984f808c6aa5c2a650d533b331ff180b876a88bb4a16babb5c8df5bb60dfbfc",
+    "log_bytes": 33491,
+    "log_lines": 328,
+    "failure_log_lines": [287, 288, 289, 290, 291],
+    "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events",
+    "test": "TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence",
+    "failure_timestamp": "2026-09-11T16:53:31.5972308Z",
+    "test_elapsed_seconds": 3.0,
+    "package_elapsed_seconds": 13.366,
+    "assertion": {
+      "file": "agent-cli/internal/transport/cli/internal/events/room_live_liveness_test.go",
+      "line": 40,
+      "message": "room did not publish liveness through the live service"
+    },
+    "observable_boundary": "roomLiveLivenessFixture.waitForLiveness after advanceTimeout; the fixture's wall-clock 3-second guard expired before the peer sink observed a liveness event"
+  },
+  "c60_attribution_boundary": {
+    "immutable_report": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization-corrected-vertical-probe.json",
+      "sha256": "8b4f23539aceb6f687e4adafef711b4fc65cc91862a0af5670add5f7b7379a25",
+      "decision": "FAILED"
+    },
+    "controls_path": "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/attribution-controls.json",
+    "controls_sha256": "deafe6d46dcc854f45a8850a7fdaaa977ab26759eeecea5be87fcc01927fe676",
+    "accepted_shape": {
+      "action": "fail",
+      "ordinal": 0,
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+      "parent_test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer",
+      "subtest": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+    },
+    "rejected_controls": [
+      "process_exit_only",
+      "zero_failed_outcomes",
+      "duplicate_failed_outcomes",
+      "passing_outcome_not_failure",
+      "transformed_checkpoint",
+      "mismatched_raw_selection",
+      "multiple_failed_cases",
+      "stale_run_identity",
+      "cross_run_trace_substitution",
+      "changed_peer_boundary"
+    ],
+    "identity_mismatch": {
+      "ci_package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events",
+      "ci_test": "TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence",
+      "c52_package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+      "c52_parent_test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer"
+    }
+  },
+  "changed_control": {
+    "purpose": "Distinguish a lost runtime diagnostic from a fixture scheduling timeout without rerunning the frozen 22-cell matrix or integrating the unaccepted PR439 candidate.",
+    "source_revision": "79754c85b85673a23a9145655d7e3ddd04f1494f",
+    "source_files": {
+      "agent-cli/internal/transport/cli/internal/events/room_live_liveness_test.go": "4855bf9d1dc338d0681121138ba6d29ea2849a07101c9a43e817d3d63da81238",
+      "agent-cli/internal/transport/cli/internal/events/room_live_liveness_fixture_test.go": "3714452f7e409eb4ee69d46efb359cc4a1e7a194bc5740a7a950de65c9c055eb",
+      "agent-cli/internal/transport/cli/internal/events/live_sink.go": "390b09133c660933a11a1e1148fba62f6a3cb706a896c015d743ff21d78174fc"
+    },
+    "normal": {
+      "command": "CGO_ENABLED=0 go test -json -count=1 -timeout=15s -tags=nomicrophone -run ^TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence$ ./agent-cli/internal/transport/cli/internal/events",
+      "observed_at": "2026-09-11T10:21:55-07:00",
+      "go_test_action": "pass",
+      "exit_code": 0,
+      "test_elapsed_seconds": 0.08,
+      "package_elapsed_seconds": 0.286
+    },
+    "coverage": {
+      "command": "CGO_ENABLED=0 go test -json -count=1 -timeout=15s -tags=nomicrophone -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -run ^TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence$ ./agent-cli/internal/transport/cli/internal/events",
+      "observed_at": "2026-09-11T10:21:34-07:00",
+      "go_test_action": "pass",
+      "exit_code": 0,
+      "test_elapsed_seconds": 0.06,
+      "package_elapsed_seconds": 0.344,
+      "coverage_percent": 26.1
+    }
+  },
+  "finding": {
+    "causal_result": "The hosted occurrence is a distinct transport/events fixture boundary: its own 3-second wait expired, while the package was reported as a normal non-timeout test failure. It does not contain the C52 selected parent/subtest, package, raw Go action, run identity, or C52 trace, so it cannot be attributed to the C60 verifier or used to relabel the immutable C52 report.",
+    "local_result": "The exact timeout case passed with raw Action=pass under both hermetic normal and coverage instrumentation on the preserved C60 head.",
+    "limitation": "The hosted log has no fixture trace or raw -json action stream, so it cannot distinguish a transient scheduling delay from a lost runtime diagnostic beyond the failed wait boundary. The result is intentionally unresolved and fail-closed.",
+    "classification": "CI_ONLY_NON_REPRODUCED_AT_FIXTURE_BOUNDARY"
+  },
+  "next_owner": {
+    "owner": "C47/C55 combined integration owner",
+    "action": "Reproduce or repair the transport/events room-liveness fixture on the accepted combined main; C60 must not edit transport, lifecycle/mesh, production, or shared baseline paths.",
+    "c60_action": "Preserve this attribution record, retain the C52 22/22 NON_REPRODUCED classification and immutable FAILED report, and wait for accepted main before any C60 delivery resubmission."
+  }
+}
