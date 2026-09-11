@@ -1,0 +1,27 @@
+Work: audio-runtime-c47-live-probe-output-bound
+Project: audio-runtime
+Factory session: ~default
+
+Admission and ancestry
+- Admission command: rtk python3 "$FACTORY_ROOT/factory/scripts/project-control.py" verify-work --type task --name audio-runtime-c47-live-probe-output-bound
+- Admission result: admitted, project audio-runtime.
+- PRD branch: codex/audio-runtime-c47-live-probe-output-bound.
+- Isolated worktree branch matches the PRD branch exactly.
+- Baseline fetch: origin/main fetched in this worktree; origin/main and HEAD were both 7f73c8b3b4ebc99b55b8bb5e802beff024385407 and origin/main was an ancestor.
+- Canonical board had no C47 rejection. The preserved C45 review finding was used as the causal repair oracle.
+
+Implementation checkpoint
+- C44 verify.py now captures stdout and stderr through nonblocking bounded readers, sharing one OutputBudget across children. Overflow is rejected while the producer is live, only the admitted prefix is retained, and the process group is terminated/reaped with bounded cleanup diagnostics.
+- C45 run_staged_probe.py now enforces the aggregate deadline, checks the storage reserve before/during/after execution, budgets prospective copies, fixtures, output, scratch, and report space, uses APFS clone-or-independent-copy staging, rejects peer/historical output roots, and cleans all run scratch.
+- C47 test_resource_bounds.py covers fast and continuous output overflow, shared budget exhaustion/no-launch, combined streams, descendants, timeout, cleanup/inspection failures, quiet reserve failure, staging independence, reserve blocking, and output-root protection.
+- C47 run_c45_controls_private.py runs the unchanged C45 focused controls in task-local roots and reproduces the original 5f14c45313cfdc71e000fda209e3408fcf863faf false-positive source negative without writing C45 history.
+
+Focused evidence before checkpoint commit
+- test_resource_bounds.py --group capture --child-timeout 10 --total-timeout 120: PASS.
+- test_resource_bounds.py --group staging --child-timeout 10 --total-timeout 120: PASS.
+- run_c45_controls_private.py --child-timeout 60 --total-timeout 300: PASS.
+- Exact staged mission live-01 passed in the working tree. Artifact hashes before/after were equivalent; staged binary bytes 57,445,940; fixture bytes 27,040; scratch before/after 57,472,980/0; output 4,768 of 67,108,864; minimum observed free space 11,506,757,632; staging method APFS clone.
+- Provisional report: evidence/staged-probe-live-01/latest-staged-probe.json. A committed-head exact rerun remains required.
+
+Next action
+- Commit this checkpoint, push the task branch, rerun the exact staged mission so tested_source_revision is the committed candidate, then update/open the PR and hand off to the script CI gate without polling it.

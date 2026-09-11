@@ -8,13 +8,14 @@ import hashlib
 import json
 import os
 import pathlib
+import select
 import signal
 import socket
 import subprocess
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -30,6 +31,65 @@ YUI = ARTIFACTS / "yui"
 
 class EvidenceFailure(RuntimeError):
     pass
+
+
+class StorageBlocked(EvidenceFailure):
+    """A truthful storage prerequisite failure, distinct from a product failure."""
+
+
+CAPTURE_CHUNK_BYTES = 64 * 1024
+CLEANUP_GRACE_SECONDS = 2.0
+RESERVE_SAMPLE_INTERVAL_SECONDS = 0.1
+
+
+class OutputBudget:
+    """A cumulative stdout/stderr budget shared by every child in one mission."""
+
+    def __init__(self, limit_bytes: int) -> None:
+        if limit_bytes <= 0:
+            raise ValueError("output budget must be positive")
+        self.limit_bytes = limit_bytes
+        self.used_bytes = 0
+        self._lock = threading.Lock()
+
+    @property
+    def remaining_bytes(self) -> int:
+        with self._lock:
+            return max(0, self.limit_bytes - self.used_bytes)
+
+    def require_available(self, label: str) -> None:
+        with self._lock:
+            if self.used_bytes >= self.limit_bytes:
+                raise EvidenceFailure(
+                    f"aggregate private output limit exhausted before launching {label}: "
+                    f"{self.used_bytes} >= {self.limit_bytes}"
+                )
+
+    def reserve(self, observed_bytes: int) -> tuple[int, bool]:
+        if observed_bytes < 0:
+            raise ValueError("observed output cannot be negative")
+        with self._lock:
+            available = max(0, self.limit_bytes - self.used_bytes)
+            accepted = min(available, observed_bytes)
+            self.used_bytes += accepted
+            return accepted, observed_bytes > accepted
+
+
+class _CaptureState:
+    def __init__(self) -> None:
+        self.failure: dict[str, Any] | None = None
+        self._failure_lock = threading.Lock()
+        self.stop = threading.Event()
+        self.done = threading.Event()
+        self.captured_bytes = {"stdout": 0, "stderr": 0}
+        self.high_water_bytes = 0
+        self.output_overflow = False
+
+    def fail(self, kind: str, message: str, **details: Any) -> None:
+        with self._failure_lock:
+            if self.failure is None:
+                self.failure = {"kind": kind, "message": message, **details}
+        self.stop.set()
 
 
 WRONG_PCM_ORACLE_DIAGNOSTIC = "wrong PCM oracle rejected"
@@ -84,6 +144,116 @@ def process_group_pids(pgid: int) -> list[int]:
     return pids
 
 
+def _capture_read_size(output_budget: OutputBudget | None) -> int:
+    if output_budget is None:
+        return CAPTURE_CHUNK_BYTES
+    return min(CAPTURE_CHUNK_BYTES, max(1, output_budget.remaining_bytes + 1))
+
+
+def _capture_outputs(
+    process: subprocess.Popen[bytes],
+    stdout_path: pathlib.Path,
+    stderr_path: pathlib.Path,
+    output_budget: OutputBudget | None,
+    state: _CaptureState,
+) -> None:
+    streams: dict[int, tuple[str, Any, Any]] = {}
+    try:
+        for name, stream, path in (
+            ("stdout", process.stdout, stdout_path),
+            ("stderr", process.stderr, stderr_path),
+        ):
+            if stream is None:
+                state.fail("capture_setup", f"{name} pipe was not created")
+                return
+            fd = stream.fileno()
+            os.set_blocking(fd, False)
+            handle = path.open("wb", buffering=0)
+            streams[fd] = (name, stream, handle)
+        while streams and not state.stop.is_set():
+            try:
+                readable, _, _ = select.select(list(streams), [], [], 0.05)
+            except (OSError, ValueError) as exc:
+                state.fail("capture_read", f"output pipe selection failed: {exc}")
+                break
+            if not readable:
+                continue
+            for fd in readable:
+                if fd not in streams:
+                    continue
+                name, stream, handle = streams[fd]
+                try:
+                    data = os.read(fd, _capture_read_size(output_budget))
+                except BlockingIOError:
+                    continue
+                except OSError as exc:
+                    state.fail("capture_read", f"{name} pipe read failed: {exc}", stream=name)
+                    break
+                if not data:
+                    handle.close()
+                    stream.close()
+                    del streams[fd]
+                    continue
+                state.high_water_bytes = max(state.high_water_bytes, len(data))
+                accepted = len(data)
+                overflow = False
+                if output_budget is not None:
+                    accepted, overflow = output_budget.reserve(len(data))
+                if accepted:
+                    try:
+                        handle.write(data[:accepted])
+                    except OSError as exc:
+                        state.fail("capture_write", f"{name} diagnostic write failed: {exc}", stream=name)
+                        break
+                    state.captured_bytes[name] += accepted
+                if overflow:
+                    state.output_overflow = True
+                    limit = output_budget.limit_bytes if output_budget is not None else 0
+                    used = output_budget.used_bytes if output_budget is not None else accepted
+                    state.fail(
+                        "output_overflow",
+                        f"aggregate private output limit exceeded while capturing {name}: "
+                        f"at least {used + len(data) - accepted} > {limit}",
+                        stream=name,
+                        observed_chunk_bytes=len(data),
+                        accepted_chunk_bytes=accepted,
+                    )
+                    break
+    except BaseException as exc:
+        state.fail("capture", f"bounded output capture failed: {exc}")
+    finally:
+        for _fd, (_name, stream, handle) in list(streams.items()):
+            try:
+                handle.close()
+            except OSError:
+                pass
+            try:
+                stream.close()
+            except OSError:
+                pass
+        state.done.set()
+
+
+def _bounded_wait(process: subprocess.Popen[bytes], deadline: float) -> bool:
+    while process.poll() is None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        try:
+            process.wait(timeout=min(0.05, remaining))
+        except subprocess.TimeoutExpired:
+            continue
+    return True
+
+
+def _attach_result(error: BaseException, result: dict[str, Any]) -> BaseException:
+    try:
+        setattr(error, "result", result)
+    except Exception:
+        pass
+    return error
+
+
 def run_process(
     label: str,
     argv: list[str],
@@ -91,6 +261,8 @@ def run_process(
     run_dir: pathlib.Path,
     timeout_seconds: float,
     env: dict[str, str] | None = None,
+    output_budget: OutputBudget | None = None,
+    reserve_check: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
     safe = "".join(char if char.isalnum() or char in "-_." else "_" for char in label)
@@ -99,71 +271,225 @@ def run_process(
     record_path = run_dir / f"{safe}.json"
     selected = dict(os.environ if env is None else env)
     started = time.monotonic()
+    child_deadline = started + timeout_seconds
     timed_out = False
     term_sent = False
     kill_sent = False
-    stdout = b""
-    stderr = b""
-    process = subprocess.Popen(
-        argv,
-        cwd=str(cwd),
-        env=selected,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        start_new_session=True,
-    )
-    pgid = os.getpgid(process.pid)
+    cleanup_failures: list[dict[str, str]] = []
+    primary_exception: BaseException | None = None
+    primary_failure: dict[str, Any] | None = None
+    survivors_before_final_kill: list[int] = []
+    survivors: list[int] = []
+    process: subprocess.Popen[bytes] | None = None
+    state = _CaptureState()
+
+    def write_not_started(message: str, error: BaseException) -> None:
+        stdout_path.write_bytes(b"")
+        stderr_path.write_bytes(b"")
+        result = {
+            "label": label,
+            "argv": argv,
+            "cwd": str(cwd),
+            "environment": selected_environment(selected),
+            "deadline_seconds": timeout_seconds,
+            "elapsed_seconds": round(time.monotonic() - started, 6),
+            "exit_code": None,
+            "timed_out": False,
+            "term_sent": False,
+            "kill_sent": False,
+            "parent_reaped": False,
+            "surviving_process_group_pids": [],
+            "stdout_bytes": 0,
+            "stdout_sha256": sha256_bytes(b""),
+            "stderr_bytes": 0,
+            "stderr_sha256": sha256_bytes(b""),
+            "stdout_path": str(stdout_path),
+            "stderr_path": str(stderr_path),
+            "not_started": True,
+            "primary_failure": {"kind": "not_started", "message": message},
+            "cleanup_failures": [],
+            "output_budget_limit_bytes": output_budget.limit_bytes if output_budget is not None else None,
+            "output_budget_used_bytes": output_budget.used_bytes if output_budget is not None else 0,
+            "output_budget_remaining_bytes": output_budget.remaining_bytes if output_budget is not None else None,
+        }
+        record_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        raise _attach_result(error, result)
+
     try:
-        stdout, stderr = process.communicate(timeout=timeout_seconds)
-    except subprocess.TimeoutExpired as exc:
-        timed_out = True
-        stdout = exc.output or b""
-        stderr = exc.stderr or b""
-        try:
-            os.killpg(pgid, signal.SIGTERM)
-            term_sent = True
-        except ProcessLookupError:
-            pass
-        try:
-            stdout, stderr = process.communicate(timeout=2)
-        except subprocess.TimeoutExpired:
+        if output_budget is not None:
             try:
-                os.killpg(pgid, signal.SIGKILL)
-                kill_sent = True
+                output_budget.require_available(label)
+            except EvidenceFailure as exc:
+                write_not_started(str(exc), exc)
+        if reserve_check is not None:
+            try:
+                reserve_check("before-launch")
+            except BaseException as exc:
+                write_not_started(str(exc), exc)
+        process = subprocess.Popen(
+            argv,
+            cwd=str(cwd),
+            env=selected,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        pgid = os.getpgid(process.pid)
+        reader = threading.Thread(
+            target=_capture_outputs,
+            args=(process, stdout_path, stderr_path, output_budget, state),
+            name=f"capture-{safe}",
+            daemon=True,
+        )
+        reader.start()
+        last_reserve_check = started
+        while process.poll() is None:
+            if state.failure is not None:
+                primary_failure = state.failure
+                break
+            now = time.monotonic()
+            if reserve_check is not None and now - last_reserve_check >= RESERVE_SAMPLE_INTERVAL_SECONDS:
+                last_reserve_check = now
+                try:
+                    reserve_check("during-execution")
+                except BaseException as exc:
+                    primary_exception = exc
+                    primary_failure = {"kind": "reserve", "message": str(exc)}
+                    state.stop.set()
+                    break
+            if now >= child_deadline:
+                timed_out = True
+                primary_failure = {
+                    "kind": "timeout",
+                    "message": f"{label} exceeded its {timeout_seconds:g}-second deadline",
+                }
+                break
+            try:
+                process.wait(timeout=min(0.05, child_deadline - now))
+            except subprocess.TimeoutExpired:
+                continue
+
+        if state.failure is not None and primary_failure is None:
+            primary_failure = state.failure
+        cleanup_needed = timed_out or primary_failure is not None
+        if not cleanup_needed:
+            try:
+                survivors_before_final_kill = process_group_pids(pgid)
+            except BaseException as exc:
+                primary_exception = primary_exception or exc
+                primary_failure = primary_failure or {"kind": "process_inspection", "message": str(exc)}
+                cleanup_needed = True
+            if survivors_before_final_kill:
+                cleanup_needed = True
+                primary_failure = primary_failure or {
+                    "kind": "descendants",
+                    "message": f"{label} exited with surviving process-group members",
+                }
+
+        if cleanup_needed:
+            cleanup_deadline = time.monotonic() + CLEANUP_GRACE_SECONDS
+            try:
+                os.killpg(pgid, signal.SIGTERM)
+                term_sent = True
             except ProcessLookupError:
                 pass
+            except OSError as exc:
+                cleanup_failures.append({"operation": "SIGTERM", "error": str(exc)})
             try:
-                stdout, stderr = process.communicate(timeout=2)
-            except subprocess.TimeoutExpired as final_timeout:
-                stdout = final_timeout.output or stdout
-                stderr = final_timeout.stderr or stderr
-                if process.poll() is None:
-                    process.kill()
-                try:
-                    process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    pass
-                if process.stdout is not None:
-                    process.stdout.close()
-                if process.stderr is not None:
-                    process.stderr.close()
-    survivors_before_final_kill = process_group_pids(pgid)
-    if survivors_before_final_kill:
-        try:
-            os.killpg(pgid, signal.SIGKILL)
-            kill_sent = True
-        except ProcessLookupError:
-            pass
-        if process.poll() is None:
-            try:
-                process.wait(timeout=2)
+                process.wait(timeout=min(0.5, max(0.01, cleanup_deadline - time.monotonic())))
             except subprocess.TimeoutExpired:
                 pass
+            group_deadline = min(cleanup_deadline, time.monotonic() + 0.6)
+            group_empty = False
+            group_inspection_failed = False
+            while time.monotonic() < group_deadline:
+                try:
+                    group_pids = process_group_pids(pgid)
+                except BaseException as exc:
+                    cleanup_failures.append({"operation": "post-term-process-inspection", "error": str(exc)})
+                    group_inspection_failed = True
+                    group_pids = []
+                if not group_pids and not group_inspection_failed:
+                    group_empty = True
+                    break
+                time.sleep(0.02)
+            if not group_empty:
+                try:
+                    os.killpg(pgid, signal.SIGKILL)
+                    kill_sent = True
+                except ProcessLookupError:
+                    pass
+                except OSError as exc:
+                    cleanup_failures.append({"operation": "SIGKILL", "error": str(exc)})
+                if not _bounded_wait(process, cleanup_deadline):
+                    try:
+                        process.kill()
+                    except ProcessLookupError:
+                        pass
+                    except OSError as exc:
+                        cleanup_failures.append({"operation": "parent-kill", "error": str(exc)})
+                    if not _bounded_wait(process, cleanup_deadline):
+                        cleanup_failures.append({"operation": "parent-reap", "error": "parent remained running after bounded cleanup"})
+        else:
+            _bounded_wait(process, time.monotonic() + 0.1)
+
+        reader.join(timeout=CLEANUP_GRACE_SECONDS)
+        if reader.is_alive():
+            cleanup_failures.append({"operation": "pipe-reader-join", "error": "reader did not stop within bounded cleanup"})
+            state.stop.set()
+            reader.join(timeout=0.1)
+
+        if state.failure is not None and primary_failure is None:
+            primary_failure = state.failure
+        try:
+            survivors = process_group_pids(pgid)
+        except BaseException as exc:
+            cleanup_failures.append({"operation": "final-process-inspection", "error": str(exc)})
+            if primary_failure is None:
+                primary_exception = primary_exception or exc
+                primary_failure = {"kind": "process_inspection", "message": str(exc)}
+        if survivors:
+            cleanup_failures.append({"operation": "final-process-inspection", "error": f"surviving pids: {survivors}"})
+            if primary_failure is None:
+                primary_failure = {"kind": "survivors", "message": f"process group survived cleanup: {survivors}"}
+    except BaseException as exc:
+        if primary_exception is None:
+            primary_exception = exc
+        if primary_failure is None:
+            primary_failure = {"kind": "runner", "message": str(exc)}
+        if process is not None:
+            state.stop.set()
+            try:
+                process.kill()
+            except (ProcessLookupError, OSError):
+                pass
+            _bounded_wait(process, time.monotonic() + 0.5)
+    finally:
+        if process is not None:
+            if process.stdout is not None:
+                try:
+                    process.stdout.close()
+                except (OSError, ValueError):
+                    pass
+            if process.stderr is not None:
+                try:
+                    process.stderr.close()
+                except (OSError, ValueError):
+                    pass
+        if not stdout_path.exists():
+            stdout_path.write_bytes(b"")
+        if not stderr_path.exists():
+            stderr_path.write_bytes(b"")
+
+    if process is None:
+        if primary_exception is not None:
+            raise primary_exception
+        raise EvidenceFailure(f"{label} did not start")
+
+    stdout_bytes = stdout_path.stat().st_size
+    stderr_bytes = stderr_path.stat().st_size
     elapsed = time.monotonic() - started
-    survivors = process_group_pids(pgid)
-    stdout_path.write_bytes(stdout)
-    stderr_path.write_bytes(stderr)
     result = {
         "label": label,
         "argv": argv,
@@ -177,19 +503,48 @@ def run_process(
         "kill_sent": kill_sent,
         "parent_reaped": process.returncode is not None,
         "surviving_process_group_pids": survivors,
-        "stdout_bytes": len(stdout),
-        "stdout_sha256": sha256_bytes(stdout),
-        "stderr_bytes": len(stderr),
-        "stderr_sha256": sha256_bytes(stderr),
+        "survivors_before_final_kill": survivors_before_final_kill,
+        "stdout_bytes": stdout_bytes,
+        "stdout_sha256": sha256(stdout_path),
+        "stderr_bytes": stderr_bytes,
+        "stderr_sha256": sha256(stderr_path),
         "stdout_path": str(stdout_path),
         "stderr_path": str(stderr_path),
+        "output_overflow": state.output_overflow,
+        "capture_failure": state.failure,
+        "primary_failure": primary_failure,
+        "cleanup_failures": cleanup_failures,
+        "capture_read_chunk_bytes": CAPTURE_CHUNK_BYTES,
+        "capture_buffer_high_water_bytes": state.high_water_bytes,
+        "retained_output_bytes": stdout_bytes + stderr_bytes,
+        "output_budget_limit_bytes": output_budget.limit_bytes if output_budget is not None else None,
+        "output_budget_used_bytes": output_budget.used_bytes if output_budget is not None else stdout_bytes + stderr_bytes,
+        "output_budget_remaining_bytes": output_budget.remaining_bytes if output_budget is not None else None,
     }
     record_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+
+    if primary_exception is not None:
+        raise _attach_result(primary_exception, result)
+    if primary_failure is not None and (state.output_overflow or cleanup_failures or primary_failure["kind"] != "timeout"):
+        raise _attach_result(EvidenceFailure(primary_failure["message"]), result)
+    if cleanup_failures or survivors:
+        raise _attach_result(EvidenceFailure(f"{label} cleanup proof failed; see {record_path}"), result)
+    if state.output_overflow:
+        raise _attach_result(EvidenceFailure(primary_failure["message"] if primary_failure else f"{label} exceeded output budget"), result)
     return result
 
 
 def require_ok(result: dict[str, Any]) -> None:
-    if result["timed_out"] or result["exit_code"] != 0 or not result["parent_reaped"] or result["surviving_process_group_pids"]:
+    if (
+        result["timed_out"]
+        or result["exit_code"] != 0
+        or not result["parent_reaped"]
+        or result["surviving_process_group_pids"]
+        or result.get("output_overflow")
+        or result.get("capture_failure")
+        or result.get("cleanup_failures")
+        or (result.get("primary_failure") and result["primary_failure"].get("kind") != "timeout")
+    ):
         raise EvidenceFailure(f"{result['label']} failed; see {result['stderr_path']} and {result['stdout_path']}")
 
 
