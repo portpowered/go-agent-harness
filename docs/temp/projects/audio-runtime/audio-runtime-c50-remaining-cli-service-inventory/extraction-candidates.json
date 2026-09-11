@@ -37,16 +37,14 @@
       "current_declarations": [
         {"source": "agent-cli/internal/room/manifest.go:343", "symbol": "Manifest.Validate", "class": "BUSINESS_POLICY"},
         {"source": "agent-cli/internal/room/manifest.go:519", "symbol": "ParseManifest", "class": "BUSINESS_POLICY"},
-        {"source": "agent-cli/internal/room/manifest.go:547", "symbol": "ReadManifest", "class": "THIN_TRANSPORT_DELEGATION"},
+        {"source": "agent-cli/internal/room/manifest.go:547", "symbol": "ReadManifest", "class": "BUSINESS_POLICY"},
         {"source": "agent-cli/internal/room/manifest.go:588", "symbol": "normalizeManifest", "class": "BUSINESS_POLICY"},
         {"source": "agent-cli/internal/room/browser_tools.go:112", "symbol": "DefaultBrowserToolsConfig", "class": "BUSINESS_POLICY"},
-        {"source": "agent-cli/internal/room/browser_tools.go:196", "symbol": "BrowserToolsConfig.Validate", "class": "BUSINESS_POLICY"},
         {"source": "agent-cli/internal/room/browser_tools.go:514", "symbol": "validateManifestBrowserToolsShape", "class": "BUSINESS_POLICY"},
         {"source": "agent-cli/internal/room/browser_tools.go:622", "symbol": "normalizeManifestBrowserTools", "class": "BUSINESS_POLICY"}
       ],
       "production_callers": [
-        {"source": "agent-cli/internal/services/rooms/internal/launch/planner.go:55", "expression": "room.ReadManifest", "role": "configured room launch admission"},
-        {"source": "agent-cli/internal/services/rooms/internal/launch/planner.go:229", "expression": "toRuntimeManifest", "role": "normalized admission result crosses into the runtime rooms contract"}
+        {"source": "agent-cli/internal/services/rooms/internal/launch/planner.go:55", "expression": "room.ReadManifest", "role": "configured room launch admission"}
       ],
       "test_only_callers": [
         {"source": "agent-cli/internal/transport/cli/room_test.go:201", "expression": "room.ParseManifest", "role": "CLI example contract regression; not a production caller"},
@@ -101,10 +99,19 @@
         {"source": "agent-cli/internal/room/mesh.go:771", "symbol": "NewLoopbackPairFactory", "class": "REUSABLE_RUNTIME_BEHAVIOR"}
       ],
       "production_callers": [
+        {"source": "agent-cli/internal/room/mesh.go:210", "expression": "NewLoopbackPairFactory", "role": "mesh constructor selects the default loopback pair factory"},
+        {"source": "agent-cli/internal/room/mesh.go:220", "expression": "mesh.Close", "role": "parent cancellation closes the mesh"},
+        {"source": "agent-cli/internal/room/mesh.go:227", "expression": "NewMesh", "role": "participant constructor delegates to the configurable mesh"},
+        {"source": "agent-cli/internal/room/mesh.go:233", "expression": "NewParticipantMesh", "role": "participant constructor delegates to the configurable mesh"},
+        {"source": "agent-cli/internal/room/mesh.go:233", "expression": "NewLoopbackPairFactory", "role": "participant constructor supplies the default factory through NewMesh"},
+        {"source": "agent-cli/internal/room/mesh.go:382", "expression": "m.Join", "role": "mesh alias preserves join behavior"},
+        {"source": "agent-cli/internal/room/mesh.go:428", "expression": "m.Remove", "role": "mesh alias preserves removal behavior"},
+        {"source": "agent-cli/internal/room/mesh.go:433", "expression": "m.Remove", "role": "mesh alias preserves removal behavior"},
+        {"source": "agent-cli/internal/room/mesh.go:492", "expression": "m.Peers", "role": "mesh alias exposes peer snapshots"},
+        {"source": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go:762", "expression": "mesh.Remove", "role": "room coordinator removes a terminated participant"},
         {"source": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go:105", "expression": "room.NewParticipantMesh", "role": "room composition creates the participant mesh"},
-        {"source": "agent-cli/internal/services/internal/agentruntime/session_room_run.go:707", "expression": "*room.Mesh", "role": "room result collection owns mesh shutdown sequencing"},
-        {"source": "agent-cli/internal/services/internal/agentruntime/session_room_run.go:818", "expression": "closeRoomMeshBounded", "role": "bounded cleanup of the mesh"},
-        {"source": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go:607", "expression": "*room.Mesh", "role": "participant terminal outcome cleanup"}
+        {"source": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go:109", "expression": "mesh.Close", "role": "room orchestration closes the mesh on early exit"},
+        {"source": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go:123", "expression": "mesh.Join", "role": "room orchestration joins each admitted participant"}
       ],
       "proposed_destination_writer_paths": [
         "go-agent-runtime/services/rooms/mesh.go",

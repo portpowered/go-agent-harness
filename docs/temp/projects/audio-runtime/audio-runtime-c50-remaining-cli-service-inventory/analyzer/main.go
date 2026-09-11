@@ -176,6 +176,26 @@ type callSite struct {
 	Local        bool
 }
 
+// typeRef is the small amount of type information needed to resolve the
+// method calls that form the C50 extraction boundaries. It is intentionally
+// package-path based, so an identifier named Mesh in two packages cannot be
+// confused with the other package's Mesh.
+type typeRef struct {
+	ImportPath string
+	Name       string
+}
+
+type valueBinding struct {
+	Name string
+	Type typeRef
+	Pos  token.Pos
+}
+
+type functionScope struct {
+	Decl     *ast.FuncDecl
+	Bindings []valueBinding
+}
+
 func main() {
 	root := flag.String("root", ".", "repository root")
 	out := flag.String("out", ".", "output directory")
@@ -309,10 +329,16 @@ func buildInventory(root, revision string) (Inventory, error) {
 	})
 	// Rebuild indexes after the stable sort.
 	byKey := make(map[string][]int)
+	methodByKey := make(map[string][]int)
 	for i := range inventory.Symbols {
 		byKey[symbolKey(inventory.Symbols[i].ImportPath, inventory.Symbols[i].Package, inventory.Symbols[i].Name)] = append(byKey[symbolKey(inventory.Symbols[i].ImportPath, inventory.Symbols[i].Package, inventory.Symbols[i].Name)], i)
+		if inventory.Symbols[i].Kind == "method" {
+			key := methodKey(inventory.Symbols[i].ImportPath, inventory.Symbols[i].Receiver, inventory.Symbols[i].Name)
+			methodByKey[key] = append(methodByKey[key], i)
+		}
 	}
-	allCalls := collectCalls(root, parsed, inventory.Symbols, byKey)
+	returnTypes := functionReturnTypes(parsed)
+	allCalls := collectCalls(root, parsed, inventory.Symbols, byKey, methodByKey, returnTypes)
 	for _, edge := range allCalls {
 		inventory.CallEdges = append(inventory.CallEdges, edge)
 		for i := range inventory.Symbols {
@@ -560,7 +586,7 @@ func importPaths(imports []Import) []string {
 	return paths
 }
 
-func collectCalls(root string, parsed []parsedFile, symbols []Symbol, byKey map[string][]int) []CallEdge {
+func collectCalls(root string, parsed []parsedFile, symbols []Symbol, byKey, methodByKey map[string][]int, returnTypes map[string]typeRef) []CallEdge {
 	var edges []CallEdge
 	for _, file := range parsed {
 		if file.Kind != "production" || file.AST == nil {
@@ -576,6 +602,7 @@ func collectCalls(root string, parsed []parsedFile, symbols []Symbol, byKey map[
 				imports[alias] = item.Path
 			}
 		}
+		scopes := functionScopes(file, imports, returnTypes)
 		ast.Inspect(file.AST, func(node ast.Node) bool {
 			call, ok := node.(*ast.CallExpr)
 			if !ok {
@@ -587,16 +614,28 @@ func collectCalls(root string, parsed []parsedFile, symbols []Symbol, byKey map[
 			}
 			callerSymbol, callerID := enclosingCaller(file, call.Pos())
 			line := file.Fset.Position(call.Pos())
-			for _, index := range candidateSymbolIndexes(name, qualifier, local, imports, file, symbols, byKey) {
-				callee := symbols[index]
-				resolution := "same-package AST call"
-				confidence := "high"
-				if !local {
-					resolution = "import-qualified AST call"
-				} else if callee.Kind == "method" {
-					resolution = "method-name AST call; receiver/interface resolution is not available"
-					confidence = "medium"
+			indexes := candidateSymbolIndexes(name, qualifier, local, imports, file, symbols, byKey)
+			resolution := "same-package AST CallExpr"
+			confidence := "high"
+			if !local {
+				resolution = "import-qualified AST CallExpr"
+				if len(indexes) == 0 && qualifier != "" {
+					if receiver, ok := receiverTypeAt(file, call, scopes); ok {
+						indexes = append(indexes, methodByKey[methodKey(receiver.ImportPath, receiver.Name, name)]...)
+						if len(indexes) > 0 {
+							resolution = "typed receiver method AST CallExpr; exact method declaration"
+							confidence = "high"
+						}
+					}
 				}
+			} else if len(indexes) == 0 {
+				// A bare identifier can still be a method expression in Go, but
+				// without a receiver expression there is no safe declaration to
+				// attribute. Leave it unresolved rather than inventing a caller.
+				return true
+			}
+			for _, index := range indexes {
+				callee := symbols[index]
 				caller := Caller{File: file.Rel, Line: line.Line, Column: line.Column, CallerPackage: file.Package, CallerImportPath: file.ImportPath, CallerSymbol: callerSymbol, Expression: expression, Resolution: resolution, Confidence: confidence}
 				edges = append(edges, CallEdge{Caller: callerID, Callee: callee.ID, Call: caller})
 			}
@@ -605,6 +644,213 @@ func collectCalls(root string, parsed []parsedFile, symbols []Symbol, byKey map[
 	}
 	_ = root
 	return dedupeEdges(edges)
+}
+
+func functionReturnTypes(parsed []parsedFile) map[string]typeRef {
+	result := make(map[string]typeRef)
+	for _, file := range parsed {
+		if file.Kind != "production" || file.AST == nil {
+			continue
+		}
+		imports := importMap(file.Imports)
+		for _, declaration := range file.AST.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || function.Recv != nil || function.Type == nil || function.Type.Results == nil || len(function.Type.Results.List) == 0 {
+				continue
+			}
+			if typ, ok := expressionType(function.Type.Results.List[0].Type, file, imports); ok {
+				result[symbolKey(file.ImportPath, file.Package, function.Name.Name)] = typ
+			}
+		}
+	}
+	return result
+}
+
+func functionScopes(file parsedFile, imports map[string]string, returnTypes map[string]typeRef) []functionScope {
+	if file.AST == nil {
+		return nil
+	}
+	var scopes []functionScope
+	for _, declaration := range file.AST.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Body == nil {
+			continue
+		}
+		scope := functionScope{Decl: function}
+		addFieldBindings(&scope.Bindings, file, imports, function.Recv)
+		if function.Type != nil {
+			addFieldBindings(&scope.Bindings, file, imports, function.Type.Params)
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			switch value := node.(type) {
+			case *ast.AssignStmt:
+				for index, lhs := range value.Lhs {
+					ident, ok := lhs.(*ast.Ident)
+					if !ok || ident.Name == "_" {
+						continue
+					}
+					var rhs ast.Expr
+					if len(value.Rhs) == 1 {
+						rhs = value.Rhs[0]
+					} else if index < len(value.Rhs) {
+						rhs = value.Rhs[index]
+					}
+					if typ, ok := expressionTypeWithBindings(rhs, file, imports, returnTypes, scope.Bindings, value.Pos()); ok {
+						scope.Bindings = append(scope.Bindings, valueBinding{Name: ident.Name, Type: typ, Pos: ident.Pos()})
+					}
+				}
+			case *ast.DeclStmt:
+				declaration, ok := value.Decl.(*ast.GenDecl)
+				if !ok || declaration.Tok != token.VAR {
+					return true
+				}
+				for _, spec := range declaration.Specs {
+					valueSpec, ok := spec.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+					declared, declaredOK := expressionType(valueSpec.Type, file, imports)
+					for index, ident := range valueSpec.Names {
+						if ident.Name == "_" {
+							continue
+						}
+						typ, ok := declared, declaredOK
+						if !ok && len(valueSpec.Values) == 1 {
+							typ, ok = expressionTypeWithBindings(valueSpec.Values[0], file, imports, returnTypes, scope.Bindings, value.Pos())
+						} else if !ok && index < len(valueSpec.Values) {
+							typ, ok = expressionTypeWithBindings(valueSpec.Values[index], file, imports, returnTypes, scope.Bindings, value.Pos())
+						}
+						if ok {
+							scope.Bindings = append(scope.Bindings, valueBinding{Name: ident.Name, Type: typ, Pos: ident.Pos()})
+						}
+					}
+				}
+			}
+			return true
+		})
+		sort.SliceStable(scope.Bindings, func(i, j int) bool { return scope.Bindings[i].Pos < scope.Bindings[j].Pos })
+		scopes = append(scopes, scope)
+	}
+	return scopes
+}
+
+func addFieldBindings(bindings *[]valueBinding, file parsedFile, imports map[string]string, fields *ast.FieldList) {
+	if fields == nil {
+		return
+	}
+	for _, field := range fields.List {
+		typ, ok := expressionType(field.Type, file, imports)
+		if !ok {
+			continue
+		}
+		for _, name := range field.Names {
+			*bindings = append(*bindings, valueBinding{Name: name.Name, Type: typ, Pos: name.Pos()})
+		}
+	}
+}
+
+func receiverTypeAt(file parsedFile, call *ast.CallExpr, scopes []functionScope) (typeRef, bool) {
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return typeRef{}, false
+	}
+	receiver, ok := selector.X.(*ast.Ident)
+	if !ok {
+		return typeRef{}, false
+	}
+	function := enclosingFuncDecl(file, call.Pos())
+	for _, scope := range scopes {
+		if scope.Decl != function {
+			continue
+		}
+		var found typeRef
+		foundOK := false
+		for _, binding := range scope.Bindings {
+			if binding.Name == receiver.Name && binding.Pos <= call.Pos() {
+				found = binding.Type
+				foundOK = true
+			}
+		}
+		return found, foundOK
+	}
+	return typeRef{}, false
+}
+
+func importMap(items []Import) map[string]string {
+	result := make(map[string]string)
+	for _, item := range items {
+		alias := item.Name
+		if alias == "" {
+			alias = pathBase(item.Path)
+		}
+		if alias != "." && alias != "_" {
+			result[alias] = item.Path
+		}
+	}
+	return result
+}
+
+func expressionType(expr ast.Expr, file parsedFile, imports map[string]string) (typeRef, bool) {
+	if expr == nil {
+		return typeRef{}, false
+	}
+	switch value := expr.(type) {
+	case *ast.StarExpr:
+		return expressionType(value.X, file, imports)
+	case *ast.Ident:
+		return typeRef{ImportPath: file.ImportPath, Name: value.Name}, true
+	case *ast.SelectorExpr:
+		qualifier, ok := value.X.(*ast.Ident)
+		if !ok {
+			return typeRef{}, false
+		}
+		path := imports[qualifier.Name]
+		if path == "" {
+			return typeRef{}, false
+		}
+		return typeRef{ImportPath: path, Name: value.Sel.Name}, true
+	case *ast.IndexExpr:
+		return expressionType(value.X, file, imports)
+	case *ast.IndexListExpr:
+		return expressionType(value.X, file, imports)
+	case *ast.ParenExpr:
+		return expressionType(value.X, file, imports)
+	case *ast.CompositeLit:
+		return expressionType(value.Type, file, imports)
+	case *ast.UnaryExpr:
+		return expressionType(value.X, file, imports)
+	case *ast.ArrayType, *ast.MapType, *ast.InterfaceType, *ast.StructType, *ast.FuncType, *ast.ChanType:
+		return typeRef{}, false
+	}
+	return typeRef{}, false
+}
+
+func expressionTypeWithBindings(expr ast.Expr, file parsedFile, imports map[string]string, returnTypes map[string]typeRef, bindings []valueBinding, at token.Pos) (typeRef, bool) {
+	if expr == nil {
+		return typeRef{}, false
+	}
+	if ident, ok := expr.(*ast.Ident); ok {
+		for index := len(bindings) - 1; index >= 0; index-- {
+			if bindings[index].Name == ident.Name && bindings[index].Pos <= at {
+				return bindings[index].Type, true
+			}
+		}
+	}
+	if call, ok := expr.(*ast.CallExpr); ok {
+		name, qualifier, local, _ := calledName(call.Fun)
+		if name != "" {
+			if local {
+				if typ, ok := returnTypes[symbolKey(file.ImportPath, file.Package, name)]; ok {
+					return typ, true
+				}
+			} else if importPath := imports[qualifier]; importPath != "" {
+				if typ, ok := returnTypes[symbolKey(importPath, pathBase(importPath), name)]; ok {
+					return typ, true
+				}
+			}
+		}
+	}
+	return expressionType(expr, file, imports)
 }
 
 func calledName(expr ast.Expr) (string, string, bool, string) {
@@ -626,6 +872,19 @@ func calledName(expr ast.Expr) (string, string, bool, string) {
 }
 
 func enclosingCaller(file parsedFile, pos token.Pos) (string, string) {
+	best := enclosingFuncDecl(file, pos)
+	if best == nil {
+		return "<file-init>", file.Rel + ":init"
+	}
+	name := best.Name.Name
+	if receiver := receiverName(best.Recv); receiver != "" {
+		name = "(" + receiver + ")." + name
+	}
+	posValue := file.Fset.Position(best.Pos())
+	return name, file.Rel + ":" + strconv.Itoa(posValue.Line) + ":" + name
+}
+
+func enclosingFuncDecl(file parsedFile, pos token.Pos) *ast.FuncDecl {
 	var best *ast.FuncDecl
 	ast.Inspect(file.AST, func(node ast.Node) bool {
 		decl, ok := node.(*ast.FuncDecl)
@@ -639,31 +898,31 @@ func enclosingCaller(file parsedFile, pos token.Pos) (string, string) {
 		}
 		return true
 	})
-	if best == nil {
-		return "<file-init>", file.Rel + ":init"
-	}
-	name := best.Name.Name
-	if receiver := receiverName(best.Recv); receiver != "" {
-		name = "(" + receiver + ")." + name
-	}
-	posValue := file.Fset.Position(best.Pos())
-	return name, file.Rel + ":" + strconv.Itoa(posValue.Line) + ":" + name
+	return best
 }
 
 func candidateSymbolIndexes(name, qualifier string, local bool, imports map[string]string, file parsedFile, symbols []Symbol, byKey map[string][]int) []int {
 	var indexes []int
 	if local {
-		indexes = append(indexes, byKey[symbolKey(file.ImportPath, file.Package, name)]...)
+		for _, index := range byKey[symbolKey(file.ImportPath, file.Package, name)] {
+			if symbols[index].Kind == "function" {
+				indexes = append(indexes, index)
+			}
+		}
 		return indexes
 	}
 	importPath := imports[qualifier]
 	if importPath == "" {
 		return nil
 	}
-	indexes = append(indexes, byKey[symbolKey(importPath, pathBase(importPath), name)]...)
+	for _, index := range byKey[symbolKey(importPath, pathBase(importPath), name)] {
+		if symbols[index].Kind == "function" {
+			indexes = append(indexes, index)
+		}
+	}
 	if len(indexes) == 0 {
 		for i := range symbols {
-			if symbols[i].ImportPath == importPath && symbols[i].Name == name {
+			if symbols[i].ImportPath == importPath && symbols[i].Name == name && symbols[i].Kind == "function" {
 				indexes = append(indexes, i)
 			}
 		}
@@ -673,6 +932,10 @@ func candidateSymbolIndexes(name, qualifier string, local bool, imports map[stri
 
 func symbolKey(importPath, packageName, name string) string {
 	return importPath + "|" + packageName + "|" + name
+}
+
+func methodKey(importPath, receiver, name string) string {
+	return importPath + "|" + receiver + "|" + name
 }
 
 func dedupeEdges(edges []CallEdge) []CallEdge {
@@ -699,7 +962,10 @@ func classify(symbol *Symbol) {
 	file := strings.ToLower(symbol.File)
 	signature := strings.ToLower(symbol.Signature)
 	imports := strings.ToLower(strings.Join(symbol.Imports, " "))
-	evidence := []string{"production caller resolved by AST CallExpr at cited locations"}
+	evidence := []string{"production callers are exact AST CallExpr citations; declaration and type-only references are not counted"}
+	for _, caller := range symbol.ProductionCallers {
+		evidence = append(evidence, fmt.Sprintf("exact production CallExpr %s:%d:%d `%s` (%s)", caller.File, caller.Line, caller.Column, caller.Expression, caller.Resolution))
+	}
 	class := classRuntime
 	confidence := "medium"
 	if strings.Contains(file, "/livehost/") {
@@ -714,11 +980,15 @@ func classify(symbol *Symbol) {
 			class = classPolicy
 			evidence = append(evidence, "AST declaration parses/validates room input and returns attributed validation errors")
 		} else if strings.Contains(file, "browser_tools.go") {
-			class = classThin
-			evidence = append(evidence, "AST declaration adapts browser/tool inputs at the CLI boundary")
+			class = classPolicy
+			evidence = append(evidence, "AST declaration enforces browser-tool shape, endpoint and credential-reference policy")
 		} else {
 			class = classRuntime
 			evidence = append(evidence, "AST declaration implements room mesh/mixing behavior rather than command construction")
+		}
+		if symbol.Name == "NewParticipantMesh" {
+			class = classComposition
+			evidence = append(evidence, "explicit participant-mesh constructor is a composition seam around the injected PairFactory")
 		}
 	} else {
 		if strings.Contains(file, "/service.go") || strings.Contains(file, "_wire") || strings.Contains(file, "runtime_factory") || strings.Contains(symbol.Name, "Wire") || strings.Contains(imports, "github.com/google/wire") {
@@ -782,21 +1052,54 @@ func classificationDocument(inventory Inventory) map[string]any {
 }
 
 func callPathDocument(inventory Inventory) map[string]any {
-	entryPrefixes := []string{"agent-cli/cmd/", "agent-cli/internal/cli/", "agent-cli/internal/transport/cli/", "agent-cli/internal/wire/"}
+	entryRoots := []string{"agent-cli/cmd/yui", "agent-cli/internal/cli", "agent-cli/internal/transport/cli", "agent-cli/internal/wire"}
 	var entryCalls []CallEdge
 	for _, edge := range inventory.CallEdges {
-		for _, prefix := range entryPrefixes {
-			if strings.HasPrefix(edge.Call.File, prefix) {
-				entryCalls = append(entryCalls, edge)
-				break
-			}
+		if isDirectEntryFile(edge.Call.File, entryRoots) {
+			entryCalls = append(entryCalls, edge)
 		}
 	}
 	sort.Slice(entryCalls, func(i, j int) bool { return edgeLess(entryCalls[i], entryCalls[j]) })
-	return map[string]any{"schema_version": "c50-call-paths-v1", "source_revision": inventory.SourceRevision, "entry_prefixes": entryPrefixes, "entry_call_sites": entryCalls, "target_call_edges": inventory.CallEdges, "reachability_rule": "A target symbol is a reachable anchor only when a production CallExpr from the listed public CLI construction/transport prefixes is cited; downstream target-to-target edges are retained separately.", "dynamic_limitations": []string{
+	entryFiles := make([]string, 0)
+	seenFiles := make(map[string]bool)
+	for _, edge := range entryCalls {
+		if !seenFiles[edge.Call.File] {
+			seenFiles[edge.Call.File] = true
+			entryFiles = append(entryFiles, edge.Call.File)
+		}
+	}
+	sort.Strings(entryFiles)
+	targetLocal := 0
+	for _, edge := range entryCalls {
+		if isTargetFile(edge.Call.File) {
+			targetLocal++
+		}
+	}
+	return map[string]any{"schema_version": "c50-call-paths-v1", "source_revision": inventory.SourceRevision, "entry_source_roots": entryRoots, "entry_source_rule": "only .go files immediately inside a declared public source root are entry files; nested internal implementation directories are excluded", "entry_source_files": entryFiles, "entry_call_sites": entryCalls, "target_local_entry_call_sites": targetLocal, "target_call_edges": inventory.CallEdges, "reachability_rule": "A target symbol is a reachable anchor only when an exact production CallExpr from an immediate public CLI construction/transport file is cited; downstream target-to-target edges are retained separately.", "dynamic_limitations": []string{
 		"AST analysis does not prove interface dispatch, reflection, generated code or runtime registration; those paths remain explicit uncertainty.",
-		"A selector with an imported package qualifier is resolved by exact import path; method calls retain medium confidence unless receiver typing is available.",
-	}, "public_construction_sources": []string{"agent-cli/cmd/yui/main.go", "agent-cli/internal/wire/", "agent-cli/internal/transport/cli/"}}
+		"A selector with an imported package qualifier is resolved by exact import path; receiver-typed method calls are resolved to an exact method declaration, while interface or dynamic receivers remain uncertain.",
+	}, "public_construction_sources": entryRoots}
+}
+
+func isDirectEntryFile(path string, roots []string) bool {
+	for _, root := range roots {
+		prefix := root + "/"
+		if !strings.HasPrefix(path, prefix) {
+			continue
+		}
+		remainder := strings.TrimPrefix(path, prefix)
+		return strings.HasSuffix(remainder, ".go") && !strings.Contains(remainder, "/")
+	}
+	return false
+}
+
+func isTargetFile(path string) bool {
+	for _, root := range targetRoots {
+		if path == root || strings.HasPrefix(path, root+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func edgeLess(a, b CallEdge) bool {
@@ -844,7 +1147,7 @@ func writeMarkdown(out string, inventory Inventory) error {
 		fmt.Fprintf(&b, "| `%s:%d` | `%s` | `%s` | `%s` | `%s` | %d |\n", symbol.File, symbol.Line, symbol.Kind, symbol.QualifiedName, symbol.Class, symbol.Confidence, len(symbol.ProductionCallers))
 	}
 	b.WriteString("\n## Classification and reachability limits\n\n")
-	b.WriteString("The analyzer records exact AST call expressions and import-qualified calls. It does not pretend to resolve interface dispatch, reflection, generated registration, or runtime configuration; no-caller symbols are `DEAD_OR_UNCERTAIN`, and method-name matches retain medium confidence. Public CLI entry prefixes and all downstream target edges are in `call-paths.json`.\n")
+	b.WriteString("The analyzer records exact AST CallExpr citations, resolves imported functions and receiver-typed method calls, and fails closed for interface dispatch, reflection, generated registration, or runtime configuration. No-caller symbols are `DEAD_OR_UNCERTAIN`; public immediate source files and all downstream target edges are in `call-paths.json`.\n")
 	return os.WriteFile(filepath.Join(out, "inventory.md"), []byte(b.String()), 0o644)
 }
 
