@@ -121,6 +121,17 @@ def assert_ancestors() -> None:
         run(["git", "merge-base", "--is-ancestor", revision, "HEAD"], timeout=30)
 
 
+def execution_main_revision() -> str:
+    """Return the accepted execution base used for current-scope accounting.
+
+    MAIN remains the pinned planning revision for the admitted baseline and
+    read-only caller oracle.  Once accepted work lands on main, provenance
+    accounting must start at the refreshed remote main instead of charging
+    those already-accepted production changes to this task.
+    """
+    return run(["git", "rev-parse", "--verify", "origin/main^{commit}"], timeout=30).stdout.strip()
+
+
 def assert_runtime_scope() -> None:
     root = ROOT / "go-agent-runtime/services/audioinput"
     if not root.exists():
@@ -231,7 +242,9 @@ def final_scope_provenance_budget() -> None:
     assert_ancestors()
     current_cli_census(argparse.Namespace(max_files=2, max_lines=400, min_file_reduction=3, min_line_reduction=918))
     run(["git", "diff", "--check"], timeout=30)
-    changed = set(run(["git", "diff", "--name-only", MAIN], timeout=30).stdout.splitlines())
+    execution_main = execution_main_revision()
+    run(["git", "merge-base", "--is-ancestor", execution_main, "HEAD"], timeout=30)
+    changed = set(run(["git", "diff", "--name-only", execution_main], timeout=30).stdout.splitlines())
     forbidden = []
     for path in changed:
         if path.startswith("agent-cli/") and path.endswith(".go") and not path.endswith("_test.go") and path not in CLI_ALLOWED:
@@ -240,7 +253,7 @@ def final_scope_provenance_budget() -> None:
         fail(f"unowned CLI production changes: {sorted(forbidden)}")
     if (EVIDENCE_ROOT / "waiver.json").exists() or (EVIDENCE_ROOT / "second-project").exists():
         fail("task evidence contains a waiver or second project")
-    print("final branch, ancestry, manifest, scope, diff and provenance budget passed")
+    print(f"final branch, ancestry, manifest, scope, diff and provenance budget passed (execution main {execution_main})")
 
 
 def cli_retirement(args: argparse.Namespace) -> None:

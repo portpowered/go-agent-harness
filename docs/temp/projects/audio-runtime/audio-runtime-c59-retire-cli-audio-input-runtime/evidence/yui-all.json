@@ -1,6 +1,6 @@
 {
-  "aggregate_timeout_seconds": 600.0,
-  "binary": "/private/tmp/audio-runtime-c59-yui-53931c0",
+  "aggregate_timeout_seconds": 120.0,
+  "binary": "/private/tmp/yui-c59-merged",
   "case": "all",
   "cases": [
     {
@@ -14,7 +14,7 @@
           "session",
           "--help"
         ],
-        "elapsed_ms": 523,
+        "elapsed_ms": 542,
         "process_group_killed": false,
         "returncode": 0,
         "stderr": "",
@@ -38,7 +38,7 @@
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c59-retire-cli-audio-input-runtime/agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s_v2a_audio_in_basic.session.json",
           "--json"
         ],
-        "elapsed_ms": 32,
+        "elapsed_ms": 37,
         "process_group_killed": false,
         "returncode": 0,
         "stderr": "{\"total\":1,\"passed\":1,\"failed\":0,\"stuck\":0,\"status\":\"pass\"}\n",
