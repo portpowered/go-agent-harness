@@ -88,9 +88,12 @@ type SessionOptions struct {
 	Credentials         []string
 	Limits              ResourceLimits
 	ProviderCapturePath string
-	Metadata            transcript.RecordingMetadata
-	Browser             BrowserOptions
-	AdditionalArtifacts []transcript.RecordingArtifact
+	// DisableProviderCaptureSidecar prevents a replayed or duration-controlled
+	// provider capture from competing with the host-owned semantic sidecar.
+	DisableProviderCaptureSidecar bool
+	Metadata                      transcript.RecordingMetadata
+	Browser                       BrowserOptions
+	AdditionalArtifacts           []transcript.RecordingArtifact
 }
 
 // SessionRecorder is the complete runtime-owned recording façade. It is

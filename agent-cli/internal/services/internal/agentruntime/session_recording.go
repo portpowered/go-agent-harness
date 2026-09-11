@@ -58,7 +58,7 @@ func RunSessionWithRecordingDirectoryAndInstructionsAndAudioFilesAndOutputAndTex
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
+	defer func() { releaseSessionRecordingClaim(claim, &runErr) }()
 	scheduled, err := prepareScheduledAudioInputs(audioPaths)
 	if err != nil {
 		return err
@@ -128,7 +128,7 @@ func runSessionWithImagesAndRecordingDirectory(ctx context.Context, out io.Write
 		return err
 	}
 	if ownedClaim {
-		defer func() { _ = claim.release() }()
+		defer func() { releaseSessionRecordingClaim(claim, &runErr) }()
 	}
 	metadata, err := resolveSessionImageCapabilities(opts.SessionRunOptions)
 	if err != nil {
@@ -178,16 +178,16 @@ func runSessionWithImagesAndRecordingDirectory(ctx context.Context, out io.Write
 }
 
 func runSessionImageRecording(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt, directory string) (runErr error) {
-	recording := newSessionDirectoryRecording(directory, plan, opts.SessionRunOptions)
+	recording := newSessionDirectoryRecording(directory, plan, opts.SessionRunOptions, disableProviderCaptureSidecar(opts.SessionRunOptions, opts.MaxDuration))
 	if recording.openErr != nil {
-		return finalizeSessionDirectoryRecording(runErr, recording)
+		return finalizeSessionDirectoryRecording(ctx, runErr, recording)
 	}
 	plan.loop.toolLifecycleObserver, plan.loop.terminalSummaryRecorder = recording, recording
 	if plan.inferencer != nil {
 		plan.inferencer = &sessionDirectoryRecordingInferencer{inner: plan.inferencer, recording: recording}
 	}
 	runErr = runSessionImagePlan(ctx, out, plan, opts, wirePrompt)
-	return finalizeSessionDirectoryRecording(runErr, recording)
+	return finalizeSessionDirectoryRecording(ctx, runErr, recording)
 }
 
 func runSessionWithRecordingDirectory(ctx context.Context, out io.Writer, opts SessionRunOptions, directory, audioOutPath string, maxDuration time.Duration, seed SessionTextSeed, systemPrompt string, withInstructions bool, audioInput *SessionAudioInput) (runErr error) {
@@ -211,7 +211,7 @@ func runSessionWithRecordingDirectory(ctx context.Context, out io.Writer, opts S
 		return err
 	}
 	if ownedClaim {
-		defer func() { _ = claim.release() }()
+		defer func() { releaseSessionRecordingClaim(claim, &runErr) }()
 	}
 	if audioInput != nil {
 		opts.ClientOwnsAudioTurnBoundaries = true
@@ -242,9 +242,9 @@ func runSessionWithRecordingDirectory(ctx context.Context, out io.Writer, opts S
 		plan.loop.RequireAssistantResponse = true
 		audioSource.bindRuntime(plan.runtime, plan.clockSource)
 	}
-	recording := newSessionDirectoryRecording(directory, plan, opts)
+	recording := newSessionDirectoryRecording(directory, plan, opts, disableProviderCaptureSidecar(opts, maxDuration))
 	if recording.openErr != nil {
-		return finalizeSessionDirectoryRecording(runErr, recording)
+		return finalizeSessionDirectoryRecording(ctx, runErr, recording)
 	}
 	plan.loop.toolLifecycleObserver, plan.loop.terminalSummaryRecorder = recording, recording
 	if plan.inferencer != nil {
@@ -256,7 +256,7 @@ func runSessionWithRecordingDirectory(ctx context.Context, out io.Writer, opts S
 	if audioOutPath != "" {
 		audioOutput, err = newSessionAudioOutputForPlan(&plan, audioOutPath, out, nil)
 		if err != nil {
-			return finalizeSessionDirectoryRecording(fmt.Errorf("--audio-out %q: %w", audioOutPath, err), recording)
+			return finalizeSessionDirectoryRecording(ctx, fmt.Errorf("--audio-out %q: %w", audioOutPath, err), recording)
 		}
 		if plan.inferencer != nil {
 			wirePrompt := ""
@@ -287,7 +287,7 @@ func runSessionWithRecordingDirectory(ctx context.Context, out io.Writer, opts S
 	} else {
 		durationCtx, durationErr := prepareSessionDurationArtifacts(ctx)
 		if durationErr != nil {
-			return finalizeSessionDirectoryRecording(durationErr, recording)
+			return finalizeSessionDirectoryRecording(ctx, durationErr, recording)
 		}
 		durationCtx = withSessionDurationTerminalRecorder(durationCtx, recording)
 		runErr = runSessionDurationPlan(durationCtx, sessionOut, plan, maxDuration, realSessionDurationClock{})
@@ -303,25 +303,33 @@ func runSessionWithRecordingDirectory(ctx context.Context, out io.Writer, opts S
 			runErr = errors.Join(runErr, fmt.Errorf("--audio-out %q: %w", audioOutPath, closeErr))
 		}
 	}
-	return finalizeSessionDirectoryRecording(runErr, recording)
+	return finalizeSessionDirectoryRecording(ctx, runErr, recording)
 }
 
-func finalizeSessionDirectoryRecording(runErr error, recording *sessionDirectoryRecording) error {
+func finalizeSessionDirectoryRecording(ctx context.Context, runErr error, recording *sessionDirectoryRecording) error {
 	if recording == nil {
 		return runErr
 	}
-	return errors.Join(runErr, recording.finalize(runErr))
+	return errors.Join(runErr, recording.finalize(ctx, runErr))
 }
 
 func validateSessionRecordingOptions(opts SessionRunOptions) error {
+	// Keep the deprecated field's compatibility type live until its owning
+	// options surface can be retired under a separate lease.
+	_ = opts.recordingDirectoryClaim
 	if opts.RecordPath == "" && opts.ReplayPath == "" {
 		return nil
 	}
 	return validateSessionRunOptions(opts)
 }
 
-func planSessionForDirectoryRecording(opts SessionRunOptions) (sessionRuntimePlan, func(), error) {
-	return planSessionForDirectoryRecordingWithInstructions(opts, "", false)
+func releaseSessionRecordingClaim(claim *sessionRecordingClaim, runErr *error) {
+	if claim == nil || runErr == nil {
+		return
+	}
+	if err := claim.release(); err != nil {
+		*runErr = errors.Join(*runErr, err)
+	}
 }
 
 func planSessionForDirectoryRecordingWithInstructions(opts SessionRunOptions, systemPrompt string, withInstructions bool) (sessionRuntimePlan, func(), error) {
@@ -374,6 +382,7 @@ type sessionDirectoryRecording struct {
 	openErr     error
 	terminalMu  sync.Mutex
 	terminalSet bool
+	observeErr  error
 }
 
 // sessionRecordingDirectoryClaim remains as a type-only compatibility seam
@@ -386,7 +395,7 @@ type sessionToolLifecycleObserver interface {
 	observeToolResult(messages.ToolCall, messages.ToolCallResponse, bool)
 }
 
-func newSessionDirectoryRecording(destination string, plan sessionRuntimePlan, opts SessionRunOptions) *sessionDirectoryRecording {
+func newSessionDirectoryRecording(destination string, plan sessionRuntimePlan, opts SessionRunOptions, disableSidecar ...bool) *sessionDirectoryRecording {
 	base := time.Unix(0, 0).UTC()
 	recordingClock := platformclock.NewDeterministic(base, time.Nanosecond)
 	wallClockStart := recordingClock.Now()
@@ -400,11 +409,12 @@ func newSessionDirectoryRecording(destination string, plan sessionRuntimePlan, o
 		// retain that input as the finalized bundle's replay source.
 		providerCapturePath = opts.ReplayPath
 	}
+	providerSidecarDisabled := len(disableSidecar) > 0 && disableSidecar[0]
 	handle, err := service.OpenSession(runtimerecording.SessionOptions{
 		Destination: destination, Provider: plan.provider, Model: model, Transport: "websocket",
 		ClockBase: base, WallClockStart: wallClockStart, Credentials: credentials,
-		ProviderCapturePath: providerCapturePath,
-		Metadata:            metadata, Browser: sessionRecordingBrowserOptions(opts, plan),
+		ProviderCapturePath: providerCapturePath, DisableProviderCaptureSidecar: providerSidecarDisabled,
+		Metadata: metadata, Browser: sessionRecordingBrowserOptions(opts, plan),
 	})
 	return &sessionDirectoryRecording{destination: destination, metadata: metadata, credentials: credentials, session: handle, openErr: err}
 }
@@ -450,34 +460,42 @@ func convertRecordingBrowserEvent(event webmcp.BrowserEvent) runtimerecording.Br
 	}
 }
 
+const maxSessionRecordingCredentials = 3
+
 func sessionRecordingCredentials(opts SessionRunOptions, plan sessionRuntimePlan) []string {
-	credentials := make([]string, 0, 3)
-	appendCredential := func(value string) {
-		value = strings.TrimSpace(value)
-		if value == "" {
+	credentials := make([]string, 0, maxSessionRecordingCredentials)
+	appendSessionRecordingCredential(&credentials, opts.APIKey)
+	appendConfiguredSessionCredential(&credentials, opts.LoadedConfig, plan.provider)
+	return credentials
+}
+
+func appendSessionRecordingCredential(credentials *[]string, value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	for _, existing := range *credentials {
+		if existing == value {
 			return
 		}
-		for _, existing := range credentials {
-			if existing == value {
-				return
-			}
-		}
-		credentials = append(credentials, value)
 	}
-	appendCredential(opts.APIKey)
-	if opts.LoadedConfig != nil {
-		switch strings.ToLower(strings.TrimSpace(plan.provider)) {
-		case sessionProviderGrok:
-			if opts.LoadedConfig.Model.Grok != nil {
-				appendCredential(opts.LoadedConfig.Model.Grok.APIKey)
-			}
-		case sessionProviderOpenAI:
-			if opts.LoadedConfig.Model.OpenAI != nil {
-				appendCredential(opts.LoadedConfig.Model.OpenAI.APIKey)
-			}
+	*credentials = append(*credentials, value)
+}
+
+func appendConfiguredSessionCredential(credentials *[]string, loaded *config.Config, provider string) {
+	if loaded == nil {
+		return
+	}
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case sessionProviderGrok:
+		if loaded.Model.Grok != nil {
+			appendSessionRecordingCredential(credentials, loaded.Model.Grok.APIKey)
+		}
+	case sessionProviderOpenAI:
+		if loaded.Model.OpenAI != nil {
+			appendSessionRecordingCredential(credentials, loaded.Model.OpenAI.APIKey)
 		}
 	}
-	return credentials
 }
 
 func sessionRecordingModel(opts SessionRunOptions, plan sessionRuntimePlan) string {
@@ -533,19 +551,34 @@ func (r *sessionDirectoryRecording) observe(message messages.StreamMessage, outb
 	if outbound {
 		direction = runtimerecording.SessionMessageFromClient
 	}
-	_ = r.session.ObserveMessage(context.Background(), message, direction)
+	if err := r.session.ObserveMessage(context.Background(), message, direction); err != nil {
+		r.recordObserveError(err)
+	}
 }
 
 func (r *sessionDirectoryRecording) observeToolCall(call messages.ToolCall) {
 	if r != nil && r.session != nil {
-		_ = r.session.ObserveToolCall(context.Background(), call)
+		if err := r.session.ObserveToolCall(context.Background(), call); err != nil {
+			r.recordObserveError(err)
+		}
 	}
 }
 
 func (r *sessionDirectoryRecording) observeToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
 	if r != nil && r.session != nil {
-		_ = r.session.ObserveToolResult(context.Background(), call, response, failed)
+		if err := r.session.ObserveToolResult(context.Background(), call, response, failed); err != nil {
+			r.recordObserveError(err)
+		}
 	}
+}
+
+func (r *sessionDirectoryRecording) recordObserveError(err error) {
+	if r == nil || err == nil {
+		return
+	}
+	r.terminalMu.Lock()
+	r.observeErr = errors.Join(r.observeErr, err)
+	r.terminalMu.Unlock()
 }
 
 func (r *sessionDirectoryRecording) RecordTerminalSummary(summary transcript.RecordingTerminalSummary) error {
@@ -564,9 +597,9 @@ func (r *sessionDirectoryRecording) RecordTerminalSummary(summary transcript.Rec
 	return err
 }
 
-func (r *sessionDirectoryRecording) Finalize() error { return r.finalize(nil) }
+func (r *sessionDirectoryRecording) Finalize() error { return r.finalize(context.Background(), nil) }
 
-func (r *sessionDirectoryRecording) finalize(runErr error) error {
+func (r *sessionDirectoryRecording) finalize(ctx context.Context, runErr error) error {
 	if r == nil {
 		return nil
 	}
@@ -591,7 +624,14 @@ func (r *sessionDirectoryRecording) finalize(runErr error) error {
 			runErr = errors.Join(runErr, terminalErr)
 		}
 	}
-	return errors.Join(runErr, r.session.Finalize(context.Background(), runErr))
+	r.terminalMu.Lock()
+	observeErr := r.observeErr
+	r.terminalMu.Unlock()
+	return errors.Join(runErr, observeErr, r.session.Finalize(ctx, runErr))
+}
+
+func disableProviderCaptureSidecar(opts SessionRunOptions, maxDuration time.Duration) bool {
+	return maxDuration > 0 || (opts.ReplayPath != "" && opts.RecordPath == "")
 }
 
 var _ messages.SessionInferencer = (*sessionDirectoryRecordingInferencer)(nil)

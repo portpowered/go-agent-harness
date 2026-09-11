@@ -14,6 +14,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 )
 
+const (
+	recordingFileMode        os.FileMode = 0o644
+	recordingDirectoryMode   os.FileMode = 0o755
+	sessionLogToolResultType             = "tool_result"
+)
+
 type sessionLogEntry struct {
 	TurnIndex  int                `json:"turn_index"`
 	Input      sessionLogInput    `json:"input"`
@@ -58,7 +64,7 @@ func (e sessionLogTool) MarshalJSON() ([]byte, error) {
 			Arguments  string `json:"arguments"`
 		}{e.Sequence, e.Type, e.ToolCallID, e.ToolName, e.Arguments})
 	}
-	if e.Type == "tool_result" {
+	if e.Type == sessionLogToolResultType {
 		return json.Marshal(struct {
 			Sequence   uint64         `json:"sequence"`
 			Type       string         `json:"type"`
@@ -82,85 +88,116 @@ func (e sessionLogTool) MarshalJSON() ([]byte, error) {
 }
 
 func augmentBundle(options recording.SessionOptions, browser *browserRecorder, images []imageEvidence, tools []toolObservation, audio []audioTurn) error {
-	var browserArtifact *transcript.BrowserArtifact
-	var err error
-	if browser != nil {
-		browserArtifact, err = browser.artifact()
-		if err != nil {
-			return wrapRecordingError(transcript.ErrRecordingWrite, "finalize browser events", options.Destination, err, options.Credentials)
-		}
+	browserArtifact, err := browserArtifactFor(browser, options)
+	if err != nil {
+		return err
 	}
-	if browserArtifact == nil && len(options.AdditionalArtifacts) == 0 && !metadataNeedsPatch(options) {
+	if !bundleNeedsAugment(options, browserArtifact) {
 		return nil
 	}
 	manifestPath := filepath.Join(options.Destination, "manifest.json")
-	manifestData, err := os.ReadFile(manifestPath)
+	manifest, err := readManifestForAugment(manifestPath, options.Credentials)
 	if err != nil {
-		return wrapRecordingError(transcript.ErrRecordingWrite, "read recording manifest", manifestPath, err, options.Credentials)
+		return err
 	}
-	var manifest transcript.RecordingManifest
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		return wrapRecordingError(transcript.ErrRecordingLayout, "decode recording manifest", manifestPath, err, options.Credentials)
+	if err := patchObservedLogs(options, &manifest, images, tools, audio); err != nil {
+		return err
 	}
-
-	if len(images) > 0 || len(tools) > 0 {
-		logPath := filepath.Join(options.Destination, "session-log.jsonl")
-		if err := patchSessionLog(logPath, images, tools, options.Credentials); err != nil {
-			return err
-		}
-		logData, readErr := os.ReadFile(logPath)
-		if readErr != nil {
-			return wrapRecordingError(transcript.ErrRecordingWrite, "read session log", logPath, readErr, options.Credentials)
-		}
-		updateArtifactHash(&manifest, "session-log.jsonl", logData)
+	if err := appendAdditionalArtifacts(options, &manifest); err != nil {
+		return err
 	}
-	if len(audio) > 0 {
-		logPath := filepath.Join(options.Destination, "session-log.jsonl")
-		if err := patchSessionLogAudio(logPath, audio, options.Credentials); err != nil {
-			return err
-		}
-		logData, readErr := os.ReadFile(logPath)
-		if readErr != nil {
-			return wrapRecordingError(transcript.ErrRecordingWrite, "read session log", logPath, readErr, options.Credentials)
-		}
-		updateArtifactHash(&manifest, "session-log.jsonl", logData)
-	}
-
-	for _, artifact := range options.AdditionalArtifacts {
-		if err := appendArtifact(options.Destination, &manifest, artifact, options.Credentials); err != nil {
-			return err
-		}
-	}
-	if browserArtifact != nil {
-		normalized, normalizeErr := browserArtifact.Normalize()
-		if normalizeErr != nil {
-			return wrapRecordingError(transcript.ErrRecordingWrite, "normalize browser artifact", options.Destination, normalizeErr, options.Credentials)
-		}
-		if hasArtifact(&manifest, normalized.Path) {
-			return wrapRecordingError(transcript.ErrInvalidRecording, "validate browser artifact", normalized.Path, errors.New("artifact path collides with an existing bundle artifact"), options.Credentials)
-		}
-		if err := writeArtifact(options.Destination, normalized.Path, normalized.Data, options.Credentials); err != nil {
-			return err
-		}
-		manifest.FormatVersion = transcript.RecordingManifestV2Version
-		updateArtifactHash(&manifest, normalized.Path, normalized.Data)
-		manifest.Browser = &transcript.BrowserManifest{
-			Format:    normalized.Format,
-			Artifact:  transcript.ArtifactHash{Path: normalized.Path, SHA256: normalized.SHA256},
-			Redaction: normalized.Redaction,
-		}
+	if err := appendBrowserArtifact(options, &manifest, browserArtifact); err != nil {
+		return err
 	}
 	patchManifestMetadata(&manifest, options)
-	if err := manifest.Validate(); err != nil {
-		return wrapRecordingError(transcript.ErrRecordingLayout, "validate recording manifest", manifestPath, err, options.Credentials)
+	return writeManifestForAugment(manifestPath, manifest, options.Credentials)
+}
+
+func browserArtifactFor(browser *browserRecorder, options recording.SessionOptions) (*transcript.BrowserArtifact, error) {
+	if browser == nil {
+		return nil, nil
 	}
-	encoded, err := json.Marshal(manifest)
+	artifact, err := browser.artifact()
 	if err != nil {
-		return wrapRecordingError(transcript.ErrRecordingWrite, "encode recording manifest", manifestPath, err, options.Credentials)
+		return nil, wrapRecordingError(transcript.ErrRecordingWrite, "finalize browser events", options.Destination, err, options.Credentials)
 	}
-	encoded = append(encoded, '\n')
-	if err := atomicReplace(manifestPath, encoded, 0o644); err != nil {
-		return wrapRecordingError(transcript.ErrRecordingWrite, "write recording manifest", manifestPath, err, options.Credentials)
+	return artifact, nil
+}
+
+func bundleNeedsAugment(options recording.SessionOptions, browser *transcript.BrowserArtifact) bool {
+	return browser != nil || len(options.AdditionalArtifacts) > 0 || metadataNeedsPatch(options)
+}
+
+func readManifestForAugment(path string, credentials []string) (transcript.RecordingManifest, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return transcript.RecordingManifest{}, wrapRecordingError(transcript.ErrRecordingWrite, "read recording manifest", path, err, credentials)
+	}
+	var manifest transcript.RecordingManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return transcript.RecordingManifest{}, wrapRecordingError(transcript.ErrRecordingLayout, "decode recording manifest", path, err, credentials)
+	}
+	return manifest, nil
+}
+
+func patchObservedLogs(options recording.SessionOptions, manifest *transcript.RecordingManifest, images []imageEvidence, tools []toolObservation, audio []audioTurn) error {
+	if len(images) > 0 || len(tools) > 0 {
+		if err := patchSessionLog(filepath.Join(options.Destination, "session-log.jsonl"), images, tools, options.Credentials); err != nil {
+			return err
+		}
+		if err := refreshArtifactHash(options.Destination, manifest, "session-log.jsonl", options.Credentials); err != nil {
+			return err
+		}
+	}
+	if len(audio) > 0 {
+		path := filepath.Join(options.Destination, "session-log.jsonl")
+		if err := patchSessionLogAudio(path, audio, options.Credentials); err != nil {
+			return err
+		}
+		if err := refreshArtifactHash(options.Destination, manifest, "session-log.jsonl", options.Credentials); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func refreshArtifactHash(destination string, manifest *transcript.RecordingManifest, relative string, credentials []string) error {
+	path := filepath.Join(destination, filepath.FromSlash(relative))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return wrapRecordingError(transcript.ErrRecordingWrite, "read session log", path, err, credentials)
+	}
+	updateArtifactHash(manifest, relative, data)
+	return nil
+}
+
+func appendAdditionalArtifacts(options recording.SessionOptions, manifest *transcript.RecordingManifest) error {
+	for _, artifact := range options.AdditionalArtifacts {
+		if err := appendArtifact(options.Destination, manifest, artifact, options.Credentials); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func appendBrowserArtifact(options recording.SessionOptions, manifest *transcript.RecordingManifest, browser *transcript.BrowserArtifact) error {
+	if browser == nil {
+		return nil
+	}
+	normalized, err := browser.Normalize()
+	if err != nil {
+		return wrapRecordingError(transcript.ErrRecordingWrite, "normalize browser artifact", options.Destination, err, options.Credentials)
+	}
+	if hasArtifact(manifest, normalized.Path) {
+		return wrapRecordingError(transcript.ErrInvalidRecording, "validate browser artifact", normalized.Path, errors.New("artifact path collides with an existing bundle artifact"), options.Credentials)
+	}
+	if err := writeArtifact(options.Destination, normalized.Path, normalized.Data, options.Credentials); err != nil {
+		return err
+	}
+	manifest.FormatVersion = transcript.RecordingManifestV2Version
+	updateArtifactHash(manifest, normalized.Path, normalized.Data)
+	manifest.Browser = &transcript.BrowserManifest{
+		Format: normalized.Format, Artifact: transcript.ArtifactHash{Path: normalized.Path, SHA256: normalized.SHA256}, Redaction: normalized.Redaction,
 	}
 	return nil
 }
@@ -171,6 +208,11 @@ func metadataNeedsPatch(options recording.SessionOptions) bool {
 }
 
 func patchManifestMetadata(manifest *transcript.RecordingManifest, options recording.SessionOptions) {
+	patchManifestOptions(manifest, options)
+	patchManifestMetadataFields(manifest, options.Metadata)
+}
+
+func patchManifestOptions(manifest *transcript.RecordingManifest, options recording.SessionOptions) {
 	if options.Transport != "" {
 		manifest.Transport = options.Transport
 	}
@@ -183,7 +225,9 @@ func patchManifestMetadata(manifest *transcript.RecordingManifest, options recor
 	if !options.WallClockStart.IsZero() {
 		manifest.WallClockStart = options.WallClockStart.UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
 	}
-	metadata := options.Metadata
+}
+
+func patchManifestMetadataFields(manifest *transcript.RecordingManifest, metadata transcript.RecordingMetadata) {
 	if metadata.Transport != "" {
 		manifest.Transport = metadata.Transport
 	}
@@ -196,102 +240,55 @@ func patchManifestMetadata(manifest *transcript.RecordingManifest, options recor
 	if metadata.WallClockStart != "" {
 		manifest.WallClockStart = metadata.WallClockStart
 	}
+	patchManifestDevices(manifest, metadata)
+	patchManifestMedia(manifest, metadata)
+	patchManifestConfiguration(manifest, metadata.Configuration)
+}
+
+func patchManifestDevices(manifest *transcript.RecordingManifest, metadata transcript.RecordingMetadata) {
 	if metadata.InputDevice != (transcript.DeviceMetadata{}) {
 		manifest.InputDevice = metadata.InputDevice
 	}
 	if metadata.OutputDevice != (transcript.DeviceMetadata{}) {
 		manifest.OutputDevice = metadata.OutputDevice
 	}
+}
+
+func patchManifestMedia(manifest *transcript.RecordingManifest, metadata transcript.RecordingMetadata) {
 	if metadata.MediaSource != nil {
 		manifest.MediaSource = metadata.MediaSource
 	}
 	if metadata.MediaSourceURL != "" && manifest.MediaSource == nil {
 		manifest.MediaSource = &transcript.MediaSourceMetadata{URL: metadata.MediaSourceURL}
 	}
-	if len(metadata.Configuration) > 0 {
-		if manifest.Configuration == nil {
-			manifest.Configuration = make(map[string]string)
-		}
-		for key, value := range metadata.Configuration {
-			manifest.Configuration[key] = value
-		}
+}
+
+func patchManifestConfiguration(manifest *transcript.RecordingManifest, configuration map[string]string) {
+	if len(configuration) == 0 {
+		return
+	}
+	if manifest.Configuration == nil {
+		manifest.Configuration = make(map[string]string)
+	}
+	for key, value := range configuration {
+		manifest.Configuration[key] = value
 	}
 }
 
-func patchSessionLog(path string, images []imageEvidence, tools []toolObservation, credentials []string) error {
-	data, err := os.ReadFile(path)
+func writeManifestForAugment(path string, manifest transcript.RecordingManifest, credentials []string) error {
+	if err := manifest.Validate(); err != nil {
+		return wrapRecordingError(transcript.ErrRecordingLayout, "validate recording manifest", path, err, credentials)
+	}
+	encoded, err := json.Marshal(manifest)
 	if err != nil {
-		return wrapRecordingError(transcript.ErrRecordingWrite, "read session log", path, err, credentials)
+		return wrapRecordingError(transcript.ErrRecordingWrite, "encode recording manifest", path, err, credentials)
 	}
-	byCall := make(map[string]imageEvidence, len(images))
-	for _, image := range images {
-		byCall[image.ToolCallID()] = image
+	encoded = append(encoded, '\n')
+	if err := atomicReplace(path, encoded, recordingFileMode); err != nil {
+		return wrapRecordingError(transcript.ErrRecordingWrite, "write recording manifest", path, err, credentials)
 	}
-	var fallback *imageEvidence
-	if len(images) == 1 {
-		fallback = &images[0]
-	}
-	lines := bytes.Split(data, []byte{'\n'})
-	output := make([]byte, 0, len(data)+len(images)*256)
-	for _, line := range lines {
-		if len(bytes.TrimSpace(line)) == 0 {
-			continue
-		}
-		var entry sessionLogEntry
-		if err := json.Unmarshal(line, &entry); err != nil {
-			return wrapRecordingError(transcript.ErrRecordingWrite, "decode session log", path, err, credentials)
-		}
-		callCursor := 0
-		resultCursor := 0
-		for index := range entry.ToolEvents {
-			if callCursor < len(tools) && entry.ToolEvents[index].Type == "tool_call" {
-				observation := tools[callCursor]
-				entry.ToolEvents[index].ToolCallID = firstNonEmpty(entry.ToolEvents[index].ToolCallID, observation.call.ID)
-				entry.ToolEvents[index].ToolName = firstNonEmpty(entry.ToolEvents[index].ToolName, observation.call.Name)
-				entry.ToolEvents[index].Arguments = firstNonEmpty(entry.ToolEvents[index].Arguments, observation.call.Arguments)
-				callCursor++
-			}
-			if resultCursor < len(tools) && entry.ToolEvents[index].Type == "tool_result" {
-				observation := tools[resultCursor]
-				entry.ToolEvents[index].ToolCallID = firstNonEmpty(entry.ToolEvents[index].ToolCallID, observation.call.ID)
-				entry.ToolEvents[index].ToolName = firstNonEmpty(entry.ToolEvents[index].ToolName, observation.call.Name)
-				if observation.failed {
-					entry.ToolEvents[index].Status = "failed"
-				} else if entry.ToolEvents[index].Status == "" {
-					entry.ToolEvents[index].Status = "completed"
-				}
-				if entry.ToolEvents[index].Content == "" && observation.result.Content != "" {
-					entry.ToolEvents[index].Content = observation.result.Content
-				}
-				resultCursor++
-			}
-			image, ok := byCall[entry.ToolEvents[index].ToolCallID]
-			if !ok && fallback != nil && entry.ToolEvents[index].Type == "tool_result" {
-				image, ok = *fallback, true
-			}
-			if ok && entry.ToolEvents[index].Type == "tool_result" {
-				copy := image
-				entry.ToolEvents[index].Image = &copy
-			}
-		}
-		encoded, err := json.Marshal(entry)
-		if err != nil {
-			return wrapRecordingError(transcript.ErrRecordingWrite, "encode session log", path, err, credentials)
-		}
-		output = append(output, encoded...)
-		output = append(output, '\n')
-	}
-	return atomicReplace(path, output, 0o644)
+	return nil
 }
-
-func firstNonEmpty(value, fallback string) string {
-	if value != "" {
-		return value
-	}
-	return fallback
-}
-
-func (e imageEvidence) ToolCallID() string { return e.callID }
 
 func appendArtifact(destination string, manifest *transcript.RecordingManifest, artifact transcript.RecordingArtifact, credentials []string) error {
 	if artifact.SourcePath != "" && len(artifact.Data) > 0 {
@@ -341,10 +338,10 @@ func writeArtifact(destination, relative string, data []byte, credentials []stri
 		}
 	}
 	path := filepath.Join(destination, filepath.FromSlash(relative))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), recordingDirectoryMode); err != nil {
 		return wrapRecordingError(transcript.ErrRecordingDestination, "prepare artifact directory", path, err, credentials)
 	}
-	if err := atomicReplace(path, data, 0o644); err != nil {
+	if err := atomicReplace(path, data, recordingFileMode); err != nil {
 		return wrapRecordingError(transcript.ErrRecordingWrite, "write artifact", path, err, credentials)
 	}
 	return nil
@@ -369,27 +366,35 @@ func updateArtifactHash(manifest *transcript.RecordingManifest, path string, dat
 	manifest.Artifacts = append(manifest.Artifacts, transcript.ArtifactHash{Path: path, SHA256: hex.EncodeToString(digest[:])})
 }
 
-func atomicReplace(path string, data []byte, mode os.FileMode) error {
+func atomicReplace(path string, data []byte, mode os.FileMode) (replaceErr error) {
 	temporary, err := os.CreateTemp(filepath.Dir(path), ".recording-augment-*")
 	if err != nil {
 		return err
 	}
 	temporaryName := temporary.Name()
-	defer os.Remove(temporaryName)
+	closed := false
+	defer func() {
+		if !closed {
+			if closeErr := temporary.Close(); closeErr != nil {
+				replaceErr = errors.Join(replaceErr, closeErr)
+			}
+		}
+		if removeErr := os.Remove(temporaryName); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			replaceErr = errors.Join(replaceErr, removeErr)
+		}
+	}()
 	if err := temporary.Chmod(mode); err != nil {
-		_ = temporary.Close()
 		return err
 	}
 	if _, err := temporary.Write(data); err != nil {
-		_ = temporary.Close()
 		return err
 	}
 	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
 		return err
 	}
 	if err := temporary.Close(); err != nil {
 		return err
 	}
+	closed = true
 	return os.Rename(temporaryName, path)
 }

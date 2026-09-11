@@ -9,10 +9,10 @@
   "baseline_files": 5,
   "baseline_lines": 2609,
   "current_counts": {
-    "agent-cli/internal/services/internal/agentruntime/session_recording.go": 598
+    "agent-cli/internal/services/internal/agentruntime/session_recording.go": 638
   },
   "current_files": 1,
-  "current_lines": 598,
+  "current_lines": 638,
   "owned_production_paths": [
     "agent-cli/internal/services/internal/agentruntime/session_recording.go",
     "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go",
@@ -23,7 +23,7 @@
   "passed": true,
   "reductions": {
     "files": 4,
-    "lines": 2011
+    "lines": 1971
   },
   "schema": "audio-runtime.c56.cli-retirement.v1"
 }

@@ -42,50 +42,63 @@ func (p *audioProjection) observe(message messages.StreamMessage, direction reco
 	if p == nil {
 		return
 	}
-	if audio, ok := message.Value.(*messages.AudioDeltaValue); ok && audio != nil && len(audio.Content) > 0 {
-		if direction == recordingDirectionClient {
-			if p.current.inputBytes == 0 {
-				p.current.inputOffset = p.inputBytes
-			}
-			p.current.inputBytes += uint64(len(audio.Content))
-			p.inputBytes += uint64(len(audio.Content))
-			p.current.inputSegments = append(p.current.inputSegments, filepath.ToSlash(filepath.Join("audio", formatAudioName("in", p.inputOrdinal))))
-			p.inputOrdinal++
-		} else {
-			if p.current.outputBytes == 0 {
-				p.current.outputOffset = p.outputBytes
-			}
-			p.current.outputBytes += uint64(len(audio.Content))
-			p.outputBytes += uint64(len(audio.Content))
-			p.current.outputSegments = append(p.current.outputSegments, filepath.ToSlash(filepath.Join("audio", formatAudioName("out", p.outputOrdinal))))
-			p.outputOrdinal++
-		}
-	}
-
+	p.observeAudioDelta(message, direction)
 	if direction == recordingDirectionClient {
-		if message.Type == messages.StreamTypeMessageEnd {
-			p.current.committed = true
-		}
+		p.observeClientBoundary(message)
 		return
 	}
-	switch message.Type {
-	case messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd:
-		p.current.toolMessage = true
-	case messages.StreamTypeMessageEnd:
-		if p.current.toolMessage {
-			p.current.toolMessage = false
-			return
+	p.observeAgentBoundary(message)
+}
+
+func (p *audioProjection) observeAudioDelta(message messages.StreamMessage, direction recordingDirection) {
+	audio, ok := message.Value.(*messages.AudioDeltaValue)
+	if !ok || audio == nil || len(audio.Content) == 0 {
+		return
+	}
+	contentBytes := uint64(len(audio.Content))
+	if direction == recordingDirectionClient {
+		if p.current.inputBytes == 0 {
+			p.current.inputOffset = p.inputBytes
 		}
-		p.current.complete = true
-		p.closeCurrent()
+		p.current.inputBytes += contentBytes
+		p.inputBytes += contentBytes
+		p.current.inputSegments = append(p.current.inputSegments, filepath.ToSlash(filepath.Join("audio", formatAudioName("in", p.inputOrdinal))))
+		p.inputOrdinal++
+		return
+	}
+	if p.current.outputBytes == 0 {
+		p.current.outputOffset = p.outputBytes
+	}
+	p.current.outputBytes += contentBytes
+	p.outputBytes += contentBytes
+	p.current.outputSegments = append(p.current.outputSegments, filepath.ToSlash(filepath.Join("audio", formatAudioName("out", p.outputOrdinal))))
+	p.outputOrdinal++
+}
+
+func (p *audioProjection) observeClientBoundary(message messages.StreamMessage) {
+	if message.Type == messages.StreamTypeMessageEnd {
+		p.current.committed = true
 	}
 }
 
-func (p *audioProjection) closeCurrent() {
-	if p == nil {
+func (p *audioProjection) observeAgentBoundary(message messages.StreamMessage) {
+	if message.Type == messages.StreamTypeToolCallStart || message.Type == messages.StreamTypeToolCallDelta || message.Type == messages.StreamTypeToolCallEnd {
+		p.current.toolMessage = true
 		return
 	}
-	if p.current.inputBytes == 0 && p.current.outputBytes == 0 {
+	if message.Type != messages.StreamTypeMessageEnd {
+		return
+	}
+	if p.current.toolMessage {
+		p.current.toolMessage = false
+		return
+	}
+	p.current.complete = true
+	p.closeCurrent()
+}
+
+func (p *audioProjection) closeCurrent() {
+	if p == nil || (p.current.inputBytes == 0 && p.current.outputBytes == 0) {
 		return
 	}
 	turn := p.current
@@ -101,17 +114,18 @@ func (p *audioProjection) snapshot() []audioTurn {
 	}
 	copyOf := make([]audioTurn, 0, len(p.closed)+1)
 	for _, turn := range p.closed {
-		turn.inputSegments = append([]string(nil), turn.inputSegments...)
-		turn.outputSegments = append([]string(nil), turn.outputSegments...)
-		copyOf = append(copyOf, turn)
+		copyOf = append(copyOf, cloneAudioTurn(turn))
 	}
 	if p.current.inputBytes > 0 || p.current.outputBytes > 0 {
-		turn := p.current
-		turn.inputSegments = append([]string(nil), turn.inputSegments...)
-		turn.outputSegments = append([]string(nil), turn.outputSegments...)
-		copyOf = append(copyOf, turn)
+		copyOf = append(copyOf, cloneAudioTurn(p.current))
 	}
 	return copyOf
+}
+
+func cloneAudioTurn(turn audioTurn) audioTurn {
+	turn.inputSegments = append([]string(nil), turn.inputSegments...)
+	turn.outputSegments = append([]string(nil), turn.outputSegments...)
+	return turn
 }
 
 type recordingDirection uint8
@@ -129,11 +143,22 @@ func patchSessionLogAudio(path string, turns []audioTurn, credentials []string) 
 	if len(turns) == 0 {
 		return nil
 	}
+	data, entries, err := readAudioSessionLog(path, len(turns), credentials)
+	if err != nil {
+		return err
+	}
+	for index, turn := range turns {
+		applyAudioTurn(&entries[index], index, turn)
+	}
+	return writeAudioSessionLog(path, data, entries, len(turns), credentials)
+}
+
+func readAudioSessionLog(path string, turnCount int, credentials []string) ([]byte, []sessionLogEntry, error) {
 	data, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return wrapRecordingError(transcript.ErrRecordingWrite, "read session log", path, err, credentials)
+		return nil, nil, wrapRecordingError(transcript.ErrRecordingWrite, "read session log", path, err, credentials)
 	}
-	entries := make([]sessionLogEntry, 0, len(turns))
+	entries := make([]sessionLogEntry, 0, turnCount)
 	if err == nil {
 		for _, line := range bytes.Split(data, []byte{'\n'}) {
 			if len(bytes.TrimSpace(line)) == 0 {
@@ -141,42 +166,46 @@ func patchSessionLogAudio(path string, turns []audioTurn, credentials []string) 
 			}
 			var entry sessionLogEntry
 			if decodeErr := json.Unmarshal(line, &entry); decodeErr != nil {
-				return wrapRecordingError(transcript.ErrRecordingWrite, "decode session log", path, decodeErr, credentials)
+				return nil, nil, wrapRecordingError(transcript.ErrRecordingWrite, "decode session log", path, decodeErr, credentials)
 			}
 			entries = append(entries, entry)
 		}
 	}
-	for len(entries) < len(turns) {
+	for len(entries) < turnCount {
 		entries = append(entries, sessionLogEntry{TurnIndex: len(entries) + 1})
 	}
-	for index, turn := range turns {
-		entry := &entries[index]
-		if entry.TurnIndex == 0 {
-			entry.TurnIndex = index + 1
-		}
-		if turn.inputBytes > 0 {
-			entry.Input.AudioOffsetBytes = turn.inputOffset
-			entry.Input.AudioBytes = turn.inputBytes
-			entry.Input.AudioSegments = append([]string(nil), turn.inputSegments...)
-		}
-		if turn.outputBytes > 0 {
-			entry.Response.AudioOffsetBytes = turn.outputOffset
-			entry.Response.AudioBytes = turn.outputBytes
-			entry.Response.AudioSegments = append([]string(nil), turn.outputSegments...)
-		}
-		entry.Input.Committed = entry.Input.Committed || turn.committed
-		entry.Response.Complete = entry.Response.Complete || turn.complete
+	return data, entries, nil
+}
+
+func applyAudioTurn(entry *sessionLogEntry, index int, turn audioTurn) {
+	if entry.TurnIndex == 0 {
+		entry.TurnIndex = index + 1
 	}
-	output := make([]byte, 0, len(data)+len(turns)*128)
+	if turn.inputBytes > 0 {
+		entry.Input.AudioOffsetBytes = turn.inputOffset
+		entry.Input.AudioBytes = turn.inputBytes
+		entry.Input.AudioSegments = append([]string(nil), turn.inputSegments...)
+	}
+	if turn.outputBytes > 0 {
+		entry.Response.AudioOffsetBytes = turn.outputOffset
+		entry.Response.AudioBytes = turn.outputBytes
+		entry.Response.AudioSegments = append([]string(nil), turn.outputSegments...)
+	}
+	entry.Input.Committed = entry.Input.Committed || turn.committed
+	entry.Response.Complete = entry.Response.Complete || turn.complete
+}
+
+func writeAudioSessionLog(path string, data []byte, entries []sessionLogEntry, turnCount int, credentials []string) error {
+	output := make([]byte, 0, len(data)+turnCount*128)
 	for _, entry := range entries {
-		encoded, marshalErr := json.Marshal(entry)
-		if marshalErr != nil {
-			return wrapRecordingError(transcript.ErrRecordingWrite, "encode session log", path, marshalErr, credentials)
+		encoded, err := json.Marshal(entry)
+		if err != nil {
+			return wrapRecordingError(transcript.ErrRecordingWrite, "encode session log", path, err, credentials)
 		}
 		output = append(output, encoded...)
 		output = append(output, '\n')
 	}
-	if err := atomicReplace(path, output, 0o644); err != nil {
+	if err := atomicReplace(path, output, recordingFileMode); err != nil {
 		return wrapRecordingError(transcript.ErrRecordingWrite, "write session log", path, err, credentials)
 	}
 	return nil

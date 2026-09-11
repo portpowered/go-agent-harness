@@ -32,11 +32,18 @@
     "go-agent-runtime/services/recording/internal/service/service.go",
     "go-agent-runtime/services/recording/internal/service/session.go",
     "go-agent-runtime/services/recording/internal/service/session_test.go",
+    "go-agent-runtime/services/recording/internal/session/browser_redaction.go",
+    "go-agent-runtime/services/recording/internal/session/browser_events.go",
     "go-agent-runtime/services/recording/internal/session/service.go",
+    "go-agent-runtime/services/recording/internal/session/session_helpers_test.go",
     "go-agent-runtime/services/recording/internal/session/augment.go",
+    "go-agent-runtime/services/recording/internal/session/recorded_session.go",
+    "go-agent-runtime/services/recording/internal/session/recorder_finalize.go",
+    "go-agent-runtime/services/recording/internal/session/recorder_observe.go",
     "go-agent-runtime/services/recording/internal/session/browser.go",
     "go-agent-runtime/services/recording/internal/session/session_test.go",
     "go-agent-runtime/services/recording/internal/session/image.go",
+    "go-agent-runtime/services/recording/internal/session/augment_log.go",
     "go-agent-runtime/services/recording/internal/session/projection.go"
   ],
   "schema": "audio-runtime.c56.lifecycle-projections-failures.v1",
@@ -49,10 +56,10 @@
       "./go-agent-runtime/services/recording/..."
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration",
-    "elapsed_ms": 2744,
+    "elapsed_ms": 2209,
     "returncode": 0,
     "stderr": "",
-    "stdout": "?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/evidence\t2.109s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/service\t0.358s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/session\t0.703s\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire\t[no test files]\n",
+    "stdout": "?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/evidence\t1.919s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/service\t0.438s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/session\t0.853s\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire\t[no test files]\n",
     "timed_out": false
   }
 }
