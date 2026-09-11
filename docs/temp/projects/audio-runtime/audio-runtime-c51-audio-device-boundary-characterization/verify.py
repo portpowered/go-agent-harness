@@ -28,8 +28,8 @@ REPO_ROOT = EVIDENCE_ROOT.parents[4]
 FACTORY_ROOT = Path(os.environ.get("FACTORY_ROOT", REPO_ROOT)).resolve()
 TASK = "audio-runtime-c51-audio-device-boundary-characterization"
 OWNED_REL = Path("docs/temp/projects/audio-runtime") / TASK
-SOURCE_REVISION = "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
-PLANNING_MAIN_REVISION = SOURCE_REVISION
+SOURCE_REVISION = "bb29005d0bb545db5e08ffda0205929b021d4fc1"
+PLANNING_MAIN_REVISION = "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
 STARTUP_INTEGRATION_REVISION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 BASELINE_REVISION = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 EXPECTED_BRANCH = "codex/audio-runtime-c51-audio-device-boundary-characterization"
@@ -785,8 +785,9 @@ def verify_provenance() -> None:
         die("provenance schema mismatch")
     if git("branch", "--show-current") != EXPECTED_BRANCH:
         die("branch does not match the admitted PRD branch")
-    if git("rev-parse", "origin/main") != PLANNING_MAIN_REVISION:
-        die("origin/main moved after the pinned integration checkpoint; fetch and integrate before handoff")
+    current_main = git("rev-parse", "origin/main")
+    if current_main != SOURCE_REVISION:
+        die("origin/main moved after the fetched integration checkpoint; fetch and integrate before handoff")
     status = git("status", "--short")
     if status:
         die(f"worktree is not clean:\n{status}")
@@ -810,9 +811,9 @@ def verify_provenance() -> None:
     if current_control.get("json") != control.get("json"):
         die("project-control admission output changed since provenance capture")
     recorded = provenance["source"]
-    if recorded["sourceRevision"] != SOURCE_REVISION or recorded["planningMainRevision"] != PLANNING_MAIN_REVISION or recorded["currentMainRevision"] != PLANNING_MAIN_REVISION:
-        die("provenance revision pins do not match the admitted integration checkpoint")
-    if recorded.get("fetchedMain", {}).get("revision") != git("rev-parse", "origin/main"):
+    if recorded["sourceRevision"] != SOURCE_REVISION or recorded["planningMainRevision"] != PLANNING_MAIN_REVISION or recorded["currentMainRevision"] != current_main:
+        die("provenance revision pins do not match the fetched integrated main")
+    if recorded.get("fetchedMain", {}).get("revision") != current_main:
         die("provenance fetched-main identity does not match origin/main")
     candidate = recorded.get("cleanCandidateSHA")
     if not candidate or not recorded.get("candidateWasCleanAtCapture") or recorded.get("candidateStatusAtCapture") != "":
@@ -820,7 +821,7 @@ def verify_provenance() -> None:
     if not is_ancestor(candidate, head):
         die("clean candidate SHA is not an ancestor of the submitted head")
     required_ancestry = recorded.get("requiredAncestry", {})
-    for key, revision in (("startupIntegration", STARTUP_INTEGRATION_REVISION), ("planningMain", PLANNING_MAIN_REVISION), ("fetchedMain", PLANNING_MAIN_REVISION)):
+    for key, revision in (("startupIntegration", STARTUP_INTEGRATION_REVISION), ("planningMain", PLANNING_MAIN_REVISION), ("fetchedMain", SOURCE_REVISION)):
         entry = required_ancestry.get(key, {})
         if entry.get("revision") != revision or entry.get("isAncestor") is not True or not is_ancestor(revision, head):
             die(f"required ancestry is not pinned and verified for {key}")

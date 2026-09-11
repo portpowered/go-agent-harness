@@ -1,7 +1,8 @@
 # C51 audio/device boundary map
 
-The characterized source is `7f73c8b3b4ebc99b55b8bb5e802beff024385407`, the
-isolated branch's planning-main checkpoint. `import-graph.json` is generated
+The characterized source is the fetched integrated main
+`bb29005d0bb545db5e08ffda0205929b021d4fc1`; the planning-main checkpoint is
+`7f73c8b3b4ebc99b55b8bb5e802beff024385407`. `import-graph.json` is generated
 from production Go imports with file/line citations and checked with
 `GOWORK=off go list -json ./...` for every workspace module.
 

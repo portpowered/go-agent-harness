@@ -2,9 +2,10 @@
 
 This is an evidence-only characterization for the admitted task
 `audio-runtime-c51-audio-device-boundary-characterization`. The production
-source is pinned to `7f73c8b3b4ebc99b55b8bb5e802beff024385407`; the startup
-integration `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main, and
-baseline ancestry are recorded in `provenance.json`. No production, shared
+source is pinned to the fetched integrated main `bb29005d0bb545db5e08ffda0205929b021d4fc1`; the startup
+integration `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main
+`7f73c8b3b4ebc99b55b8bb5e802beff024385407`, and baseline ancestry are recorded
+in `provenance.json`. No production, shared
 fixture, baseline, acceptance, or sibling-owner file is changed.
 
 `review-findings.json` records the exact canonical-board lookup and the
@@ -77,7 +78,7 @@ The consumer mode runs both normal and `-race` tests. Its dependency listing is
 Build the shipped binary from the exact source before the process check:
 
 ```sh
-export C51_YUI=/tmp/audio-runtime-c51-yui-7f73c8b3
+export C51_YUI=/private/tmp/audio-runtime-c51-yui-2b3f565
 (cd agent-cli && GOWORK=off go build -trimpath -o "$C51_YUI" ./cmd/yui)
 python3 docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/verify.py --mode write-build-manifest --binary "$C51_YUI"
 python3 docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/verify.py --mode shipped-regression --binary "$C51_YUI" --build-manifest docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/evidence/shipped-build.json --child-timeout 60 --total-timeout 600

@@ -1,6 +1,6 @@
 {
   "schema": "audio-runtime-c51.repair-candidates.v1",
-  "sourceRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+  "sourceRevision": "bb29005d0bb545db5e08ffda0205929b021d4fc1",
   "policy": "Only demonstrated gaps are listed. C51 has no authorization to edit production or another owner's path.",
   "candidates": [
     {
