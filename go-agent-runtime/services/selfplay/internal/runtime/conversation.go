@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -113,102 +112,6 @@ func (s *stopState) snapshot() (selfplay.Result, error) {
 	return selfplay.Result{CustomerTurns: s.turns[0], AssistantTurns: s.turns[1]}, nil
 }
 
-type pcmBridge struct {
-	reader *io.PipeReader
-	writer *io.PipeWriter
-	once   sync.Once
-	mu     sync.Mutex
-	closed bool
-}
-
-func newPCMBridge(ctx context.Context) *pcmBridge {
-	reader, writer := io.Pipe()
-	bridge := &pcmBridge{reader: reader, writer: writer}
-	go func() {
-		<-ctx.Done()
-		bridge.close()
-	}()
-	return bridge
-}
-
-func (b *pcmBridge) write(pcm []byte) error {
-	if len(pcm) == 0 {
-		return nil
-	}
-	n, err := b.writer.Write(pcm)
-	if err != nil {
-		return err
-	}
-	if n != len(pcm) {
-		return io.ErrShortWrite
-	}
-	return nil
-}
-
-func (b *pcmBridge) pump(ctx context.Context, ready <-chan selfplay.AudioInput, fail func(error), name string, observe func([]byte)) {
-	input, ok := waitForAudioInput(ctx, ready)
-	if !ok {
-		return
-	}
-	buffer := make([]byte, 64*1024)
-	for {
-		count, err := b.reader.Read(buffer)
-		if count > 0 && !b.forward(input, ctx, buffer[:count], fail, name, observe) {
-			return
-		}
-		if err != nil {
-			b.handleReadError(err, fail, name)
-			return
-		}
-	}
-}
-
-func waitForAudioInput(ctx context.Context, ready <-chan selfplay.AudioInput) (selfplay.AudioInput, bool) {
-	select {
-	case input, ok := <-ready:
-		return input, ok && input != nil
-	case <-ctx.Done():
-		return nil, false
-	}
-}
-
-func (b *pcmBridge) forward(input selfplay.AudioInput, ctx context.Context, raw []byte, fail func(error), name string, observe func([]byte)) bool {
-	pcm := append([]byte(nil), raw...)
-	if sendErr := input.SendAudioInput(ctx, pcm); sendErr != nil {
-		if !isCancellation(sendErr) {
-			fail(fmt.Errorf("%s PCM bridge send: %w", name, sendErr))
-		}
-		return false
-	}
-	if observe != nil {
-		observe(pcm)
-	}
-	return true
-}
-
-func (b *pcmBridge) handleReadError(err error, fail func(error), name string) {
-	b.mu.Lock()
-	closed := b.closed
-	b.mu.Unlock()
-	if !closed && !isCancellation(err) {
-		fail(fmt.Errorf("%s PCM bridge read: %w", name, err))
-	}
-}
-
-func (b *pcmBridge) close() {
-	b.once.Do(func() {
-		b.mu.Lock()
-		b.closed = true
-		b.mu.Unlock()
-		_ = b.writer.Close()
-		_ = b.reader.Close()
-	})
-}
-
-func isCancellation(err error) bool {
-	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.ErrClosedPipe)
-}
-
 type conversationRuntime struct {
 	service             *Service
 	ctx                 context.Context
@@ -229,7 +132,7 @@ type conversationRuntime struct {
 }
 
 func newConversationRuntime(service *Service, ctx context.Context, options selfplay.RunOptions, customer, assistant messages.SessionInferencer, evidence *evidence, closeSessions func() error) *conversationRuntime {
-	bridgeCtx, bridgeCancel := context.WithCancel(context.Background())
+	bridgeCtx, bridgeCancel := context.WithCancel(ctx)
 	return &conversationRuntime{
 		service: service, ctx: ctx, options: options, customer: customer, assistant: assistant,
 		evidence: evidence, closeSessions: closeSessions, bridgeCtx: bridgeCtx, bridgeCancel: bridgeCancel,
@@ -362,6 +265,7 @@ func (c *conversationRuntime) finish() (selfplay.Result, error) {
 	if err := c.evidence.err(); err != nil {
 		runErr = errors.Join(runErr, err)
 	}
+	runErr = errors.Join(runErr, c.customerToAssistant.closeError(), c.assistantToCustomer.closeError())
 	runErr = errors.Join(runErr, closeSessionsSafely(c.closeSessions))
 	finalizeErr := c.evidence.finalize(result, runErr, now(c.service.deps.Clock))
 	return result, errors.Join(runErr, finalizeErr)
@@ -393,6 +297,9 @@ func assistantAudioDelta(msg messages.StreamMessage) bool {
 }
 
 func turnIndex(fields map[string]string) int {
-	index, _ := strconv.Atoi(fields["turn_index"])
+	index, err := strconv.Atoi(fields["turn_index"])
+	if err != nil {
+		return 0
+	}
 	return index
 }

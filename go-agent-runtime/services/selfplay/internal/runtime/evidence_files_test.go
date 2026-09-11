@@ -38,7 +38,9 @@ func TestEvidenceFactoryWritersEnforceFiniteBudgets(t *testing.T) {
 	if err := jsonl.Write(map[string]string{"x": "too-long"}); !errors.Is(err, selfplay.ErrEvidenceQuota) {
 		t.Fatalf("JSONL quota error = %v", err)
 	}
-	_ = jsonl.Close()
+	if closeErr := jsonl.Close(); closeErr != nil && !errors.Is(closeErr, selfplay.ErrEvidenceQuota) {
+		t.Fatalf("JSONL close: %v", closeErr)
+	}
 	wav, err := factory.NewWAVWriter(filepath.Join(destination, "audio.wav"), selfplay.EvidenceSampleRate, selfplay.EvidenceLimits{WAVBytes: 2})
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +51,9 @@ func TestEvidenceFactoryWritersEnforceFiniteBudgets(t *testing.T) {
 	if err := wav.Write(context.Background(), []byte{1}); err == nil {
 		t.Fatal("odd PCM should be rejected")
 	}
-	_ = wav.Close()
+	if closeErr := wav.Close(); closeErr != nil && !errors.Is(closeErr, selfplay.ErrEvidenceQuota) {
+		t.Fatalf("WAV close: %v", closeErr)
+	}
 }
 
 func TestEvidenceFactoryRedactErrorRemovesCredentialValues(t *testing.T) {

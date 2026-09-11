@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -55,7 +56,7 @@ func evidenceCredentialTokenEnd(value string, start int) int {
 	return len(value)
 }
 
-func writeAtomicEvidenceJSON(path string, value any) error {
+func writeAtomicEvidenceJSON(path string, value any) (returnErr error) {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal JSON artifact: %w", err)
@@ -72,16 +73,18 @@ func writeAtomicEvidenceJSON(path string, value any) error {
 	remove := true
 	defer func() {
 		if remove {
-			_ = os.Remove(tmpPath)
+			if removeErr := os.Remove(tmpPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				returnErr = errors.Join(returnErr, fmt.Errorf("remove JSON artifact temporary file %q: %w", tmpPath, removeErr))
+			}
 		}
 	}()
-	if _, err := writeEvidenceAll(tmp, data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write JSON artifact temporary file: %w", err)
+	if _, writeErr := writeEvidenceAll(tmp, data); writeErr != nil {
+		closeErr := tmp.Close()
+		return fmt.Errorf("write JSON artifact temporary file: %w", errors.Join(writeErr, closeErr))
 	}
 	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("sync JSON artifact temporary file: %w", err)
+		closeErr := tmp.Close()
+		return fmt.Errorf("sync JSON artifact temporary file: %w", errors.Join(err, closeErr))
 	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close JSON artifact temporary file: %w", err)

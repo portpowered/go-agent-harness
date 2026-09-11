@@ -33,7 +33,7 @@ func (s *Service) RunWithResult(ctx context.Context, out io.Writer, options self
 		return failureResult(), errors.New("self-play service is required")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return failureResult(), errors.New("self-play context is required")
 	}
 	if out == nil {
 		out = io.Discard
@@ -73,7 +73,7 @@ func (s *Service) RunWithResult(ctx context.Context, out io.Writer, options self
 		return failureResult(), closeAfterConstruction(customer, errors.New("self-play session factory returned a nil assistant inferencer"))
 	}
 
-	if err := os.MkdirAll(normalized.OutputDir, 0o700); err != nil {
+	if err := os.MkdirAll(normalized.OutputDir, evidenceDirectoryMode); err != nil {
 		return failureResult(), closeAfterConstructionPair(customer, assistant, fmt.Errorf("create self-play output directory %q: %w", normalized.OutputDir, err))
 	}
 	startedAt := now(s.deps.Clock)
@@ -132,7 +132,7 @@ func normalize(options selfplay.RunOptions, deps selfplay.Dependencies) (selfpla
 
 func validateOutputTarget(destination string) error {
 	parent := filepath.Dir(destination)
-	if err := os.MkdirAll(parent, 0o700); err != nil {
+	if err := os.MkdirAll(parent, evidenceDirectoryMode); err != nil {
 		return fmt.Errorf("prepare self-play output parent %q: %w", destination, err)
 	}
 	info, err := os.Lstat(destination)

@@ -15,12 +15,17 @@ import (
 
 type evidenceFactory struct{}
 
+const (
+	evidenceFileMode      os.FileMode = 0o600
+	evidenceDirectoryMode os.FileMode = 0o700
+)
+
 // NewEvidenceFactory exposes only the runtime's evidence port to the generated
 // composition layer. File and redaction implementations stay in this package.
 func NewEvidenceFactory() selfplay.EvidenceFactory { return evidenceFactory{} }
 
 func (evidenceFactory) NewJSONLWriter(path string, limits selfplay.EvidenceLimits) (selfplay.JSONLWriter, error) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, 0o600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, evidenceFileMode)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +65,7 @@ func (evidenceFactory) NewWAVWriter(path string, sampleRate int, limits selfplay
 	if sampleRate <= 0 {
 		return nil, fmt.Errorf("WAV sample rate must be positive, got %d", sampleRate)
 	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, evidenceFileMode)
 	if err != nil {
 		return nil, err
 	}
@@ -69,9 +74,9 @@ func (evidenceFactory) NewWAVWriter(path string, sampleRate int, limits selfplay
 		_, err = writeEvidenceAll(file, header[:])
 	}
 	if err != nil {
-		_ = file.Close()
-		_ = os.Remove(path)
-		return nil, fmt.Errorf("write WAV header: %w", err)
+		closeErr := file.Close()
+		removeErr := os.Remove(path)
+		return nil, fmt.Errorf("write WAV header: %w", errors.Join(err, closeErr, removeErr))
 	}
 	return &wavWriter{
 		path:       path,

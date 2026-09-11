@@ -84,46 +84,59 @@ func newEvidence(destination string, options selfplay.RunOptions, startedAt time
 		var err error
 		side.audio, err = factory.NewWAVWriter(side.wavPath, selfplay.EvidenceSampleRate, options.EvidenceLimits)
 		if err != nil {
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create %s WAV evidence: %w", config.id, err)
+			return nil, fmt.Errorf("create %s WAV evidence: %w", config.id, errors.Join(err, evidence.cleanupSetup()))
 		}
 		side.diagnostics, err = factory.NewJSONLWriter(side.diagnosticPath, options.EvidenceLimits)
 		if err != nil {
 			evidence.sides[index] = side
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create %s diagnostics evidence: %w", config.id, err)
+			return nil, fmt.Errorf("create %s diagnostics evidence: %w", config.id, errors.Join(err, evidence.cleanupSetup()))
 		}
 		side.streamDeltas, err = factory.NewJSONLWriter(side.streamPath, options.EvidenceLimits)
 		if err != nil {
 			evidence.sides[index] = side
-			evidence.cleanupSetup()
-			return nil, fmt.Errorf("create %s stream evidence: %w", config.id, err)
+			return nil, fmt.Errorf("create %s stream evidence: %w", config.id, errors.Join(err, evidence.cleanupSetup()))
 		}
 	}
 	return evidence, nil
 }
 
-func (e *evidence) cleanupSetup() {
+func (e *evidence) cleanupSetup() error {
 	if e == nil {
-		return
+		return nil
 	}
+	var cleanupErr error
 	for _, side := range e.sides {
-		if side == nil {
-			continue
-		}
-		if side.audio != nil {
-			_ = side.audio.Close()
-		}
-		if side.diagnostics != nil {
-			_ = side.diagnostics.Close()
-		}
-		if side.streamDeltas != nil {
-			_ = side.streamDeltas.Close()
-		}
-		for _, path := range []string{side.wavPath, side.diagnosticPath, side.streamPath} {
-			_ = os.Remove(path)
-		}
+		cleanupErr = errors.Join(cleanupErr, cleanupEvidenceSide(side))
 	}
+	return cleanupErr
+}
+
+func cleanupEvidenceSide(side *sideEvidence) error {
+	if side == nil {
+		return nil
+	}
+	return errors.Join(
+		closeEvidenceSink(side.audio),
+		closeEvidenceSink(side.diagnostics),
+		closeEvidenceSink(side.streamDeltas),
+		removePartialEvidence(side.wavPath),
+		removePartialEvidence(side.diagnosticPath),
+		removePartialEvidence(side.streamPath),
+	)
+}
+
+func closeEvidenceSink(sink interface{ Close() error }) error {
+	if sink == nil {
+		return nil
+	}
+	return sink.Close()
+}
+
+func removePartialEvidence(path string) error {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove partial self-play evidence %q: %w", path, err)
+	}
+	return nil
 }
 
 func (e *evidence) side(index int) *sideEvidence {
