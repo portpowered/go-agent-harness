@@ -4,12 +4,12 @@
   "candidateStatus": "READY_FOR_SCRIPT_CI",
   "candidate": {
     "branch": "codex/audio-runtime-c62-validation-contract-anchor-repair",
-    "revision": "3f47cfbf5edeaca0b1f9e9a883963cbe6c8157b7",
+    "revision": "63988c0af875f2fd379b0fc866282dee600ea09e",
     "pullRequest": 453,
     "pullRequestUrl": "https://github.com/portpowered/go-agent-harness/pull/453",
     "baselineOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
     "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-    "worktreeStatus": "clean",
+    "worktreeStatus": "clean after evidence checkpoint",
     "ancestry": {
       "startupIntegrationIsAncestor": true,
       "originMainIsAncestor": true,
@@ -83,7 +83,7 @@
   "preservedInputs": {
     "amendmentId": "user-windows-hardware-scope-20260910",
     "amendmentSha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa",
-    "authorizationSha256": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
+    "authorizationSha256": "c3bfa91543b349b2c89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
     "preparedBatchPath": "docs/temp/projects/audio-runtime/c47-c55-vertical-probes-batch.json",
     "preparedBatchSha256": "b03c30d1225e2fd1d533c90524e5aac9ab256627b39cc3ae4a1ce71d98361a3f",
     "buildSha256": "2bf087d1f9fef4df0ba85847a594bc8d67292c5e6d3ce44923cc3e64d53d92d7",
@@ -96,7 +96,7 @@
       "audio-runtime-c54-room-document-admission-vertical-probe",
       "audio-runtime-c55-room-participant-mesh-vertical-probe"
     ],
-    "result": "all three exact packets reached the intercepted target-directory creation boundary",
+    "result": "all three exact packets reached the intercepted target-directory creation boundary from tracked fixtures in a clean-checkout fixture root",
     "stagingReached": false,
     "artifactCopyReached": false,
     "missionJsonCreated": false,
@@ -118,19 +118,40 @@
     "realtimeSecondsUsed": 0,
     "validatorsLaunched": false
   },
+  "successorCompletionRegression": {
+    "result": "PASS",
+    "test": "test_successor_mission_authority_reaches_completion",
+    "missionAuthority": "trusted admitted successor authority",
+    "amendmentAuthority": "trusted original authority retained as provenance",
+    "projectControl": "verify_completion returned status=verified",
+    "realtimeSessionsUsed": 0
+  },
   "changedFiles": {
-    "factory/scripts/project_scope_amendment.py": "00dfe7fef8dd08fa18e32579922e10b74d6ac191eeb3d62ca6621c19db439bd8",
-    "factory/scripts/tests/test_prepare_validation.py": "0211bf0c1daca3e390f8c90e65a1bcab3940cdf007dbd5a56cca2d1b493965f2",
+    "factory/scripts/project_scope_amendment.py": "fabe4bdc74c21703c872239ba57c3abc15d760a7690985d7e8404ba2d65e8817",
+    "factory/scripts/tests/test_prepare_validation.py": "3e34ffca59fed3379cd2910111a95b277425afe548cb056d00aaa3789fe81ddd",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/fixtures/audio-runtime-c32-capture-energy-vertical-probe.json": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/fixtures/c47-c55-vertical-probes-batch.json": "b03c30d1225e2fd1d533c90524e5aac9ab256627b39cc3ae4a1ce71d98361a3f",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/fixtures/scope-amendment-authority.json": "c3bfa91543b349b2c89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/fixtures/successor-acceptance.md": "edd1f5cbca1de8b49f96cdf8f039732d28a0082ef3718015e10535ff2e6a441a",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/fixtures/successor-manifest.json": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
     "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/pre-fix-anchor-failure.json": "0c1b6178ccf421d6c0a7d5279da9a3de14df799db32a642b465a9a10c2d8c01e"
   },
   "checks": [
     {
-      "command": "rtk proxy env -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_project_control factory.scripts.tests.test_prepare_validation factory.scripts.tests.test_prepare_validation_budget",
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_prepare_validation",
       "result": "PASS",
-      "tests": 37
+      "tests": 6,
+      "note": "Clean-checkout C62 fixture path; includes the successor-authority-to-verified-completion regression."
     },
     {
-      "command": "rtk proxy env -u FACTORY_PROJECT_MANIFEST make test-factory-scripts",
+      "command": "rtk proxy env -u FACTORY_PROJECT_MANIFEST FACTORY_ROOT=<admitted-factory-root> FACTORY_TEST_CONTRACT_CHILD=1 FACTORY_TEST_MODULES='factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_project_control factory.scripts.tests.test_prepare_validation factory.scripts.tests.test_prepare_validation_budget' make -e test-factory-scripts",
+      "result": "PASS",
+      "tests": 38,
+      "skipped": 16,
+      "note": "Accumulated selector; the legacy C39 cases skip when their separate historical inputs are unavailable in the isolated checkout."
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 make test-factory-scripts",
       "result": "PASS",
       "tests": 76
     },
@@ -164,7 +185,7 @@
       "owner": "SCRIPT",
       "status": "PENDING",
       "pollingByExecutor": false,
-      "nextAction": "Run the broad required checks for PR 453 at exact head 3f47cfbf5edeaca0b1f9e9a883963cbe6c8157b7. On rejection, return the same task to this executor with exact logs."
+      "nextAction": "Run the broad required checks for PR 453 after this repaired candidate is pushed; implementation revision 63988c0af875f2fd379b0fc866282dee600ea09e. On rejection, return the same task to this executor with exact logs."
     },
     "independentReview": "PENDING_SCRIPT_CI_GREEN",
     "guardedMerge": "PENDING_INDEPENDENT_REVIEW",
