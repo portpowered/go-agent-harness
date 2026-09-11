@@ -104,6 +104,16 @@ Artifact input equivalence is true, APFS clones were used, projected growth is `
 
 The latest-main evidence is ready for the script-owned CI gate. No CI result, independent review, guarded merge, post-merge vertical acceptance or project acceptance is claimed.
 
+## Current-main WebMCP repair handoff
+
+The current-main CI rejection on PR #439 identified a bounded WebMCP defect in `productionTargetProbe.Probe`: a persisted listed selection in `browserID/targetID` form was compared verbatim with the raw target ID, so the selected target was treated as unknown. Source checkpoint `c1ab430a8b76af3f06f88b9194f2377246a6d457` fixes that within the amended lease by splitting the composite reference, requiring the live browser ID to match, and then comparing the normalized raw target ID. The extra probe test was consolidated into `webmcp_composite_ref_test.go` and removed, preserving the 147-file CLI package baseline; bare and composite success plus unrelated restored-target fail-closed controls are covered.
+
+Focused evidence on the committed source is green: the exact composite test passed five repetitions; the adjacent WebMCP selection/probe set and full `agent-cli/internal/transport/cli` package passed; `make architecture-size-check` passed at 185 packages/1891 files/27914 functions; and `git diff --check` passed. The accumulated C47 resource suite returned `ACCEPTED` in 7.2438s with its measured reserve-shortfall negative intentionally `BLOCKED` before launch (`available=2197842496`, `needed=2197842497`). Private C45 regressions pinned to `5f14c45313cfdc71e000fda209e3408fcf863faf` returned `ACCEPTED` in 1.63785s, and all seven Python sources compiled successfully.
+
+The exact immutable staged mission used the read-only C45 artifact root and isolated C47 output root. `runs/latest-staged-probe.json` is `ACCEPTED` at tested source `c1ab430a8b76af3f06f88b9194f2377246a6d457`; raw controls are under `runs/runs/staged-probe-20260911T131838Z-38590/`. Artifact input equivalence is true, APFS clone staging was used, projected growth is 174966628 bytes, minimum observed free space is 103742377984 bytes, binary output is 4718 bytes, `report_bytes=380416`, `latest_report_bytes=65811`, and scratch cleanup is `57472980 -> 0` with no errors or survivors.
+
+The changed source and C47-owned evidence are ready to push on the same branch and hand to the script CI gate. This is executor evidence only: no CI result, independent review, guarded merge or vertical/project acceptance is claimed or polled.
+
 ## Submitted head
 
 Evidence-only checkpoint `c86fb9a6687dfcb38e35447b42242ca64d6742db` is pushed to `codex/audio-runtime-c47-live-probe-output-bound` and contains the repair ledger, focused reports and exact raw staged run. No executable Python source, Go source, immutable artifact, fixture or peer path changed after tested source `7b03664b9c355709c592998026b093ab547f6290`.
