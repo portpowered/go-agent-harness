@@ -1,0 +1,129 @@
+{
+  "schema": "audio-runtime.c54.admission-inventory.v1",
+  "project": "audio-runtime",
+  "task": "audio-runtime-c54-room-document-admission",
+  "factory_session": "~default",
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission",
+  "branch": "codex/audio-runtime-c54-room-document-admission",
+  "task_board_state_at_admission": "init",
+  "base_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "admission_verification": {
+    "command": "project-control.py verify-work --type task --name audio-runtime-c54-room-document-admission",
+    "status": "admitted",
+    "admitted_project": "audio-runtime",
+    "admitted_name": "audio-runtime-c54-room-document-admission",
+    "prd_branch_matches_worktree": true,
+    "fresh_fetch_at_admission": "origin/main=2456a5d1594e73faf85e1132d6050735bc3e4710"
+  },
+  "peer_read_only_inventory": [
+    {
+      "task": "audio-runtime-c50-remaining-cli-service-inventory",
+      "branch": "codex/audio-runtime-c50-remaining-cli-service-inventory",
+      "head": "1d95a91addcd80673dbc839a1881411d759f972e",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
+      "status": "clean",
+      "owned_paths": ["docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/"]
+    },
+    {
+      "task": "audio-runtime-c52-hermetic-room-liveness-characterization",
+      "branch": "codex/audio-runtime-c52-hermetic-room-liveness-characterization",
+      "head": "505121283ec2fdfb60422b6c34906902dbd160ba",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization",
+      "status": "clean",
+      "owned_paths": ["docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/"]
+    },
+    {
+      "task": "audio-runtime-c53-provider-close-terminal-drain",
+      "branch": "codex/audio-runtime-c53-provider-close-terminal-drain",
+      "head": "668aceedb5ba151caea59ed77a4473b5340358b5",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain",
+      "status": "clean",
+      "owned_paths": [
+        "go-agent-runtime/services/session/internal/live/observation.go",
+        "go-agent-runtime/services/session/internal/live/start_support.go",
+        "go-agent-runtime/services/session/internal/live/lifecycle.go",
+        "go-agent-runtime/services/session/internal/live/control.go",
+        "go-agent-runtime/services/session/internal/live/service.go",
+        "go-agent-runtime/services/session/internal/live/policies_test.go",
+        "go-agent-runtime/services/session/internal/live/terminal_drain_test.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/"
+      ]
+    },
+    {
+      "task": "audio-runtime-c46-retire-cli-terminal-policy",
+      "branch": "codex/audio-runtime-c46-retire-cli-terminal-policy",
+      "head": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c46-retire-cli-terminal-policy",
+      "status": "clean",
+      "owned_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go",
+        "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go",
+        "go-agent-runtime/services/providers/terminal_policy.go",
+        "go-agent-runtime/services/providers/internal/terminalpolicy/",
+        "go-agent-runtime/services/providers/wire/terminal_policy.go",
+        "go-agent-runtime/services/providers/wire/terminal_policy_gen.go",
+        "coverage-manifest/go-agent-runtime/services/providers/internal/terminalpolicy/package.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c46-retire-cli-terminal-policy/",
+        "docs/architecture/architecture-size-baseline.json"
+      ]
+    },
+    {
+      "task": "audio-runtime-c47-live-probe-output-bound",
+      "branch": "codex/audio-runtime-c47-live-probe-output-bound",
+      "head": "a22498d965c85bb6a92e4bf0eae5583065a1a884",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound",
+      "status": "clean",
+      "owned_paths": [
+        "docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/verify.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c45-model-probe-oracle-repair/run_staged_probe.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/"
+      ]
+    },
+    {
+      "task": "audio-runtime-c23-long-session-tool-characterization",
+      "branch": "codex/audio-runtime-c23-long-session-tool-characterization",
+      "head": "6677465e00c9fd052a7c6b6bc69cc17f8e32e02f",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization",
+      "status": "clean",
+      "owned_paths": ["docs/temp/projects/audio-runtime/audio-runtime-c23-long-session-tool-characterization/"]
+    },
+    {
+      "task": "audio-runtime-c55-room-participant-mesh",
+      "branch": "codex/audio-runtime-c55-room-participant-mesh",
+      "head": "9779b2364cd00516b9b227f5b3f10275bfe43c7a",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh",
+      "status": "dirty; preserved and not read beyond status",
+      "owned_paths": [
+        "agent-cli/internal/room/mesh.go",
+        "agent-cli/internal/room/mesh_test.go",
+        "go-agent-runtime/services/rooms/mesh.go",
+        "go-agent-runtime/services/rooms/internal/lifecycle/mesh.go",
+        "go-agent-runtime/services/rooms/wire/mesh.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/"
+      ]
+    },
+    {
+      "task": "audio-runtime-c05-baseline-behavior-recovery",
+      "branch": "codex/audio-runtime-c05-baseline-behavior-recovery",
+      "head": "ebb7d5ab2096eb8270b747224779ed14bbdfee80",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c05-baseline-behavior-recovery",
+      "status": "dirty; preserved and not read beyond status",
+      "owned_paths": [
+        "agent-cli/internal/wire/**",
+        "agent-cli/internal/services/**",
+        "agent-cli/internal/transport/cli/**",
+        "agent-cli/test/integration/**",
+        "go-agent-runtime/services/session/**",
+        "go-agent-runtime/services/providers/**",
+        "go-agent-runtime/services/recording/**",
+        "go-agent-runtime/services/replay/**",
+        "go-agent-runtime/services/tools/**",
+        "tests/embedding/**"
+      ]
+    }
+  ],
+  "overlap_result": "no peer owned path overlaps C54 owned paths; peer dirty content was preserved",
+  "host_checkout_preserved": true
+}
