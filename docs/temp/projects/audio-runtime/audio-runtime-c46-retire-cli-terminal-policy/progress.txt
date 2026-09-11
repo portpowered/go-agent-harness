@@ -1,0 +1,28 @@
+Task: audio-runtime-c46-retire-cli-terminal-policy
+Project: audio-runtime
+Candidate checkpoint: 1e743f3e2d7ae3559c3c143939c9e4982abcef44
+
+Admission and ancestry
+- project-control.py verify-work --type task --name audio-runtime-c46-retire-cli-terminal-policy: admitted.
+- prd.branchName matches codex/audio-runtime-c46-retire-cli-terminal-policy.
+- Fetched origin/main at aa31d6d0e7261f7dcfc07e8f14a7ad29501f542b; baseline 3194edd, startup integration 8bdafc7, manifest intended main ddebb8 and fetched main are ancestors.
+- Worktree is clean after the source checkpoint; no host checkout reset or merge was used.
+- Canonical board has no C46 rejection feedback or prior review attempt. C38/C40/C45 leases remain disjoint.
+
+Implementation
+- Moved terminal status normalization, explicit error metadata precedence, legacy field extraction, rate-limit eligibility/cancellation discrimination, and decimal retry-delay parsing into go-agent-runtime/services/providers/internal/terminalpolicy.
+- Added providers.TerminalPolicy and the dedicated providers/wire terminal entrypoint. The existing generic provider Wire graph is unchanged.
+- Retained CLI helper names/constants as thin delegates; scheduler, wait, diagnostics, response lifecycle and continuation ownership remain in CLI.
+- Registered only the new private terminalpolicy coverage floor at 80.00.
+- Added standalone GOWORK=off consumer, positive behavior report and wrong-oracle negative control under this owned evidence directory.
+
+Focused evidence
+- Provider terminalpolicy normal/race tests PASS; private coverage 95.5%.
+- CLI rate-limit, scheduled retry, tool continuation, cancellation, metadata and non-rate-limit regressions PASS normal and race.
+- Focused provider/CLI vet PASS.
+- Wire check PASS; coverage registration PASS (175 packages); architecture-size PASS (185 packages, 1893 files, 27796 functions).
+- Standalone consumer PASS; mutated delay oracle exits nonzero as expected. Exact public YUI replay was not run; deterministic local provider/session fixture is the bounded route used here.
+- No script CI, independent review, guarded merge, post-merge vertical acceptance or project completion is claimed.
+
+Next action
+- Push this changed candidate, open/update the same task PR, and return ACCEPTED to the script-owned CI gate. Do not poll CI; repair any exact rejection on this same task and retain ownership with CONTINUE.
