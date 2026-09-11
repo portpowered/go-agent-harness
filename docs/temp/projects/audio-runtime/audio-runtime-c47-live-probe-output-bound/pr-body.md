@@ -94,6 +94,10 @@ This candidate is ready for the script-owned CI gate. No CI result, independent 
 
 ## Submitted head
 
+Evidence-only checkpoint `40c011bc2f09d2f4fe128e50ebfb30ec2b3a0091` is pushed to `codex/audio-runtime-c47-live-probe-output-bound`; PR #439 is open at this head against `main`. The candidate is handed to the script-owned CI gate. No CI result, independent review, guarded merge, post-merge vertical acceptance or project acceptance is claimed.
+
+## Submitted head
+
 Evidence-only checkpoint `c86fb9a6687dfcb38e35447b42242ca64d6742db` is pushed to `codex/audio-runtime-c47-live-probe-output-bound` and contains the repair ledger, focused reports and exact raw staged run. No executable Python source, Go source, immutable artifact, fixture or peer path changed after tested source `7b03664b9c355709c592998026b093ab547f6290`.
 
 PR #439 is open at this head against `main` and is ready for the script-owned CI gate. No CI result, independent review, guarded merge, vertical acceptance or project acceptance is claimed here.
