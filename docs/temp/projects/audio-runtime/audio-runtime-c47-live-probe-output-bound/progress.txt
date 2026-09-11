@@ -35,3 +35,13 @@ Committed-head final evidence
 
 Next action
 - PR #439 is open from the pushed candidate branch. The implementation and committed-head probe evidence are handed to the script CI gate; no CI result is claimed and no CI polling is performed.
+
+Review repair checkpoint
+- Canonical review rejection required preserving a nonzero parent exit over descendant cleanup, failure-safe cleanup inspection evidence, C47-only output roots, aggregate deadline checks through staging/extraction/cleanup, timestamped reserve samples, final report sizing after outcome.json, and removal of the trailing blank line in the prior evidence.
+- Repair checkpoint commit: 9974990cf94995e2584948d1074a8199d3778ae3. The branch is clean after commit and still matches prd.branchName.
+- Focused regressions after the repair: test_resource_bounds.py --group all --child-timeout 10 --total-timeout 120: PASS; run_c45_controls_private.py --child-timeout 60 --total-timeout 300: PASS; Python compilation: PASS; git diff --check: PASS.
+- Exact staged mission rerun: evidence/staged-probe-live-04/latest-staged-probe.json, decision ACCEPTED, tested_source_revision=9974990cf94995e2584948d1074a8199d3778ae3, verifier_sha256=d738313be5bba70482147227f939b733077bc6f3d8c1de6d485d1c9dd73ff0d0.
+- Exact evidence: staged binary bytes 57,445,940; fixture bytes 27,040; binary output 4,768/67,108,864; report_bytes 379,244 measured after outcome.json; scratch 57,472,980 before and 0 after with no cleanup errors; artifact_input_equivalence=true; forbidden_helpers_called=[]; minimum free space 115,870,154,752 bytes.
+
+Next action
+- Push the repaired head and update the existing PR #439 with the same task. Submit it to the script CI gate; do not claim or poll CI results.
