@@ -10,7 +10,7 @@
   "bounds": {
     "aggregate_timeout_seconds": 600.0,
     "child_timeout_seconds": 60.0,
-    "elapsed_ms": 41442,
+    "elapsed_ms": 60149,
     "max_child_output_bytes": 65536,
     "max_retained_disk_bytes": 8388608
   },
@@ -19,7 +19,7 @@
     "consumer": {
       "bytes": 4484242,
       "path": "artifacts/c54-consumer",
-      "sha256": "a15f2f973e383d938b71e25c3519ea0c8632f4e2fb5aa37dd4c1255ba1b20077"
+      "sha256": "b5a595155ea542510d627477507bae95afc30506dd3f108ec3b4f0430c878846"
     },
     "inputs": [
       {
@@ -143,9 +143,9 @@
         "sha256": "f2e2cdcc7d7163bf5b952bc613b995a228d325c4782a48f05ba7614fca076676"
       },
       {
-        "bytes": 1908608,
+        "bytes": 1905352,
         "path": "docs/architecture/architecture-size-baseline.json",
-        "sha256": "069839c59f601bc021d77ab578557201cfb849f39d13b247ca02a399b0cb75f4"
+        "sha256": "6d61448b83eca374b324335f6a9e2fac768969d073b1091d17d48d45bf3badd1"
       },
       {
         "bytes": 1236,
@@ -195,12 +195,12 @@
     ],
     "toolchain": "go version go1.26.7 darwin/arm64",
     "yui": {
-      "bytes": 50913458,
+      "bytes": 50936754,
       "path": "artifacts/yui",
-      "sha256": "3601f3502fdea48b64e56c192bd72dcb46d3f601e39e3263c45b1186dbeefdfa"
+      "sha256": "2bf087d1f9fef4df0ba85847a594bc8d67292c5e6d3ce44923cc3e64d53d92d7"
     }
   },
-  "candidate_revision": "67d98d3a13fd9d01ac92acc3a8ec8467f06803e0",
+  "candidate_revision": "cc740a131a0763a6325f20bb3d34195494fc6700",
   "case_names": [
     "consumer",
     "yui"
@@ -222,7 +222,7 @@
     "expected_pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
   },
   "fresh_fetch_is_newer_descendant": true,
-  "fresh_fetch_origin_main_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+  "fresh_fetch_origin_main_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
   "integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "project": "audio-runtime",
   "schema": "audio-runtime.c54.provenance.v1",
