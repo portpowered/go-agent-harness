@@ -1,0 +1,260 @@
+{
+  "execution": {
+    "cleanup": {
+      "group_alive_after": false,
+      "group_alive_before": true,
+      "kill_sent": false,
+      "parent_reaped": true,
+      "reader_threads_joined": true,
+      "setup_error": "",
+      "term_sent": false
+    },
+    "command": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain/docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/bin/c53-consumer",
+      "--fixture",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain/docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/fixtures.json",
+      "--output",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain/docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/artifacts/provider-close-overtake/candidate/consumer-report.json"
+    ],
+    "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain",
+    "disk_bounded": true,
+    "disk_bytes": 0,
+    "elapsed_ms": 259,
+    "label": "provider-close-overtake/candidate",
+    "output_bounded": true,
+    "returncode": 0,
+    "stderr": "artifacts/provider-close-overtake/candidate/process/stderr.log",
+    "stderr_bytes": 0,
+    "stdout": "artifacts/provider-close-overtake/candidate/process/stdout.log",
+    "stdout_bytes": 0,
+    "timed_out": false
+  },
+  "expected_outcome": "repaired-pass",
+  "report": {
+    "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+    "clean_shutdown": true,
+    "consumer_surface": "public-live-service",
+    "fixture_sha256": "d58674074f07a41dff79759104ad2a85c708cc4a4d623536db726ea857a2ee63",
+    "healthy_pcm": {
+      "bytes": 8,
+      "channels": 1,
+      "format": "pcm16-le",
+      "sample_rate": 16000,
+      "sha256": "79761b4bfaef74f2e183877f56ec7ccc0adb8b0e21a9dbb4020748ae8eb5ac6b"
+    },
+    "interruption": {
+      "cancel_boundary_sequence": 5,
+      "cancel_response_id": "interrupt-resp-1",
+      "cancel_sent": true,
+      "cancellation_terminal_observed": true,
+      "cancelled_output_rejected": true,
+      "delayed_audio_bytes": 4,
+      "delayed_audio_observed": true,
+      "delayed_audio_publicly_emitted": false,
+      "healthy_response_id": "healthy-resp-2",
+      "healthy_tail_bytes": 8,
+      "healthy_tail_nonempty": true,
+      "healthy_tail_sha256": "79761b4bfaef74f2e183877f56ec7ccc0adb8b0e21a9dbb4020748ae8eb5ac6b"
+    },
+    "lifecycle": {
+      "close_called": true,
+      "opened": true,
+      "started": true,
+      "wait_called": true
+    },
+    "provider": {
+      "closed": true,
+      "controls": [
+        "RESPONSE.CANCEL",
+        "RESPONSE.CREATE"
+      ],
+      "delayed_audio_bytes": 4,
+      "delayed_audio_observed": true,
+      "trace": [
+        {
+          "kind": "SESSION.OPEN",
+          "sequence": 0
+        },
+        {
+          "kind": "MESSAGE.START",
+          "response_id": "interrupt-resp-1",
+          "sequence": 1
+        },
+        {
+          "kind": "TEXT.DELTA",
+          "response_id": "interrupt-resp-1",
+          "sequence": 2
+        },
+        {
+          "kind": "AUDIO.START",
+          "response_id": "interrupt-resp-1",
+          "sequence": 3
+        },
+        {
+          "kind": "AUDIO.DELTA",
+          "pcm_bytes": 4,
+          "response_id": "interrupt-resp-1",
+          "sequence": 4
+        },
+        {
+          "kind": "AUDIO.DELTA",
+          "pcm_bytes": 4,
+          "response_id": "interrupt-resp-1",
+          "sequence": 5
+        },
+        {
+          "kind": "MESSAGE.END",
+          "response_id": "interrupt-resp-1",
+          "sequence": 6
+        },
+        {
+          "kind": "MESSAGE.START",
+          "response_id": "healthy-resp-2",
+          "sequence": 7
+        },
+        {
+          "kind": "AUDIO.START",
+          "response_id": "healthy-resp-2",
+          "sequence": 8
+        },
+        {
+          "kind": "AUDIO.DELTA",
+          "pcm_bytes": 8,
+          "response_id": "healthy-resp-2",
+          "sequence": 9
+        },
+        {
+          "kind": "AUDIO.END",
+          "response_id": "healthy-resp-2",
+          "sequence": 10
+        },
+        {
+          "kind": "TEXT.DELTA",
+          "response_id": "healthy-resp-2",
+          "sequence": 11
+        },
+        {
+          "kind": "MESSAGE.END",
+          "response_id": "healthy-resp-2",
+          "sequence": 12
+        },
+        {
+          "kind": "SESSION.CLOSE",
+          "response_id": "healthy-resp-2",
+          "sequence": 13
+        }
+      ]
+    },
+    "public_pcm": {
+      "bytes": 12,
+      "channels": 1,
+      "format": "pcm16-le",
+      "sample_rate": 16000,
+      "sha256": "f7d851c0baf9d6b6c1b90ee96082c1454b96e071e77376dd3819eab6706b01c0"
+    },
+    "scenario": "provider-close-overtake",
+    "schema": "audio-runtime.c53.v1",
+    "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+    "terminal": {
+      "classification": "fixture",
+      "kind": "terminal",
+      "output_state": "complete",
+      "provenance": "provider",
+      "reason": "fixture_complete"
+    },
+    "trace": [
+      {
+        "kind": "started",
+        "sequence": 0
+      },
+      {
+        "kind": "SESSION.OPEN",
+        "sequence": 1
+      },
+      {
+        "kind": "MESSAGE.START",
+        "response_id": "interrupt-resp-1",
+        "role": "assistant",
+        "sequence": 2
+      },
+      {
+        "kind": "TEXT.DELTA",
+        "response_id": "interrupt-resp-1",
+        "role": "assistant",
+        "sequence": 3,
+        "text": "partial-before-cancel"
+      },
+      {
+        "kind": "AUDIO.START",
+        "response_id": "interrupt-resp-1",
+        "role": "assistant",
+        "sequence": 4
+      },
+      {
+        "kind": "AUDIO.DELTA",
+        "pcm_bytes": 4,
+        "pcm_sha256": "9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a",
+        "response_id": "interrupt-resp-1",
+        "role": "assistant",
+        "sequence": 5
+      },
+      {
+        "kind": "MESSAGE.END",
+        "response_id": "interrupt-resp-1",
+        "role": "assistant",
+        "sequence": 6,
+        "terminal_source": "provider"
+      },
+      {
+        "kind": "MESSAGE.START",
+        "response_id": "healthy-resp-2",
+        "role": "assistant",
+        "sequence": 7
+      },
+      {
+        "kind": "AUDIO.START",
+        "response_id": "healthy-resp-2",
+        "role": "assistant",
+        "sequence": 8
+      },
+      {
+        "kind": "AUDIO.DELTA",
+        "pcm_bytes": 8,
+        "pcm_sha256": "79761b4bfaef74f2e183877f56ec7ccc0adb8b0e21a9dbb4020748ae8eb5ac6b",
+        "response_id": "healthy-resp-2",
+        "role": "assistant",
+        "sequence": 9
+      },
+      {
+        "kind": "AUDIO.END",
+        "response_id": "healthy-resp-2",
+        "role": "assistant",
+        "sequence": 10
+      },
+      {
+        "kind": "TEXT.DELTA",
+        "response_id": "healthy-resp-2",
+        "role": "assistant",
+        "sequence": 11,
+        "text": "healthy-after-cancel"
+      },
+      {
+        "kind": "MESSAGE.END",
+        "response_id": "healthy-resp-2",
+        "role": "assistant",
+        "sequence": 12,
+        "terminal_source": "provider"
+      },
+      {
+        "kind": "SESSION.CLOSE",
+        "sequence": 13
+      },
+      {
+        "kind": "terminal",
+        "sequence": 14
+      }
+    ],
+    "trace_complete": true
+  },
+  "schema": "audio-runtime.c53.provider-close.v1"
+}

@@ -1,0 +1,1 @@
+public trace[12] = SESSION.CLOSE, want MESSAGE.END

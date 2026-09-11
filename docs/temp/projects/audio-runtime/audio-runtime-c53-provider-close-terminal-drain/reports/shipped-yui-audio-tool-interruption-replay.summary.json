@@ -1,0 +1,14 @@
+{
+  "bounds": {
+    "aggregate_timeout_seconds": 600,
+    "child_timeout_seconds": 60.0,
+    "max_child_output_bytes": 65536,
+    "max_retained_disk_bytes": 8388608
+  },
+  "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+  "case": "shipped-yui-audio-tool-interruption-replay",
+  "elapsed_ms": 1234,
+  "passed": true,
+  "provenance": "provenance.json",
+  "schema": "audio-runtime.c53.run-summary.v1"
+}

@@ -1,0 +1,133 @@
+{
+  "audio_output": {
+    "bytes": 9120,
+    "expected_bytes": 9120,
+    "expected_sha256": "9495487706f4a3001922c10d4dd496e7cd29fff9815a76f2f842f8e970725cc9",
+    "path": "artifacts/shipped-yui-audio-tool-interruption-replay/healthy-tail.pcm",
+    "sha256": "9495487706f4a3001922c10d4dd496e7cd29fff9815a76f2f842f8e970725cc9"
+  },
+  "binary": {
+    "build": {
+      "cleanup": {
+        "group_alive_after": false,
+        "group_alive_before": true,
+        "kill_sent": false,
+        "parent_reaped": true,
+        "reader_threads_joined": true,
+        "setup_error": "",
+        "term_sent": false
+      },
+      "command": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain/docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/bin/yui",
+        "./agent-cli/cmd/yui"
+      ],
+      "cwd": ".",
+      "disk_bounded": true,
+      "disk_bytes": 0,
+      "elapsed_ms": 296,
+      "label": "build-candidate-yui",
+      "output_bounded": true,
+      "returncode": 0,
+      "stderr": "artifacts/shipped-yui-audio-tool-interruption-replay/build/stderr.log",
+      "stderr_bytes": 0,
+      "stdout": "artifacts/shipped-yui-audio-tool-interruption-replay/build/stdout.log",
+      "stdout_bytes": 0,
+      "timed_out": false
+    },
+    "path": "bin/yui",
+    "sha256": "443ddd3ebf89deaff33a63ab8c0dd9c1e853c0612631340f2a71a01955dde701"
+  },
+  "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+  "capture": {
+    "healthy_response_id": "resp-test6-new-assistant",
+    "interrupted_response_id": "resp-test6-interrupted",
+    "ordered_types": [
+      "session.update",
+      "session.created",
+      "conversation.item.create",
+      "response.create",
+      "response.created",
+      "response.output_audio.delta",
+      "input_audio_buffer.speech_started",
+      "conversation.item.truncate",
+      "conversation.item.truncated",
+      "response.output_audio.done",
+      "response.done",
+      "response.created",
+      "response.output_audio.delta",
+      "response.output_audio.done",
+      "response.done"
+    ],
+    "record_count": 15,
+    "sequence_contiguous": true
+  },
+  "classification": {
+    "acoustic": "not_attempted",
+    "audio_tool_interruption_order": "proved",
+    "physical_device": "not_attempted",
+    "provider_edge": "credential-free shipped replay",
+    "quiet_host": "not_claimed"
+  },
+  "execution": {
+    "cleanup": {
+      "group_alive_after": false,
+      "group_alive_before": true,
+      "kill_sent": false,
+      "parent_reaped": true,
+      "reader_threads_joined": true,
+      "setup_error": "",
+      "term_sent": false
+    },
+    "command": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain/docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/bin/yui",
+      "-C",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization/docs/temp/projects/audio-runtime/audio-runtime-c23-long-session-tool-characterization/artifacts/runs/20260910T234434Z-shipped-regressions/config",
+      "session",
+      "--replay",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization/docs/temp/projects/audio-runtime/audio-runtime-c23-long-session-tool-characterization/artifacts/runs/20260910T234434Z-shipped-regressions/test6.session.json",
+      "--replay-timing",
+      "recorded",
+      "--prompt",
+      "test6 customer barge in",
+      "--audio-out",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain/docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/artifacts/shipped-yui-audio-tool-interruption-replay/healthy-tail.pcm",
+      "--no-terminal-tools"
+    ],
+    "cwd": ".",
+    "disk_bounded": true,
+    "disk_bytes": 618,
+    "elapsed_ms": 559,
+    "label": "shipped-yui-test6",
+    "output_bounded": true,
+    "returncode": 0,
+    "stderr": "artifacts/shipped-yui-audio-tool-interruption-replay/process/stderr.log",
+    "stderr_bytes": 0,
+    "stdout": "artifacts/shipped-yui-audio-tool-interruption-replay/process/stdout.log",
+    "stdout_bytes": 618,
+    "timed_out": false
+  },
+  "inputs": {
+    "capture_sha256": "49feab183f1222b5f2e866d130703cd468d49c95c4d5edd2d364d44e8e9ddd52",
+    "config_sha256": "24758d877b369728e37e7bbcc1b1c82ac402d126966fbe43397d6a16f66e7e29",
+    "expected_manifest": {
+      "bytes": 9120,
+      "expected_bytes": 9120,
+      "expected_sha256": "9495487706f4a3001922c10d4dd496e7cd29fff9815a76f2f842f8e970725cc9",
+      "healthy_tail_bytes": 2400,
+      "healthy_tail_sha256": "ce2b9a756d4c71c1e3d07e5302edaae9bf786a58eb3d53dc02ea559565c35df0",
+      "path": "artifacts/runs/20260910T234434Z-shipped-regressions/healthy-tail.pcm",
+      "prefix_bytes": 6720,
+      "sha256": "9495487706f4a3001922c10d4dd496e7cd29fff9815a76f2f842f8e970725cc9"
+    },
+    "fixture_sha256": "599117c498e17771619deb9c63f9be5d79329384f5dfa8375663dc1806cd6a4d",
+    "frozen_manifest_sha256": "1e0adfb75f2d3c3895026a70276c974d7172ed8b7e79a6e3f071a4de2a93b191",
+    "source_audio_sha256": "6bb5a07350bbe1a874b4a28fcc79f7575f272a38a6338aa223c6fa9a99e6b5c6"
+  },
+  "passed": true,
+  "schema": "audio-runtime.c53.shipped-replay.v1",
+  "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710"
+}
