@@ -2,14 +2,14 @@
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "branch": "codex/audio-runtime-c55-room-participant-mesh",
   "build_inputs": {
-    "content_sha256": "0a70bcefd8e9717e6120f590b41ef0bddc153d2fb4dc1ca89f9826e796d8f0e0",
+    "content_sha256": "8fc22e853a4ee9ccd730d3192004527c745b555132340e3e1e1dc64968ca4282",
     "file_count": 2191,
     "path": "reports/build-input-manifest.json",
-    "sha256": "aa10cc5229b220ff809dc4d9c7803b0004c35fa59268b31ed073e80151a7474a"
+    "sha256": "b119628b12b6f43e541cfdf5ddb344914e9820d07aeaec8f56db8abdf3017c7d"
   },
   "builds": {
     "consumer": {
-      "sha256": "00b837cc4207cdf3327a1a82623980e0e29d0a5dcf927ffb6b22aa704ff060c0"
+      "sha256": "ddbf562e736420d56d647e53fc827c77141051d56f54d6cbfe2df52188256d68"
     },
     "fixtures": {
       "audio-tool": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
@@ -30,10 +30,10 @@
         ],
         "artifact": {
           "build_input_count": 2191,
-          "build_input_manifest_sha256": "0a70bcefd8e9717e6120f590b41ef0bddc153d2fb4dc1ca89f9826e796d8f0e0",
-          "bytes": 50970898,
+          "build_input_manifest_sha256": "8fc22e853a4ee9ccd730d3192004527c745b555132340e3e1e1dc64968ca4282",
+          "bytes": 50970882,
           "path": "artifacts/yui",
-          "sha256": "46ff61b797884e9db5fd6d4811b69ddd54fbdd931cdd30e903530e08e5f535f1"
+          "sha256": "6174b54df0ea9d6f2a4ccdf0e6cc1b0f648867b5167408cae86e415ac3715761"
         },
         "cleanup": {
           "group_alive_after": false,
@@ -45,27 +45,27 @@
         "cwd": "agent-cli",
         "disk_bounded": true,
         "disk_bytes": 0,
-        "elapsed_ms": 280,
+        "elapsed_ms": 238,
         "label": "build-yui",
         "output_bounded": true,
         "returncode": 0,
         "stderr": "",
         "stderr_bytes": 0,
-        "stderr_path": "runs/20260911T150640Z-85657/build-yui.stderr.log",
+        "stderr_path": "runs/20260911T152907Z-9066/build-yui.stderr.log",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "stderr_truncated": false,
         "stdout": "",
         "stdout_bytes": 0,
-        "stdout_path": "runs/20260911T150640Z-85657/build-yui.stdout.log",
+        "stdout_path": "runs/20260911T152907Z-9066/build-yui.stdout.log",
         "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "stdout_truncated": false,
         "timed_out": false
       },
       "path": "artifacts/yui",
-      "sha256": "46ff61b797884e9db5fd6d4811b69ddd54fbdd931cdd30e903530e08e5f535f1"
+      "sha256": "6174b54df0ea9d6f2a4ccdf0e6cc1b0f648867b5167408cae86e415ac3715761"
     }
   },
-  "candidate_revision": "de7e905b506a7d77589c6b69bbb5b1a5d719488d",
+  "candidate_revision": "3ef13971ed25b478358a04cfcec202877af0eb37",
   "contract_revision": "audio-runtime-v1",
   "credential_environment": "API keys, secrets, passwords, and tokens removed from child environments",
   "fetched_main_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
@@ -81,30 +81,31 @@
   "source_hashes": {
     "agent-cli/internal/room/mesh.go": "5a7f6464a83b1ff1922f38e6dcbfd8db7680674fdabce1b055b755d3d9081aa7",
     "agent-cli/internal/room/mesh_test.go": "9d663df0afd07c7624849bbbaaaed2e6d978dac1a94b3e9d2a760950bd83bded",
+    "coverage-manifest/go-agent-runtime/services/rooms/internal/mesh/package.json": "dd2cd80677ecd6018985ff73cfafc56fa43625cfe21fb76bef2b3430ad4d75c2",
     "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/consumer/main.go": "e7bf12ac6ddf0fec09770a2b2cbf823019bba3771a41b16900879273b5ec69a7",
     "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/go.mod": "0f02eca7c0ee05fbb55e5b91b6b0323bd9d63ee901789457b4d0a09659e44007",
     "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/go.sum": "f3ce007522e789ffb699ea5fe3fba64402a26e31c99958f0b744bd32ba01a926",
-    "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/run.py": "d13f0d47d59bbdf00abf3ed0279fd0e887872b6c76694cb630197b8b0a94662e",
-    "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/verify.py": "4deda7d04a52e5661d1a90352d1f54a78a8b1f082ea1af5fe2f90ba38dfe2977",
-    "go-agent-runtime/services/rooms/internal/lifecycle/mesh.go": "e7b896eb43fa00ec152e9b32598e8bc604c2b2b7c19df222ba45ecd37976a839",
+    "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/run.py": "87260731fdf10ea881dc37c03c8ccf697d9a6e35c41f63d7e1ad58f74a9513a8",
+    "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/verify.py": "306b7f2ff427eefa59c14ed34964d5e3144ddd557f3dd5bc830e8e7a66b6e1e3",
+    "go-agent-runtime/services/rooms/internal/mesh/mesh.go": "36e8bbc66a06b7f3f75df3ebff9dcedeb150791de4957088b0fca8b3c84eb2ff",
     "go-agent-runtime/services/rooms/mesh.go": "b2852f53b07d26903e52c3e6d510ba1e387dc702c681ed4d088160d72e7e6bea",
-    "go-agent-runtime/services/rooms/wire/mesh.go": "0d742f996cba6b0014d82bcbe410bca151e16e910ed51891d4b4b7b58b6e79ab"
+    "go-agent-runtime/services/rooms/wire/mesh.go": "ccd5a3900fbf99d84e4e52930a3eaad0467ea58b66802f8836d955cceb54ae80"
   },
   "source_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
   "storage": {
     "after": {
-      "binary_output_bytes": 54974164,
+      "binary_output_bytes": 54973972,
       "compilation_reserve_bytes": 2147483648,
-      "free_space_bytes": 97977745408,
-      "report_fixture_bytes": 863008,
-      "scratch_bytes": 146644,
+      "free_space_bytes": 96433807360,
+      "report_fixture_bytes": 862903,
+      "scratch_bytes": 146646,
       "staging_bytes": 10345
     },
     "before": {
-      "binary_output_bytes": 54974164,
+      "binary_output_bytes": 54973972,
       "compilation_reserve_bytes": 2147483648,
-      "free_space_bytes": 98004389888,
-      "report_fixture_bytes": 863008,
+      "free_space_bytes": 96434003968,
+      "report_fixture_bytes": 862903,
       "scratch_bytes": 0,
       "staging_bytes": 10345
     }

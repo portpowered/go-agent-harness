@@ -1,5 +1,5 @@
 {
-  "candidate_revision": "de7e905b506a7d77589c6b69bbb5b1a5d719488d",
+  "candidate_revision": "3ef13971ed25b478358a04cfcec202877af0eb37",
   "entries": [
     {
       "bytes": 18,
@@ -7687,11 +7687,6 @@
       "sha256": "bddab43c48070a3c0c79674c745f531b3993d651d1f248ebef0d735ca8d50f38"
     },
     {
-      "bytes": 12048,
-      "path": "go-agent-runtime/services/rooms/internal/lifecycle/mesh.go",
-      "sha256": "e7b896eb43fa00ec152e9b32598e8bc604c2b2b7c19df222ba45ecd37976a839"
-    },
-    {
       "bytes": 7636,
       "path": "go-agent-runtime/services/rooms/internal/lifecycle/participant.go",
       "sha256": "5242e946f5697b01b794a16a105f8371e2b3493a7a986e1dbcc80ddf87a45910"
@@ -7735,6 +7730,11 @@
       "bytes": 3401,
       "path": "go-agent-runtime/services/rooms/internal/media/factory_test.go",
       "sha256": "1011c9fed7ef35035d4b5062409c81de96c935c5e0a58d51b0a01ae1aedc9754"
+    },
+    {
+      "bytes": 12043,
+      "path": "go-agent-runtime/services/rooms/internal/mesh/mesh.go",
+      "sha256": "36e8bbc66a06b7f3f75df3ebff9dcedeb150791de4957088b0fca8b3c84eb2ff"
     },
     {
       "bytes": 2860,
@@ -7787,9 +7787,9 @@
       "sha256": "928dafeee7218930b285e3c297cdbaad4360cafae13df00552871d544ba6798e"
     },
     {
-      "bytes": 1011,
+      "bytes": 996,
       "path": "go-agent-runtime/services/rooms/wire/mesh.go",
-      "sha256": "0d742f996cba6b0014d82bcbe410bca151e16e910ed51891d4b4b7b58b6e79ab"
+      "sha256": "ccd5a3900fbf99d84e4e52930a3eaad0467ea58b66802f8836d955cceb54ae80"
     },
     {
       "bytes": 1805,
@@ -10958,5 +10958,5 @@
     }
   ],
   "schema": "audio-runtime.c55.build-inputs.v1",
-  "sha256": "0a70bcefd8e9717e6120f590b41ef0bddc153d2fb4dc1ca89f9826e796d8f0e0"
+  "sha256": "8fc22e853a4ee9ccd730d3192004527c745b555132340e3e1e1dc64968ca4282"
 }
