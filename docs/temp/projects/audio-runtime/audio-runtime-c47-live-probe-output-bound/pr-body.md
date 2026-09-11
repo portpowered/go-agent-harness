@@ -13,7 +13,8 @@
 - `test_resource_bounds.py --group staging --child-timeout 10 --total-timeout 120`
 - `test_resource_bounds.py --group all --child-timeout 10 --total-timeout 120`
 - `run_c45_controls_private.py --child-timeout 60 --total-timeout 300`
-- Exact staged mission against the admitted C44 artifact bundle, with a 2 GiB reserve and 64 MiB aggregate output cap: `evidence/staged-probe-live-04/latest-staged-probe.json` (`tested_source_revision=9974990cf94995e2584948d1074a8199d3778ae3`, `decision=ACCEPTED`).
-- The repaired exact report records post-outcome `report_bytes=379244`, scratch cleanup `57472980 -> 0` with no errors, artifact equivalence, timestamped reserve samples, and the C47-owned reserve filesystem root.
+- Clean-head repair checkpoint: `98ec09a4f0e27864e3d8e21967b8a70c73caed5f`, which preserves the first primary failure when cleanup inspection raises and adds a causal regression for that ordering.
+- Exact staged mission against the admitted C44 artifact bundle, with a 2 GiB reserve and 64 MiB aggregate output cap: `evidence/staged-probe-live-07/latest-staged-probe.json` (`tested_source_revision=98ec09a4f0e27864e3d8e21967b8a70c73caed5f`, `decision=ACCEPTED`).
+- The final exact report records `report_bytes=379480`, scratch cleanup `57472980 -> 0` with no errors, artifact equivalence, timestamped reserve samples, and the C47-owned reserve filesystem root. A prior live-06 miss was a single nondeterministic interruption-boundary result and is retained as diagnostic evidence, not acceptance evidence.
 
 The exact staged mission report and raw control diagnostics are under the task-local `evidence/` directory. CI status is intentionally not claimed here; the open candidate is handed to the script CI gate.

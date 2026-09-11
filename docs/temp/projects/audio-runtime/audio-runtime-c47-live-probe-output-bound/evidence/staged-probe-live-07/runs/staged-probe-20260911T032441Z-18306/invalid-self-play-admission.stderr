@@ -1,0 +1,21 @@
+Error: self-play model "c44-unknown-model" is not an OpenAI Realtime model; supported models: gpt-realtime, gpt-realtime-2.1-mini, gpt-realtime-2.1
+Usage:
+  yui session self-play [flags]
+
+Flags:
+      --api-key string          OpenAI API key; may also come from the configured AGENT_MODEL__OPENAI__API_KEY
+      --base-url string         Optional OpenAI Realtime WebSocket endpoint override
+  -h, --help                    help for self-play
+      --max-duration duration   Positive maximum run duration (default: 2m) (default 2m0s)
+      --max-turns int           Positive completed-turn target per side (default: 3) (default 3)
+      --model string            OpenAI Realtime model (default: gpt-realtime) (default "gpt-realtime")
+      --output-dir string       Empty directory for this self-play run (required)
+      --provider string         Phase 1 realtime provider (openai only) (default "openai")
+
+Global Flags:
+      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)
+  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)
+      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)
+  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)
+      --workdir string           Filesystem-tool workdir (default: the process current directory)
+

@@ -45,3 +45,13 @@ Review repair checkpoint
 
 Next action
 - Push the repaired head and update the existing PR #439 with the same task. Submit it to the script CI gate; do not claim or poll CI results.
+
+Committed-head causal repair checkpoint
+- Failure-ordering repair commit: 98ec09a4f0e27864e3d8e21967b8a70c73caed5f. The outer runner now retains an existing primary failure when later cleanup raises, and records the cleanup exception as secondary evidence; the capture regression injects final process-inspection failure to prove this ordering.
+- Focused regressions on the clean repair commit: test_resource_bounds.py --group all --child-timeout 10 --total-timeout 120: PASS (the nested reserve-shortfall control intentionally reports BLOCKED); run_c45_controls_private.py --child-timeout 60 --total-timeout 300: PASS; Python compilation: PASS; git diff --check: PASS.
+- One exact mission in evidence/staged-probe-live-06 recorded a single runtime interruption-boundary miss (turn one reported 0 bytes) and was not used as acceptance evidence. The same clean commit passed on the new exact mission evidence/staged-probe-live-07.
+- Final clean-head report: evidence/staged-probe-live-07/latest-staged-probe.json, decision ACCEPTED, tested_source_revision=98ec09a4f0e27864e3d8e21967b8a70c73caed5f, verifier_sha256=821958eec663fe831fec0d4641dda990ebf76f662f0163edd73bfae842126574.
+- Final exact evidence: artifact_input_equivalence=true; staged binary bytes 57,445,940; fixture bytes 27,040; binary output 4,768/67,108,864; report_bytes=379,480 measured after outcome.json; scratch 57,472,980 before and 0 after with no cleanup errors; forbidden_helpers_called=[]; minimum observed free space 152,397,053,952 bytes.
+
+Next action
+- Preserve the historical C45 focused-result checkpoint, add the final C47 live-07 evidence and task handoff metadata, push the committed candidate, and update PR #439. Submit the same task to the script CI gate without polling CI.
