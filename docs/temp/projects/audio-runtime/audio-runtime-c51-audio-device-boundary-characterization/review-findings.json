@@ -1,0 +1,20 @@
+{
+  "schema": "audio-runtime-c51.review-findings.v1",
+  "task": "audio-runtime-c51-audio-device-boundary-characterization",
+  "canonicalBoardCommand": "you --server $FACTORY_SERVER_URL --json work list --session \"~default\" --max-results 500 --all",
+  "matchingTask": {
+    "workId": "work-task-22",
+    "state": "init",
+    "processing": true,
+    "branch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
+    "baseRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
+  },
+  "previousReviewFindings": [],
+  "previousRejectionFeedback": [],
+  "progressHistory": {
+    "path": "progress.txt",
+    "taskMatches": [],
+    "interpretation": "progress.txt contains predecessor and sibling history but no C51 checkpoint; no local C51 review finding is inferred."
+  }
+}

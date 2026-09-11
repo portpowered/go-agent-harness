@@ -1,0 +1,82 @@
+{
+  "binary": {
+    "path": "/private/tmp/audio-runtime-c51/yui",
+    "sha256": "9fb61c65e9242947ccaffe178c7c069eec7497c64dd35215e60e9672b596822d"
+  },
+  "healthyReplay": {
+    "expectedWav": {
+      "channels": 1,
+      "frames": 2,
+      "pcmBytes": 4,
+      "pcmSHA256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "sampleRate": 16000,
+      "sampleWidth": 2,
+      "wavSHA256": "3e9bdf4cffd0b09b1ce550cf199542cd54fdaf69bf4f53d2e1b8be88c02f5aa3"
+    },
+    "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
+    "markers": [
+      "Assistant: Hello thereSecond turn reply",
+      "[session closed: healthy_complete]",
+      "[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]"
+    ],
+    "result": {
+      "argv": [
+        "/private/tmp/audio-runtime-c51/yui",
+        "--config-dir",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vpfg5fi3/config",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
+        "--audio-out",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vpfg5fi3/healthy.wav"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
+      "durationSeconds": 0.135142,
+      "processGroupAlive": false,
+      "returnCode": 0,
+      "stderr": "",
+      "stderrTruncated": false,
+      "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: Hello thereSecond turn reply\n\n[session closed: healthy_complete]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+      "stdoutTruncated": false,
+      "timedOut": false
+    },
+    "wav": {
+      "channels": 1,
+      "fileBytes": 48,
+      "frames": 2,
+      "pcmBytes": 4,
+      "pcmSHA256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "sampleRate": 16000,
+      "sampleWidth": 2,
+      "wavSHA256": "3e9bdf4cffd0b09b1ce550cf199542cd54fdaf69bf4f53d2e1b8be88c02f5aa3"
+    }
+  },
+  "sourceRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+  "status": "verified",
+  "toolLifecycleNegativeControl": {
+    "audioOutputWritten": true,
+    "expectedMarker": "tool results were not delivered for 1 unresolved call(s): call_weather_001",
+    "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
+    "result": {
+      "argv": [
+        "/private/tmp/audio-runtime-c51/yui",
+        "--config-dir",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vpfg5fi3/tool-config",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
+        "--audio-out",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vpfg5fi3/tool.wav"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
+      "durationSeconds": 0.041273,
+      "processGroupAlive": false,
+      "returnCode": 1,
+      "stderr": "Error: tool results were not delivered for 1 unresolved call(s): call_weather_001\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vpfg5fi3/tool.wav\" (wav): empty WAV samples\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vpfg5fi3/tool.wav\" (wav): empty WAV samples\ntool results were not delivered for 1 unresolved call(s): call_weather_001\n",
+      "stderrTruncated": false,
+      "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: It is sunny in Paris.\n\n[session closed: fixture_complete]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\nlive session terminated: tool results were not delivered for 1 unresolved call(s): call_weather_001\n",
+      "stdoutTruncated": false,
+      "timedOut": false
+    }
+  }
+}

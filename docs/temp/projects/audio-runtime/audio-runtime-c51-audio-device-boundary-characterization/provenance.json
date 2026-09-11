@@ -1,0 +1,80 @@
+{
+  "admission": {
+    "name": "audio-runtime-c51-audio-device-boundary-characterization",
+    "project": "audio-runtime",
+    "status": "admitted",
+    "verifyCommand": "python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work --type task --name audio-runtime-c51-audio-device-boundary-characterization --root $FACTORY_ROOT",
+    "workId": "work-task-22"
+  },
+  "analysisInputs": {
+    "fileCount": 1844,
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/analysis-inputs.json",
+    "sha256": "78dd5d3bd2c2bd2f317f7af58c2e028181d44b1f99f82b6167475cb0067cb1b8"
+  },
+  "authorityInputs": [
+    {
+      "path": "factory/docs/operating-policy.md",
+      "sha256": "bc8e1754c29c2cc0dcd10b4cf76c8ee57c2e4b7511232b29ba3640c7ce724abb"
+    },
+    {
+      "path": "factory/docs/implementation-handoff.md",
+      "sha256": "1c9028c59fa2b61e36b769dc070c38d205fedb39a01620a9fb9fcb8598879e25"
+    },
+    {
+      "path": "factory/projects/audio-runtime/manifest.json",
+      "sha256": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d"
+    },
+    {
+      "path": "factory/projects/audio-runtime/request.md",
+      "sha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0"
+    },
+    {
+      "path": "factory/projects/audio-runtime/acceptance.md",
+      "sha256": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5"
+    },
+    {
+      "path": "factory/projects/audio-runtime/source-plan.md",
+      "sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+    },
+    {
+      "path": "factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json",
+      "sha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa"
+    }
+  ],
+  "contractRevision": "audio-runtime-v1",
+  "project": "audio-runtime",
+  "schema": "audio-runtime-c51.provenance.v1",
+  "scope": {
+    "ownedPath": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization",
+    "physicalAcousticProof": "OUT_OF_SCOPE",
+    "physicalHardware": "OUT_OF_SCOPE",
+    "productionEdits": "none",
+    "windowsNativeEndpoints": "OUT_OF_SCOPE",
+    "windowsSoftwareCompileAndHermeticValidation": "retained"
+  },
+  "scripts": [
+    {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/verify.py",
+      "sha256": "2dab720dfe07fe3d381248970c70db8be164633c97e3526e3a98fb03721212f4"
+    }
+  ],
+  "source": {
+    "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+    "branch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
+    "currentMainRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+    "expectedBranch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
+    "planningMainRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+    "sourceArchive": {
+      "bytes": 141281280,
+      "command": "git archive --format=tar <sourceRevision>",
+      "sha256": "4abaf8995d7b63bcc9c6b551f53b829c5e44e1cba8661e81ee3fb5028ca9ba00"
+    },
+    "sourceRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
+  },
+  "storage": {
+    "freeBytesAtGeneration": 144962228224,
+    "requiredCompileReserveBytes": 2147483648
+  },
+  "task": "audio-runtime-c51-audio-device-boundary-characterization"
+}
