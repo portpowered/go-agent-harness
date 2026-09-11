@@ -26,13 +26,16 @@ const (
 	EvidenceSampleRate     = 24000
 )
 
-var (
-	ErrEvidenceQuota  = errors.New("self-play evidence quota exceeded")
-	ErrEvidenceClosed = errors.New("self-play evidence writer is closed")
+type evidenceError string
+
+func (e evidenceError) Error() string { return string(e) }
+
+const (
+	ErrEvidenceQuota  evidenceError = "self-play evidence quota exceeded"
+	ErrEvidenceClosed evidenceError = "self-play evidence writer is closed"
 )
 
-// EvidenceLimits bounds each side's diagnostic/stream and PCM artifacts.
-// Zero selects finite service defaults; positive values may reduce them.
+// EvidenceLimits bounds each side's diagnostic/stream and PCM artifacts; zero selects finite defaults.
 type EvidenceLimits struct {
 	JSONLBytes int64
 	JSONLItems int64
@@ -76,8 +79,7 @@ func CloneStringMap(fields map[string]string) map[string]string {
 	return copyOf
 }
 
-// WriteAll preserves partial-write accounting and rejects a writer that makes
-// no progress. It is intentionally shared by every evidence sink.
+// WriteAll preserves partial-write accounting and rejects a writer that makes no progress.
 func WriteAll(writer io.Writer, data []byte) (int, error) {
 	if writer == nil {
 		return 0, errors.New("self-play evidence writer is required")
@@ -119,31 +121,40 @@ func RedactError(value, secret string) string {
 	if secret != "" {
 		value = strings.ReplaceAll(value, secret, "[REDACTED]")
 	}
-	for _, marker := range []string{"authorization: bearer ", "authorization=bearer ", "authorization: ", "authorization=", "x-api-key: ", "x-api-key=", "api-key: ", "api-key=", "api_key: ", "api_key=", "bearer "} {
-		for {
-			lower := strings.ToLower(value)
-			start := strings.Index(lower, marker)
-			if start < 0 {
-				break
-			}
-			markerEnd := start + len(marker)
-			if strings.HasPrefix(value[markerEnd:], "[REDACTED]") {
-				break
-			}
-			end := markerEnd
-			for end < len(value) {
-				switch value[end] {
-				case ' ', '\t', '\r', '\n', ',', ';', ')', ']', '}':
-					goto tokenEnd
-				default:
-					end++
-				}
-			}
-		tokenEnd:
-			value = value[:markerEnd] + "[REDACTED]" + value[end:]
-		}
+	for _, marker := range selfPlayCredentialMarkers() {
+		value = redactSelfPlayMarker(value, marker)
 	}
 	return value
+}
+
+func selfPlayCredentialMarkers() []string {
+	return []string{"authorization: bearer ", "authorization=bearer ", "authorization: ", "authorization=", "x-api-key: ", "x-api-key=", "api-key: ", "api-key=", "api_key: ", "api_key=", "bearer "}
+}
+
+func redactSelfPlayMarker(value, marker string) string {
+	for {
+		lower := strings.ToLower(value)
+		start := strings.Index(lower, marker)
+		if start < 0 {
+			return value
+		}
+		markerEnd := start + len(marker)
+		if strings.HasPrefix(value[markerEnd:], "[REDACTED]") {
+			return value
+		}
+		end := credentialTokenEnd(value, markerEnd)
+		value = value[:markerEnd] + "[REDACTED]" + value[end:]
+	}
+}
+
+func credentialTokenEnd(value string, start int) int {
+	for end := start; end < len(value); end++ {
+		switch value[end] {
+		case ' ', '\t', '\r', '\n', ',', ';', ')', ']', '}':
+			return end
+		}
+	}
+	return len(value)
 }
 
 // JSONLWriter is a bounded, exclusive, synchronized JSONL sink.
@@ -349,8 +360,7 @@ func (w *WAVWriter) Close() error {
 	return w.err
 }
 
-// WriteAtomicJSON publishes a bounded JSON artifact through a temporary file
-// and rename, never exposing a partially written manifest.
+// WriteAtomicJSON publishes a bounded JSON artifact through a temporary file and rename.
 func WriteAtomicJSON(path string, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {

@@ -198,16 +198,29 @@ func TestConversationBridgesOnlyOrderedAssistantPCMAndFinalizesArtifacts(t *test
 	}
 	var presentation bytes.Buffer
 	result, err := regressionService(factory, runner).RunWithResult(context.Background(), &presentation, regressionOptions(destination))
+	assertConversationResult(t, result, err, presentation.Bytes())
+	requests, sessions := factory.snapshot()
+	assertConversationSessions(t, requests, sessions)
+	assertConversationBridges(t, runner)
+	assertConversationArtifacts(t, destination)
+	assertConversationManifest(t, destination)
+}
+
+func assertConversationResult(t *testing.T, result selfplay.Result, err error, presentation []byte) {
+	t.Helper()
 	if err != nil {
 		t.Fatalf("self-play conversation: %v", err)
 	}
 	if result != (selfplay.Result{StopReason: selfplay.StopTurnTarget, CustomerTurns: 2, AssistantTurns: 2}) {
 		t.Fatalf("result = %+v", result)
 	}
-	if !bytes.Contains(presentation.Bytes(), []byte("reason=turn_target customer_turns=2 assistant_turns=2")) {
-		t.Fatalf("presentation = %q", presentation.String())
+	if !bytes.Contains(presentation, []byte("reason=turn_target customer_turns=2 assistant_turns=2")) {
+		t.Fatalf("presentation = %q", presentation)
 	}
-	requests, sessions := factory.snapshot()
+}
+
+func assertConversationSessions(t *testing.T, requests []selfplay.SessionRequest, sessions []*regressionInferencer) {
+	t.Helper()
 	if len(requests) != 2 || len(sessions) != 2 || sessions[0] == sessions[1] {
 		t.Fatalf("factory construction = requests:%d sessions:%d distinct:%t", len(requests), len(sessions), len(sessions) == 2 && sessions[0] != sessions[1])
 	}
@@ -222,6 +235,10 @@ func TestConversationBridgesOnlyOrderedAssistantPCMAndFinalizesArtifacts(t *test
 			t.Fatalf("session %d close count = %d, want 1", index, got)
 		}
 	}
+}
+
+func assertConversationBridges(t *testing.T, runner *regressionRunner) {
+	t.Helper()
 	runner.mu.Lock()
 	inputs := [2]*regressionInput{runner.inputs[0], runner.inputs[1]}
 	runner.mu.Unlock()
@@ -231,6 +248,10 @@ func TestConversationBridgesOnlyOrderedAssistantPCMAndFinalizesArtifacts(t *test
 	if got, want := inputs[1].bytes(), []byte{1, 2, 3, 4}; !bytes.Equal(got, want) {
 		t.Fatalf("assistant bridge bytes = %v, want %v", got, want)
 	}
+}
+
+func assertConversationArtifacts(t *testing.T, destination string) {
+	t.Helper()
 	for _, name := range []string{selfplay.AgentAWAVPath, selfplay.AgentBWAVPath, selfplay.AgentADiagnosticsPath, selfplay.AgentBDiagnosticsPath, selfplay.AgentAStreamDeltasPath, selfplay.AgentBStreamDeltasPath, selfplay.ManifestPath} {
 		if _, err := os.Stat(filepath.Join(destination, name)); err != nil {
 			t.Fatalf("artifact %s: %v", name, err)
@@ -248,6 +269,10 @@ func TestConversationBridgesOnlyOrderedAssistantPCMAndFinalizesArtifacts(t *test
 			t.Fatalf("%s PCM = %v, want %v", path, data, want)
 		}
 	}
+}
+
+func assertConversationManifest(t *testing.T, destination string) {
+	t.Helper()
 	var manifest struct {
 		StopReason selfplay.StopReason `json:"stop_reason"`
 		Agents     map[string]struct {

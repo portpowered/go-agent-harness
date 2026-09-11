@@ -208,30 +208,43 @@ func (e *evidence) finalize(result selfplay.Result, runErr error, endedAt time.T
 	if e == nil {
 		return nil
 	}
-	e.finalizeOnce.Do(func() {
-		var closeErr error
-		for _, side := range e.sides {
-			if side == nil {
-				continue
-			}
-			if side.audio != nil {
-				closeErr = errors.Join(closeErr, side.audio.Close())
-			}
-			if side.diagnostics != nil {
-				closeErr = errors.Join(closeErr, side.diagnostics.Close())
-			}
-			if side.streamDeltas != nil {
-				closeErr = errors.Join(closeErr, side.streamDeltas.Close())
-			}
-		}
-		effectiveErr := errors.Join(runErr, e.err(), closeErr)
-		if err := e.writeManifest(result, effectiveErr, endedAt.UTC()); err != nil {
-			e.finalizeErr = errors.Join(closeErr, err)
-			return
-		}
-		e.finalizeErr = closeErr
-	})
+	e.finalizeOnce.Do(func() { e.finalizeErr = e.finalizeArtifacts(result, runErr, endedAt.UTC()) })
 	return e.finalizeErr
+}
+
+func (e *evidence) finalizeArtifacts(result selfplay.Result, runErr error, endedAt time.Time) error {
+	closeErr := e.closeSinks()
+	effectiveErr := errors.Join(runErr, e.err(), closeErr)
+	manifestErr := e.writeManifest(result, effectiveErr, endedAt)
+	if manifestErr != nil {
+		return errors.Join(closeErr, manifestErr)
+	}
+	return closeErr
+}
+
+func (e *evidence) closeSinks() error {
+	var closeErr error
+	for _, side := range e.sides {
+		closeErr = errors.Join(closeErr, closeEvidenceSide(side))
+	}
+	return closeErr
+}
+
+func closeEvidenceSide(side *sideEvidence) error {
+	if side == nil {
+		return nil
+	}
+	var closeErr error
+	if side.audio != nil {
+		closeErr = errors.Join(closeErr, side.audio.Close())
+	}
+	if side.diagnostics != nil {
+		closeErr = errors.Join(closeErr, side.diagnostics.Close())
+	}
+	if side.streamDeltas != nil {
+		closeErr = errors.Join(closeErr, side.streamDeltas.Close())
+	}
+	return closeErr
 }
 
 type manifest struct {
