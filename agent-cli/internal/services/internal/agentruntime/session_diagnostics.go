@@ -1,9 +1,4 @@
-// This file contains the session diagnostic contract: the canonical structured
-// failure record, per-turn accounting records, unexecutable tool-call records,
-// and the observer that derives them from the session loop's delta stream.
-//
-// Field names and values documented here are a stable operator contract; see
-// docs/architecture/s2s-session-diagnostic-contract.md.
+// Session diagnostic contract; see docs/architecture/s2s-session-diagnostic-contract.md.
 package agentruntime
 
 import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
@@ -12,6 +7,9 @@ import (
 	"context"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	audioinput "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioinput"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"sync"
 )
 
@@ -40,36 +38,31 @@ const (
 	SessionDiagnosticEventRoomBound = sessioncontract.SessionDiagnosticEventRoomBound
 )
 
-// Stable field keys for canonical diagnostic records.
 const (
-	fieldClassification     = "classification"
-	fieldTerminalReason     = "terminal_reason"
-	fieldTerminalProvenance = "terminal_provenance"
-	fieldOutputState        = "output_state"
-	fieldProvider           = "provider"
-	fieldModel              = "model"
-	fieldTurnsCompleted     = "turns_completed"
-	fieldFailingEvent       = "failing_event"
-	fieldProviderErrorType  = "provider_error_type"
-	fieldProviderErrorCode  = "provider_error_code"
-
-	fieldTurnIndex        = "turn_index"
-	fieldInputAudioBytes  = "input_audio_bytes"
-	fieldInputTextBytes   = "input_text_bytes"
-	fieldOutputAudioBytes = "output_audio_bytes"
-	fieldOutputTextBytes  = "output_text_bytes"
-	fieldOutputToolBytes  = "output_tool_bytes"
-
+	fieldClassification           = "classification"
+	fieldTerminalReason           = "terminal_reason"
+	fieldTerminalProvenance       = "terminal_provenance"
+	fieldOutputState              = "output_state"
+	fieldProvider                 = "provider"
+	fieldModel                    = "model"
+	fieldTurnsCompleted           = "turns_completed"
+	fieldFailingEvent             = "failing_event"
+	fieldProviderErrorType        = "provider_error_type"
+	fieldProviderErrorCode        = "provider_error_code"
+	fieldTurnIndex                = "turn_index"
+	fieldInputAudioBytes          = "input_audio_bytes"
+	fieldInputTextBytes           = "input_text_bytes"
+	fieldOutputAudioBytes         = "output_audio_bytes"
+	fieldOutputTextBytes          = "output_text_bytes"
+	fieldOutputToolBytes          = "output_tool_bytes"
 	fieldProviderPromptTokens     = "provider_prompt_tokens"
 	fieldProviderCompletionTokens = "provider_completion_tokens"
 	fieldProviderTotalTokens      = "provider_total_tokens"
 	fieldProviderReasoningTokens  = "provider_reasoning_tokens"
-
-	fieldToolName              = "tool_name"
-	fieldToolCallID            = "tool_call_id"
-	fieldFailureClassification = "failure_classification"
-	fieldFailureReason         = "failure_reason"
-
+	fieldToolName                 = "tool_name"
+	fieldToolCallID               = "tool_call_id"
+	fieldFailureClassification    = "failure_classification"
+	fieldFailureReason            = "failure_reason"
 	// These fields extend the canonical session_failure record when a terminal
 	// path leaves provider-requested tool results unresolved.
 	SessionDiagnosticFieldUnresolvedToolResultCount = sessioncontract.SessionDiagnosticFieldUnresolvedToolResultCount
@@ -101,36 +94,55 @@ const (
 	SessionDiagnosticFieldCancelledToolContinuationCount   = sessioncontract.SessionDiagnosticFieldCancelledToolContinuationCount
 	SessionDiagnosticFieldCancelledToolContinuationCallIDs = sessioncontract.SessionDiagnosticFieldCancelledToolContinuationCallIDs
 )
-
 const (
 	fieldUnresolvedToolResultCount = SessionDiagnosticFieldUnresolvedToolResultCount
 	fieldUnresolvedToolCallIDs     = SessionDiagnosticFieldUnresolvedToolCallIDs
 )
 
-// Failing-event identities used when no stream event authored the failure.
+// Failing-event identities when no stream event authored the failure.
 const (
 	failingEventConnect = "SESSION.CONNECT"
 	failingEventRun     = "SESSION.RUN"
 )
 
-// ScheduledAudioInput schedules one raw PCM user-audio injection through the
-// loop's existing audio-input seam (AgentLoop.SendAudioInput). The default
-// completion-gated policy fires after AfterCompletedTurns assistant turns have
-// completed; the active-response policy may fire at the immediately preceding
-// response's non-terminal boundary. Its bytes are attributed to the then
-// in-flight turn (turn index AfterCompletedTurns+1).
-type ScheduledAudioInput struct {
-	AfterCompletedTurns int
-	PCM                 []byte
-	// SourceSampleRate is the native rate of PCM. Zero explicitly means the
-	// caller/replay bytes already use the resolved provider rate.
-	SourceSampleRate int
-	// EndOfTurn sends MESSAGE.END after this input so realtime providers
-	// commit the audio and create one response before the next scheduled turn.
-	// The zero value preserves the diagnostics-only injection behavior.
-	EndOfTurn bool
-}
+// ScheduledAudioInput schedules raw PCM through AgentLoop.SendAudioInput. The
+// completion-gated policy fires after AfterCompletedTurns turns; the active-
+// response policy fires at the preceding response's non-terminal boundary.
+type ScheduledAudioInput = audioinput.ScheduledInput
+type SessionAudioInput = audioinput.InputSpec
+type SessionAudioInputErrorKind = audioinput.ErrorKind
+type SessionAudioInputError = audioinput.Error
+type rec = sessionRuntimeObservationRecorder
 
+const SessionAudioInputEmpty SessionAudioInputErrorKind = audioinput.KindEmpty
+const SessionAudioInputMissing SessionAudioInputErrorKind = audioinput.KindMissing
+const SessionAudioInputUnreadable SessionAudioInputErrorKind = audioinput.KindUnreadable
+const SessionAudioInputFormat SessionAudioInputErrorKind = audioinput.KindFormat
+const SessionAudioInputConflict SessionAudioInputErrorKind = audioinput.KindConflict
+const SessionAudioInputRead SessionAudioInputErrorKind = audioinput.KindRead
+const SessionAudioInputSend SessionAudioInputErrorKind = audioinput.KindSend
+const SessionAudioInputClose SessionAudioInputErrorKind = audioinput.KindClose
+const ErrSessionAudioInputEmpty = audioinput.ErrEmpty
+const ErrSessionAudioInputMissing = audioinput.ErrMissing
+const ErrSessionAudioInputUnreadable = audioinput.ErrUnreadable
+const ErrSessionAudioInputFormat = audioinput.ErrFormat
+const ErrSessionAudioInputRead = audioinput.ErrRead
+const ErrSessionAudioInputSend = audioinput.ErrSend
+const ErrSessionAudioInputClose = audioinput.ErrClose
+const ErrSessionAudioInputUninterruptible = audioinput.ErrUninterruptible
+const ErrSessionAudioInputEndOfTurnLost = audioinput.ErrEndOfTurnLost
+const ErrSessionAudioPCM16Truncated = audioinput.ErrPCM16Truncated
+const ErrSessionAudioSampleRateConflict = audioinput.ErrRateConflict
+
+type sessionAudioOutputConfigurer interface {
+	SetSessionAudioOutput(models.AudioFormat, models.SampleRate)
+}
+type sessionAudioInputConfigurer interface {
+	SetSessionAudioInput(models.AudioFormat, models.SampleRate)
+}
+type sessionAudioRequestProvider interface {
+	Request() inference.SessionRequest
+}
 type diagnosticSinkFanout []SessionDiagnosticSink
 
 func combineDiagnosticSinks(sinks ...SessionDiagnosticSink) SessionDiagnosticSink {
@@ -149,7 +161,6 @@ func combineDiagnosticSinks(sinks ...SessionDiagnosticSink) SessionDiagnosticSin
 		return filtered
 	}
 }
-
 func (f diagnosticSinkFanout) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
 	for _, sink := range f {
 		if sink != nil {
@@ -257,10 +268,9 @@ type sessionProgressObserver struct {
 	// Room mixer input is admitted by a background pump rather than the
 	// session delta consumer. Keep its per-turn and lifetime byte totals behind
 	// their own lock so concurrent provider observation remains race-free.
-	roomInputMu         sync.Mutex
-	roomInputTurnBytes  uint64
-	roomInputTotalBytes uint64
-
+	roomInputMu             sync.Mutex
+	roomInputTurnBytes      uint64
+	roomInputTotalBytes     uint64
 	toolStateMu             sync.Mutex
 	unresolvedToolCalls     map[string]struct{}
 	acceptedToolCalls       map[string]struct{}
@@ -284,18 +294,15 @@ type sessionProgressObserver struct {
 	// provider tool event is reported as unexecutable rather than creating an
 	// obligation that no executor can satisfy.
 	toolResultsEnabled bool
-
 	// toolDeltaSeen tracks whether the in-flight provider tool call streamed
 	// TOOLCALL.DELTA bytes, so a terminal TOOLCALL.END carrying full arguments
 	// is counted only when no deltas preceded it.
-	toolDeltaSeen bool
-
-	usagePrompt     uint64
-	usageCompletion uint64
-	usageTotal      uint64
-	usageReasoning  uint64
-	usageSeen       bool
-
+	toolDeltaSeen          bool
+	usagePrompt            uint64
+	usageCompletion        uint64
+	usageTotal             uint64
+	usageReasoning         uint64
+	usageSeen              bool
 	livenessMu             sync.Mutex
 	livenessErr            error
 	livenessObserver       func(error)
@@ -327,9 +334,8 @@ type sessionProgressObserver struct {
 	// separate from the diagnostic sink so a failure still produces exactly
 	// one canonical session_failure record.
 	failureObserver func(sessionTerminalObservation)
-
-	emitOnce    sync.Once
-	metricsOnce sync.Once
+	emitOnce        sync.Once
+	metricsOnce     sync.Once
 }
 
 func (o *sessionProgressObserver) markRoomBoundCancellation() {
@@ -337,7 +343,6 @@ func (o *sessionProgressObserver) markRoomBoundCancellation() {
 		o.roomBoundCancellation = true
 	}
 }
-
 func (o *sessionProgressObserver) notifyTerminalObservation(observation sessionTerminalObservation) bool {
 	if o == nil {
 		return false
@@ -347,7 +352,6 @@ func (o *sessionProgressObserver) notifyTerminalObservation(observation sessionT
 	}
 	return o.terminalObserver(observation)
 }
-
 func (o *sessionProgressObserver) notifyFailureObservation(observation sessionTerminalObservation) bool {
 	if !observation.Failure || !o.notifyTerminalObservation(observation) {
 		return false
@@ -357,7 +361,6 @@ func (o *sessionProgressObserver) notifyFailureObservation(observation sessionTe
 	}
 	return true
 }
-
 func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Recorder, provider, model string) *sessionProgressObserver {
 	productionSink, err := metrics.NewInMemorySink()
 	if err != nil {
@@ -385,7 +388,6 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		livenessWakeCh:        make(chan struct{}, 1),
 	}
 }
-
 func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInput) {
 	if o == nil {
 		return

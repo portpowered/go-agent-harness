@@ -8,6 +8,13 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+func preserveRunTerminalError(engineErr, cancellationErr error) error {
+	if engineErr != nil && !errors.Is(engineErr, context.Canceled) && !errors.Is(engineErr, context.DeadlineExceeded) {
+		return engineErr
+	}
+	return cancellationErr
+}
+
 // FinalTextStatus is the explicit terminal outcome reported by
 // [ExecuteResult.FinalText].
 type FinalTextStatus string

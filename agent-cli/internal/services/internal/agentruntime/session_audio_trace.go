@@ -2,19 +2,25 @@ package agentruntime
 
 import (
 	"bytes"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 )
 
-// TraceRuntimeObserver translates service observations into the shared recorder.
+const (
+	traceProviderWireSend    = "provider_wire_send"
+	traceProviderWireReceive = "provider_wire_receive"
+)
+
 type TraceRuntimeObserver struct {
 	Trace      *recording.Trace
 	Redactions []string
 }
 
 func (o TraceRuntimeObserver) ObserveSessionRuntime(event SessionRuntimeObservation) {
+	redact := event.Kind == sessionToolEventTypeCall || event.Kind == sessionToolEventTypeResult || event.Kind == traceProviderWireSend || event.Kind == traceProviderWireReceive
 	if len(o.Redactions) > 0 {
-		if runtimePayloadNeedsRedaction(event.Kind) {
+		if redact {
 			event.Payload = append([]byte(nil), event.Payload...)
 		}
 		for _, secret := range o.Redactions {
@@ -22,25 +28,12 @@ func (o TraceRuntimeObserver) ObserveSessionRuntime(event SessionRuntimeObservat
 				continue
 			}
 			event.Error = strings.ReplaceAll(event.Error, secret, "[REDACTED]")
-			if runtimePayloadNeedsRedaction(event.Kind) {
+			if redact {
 				event.Payload = bytes.ReplaceAll(event.Payload, []byte(secret), []byte("[REDACTED]"))
 			}
 		}
 	}
-
 	o.Trace.ObserveRuntime(recording.RuntimeEvent{Kind: string(event.Kind), Tick: event.Tick, InputCommit: event.InputCommit, ResponseID: event.ResponseID, ResponsePurpose: string(event.ResponsePurpose), StreamID: event.StreamID, LoopPassID: event.LoopPassID, Epoch: event.Epoch, TurnsCompleted: event.TurnsCompleted, Clean: event.Clean, Error: event.Error, Payload: event.Payload})
-}
-
-// Wire observations contain provider JSON and can include credentials or
-// bearer material. Treat them like tool payloads for redaction. Audio payloads
-// intentionally remain byte-identical so trace replay retains PCM evidence.
-func runtimePayloadNeedsRedaction(kind SessionRuntimeObservationKind) bool {
-	switch kind {
-	case "tool_call", "tool_result", "provider_wire_send", "provider_wire_receive":
-		return true
-	default:
-		return false
-	}
 }
 
 type sessionRuntimeObserverFanout []SessionRuntimeObserver
@@ -52,23 +45,14 @@ func (f sessionRuntimeObserverFanout) ObserveSessionRuntime(observation SessionR
 		}
 	}
 }
-
-// CombineSessionRuntimeObservers preserves all non-nil observers in order.
 func CombineSessionRuntimeObservers(observers ...SessionRuntimeObserver) SessionRuntimeObserver {
-	filtered := make(sessionRuntimeObserverFanout, 0, len(observers))
 	for _, observer := range observers {
 		if observer != nil {
-			filtered = append(filtered, observer)
+			return sessionRuntimeObserverFanout(observers)
 		}
 	}
-	if len(filtered) == 0 {
-		return nil
-	}
-	return filtered
+	return nil
 }
-
-// Provider commits release the accumulated utterance and record server VAD
-// boundaries even when no explicit client commit is sent.
 func (TraceRuntimeObserver) ObserveProviderBoundaries() bool { return true }
 func (f sessionRuntimeObserverFanout) ObserveProviderBoundaries() bool {
 	for _, observer := range f {
@@ -78,18 +62,13 @@ func (f sessionRuntimeObserverFanout) ObserveProviderBoundaries() bool {
 	}
 	return false
 }
-
-// The audio trace already persists input chunks. Re-copying whole utterances
-// at VAD commit would grow memory during silence or very long utterances.
 func (TraceRuntimeObserver) RetainCommitPayload() bool { return false }
 func (f sessionRuntimeObserverFanout) RetainCommitPayload() bool {
 	for _, observer := range f {
-		if observer == nil {
-			continue
-		}
-		preference, ok := observer.(interface{ RetainCommitPayload() bool })
-		if !ok || preference.RetainCommitPayload() {
-			return true
+		if observer != nil {
+			if preference, ok := observer.(interface{ RetainCommitPayload() bool }); !ok || preference.RetainCommitPayload() {
+				return true
+			}
 		}
 	}
 	return false

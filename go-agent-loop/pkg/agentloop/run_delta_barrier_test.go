@@ -132,6 +132,15 @@ func TestRunCancellationReleasesBlockedDeltaForwarder(t *testing.T) {
 	}) {
 		t.Fatal("write provider terminal error")
 	}
+	// Wait for the model runner to consume the terminal event and close the
+	// provider session before cancelling. This establishes the natural-error
+	// ordering that the test is intended to exercise without relying on a
+	// scheduler-dependent sleep.
+	select {
+	case <-session.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("provider did not close after the terminal error")
+	}
 	// With a one-element public delta buffer and no reader, the forwarding
 	// worker blocks on the second event after the engine reports its error.
 	// Cancellation must release that write even though Run is already inside

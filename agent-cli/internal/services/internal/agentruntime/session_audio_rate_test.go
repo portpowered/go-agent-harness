@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	audioinput "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioinput"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
@@ -20,20 +21,13 @@ func TestStreamSessionAudioInputResamples16kHzAtProviderBoundary(t *testing.T) {
 	}
 	var captured []byte
 	endOfTurn := false
-	source := &sessionAudioSource{
-		source:       audio.NewSliceSource(samples),
-		path:         "injected-16k",
-		sourceRate:   wavio.Rate16kHz,
-		providerRate: wavio.Rate24kHz,
-		send: func(_ context.Context, pcm []byte) error {
+	source := newSessionAudioSource(&audioinput.ManagedSource{
+		Source: audio.NewSliceSource(samples), Path: "injected-16k", SourceSampleRate: wavio.Rate16kHz, ProviderSampleRate: wavio.Rate24kHz,
+		SendEndOfTurn: func(context.Context) error { endOfTurn = true; return nil }, SendAudioInput: func(_ context.Context, pcm []byte) error {
 			captured = append(captured, pcm...)
 			return nil
 		},
-		endOfTurn: func(context.Context) error {
-			endOfTurn = true
-			return nil
-		},
-	}
+	})
 
 	if err := streamSessionAudioInput(context.Background(), nil, source); err != nil {
 		t.Fatalf("stream input: %v", err)

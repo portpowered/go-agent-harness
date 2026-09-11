@@ -453,8 +453,8 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 			// the lifecycle signal that releases that worker; natural engine errors
 			// still drain it to preserve the publication barrier.
 			forwardCancel()
-			_ = finish(nil, false)
-			return ctx.Err()
+			// Preserve a structured provider failure when cancellation races shutdown.
+			return preserveRunTerminalError(finish(nil, false), ctx.Err())
 
 		case err := <-errCh:
 			if err != nil {
