@@ -634,3 +634,47 @@ C23 current-main/C53 characterization checkpoint — 2026-09-11T23:41:07Z
   regressions, and only after it passes update and submit the same PR #415 to
   script CI without polling. CI, review, merge, vertical, device, acoustic
   and project-completion claims remain open.
+
+C23 bounded ownership recheck — 2026-09-11T23:52:07Z
+
+- Admission remains valid for the sole `audio-runtime` project and task;
+  `project-control.py verify-work --type task --name
+  audio-runtime-c23-long-session-tool-characterization` returned `admitted`.
+  The isolated branch exactly matches `prd.json.branchName`. Fresh fetch
+  resolved `origin/main=d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`; the
+  candidate is clean at `8d2a74fd97614635a5915b74693bcbbb2bba0e92`, with
+  startup and project-baseline ancestry preserved. The branch diff remains
+  exactly the seven admitted C23 evidence paths. C56's external candidate is
+  still only `origin/codex/audio-runtime-c56-retire-cli-recording-orchestration
+  =9f089bfa703a0e024844b5f0fdbe62b4c44720d8`; its task remains active and
+  unreviewed, so no recording repair has reached main.
+- Re-read the current C23 task/review rows and preserved Review-155,
+  Review-169, and Review-191 findings. The owned runner/evidence repairs are
+  still bounded and source-local. Python compilation and the driver help
+  contract pass, including the mandated `probe` command. The accumulated C21
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` passes
+  normal `-count=5` (`13.726s`) and race `-count=1` (`13.399s`); `git diff
+  --check` passes.
+- The focused C23 self-check passes all four negative controls. Report-oracle
+  PCM/identity mutations reject as expected. Native missing-result and
+  duplicate-result controls each reject with the public runtime error
+  `tool results were not delivered for 1 unresolved call(s): call-000-beta`,
+  terminal `terminal_failure`, one accepted alpha result, bounded output,
+  and `parent_reaped=true`/`group_alive_after=false`. The new runs are
+  `20260911T235134Z-self-check-missing-result` and
+  `20260911T235136Z-self-check-duplicate-result`; self-check reports
+  `passed=true`.
+- The preserved first unexpected C53/C56 recording-on/16 failure remains
+  immutable: provider/public PCM and clean provider completion exist, but the
+  recording manifest has no `audio/out-000.pcm` and reports
+  `accepted_audio=0`, `audio_bytes=0`. No unchanged controls or matrix were
+  rerun, no C23 oracle or deadline was weakened, and no production/peer path
+  was edited. CI, review, merge, vertical, device, acoustic, and project
+  completion remain unclaimed.
+- Disposition remains `CONTINUE`, not `ACCEPTED`. Exact next action: after the
+  reviewed C56 recording/media repair reaches `origin/main` (or primary gives
+  an explicit ownership decision), fetch that changed main, rebuild and
+  rebind exact provenance, run the complete bounded controls/matrix/
+  shipped-regressions/self-check/report sequence plus C21 normal/race
+  regressions, then push/update the same PR #415 and return `ACCEPTED` to the
+  script CI gate without polling. Do not resubmit this unchanged red head.
