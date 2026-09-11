@@ -1,0 +1,50 @@
+{
+  "schema": "audio-runtime-c52-checkpoints-v1",
+  "required_kinds": [
+    "case_started",
+    "live_open",
+    "event_drain_created",
+    "handle_start",
+    "live_event_received",
+    "terminal_observed",
+    "terminal_metadata_latched",
+    "liveness_cancel_requested",
+    "handle_cancel",
+    "sink_publish_before",
+    "sink_publish",
+    "sink_publish_returned",
+    "diagnostic_published",
+    "peer_cancel_snapshot",
+    "room_context_cancel_requested",
+    "participant_wait_returned",
+    "participant_handle_closed",
+    "participant_result_recorded",
+    "room_result_snapshot",
+    "room_run_return"
+  ],
+  "per_case_order": [
+    "case_started",
+    "live_event_received",
+    "terminal_observed",
+    "terminal_metadata_latched",
+    "liveness_cancel_requested",
+    "sink_publish_before",
+    "sink_publish",
+    "sink_publish_returned",
+    "diagnostic_published",
+    "peer_cancel_snapshot",
+    "room_context_cancel_requested",
+    "room_result_snapshot",
+    "room_run_return"
+  ],
+  "cleanup_kinds": [
+    "handle_wait_returned",
+    "handle_close_returned",
+    "participant_result_recorded"
+  ],
+  "negative_controls": [
+    "zero_test_selection_rejected",
+    "wrong_test_selection_rejected",
+    "survivor_process_rejected"
+  ]
+}

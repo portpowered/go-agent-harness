@@ -1,0 +1,30 @@
+{
+  "cleanup": {},
+  "command": [
+    "go",
+    "test",
+    "-tags=nomicrophone",
+    "-json",
+    "-count=10",
+    "-run",
+    "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
+    "./services/rooms/internal/lifecycle"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T070000Z-go1267/scratch/pr438",
+  "duration_seconds": 7.803944333922118,
+  "ended_at": "2026-09-11T06:48:27.771299+00:00",
+  "exit_code": 1,
+  "first_failure": {
+    "line": 1,
+    "stream": "stderr",
+    "text": "go: downloading go1.26.7 (darwin/arm64)"
+  },
+  "output_overflow": false,
+  "reader_survivor": false,
+  "started_at": "2026-09-11T06:48:19.967420+00:00",
+  "stderr_bytes": 360,
+  "stderr_sha256": "b41a5b29b27efa2a4335aedc337f1bcbc75e870c013d2e33f6383d69397bff50",
+  "stdout_bytes": 0,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "timed_out": false
+}

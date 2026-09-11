@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
-	"reflect"
-	"strings"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
+	"reflect"
+	"strings"
 )
 
 func (h *handle) setProviderMediaAttached(attached bool) {
@@ -26,7 +25,6 @@ func (h *handle) setProviderMediaAttached(attached bool) {
 		h.mediaFailure(mediagate.ErrMediaUnavailable)
 	}
 }
-
 func (h *handle) Send(ctx context.Context, control session.LiveControl) error {
 	if h == nil {
 		return session.ErrLiveClosed
@@ -51,18 +49,10 @@ func (h *handle) Send(ctx context.Context, control session.LiveControl) error {
 	if err := h.refreshLiveTools(ctx, loop); err != nil {
 		return err
 	}
-	// Close is teardown, so it must cancel the provider and media bridges before
-	// waiting on any in-flight media write. Waiting behind a blocked writer here
-	// would make a close control unable to stop that writer.
 	if control.Kind == session.LiveControlClose {
 		h.Cancel(context.Canceled)
 		return nil
 	}
-
-	// Reserve the control's place in the same admission sequence used by PCM
-	// frames and automatic provider sends. Reservation is non-blocking; waiting
-	// for an earlier operation while holding a mutex would deadlock the
-	// agent-loop runner when that earlier operation is itself a provider send.
 	ackID, ack, err := h.media.RegisterAck()
 	if err != nil {
 		return err
@@ -88,11 +78,6 @@ func (h *handle) Send(ctx context.Context, control session.LiveControl) error {
 		return ctx.Err()
 	}
 }
-
-// refreshLiveTools publishes a participant's current tool surface before a
-// new control enters the provider wire. The update uses the same marked
-// admission barrier as text/commit/cancel, so a page-discovery refresh cannot
-// overtake already admitted PCM or be overtaken by the following control.
 func (h *handle) refreshLiveTools(ctx context.Context, loop *agentloop.AgentLoop) error {
 	h.mu.Lock()
 	refresh := h.capabilityRefresh
@@ -102,9 +87,6 @@ func (h *handle) refreshLiveTools(ctx context.Context, loop *agentloop.AgentLoop
 	}
 	h.capabilityMu.Lock()
 	defer h.capabilityMu.Unlock()
-	// A concurrent Send may have refreshed the definitions while this call was
-	// waiting for the capability mutex. Re-read the current snapshot before
-	// deciding whether another provider update is needed.
 	h.mu.Lock()
 	current := append([]messages.ToolDefinition(nil), h.toolDefinitions...)
 	h.mu.Unlock()
@@ -148,11 +130,9 @@ func (h *handle) refreshLiveTools(ctx context.Context, loop *agentloop.AgentLoop
 		return ctx.Err()
 	}
 }
-
 func liveControlEvent(control session.LiveControl) (messages.StreamMessage, error) {
 	switch control.Kind {
 	case session.LiveControlText:
-		// Text uses the same ordered provider ingress as other controls.
 		return messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(control.Text)}, nil
 	case session.LiveControlAudioCommit:
 		return messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}, nil
@@ -166,7 +146,6 @@ func liveControlEvent(control session.LiveControl) (messages.StreamMessage, erro
 		return messages.StreamMessage{}, fmt.Errorf("unsupported live control %q", control.Kind)
 	}
 }
-
 func (h *handle) Cancel(err error) {
 	if h == nil {
 		return
@@ -176,7 +155,6 @@ func (h *handle) Cancel(err error) {
 	}
 	h.mu.Lock()
 	h.cancelRequested = true
-	// Preserve the first cancellation cause for actionable terminal errors.
 	if h.cancelCause == nil {
 		h.cancelCause = err
 	}
@@ -188,7 +166,6 @@ func (h *handle) Cancel(err error) {
 		cancel(err)
 	}
 }
-
 func (h *handle) stopGracefully() {
 	if h == nil {
 		return
@@ -206,7 +183,6 @@ func (h *handle) stopGracefully() {
 		cancel(nil)
 	}
 }
-
 func (h *handle) Wait() error {
 	if h == nil {
 		return session.ErrLiveNotStarted
@@ -225,7 +201,6 @@ func (h *handle) Wait() error {
 	defer h.mu.Unlock()
 	return h.terminalErr
 }
-
 func (h *handle) Close() error {
 	if h == nil {
 		return nil
@@ -245,7 +220,6 @@ func (h *handle) Close() error {
 	cancel := h.cancel
 	if started {
 		h.cancelRequested = true
-		// Close preserves any typed cause already recorded by the session.
 		if h.cancelCause == nil {
 			h.cancelCause = context.Canceled
 		}
@@ -264,12 +238,10 @@ func (h *handle) Close() error {
 	<-h.done
 	return mediaErr
 }
-
 func (h *handle) clearPendingToolCallsLocked() {
 	clear(h.pendingToolCallResponses)
 	h.pendingToolCalls = 0
 }
-
 func (h *handle) noteCaptureDispatched() {
 	if h == nil {
 		return
@@ -285,11 +257,9 @@ func (h *handle) noteCaptureDispatched() {
 		close(wake)
 	}
 }
-
 func (h *handle) observeToolResult(callID, name string, requestsContinuation bool) {
 	_ = h.beginToolResultAdmission(callID, name, requestsContinuation)
 }
-
 func providerContinuationFailed(value *messages.MessageEndValue) bool {
 	if value == nil {
 		return false
@@ -297,7 +267,6 @@ func providerContinuationFailed(value *messages.MessageEndValue) bool {
 	status := strings.ToLower(strings.TrimSpace(value.Status))
 	return status == continuationStatusFailed || status == "error"
 }
-
 func drainLiveEvents(events <-chan session.LiveEvent, sink session.LiveEventSink, ctx context.Context, sinkErr *error, handle session.LiveHandle) {
 	if events == nil {
 		return
@@ -320,7 +289,6 @@ func drainLiveEvents(events <-chan session.LiveEvent, sink session.LiveEventSink
 		}
 	}
 }
-
 func sessionSendOutcomeForError(ctx context.Context, err error) messages.SessionSendOutcome {
 	if err == nil {
 		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
@@ -333,7 +301,6 @@ func sessionSendOutcomeForError(ctx context.Context, err error) messages.Session
 	}
 	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 }
-
 func (h *handle) finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
 	value, ok := msg.Value.(*messages.MessageEndValue)
 	if !ok || value == nil {
@@ -342,25 +309,17 @@ func (h *handle) finiteResponseWasInterrupted(msg messages.StreamMessage) bool {
 	if value.TerminalReason == messages.TerminalReasonPartialOutput {
 		return true
 	}
-	// Realtime providers report a VAD barge-in as a cancelled response. An
-	// explicit replay plan owns the following replacement response, so this
-	// provider cancellation is an interruption boundary rather than the
-	// finite replay's successful terminal. Ordinary finite captures retain
-	// their existing cancellation semantics.
 	return h != nil && h.request.ReplayPlan != nil &&
 		h.request.ReplayPlan.InterruptionReplacementExpected &&
 		value.TerminalReason == messages.TerminalReasonCancellation &&
 		value.TerminalProvenance == messages.TerminalProvenanceProvider
 }
-
 func (h *handle) isToolResponseEnd(msg messages.StreamMessage) bool {
 	return msg.Type == messages.StreamTypeMessageEnd && msg.Role == messages.RoleTool
 }
-
 func (h *handle) shouldFinishFiniteResponse(msg messages.StreamMessage) bool {
 	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool && !h.finiteResponseWasInterrupted(msg) && h.canFinishFiniteResponse()
 }
-
 func (h *handle) canFinishFiniteResponse() bool {
 	if !h.request.FinishAfterResponse || h.responseActive || h.responsePending {
 		return false
@@ -371,15 +330,11 @@ func (h *handle) canFinishFiniteResponse() bool {
 		responseTarget = h.captureResponseTarget
 	}
 	if h.scheduledAudioCount > 0 {
-		// Scheduled barge-in resolves input at its owned partial terminal. A
-		// completed tool continuation after that interruption owns one additional
-		// provider terminal before the scheduled final response can complete.
 		responseCount = h.observedResponseTerminals
 		responseTarget = h.scheduledResponseBase + h.scheduledAudioCount + h.scheduledContinuationTerminals
 	}
 	return h.captureComplete && h.responseStarted && h.pendingToolCalls == 0 && responseCount >= responseTarget && !h.gracefulStop && !h.cancelRequested && !providerCloseExpected
 }
-
 func (h *handle) replayResponseTarget() int {
 	target := 1
 	if h.request.ReplayPlan != nil && len(h.request.ReplayPlan.AudioTurns) > 0 {
@@ -390,10 +345,56 @@ func (h *handle) replayResponseTarget() int {
 	}
 	return target
 }
-
 func shouldCancelMediaPumpFor(name string, pumpErr error, ctx context.Context) bool {
 	if name == "playback" && errors.Is(pumpErr, devices.ErrPlaybackInput) {
 		return false
 	}
 	return shouldCancelMediaPump(pumpErr, ctx)
+}
+func (s *terminalDrainSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	return s.SendWithOutcome(ctx, msg).OK()
+}
+func (s *terminalDrainSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	if s == nil || s.inner == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
+	}
+	if sender, ok := s.inner.(messages.SessionSendOutcomeSender); ok {
+		return sender.SendWithOutcome(ctx, msg)
+	}
+	if s.inner.Send(ctx, msg) {
+		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	}
+	if ctx != nil && ctx.Err() != nil {
+		status := messages.SessionSendCancelled
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			status = messages.SessionSendTimedOut
+		}
+		return messages.SessionSendOutcome{Status: status, Err: ctx.Err()}
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+}
+func (s *terminalDrainSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.receive
+}
+func (s *terminalDrainSession) Done() <-chan struct{} { return s.done }
+func (s *terminalDrainSession) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.close.Do(func() {
+		close(s.stop)
+		if s.inner != nil {
+			s.closeErr = s.inner.Close()
+		}
+	})
+	<-s.done
+	return s.closeErr
+}
+func (s *terminalDrainSession) SupportsCompleteMessages() bool {
+	capability, ok := s.inner.(interface{ SupportsCompleteMessages() bool })
+	return ok && capability.SupportsCompleteMessages()
+}
+func (s *terminalDrainSession) SupportsCompleteMessagesWithoutResponse() bool {
+	capability, ok := s.inner.(interface{ SupportsCompleteMessagesWithoutResponse() bool })
+	return ok && capability.SupportsCompleteMessagesWithoutResponse()
 }

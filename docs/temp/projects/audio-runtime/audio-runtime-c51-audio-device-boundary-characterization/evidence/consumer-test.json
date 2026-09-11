@@ -1,0 +1,78 @@
+{
+  "dependencyCommand": {
+    "argv": [
+      "go",
+      "list",
+      "-deps",
+      "./..."
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/consumer",
+    "diskBytesAfter": null,
+    "diskBytesBefore": null,
+    "diskBytesDelta": null,
+    "diskLimitBytes": null,
+    "diskLimitExceeded": false,
+    "durationSeconds": 0.162627,
+    "fileLimitBytes": null,
+    "processGroupAlive": false,
+    "returnCode": 0,
+    "stderr": "",
+    "stderrTruncated": false,
+    "stdout": "internal/goarch\nunsafe\ninternal/abi\ninternal/unsafeheader\ninternal/cpu\ninternal/bytealg\ninternal/byteorder\ninternal/chacha8rand\ninternal/coverage/rtcov\ninternal/godebugs\ninternal/goexperiment\ninternal/goos\ninternal/profilerecord\ninternal/runtime/atomic\ninternal/runtime/exithook\ninternal/runtime/gc\ninternal/runtime/sys\ninternal/runtime/gc/scan\ninternal/asan\ninternal/msan\ninternal/race\ninternal/runtime/math\ninternal/runtime/maps\ninternal/runtime/pprof/label\nmath/bits\ninternal/strconv\ninternal/stringslite\ninternal/trace/tracev2\nruntime\ninternal/reflectlite\nerrors\nsync/atomic\ninternal/sync\ninternal/synctest\nsync\ninternal/bisect\ninternal/godebug\ninternal/oserror\nsyscall\ntime\ncontext\nio\niter\nunicode\nunicode/utf8\nbytes\ncmp\nencoding\nslices\nstrconv\nencoding/base64\nmath\nreflect\ninternal/fmtsort\npath\nio/fs\ninternal/filepathlite\ninternal/syscall/unix\ninternal/poll\ninternal/syscall/execenv\ninternal/testlog\nos\nfmt\nstrings\nunicode/utf16\nencoding/json\nsort\ngithub.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages\nbufio\nembed\ncontainer/heap\ngithub.com/portpowered/go-agent-harness/go-audio/pkg/clock\ngithub.com/portpowered/go-agent-harness/go-agent-loop/test/functional/timeharness\nencoding/binary\ngithub.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream\ngithub.com/portpowered/go-agent-harness/go-audio/pkg/contract\ngithub.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing\ngithub.com/pion/opus/internal/bitdepth\ngithub.com/pion/opus/internal/rangecoding\ngithub.com/pion/opus/internal/slicetools\ngithub.com/pion/opus/internal/celt\ngithub.com/pion/opus/internal/resample/silk\ngithub.com/pion/opus/internal/silk\ngithub.com/pion/opus\ngithub.com/portpowered/go-agent-harness/go-audio/pkg/codec\ngithub.com/portpowered/go-agent-harness/go-audio/pkg/wavio\nmath/rand\nmath/big\npath/filepath\ngithub.com/portpowered/go-agent-harness/go-audio/pkg/audio\nregexp/syntax\nregexp\ngithub.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe\ngithub.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport\ngithub.com/portpowered/go-agent-harness/go-agent-runtime/services/devices\ngithub.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/composite\ngithub.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file\ngithub.com/portpowered/go-agent-harness/go-audio/pkg/mixer\nhash\ncrypto\ncrypto/internal/fips140deps/godebug\ncrypto/internal/fips140\ncrypto/internal/fips140/alias\ncrypto/internal/fips140deps/byteorder\ncrypto/internal/fips140deps/cpu\ncrypto/internal/impl\ncrypto/internal/fips140/sha256\ncrypto/internal/constanttime\ncrypto/internal/fips140/subtle\ncrypto/internal/fips140/sha3\ncrypto/internal/fips140/sha512\ncrypto/internal/fips140/hmac\ncrypto/internal/fips140/check\ncrypto/internal/fips140/aes\ncrypto/internal/fips140deps/time\ncrypto/internal/entropy/v1.0.0\ncrypto/internal/sysrand\ncrypto/internal/fips140/drbg\ncrypto/internal/fips140/aes/gcm\ncrypto/fips140\ncrypto/internal/fips140only\ncrypto/subtle\ncrypto/cipher\ncrypto/internal/boring/sig\ncrypto/internal/boring\ncrypto/sha256\nencoding/hex\ngithub.com/ebitengine/purego/internal/cgo\ngithub.com/ebitengine/purego/internal/strings\nruntime/cgo\nstructs\ngithub.com/ebitengine/purego\ngithub.com/gen2brain/malgo\ngithub.com/portpowered/go-agent-harness/go-audio/pkg/observability\nvendor/golang.org/x/net/dns/dnsmessage\ninternal/nettrace\nweak\nunique\nnet/netip\ninternal/routebsd\ninternal/singleflight\nnet\ncompress/flate\nhash/crc32\ncompress/gzip\ncontainer/list\nmath/rand/v2\ncrypto/internal/randutil\ncrypto/internal/rand\ncrypto/rand\ncrypto/aes\ncrypto/des\ncrypto/internal/fips140/nistec/fiat\ncrypto/internal/fips140/nistec\ncrypto/internal/fips140/ecdh\ncrypto/internal/fips140/edwards25519/field\ncrypto/ecdh\ncrypto/elliptic\ncrypto/internal/boring/bbig\ncrypto/internal/fips140/bigmod\ncrypto/internal/fips140/ecdsa\ncrypto/internal/fips140cache\ncrypto/sha3\ncrypto/internal/fips140hash\ncrypto/sha512\ninternal/saferio\nencoding/asn1\nvendor/golang.org/x/crypto/cryptobyte/asn1\nvendor/golang.org/x/crypto/cryptobyte\ncrypto/ecdsa\ncrypto/internal/fips140/edwards25519\ncrypto/internal/fips140/ed25519\ncrypto/ed25519\ncrypto/internal/fips140/hkdf\ncrypto/hkdf\ncrypto/hmac\ncrypto/internal/fips140/mlkem\ncrypto/mlkem\nvendor/golang.org/x/crypto/internal/alias\nvendor/golang.org/x/crypto/chacha20\nvendor/golang.org/x/crypto/internal/poly1305\nvendor/golang.org/x/crypto/chacha20poly1305\ncrypto/hpke\ncrypto/internal/fips140/tls12\ncrypto/internal/fips140/tls13\ncrypto/md5\ncrypto/rc4\ncrypto/internal/fips140/rsa\ncrypto/rsa\ncrypto/sha1\ncrypto/tls/internal/fips140tls\ncrypto/dsa\ncrypto/x509/internal/macos\ncrypto/x509/pkix\nencoding/pem\nmaps\nnet/url\ncrypto/x509\ncrypto/tls\nvendor/golang.org/x/text/transform\nlog/internal\nlog\nvendor/golang.org/x/text/unicode/bidi\nvendor/golang.org/x/text/secure/bidirule\nvendor/golang.org/x/text/unicode/norm\nvendor/golang.org/x/net/idna\nnet/textproto\nvendor/golang.org/x/net/http/httpguts\nvendor/golang.org/x/net/http/httpproxy\nvendor/golang.org/x/net/http2/hpack\nmime\nmime/quotedprintable\nmime/multipart\nnet/http/httptrace\nnet/http/internal\nnet/http/internal/ascii\nnet/http/internal/httpcommon\nnet/http\ngithub.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices\ngithub.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime\ngithub.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/media\ngithub.com/pion/randutil\ngithub.com/pion/rtp/codecs/av1/obu\ngithub.com/pion/rtp\ngithub.com/pion/logging\ngithub.com/pion/transport/v4/deadline\ngithub.com/pion/sctp\ngithub.com/pion/datachannel\nencoding/gob\ngithub.com/pion/dtls/v3/internal/ciphersuite/types\ngithub.com/pion/dtls/v3/internal/util\ngithub.com/pion/dtls/v3/pkg/crypto/ccm\ngithub.com/pion/dtls/v3/pkg/crypto/elliptic\ngithub.com/pion/dtls/v3/pkg/protocol\ngithub.com/pion/dtls/v3/pkg/crypto/prf\ngithub.com/pion/dtls/v3/pkg/protocol/alert\ngithub.com/pion/dtls/v3/pkg/crypto/clientcertificate\ngithub.com/pion/dtls/v3/pkg/crypto/hash\ngithub.com/pion/dtls/v3/pkg/crypto/signature\ngithub.com/pion/dtls/v3/pkg/crypto/signaturehash\ngolang.org/x/crypto/cryptobyte/asn1\ngolang.org/x/crypto/cryptobyte\ngithub.com/pion/dtls/v3/pkg/protocol/extension\ngithub.com/pion/dtls/v3/pkg/protocol/handshake\ngithub.com/pion/dtls/v3/pkg/protocol/recordlayer\ngolang.org/x/crypto/internal/alias\ngolang.org/x/crypto/chacha20\ngolang.org/x/crypto/internal/poly1305\ngolang.org/x/crypto/chacha20poly1305\ngithub.com/pion/dtls/v3/pkg/crypto/ciphersuite\ngithub.com/pion/dtls/v3/internal/ciphersuite\ngithub.com/pion/dtls/v3/internal/closer\ngithub.com/pion/dtls/v3/internal/net\ngithub.com/pion/dtls/v3/pkg/net\ngithub.com/pion/dtls/v3/internal/net/udp\ngithub.com/pion/transport/v4/netctx\ngithub.com/pion/transport/v4/replaydetector\ngithub.com/pion/dtls/v3\ngithub.com/pion/dtls/v3/pkg/crypto/fingerprint\ndatabase/sql/driver\ngithub.com/google/uuid\ngithub.com/pion/ice/v4/internal/fakenet\ngithub.com/pion/ice/v4/internal/netutil\ngithub.com/pion/stun/v3/internal/hmac\ngithub.com/pion/transport/v4\ngithub.com/wlynxg/anet\ngithub.com/pion/transport/v4/stdnet\ngithub.com/pion/transport/v4/utils/xor\ngithub.com/pion/stun/v3\ngithub.com/pion/ice/v4/internal/stun\ngithub.com/pion/ice/v4/internal/atomic\ngithub.com/pion/ice/v4/internal/taskloop\ngolang.org/x/net/dns/dnsmessage\ngolang.org/x/net/bpf\ngolang.org/x/net/internal/iana\ngolang.org/x/sys/unix\ngolang.org/x/net/internal/socket\ngolang.org/x/net/ipv4\ngolang.org/x/net/ipv6\ngithub.com/pion/mdns/v2\ngithub.com/pion/transport/v4/packetio\ngolang.org/x/time/rate\ngithub.com/pion/transport/v4/vnet\ngithub.com/pion/transport/v4/reuseport\ngithub.com/pion/turn/v5/internal/ipnet\ngithub.com/pion/turn/v5/internal/proto\ngithub.com/pion/turn/v5/internal/allocation\ngithub.com/pion/turn/v5/internal/auth\ngithub.com/pion/turn/v5/internal/client\ngithub.com/pion/turn/v5/internal/server\ngithub.com/pion/turn/v5\ngolang.org/x/net/internal/socks\ngolang.org/x/net/proxy\ngithub.com/pion/ice/v4\ngithub.com/pion/rtcp\ngithub.com/pion/interceptor\ngithub.com/pion/interceptor/pkg/flexfec/util\ngithub.com/pion/interceptor/pkg/flexfec\ngithub.com/pion/interceptor/internal/rtpbuffer\ngithub.com/pion/interceptor/pkg/nack\ngithub.com/pion/interceptor/internal/ntp\ngithub.com/pion/interceptor/pkg/report\ngithub.com/pion/interceptor/internal/sequencenumber\ngithub.com/pion/interceptor/pkg/rfc8888\ngithub.com/pion/interceptor/pkg/stats\ngithub.com/pion/interceptor/pkg/twcc\ngithub.com/pion/rtp/codecs/vp9\ngithub.com/pion/rtp/codecs\ngithub.com/pion/sdp/v3\ngithub.com/pion/srtp/v3\ngithub.com/pion/webrtc/v4/internal/fmtp\ngithub.com/pion/webrtc/v4/internal/mux\ngithub.com/pion/webrtc/v4/internal/util\ngithub.com/pion/webrtc/v4/pkg/media\ngithub.com/pion/webrtc/v4/pkg/rtcerr\ngithub.com/pion/webrtc/v4\ngithub.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging\ngithub.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants\nio/ioutil\ngithub.com/gorilla/websocket\ngithub.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc\ngithub.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/probe\ngithub.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire\naudio-runtime-c51-device-boundary-consumer\n",
+    "stdoutTruncated": false,
+    "timedOut": false
+  },
+  "normal": {
+    "argv": [
+      "go",
+      "test",
+      "-count=1",
+      "-timeout",
+      "90s",
+      "./..."
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/consumer",
+    "diskBytesAfter": null,
+    "diskBytesBefore": null,
+    "diskBytesDelta": null,
+    "diskLimitBytes": null,
+    "diskLimitExceeded": false,
+    "durationSeconds": 1.786215,
+    "fileLimitBytes": null,
+    "processGroupAlive": false,
+    "returnCode": 0,
+    "stderr": "",
+    "stderrTruncated": false,
+    "stdout": "ok  \taudio-runtime-c51-device-boundary-consumer\t0.204s\n",
+    "stdoutTruncated": false,
+    "timedOut": false
+  },
+  "race": {
+    "argv": [
+      "go",
+      "test",
+      "-count=1",
+      "-timeout",
+      "90s",
+      "-race",
+      "./..."
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/consumer",
+    "diskBytesAfter": null,
+    "diskBytesBefore": null,
+    "diskBytesDelta": null,
+    "diskLimitBytes": null,
+    "diskLimitExceeded": false,
+    "durationSeconds": 2.491017,
+    "fileLimitBytes": null,
+    "processGroupAlive": false,
+    "returnCode": 0,
+    "stderr": "",
+    "stderrTruncated": false,
+    "stdout": "ok  \taudio-runtime-c51-device-boundary-consumer\t1.230s\n",
+    "stdoutTruncated": false,
+    "timedOut": false
+  },
+  "sourceRevision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+  "status": "passed"
+}

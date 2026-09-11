@@ -1,0 +1,13 @@
+{
+  "schema": "audio-runtime-c52-primary-observation-v1",
+  "status": "REPORTED_UNDER_PAYLOAD",
+  "reported_result": "10/10 focused passing rerun",
+  "reported_scope": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout",
+  "source": "admitted prd.json description and planning payload",
+  "independently_verified": false,
+  "command": null,
+  "raw_output": null,
+  "source_revision": null,
+  "environment": null,
+  "limitation": "No original command, timestamp, source SHA, environment, or raw transcript for the primary rerun was available in the admitted board or repository at C52 startup. The report is preserved as a primary/customer observation and is not merged into fresh C52 matrix evidence."
+}

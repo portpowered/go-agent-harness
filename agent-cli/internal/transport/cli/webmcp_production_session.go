@@ -23,6 +23,12 @@ func (p productionTargetProbe) Probe(ctx context.Context, browser discovery.Brow
 	if p.owner == nil {
 		return discovery.TargetCapabilities{}, webmcp.ErrClosed
 	}
+	// An exact selection must not wait for unrelated suspended/restored pages.
+	// Their metadata remains listed, but capability checks belong to the target
+	// the caller selected. Unknown capabilities never authorize invocation.
+	if selected := p.owner.browser.Selection.Tab; selected != "" && selected != target.ID {
+		return discovery.TargetCapabilities{ToolCount: -1}, nil
+	}
 	return p.owner.probeTarget(ctx, browser, target)
 }
 

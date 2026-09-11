@@ -1,0 +1,5 @@
+{"Time":"2026-09-10T23:52:36.392391-07:00","Action":"start","Package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live"}
+{"Time":"2026-09-10T23:52:36.583063-07:00","Action":"output","Package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live","Output":"testing: warning: no tests to run\n"}
+{"Time":"2026-09-10T23:52:36.583179-07:00","Action":"output","Package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live","Output":"PASS\n"}
+{"Time":"2026-09-10T23:52:36.583408-07:00","Action":"output","Package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live","Output":"ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live\t0.191s [no tests to run]\n"}
+{"Time":"2026-09-10T23:52:36.583436-07:00","Action":"pass","Package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live","Elapsed":0.191}

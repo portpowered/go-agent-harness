@@ -1,0 +1,121 @@
+{
+  "limits": {
+    "aggregateDeadlineEnforced": true,
+    "aggregateTimeoutSeconds": 600.0,
+    "childTimeoutSeconds": 60.0,
+    "diskOverflowControlBytes": 262144,
+    "outputBytesPerStream": 1024,
+    "ownedTemporaryGrowthBytes": 33554432,
+    "perFileBytes": 33554432
+  },
+  "liveDiskBound": {
+    "completedMarkerPresent": false,
+    "result": {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-c",
+        "import os, pathlib, sys, time; root=pathlib.Path(sys.argv[1]); fd=os.open(root / 'overflow.bin', os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600); chunk=b'x' * 65536; [(os.write(fd, chunk), time.sleep(0.005)) for _ in range(1024)]; os.close(fd); pathlib.Path(root / 'complete').write_text('unexpected completion')",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-runner-pa_p7527"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
+      "diskBytesAfter": 327680,
+      "diskBytesBefore": 0,
+      "diskBytesDelta": 327680,
+      "diskLimitBytes": 262144,
+      "diskLimitExceeded": true,
+      "durationSeconds": 0.057011,
+      "fileLimitBytes": 33554432,
+      "processGroupAlive": false,
+      "returnCode": -15,
+      "stderr": "",
+      "stderrTruncated": false,
+      "stdout": "",
+      "stdoutTruncated": false,
+      "timedOut": false
+    }
+  },
+  "outputBound": {
+    "argv": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-c",
+      "import sys; sys.stdout.write('x' * 10000)"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
+    "diskBytesAfter": 0,
+    "diskBytesBefore": 0,
+    "diskBytesDelta": 0,
+    "diskLimitBytes": 33554432,
+    "diskLimitExceeded": false,
+    "durationSeconds": 0.032251,
+    "fileLimitBytes": null,
+    "processGroupAlive": false,
+    "returnCode": 0,
+    "stderr": "",
+    "stderrTruncated": false,
+    "stdout": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "stdoutTruncated": true,
+    "timedOut": false
+  },
+  "ownedDisk": {
+    "bytesAfter": 327686,
+    "bytesBefore": 0,
+    "bytesDelta": 327686
+  },
+  "parentExitDescendantGroupCleanup": {
+    "descendantAliveAfterCleanup": false,
+    "descendantPID": 883,
+    "result": {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-c",
+        "import pathlib, subprocess, sys; child=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); pathlib.Path(sys.argv[1]).write_text(str(child.pid))",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-runner-pa_p7527/parent-exit-child.pid"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
+      "diskBytesAfter": 327683,
+      "diskBytesBefore": 327680,
+      "diskBytesDelta": 3,
+      "diskLimitBytes": 33554432,
+      "diskLimitExceeded": false,
+      "durationSeconds": 0.057742,
+      "fileLimitBytes": null,
+      "processGroupAlive": false,
+      "returnCode": 0,
+      "stderr": "",
+      "stderrTruncated": false,
+      "stdout": "",
+      "stdoutTruncated": false,
+      "timedOut": false
+    }
+  },
+  "readerStartFailureGroupCleanup": {
+    "descendantAliveAfterCleanup": false,
+    "descendantPID": 893,
+    "error": "injected output-reader start failure",
+    "status": "caught"
+  },
+  "schema": "audio-runtime-c51.runner-negative-controls.v2",
+  "status": "verified",
+  "timeoutAndReap": {
+    "argv": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-c",
+      "import time; print('C51_TIMEOUT_CONTROL', flush=True); time.sleep(5)"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
+    "diskBytesAfter": 0,
+    "diskBytesBefore": 0,
+    "diskBytesDelta": 0,
+    "diskLimitBytes": 33554432,
+    "diskLimitExceeded": false,
+    "durationSeconds": 0.252657,
+    "fileLimitBytes": null,
+    "processGroupAlive": false,
+    "returnCode": -15,
+    "stderr": "",
+    "stderrTruncated": false,
+    "stdout": "C51_TIMEOUT_CONTROL\n",
+    "stdoutTruncated": false,
+    "timedOut": true
+  }
+}
