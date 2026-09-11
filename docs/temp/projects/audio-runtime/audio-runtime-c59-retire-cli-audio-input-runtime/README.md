@@ -24,3 +24,16 @@ The independent verifier is invoked with `rtk proxy python3 verify.py` and
 covers the baseline caller diff, public consumer, normal/race runtime tests,
 five deliberate wrong-oracle controls, Wire registration, formatting, and the
 final scope/provenance budget.
+
+## Repaired CI rejection
+
+PR #450 at `51f5c3942cd225f39270f57624bd7dfd39f9b805` was rejected by the
+hermetic CI job because `TestRunCancellationReleasesBlockedDeltaForwarder`
+returned `context canceled` instead of the provider's terminal
+`*engine.StreamDeltaError`.
+
+Commit `ac4d6022d68c0ff730a1f22229866048671bc5f0` preserves a non-context
+engine error when cancellation races the completed hot loop and synchronizes
+the regression test on provider close rather than a scheduler-dependent sleep.
+The focused test passed 100 normal iterations and 20 race iterations; the full
+`agentloop` package and accumulated session regression harness also passed.
