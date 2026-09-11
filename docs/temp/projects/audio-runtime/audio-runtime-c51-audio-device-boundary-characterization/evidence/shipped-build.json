@@ -1,7 +1,7 @@
 {
   "binary": {
     "bytes": 52771138,
-    "path": "/private/tmp/audio-runtime-c51-yui-2b3f565",
+    "path": "/private/tmp/audio-runtime-c51-yui-6ef0972",
     "sha256": "88eebb71e0b84509101ff0c6a9b0a2077c06e78034e03ee65cea140004ce7e8d"
   },
   "branch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
@@ -7444,8 +7444,8 @@
   ],
   "retention": "External exact-head executable retained at the recorded path; evidence-only descendants must prove identical Go build inputs.",
   "schema": "audio-runtime-c51.shipped-build.v1",
-  "sourceRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-  "testedRevision": "2b3f565b45c59f772429f06d564d06de78bb3310",
+  "sourceRevision": "bb29005d0bb545db5e08ffda0205929b021d4fc1",
+  "testedRevision": "dab4d74d8e677fd1eefd78b56355f680189ec8d3",
   "toolchain": {
     "env": {
       "GOARCH": "arm64",
