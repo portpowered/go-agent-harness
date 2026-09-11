@@ -54,4 +54,4 @@ Committed-head causal repair checkpoint
 - Final exact evidence: artifact_input_equivalence=true; staged binary bytes 57,445,940; fixture bytes 27,040; binary output 4,768/67,108,864; report_bytes=379,480 measured after outcome.json; scratch 57,472,980 before and 0 after with no cleanup errors; forbidden_helpers_called=[]; minimum observed free space 152,397,053,952 bytes.
 
 Next action
-- Preserve the historical C45 focused-result checkpoint, add the final C47 live-07 evidence and task handoff metadata, push the committed candidate, and update PR #439. Submit the same task to the script CI gate without polling CI.
+- Final C47 live-07 evidence and task handoff metadata are recorded in commit f9ed7d9eeaf058ac1e614a783d7262d8802c5f74; the branch is pushed and PR #439 is updated. The candidate is submitted to the script CI gate without claiming or polling CI. Next action is for the script CI gate and independent reviewer to evaluate the current head; repair any exact rejection on this same task.
