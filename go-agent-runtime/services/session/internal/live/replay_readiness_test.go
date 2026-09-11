@@ -3,16 +3,15 @@ package live
 import (
 	"context"
 	"errors"
-	"slices"
-	"testing"
-	"time"
-
+	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/stretchr/testify/require"
+	"testing"
+	"time"
 )
 
 type recordingAudioInputSender struct {
@@ -21,8 +20,7 @@ type recordingAudioInputSender struct {
 }
 
 func (s *recordingAudioInputSender) sendAudioInput(_ context.Context, payload []byte, policy messages.SessionAudioInputPolicy) error {
-	s.payload = append([]byte(nil), payload...)
-	s.policy = policy
+	s.payload, s.policy = append([]byte(nil), payload...), policy
 	return nil
 }
 func TestLoopAudioOutboundUsesOrderedPCMInputPolicy(t *testing.T) {
@@ -31,22 +29,14 @@ func TestLoopAudioOutboundUsesOrderedPCMInputPolicy(t *testing.T) {
 	outbound := &loopAudioOutbound{sender: sender, onAdmit: func(frame sharedaudio.PCMFrame) { admitted = frame }}
 	want := []int16{1, -2, 32767, -32768}
 	frame := sharedaudio.PCMFrame{Samples: want, Format: sharedaudio.PCM16DeviceFormat(16000), StreamID: "capture", Sequence: 7}
-	if err := outbound.WriteFrame(context.Background(), frame); err != nil {
-		t.Fatalf("WriteFrame: %v", err)
-	}
+	require.NoError(t, outbound.WriteFrame(context.Background(), frame))
 	got, err := codec.DecodePCM16(sender.payload)
-	if err != nil {
-		t.Fatalf("DecodePCM16: %v", err)
-	}
-	if !slices.Equal(got, want) {
-		t.Fatalf("encoded samples = %v, want %v", got, want)
-	}
-	if sender.policy != messages.SessionAudioInputPolicyDefault {
-		t.Fatalf("policy = %q, want default interrupting policy", sender.policy)
-	}
-	if !slices.Equal(admitted.Samples, want) || admitted.StreamID != frame.StreamID || admitted.Sequence != frame.Sequence {
-		t.Fatalf("admitted frame = %+v, want metadata-preserving copy of %+v", admitted, frame)
-	}
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+	require.Equal(t, messages.SessionAudioInputPolicyDefault, sender.policy)
+	require.Equal(t, want, admitted.Samples)
+	require.Equal(t, frame.StreamID, admitted.StreamID)
+	require.Equal(t, frame.Sequence, admitted.Sequence)
 }
 
 type replayReadinessSession struct {
@@ -62,7 +52,6 @@ func (i *replayReadinessInferencer) ConnectSession(context.Context) (messages.Se
 	return i.session, nil
 }
 func awaitSessionOpen(t testing.TB, events <-chan session.LiveEvent) []session.LiveEvent {
-	t.Helper()
 	var got []session.LiveEvent
 	deadline := time.NewTimer(2 * time.Second)
 	defer deadline.Stop()
@@ -85,17 +74,7 @@ func awaitSessionOpen(t testing.TB, events <-chan session.LiveEvent) []session.L
 	}
 }
 func waitForSentText(t testing.TB, provider *testSession, text string) {
-	t.Helper()
-	deadline := time.NewTimer(2 * time.Second)
-	defer deadline.Stop()
-	for !provider.hasText(text) {
-		select {
-		case <-deadline.C:
-			t.Fatalf("text %q was not delivered", text)
-		default:
-			time.Sleep(time.Millisecond)
-		}
-	}
+	require.Eventually(t, func() bool { return provider.hasText(text) }, 2*time.Second, time.Millisecond, "text %q was not delivered", text)
 }
 func collectTestLiveEvents(events <-chan session.LiveEvent) (got []session.LiveEvent) {
 	for event := range events {
@@ -104,28 +83,24 @@ func collectTestLiveEvents(events <-chan session.LiveEvent) (got []session.LiveE
 	return
 }
 func queueProviderMessages(t testing.TB, provider *testSession, messagesToQueue []messages.StreamMessage) {
-	t.Helper()
 	for _, message := range messagesToQueue {
-		if !provider.receive.Write(context.Background(), message) {
-			t.Fatalf("queue provider message %s", message.Type)
-		}
+		require.True(t, provider.receive.Write(context.Background(), message), "queue provider message %s", message.Type)
 	}
 }
 func assertEmptyResponseEvents(t testing.TB, events []session.LiveEvent) {
-	t.Helper()
 	faultIndex, terminalIndex := -1, -1
 	for index, event := range events {
 		switch event.Kind {
 		case string(session.LiveEventLiveness):
 			faultIndex = index
-			if event.Liveness == nil || event.Liveness.Classification != "silent_provider_empty_response" || event.Liveness.ResponseID != "response-empty" {
-				t.Fatalf("liveness event = %+v", event)
-			}
+			require.NotNil(t, event.Liveness)
+			require.Equal(t, "silent_provider_empty_response", event.Liveness.Classification)
+			require.Equal(t, "response-empty", event.Liveness.ResponseID)
 		case string(session.LiveEventTerminal):
 			terminalIndex = index
-			if event.Terminal == nil || event.Terminal.Classification != "silent_provider_empty_response" || event.Terminal.TerminalReason != messages.TerminalReasonTerminalFailure {
-				t.Fatalf("terminal event = %+v", event)
-			}
+			require.NotNil(t, event.Terminal)
+			require.Equal(t, "silent_provider_empty_response", event.Terminal.Classification)
+			require.Equal(t, messages.TerminalReasonTerminalFailure, event.Terminal.TerminalReason)
 		}
 	}
 	if faultIndex < 0 || terminalIndex < 0 || faultIndex >= terminalIndex {
@@ -155,12 +130,8 @@ func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 		},
 		FinishAfterResponse: true,
 	})
-	if err != nil {
-		t.Fatalf("OpenLive: %v", err)
-	}
-	if err := handle.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, handle.Start(context.Background()))
 	select {
 	case <-frameSeen:
 		t.Fatal("replay admitted PCM before the provider session.updated boundary")
@@ -170,9 +141,7 @@ func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 		{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("provider", "audio")},
 		{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue("provider")},
 	} {
-		if !provider.receive.Write(context.Background(), msg) {
-			t.Fatalf("queue provider message %s", msg.Type)
-		}
+		require.True(t, provider.receive.Write(context.Background(), msg))
 	}
 	select {
 	case <-frameSeen:
@@ -181,34 +150,23 @@ func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 	}
 	cause := errors.New("stop readiness fixture")
 	handle.Cancel(cause)
-	if err := handle.Wait(); !errors.Is(err, cause) {
-		t.Fatalf("Wait = %v, want cancellation cause", err)
-	}
+	require.ErrorIs(t, handle.Wait(), cause)
 }
 func assertFiniteResponseReplacement(t testing.TB, h *handle, interrupted messages.StreamMessage, replacementID string) {
-	t.Helper()
 	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: interrupted.ResponseID})
-	if !h.observeFiniteResponse(interrupted) {
-		t.Fatal("interrupted response was not recognized as a terminal boundary")
-	}
-	if h.gracefulStop || h.replayResponses != 0 {
-		t.Fatalf("interrupted response stopped/count = %t/%d, want false/0", h.gracefulStop, h.replayResponses)
-	}
+	require.True(t, h.observeFiniteResponse(interrupted))
+	require.False(t, h.gracefulStop)
+	require.Zero(t, h.replayResponses)
 	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: replacementID})
 	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: replacementID, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
-	if !h.gracefulStop || h.replayResponses != 1 {
-		t.Fatalf("replacement stop/count = %t/%d, want true/1", h.gracefulStop, h.replayResponses)
-	}
+	require.True(t, h.gracefulStop)
+	require.Equal(t, 1, h.replayResponses)
 }
 func assertFiniteResponseCompletes(t testing.TB, h *handle, responseID string, value *messages.MessageEndValue) {
-	t.Helper()
 	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID})
-	if !h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: value}) {
-		t.Fatal("finite response did not complete at its terminal boundary")
-	}
-	if !h.gracefulStop || h.replayResponses != 1 {
-		t.Fatalf("finite response stop/count = %t/%d, want true/1", h.gracefulStop, h.replayResponses)
-	}
+	require.True(t, h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: value}))
+	require.True(t, h.gracefulStop)
+	require.Equal(t, 1, h.replayResponses)
 }
 func TestInterruptedFiniteResponseDoesNotFinishBeforeReplacement(t *testing.T) {
 	h := &handle{request: session.LiveRequest{FinishAfterResponse: true}, captureComplete: true, responseStartWake: make(chan struct{})}
@@ -256,12 +214,9 @@ func TestInterruptedFiniteResponseDoesNotFinishAfterPriorResponse(t *testing.T) 
 		ResponseID: "response-current",
 		Value:      &messages.MessageEndValue{Type: "message_end", TerminalReason: messages.TerminalReasonPartialOutput, OutputState: messages.TerminalOutputPartial},
 	}
-	if !h.observeFiniteResponse(partial) {
-		t.Fatal("interrupted response was not recognized as a terminal boundary")
-	}
-	if h.gracefulStop || h.replayResponses != 1 {
-		t.Fatalf("interrupted response after prior completion stopped/count = %t/%d, want false/1", h.gracefulStop, h.replayResponses)
-	}
+	require.True(t, h.observeFiniteResponse(partial))
+	require.False(t, h.gracefulStop)
+	require.Equal(t, 1, h.replayResponses)
 }
 func TestBargeCaptureWaitsOnCancelledResponseBoundary(t *testing.T) {
 	h := &handle{
@@ -291,9 +246,7 @@ func TestBargeCaptureWaitsOnCancelledResponseBoundary(t *testing.T) {
 	})
 	select {
 	case err := <-result:
-		if err != nil {
-			t.Fatalf("boundary wait returned error after second terminal: %v", err)
-		}
+		require.NoError(t, err)
 	case <-time.After(time.Second):
 		t.Fatal("boundary wait did not release after cancelled and completed response terminals")
 	}
@@ -310,9 +263,7 @@ func TestScheduledBargeCompletionCountsCancelledTerminal(t *testing.T) {
 		observedResponseTerminals: 3,
 		replayResponses:           2,
 	}
-	if !h.canFinishFiniteResponse() {
-		t.Fatal("scheduled finite gate ignored the cancelled response terminal")
-	}
+	require.True(t, h.canFinishFiniteResponse())
 }
 func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
 	const callID = "call-finite-continuation"
@@ -423,6 +374,61 @@ func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.
 		t.Fatalf("pending tool calls = %d, want 1 for the next provider call", h.pendingToolCalls)
 	}
 }
+func TestOverlappingFiniteResponsesCountOnlyTheirOwnPendingTools(t *testing.T) {
+	const responseZero, responseOne = "response-zero", "response-one"
+	h := &handle{
+		request: session.LiveRequest{FinishAfterResponse: true, ExpectedResponses: 2}, captureComplete: true,
+		toolContinuations:        make(map[string]*liveToolContinuation),
+		pendingToolCallResponses: make(map[string]string), responseStartWake: make(chan struct{}),
+	}
+	batches := []struct {
+		id    string
+		calls []string
+	}{{responseZero, []string{"call-zero-alpha", "call-zero-beta"}}, {responseOne, []string{"call-one-alpha", "call-one-beta"}}}
+	end := func(id string, role messages.Role) messages.StreamMessage {
+		return messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: role, ResponseID: id, Value: messages.NewMessageEndValue(messages.TokenUsage{})}
+	}
+	for _, batch := range batches {
+		h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: batch.id, Value: messages.NewMessageStartValue()})
+		for _, callID := range batch.calls {
+			call := messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, ResponseID: batch.id, ToolCallId: callID, Value: messages.NewToolCallEndValue(callID, "lookup", `{}`)}
+			h.observeProviderToolCall(call)
+			h.observeFiniteResponse(call)
+		}
+	}
+	for index, batch := range batches {
+		h.observeFiniteResponse(end(batch.id, messages.RoleAssistant))
+		require.True(t, index != 0 || h.responseIsActive(), "ending one overlapping response released its active sibling")
+	}
+	require.Equal(t, 4, h.pendingToolCalls)
+	finalIDs := []string{"final-zero", "final-one"}
+	for index, batch := range batches {
+		for _, callID := range batch.calls {
+			h.observeToolResult(callID, "lookup", true)
+			h.observeToolResponseOutput(callID)
+		}
+		toolEnd := end("", messages.RoleTool)
+		if err, done := h.observeToolLifecycle(toolEnd); err != nil || done {
+			t.Fatalf("tool batch lifecycle = error:%v complete:%t", err, done)
+		}
+		h.observeFiniteResponse(toolEnd)
+		h.observeFiniteResponse(end(finalIDs[index], messages.RoleAssistant))
+		if h.gracefulStop != (index == 1) || h.replayResponses != index+1 || h.pendingToolCalls != 2-2*index {
+			t.Fatalf("final state = graceful:%t replay:%d pending:%d", h.gracefulStop, h.replayResponses, h.pendingToolCalls)
+		}
+	}
+	clear(h.pendingToolCallResponses)
+	for index := 0; index < maxPendingToolCallResponses; index++ {
+		h.pendingToolCallResponses[fmt.Sprintf("bounded-%d", index)] = ""
+	}
+	h.pendingToolCalls = len(h.pendingToolCallResponses)
+	if err := h.notePendingToolCallLocked(messages.StreamMessage{ToolCallId: "bounded-over-limit"}); err == nil {
+		t.Fatal("pending tool call response admission exceeded its bound")
+	}
+	h.Cancel(errors.New("test pending cleanup"))
+	require.Zero(t, h.pendingToolCalls)
+	require.Empty(t, h.pendingToolCallResponses)
+}
 func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 	h := newHandle(session.LiveRequest{OpeningContentParts: []messages.ContentPart{messages.ImagePart{Bytes: []byte{1, 2, 3}}}}, nil, nil, nil, nil, defaultEventCapacity, nil, nil)
 	result := make(chan error, 1)
@@ -435,23 +441,21 @@ func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 	h.markOpeningAdmitted(nil)
 	select {
 	case err := <-result:
-		if err != nil {
-			t.Fatalf("opening wait after admission = %v", err)
-		}
+		require.NoError(t, err)
 	case <-time.After(time.Second):
 		t.Fatal("opening wait did not release after provider admission")
 	}
+	h.parentCtx = context.Background()
+	h.pendingToolCallResponses["shutdown-call"] = "response"
+	h.pendingToolCalls = 1
+	require.NoError(t, h.Close())
+	require.Empty(t, h.pendingToolCallResponses)
+	require.Zero(t, h.pendingToolCalls)
 }
-
-// An explicit control may register its media barrier before an automatic provider send reaches the wrapper.
-// The automatic send must finish so the model runner can dispatch the control; waiting on the control
-// barrier from the runner itself would deadlock both operations.
 func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *testing.T) {
 	gate := mediagate.New(nil)
 	ackID, _, err := gate.RegisterAck()
-	if err != nil {
-		t.Fatalf("register control: %v", err)
-	}
+	require.NoError(t, err)
 	automaticStarted := make(chan struct{})
 	releaseAutomatic := make(chan struct{})
 	controlSent := make(chan struct{})
@@ -489,17 +493,13 @@ func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *test
 	close(releaseAutomatic)
 	select {
 	case outcome := <-automaticDone:
-		if !outcome.OK() {
-			t.Fatalf("automatic send outcome = %+v", outcome)
-		}
+		require.True(t, outcome.OK())
 	case <-time.After(time.Second):
 		t.Fatal("automatic provider send did not finish")
 	}
 	select {
 	case outcome := <-controlDone:
-		if !outcome.OK() {
-			t.Fatalf("control send outcome = %+v", outcome)
-		}
+		require.True(t, outcome.OK())
 	case <-time.After(time.Second):
 		t.Fatal("control provider send deadlocked behind automatic send")
 	}
