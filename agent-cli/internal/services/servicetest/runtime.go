@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+import webmcp "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+
 import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 
 import serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
@@ -40,7 +42,28 @@ type BrowserConversationInterrupt = runtimeBrowser.BrowserConversationInterrupt
 const BrowserConversationInvoke = runtimeBrowser.BrowserConversationInvoke
 const BrowserConversationLifecycleCanceled = runtimeBrowser.BrowserConversationLifecycleCanceled
 
-type BrowserConversationLifecycleEvidence = runtimeBrowser.BrowserConversationLifecycleEvidence
+// BrowserConversationLifecycleEvidence preserves the historical test-seam ID
+// types while the runtime contract remains host-neutral and accepts opaque
+// values. This is a shape-only compatibility adapter; policy lives in the
+// runtime service.
+type BrowserConversationLifecycleEvidence struct {
+	Outcome                   runtimeBrowser.BrowserConversationLifecycleOutcome `json:"outcome"`
+	SessionStarted            bool                                               `json:"session_started"`
+	SessionTerminated         bool                                               `json:"session_terminated"`
+	Detached                  bool                                               `json:"detached"`
+	DetachCount               int                                                `json:"detach_count"`
+	DetachRequired            bool                                               `json:"detach_required"`
+	BrowserClosed             bool                                               `json:"browser_closed"`
+	TargetClosed              bool                                               `json:"target_closed"`
+	ExternalBrowserID         webmcp.BrowserID                                   `json:"external_browser_id,omitempty"`
+	ExternalTargetID          webmcp.TargetID                                    `json:"external_target_id,omitempty"`
+	ExternalTabAlive          bool                                               `json:"external_tab_alive"`
+	ExternalTabResponsive     bool                                               `json:"external_tab_responsive"`
+	ExternalTabAllowsMutation bool                                               `json:"external_tab_allows_mutation"`
+	ExternalTabRead           bool                                               `json:"external_tab_read"`
+	ExternalTabMutation       bool                                               `json:"external_tab_mutation"`
+	Error                     string                                             `json:"error,omitempty"`
+}
 
 const BrowserConversationListTools = runtimeBrowser.BrowserConversationListTools
 const BrowserConversationOracleAfter = runtimeBrowser.BrowserConversationOracleAfter
@@ -53,7 +76,69 @@ const BrowserConversationOraclePostSession = runtimeBrowser.BrowserConversationO
 type BrowserConversationOracleSnapshot = runtimeBrowser.BrowserConversationOracleSnapshot
 type BrowserConversationPage = runtimeBrowser.BrowserConversationPage
 type BrowserConversationReportMetadata = runtimeBrowser.BrowserConversationReportMetadata
-type BrowserConversationResult = runtimeBrowser.BrowserConversationResult
+
+// BrowserConversationResult keeps the test-only servicetest shape compatible
+// with the former CLI contract. All behavior is delegated to the runtime
+// contract through the conversion method below.
+type BrowserConversationResult struct {
+	ScenarioID        string                                                 `json:"scenario_id"`
+	ScenarioName      string                                                 `json:"scenario_name"`
+	Finalized         bool                                                   `json:"finalized"`
+	Turns             []runtimeBrowser.BrowserConversationTurn               `json:"turns,omitempty"`
+	BrokerCalls       []runtimeBrowser.BrowserConversationBrokerCall         `json:"broker_calls,omitempty"`
+	InputJSONValidity runtimeBrowser.BrowserConversationInputJSONValidity    `json:"input_json_validity"`
+	Oracles           []runtimeBrowser.BrowserConversationOracleSnapshot     `json:"oracle_snapshots,omitempty"`
+	Corrections       []runtimeBrowser.BrowserConversationCorrectionEvidence `json:"corrections,omitempty"`
+	Recovery          []runtimeBrowser.BrowserConversationRecoveryEvidence   `json:"recovery,omitempty"`
+	Cancellation      runtimeBrowser.BrowserConversationCancellationEvidence `json:"cancellation"`
+	Lifecycle         BrowserConversationLifecycleEvidence                   `json:"lifecycle"`
+	Mechanical        runtimeBrowser.BrowserConversationMechanicalEvaluation `json:"mechanical"`
+	Validator         runtimeBrowser.BrowserConversationValidatorVerdict     `json:"validator"`
+}
+
+func (value BrowserConversationLifecycleEvidence) runtime() runtimeBrowser.BrowserConversationLifecycleEvidence {
+	return runtimeBrowser.BrowserConversationLifecycleEvidence{
+		Outcome:                   value.Outcome,
+		SessionStarted:            value.SessionStarted,
+		SessionTerminated:         value.SessionTerminated,
+		Detached:                  value.Detached,
+		DetachCount:               value.DetachCount,
+		DetachRequired:            value.DetachRequired,
+		BrowserClosed:             value.BrowserClosed,
+		TargetClosed:              value.TargetClosed,
+		ExternalBrowserID:         value.ExternalBrowserID,
+		ExternalTargetID:          value.ExternalTargetID,
+		ExternalTabAlive:          value.ExternalTabAlive,
+		ExternalTabResponsive:     value.ExternalTabResponsive,
+		ExternalTabAllowsMutation: value.ExternalTabAllowsMutation,
+		ExternalTabRead:           value.ExternalTabRead,
+		ExternalTabMutation:       value.ExternalTabMutation,
+		Error:                     value.Error,
+	}
+}
+
+func (value BrowserConversationResult) runtime() runtimeBrowser.BrowserConversationResult {
+	return runtimeBrowser.BrowserConversationResult{
+		ScenarioID:        value.ScenarioID,
+		ScenarioName:      value.ScenarioName,
+		Finalized:         value.Finalized,
+		Turns:             value.Turns,
+		BrokerCalls:       value.BrokerCalls,
+		InputJSONValidity: value.InputJSONValidity,
+		Oracles:           value.Oracles,
+		Corrections:       value.Corrections,
+		Recovery:          value.Recovery,
+		Cancellation:      value.Cancellation,
+		Lifecycle:         value.Lifecycle.runtime(),
+		Mechanical:        value.Mechanical,
+		Validator:         value.Validator,
+	}
+}
+
+func (value BrowserConversationResult) Validate() error {
+	return value.runtime().Validate()
+}
+
 type BrowserConversationScenario = runtimeBrowser.BrowserConversationScenario
 
 const BrowserConversationScenarioVersion = runtimeBrowser.BrowserConversationScenarioVersion
@@ -80,12 +165,12 @@ func ComputeBrowserConversationInputJSONValidity(calls []runtimeBrowser.BrowserC
 
 const DefaultOpenAIRealtimeModel = impl.DefaultOpenAIRealtimeModel
 
-func DeriveBrowserConversationCorrections(scenario runtimeBrowser.BrowserConversationScenario, result runtimeBrowser.BrowserConversationResult) []runtimeBrowser.BrowserConversationCorrectionEvidence {
-	return browserScenarioWire.NewService().DeriveCorrections(scenario, result)
+func DeriveBrowserConversationCorrections(scenario runtimeBrowser.BrowserConversationScenario, result BrowserConversationResult) []runtimeBrowser.BrowserConversationCorrectionEvidence {
+	return browserScenarioWire.NewService().DeriveCorrections(scenario, result.runtime())
 }
 
-func DeriveBrowserConversationRecovery(scenario runtimeBrowser.BrowserConversationScenario, result runtimeBrowser.BrowserConversationResult) []runtimeBrowser.BrowserConversationRecoveryEvidence {
-	return browserScenarioWire.NewService().DeriveRecovery(scenario, result)
+func DeriveBrowserConversationRecovery(scenario runtimeBrowser.BrowserConversationScenario, result BrowserConversationResult) []runtimeBrowser.BrowserConversationRecoveryEvidence {
+	return browserScenarioWire.NewService().DeriveRecovery(scenario, result.runtime())
 }
 
 var ErrInvalidOpenAIRealtimeVoice = sessioncontract.ErrInvalidOpenAIRealtimeVoice
@@ -101,8 +186,8 @@ var ErrSessionImageContinuationIncomplete = impl.ErrSessionImageContinuationInco
 var ErrSessionScheduledAudioIncomplete = runtimeSession.ErrLiveScheduledAudioIncomplete
 var ErrSessionUnresolvedToolResults = sessioncontract.ErrSessionUnresolvedToolResults
 
-func EvaluateBrowserConversation(scenario runtimeBrowser.BrowserConversationScenario, result runtimeBrowser.BrowserConversationResult, rootErr error) (runtimeBrowser.BrowserConversationMechanicalEvaluation, error) {
-	return browserScenarioWire.NewService().Evaluate(scenario, result, rootErr)
+func EvaluateBrowserConversation(scenario runtimeBrowser.BrowserConversationScenario, result BrowserConversationResult, rootErr error) (runtimeBrowser.BrowserConversationMechanicalEvaluation, error) {
+	return browserScenarioWire.NewService().Evaluate(scenario, result.runtime(), rootErr)
 }
 
 type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
@@ -121,7 +206,7 @@ func NewBrowserConversationCommandValidator(command []string, timeout time.Durat
 	return &BrowserConversationCommandValidator{Command: append([]string(nil), command...), Timeout: timeout}, nil
 }
 
-func (validator *BrowserConversationCommandValidator) ValidateBrowserConversation(result runtimeBrowser.BrowserConversationResult) (runtimeBrowser.BrowserConversationValidatorVerdict, error) {
+func (validator *BrowserConversationCommandValidator) ValidateBrowserConversation(result BrowserConversationResult) (runtimeBrowser.BrowserConversationValidatorVerdict, error) {
 	if validator == nil {
 		return runtimeBrowser.BrowserConversationValidatorVerdict{}, runtimeBrowser.ErrBrowserConversationValidatorCommand
 	}
@@ -131,7 +216,7 @@ func (validator *BrowserConversationCommandValidator) ValidateBrowserConversatio
 	if err != nil {
 		return runtimeBrowser.BrowserConversationValidatorVerdict{}, err
 	}
-	return serviceValidator.ValidateBrowserConversation(result)
+	return serviceValidator.ValidateBrowserConversation(result.runtime())
 }
 
 var NewOpenAIRealtimeSessionInferencerWithOptions = impl.NewOpenAIRealtimeSessionInferencerWithOptions
@@ -150,8 +235,8 @@ type RTCDeviceBindingError = impl.RTCDeviceBindingError
 var PrepareRTCDeviceBindings = impl.PrepareRTCDeviceBindings
 var ValidateSessionAudioDeviceConflicts = serviceDevices.ValidateSessionAudioDeviceConflicts
 
-func RenderBrowserConversationReport(result runtimeBrowser.BrowserConversationResult, metadata runtimeBrowser.BrowserConversationReportMetadata) (string, error) {
-	return browserScenarioWire.NewService().RenderReport(result, metadata)
+func RenderBrowserConversationReport(result BrowserConversationResult, metadata runtimeBrowser.BrowserConversationReportMetadata) (string, error) {
+	return browserScenarioWire.NewService().RenderReport(result.runtime(), metadata)
 }
 
 var RunSession = impl.RunSession
@@ -195,6 +280,6 @@ const SessionTransportWebRTC = impl.SessionTransportWebRTC
 
 type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
 
-func WriteBrowserConversationReport(out io.Writer, result runtimeBrowser.BrowserConversationResult, metadata runtimeBrowser.BrowserConversationReportMetadata) error {
-	return browserScenarioWire.NewService().WriteReport(out, result, metadata)
+func WriteBrowserConversationReport(out io.Writer, result BrowserConversationResult, metadata runtimeBrowser.BrowserConversationReportMetadata) error {
+	return browserScenarioWire.NewService().WriteReport(out, result.runtime(), metadata)
 }
