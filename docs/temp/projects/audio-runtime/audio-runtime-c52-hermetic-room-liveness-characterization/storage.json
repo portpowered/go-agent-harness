@@ -1,6 +1,32 @@
 {
+  "archive_reuse": {
+    "planning-main": {
+      "content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+      "fixed_revision_verified": true,
+      "generated_content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+      "retained_content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+      "reused": true,
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "sha256": "e86aa559d029cfe9a13dbd550e5f9f41d57ed468f4e79990948c179f28ede640"
+    },
+    "pr438": {
+      "content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+      "fixed_revision_verified": true,
+      "generated_content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+      "retained_content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+      "reused": true,
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "sha256": "f8f2f86cc68a8844316363d8cb33832debeac3cb3a476c0ce40057a1c36ba720"
+    }
+  },
   "binary_output_bytes": 0,
+  "cache_bytes_before_cleanup": 653252867,
   "cleanup": {
+    "current_run": {
+      "cache_present_after_cleanup": false,
+      "known_generated_cache_and_scratch_removed": true,
+      "scratch_present_after_cleanup": false
+    },
     "known_generated_cache_and_scratch_removed": true,
     "retained": [
       "run.json",
@@ -12,12 +38,29 @@
       "CI log/metadata"
     ]
   },
-  "fixture_report_bytes": 25329002,
-  "free_space_after_capture_bytes": 124043116544,
-  "free_space_before_cleanup_bytes": null,
-  "free_space_limitation": "pre-cleanup free space was not captured by the preflight runner; current free space and exact retained bytes are recorded",
-  "observed_at": "2026-09-11T10:11:34.687379+00:00",
+  "current_run_fixture_report_bytes": 8030300,
+  "fixture_report_bytes": 25301761,
+  "free_space_after_cleanup_bytes": 120842915840,
+  "free_space_before_cleanup_bytes": 119821434880,
+  "free_space_before_run_bytes": 120698228736,
+  "free_space_limitation": "free space was measured immediately before and after cleanup; background filesystem activity is not controlled",
+  "observed_at": "2026-09-11T11:10:37.983297+00:00",
+  "reproducible_scratch_bytes_before_cleanup": 266983979,
   "reproducible_scratch_bytes_retained_after_cleanup": 0,
+  "reuse_identity": {
+    "planning-main": {
+      "content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+      "fixed_revision_verified": true,
+      "retained_content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
+    },
+    "pr438": {
+      "content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+      "fixed_revision_verified": true,
+      "retained_content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd"
+    }
+  },
   "runs": [
     {
       "cache_present": false,
@@ -62,23 +105,99 @@
       "scratch_content_present": false
     },
     {
+      "archive_reuse": {
+        "planning-main": {
+          "content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+          "fixed_revision_verified": true,
+          "generated_content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+          "retained_content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+          "reused": true,
+          "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+          "sha256": "e86aa559d029cfe9a13dbd550e5f9f41d57ed468f4e79990948c179f28ede640"
+        },
+        "pr438": {
+          "content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+          "fixed_revision_verified": true,
+          "generated_content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+          "retained_content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+          "reused": true,
+          "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+          "sha256": "f8f2f86cc68a8844316363d8cb33832debeac3cb3a476c0ce40057a1c36ba720"
+        }
+      },
       "cache_present": false,
       "cleanup_verified": true,
-      "retained_bytes": 8256628,
-      "run_id": "20260911T113000Z-final-failclosed-v2",
-      "scratch_content_present": false
+      "free_space_after_cleanup_bytes": 120842915840,
+      "free_space_before_cleanup_bytes": 119821434880,
+      "retained_bytes": 8229387,
+      "run_id": "20260911T143300Z-review52-repair-v2",
+      "scratch_content_present": false,
+      "storage": {
+        "archive_reuse": {
+          "planning-main": {
+            "content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+            "fixed_revision_verified": true,
+            "generated_content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+            "retained_content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+            "reused": true,
+            "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+            "sha256": "e86aa559d029cfe9a13dbd550e5f9f41d57ed468f4e79990948c179f28ede640"
+          },
+          "pr438": {
+            "content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+            "fixed_revision_verified": true,
+            "generated_content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+            "retained_content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+            "reused": true,
+            "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+            "sha256": "f8f2f86cc68a8844316363d8cb33832debeac3cb3a476c0ce40057a1c36ba720"
+          }
+        },
+        "binary_output_bytes": 0,
+        "cache_bytes_before_cleanup": 653252867,
+        "cleanup": {
+          "cache_present_after_cleanup": false,
+          "known_generated_cache_and_scratch_removed": true,
+          "scratch_present_after_cleanup": false
+        },
+        "fixture_report_bytes": 8030300,
+        "free_space_after_cleanup_bytes": 120842915840,
+        "free_space_before_cleanup_bytes": 119821434880,
+        "free_space_before_run_bytes": 120698228736,
+        "reproducible_scratch_bytes_before_cleanup": 266983979,
+        "reproducible_scratch_bytes_retained_after_cleanup": 0,
+        "source_staging_bytes": 103053735
+      }
     }
   ],
   "schema": "audio-runtime-c52-storage-v1",
   "source_archives": {
     "planning_main": {
       "bytes": 51513216,
+      "content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+      "fixed_revision_verified": true,
+      "generated_content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+      "generated_sha256": "4abaf8995d7b63bcc9c6b551f53b829c5e44e1cba8661e81ee3fb5028ca9ba00",
       "path": "inputs/source-archives/planning-main-7f73c8b3b4eb.tar.gz",
+      "resolved_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "retained_content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
+      "retained_sha256": "e86aa559d029cfe9a13dbd550e5f9f41d57ed468f4e79990948c179f28ede640",
+      "reused": true,
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
       "sha256": "e86aa559d029cfe9a13dbd550e5f9f41d57ed468f4e79990948c179f28ede640"
     },
     "pr438": {
       "bytes": 51540519,
+      "content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+      "fixed_revision_verified": true,
+      "generated_content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+      "generated_sha256": "bf3cb06880caf1bf50b9be79b90ad8916d6013110002988e858b915592cb075a",
       "path": "inputs/source-archives/pr438-823bd350fe5d.tar.gz",
+      "resolved_revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "retained_content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
+      "retained_sha256": "f8f2f86cc68a8844316363d8cb33832debeac3cb3a476c0ce40057a1c36ba720",
+      "reused": true,
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
       "sha256": "f8f2f86cc68a8844316363d8cb33832debeac3cb3a476c0ce40057a1c36ba720"
     }
   },

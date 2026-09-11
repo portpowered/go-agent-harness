@@ -4,7 +4,7 @@ This directory is the sole C52 executor lease. It contains an evidence-only
 comparison of PR438 (`823bd350fe5d11782c38bda87d7b7bfd7d89d7cd`) and the
 planning-time integrated main (`7f73c8b3b4ebc99b55b8bb5e802beff024385407`).
 The final tested evidence parent is the clean branch head
-`0ae5cd55802033e46d1ff64aaecb4aaf7421f92d`, which includes refreshed
+`1ae02396f1162c0b9c1f444609617f28b4c21f46`, which includes refreshed
 `origin/main` (`2456a5d1594e73faf85e1132d6050735bc3e4710`) as an ancestor.
 The fetched `origin/main` may advance; its exact revision is recorded in
 `provenance.json` and does not replace the declared comparison input.
@@ -36,17 +36,21 @@ The first four executor attempts are retained as preflight history in
 `provenance.json`; they were rejected as invalid setup/overlay executions
 (toolchain selection, cache directory creation, module working directory, and
 overlay typing) and are not behavioral trials. The final canonical run is
-`20260911T113000Z-final-failclosed-v2`: 22/22 cells passed on both revisions
-in 66.031 seconds, within the 900-second aggregate bound; all five negative
+`20260911T143300Z-review52-repair-v2`: 22/22 cells passed on both revisions
+in 69.655 seconds, within the 900-second aggregate bound; all six negative
 controls were rejected, normal parent-exit cleanup was proven, and the
 run-local cache was removed after its retained reports were written. Focused
-normal and race regressions also pass from `0ae5cd55`. The repaired runner uses only the
-declared environment allowlist and its classification controls reject a label
-when both explicit orders fail.
+normal and race regressions also pass from `1ae02396`. The repaired runner uses
+only the declared environment allowlist and its classification controls reject
+a label when both explicit orders fail. `storage.json` records source staging,
+fixture/report, scratch/cache, free-space before/after, archive reuse identity,
+and cleanup values for the canonical run.
 
 The final fail-closed integrity probes reject deleted cleanup fields, survivor
-claims, tampered raw selection counts, duplicate checkpoints, and mismatched
-retained archives. `verify.py --mode all` passes against the final run.
+claims, tampered raw selection counts, duplicate or transformed checkpoints,
+tampered CI metadata, selected behavior failures hidden as selection errors, and
+mismatched retained archives. `verify.py --mode all` passes against the final
+run.
 
 During repair, a pre-final local diagnostic attempt observed one planning-main
 `gomaxprocs-4` assertion failure with a peer-cancel snapshot at
