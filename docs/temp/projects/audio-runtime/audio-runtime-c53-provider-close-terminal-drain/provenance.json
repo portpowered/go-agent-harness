@@ -1,0 +1,237 @@
+{
+  "baseline_manifest_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "bounds": {
+    "aggregate_timeout_seconds": 600,
+    "child_timeout_seconds": 60.0,
+    "max_child_output_bytes": 65536,
+    "max_retained_disk_bytes": 8388608
+  },
+  "branch": "codex/audio-runtime-c53-provider-close-terminal-drain",
+  "build": {
+    "environment_allowlist": [
+      "PATH",
+      "HOME",
+      "TMPDIR",
+      "GOCACHE",
+      "GOMODCACHE",
+      "GOWORK",
+      "LANG",
+      "LC_ALL",
+      "C53_SOURCE_REVISION",
+      "C53_CANDIDATE_REVISION"
+    ],
+    "flags": [
+      "-trimpath",
+      "-mod=readonly"
+    ],
+    "toolchain": "go version go1.26.7 darwin/arm64"
+  },
+  "build_inputs": [
+    {
+      "bytes": 120,
+      "path": "go.work",
+      "sha256": "bb93b21299499bd9d9264ccdc956e17ec3364e1f132f58f43282b0ff8a7c40bc"
+    },
+    {
+      "bytes": 13858,
+      "path": "go.work.sum",
+      "sha256": "771f6df0e159ddaf47d81d40b551fe555317fd56aeb3d97f904498dcf92b8307"
+    },
+    {
+      "bytes": 5117,
+      "path": "agent-cli/go.mod",
+      "sha256": "3546c664ee476c1726701292b5aa9db20b532af010ca74b610e81681b9e3b845"
+    },
+    {
+      "bytes": 289,
+      "path": "go-agent-loop/go.mod",
+      "sha256": "a1b13c5848187066d2aedfa0bc6a2d8bfc26e501c687160de6669691eac274f6"
+    },
+    {
+      "bytes": 4970,
+      "path": "go-agent-runtime/go.mod",
+      "sha256": "b58a34441c4d35a0bccc2f46b1e1e84d20afb8bde8da147e9415601d94623150"
+    },
+    {
+      "bytes": 134,
+      "path": "go-audio/go.mod",
+      "sha256": "0b959f3a6a23c827c8f1a89323a760637b3ff001f4b70f75aa423c9c053d88d7"
+    },
+    {
+      "bytes": 695,
+      "path": "go-device-gateway/go.mod",
+      "sha256": "662a1b74be04ebe5a98cb5a67c39e2b7cb9bf15e3b903c77bb16caebdee69b84"
+    },
+    {
+      "bytes": 2367,
+      "path": "go-llm-gateway/go.mod",
+      "sha256": "0f4f45cf37aa17a8db3648c289874c806e52da32aa1fcdb3baf80122235af802"
+    },
+    {
+      "bytes": 11852,
+      "path": "go-agent-runtime/services/session/internal/live/control.go",
+      "sha256": "a8f0137b8ec94dfdb92138dced92a4ef5960e37045898b05333008a992c0fe28"
+    },
+    {
+      "bytes": 12097,
+      "path": "go-agent-runtime/services/session/internal/live/lifecycle.go",
+      "sha256": "dec3ea49fb1ade21fdbb18317d66a0a22f6f21ae42f9c9f9da36f6751c0e8bfb"
+    },
+    {
+      "bytes": 13681,
+      "path": "go-agent-runtime/services/session/internal/live/observation.go",
+      "sha256": "18bea7cc896099a2beec4fc0b3ffe69c0df6a640c8a8bcd9bc43a7962ca2726b"
+    },
+    {
+      "bytes": 16268,
+      "path": "go-agent-runtime/services/session/internal/live/service.go",
+      "sha256": "2bcf28fbc8c99606bbd3faf6509d566dec33c6a446366a63a0748364c2e2fef9"
+    },
+    {
+      "bytes": 12457,
+      "path": "go-agent-runtime/services/session/internal/live/start_support.go",
+      "sha256": "49349b795b2654a9b299c747f5a21803c6c943fe5264c11c21b3e5d3fc2f4a7e"
+    },
+    {
+      "bytes": 23691,
+      "path": "go-agent-runtime/services/session/internal/live/policies_test.go",
+      "sha256": "011a9af4c6583a801e6e4796a8e508820b78eabdeee4a9d4686419a1cbd5fd27"
+    },
+    {
+      "bytes": 1098,
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/go.mod",
+      "sha256": "bd8827d52643e6e3ab18cfec128c1210ffe57d54f2d34adc934f4d9372e6fa58"
+    },
+    {
+      "bytes": 858,
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/go.sum",
+      "sha256": "3f10bf5b2fa1152297f1ce621e1d49c3610392f9e950a90f267475fb7ad4e24a"
+    },
+    {
+      "bytes": 553,
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/fixtures.json",
+      "sha256": "d58674074f07a41dff79759104ad2a85c708cc4a4d623536db726ea857a2ee63"
+    },
+    {
+      "bytes": 23111,
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/consumer/main.go",
+      "sha256": "41f67313f3b8bfc26472c1e88b6bcbbc339fbea542f26c203631e73fc730beb7"
+    },
+    {
+      "bytes": 27613,
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/run.py",
+      "sha256": "2bc2dc8ea66cbc2048d7938b6567dcaf3b833aad50e31684c3377b3fe0486087"
+    },
+    {
+      "bytes": 18525,
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/verify.py",
+      "sha256": "882f6f8cf5d1cfa98693199f07849e83aca54847d73d26735e97255df0f6e34f"
+    }
+  ],
+  "builds": {
+    "consumer": {
+      "result": {
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "command": [
+          "go",
+          "build",
+          "-mod=readonly",
+          "-trimpath",
+          "-o",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain/docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/bin/c53-consumer",
+          "./consumer"
+        ],
+        "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain",
+        "disk_bounded": true,
+        "disk_bytes": 0,
+        "elapsed_ms": 143,
+        "label": "build-candidate-consumer",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/build-candidate-consumer/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/build-candidate-consumer/stdout.log",
+        "stdout_bytes": 0,
+        "timed_out": false
+      },
+      "sha256": "4063e8a6376ce908c3f24b8023ff7691a384b3ab63d6eb80deba95fd8512c848"
+    },
+    "yui": {
+      "result": {
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "command": [
+          "go",
+          "build",
+          "-trimpath",
+          "-o",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain/docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/bin/yui",
+          "./agent-cli/cmd/yui"
+        ],
+        "cwd": ".",
+        "disk_bounded": true,
+        "disk_bytes": 0,
+        "elapsed_ms": 5203,
+        "label": "build-candidate-yui",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/shipped-yui-audio-tool-interruption-replay/build/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/shipped-yui-audio-tool-interruption-replay/build/stdout.log",
+        "stdout_bytes": 0,
+        "timed_out": false
+      },
+      "sha256": "37e88f782ba8cbe44f73ce599b927bc147edc24d77d617b4cc77290f676ca588"
+    }
+  },
+  "c23_failure_source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+  "candidate_revision": "5e4a9e5933eceb27961aebe1ac3a63e18092ea78",
+  "contract_revision": "audio-runtime-v1",
+  "current_main_fetched": true,
+  "integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "owned_paths": [
+    "go-agent-runtime/services/session/internal/live/observation.go",
+    "go-agent-runtime/services/session/internal/live/start_support.go",
+    "go-agent-runtime/services/session/internal/live/lifecycle.go",
+    "go-agent-runtime/services/session/internal/live/control.go",
+    "go-agent-runtime/services/session/internal/live/service.go",
+    "go-agent-runtime/services/session/internal/live/policies_test.go",
+    "go-agent-runtime/services/session/internal/live/terminal_drain_test.go",
+    "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain"
+  ],
+  "preserved": {
+    "c05": {
+      "branch": "unavailable",
+      "status": "",
+      "status_scope": "recorded_only; uncommitted contents not read",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c05-provider-terminal-policy"
+    },
+    "c23": {
+      "child_report_sha256": "d504b8a6f5a00d049c9af7a43649a98ca1080d6baee832e226bbb0e603bb2819",
+      "first_failure_sha256": "186d2c5902947582202d33afe1fa0d62c61d38d2d15bc3ae3fad8819f3a7b7f5",
+      "head": "6677465e00c9fd052a7c6b6bc69cc17f8e32e02f",
+      "status": "clean"
+    }
+  },
+  "project": "audio-runtime",
+  "schema": "audio-runtime.c53.provenance.v1",
+  "source_plan_sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
+  "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+  "source_tree_status": "",
+  "task": "audio-runtime-c53-provider-close-terminal-drain"
+}

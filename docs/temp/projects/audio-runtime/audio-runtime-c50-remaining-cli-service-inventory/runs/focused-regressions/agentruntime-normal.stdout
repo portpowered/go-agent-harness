@@ -1,0 +1,18 @@
+=== RUN   TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration
+=== RUN   TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration/prompt_only,_no_record_or_replay
+=== RUN   TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration/scheduled_audio_input,_no_record_or_replay
+=== RUN   TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration/bare_invocation,_no_record_or_replay
+=== RUN   TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration/browser_tools_enabled,_no_record_or_replay
+=== RUN   TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration/no_mode_flags_and_not_bare_(e.g._audio-in,_image)_still_admitted
+--- PASS: TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration (0.00s)
+    --- PASS: TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration/prompt_only,_no_record_or_replay (0.00s)
+    --- PASS: TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration/scheduled_audio_input,_no_record_or_replay (0.00s)
+    --- PASS: TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration/bare_invocation,_no_record_or_replay (0.00s)
+    --- PASS: TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration/browser_tools_enabled,_no_record_or_replay (0.00s)
+    --- PASS: TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration/no_mode_flags_and_not_bare_(e.g._audio-in,_image)_still_admitted (0.00s)
+=== RUN   TestSessionReplayRejectsCorruptCaptureBeforeAudioSinkOrProviderSetup
+--- PASS: TestSessionReplayRejectsCorruptCaptureBeforeAudioSinkOrProviderSetup (0.00s)
+=== RUN   TestSessionDirectoryRecordingWritesConversationSessionLog
+--- PASS: TestSessionDirectoryRecordingWritesConversationSessionLog (0.00s)
+PASS
+ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	(cached)

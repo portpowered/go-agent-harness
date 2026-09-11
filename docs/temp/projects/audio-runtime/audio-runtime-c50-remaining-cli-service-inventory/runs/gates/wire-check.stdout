@@ -1,0 +1,8 @@
+==> Wire agent-cli/internal/wire
+==> Wire go-agent-runtime/services/devices/wire
+==> Wire go-agent-runtime/services/providers/wire
+==> Wire go-agent-runtime/services/session/wire
+==> Wire go-agent-runtime/services/rooms/wire
+==> Wire go-agent-runtime/services/tools/wire
+==> Wire go-agent-runtime/services/replay/wire
+==> Wire go-agent-runtime/services/recording/wire
