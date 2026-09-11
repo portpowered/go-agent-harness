@@ -1,0 +1,47 @@
+{
+  "ancestry": {
+    "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
+    "head": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+    "origin_main": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+    "origin_main_matches_planning_revision": true,
+    "planning_main_is_ancestor": true,
+    "startup_is_ancestor": true
+  },
+  "baseline_cli_production_lines": {
+    "agent-cli/internal/services/internal/agentruntime/session_browser_recording.go": 355,
+    "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go": 531,
+    "agent-cli/internal/services/internal/agentruntime/session_recording.go": 1217,
+    "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go": 261,
+    "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go": 245
+  },
+  "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "baseline_total_lines": 2609,
+  "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
+  "oracle_source": "go-agent-runtime/services/recording/internal/session/session_test.go",
+  "planning_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+  "schema": "audio-runtime.c56.baseline-and-oracles.v1",
+  "startup_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "status_paths": [
+    "gent-cli/internal/services/internal/agentruntime/session_browser_recording.go",
+    "agent-cli/internal/services/internal/agentruntime/session_browser_recording_test.go",
+    "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
+    "agent-cli/internal/services/internal/agentruntime/session_conversation_log_test.go",
+    "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+    "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go",
+    "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim_test.go",
+    "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go",
+    "agent-cli/internal/services/internal/agentruntime/session_recording_sessions_test.go",
+    "agent-cli/internal/services/internal/agentruntime/session_recording_test.go",
+    "coverage-manifest/go-agent-runtime/services/recording/internal/session/package.json",
+    "go-agent-runtime/services/recording/internal/session/augment.go",
+    "go-agent-runtime/services/recording/internal/session/browser.go",
+    "go-agent-runtime/services/recording/internal/session/image.go",
+    "go-agent-runtime/services/recording/internal/session/projection.go",
+    "go-agent-runtime/services/recording/internal/session/service.go",
+    "go-agent-runtime/services/recording/internal/session/session_test.go",
+    "go-agent-runtime/services/recording/session.go",
+    "go-agent-runtime/services/recording/wire/session.go",
+    "go-agent-runtime/services/recording/wire/session_gen.go"
+  ],
+  "task": "audio-runtime-c56-retire-cli-recording-orchestration"
+}

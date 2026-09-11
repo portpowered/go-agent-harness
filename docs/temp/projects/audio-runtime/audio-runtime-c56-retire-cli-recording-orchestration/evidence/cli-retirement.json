@@ -1,0 +1,29 @@
+{
+  "baseline_counts": {
+    "agent-cli/internal/services/internal/agentruntime/session_browser_recording.go": 355,
+    "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go": 531,
+    "agent-cli/internal/services/internal/agentruntime/session_recording.go": 1217,
+    "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go": 261,
+    "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go": 245
+  },
+  "baseline_files": 5,
+  "baseline_lines": 2609,
+  "current_counts": {
+    "agent-cli/internal/services/internal/agentruntime/session_recording.go": 594
+  },
+  "current_files": 1,
+  "current_lines": 594,
+  "owned_production_paths": [
+    "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+    "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go",
+    "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go",
+    "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
+    "agent-cli/internal/services/internal/agentruntime/session_browser_recording.go"
+  ],
+  "passed": true,
+  "reductions": {
+    "files": 4,
+    "lines": 2015
+  },
+  "schema": "audio-runtime.c56.cli-retirement.v1"
+}

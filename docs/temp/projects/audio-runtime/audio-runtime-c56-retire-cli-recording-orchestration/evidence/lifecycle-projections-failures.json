@@ -1,0 +1,58 @@
+{
+  "generated_session_constructor": "go-agent-runtime/services/recording/wire/session_gen.go",
+  "passed": true,
+  "read_only_callers": [
+    "agent-cli/internal/services/internal/agentruntime/service.go",
+    "agent-cli/internal/services/internal/agentruntime/session_image.go",
+    "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+    "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go"
+  ],
+  "runtime_go_files": [
+    "go-agent-runtime/services/recording/service.go",
+    "go-agent-runtime/services/recording/session.go",
+    "go-agent-runtime/services/recording/wire/wire_gen.go",
+    "go-agent-runtime/services/recording/wire/session.go",
+    "go-agent-runtime/services/recording/wire/providers.go",
+    "go-agent-runtime/services/recording/wire/session_gen.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory_provider.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory_failure_test.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory_sidecar.go",
+    "go-agent-runtime/services/recording/internal/evidence/provider_spool.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory_finalize.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory_test.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory_response_audio.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory_capture.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory_conversation.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory_conversation_test.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory_destination.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory_conversation_projection.go",
+    "go-agent-runtime/services/recording/internal/evidence/provider_spool_test.go",
+    "go-agent-runtime/services/recording/internal/evidence/provider_spool_io.go",
+    "go-agent-runtime/services/recording/internal/evidence/directory.go",
+    "go-agent-runtime/services/recording/internal/service/service.go",
+    "go-agent-runtime/services/recording/internal/service/session.go",
+    "go-agent-runtime/services/recording/internal/service/session_test.go",
+    "go-agent-runtime/services/recording/internal/session/service.go",
+    "go-agent-runtime/services/recording/internal/session/augment.go",
+    "go-agent-runtime/services/recording/internal/session/browser.go",
+    "go-agent-runtime/services/recording/internal/session/session_test.go",
+    "go-agent-runtime/services/recording/internal/session/image.go",
+    "go-agent-runtime/services/recording/internal/session/projection.go"
+  ],
+  "schema": "audio-runtime.c56.lifecycle-projections-failures.v1",
+  "test": {
+    "command": [
+      "go",
+      "test",
+      "-count=1",
+      "-timeout=180s",
+      "./go-agent-runtime/services/recording/..."
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration",
+    "elapsed_ms": 2094,
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/evidence\t1.780s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/service\t0.355s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/session\t0.728s\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire\t[no test files]\n",
+    "timed_out": false
+  }
+}

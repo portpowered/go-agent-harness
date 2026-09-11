@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "required_literals": [
+    "audio/in-000.pcm",
+    "audio/in-001.pcm",
+    "audio/out-000.pcm",
+    "audio/out-001.pcm",
+    "session-log.jsonl",
+    "BrowserArtifactDefaultPath",
+    "browserEventsVersion",
+    "ErrLiveEvidenceClaimed",
+    "conflicting terminal",
+    "secret=hidden",
+    "SHA256",
+    "audio_segments"
+  ],
+  "schema": "audio-runtime.c56.exact-artifacts-and-mutations.v1",
+  "test": {
+    "command": [
+      "go",
+      "test",
+      "-count=1",
+      "-timeout=180s",
+      "./go-agent-runtime/services/recording/internal/session"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration",
+    "elapsed_ms": 619,
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/session\t0.314s\n",
+    "timed_out": false
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "consumer": "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/consumer",
+  "gowork": "off",
+  "normal": {
+    "command": [
+      "go",
+      "test",
+      "-count=1",
+      "-timeout=180s",
+      "./..."
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/consumer",
+    "elapsed_ms": 599,
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "ok  \texample.com/audio-runtime-c56-recording-consumer\t0.242s\n",
+    "timed_out": false
+  },
+  "passed": true,
+  "private_imports": [],
+  "race": {
+    "command": [
+      "go",
+      "test",
+      "-race",
+      "-count=1",
+      "-timeout=240s",
+      "./..."
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/consumer",
+    "elapsed_ms": 1631,
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "ok  \texample.com/audio-runtime-c56-recording-consumer\t1.289s\n",
+    "timed_out": false
+  },
+  "schema": "audio-runtime.c56.embedding-public-provenance-cleanup.v1"
+}

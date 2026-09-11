@@ -1,0 +1,69 @@
+{
+  "aggregate_timeout_seconds": 600.0,
+  "causal_controls": {
+    "output_cap_bytes": 65536,
+    "process_group_signal": "SIGTERM_then_SIGKILL",
+    "retry": false
+  },
+  "controls": {
+    "output_overflow": {
+      "cleanup": {
+        "group_alive_after": false,
+        "group_alive_before": true,
+        "kill_sent": false,
+        "parent_reaped": true,
+        "reader_threads_joined": true,
+        "setup_error": "",
+        "term_sent": false
+      },
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-c",
+        "import sys; sys.stdout.write('x' * 131072); sys.stdout.flush()"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration",
+      "disk_bounded": true,
+      "elapsed_ms": 37,
+      "label": "output-overflow-control",
+      "output_bounded": false,
+      "retained_process_output_bytes": 65536,
+      "returncode": 0,
+      "stderr": "runs/runner-negative-controls-kkth6o7h/overflow/process/stderr.log",
+      "stderr_bytes_observed": 0,
+      "stdout": "runs/runner-negative-controls-kkth6o7h/overflow/process/stdout.log",
+      "stdout_bytes_observed": 131072,
+      "timed_out": false
+    },
+    "process_group_timeout": {
+      "cleanup": {
+        "group_alive_after": false,
+        "group_alive_before": true,
+        "kill_sent": true,
+        "parent_reaped": true,
+        "reader_threads_joined": true,
+        "setup_error": "",
+        "term_sent": true
+      },
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-c",
+        "import subprocess,sys,time; subprocess.Popen([sys.executable,'-c','import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(30)']); time.sleep(30)"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration",
+      "disk_bounded": true,
+      "elapsed_ms": 2033,
+      "label": "process-group-timeout-control",
+      "output_bounded": true,
+      "retained_process_output_bytes": 0,
+      "returncode": -15,
+      "stderr": "runs/runner-negative-controls-kkth6o7h/timeout/process/stderr.log",
+      "stderr_bytes_observed": 0,
+      "stdout": "runs/runner-negative-controls-kkth6o7h/timeout/process/stdout.log",
+      "stdout_bytes_observed": 0,
+      "timed_out": true
+    }
+  },
+  "elapsed_ms": 2075,
+  "passed": true,
+  "schema": "audio-runtime.c56.runner-negative-controls.v1"
+}

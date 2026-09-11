@@ -1,0 +1,37 @@
+{
+  "execution": {
+    "cleanup": {
+      "group_alive_after": false,
+      "group_alive_before": true,
+      "kill_sent": false,
+      "parent_reaped": true,
+      "reader_threads_joined": true,
+      "setup_error": "",
+      "term_sent": false
+    },
+    "command": [
+      "/private/tmp/audio-runtime-c56-yui-final",
+      "session",
+      "--replay",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_text_reply.session.json",
+      "--no-terminal-tools"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/non-recording-8nkwfzda/work",
+    "disk_bounded": true,
+    "elapsed_ms": 328,
+    "label": "non-recording-replay",
+    "output_bounded": true,
+    "retained_process_output_bytes": 791,
+    "returncode": 0,
+    "stderr": "runs/non-recording-8nkwfzda/process/stderr.log",
+    "stderr_bytes_observed": 0,
+    "stdout": "runs/non-recording-8nkwfzda/process/stdout.log",
+    "stdout_bytes_observed": 791,
+    "timed_out": false
+  },
+  "passed": true,
+  "recording_side_effects": false,
+  "schema": "audio-runtime.c56.non-recording-regression.v1",
+  "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/non-recording-8nkwfzda/work; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: Hello! How can I help you today?\n[session closed: fixture_complete]\n[session terminal: classification=session_close terminal_reason=session_close terminal_provenance=session output_state=complete]\n",
+  "work_files": []
+}
