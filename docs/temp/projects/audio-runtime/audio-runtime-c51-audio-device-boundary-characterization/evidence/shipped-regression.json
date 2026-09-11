@@ -1,22 +1,1712 @@
 {
   "binary": {
-    "bytes": 52771138,
-    "path": "/private/tmp/audio-runtime-c51-yui-6ef0972",
-    "sha256": "88eebb71e0b84509101ff0c6a9b0a2077c06e78034e03ee65cea140004ce7e8d"
+    "bytes": 52789298,
+    "path": "/private/tmp/audio-runtime-c51-yui-bd8cabc",
+    "sha256": "f78af697b22c99eacd248a0c5897e5e3dfce8d78270c79ad2fbe160489a4da0c"
   },
   "buildManifest": {
-    "inputTreeSha256": "c27dcf19b55d423fddfddeec35a5af99b5381491604dcdc82711f93892790007",
+    "inputCount": 2181,
+    "inputSelection": {
+      "method": "git ls-tree all tracked files under the local yui workspace roots",
+      "reason": "conservatively includes transitive Go embed and local JS/JSON/other asset inputs",
+      "roots": [
+        "agent-cli",
+        "go-agent-loop",
+        "go-agent-runtime",
+        "go-audio",
+        "go-device-gateway",
+        "go-llm-gateway"
+      ],
+      "workspaceFiles": [
+        "go.work",
+        "go.work.sum"
+      ]
+    },
+    "inputTreeSha256": "28c856003c288fe2db83bed651d3b4084bf1658ffe9d0ffc3f03f382e6ad3ad9",
+    "nonGoInputs": [
+      {
+        "bytes": 18,
+        "path": "agent-cli/.gitignore",
+        "sha256": "dede6a59299f478bd6332f6b01bce7918a9685f575aca0a2c3c29536c64d5658"
+      },
+      {
+        "bytes": 1371,
+        "path": "agent-cli/Makefile",
+        "sha256": "b5238b272977fabdeb981f1888df5d3371a4abd95e7075c8bba484094d7a21b4"
+      },
+      {
+        "bytes": 9691,
+        "path": "agent-cli/README.md",
+        "sha256": "65552a580a10db75b998b0be392c8f3072464a34ced2d7aed326b6192edc9a65"
+      },
+      {
+        "bytes": 4839,
+        "path": "agent-cli/docs/FILES.md",
+        "sha256": "e2c7f80423c8915bf3aaad5fe607f4dbad2f7d3d8e6b43e7962dc3bb28eec15d"
+      },
+      {
+        "bytes": 3442,
+        "path": "agent-cli/docs/NOTEs.md",
+        "sha256": "279585c0d46597a5f8e6305e59bba5fd02056c5525a52925a39516180bb5e480"
+      },
+      {
+        "bytes": 5253,
+        "path": "agent-cli/docs/README.md",
+        "sha256": "0fade86b4595438d034249a6cb5458cd62a0483f7b68d739937425d76f28c61f"
+      },
+      {
+        "bytes": 2258,
+        "path": "agent-cli/docs/acceptance-probe.md",
+        "sha256": "ac292ffc7bdf1a0404184ea67a190076ffdc7d161fae8fbfce10a67418c3af7c"
+      },
+      {
+        "bytes": 4682,
+        "path": "agent-cli/docs/customer-simulation-live.md",
+        "sha256": "743fb310b29a2e597ecfa5f297b0490a7fc8bac5a4cb63fce26551b8f801a61a"
+      },
+      {
+        "bytes": 6554,
+        "path": "agent-cli/docs/development.md",
+        "sha256": "0a17f9f6564c67c720a19697ea1289f9dd651ca240752c7466486e858cb04fa2"
+      },
+      {
+        "bytes": 1473,
+        "path": "agent-cli/docs/interaction-replay.md",
+        "sha256": "8802bf36f1343240657b68cf442ae660b09c2aa24c7735f66453f602ba7077f5"
+      },
+      {
+        "bytes": 29026,
+        "path": "agent-cli/docs/prd.json",
+        "sha256": "647478d793e12957b1add31b3ff9cb57f1b2a9361d78c535a4df63dd9c806f20"
+      },
+      {
+        "bytes": 6756,
+        "path": "agent-cli/docs/prompts/AGENTS-far.md",
+        "sha256": "8154051d02d35ff00156b356af0ed3c8f12eef1868095a17adac8b14b1b5ff7f"
+      },
+      {
+        "bytes": 2949,
+        "path": "agent-cli/docs/prompts/AGENTS-jp.md",
+        "sha256": "46b8544cb47ed84c0f981192b5234cef3aef81b3df845515e5add3b8674fd172"
+      },
+      {
+        "bytes": 4504,
+        "path": "agent-cli/docs/prompts/AGENTS-learn.md",
+        "sha256": "b2947de55bc64190cfe9c94f84215c06487321d565b0c69c02c3f48b7290912c"
+      },
+      {
+        "bytes": 6851,
+        "path": "agent-cli/docs/prompts/AGENTS-near.md",
+        "sha256": "13b9f61815bdb52bae188d957a5ffa57ca703931d91d6dcff32943d3c62042d5"
+      },
+      {
+        "bytes": 11532,
+        "path": "agent-cli/docs/prompts/AGENTS-spn.md",
+        "sha256": "d233c28d50eae82687892aa8679d8e20280f9689b1ee533a7c5aeeddc9e6b967"
+      },
+      {
+        "bytes": 9789,
+        "path": "agent-cli/docs/prompts/AGENTS-webbrowser.md",
+        "sha256": "e7c255bcc6165b6e4d574fe9cf6cc5e29b2661aa307ac74e6fd20e3ddb164c71"
+      },
+      {
+        "bytes": 873,
+        "path": "agent-cli/docs/prompts/LOOPER.md",
+        "sha256": "5894eb7e4f0d9cf85b631d76705278f11ac3d4f921017a924c2082d38827cb6e"
+      },
+      {
+        "bytes": 11146,
+        "path": "agent-cli/docs/room-live-acceptance.md",
+        "sha256": "062b2650028b14b72922c25d0bb27c5031df29098018e8456603bd0914ffad47"
+      },
+      {
+        "bytes": 19579,
+        "path": "agent-cli/docs/room-recording-bundle.md",
+        "sha256": "1149e100e42ce98124d87a8658a29f6fda48b7a44eeec019b4883f2635b87014"
+      },
+      {
+        "bytes": 1248,
+        "path": "agent-cli/docs/room-three-participant.json",
+        "sha256": "c78c4219acca51240d58edc5712f59ecf7db9776e9d4e81d16843a024bee955d"
+      },
+      {
+        "bytes": 4476,
+        "path": "agent-cli/docs/room-tool-assistant-live-acceptance.md",
+        "sha256": "ac12cff9369a575d14937a1d7038351daaedcecb2d89c02bc403697387da4f3e"
+      },
+      {
+        "bytes": 1768,
+        "path": "agent-cli/docs/room-tool-assistant.json",
+        "sha256": "295e2a2900f2e824ccaf3bf5327c136e0deab0b1df3ad54c59e8064bc77f3be9"
+      },
+      {
+        "bytes": 930,
+        "path": "agent-cli/docs/room-turn-latency-live.json",
+        "sha256": "b22644a6932704256fdd1e528f2215fa78d3e63cb93250f63542a741b99b0c23"
+      },
+      {
+        "bytes": 3195,
+        "path": "agent-cli/docs/room-turn-to-turn-latency-live.md",
+        "sha256": "25e187e57db9154c80d55d60c32dda7006b13d1560d567bcbbcf3d6cc1f0551c"
+      },
+      {
+        "bytes": 32075,
+        "path": "agent-cli/docs/room-visualizer.html",
+        "sha256": "4f2bb72861c614b953752ee0e2ac4f4d7d8f4d191471f1f99ae0111d3aa2a6e4"
+      },
+      {
+        "bytes": 2507,
+        "path": "agent-cli/docs/session-audio-in-live.md",
+        "sha256": "ac494b33edb3f90d59a5d5da6190a79a35cda5391a40feca9f671b77b85124b6"
+      },
+      {
+        "bytes": 2587,
+        "path": "agent-cli/docs/session-bare-live-acceptance.md",
+        "sha256": "8e50c2c6e1cf3e6a4d1ecf07ac723d89ba045ab273e5891cc4d11a2be23e268b"
+      },
+      {
+        "bytes": 8993,
+        "path": "agent-cli/docs/session-interactive-tool-timeouts.md",
+        "sha256": "3b6cf1a17326c74aca3bff070164b1cc44c7af5e80ff6ad42aed7e7af4d500fd"
+      },
+      {
+        "bytes": 1168,
+        "path": "agent-cli/docs/session-mixed-modality-live.md",
+        "sha256": "a5a63d2af46f9fc60b0de3893b73386592a60873a99e9750f2d62cee4664e019"
+      },
+      {
+        "bytes": 23116,
+        "path": "agent-cli/docs/session-record-replay.md",
+        "sha256": "d15ce10a4ee3e90ca04671c55f440c6e3420453a1f5afc9df375d2d8459452e4"
+      },
+      {
+        "bytes": 3716,
+        "path": "agent-cli/docs/session-timing-analysis.md",
+        "sha256": "1b1d7b47afe7564860ac5f7ade09bd6cc4ccebe6db267134755694e23d3b3a43"
+      },
+      {
+        "bytes": 286,
+        "path": "agent-cli/internal/logger/testdata/formatted.golden",
+        "sha256": "0db1676b5d8bbc6253bca2a4334c6dbcc8ec54fec7ad4cee37dc901d8547c6bf"
+      },
+      {
+        "bytes": 3262,
+        "path": "agent-cli/internal/services/AGENTS.md",
+        "sha256": "bd4d7007dda1aff86f0ec622b3052a7f07a934a665cbb83163b4d7cd22de190c"
+      },
+      {
+        "bytes": 405,
+        "path": "agent-cli/internal/services/testdata/chat/s1_transcript.golden",
+        "sha256": "103a515a1d2acabfb20ec3559ecfe457e8188779958ed540df0e47f42697f72e"
+      },
+      {
+        "bytes": 1396,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/README.md",
+        "sha256": "380e846407f67b7c02b2ea5709e9b8cb1a5056234ae7bb63b4e775220c7d9993"
+      },
+      {
+        "bytes": 8044,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-a/agent.wav",
+        "sha256": "8f284ee90bcdcca5ae20fab9c8af7d513e6bad947f57ff25d491fb0e94f3913f"
+      },
+      {
+        "bytes": 796,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-a/capture.session.json",
+        "sha256": "033adb326c9001677cf1f1f3659cf74364f49419483964e2f9dd55218929f4f4"
+      },
+      {
+        "bytes": 11292,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-a/deltas.jsonl",
+        "sha256": "6f4e9596311b0e6a5e8815d596e196759f362c31266d2472c2c5e02331a13d68"
+      },
+      {
+        "bytes": 241,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-a/diagnostics.jsonl",
+        "sha256": "2c7b87aec4cd600885410747b8711d9b2deb88b5b7e04adddffc4f3df65b9e85"
+      },
+      {
+        "bytes": 391,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-a/events.jsonl",
+        "sha256": "7ecc4bd71977ea91b24690a116c045353840887e5b7534cab555aaab24013397"
+      },
+      {
+        "bytes": 8000,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-a/received.pcm",
+        "sha256": "01aff1d7fdf524b911c9600b7c2630ca7c112b2a4d49d0b9fd6214fc80ebab3f"
+      },
+      {
+        "bytes": 8000,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-a/sent.pcm",
+        "sha256": "b282edcd9d0d5e199858fd5aa8b997e0a42f47915d1737b742151ff9940a005c"
+      },
+      {
+        "bytes": 8044,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-b/agent.wav",
+        "sha256": "7508f5b93c7cd7df60cd442c674c531e7822dd9ae3c5cb72b4d34194ef3c0352"
+      },
+      {
+        "bytes": 796,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-b/capture.session.json",
+        "sha256": "74474376ea834369a655ca651870d56e0aef0670ead0a60dbe3512003af7f20f"
+      },
+      {
+        "bytes": 11319,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-b/deltas.jsonl",
+        "sha256": "818752e2bb081789f87f637e8086becc9d34cca4e7906f05be11dbbf15c54068"
+      },
+      {
+        "bytes": 242,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-b/diagnostics.jsonl",
+        "sha256": "28e91ea18bb397e3de990b93a94f1840b7c2b88358c8814d0d364dce2f920738"
+      },
+      {
+        "bytes": 392,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-b/events.jsonl",
+        "sha256": "e2cd0d230ab6b21b3c1369feff51aebca12846bbc1b0ed1cd84ef9d922f6858d"
+      },
+      {
+        "bytes": 8000,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-b/received.pcm",
+        "sha256": "f3dc60a165608d0c29e15876c830e4913c997b91145da44f6b209bb2dc71e6b6"
+      },
+      {
+        "bytes": 8000,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/participants/agent-b/sent.pcm",
+        "sha256": "19c27597d2afe3147d6a43511d7a6404cbbf53f17147c24e4a90a5a15d5e27ae"
+      },
+      {
+        "bytes": 8044,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/room-mix.wav",
+        "sha256": "32ff2e806aad30fbea0b9ba78197ad11cd3aa4ea758fed93cc3f471ab42afcdd"
+      },
+      {
+        "bytes": 1127,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/room-timeline.jsonl",
+        "sha256": "13b722fdca230abfd90773f75ee99ad78e8c3e69848dc970634feb832cc2eb28"
+      },
+      {
+        "bytes": 9615,
+        "path": "agent-cli/internal/services/testdata/room-audio/clean-turn-taking/run-manifest.json",
+        "sha256": "c3ff5b00767897b7bdec0970c946311803a09b5499a62f73a807503611fa69e4"
+      },
+      {
+        "bytes": 1436,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/README.md",
+        "sha256": "0261f2a1d7a4e0301ed99c4abf69e43f6cc3d9c98f2baaf68d3674f224f3bee8"
+      },
+      {
+        "bytes": 16044,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-a/agent.wav",
+        "sha256": "338dd163e566e9689cc532fadcfcca8a43078dbb36ec416fc4c180a8e60c673e"
+      },
+      {
+        "bytes": 797,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-a/capture.session.json",
+        "sha256": "a8a2ac68f9e5647110b8a55e516dc064f5b19f6664b1fb853c3613cabcc85f31"
+      },
+      {
+        "bytes": 22028,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-a/deltas.jsonl",
+        "sha256": "a0db4ab42a084d95c20fac7d25cf8e68335fe14f3c5accf41a4466dfdadb5dcc"
+      },
+      {
+        "bytes": 127,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-a/diagnostics.jsonl",
+        "sha256": "5fd5ee0e02f40cf66fb99ecda9d0047a9cc2f8494f9f8046274f275bb17f540c"
+      },
+      {
+        "bytes": 208,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-a/events.jsonl",
+        "sha256": "e65dc14ce8605c5b2ef4ac81685507c8343b79ae1036a9aa4ab53702c49a74e8"
+      },
+      {
+        "bytes": 16000,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-a/received.pcm",
+        "sha256": "d1f2bb41b8305a36ce29d704d70f63a17c2ec0554b701eeb4aa24f5260912d54"
+      },
+      {
+        "bytes": 16000,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-a/sent.pcm",
+        "sha256": "57bd4e5d8aceee5d62cbbfdd2207c9d1a4da1b35e29437d061fe1b5eff202839"
+      },
+      {
+        "bytes": 16044,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-b/agent.wav",
+        "sha256": "a187e671943bf2d0dd21763a2247b3a7fd29883b4e1a7b2cf31e61ca320b7d35"
+      },
+      {
+        "bytes": 797,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-b/capture.session.json",
+        "sha256": "f7f96463b4ea7cbad297ec3e1f0041604740592a350464805171bed12f05574b"
+      },
+      {
+        "bytes": 22028,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-b/deltas.jsonl",
+        "sha256": "67133f6927852a4b15864407275a639f0040a16490b1813eea3333f14a6506f8"
+      },
+      {
+        "bytes": 127,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-b/diagnostics.jsonl",
+        "sha256": "594aadf3b3ea8a1275851a1cd23b76e2b1a75e47e87c382d793bda3f92211cc7"
+      },
+      {
+        "bytes": 208,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-b/events.jsonl",
+        "sha256": "466f1762ab9bfd4a1935d1d8ee40508d4d0b1acaefc68ea589c51fc455062fad"
+      },
+      {
+        "bytes": 16000,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-b/received.pcm",
+        "sha256": "db0d75b1417c054600ee2d0249ea44af3467a76a0fc30b7dbede69291e549351"
+      },
+      {
+        "bytes": 16000,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/participants/agent-b/sent.pcm",
+        "sha256": "9e4d3f08cab894807436038481a5d0ee449fb30cec19900fc2d4d28e41ae3d22"
+      },
+      {
+        "bytes": 16044,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/room-mix.wav",
+        "sha256": "1a7022a17a36edd08efdab4e63e6a2da19ad6cb748f02669312354a7a8a7962c"
+      },
+      {
+        "bytes": 588,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/room-timeline.jsonl",
+        "sha256": "93833f1df1710e4f925e83098b1d6f499a7699b8812f5f0637b9e3f4f8882307"
+      },
+      {
+        "bytes": 9791,
+        "path": "agent-cli/internal/services/testdata/room-audio/deliberate-overlap/run-manifest.json",
+        "sha256": "6b8d3159452f965c3c69539f54801cbb3a291321ee1fa7b80cd4cbf24530f04e"
+      },
+      {
+        "bytes": 1247,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/README.md",
+        "sha256": "558470a709be5b88ff1591a92df3e7fbad3a16a4b47915b041eb659aa375ef03"
+      },
+      {
+        "bytes": 48044,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-a/agent.wav",
+        "sha256": "71814ca588c3d2c634471d74419940650a3b8f100cae5154136ad19d84c475e4"
+      },
+      {
+        "bytes": 807,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-a/capture.session.json",
+        "sha256": "9bd7885070143d18e52909b18b7d8aedeb81a1f8e3e2c8888befe5892cc034b1"
+      },
+      {
+        "bytes": 67863,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-a/deltas.jsonl",
+        "sha256": "f382ef47e223c581d14e64b0d687d7c45ecffc935dcb51d7c739bbd64209763b"
+      },
+      {
+        "bytes": 983,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-a/diagnostics.jsonl",
+        "sha256": "1191684df2cf3418a21c74561acdcab9775c1f63990011a1c486e17093fb2936"
+      },
+      {
+        "bytes": 1106,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-a/events.jsonl",
+        "sha256": "4610c7a31da58e474aeb4472ba2d5d4562b5aa922ba57e77d0508595edd07583"
+      },
+      {
+        "bytes": 48000,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-a/received.pcm",
+        "sha256": "b61520d6ae5c151a6b183a4a0065dfa241e50c2c615266b2c1902f300f568e4d"
+      },
+      {
+        "bytes": 48000,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-a/sent.pcm",
+        "sha256": "20cfa0f9ca2e879550cca6a9701de7657ea572a09bde8e7b7aafd197a1ae6c8d"
+      },
+      {
+        "bytes": 48044,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-b/agent.wav",
+        "sha256": "e05ddb65cd6071ef572a201a467848318e8864067d1e57e773d22d04cc1129fd"
+      },
+      {
+        "bytes": 807,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-b/capture.session.json",
+        "sha256": "18c0083584b95ba7ac8223cb743db620d36aaee090f82010b84df6ac8e8d6400"
+      },
+      {
+        "bytes": 67863,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-b/deltas.jsonl",
+        "sha256": "e4dc9795e548701050fef0fafd28290e11c262ed5c2274fee5e2a4d872a2b416"
+      },
+      {
+        "bytes": 986,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-b/diagnostics.jsonl",
+        "sha256": "4b156c22f05907fcec1022957421b73d936e76bf9f66829fba30375ada267391"
+      },
+      {
+        "bytes": 1108,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-b/events.jsonl",
+        "sha256": "2ab04120f399ab740a06aacf70e9fc0e71508f627f3c795758c5addad2238217"
+      },
+      {
+        "bytes": 48000,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-b/received.pcm",
+        "sha256": "1a2323865e0323dcaa989cc3e2f0f319b085d86bc3f732021bef19e11133f0b5"
+      },
+      {
+        "bytes": 48000,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/participants/agent-b/sent.pcm",
+        "sha256": "8aabf0673b8b13260d7d6ef7d85ccb0e43a307b84cdcd28365d01b678daf759b"
+      },
+      {
+        "bytes": 48044,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/room-mix.wav",
+        "sha256": "cfb80ace8264fe77d2d7b45c670d0f594918bf49fe6a2a2750a789cdb6885bd8"
+      },
+      {
+        "bytes": 5013,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/room-timeline.jsonl",
+        "sha256": "ce574f461bff06d18f24fa94c14d3a83e44828973adf580f4b7a4d9baf2ea49b"
+      },
+      {
+        "bytes": 16776,
+        "path": "agent-cli/internal/services/testdata/room-audio/long-conversation-termination/run-manifest.json",
+        "sha256": "467612ba95dd2ff664e3ae5c39ee3b8f4370447332981c318b791e652162f976"
+      },
+      {
+        "bytes": 239286,
+        "path": "agent-cli/internal/services/testdata/rtc-device-crackle-first-turn.pcm.gz.b64",
+        "sha256": "cb85ec8e17d62a618558a997c3567ea39759588365a53aaca5a15737d27ce223"
+      },
+      {
+        "bytes": 26708,
+        "path": "agent-cli/internal/services/testdata/session-audio-input/utterance-stream.session.json",
+        "sha256": "44a16c8cf4ab52127bd3f513043f1f9f91e3900df330df5b04264a1738d37e9a"
+      },
+      {
+        "bytes": 15404,
+        "path": "agent-cli/internal/services/testdata/session-audio-input/utterance.wav",
+        "sha256": "a2543d67fa9747a37703bf5af9a41618cfc32c173a32b312cfd53cc780ff40cb"
+      },
+      {
+        "bytes": 3247,
+        "path": "agent-cli/internal/transport/cli/AGENTS.md",
+        "sha256": "d16b58369c430768b5187bc9a776b6e021afbfb512c1da1e1019b4dac0cbac34"
+      },
+      {
+        "bytes": 2402,
+        "path": "agent-cli/internal/transport/cli/testdata/config_default.yaml",
+        "sha256": "7917e89ea387827f79d51a667476515a2f1fdb07e2a08185b414c8fc7e064d5e"
+      },
+      {
+        "bytes": 1927,
+        "path": "agent-cli/internal/transport/cli/testdata/config_non_default.yaml",
+        "sha256": "d44ec78c07b1f123e110b36ef2190452bfa85568f60e1665f29748602ef9f220"
+      },
+      {
+        "bytes": 512189,
+        "path": "agent-cli/internal/transport/cli/testdata/eac8-openai-long-output.base64",
+        "sha256": "fc2d2c38915e4e6cf5d6384a02de6838e7f543586954afdba94ca7dfdcd255ee"
+      },
+      {
+        "bytes": 1921,
+        "path": "agent-cli/internal/transport/cli/testdata/openai-server-vad-interrupted-output.base64",
+        "sha256": "19b8262e7d97090d464b0eede9748e86a56663449f9c9103262630a7f67bce87"
+      },
+      {
+        "bytes": 3039,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s-v3a-barge-in-basic-cancelled-16k.session.json",
+        "sha256": "16e9878e7a86d09ce8f5b305b79d536210b8c0c8229157465be6e8aa29e3a5ef"
+      },
+      {
+        "bytes": 3382,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s-v3a-barge-in-basic-cancelled-24k.session.json",
+        "sha256": "2c8450b862ff5991ed1cd7bc64575879542b6672ae232736aa93e2e71179d74d"
+      },
+      {
+        "bytes": 2812,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s-v3a-barge-in-basic-no-interruption.session.json",
+        "sha256": "8cd84100ad07433d6be7db5a388f31567ccb518ce05101be85abfed248340876"
+      },
+      {
+        "bytes": 2187,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s_v2a_audio_in_basic.session.json",
+        "sha256": "d9605fdb946ae53cbb299194557e184b2a4993826dbe7275b099671dcd690884"
+      },
+      {
+        "bytes": 1912,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s_v2a_audio_in_basic_no_response.session.json",
+        "sha256": "dedf56d22e9c4ef5443be62a707cc15f78dd9313282af5db6fc58e4fec0036bf"
+      },
+      {
+        "bytes": 2481,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s_v2e_audio_in_truncated_16k.session.json",
+        "sha256": "ad3271f56df1ef2b75538058ef092d2059edeed586c81137ad24b7d34575262c"
+      },
+      {
+        "bytes": 2277,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s_v2e_audio_in_truncated_24k.session.json",
+        "sha256": "bc359162fdf39620f987c97b85aec922ad2c1b3db784a17e515d8707e89b5ce2"
+      },
+      {
+        "bytes": 1665,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s_v2e_audio_in_truncated_uncommitted.session.json",
+        "sha256": "b845d6cccd1bc6933f681ad509ceec0ec8b97ba6565eea8dc28ed0bfa5292c4c"
+      },
+      {
+        "bytes": 914,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-reports/mixed.jsonl",
+        "sha256": "67163ed1e480b082d8c4cfe750801aa0306be94002cef3bb8794a6b6842f7d9d"
+      },
+      {
+        "bytes": 291,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-reports/run-a.jsonl",
+        "sha256": "efeb841c2d954eeea859bf4cb08ad386470722f80aef5a2984972b12ae6b14a3"
+      },
+      {
+        "bytes": 296,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-reports/run-b.jsonl",
+        "sha256": "21a31f2b61eb8a43c342d1b36a676faffd1e2c8234cadc43b4e7e181995a2cbb"
+      },
+      {
+        "bytes": 442,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-scenarios/s2s-v2a-audio-in-basic-no-response.scenario.json",
+        "sha256": "5c3e103f567aef4e97f093bcf92268c38cd97a3909f8a8094e9611f158176b0e"
+      },
+      {
+        "bytes": 398,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-scenarios/s2s-v2a-audio-in-basic.scenario.json",
+        "sha256": "2a52db89da11be48fe9f43f9be155ed9ac2cc131de1ab62f5fb88b08142dd968"
+      },
+      {
+        "bytes": 495,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-scenarios/s2s-v2e-audio-in-truncated-16k.scenario.json",
+        "sha256": "5ca38979ec267539b53fbb35015774e0dc72cb53ffdc18f3f851686a5a334564"
+      },
+      {
+        "bytes": 515,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-scenarios/s2s-v2e-audio-in-truncated-24k.scenario.json",
+        "sha256": "0ed05114a0dd081af7fd97a9f2f5c83bfc676b2475440044cc5817a78497817a"
+      },
+      {
+        "bytes": 482,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-scenarios/s2s-v2e-audio-in-truncated-uncommitted-negative.scenario.json",
+        "sha256": "497f5f9782256c92ad2d67379ecffa828a3f46f87057136267097fc9c1e734ba"
+      },
+      {
+        "bytes": 563,
+        "path": "agent-cli/internal/transport/cli/testdata/probe-scenarios/s2s-v9-webrtc-device-roundtrip.scenario.json",
+        "sha256": "44f6a4b5c37c4c1e817096cdad9343e446d0eb3a20d994ea1c1c6fbce41d998a"
+      },
+      {
+        "bytes": 113676,
+        "path": "agent-cli/internal/transport/cli/testdata/test13-openai-audio.base64",
+        "sha256": "ca29f8c81cfb020d4d94d1e023298b4e3fb5c026ab7fcae4ef0170576c71f4f0"
+      },
+      {
+        "bytes": 13039,
+        "path": "agent-cli/internal/transport/cli/testdata/test6-openai-barge-in.base64",
+        "sha256": "6bb5a07350bbe1a874b4a28fcc79f7575f272a38a6338aa223c6fa9a99e6b5c6"
+      },
+      {
+        "bytes": 102498,
+        "path": "agent-cli/internal/transport/cli/testdata/test7-openai-long-output.base64",
+        "sha256": "af594d0fe15cdecae49332df5ea288a319fecf4f22b87b2fffa5a4a1ed7b3bf4"
+      },
+      {
+        "bytes": 607,
+        "path": "agent-cli/internal/transport/cli/testdata/webmcp-invoke-invalid-input.golden.json",
+        "sha256": "27e0d3ff077525c7a13a67f0b958bd3f2b12eef16aa165545333979e76c4fc58"
+      },
+      {
+        "bytes": 4060,
+        "path": "agent-cli/internal/webmcp/chrome/testdata/audio_interrupt.html",
+        "sha256": "b34bdc1dede0acf0f27a543f7b1eff67639552a013f4ee905e285a9b78bb437c"
+      },
+      {
+        "bytes": 4985,
+        "path": "agent-cli/internal/webmcp/chrome/testdata/cubecade_screenshot.html",
+        "sha256": "01fa821efd6bb59385262bf9dfb5d0cf132b171a509ff9cf46ff6cbdd200a424"
+      },
+      {
+        "bytes": 6847,
+        "path": "agent-cli/internal/webmcp/chrome/testdata/cubecade_shared_browser.html",
+        "sha256": "8a7b2017a3cb6f4e55f1f29ad6f86c2caa6af62343e921366ef113898ad75c5c"
+      },
+      {
+        "bytes": 6533,
+        "path": "agent-cli/internal/webmcp/chrome/testdata/webmcp_adapter.html",
+        "sha256": "0f083712feb255da99ae52250980fd89a1f44e3301fa8e620ba20b8eb0d8d70c"
+      },
+      {
+        "bytes": 7224,
+        "path": "agent-cli/internal/webmcp/chrome/testdata/webmcp_conversational_customer.html",
+        "sha256": "d8b1366b7f074503562dae7b8a6850be2fab2c0440754192e5fb3c283a120a15"
+      },
+      {
+        "bytes": 16623,
+        "path": "agent-cli/internal/webmcp/siteadapter/extensions/capital_one_shopping/capital_one_shopping.js",
+        "sha256": "3cd9c4f254dab5e4dc9443e56167aa160e7578b9cf3fb88e790af6e97f193685"
+      },
+      {
+        "bytes": 8073,
+        "path": "agent-cli/internal/webmcp/siteadapter/extensions/google_maps/google_maps.js",
+        "sha256": "6e0c1be501ba46adc912a04f4801386c0555cb0f04f9577a6dba1c2c49a16779"
+      },
+      {
+        "bytes": 9001,
+        "path": "agent-cli/internal/webmcp/siteadapter/extensions/reddit/reddit.js",
+        "sha256": "2668384296a29b92b06085dc163f4c0163bfe5ed17651034ece6dd8401392039"
+      },
+      {
+        "bytes": 13591,
+        "path": "agent-cli/internal/webmcp/siteadapter/extensions/spotify/spotify.js",
+        "sha256": "f2ae8b20d50cd33bd1cccfd85b179139763adfbb4d11ecdc274bd574ad6a6614"
+      },
+      {
+        "bytes": 8239,
+        "path": "agent-cli/internal/webmcp/siteadapter/extensions/wikipedia/wikipedia.js",
+        "sha256": "ad85281c5f9b8dfd312b9241f2873bc540645328b27633053c36290876248986"
+      },
+      {
+        "bytes": 24022,
+        "path": "agent-cli/internal/webmcp/siteadapter/extensions/x/x.js",
+        "sha256": "a2c2e345ec6095b127c36ed3fd170e448e8176232d7bc82eaf8a9b29a2b752ad"
+      },
+      {
+        "bytes": 20075,
+        "path": "agent-cli/internal/webmcp/siteadapter/extensions/youtube/youtube.js",
+        "sha256": "d6e11f9d2cddff3830e955f666cb927400393816b29a65216d4ca5d855faa34d"
+      },
+      {
+        "bytes": 5288,
+        "path": "agent-cli/internal/webmcp/testkit/testdata/browser-events.golden.jsonl",
+        "sha256": "38d478050de39c6444c4ef9cff70ec09952008cc7bb8bb5773b8cd7341ef73d8"
+      },
+      {
+        "bytes": 8762,
+        "path": "agent-cli/internal/wire/AGENTS.md",
+        "sha256": "c6d552eb61fb0419b5d18dbafd49b84b4831c0c02e8a5c574c9cbcb7c7827a0e"
+      },
+      {
+        "bytes": 3150,
+        "path": "agent-cli/internal/workspace/testdata/agents_md_tools.golden",
+        "sha256": "76928ff09bff50d33baa31e463591be1c2d05fd36e4024577dd26e83edf625ed"
+      },
+      {
+        "bytes": 2882,
+        "path": "agent-cli/internal/workspace/testdata/agents_md_zero_tools.golden",
+        "sha256": "e9494d72a4547c6a9d0324a0f6b1af5aa233063dbc63880b9eafaa452f1a1fba"
+      },
+      {
+        "bytes": 1391,
+        "path": "agent-cli/test/e2e/README.md",
+        "sha256": "e7266a26f1d66aa6c502c539bd721b89ac2e21157dfaef644462fe39b476d7b1"
+      },
+      {
+        "bytes": 61,
+        "path": "agent-cli/test/functional/functional-quarantine.json",
+        "sha256": "bff3ebcfb646d2cb85606bdc98873292c4ab079bd12bd0fd49ce5e7325762637"
+      },
+      {
+        "bytes": 3259,
+        "path": "agent-cli/test/integration/AGENTS.md",
+        "sha256": "e22144f0ebd97472813e9b8cfc637a231c78e17a0a5198b4ff8793dc56ac40c8"
+      },
+      {
+        "bytes": 512307,
+        "path": "agent-cli/test/integration/openrouter_api.yaml",
+        "sha256": "89ccc783471b2484198aed40e9000bad2bc14276c07c44832dd6fe70784546ec"
+      },
+      {
+        "bytes": 106532,
+        "path": "agent-cli/test/integration/pictures/dh1.jpg",
+        "sha256": "df7da737afaf9219ec04fd58f610e91c7e9da025b3240f94a486597444240a57"
+      },
+      {
+        "bytes": 141080,
+        "path": "agent-cli/test/integration/pictures/wt3.jpg",
+        "sha256": "17416baa57af4c59f27afd862bf15e9b8e2357ddb48fedb84dadced024d003c4"
+      },
+      {
+        "bytes": 1921,
+        "path": "agent-cli/test/integration/testdata/audio/openai-server-vad-interrupted-output.base64",
+        "sha256": "19b8262e7d97090d464b0eede9748e86a56663449f9c9103262630a7f67bce87"
+      },
+      {
+        "bytes": 1682,
+        "path": "agent-cli/test/integration/testdata/image_parse.json",
+        "sha256": "8f76c52dd4f8330b9c4a46d5aac75b8d14605125a5164e0c43384f51b9767ce5"
+      },
+      {
+        "bytes": 143016,
+        "path": "agent-cli/test/integration/testdata/interest.json",
+        "sha256": "2d63208e8aea2274dec158a3066d87ddfe0f5c603eb19c726ec4dc7d17331a88"
+      },
+      {
+        "bytes": 23084,
+        "path": "agent-cli/test/integration/testdata/multiturn_turn1.wav",
+        "sha256": "81edc4447fe8f3e73ec265790a981c8916b7b60b0d36277890e63fa2cf5ab3f5"
+      },
+      {
+        "bytes": 23084,
+        "path": "agent-cli/test/integration/testdata/multiturn_turn2.wav",
+        "sha256": "c7974b5d1eef37efc991007baf4dd71d9ab1a1e92fe5c8c99c258abaf810df22"
+      },
+      {
+        "bytes": 23084,
+        "path": "agent-cli/test/integration/testdata/multiturn_turn3.wav",
+        "sha256": "ae98a076da1b0dff65e5c70b403407e7b25982156da0e1c9f708d5564e8c296b"
+      },
+      {
+        "bytes": 23084,
+        "path": "agent-cli/test/integration/testdata/multiturn_turn4.wav",
+        "sha256": "08ceb4517bd167f70a08a803afbe03361460bcbb8e3e31aacf4ed40fd2eb5de1"
+      },
+      {
+        "bytes": 50223,
+        "path": "agent-cli/test/integration/testdata/multiturn_zephyr_4turn.session.json",
+        "sha256": "6808459cde6211c1ec84ab879188c3ea7c5ff12eb98771b0667d1300dc52f052"
+      },
+      {
+        "bytes": 50259,
+        "path": "agent-cli/test/integration/testdata/multiturn_zephyr_no_carry.session.json",
+        "sha256": "aa07ad1d1012cc86e902a0825d9a50051295f63d2d7ddcf6209650620838e5a2"
+      },
+      {
+        "bytes": 2282,
+        "path": "agent-cli/test/integration/testdata/openai_realtime_error.session.json",
+        "sha256": "45477407488f387b2ff9651f1e7f2337df2ca5788ed8a47b8eaa0ca0b21da1c3"
+      },
+      {
+        "bytes": 3495,
+        "path": "agent-cli/test/integration/testdata/openai_realtime_smoke.session.json",
+        "sha256": "d17afa27306949cbda898714dcd8b05187fe20b752780c961932b2dfab21d4ad"
+      },
+      {
+        "bytes": 2878,
+        "path": "agent-cli/test/integration/testdata/openai_realtime_text.session.json",
+        "sha256": "70593dc6391fdbc1242fcee45b9bf0cfdc78be18ff3ac37d04a5e6fab4f0ce2d"
+      },
+      {
+        "bytes": 2993,
+        "path": "agent-cli/test/integration/testdata/openai_realtime_text_marin.session.json",
+        "sha256": "17df0fb756fc70840209b28bca010a81d9e7cae8da104a77aeae1487880628b7"
+      },
+      {
+        "bytes": 5455,
+        "path": "agent-cli/test/integration/testdata/s2s-e2e-vision-describe/s2s_e2e_vision_describe.session.json",
+        "sha256": "1c0d4049ad5cd2f14e13f82e62ec8f5435172628259d76879680eb00a3b48458"
+      },
+      {
+        "bytes": 5361,
+        "path": "agent-cli/test/integration/testdata/s2s-v2d/s2s_v2d_multi_utterance.session.json",
+        "sha256": "a5174409d9dbc786a6c1a11f8d54bc94d5daf669671426d5f1e9476099ab6d4a"
+      },
+      {
+        "bytes": 4309,
+        "path": "agent-cli/test/integration/testdata/s2s-v2d/s2s_v2d_multi_utterance_merged.session.json",
+        "sha256": "cd5ead434bf7a6a4510800519a8eec03bca7b61e3cb5640292112399ecce2fa8"
+      },
+      {
+        "bytes": 843,
+        "path": "agent-cli/test/integration/testdata/s2s-v2d/scenarios/s2s_v2d_multi_utterance.scenario.json",
+        "sha256": "afb2b7a321bb2db77a182fd481c2c543cf6c2d1fcd6dae591311db0311532710"
+      },
+      {
+        "bytes": 840,
+        "path": "agent-cli/test/integration/testdata/s2s-v2d/scenarios/s2s_v2d_multi_utterance_missegmented.scenario.json",
+        "sha256": "3c66eba08e1ff65d2ababf046a1ce428df3c8c6b23444966058e7a5c4e43cf99"
+      },
+      {
+        "bytes": 2470,
+        "path": "agent-cli/test/integration/testdata/s2s-v3b-barge-in-tool-result-delivered.session.json",
+        "sha256": "7d570a7d9d5394ed5e3c3c4b13fccab0168b9fce6865764dfa36b499d67f58cb"
+      },
+      {
+        "bytes": 2366,
+        "path": "agent-cli/test/integration/testdata/s2s-v3b-barge-in-tool-result-discarded.session.json",
+        "sha256": "7009fa0f9b1427fb4633f393cefb20da6e36c3939e561ab7d3d3d1a804ae5592"
+      },
+      {
+        "bytes": 2045,
+        "path": "agent-cli/test/integration/testdata/s2s-v3b-barge-in-tool-result-orphaned.session.json",
+        "sha256": "cd9686716878a5a288021fdbc23678c5e5f7e831e891ff2ad0f38c007ba2fae5"
+      },
+      {
+        "bytes": 12967,
+        "path": "agent-cli/test/integration/testdata/s2s-v3c-barge-in-repeated-double-cancel.session.json",
+        "sha256": "a952d0d902cc019dfed4d2e778da645620ad1e7ebabd18cab0611ddd6db29298"
+      },
+      {
+        "bytes": 12475,
+        "path": "agent-cli/test/integration/testdata/s2s-v3c-barge-in-repeated-dropped-commit.session.json",
+        "sha256": "fbb255d0a7c51f9ea8e6b32284d8371e5766e334b1a4f948546d52ea2369c0b5"
+      },
+      {
+        "bytes": 13568,
+        "path": "agent-cli/test/integration/testdata/s2s-v3c-barge-in-repeated-duplicated-turn.session.json",
+        "sha256": "e396df26a51ea04fdb9c73f637030ddc349905ec641820d5b370676ee9e63ed5"
+      },
+      {
+        "bytes": 12712,
+        "path": "agent-cli/test/integration/testdata/s2s-v3c-barge-in-repeated.session.json",
+        "sha256": "f852d607b2c29098e1ab9156742d1767ea93c836aaa8e233525bbf6fcd4bdf1f"
+      },
+      {
+        "bytes": 2763,
+        "path": "agent-cli/test/integration/testdata/s2s-v4e-tool-registered.capture.json",
+        "sha256": "be6edeb7a54b99beaf3378bce34a757304aeb90f56d4aebb43831260a23844ae"
+      },
+      {
+        "bytes": 2841,
+        "path": "agent-cli/test/integration/testdata/s2s-v4e-tool-unknown.capture.json",
+        "sha256": "a9d8781fe29cfbbb633c21b10647cf6ea4843cdd2c9f5b838e7c5e25dae09e1c"
+      },
+      {
+        "bytes": 605,
+        "path": "agent-cli/test/integration/testdata/s2s-v4e/s2s-v4e-tool-registered.scenario.json",
+        "sha256": "4dc1bf3b4219c45f1a16be6d7771c6f952d8dec2f5b2b8f5a0a6c5a26998a1c9"
+      },
+      {
+        "bytes": 599,
+        "path": "agent-cli/test/integration/testdata/s2s-v4e/s2s-v4e-tool-unknown.scenario.json",
+        "sha256": "f24f6f178c93e86e73d6bd5aa34c471a8163151d74535dac169a0d758fded7c7"
+      },
+      {
+        "bytes": 21876,
+        "path": "agent-cli/test/integration/testdata/streaming_2_2.json",
+        "sha256": "dcee6c63cd6945b371eb2a513028c314f3494d5f1812cc26e89bbd51cb3a16f8"
+      },
+      {
+        "bytes": 2052,
+        "path": "agent-cli/test/integration/testdata/tool_error_read_file.json",
+        "sha256": "c424d59d4ebb6148b62111bc8cb3343ef4f522ce625aba26561d02c83fb60786"
+      },
+      {
+        "bytes": 154940,
+        "path": "agent-cli/test/integration/testdata/vision_describe_question.wav",
+        "sha256": "fcd4742e86ee62063cee0a258cfe22ccd82e23aa264d8730908b6e13cb948a5b"
+      },
+      {
+        "bytes": 122,
+        "path": "agent-cli/testdata/agents-profiles/file-read/AGENTS.md",
+        "sha256": "28421b84cc01d34f8390e70445ca48a5362e793bb2b1670df5d283c2def55ac7"
+      },
+      {
+        "bytes": 49,
+        "path": "agent-cli/testdata/agents-profiles/file-read/expected-outcome.json",
+        "sha256": "3b1dd08eab88fd9c57ea0d2ea93b9d0249aa560c0af9d0475fb5de8fe5668d55"
+      },
+      {
+        "bytes": 32,
+        "path": "agent-cli/testdata/agents-profiles/file-read/fixture.txt",
+        "sha256": "cd73d2a689674c4318a0cf55bd42d6610edff619301dd986a03f2d26096d237b"
+      },
+      {
+        "bytes": 148,
+        "path": "agent-cli/testdata/agents-profiles/image-description/AGENTS.md",
+        "sha256": "33b1e5a9f7dc2536258aa7be091a4968cc087ea6491e4aadd59a6ebe4a41248b"
+      },
+      {
+        "bytes": 126,
+        "path": "agent-cli/testdata/agents-profiles/image-description/expected-outcome.json",
+        "sha256": "e596619248dafea6c52f2fa2bc2500aaee5495520bf69a5f47d89674447011a6"
+      },
+      {
+        "bytes": 129,
+        "path": "agent-cli/testdata/agents-profiles/no-tools/AGENTS.md",
+        "sha256": "0b44528babcb465851f8ed9ca40ba83a2b96528f3d98192d8347643136ed9d87"
+      },
+      {
+        "bytes": 35,
+        "path": "agent-cli/testdata/agents-profiles/no-tools/expected-outcome.json",
+        "sha256": "bfe0cbf94e5f9f905c3a0c1943ec6292ec8598b8e4d3aa6752a88ad2e91d554d"
+      },
+      {
+        "bytes": 153,
+        "path": "agent-cli/testdata/agents-profiles/ordered-tools/AGENTS.md",
+        "sha256": "250803e5da3eea0132f7f07dd3d6dd4ee360d8dd38f3849c4cd2c9d5420ed605"
+      },
+      {
+        "bytes": 111,
+        "path": "agent-cli/testdata/agents-profiles/ordered-tools/expected-outcome.json",
+        "sha256": "8becea70b83fa1ca474c101e0f8b84f1f0fc9763bece0af771f09bc1b8d32893"
+      },
+      {
+        "bytes": 36,
+        "path": "agent-cli/testdata/agents-profiles/ordered-tools/fixture.txt",
+        "sha256": "7708b2bb584e612965fec197db501c44515bdb1b6ab58fd76f2ad18f120306bc"
+      },
+      {
+        "bytes": 129,
+        "path": "agent-cli/testdata/agents-profiles/shell-command/AGENTS.md",
+        "sha256": "25bc6b263a0081f2a4a33c66a5887d343d5e93f06a940d13397507247694b0ae"
+      },
+      {
+        "bytes": 62,
+        "path": "agent-cli/testdata/agents-profiles/shell-command/expected-outcome.json",
+        "sha256": "ba037e6bd52786721e8b1d8c6e5c7a661c41d0a7d322b79d70f0e60b72d41ad0"
+      },
+      {
+        "bytes": 4462,
+        "path": "agent-cli/testdata/customer-simulation/family-a.scenario.json",
+        "sha256": "2dc249400d48e1a6f95f01dbc14a9819e9fa2c08843f1a882fe6b3b05d3ff3c3"
+      },
+      {
+        "bytes": 3485,
+        "path": "agent-cli/testdata/customer-simulation/family-b.scenario.json",
+        "sha256": "211bfe56c33e0596d78d1001435e87679e6b90ea487e74fd1f9eceac007112c7"
+      },
+      {
+        "bytes": 4578,
+        "path": "agent-cli/testdata/customer-simulation/family-c.scenario.json",
+        "sha256": "3faf6e04617b94be7a153afb4311cac831eacff5ebe00547ab61454aaccbb6d9"
+      },
+      {
+        "bytes": 1797,
+        "path": "agent-cli/testdata/customer-simulation/family-d-natural.scenario.json",
+        "sha256": "e2deeabcfe14cb94eaf72527455fe6b7fe23349a0434d4b8b1ae6863c0e8e359"
+      },
+      {
+        "bytes": 1839,
+        "path": "agent-cli/testdata/customer-simulation/family-d-sigint.scenario.json",
+        "sha256": "40ca6766eab13d7ef51482caf21034e99916c40ca737d4c80305d39780f0e278"
+      },
+      {
+        "bytes": 1845,
+        "path": "agent-cli/testdata/customer-simulation/family-e.scenario.json",
+        "sha256": "7eddeb1d40a39105592a631d88b6f5407e73589205d70a69719bec8858cc6eec"
+      },
+      {
+        "bytes": 285,
+        "path": "agent-cli/testdata/images/fixture.jpeg",
+        "sha256": "b6e7189ef91f11a1002c09f5c56f9c1774d02164ab3df186ce5085e1be6268d9"
+      },
+      {
+        "bytes": 82,
+        "path": "agent-cli/testdata/images/fixture.png",
+        "sha256": "6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5"
+      },
+      {
+        "bytes": 1753,
+        "path": "agent-cli/testdata/probe-scenarios/webmcp/README.md",
+        "sha256": "8a44bb83724d59c90c64f365050cc2f283eea987ee11797d1ea11ead97ce0912"
+      },
+      {
+        "bytes": 1843,
+        "path": "agent-cli/testdata/probe-scenarios/webmcp/happy-page-tool.browser.json",
+        "sha256": "d090be78b87d491b2928be53cfd610e27e9cd93128da54c7304a52dd14ed4500"
+      },
+      {
+        "bytes": 1204,
+        "path": "agent-cli/testdata/probe-scenarios/webmcp/happy-page-tool.provider.json",
+        "sha256": "c4b4bc2d68cfebe87b3a2efce586520490afca7453bfbe3b3a5c75f12fc4981f"
+      },
+      {
+        "bytes": 3350,
+        "path": "agent-cli/testdata/probe-scenarios/webmcp/happy-page-tool.scenario.json",
+        "sha256": "94275c19190c9c9c0d402a2fe0fc86cbeb6f9611d9cfa85b63452b82f4f5771d"
+      },
+      {
+        "bytes": 2766,
+        "path": "agent-cli/testdata/probe-scenarios/webmcp/stale-ref-recovery.browser.json",
+        "sha256": "e54d8a0bd3823fce045b5bbb105b2a4b18f69ab080c3e4c554ab46801d14d42b"
+      },
+      {
+        "bytes": 1207,
+        "path": "agent-cli/testdata/probe-scenarios/webmcp/stale-ref-recovery.provider.json",
+        "sha256": "df64a010ad682985dfffbd88118e340970728a424f05a61871ade44a08f8bd8a"
+      },
+      {
+        "bytes": 3564,
+        "path": "agent-cli/testdata/probe-scenarios/webmcp/stale-ref-recovery.scenario.json",
+        "sha256": "f109b17c62c82d164b1405bfb04767a4b64cf59b86c2be7cf5d79d1f1ff299f7"
+      },
+      {
+        "bytes": 5648,
+        "path": "agent-cli/testdata/s2s-e2e-read-image/read_image_missing.session.json",
+        "sha256": "a905752fe7d81c19286b31f6c934e0bed844f503f2848dc2b0eccb0deec50a43"
+      },
+      {
+        "bytes": 3392,
+        "path": "agent-cli/testdata/s2s-e2e-read-image/read_image_negative.session.json",
+        "sha256": "70b71afca57763ebfd4127c5fc3b6a9ae8c00954adb3b2ead3e75cab653bc381"
+      },
+      {
+        "bytes": 6511,
+        "path": "agent-cli/testdata/s2s-e2e-read-image/read_image_positive.session.json",
+        "sha256": "7dc5b54bc2ca32958f32b84e7cb694867bae92a3e593828101e94f9d6f898bc5"
+      },
+      {
+        "bytes": 418,
+        "path": "go-agent-loop/Makefile",
+        "sha256": "0b6c25f0febdc6ff9ecbbc0fc1faee0d014825af9ab15b8421ce73bcbbe13230"
+      },
+      {
+        "bytes": 5685,
+        "path": "go-agent-loop/NOTES.md",
+        "sha256": "0d8e91188c02526f003b611ff7593736af6da64b6f9df3d683de66e8dc90f3ae"
+      },
+      {
+        "bytes": 7689,
+        "path": "go-agent-loop/README.md",
+        "sha256": "da78379cde2b2b6895a20ae57e196f891049b3a91558cdfabd3a49d3771ad08c"
+      },
+      {
+        "bytes": 7359,
+        "path": "go-agent-loop/docs/ORDERING.md",
+        "sha256": "79aa823468895c98bb9506fd19d0fbeaa311ab114dc365b226f20fe3906a1e53"
+      },
+      {
+        "bytes": 5999,
+        "path": "go-agent-loop/docs/TODO.md",
+        "sha256": "d71fcbf10d6e8840028f8209ec00e823460841e4a538ad656760838f94d95fb4"
+      },
+      {
+        "bytes": 2977,
+        "path": "go-agent-loop/docs/development.md",
+        "sha256": "3470db6a323ff6fd6925c5e3d290283fa127bee5653f6414dcd9d35c90a6157f"
+      },
+      {
+        "bytes": 1349,
+        "path": "go-agent-loop/pkg/agentprofile/testdata/catalog.golden.json",
+        "sha256": "65d2be3a73c788cca83fb6b0ed88eabb36a4386bbf5ca182903ccfeba7494709"
+      },
+      {
+        "bytes": 1168,
+        "path": "go-agent-loop/pkg/logging/testdata/crossing.jsonl",
+        "sha256": "df54f7cb2cb3b2dc8eb214faf14363f115a15e20c8f2c58fbb3c707bfe794f1e"
+      },
+      {
+        "bytes": 47,
+        "path": "go-agent-loop/pkg/messages/testdata/fuzz/FuzzTypedBufferConservationAndOrdering/seed-cancellation-closure",
+        "sha256": "105b760e6384c741a85aeb245b4e6ea0a056495b48ab0bccf8cf352aee4feadc"
+      },
+      {
+        "bytes": 39,
+        "path": "go-agent-loop/pkg/messages/testdata/fuzz/FuzzTypedBufferConservationAndOrdering/seed-capacity-boundary",
+        "sha256": "f0b7708a3a98029bd20ee500be4f0a4b1969c5386f513788f118019a7e9e32b1"
+      },
+      {
+        "bytes": 27,
+        "path": "go-agent-loop/pkg/messages/testdata/fuzz/FuzzTypedBufferConservationAndOrdering/seed-empty",
+        "sha256": "caf81e9797b19c76c1fc4dbf537d4d81f389524539f402d13aa01f93a65ac7e9"
+      },
+      {
+        "bytes": 67,
+        "path": "go-agent-loop/pkg/messages/testdata/fuzz/FuzzTypedBufferConservationAndOrdering/seed-mixed-sequence",
+        "sha256": "d31860fcb57e36a23f3c43ae9320903f2776392db0bffa3954720775a16b0542"
+      },
+      {
+        "bytes": 47,
+        "path": "go-agent-loop/pkg/messages/testdata/fuzz/FuzzTypedBufferConservationAndOrdering/seed-overflow-drop",
+        "sha256": "758bfd97608bc9c4334a5cd8d89290bef0ac633562a88c1bdcd01bc2f060d24e"
+      },
+      {
+        "bytes": 51,
+        "path": "go-agent-loop/pkg/messages/testdata/fuzz/FuzzTypedBufferConservationAndOrdering/seed-repeated-values",
+        "sha256": "1e98ae862f3e1afaa07f82afc38821547a7cc052ea69cad58c60b723585e4649"
+      },
+      {
+        "bytes": 1298,
+        "path": "go-agent-loop/pkg/messages/testdata/reconstruction/fuzz-seeds.json",
+        "sha256": "68303b578d9eab5e31fc441262c34e0ea9e8fac1ea32f519090e53204e8c8db4"
+      },
+      {
+        "bytes": 183,
+        "path": "go-agent-loop/pkg/messages/testdata/reconstruction/golden/empty.json",
+        "sha256": "ef81124f7c426f845e950e66a52667f625603ebd87963974f46048525a25b355"
+      },
+      {
+        "bytes": 295,
+        "path": "go-agent-loop/pkg/messages/testdata/reconstruction/golden/interrupted.json",
+        "sha256": "ea14794d762eb6b02f5789387defbe69010de59ee2f01bec825bdfebb7a4ea77"
+      },
+      {
+        "bytes": 269,
+        "path": "go-agent-loop/pkg/messages/testdata/reconstruction/golden/text.json",
+        "sha256": "a24f75727673294a152c998e6dc618410e1f9e6bc228a85101ae6dbb9f3144c5"
+      },
+      {
+        "bytes": 428,
+        "path": "go-agent-loop/pkg/messages/testdata/reconstruction/golden/tool-call.json",
+        "sha256": "27eb0f453f27543ccc847bbfa0a9f2ce2e4b3f7b70d2274b4a2c282217edc88f"
+      },
+      {
+        "bytes": 1086,
+        "path": "go-agent-loop/pkg/messages/testdata/reconstruction/golden/tool-results.json",
+        "sha256": "e5ed062d41682472ecfa7cc295354499dee052bba92f53954143eb181bf76642"
+      },
+      {
+        "bytes": 372,
+        "path": "go-agent-loop/pkg/probe/testdata/goal_catalog.golden",
+        "sha256": "b3f38c8494025d2374085430ca32273ace6159c86731c3f5c98adc84e77ceef5"
+      },
+      {
+        "bytes": 2006,
+        "path": "go-agent-loop/pkg/probe/testdata/goal_catalog.json",
+        "sha256": "f0a9f9607d9961a8e0c1191a5236c100be1d7f125710dd75c952fe2108f4ecad"
+      },
+      {
+        "bytes": 538,
+        "path": "go-agent-loop/pkg/probe/testdata/scenarios/s2s_v1_text_in_audio_out.scenario.json",
+        "sha256": "3d055788387fcc54a85d05c139ca1791cbd253aa97e5491942694e6442b46dee"
+      },
+      {
+        "bytes": 572,
+        "path": "go-agent-loop/pkg/probe/testdata/scenarios/s2s_v1_text_in_audio_out_empty_response.scenario.json",
+        "sha256": "cac5b961e126dc606981298c682e97578b159bc53489c931b4d94ee88dae5248"
+      },
+      {
+        "bytes": 2859,
+        "path": "go-agent-loop/pkg/transcript/testdata/frame.jsonl",
+        "sha256": "71cf1ecfdd517ffd134e58b9eb201906add8057c14ef39c10a3444089f077e12"
+      },
+      {
+        "bytes": 384,
+        "path": "go-agent-loop/pkg/transcript/testdata/fuzz-seeds.json",
+        "sha256": "f4702c74379ad6f17a544baaceca19a8d11c24b4fa6454eb8cf1eb7a5e167571"
+      },
+      {
+        "bytes": 1139,
+        "path": "go-agent-loop/pkg/transcript/testdata/recording-manifest-v1.golden.json",
+        "sha256": "fd41f8e1ee4f9466fb6b0d684e26273ec4230043781d80fbf2136edaa008f8b0"
+      },
+      {
+        "bytes": 4292,
+        "path": "go-agent-loop/test/debugging/first.txt",
+        "sha256": "76df4d9bfa45ed22fcfc9686fd89405386040d758fe32c1294136df698786f44"
+      },
+      {
+        "bytes": 7282,
+        "path": "go-agent-loop/test/debugging/second.txt",
+        "sha256": "81688ef58c5510f0c660be24eeb08cc7d45bf2a4dab91b140441615fd8d2725b"
+      },
+      {
+        "bytes": 61,
+        "path": "go-agent-loop/test/functional/functional-quarantine.json",
+        "sha256": "bff3ebcfb646d2cb85606bdc98873292c4ab079bd12bd0fd49ce5e7325762637"
+      },
+      {
+        "bytes": 12302,
+        "path": "go-agent-loop/testdata/audio/manifest.json",
+        "sha256": "a1b86ef5b1c8e6bb65038f571de300f15ffa61876d1be6ff4007a0db64a1ad21"
+      },
+      {
+        "bytes": 939364,
+        "path": "go-agent-loop/testdata/audio/multi_utt_16k.wav",
+        "sha256": "63cd3264ec3151644c5799b73fbac48e27e9ffc52f07e0d5c8f2bd4aeef178f2"
+      },
+      {
+        "bytes": 1409024,
+        "path": "go-agent-loop/testdata/audio/multi_utt_24k.wav",
+        "sha256": "fbe5b39b5c761987ef78d7937ddd42255d03d6fd97c7269588c0740bc2b0abdf"
+      },
+      {
+        "bytes": 32044,
+        "path": "go-agent-loop/testdata/audio/noise_16k.wav",
+        "sha256": "8e100a23c82271b2c00d8064d5e543e0af33612615b9dd04bc8def832ec23fd5"
+      },
+      {
+        "bytes": 48044,
+        "path": "go-agent-loop/testdata/audio/noise_24k.wav",
+        "sha256": "b1a120a722af574c631c4874b3d29f887946208a85099911e773640f169b9b7c"
+      },
+      {
+        "bytes": 678664,
+        "path": "go-agent-loop/testdata/audio/overlap_16k.wav",
+        "sha256": "6023a94c8c441a202fc975a6a59c6bbb9d4dbd9178e705dfec53b437ba5d3e95"
+      },
+      {
+        "bytes": 1017974,
+        "path": "go-agent-loop/testdata/audio/overlap_24k.wav",
+        "sha256": "6e23dca5aa9f69f828952cdf33b9ed72db1ed10b1c328f76f32a8525ea42b8a1"
+      },
+      {
+        "bytes": 32044,
+        "path": "go-agent-loop/testdata/audio/silence_16k.wav",
+        "sha256": "643f8a8dc8bd9c19225afffad2becfec5426180b3749cb208abdf1a6c8354efc"
+      },
+      {
+        "bytes": 48044,
+        "path": "go-agent-loop/testdata/audio/silence_24k.wav",
+        "sha256": "e5ea01a23fcb85fd8e608c5c672ea5c22dfab6b0e581d782242f478e4b1c5900"
+      },
+      {
+        "bytes": 654664,
+        "path": "go-agent-loop/testdata/audio/tool_request_16k.wav",
+        "sha256": "12379788f0587981148830ff10bd6ef0bdb9f34a6b64f50d6f7eaae684c35a19"
+      },
+      {
+        "bytes": 981974,
+        "path": "go-agent-loop/testdata/audio/tool_request_24k.wav",
+        "sha256": "d55b730b822fefdcbb055bf292a73cad362975fe699791c173e84f080a7073c6"
+      },
+      {
+        "bytes": 88044,
+        "path": "go-agent-loop/testdata/audio/truncated_16k.wav",
+        "sha256": "9c29aa97fe06ba6fc6485bee563b2af4127cba953828fb44665ab97d1bf27a3e"
+      },
+      {
+        "bytes": 132044,
+        "path": "go-agent-loop/testdata/audio/truncated_24k.wav",
+        "sha256": "7de19d7a953476e856d30bbdadee49265d33a4a71ce7ec34c2c8044a8af23762"
+      },
+      {
+        "bytes": 457544,
+        "path": "go-agent-loop/testdata/audio/utt_long_16k.wav",
+        "sha256": "5dc2b6af890319e21d4eb35946f5650486fd8eda3ba8951eac7b8bc5a76dd562"
+      },
+      {
+        "bytes": 686294,
+        "path": "go-agent-loop/testdata/audio/utt_long_24k.wav",
+        "sha256": "2b8d07b055c4efe004108d7c8ba26ed798b51744d689b2dda1b31cae621c7f0b"
+      },
+      {
+        "bytes": 265544,
+        "path": "go-agent-loop/testdata/audio/utt_short_16k.wav",
+        "sha256": "3ebc3c7466dc8a706d2237818815629ed53eac2cd1913a115462e3af1c603aae"
+      },
+      {
+        "bytes": 398294,
+        "path": "go-agent-loop/testdata/audio/utt_short_24k.wav",
+        "sha256": "a0c3ed5e38a04c3dfa1731d415ca1a272e1d3ca6536294bdd6fc03a70000f925"
+      },
+      {
+        "bytes": 5112,
+        "path": "go-agent-runtime/README.md",
+        "sha256": "71cc8c99bba59b777743481897f981d533f48a1f346e9c5bb69c37a6cc36b04a"
+      },
+      {
+        "bytes": 21876,
+        "path": "go-agent-runtime/services/providers/internal/service/testdata/streaming_2_2.json",
+        "sha256": "dcee6c63cd6945b371eb2a513028c314f3494d5f1812cc26e89bbd51cb3a16f8"
+      },
+      {
+        "bytes": 1904,
+        "path": "go-audio/README.md",
+        "sha256": "15c3730dfc63fb8890d5eae8f3b6309aa6f54b03ffdd83e810f1a83e591a3e9d"
+      },
+      {
+        "bytes": 58,
+        "path": "go-audio/pkg/wavio/testdata/pcm16-mono-16000.wav",
+        "sha256": "ecbe3570e421b648b4ede9094d9b4566204ef63de440c24507343f361ca0fd69"
+      },
+      {
+        "bytes": 54,
+        "path": "go-audio/pkg/wavio/testdata/pcm16-mono-24000.wav",
+        "sha256": "4342c53004df27f1eee41d5a91b7c8182347f580164ff7cf9645dd30986dd331"
+      },
+      {
+        "bytes": 1851,
+        "path": "go-device-gateway/README.md",
+        "sha256": "705b9dbdcb314ea1c6ccf62167979a30a0accf8f996f7ed74eaee73cea4e7584"
+      },
+      {
+        "bytes": 239286,
+        "path": "go-device-gateway/pkg/runtime/testdata/rtc-device-crackle-first-turn.pcm.gz.b64",
+        "sha256": "cb85ec8e17d62a618558a997c3567ea39759588365a53aaca5a15737d27ce223"
+      },
+      {
+        "bytes": 252,
+        "path": "go-llm-gateway/Makefile",
+        "sha256": "22f3534b0406addcad40640420e552f36668d221d8379a1957b0141e0269b322"
+      },
+      {
+        "bytes": 30884,
+        "path": "go-llm-gateway/README.md",
+        "sha256": "c7bf8cb6ced91245055a67cc24b440ce1484cbdf6b69cbbc28ae2b78bf782ac8"
+      },
+      {
+        "bytes": 8216,
+        "path": "go-llm-gateway/docs/development.md",
+        "sha256": "66ea41b2d209717423f0f0e53f03b8905baf503c96dd2c7f7a7cc3f9be071bdd"
+      },
+      {
+        "bytes": 3853,
+        "path": "go-llm-gateway/internal/sessionfixturevalidator/testdata/committed-fixtures.manifest.json",
+        "sha256": "d8a8f89aadbae63f9f7596d55eed8b6c79cbfc5f6b30958db0e4fe39e14e6420"
+      },
+      {
+        "bytes": 643,
+        "path": "go-llm-gateway/internal/sessionfixturevalidator/testdata/golden/multi-violation.stderr",
+        "sha256": "b1d7214c043a1477ff804aa235f2b39e316cabb295ccd8ceb7c98f213dd9a9d0"
+      },
+      {
+        "bytes": 742,
+        "path": "go-llm-gateway/internal/sessionfixturevalidator/testdata/invalid-session-fixtures/missing-provenance.session.json",
+        "sha256": "62b34e9faf331217fdfde25d8d620f6ae5030c20a139330940769ca9b9564194"
+      },
+      {
+        "bytes": 742,
+        "path": "go-llm-gateway/internal/sessionfixturevalidator/testdata/invalid-session-fixtures/provider-wire-misuse.session.json",
+        "sha256": "661a1d1a97523983e5c1cb7e04b227b03683e48383125c47faa9d51ed955459f"
+      },
+      {
+        "bytes": 841,
+        "path": "go-llm-gateway/internal/sessionfixturevalidator/testdata/invalid-session-fixtures/unsafe-synthetic.session.json",
+        "sha256": "b97f219eaa6d2a30b87eb0871f49c5b1f901f1a5a1a01dc6797684484a178ca7"
+      },
+      {
+        "bytes": 2531,
+        "path": "go-llm-gateway/pkg/models/testdata/session_models.golden",
+        "sha256": "1a5d775db258d46ecfb1aa3c24cd0507655c5ac91ff1e432135447f3b76bf4a3"
+      },
+      {
+        "bytes": 162,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/error_400.json",
+        "sha256": "b12298fea2aef5f7753369b476f8b38e335f976d02e0a86f8552359f7d8fed3b"
+      },
+      {
+        "bytes": 160,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/error_401.json",
+        "sha256": "2875fed933993c0253f2a42500bdf02f850062a84cb54071a9b8ca9cca626c8a"
+      },
+      {
+        "bytes": 153,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/error_429.json",
+        "sha256": "12d2fd6bdf03211718268b995cebe3e2f94395d4151a5de12857b83febfcd442"
+      },
+      {
+        "bytes": 141,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/error_500.json",
+        "sha256": "0d5648a536d95073520cb446e7d341e7acbcbca5325e12556a0af19b5c99f3ea"
+      },
+      {
+        "bytes": 1819,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/large_response.json",
+        "sha256": "453fdd23e64ef9ac1ed74cc534dd4a99828ce55fd0cc16d4177b9c10c3b5cf9b"
+      },
+      {
+        "bytes": 353,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/multi_turn.json",
+        "sha256": "de52226bea42b9fc19a66b6e46e98cdb5d98706923775641cbff4df8c763f53d"
+      },
+      {
+        "bytes": 379,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/simple_text.json",
+        "sha256": "38977f2c9e2432badb4774f3b51edb7971b24ce96078c534ab9274deeedc28a6"
+      },
+      {
+        "bytes": 919,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/stream_text.txt",
+        "sha256": "33387ab4f3e0538835ee1690e917b21b7e4c16c6971e85d0a02bf145dbdab3fc"
+      },
+      {
+        "bytes": 1193,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/stream_thinking.txt",
+        "sha256": "77f3a9750ca44900b88da0b33cd99af74a2ef030149b2c3697b4c51b31bd4d58"
+      },
+      {
+        "bytes": 1310,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/stream_tool_calls.txt",
+        "sha256": "59363b30a8f6d0c9b833101540a631714ac82f5fc30d4db87c6ee6895885377e"
+      },
+      {
+        "bytes": 353,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/tool_call.json",
+        "sha256": "a1fe2e710e135b60ad9e1e0f1be1c507b4a3c63c6eeab7a5a5e901e89769d62a"
+      },
+      {
+        "bytes": 378,
+        "path": "go-llm-gateway/pkg/providers/anthropic/testdata/tool_result.json",
+        "sha256": "173fdf6716de356aad5a5acc7bbd25856a4d3bf0c83af738b781f7192d8d5e12"
+      },
+      {
+        "bytes": 127,
+        "path": "go-llm-gateway/pkg/providers/gemini/testdata/error_400.json",
+        "sha256": "b01105ed229707571186fdc753a734401dcd3dca044538c55285824604725bd3"
+      },
+      {
+        "bytes": 222,
+        "path": "go-llm-gateway/pkg/providers/gemini/testdata/error_401.json",
+        "sha256": "9d6bcbb8b12cb357225d0a0aabc49aed80e7af399bd5c82aaa1f6fcf02cdedaf"
+      },
+      {
+        "bytes": 139,
+        "path": "go-llm-gateway/pkg/providers/gemini/testdata/error_429.json",
+        "sha256": "73cfb6949dc395773288a9a10695a70a6b45901d933cc7ed532bb95845406453"
+      },
+      {
+        "bytes": 200,
+        "path": "go-llm-gateway/pkg/providers/gemini/testdata/error_500.json",
+        "sha256": "63f3b03fa87cb78d7154622a92de96e00a55d989dc5b61bf8d35d21fba865c2e"
+      },
+      {
+        "bytes": 423,
+        "path": "go-llm-gateway/pkg/providers/gemini/testdata/multi_turn.json",
+        "sha256": "ca9b332a6031c9d55b96bd380743d157b64873eb657491c3c29a51c0c3e0eccf"
+      },
+      {
+        "bytes": 403,
+        "path": "go-llm-gateway/pkg/providers/gemini/testdata/simple_text.json",
+        "sha256": "b9a48c97b8e7d7c383fd8ce17f0e4672fe9a6cfedac4991f450bd1f52147871e"
+      },
+      {
+        "bytes": 355,
+        "path": "go-llm-gateway/pkg/providers/gemini/testdata/stream_text.txt",
+        "sha256": "c075c662b60d464a41fe6ddac7809133da511c95b0a498c8f72188fb0e3c1041"
+      },
+      {
+        "bytes": 467,
+        "path": "go-llm-gateway/pkg/providers/gemini/testdata/stream_tool_calls.txt",
+        "sha256": "cd91225ca7abe4d4bb2e92af2da4f8d5fcd108cdb19223175d93b4e7e40dc7d0"
+      },
+      {
+        "bytes": 443,
+        "path": "go-llm-gateway/pkg/providers/gemini/testdata/system_instruction.json",
+        "sha256": "3f273bc51616ed4ce352bbbdc693b7eacd315d5dd8f48a67a03417638abb63b9"
+      },
+      {
+        "bytes": 488,
+        "path": "go-llm-gateway/pkg/providers/gemini/testdata/tool_call.json",
+        "sha256": "e5aadbf02bc66eb3f6a5c85c15ecce192692d06da5c289280464eb24553b4466"
+      },
+      {
+        "bytes": 410,
+        "path": "go-llm-gateway/pkg/providers/gemini/testdata/tool_result.json",
+        "sha256": "7707a39c4e0629fd5cb791d5a14378a7103f5cac583492c82e497e49564814a2"
+      },
+      {
+        "bytes": 573,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/audio_output.json",
+        "sha256": "737bb2b267084312f131d16fee6bbf78f06a4fe3b5b9b20ed3fac3f101a7d544"
+      },
+      {
+        "bytes": 156,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/error_400.json",
+        "sha256": "a87b573474a9ef5f0bd1d446cdcbde6f82d2605d2e20615ccecb5931f06c45aa"
+      },
+      {
+        "bytes": 235,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/error_401.json",
+        "sha256": "d4bc6e281b9735dfd0ff047b53b55c23505565db09af23c2d2f6d63d53cb3a87"
+      },
+      {
+        "bytes": 234,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/error_429.json",
+        "sha256": "ef81fe1ed733251efd8546de938945d1b2b4ad6d521d32eacc497b50585a1790"
+      },
+      {
+        "bytes": 176,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/error_500.json",
+        "sha256": "ba2eff341cbe31f5d7764336729e4dc506b54421ad30e898ebc32fcc1755f5f3"
+      },
+      {
+        "bytes": 441,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/image_input.json",
+        "sha256": "a8adae2208001be3dfc0a58b808ae5b9be398b4379ff6b8a73b94faf8c8b640c"
+      },
+      {
+        "bytes": 406,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/multi_turn.json",
+        "sha256": "b5198bbadf7f0c1b9c2ec4987130a13cbe644acdadb9e3180d137716ea6f2115"
+      },
+      {
+        "bytes": 2860,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/realtime_text.session.json",
+        "sha256": "caa3ec044c3d6456671b82b551c8d3dc6c8466e336a18b748ccbdaa2932c6dec"
+      },
+      {
+        "bytes": 425,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/simple_text.json",
+        "sha256": "f0281c2e9353ed9aa8d7b9894af5827c717cb0aa586280d63de84ad12a4d63b6"
+      },
+      {
+        "bytes": 811,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/stream_audio.txt",
+        "sha256": "488b722389a7b87f4e3e1f7d2bdd07e326eb60bd227e50c468bb725cdea9a234"
+      },
+      {
+        "bytes": 677,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/stream_reasoning.txt",
+        "sha256": "a15167b19cd0456611ea662f4611cc2016e02e0314232d868bfc58adde031121"
+      },
+      {
+        "bytes": 763,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/stream_text.txt",
+        "sha256": "7ef4b00b3d0e9e21a342c04fda85666fc0b5054f6c8aa0996b4090131b3e1e61"
+      },
+      {
+        "bytes": 1137,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/stream_tool_calls.txt",
+        "sha256": "d7c616db4f49a6fbbdbacbe98ff981e0873ca748bb84b6a521e5cd8ae4d90e93"
+      },
+      {
+        "bytes": 621,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/tool_call.json",
+        "sha256": "6f26451889409c8f3300d6e90f62a075558928cdc1e3d414c62e8fe96e890216"
+      },
+      {
+        "bytes": 420,
+        "path": "go-llm-gateway/pkg/providers/openai/testdata/tool_result.json",
+        "sha256": "9b69911d3faa9905ee1ddd2aac7f5a29364cc1db0af92b319fa393480d0fec1a"
+      },
+      {
+        "bytes": 10235,
+        "path": "go-llm-gateway/pkg/testing/README.md",
+        "sha256": "bdee1360b94d74d04591d5186ec259a880e1123aac51c9b7be6a8444a8832e7f"
+      },
+      {
+        "bytes": 1674,
+        "path": "go-llm-gateway/pkg/testing/localai/README.md",
+        "sha256": "8c84aac0a9af82274572b7ff6739782f7989d6e3b3a21f70960c43eb2c0b1fac"
+      },
+      {
+        "bytes": 26099,
+        "path": "go-llm-gateway/pkg/testing/localai/testdata/utterance.pcm.b64",
+        "sha256": "67215b76d82ba69c87ec1d51714d62cf12fab43bbcce9cddbbef0abd839a72d3"
+      },
+      {
+        "bytes": 8000,
+        "path": "go-llm-gateway/pkg/testing/session-fixture-authoring.md",
+        "sha256": "5dd2a7735ed39f1c53cc85b2eb7a4d6480a482f13a146ef5c9280eb705cb786d"
+      },
+      {
+        "bytes": 1911,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6a-error-auth-healthy-control.session.json",
+        "sha256": "ad635bdf5a740b5f8612b9daae0ad5c81fd6ea3f29d1d58a48f098188b3e20af"
+      },
+      {
+        "bytes": 1188,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6a-error-auth-invalid-credentials.session.json",
+        "sha256": "5c0639fd0d97a0822595b22fefb885ab8b836803e6d6c40413ab3be449b39c7f"
+      },
+      {
+        "bytes": 2400,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6b-error-disconnect-healthy-control.session.json",
+        "sha256": "afc0f0fbcacb99604d554e7e52890c057f566ccc169eeefc9cb0eccea1dae131"
+      },
+      {
+        "bytes": 2242,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6b-error-disconnect-mid-session.session.json",
+        "sha256": "e9c4f23ff3e53b9a482437d968c222102a745910c050fe66341fdc6eac7fa706"
+      },
+      {
+        "bytes": 1222,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6c-error-rate-limit-negative-auth.session.json",
+        "sha256": "6fb90ad165a7ba495507a0049128bc9b84dc92882dee3ed23a47fc5c2f0bb1f0"
+      },
+      {
+        "bytes": 1279,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6c-error-rate-limit-negative-invalid-request.session.json",
+        "sha256": "5df8e04f8baa022c106899b4e20105e7b5364f5c3e2f0581522c1123d105b55b"
+      },
+      {
+        "bytes": 1282,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6c-error-rate-limit-throttled.session.json",
+        "sha256": "e978c0f2d5278f607587d230acb125b663dc9cc48682fb174b6c7f7526693529"
+      },
+      {
+        "bytes": 1917,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6d-error-malformed-response-healthy-control.session.json",
+        "sha256": "8e198e3a2e99957a5ce0dbc3225e842b4908e90cb602a75776fa65555ee6a409"
+      },
+      {
+        "bytes": 1852,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v6d-error-malformed-response-malformed.session.json",
+        "sha256": "698a7b044b763bad7d2e2b7b30d04307c7923493f8c19396c8fffd97d7df8abf"
+      },
+      {
+        "bytes": 4041,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
+        "sha256": "47408c56145586dc3b1cbf1e1b9e7415c590b8cd33c6f04e11c6b2ea95d7a7ca"
+      },
+      {
+        "bytes": 3147,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s_v1_text_in_audio_out.session.json",
+        "sha256": "c70861e9b756165e5be32c800131066e4bf863e44ab3374cdf24f94830dbb6c2"
+      },
+      {
+        "bytes": 1851,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s_v1_text_in_audio_out_empty_response.session.json",
+        "sha256": "eded8643f8cf4957aa5895a9c5ea0dff260ebe8fb121558cbf54bcc6b70b6ee5"
+      },
+      {
+        "bytes": 1138,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_dead_zeroturn.session.json",
+        "sha256": "c1aca9bc04912a1e45024577933857777159c291bae05e42b46ad297ec887ef0"
+      },
+      {
+        "bytes": 1182,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_failure_auth.session.json",
+        "sha256": "1ae17d868b52b3eea6e33f9118d6fde51af9bd870012e2eacc2856169386022e"
+      },
+      {
+        "bytes": 1935,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_failure_disconnect.session.json",
+        "sha256": "778aefad2e25fc9737119cf0fb34579060033e40977341fc9b5a17de49f00810"
+      },
+      {
+        "bytes": 2041,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_failure_malformed_frame.session.json",
+        "sha256": "46a9ace2adcab9cb4487150114b71717eb78f103a999823af58f705357b12a8f"
+      },
+      {
+        "bytes": 1799,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_failure_tool_call.session.json",
+        "sha256": "dadaaa385c1081ebcb92f7e921b0840cd266b2ad330db1fe94174a1af472e3fc"
+      },
+      {
+        "bytes": 3433,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
+        "sha256": "55ba85c408ed1b907a7cea68a0b44908ff33378e9c98344dd1dcdc7cfa2f6890"
+      },
+      {
+        "bytes": 1556,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_inbound_then_outbound.session.json",
+        "sha256": "3b5c424ee3f01d91b7ec800664f911af6fac6db3be16fcce79df781b1b029677"
+      },
+      {
+        "bytes": 1163,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_outbound_then_inbound.session.json",
+        "sha256": "8497adf2d941a4118d46680a1796459aea0c3091d22459e0468e39022e0b7556"
+      },
+      {
+        "bytes": 3367,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_text_reply.session.json",
+        "sha256": "70b2c9aa130bda20a06fc82cac2297c38f961ba5fabfa77ce5f51675ab41fd99"
+      },
+      {
+        "bytes": 781,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/synthetic-text.session.json",
+        "sha256": "8756975d4ec61b3d1f16c6501ece61dd694d4ca182acdb6f3c7beb8e29ff6fd6"
+      }
+    ],
     "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/evidence/shipped-build.json",
-    "sha256": "880abad60785f43d24a7bff558d11789d3f655f5ca230519753ac95d93ced9aa"
+    "replayFixtures": [
+      {
+        "bytes": 3433,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
+        "sha256": "55ba85c408ed1b907a7cea68a0b44908ff33378e9c98344dd1dcdc7cfa2f6890"
+      },
+      {
+        "bytes": 4041,
+        "path": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
+        "sha256": "47408c56145586dc3b1cbf1e1b9e7415c590b8cd33c6f04e11c6b2ea95d7a7ca"
+      }
+    ],
+    "sha256": "f92ea7e0a426365d3fb86f15813f1a7ef4c45d0835bab361945153351a6b2ddb",
+    "sourceRevision": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
+    "testedRevision": "bd8cabcd6fdc8a6b6aba760ff065bb93aabe986e",
+    "toolchain": {
+      "env": {
+        "GOARCH": "arm64",
+        "GOOS": "darwin",
+        "GOTOOLCHAIN": "go1.26.7",
+        "GOVERSION": "go1.26.7"
+      },
+      "environment": {
+        "GOWORK": "off"
+      },
+      "version": "go version go1.26.7 darwin/arm64"
+    }
   },
-  "candidateHeadAtVerification": "7afa3816b68199db8f9ba50c29b90ccfe2828c8d",
+  "candidateHeadAtVerification": "1551ebdc56311d9654b853b77f1f80c742013f99",
   "classification": "SOFTWARE_REPLAY_PROCESS_ONLY",
   "executableInputEquivalence": {
-    "basis": "build-input manifest compared every tracked Go/module input at the tested revision and candidate head; only owned evidence descendants differ",
-    "candidateRevision": "7afa3816b68199db8f9ba50c29b90ccfe2828c8d",
+    "basis": "build-input manifest compared every tracked file under the local yui workspace roots, including Go, module, embedded JSON and local JS inputs; only owned evidence descendants differ",
+    "candidateRevision": "1551ebdc56311d9654b853b77f1f80c742013f99",
     "identical": true,
-    "inputTreeSha256": "c27dcf19b55d423fddfddeec35a5af99b5381491604dcdc82711f93892790007",
-    "testedRevision": "dab4d74d8e677fd1eefd78b56355f680189ec8d3"
+    "inputTreeSha256": "28c856003c288fe2db83bed651d3b4084bf1658ffe9d0ffc3f03f382e6ad3ad9",
+    "testedRevision": "bd8cabcd6fdc8a6b6aba760ff065bb93aabe986e"
   },
   "healthyReplay": {
     "expectedWav": {
@@ -36,21 +1726,23 @@
     ],
     "result": {
       "argv": [
-        "/private/tmp/audio-runtime-c51-yui-6ef0972",
+        "/private/tmp/audio-runtime-c51-yui-bd8cabc",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-adyc8se7/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-t42izdat/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
         "--audio-out",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-adyc8se7/healthy.wav"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-t42izdat/healthy.wav"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
       "diskBytesAfter": 2385,
       "diskBytesBefore": 0,
       "diskBytesDelta": 2385,
       "diskLimitBytes": 33554432,
-      "durationSeconds": 0.593759,
+      "diskLimitExceeded": false,
+      "durationSeconds": 0.571684,
+      "fileLimitBytes": 8388608,
       "processGroupAlive": false,
       "returnCode": 0,
       "stderr": "",
@@ -78,38 +1770,46 @@
     "ownedTemporaryGrowthBytes": 33554432,
     "wavBytes": 8388608
   },
-  "sourceRevision": "bb29005d0bb545db5e08ffda0205929b021d4fc1",
+  "provenance": {
+    "cleanCandidateSHA": "2d588b5fc7521f5f72c5fa7b0aa5c32af80ff3b1",
+    "fetchedMainRevision": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/provenance.json",
+    "sha256": "fb9673f8a368242f5f5abdbc8c24dd0b2f3b1e206c626b0d5bd6908eef5f19e6"
+  },
+  "sourceRevision": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
   "status": "verified",
   "temporaryOutput": {
     "bytesAfter": 4766,
     "bytesBefore": 0,
     "bytesDelta": 4766
   },
-  "testedSourceRevision": "dab4d74d8e677fd1eefd78b56355f680189ec8d3",
+  "testedSourceRevision": "bd8cabcd6fdc8a6b6aba760ff065bb93aabe986e",
   "toolLifecycleNegativeControl": {
     "audioOutputWritten": true,
     "expectedMarker": "tool results were not delivered for 1 unresolved call(s): call_weather_001",
     "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
     "result": {
       "argv": [
-        "/private/tmp/audio-runtime-c51-yui-6ef0972",
+        "/private/tmp/audio-runtime-c51-yui-bd8cabc",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-adyc8se7/tool-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-t42izdat/tool-config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
         "--audio-out",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-adyc8se7/tool.wav"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-t42izdat/tool.wav"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
       "diskBytesAfter": 4766,
       "diskBytesBefore": 2385,
       "diskBytesDelta": 2381,
       "diskLimitBytes": 33554432,
-      "durationSeconds": 0.046033,
+      "diskLimitExceeded": false,
+      "durationSeconds": 0.031651,
+      "fileLimitBytes": 8388608,
       "processGroupAlive": false,
       "returnCode": 1,
-      "stderr": "Error: tool results were not delivered for 1 unresolved call(s): call_weather_001\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-adyc8se7/tool.wav\" (wav): empty WAV samples\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-adyc8se7/tool.wav\" (wav): empty WAV samples\ntool results were not delivered for 1 unresolved call(s): call_weather_001\n",
+      "stderr": "Error: tool results were not delivered for 1 unresolved call(s): call_weather_001\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-t42izdat/tool.wav\" (wav): empty WAV samples\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-t42izdat/tool.wav\" (wav): empty WAV samples\ntool results were not delivered for 1 unresolved call(s): call_weather_001\n",
       "stderrTruncated": false,
       "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: It is sunny in Paris.\n\n[session closed: fixture_complete]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\nlive session terminated: tool results were not delivered for 1 unresolved call(s): call_weather_001\n",
       "stdoutTruncated": false,
