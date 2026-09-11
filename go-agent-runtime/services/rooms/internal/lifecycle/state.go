@@ -299,9 +299,8 @@ func waitParticipant(ctx context.Context, value *activeParticipant) error {
 	mediaErr := value.closeMedia()
 	var eventErr error
 	if value.events != nil {
-		// Close joins the provider and closes its event stream. Let the drain
-		// consume that stream before waiting; stopping here can win a race with
-		// a critical liveness event already published by the provider.
+		// Close joins the provider and closes its stream; drain it before waiting
+		// to preserve critical liveness events.
 		eventErr = value.events.Wait()
 	}
 	return errors.Join(err, closeErr, mediaErr, eventErr)
