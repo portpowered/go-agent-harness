@@ -129,3 +129,17 @@ C48 architecture-budget repair checkpoint — 2026-09-11
   and race modes. The next action is to checkpoint this budget repair, rerun
   the bounded driver on the final clean revision, then rerun C21 and the
   architecture/wire gates before pushing the same PR.
+
+C48 final package-budget checkpoint — 2026-09-11
+
+- The maintained-file limit disallowed the temporary split (17 files versus a
+  15-file package budget), so the lifecycle method and regression were folded
+  back into existing admitted files. The final package remains at 15 files;
+  `observation.go`, `replay_readiness_test.go`, and `service_test.go` are at
+  400, 600, and 600 lines respectively.
+- On this final layout, normal and race live/subsystem packages pass, and the
+  rejected `TestSessionCommand_OverlappingToolResultsWaitIndependently` passes
+  in normal and race modes. `make architecture-size-check wire-check` passes
+  with 184 packages, 1888 files, and 27814 functions. The next action is to
+  checkpoint this layout, bind the public driver to that clean revision, rerun
+  C21, then push and update PR #440.

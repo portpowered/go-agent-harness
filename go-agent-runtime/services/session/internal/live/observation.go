@@ -29,7 +29,6 @@ func (i *liveInvocation) bindPlaybackController() {
 		controlled.SetPlaybackController(controller)
 	}
 }
-
 func (h *handle) consumeDeltas(ctx context.Context, loop *agentloop.AgentLoop) {
 	defer h.runWG.Done()
 	for {
@@ -163,9 +162,7 @@ func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLo
 		h.markCaptureComplete()
 	}
 }
-
 const deferredImageOpeningPrompt = "Use the attached image to answer the user's next spoken question."
-
 func (h *handle) claimOpeningMessage() (string, []messages.ContentPart, session.LiveOpeningMessageResponse, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -362,6 +359,25 @@ func (h *handle) observeFiniteResponseEnd(msg messages.StreamMessage) {
 		return
 	}
 	h.replayResponses++
+}
+func (h *handle) observeResponseStartLocked(responseID string) bool {
+	responseID = strings.TrimSpace(responseID)
+	if responseID == "" {
+		if h.anonymousResponses > 0 { // Anonymous starts share one lifecycle owner.
+			return false
+		}
+		h.anonymousResponses++
+	} else {
+		if h.activeResponseIDs == nil {
+			h.activeResponseIDs = make(map[string]struct{})
+		}
+		if _, exists := h.activeResponseIDs[responseID]; exists {
+			return false
+		}
+		h.activeResponseIDs[responseID] = struct{}{}
+	}
+	h.responsePending, h.responseActive = false, true
+	return true
 }
 func (h *handle) retireResponseLocked(responseID string) bool {
 	responseID = strings.TrimSpace(responseID)
