@@ -86,7 +86,7 @@
   "scripts": [
     {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/verify.py",
-      "sha256": "c33d337ec92903007467638413f1cdca20ffa38a0eade77a61855bebea92d217"
+      "sha256": "4537f5e0d788b388ce1a234bed45236edac80f6ef034f40e59a686940ae21594"
     }
   ],
   "shippedBuildManifest": {
@@ -103,19 +103,19 @@
     "branch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
     "candidateStatusAtCapture": "",
     "candidateWasCleanAtCapture": true,
-    "cleanCandidateSHA": "2d588b5fc7521f5f72c5fa7b0aa5c32af80ff3b1",
-    "currentMainRevision": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
+    "cleanCandidateSHA": "d341d06a808c673b009622b31aae0707cac179a3",
+    "currentMainRevision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
     "expectedBranch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
     "fetchedMain": {
       "identityVerified": true,
       "ref": "origin/main",
-      "revision": "cdf416a8060251a6b4bbf3680241f1ee79953cff"
+      "revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3"
     },
     "planningMainRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
     "requiredAncestry": {
       "fetchedMain": {
-        "isAncestor": true,
-        "revision": "cdf416a8060251a6b4bbf3680241f1ee79953cff"
+        "isAncestor": false,
+        "revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3"
       },
       "planningMain": {
         "isAncestor": true,
@@ -136,7 +136,7 @@
     "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
   },
   "storage": {
-    "freeBytesAtGeneration": 132520067072,
+    "freeBytesAtGeneration": 130378010624,
     "requiredCompileReserveBytes": 2147483648
   },
   "task": "audio-runtime-c51-audio-device-boundary-characterization",
