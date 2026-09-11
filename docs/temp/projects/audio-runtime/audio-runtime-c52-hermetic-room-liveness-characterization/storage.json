@@ -20,7 +20,7 @@
     }
   },
   "binary_output_bytes": 0,
-  "cache_bytes_before_cleanup": 653135817,
+  "cache_bytes_before_cleanup": 653132489,
   "cleanup": {
     "current_run": {
       "cache_present_after_cleanup": false,
@@ -38,13 +38,13 @@
       "CI log/metadata"
     ]
   },
-  "current_run_fixture_report_bytes": 8879095,
-  "fixture_report_bytes": 26248537,
-  "free_space_after_cleanup_bytes": 99171061760,
-  "free_space_before_cleanup_bytes": 98149814272,
-  "free_space_before_run_bytes": 99191791616,
+  "current_run_fixture_report_bytes": 8788156,
+  "fixture_report_bytes": 26157599,
+  "free_space_after_cleanup_bytes": 74844053504,
+  "free_space_before_cleanup_bytes": 73822879744,
+  "free_space_before_run_bytes": 74753818624,
   "free_space_limitation": "free space was measured immediately before and after cleanup; background filesystem activity is not controlled",
-  "observed_at": "2026-09-11T18:39:38.712589+00:00",
+  "observed_at": "2026-09-11T21:30:22.326818+00:00",
   "reproducible_scratch_bytes_before_cleanup": 266984251,
   "reproducible_scratch_bytes_retained_after_cleanup": 0,
   "reuse_identity": {
@@ -127,10 +127,10 @@
       },
       "cache_present": false,
       "cleanup_verified": true,
-      "free_space_after_cleanup_bytes": 99171061760,
-      "free_space_before_cleanup_bytes": 98149814272,
-      "retained_bytes": 9176163,
-      "run_id": "c60-final-20260911T145200Z",
+      "free_space_after_cleanup_bytes": 74844053504,
+      "free_space_before_cleanup_bytes": 73822879744,
+      "retained_bytes": 9085225,
+      "run_id": "c60-final-20260911T212525Z",
       "scratch_content_present": false,
       "storage": {
         "archive_reuse": {
@@ -154,16 +154,16 @@
           }
         },
         "binary_output_bytes": 0,
-        "cache_bytes_before_cleanup": 653135817,
+        "cache_bytes_before_cleanup": 653132489,
         "cleanup": {
           "cache_present_after_cleanup": false,
           "known_generated_cache_and_scratch_removed": true,
           "scratch_present_after_cleanup": false
         },
-        "fixture_report_bytes": 8879095,
-        "free_space_after_cleanup_bytes": 99171061760,
-        "free_space_before_cleanup_bytes": 98149814272,
-        "free_space_before_run_bytes": 99191791616,
+        "fixture_report_bytes": 8788156,
+        "free_space_after_cleanup_bytes": 74844053504,
+        "free_space_before_cleanup_bytes": 73822879744,
+        "free_space_before_run_bytes": 74753818624,
         "reproducible_scratch_bytes_before_cleanup": 266984251,
         "reproducible_scratch_bytes_retained_after_cleanup": 0,
         "source_staging_bytes": 103053735

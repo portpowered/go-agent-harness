@@ -11,8 +11,8 @@
     "cell_count": 22,
     "matrix_results_path": "matrix-results.json",
     "negative_controls_rejected": true,
-    "run_id": "c60-final-20260911T145200Z",
-    "run_path": "runs/c60-final-20260911T145200Z/run.json"
+    "run_id": "c60-final-20260911T212525Z",
+    "run_path": "runs/c60-final-20260911T212525Z/run.json"
   },
   "indexed_files": [
     {
@@ -21,14 +21,14 @@
       "sha256": "6b6d24ca635104d471b93a8849af2159e164043b436bac91587e4e396fabd497"
     },
     {
-      "bytes": 51569,
+      "bytes": 51002,
       "path": "provenance.json",
-      "sha256": "2ff34a27138ffa65c96a9062ec30d36d368445c331e4b07009cfba865a7de3b9"
+      "sha256": "846c044c8e39c5e45f68645a4c8de0d10846183dbd5f8182a0faa6d3af4d0f59"
     },
     {
       "bytes": 9157,
       "path": "storage.json",
-      "sha256": "702a2ba92e93cea49cb5d9d320f27d3ddf46a98a70a084c37a7bcfae850f5f82"
+      "sha256": "092fdf3ff00daa8c65edeee69896b614d567733e0483fa1e23ff13d3f86ea62d"
     },
     {
       "bytes": 3933,
@@ -36,9 +36,9 @@
       "sha256": "16003084e9c6415dcbdb9cd90bfcc5d255c55b3d38824776a803533041bdc45c"
     },
     {
-      "bytes": 297068,
+      "bytes": 297069,
       "path": "matrix-results.json",
-      "sha256": "66b4ab0e866fbf40382cf248479a3a1012357003494718a030184a716ccbc3fe"
+      "sha256": "f16012980a277c462304baf2b5840615a610b03dce8b1028bdf5901b3d9c36e8"
     },
     {
       "bytes": 1257,
@@ -73,17 +73,17 @@
     {
       "bytes": 4045,
       "path": "regressions/summary.json",
-      "sha256": "c0663e9d06ba0fbbaa2c1ca6db06358c46a89739bec9d0a5f3f41ca69b2bc00c"
+      "sha256": "b5d2c0759980997f8ea352571f00a87d3fab10d4d4a0bce1eb8e0ec2dba193ec"
     },
     {
       "bytes": 1642,
       "path": "regressions/normal.json",
-      "sha256": "80374f5ae6d5f794fe97d43c169544dd03bc152bdd023260fb760db9d7a251cf"
+      "sha256": "663da4937cb4b53d7392b2efa5a16b9574b4e0cb76ba0dc3cfb7fb029c4212f1"
     },
     {
       "bytes": 1483,
       "path": "regressions/race.json",
-      "sha256": "3787258f32387610b7bfcfde5439307c2c0b17d1d8088d5fcb504b535e106508"
+      "sha256": "b24c755e373e42f926d9f53d5be62018c915d41a78cc3cc02b7d4c7af057cee0"
     },
     {
       "bytes": 33120,
@@ -106,9 +106,9 @@
       "sha256": "deafe6d46dcc854f45a8850a7fdaaa977ab26759eeecea5be87fcc01927fe676"
     },
     {
-      "bytes": 13287,
+      "bytes": 13288,
       "path": "../c60-c52-failed-case-attribution-repair/replay-report.json",
-      "sha256": "987382f2731fb5a147ee30d02eb6a15f74dc10e577422018ef0915872534e4d8"
+      "sha256": "345180dcc9065d640c8ec4ef3ee888a5f0faad42f67409e4f02a4bd1abff912b"
     },
     {
       "bytes": 22588,

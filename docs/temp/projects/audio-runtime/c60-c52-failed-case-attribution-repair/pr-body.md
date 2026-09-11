@@ -18,19 +18,19 @@ cross-run identity, and changed peer boundaries fail closed.
 ## Gate evidence
 
 - Admission: `audio-runtime-c60-c52-failed-case-attribution-repair`, branch `codex/audio-runtime-c60-c52-failed-case-attribution-repair`.
-- Fresh matrix: `c60-final-20260911T145200Z`, 22/22 PASS in 69.298678 seconds, unchanged 900-second runner cap, six negative controls rejected.
-- Accumulated lifecycle normal/race regressions: PASS.
-- Fresh exact-head evidence from the current pushed checkpoint reran the
-  accumulated lifecycle normal/race regressions in 21.78s/10.51s and refreshed
-  owned provenance/storage/index records. `verify.py --mode all` passes with the
-  current exact evidence, and no matrix cell was rerun.
+- Fresh matrix: `c60-final-20260911T212525Z`, 22/22 PASS in 69.671585 seconds
+  under the 900-second runner cap; all six negative controls were rejected.
+- Accumulated lifecycle normal/race regressions: PASS (24.157 seconds total).
+- Final exact-head evidence refreshed the owned matrix, regression,
+  provenance/storage/index records, and replay report. `verify.py --mode all`
+  passes with the current exact evidence.
 - Focused C60 attribution controls: one valid case accepted; ten invalid controls rejected.
 - Classification: `NON_REPRODUCED` within the exact 22-cell matrix; the immutable source report remains FAILED and is not relabelled.
 - Replay: immutable artifact-0/C16 software-file positive parity and real
-  mutated-fixture rejection PASS in fresh run `replay-20260911T180542Z-45592`
-  in 0.229135 seconds; positive exit 0, mutated-fixture exit 1, exact
-  4800-byte PCM and clean process groups; no credentials/live Realtime/native
-  or acoustic claim.
+  mutated-fixture rejection PASS in fresh run `replay-20260911T213009Z-85020`
+  in 0.178985 seconds; positive exit 0, mutated-fixture exit 1, exact
+  4800-byte PCM (`0e769b4a...`) and clean process groups; no credentials/live
+  Realtime/native or acoustic claim.
 
 ## Bounded PR439 occurrence attribution
 
@@ -52,10 +52,10 @@ The final local evidence gate is `verify.py --mode all`. The prior script-CI
 static job `34613973921` tested head `efde4d49` and rejected the C47-owned
 architecture baseline drift (`agent-cli/internal/transport/cli`: baseline 147,
 current 148); all other static steps passed. No C60-owned path overlaps that
-transport baseline. Do not resubmit this same candidate until C47/C55's repair
-lands on accepted main, then resubmit this task to script CI. CI is not claimed
-green and independent review remains separate. The current exact PR head and
-its evidence binding are recorded in `provenance.json`; the script-owned checks
-are not claimed green or polled here. C60 remains blocked only on accepted main
-from the C47/C55 combined integration owner and must not resubmit a competing
-head before that prerequisite lands.
+transport baseline. C47/C55's accepted integration is now present in
+`origin/main` at `d5d6f843` and in this branch's merge checkpoint
+`b53144eb`. This changed head is ready for script CI. CI is not claimed green
+and independent review remains separate. The current exact PR head and its
+evidence binding are recorded in `provenance.json`; the script-owned checks are
+not claimed green or polled here. No review, merge, or live/native probe
+acceptance is claimed.

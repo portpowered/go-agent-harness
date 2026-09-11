@@ -29,7 +29,7 @@
     "cell_count": 22,
     "mode": "matrix",
     "passes": true,
-    "run_id": "c60-final-20260911T145200Z"
+    "run_id": "c60-final-20260911T212525Z"
   },
   "outcomes": [
     {
@@ -47,7 +47,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "bb0d0510de4ee2badef17a5a131ab40dd0ab3e40f1920fc2501266ba6464b882"
+      "trace_sha256": "36d6410cd244e8a9cc4fb7e80bee053d6ebfd057de558c8ba900485ffe523710"
     },
     {
       "behavior_exit_code": 0,
@@ -64,7 +64,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10
       },
-      "trace_sha256": "394b787002c68d2475dee5e74f101089d04bad36941a3fe35f18701a28398e7c"
+      "trace_sha256": "f9381f58e033d9606b08f97995d8177b364a6eab9ee0d3e3d4e1b4f49fc99ba3"
     },
     {
       "behavior_exit_code": 0,
@@ -82,7 +82,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "fc9234f640a0b8db5153a4b40f86931df4671cf28327e2cd509b299810d6076b"
+      "trace_sha256": "e5434b9a7cb0216c7375667e320bd9c1f6370a86546043bad832775a0e7dc3ba"
     },
     {
       "behavior_exit_code": 0,
@@ -100,7 +100,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "ac22857d75a9d338f7ddbf26fc1ee437dd758b253c095ace83d054caf0f3bd9a"
+      "trace_sha256": "9185f3d2d03bc1c420facec75192af2f93e8808dfe10c4b4ba1517ac1ed96b24"
     },
     {
       "behavior_exit_code": 0,
@@ -118,7 +118,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "26662d35b9b3261154deecd7f74aca115742cea5e372a927c2e368e138d7b132"
+      "trace_sha256": "12cb1d8e7e3bd12a4623f6847d2b4498eb5c584ffea31bbb47d70462230a6c94"
     },
     {
       "behavior_exit_code": 0,
@@ -126,7 +126,7 @@
       "cell_id": "shuffle-seed-28",
       "first_assertion": "",
       "first_divergence_signatures": [
-        "reordered:sink_publish_before"
+        "none"
       ],
       "kind": "fixed-shuffle",
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -136,7 +136,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "f105f677aec38fbbaf4ce104b21b9840ebc48452767f2b3db60c63cf5026e292"
+      "trace_sha256": "2704f81b9afa9ee921d7793468481395e725653c350c123a16fe263669f51eb6"
     },
     {
       "behavior_exit_code": 0,
@@ -154,7 +154,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "2d8275b2f33f9f6a245d0958909499a0ea980897eb178393f4b0d54ffd1e09e8"
+      "trace_sha256": "1a6130fce7ad744bd78b093e8f499779e0662c911f9d00f9d152c861b86ed5ea"
     },
     {
       "behavior_exit_code": 0,
@@ -172,7 +172,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "acd248b3299de09f39c2fc4c5365907db8f0f24d726337b4e702e8f5d7ddd95d"
+      "trace_sha256": "d064291fe0e4c4f9b66f1ffe5880ef28f782f22ab6363083161a0bb31877400e"
     },
     {
       "behavior_exit_code": 0,
@@ -190,7 +190,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "119620db40a8bee2f885eb57849e84a6e60ec2b836b4b244e3d6ffbfefd84e42"
+      "trace_sha256": "66dcfa144913ecce0f3b17442387c56c545b77190760d0d4e6ddcc4565167dec"
     },
     {
       "behavior_exit_code": 0,
@@ -208,7 +208,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "a7eb0ce4a51d0ee9858b39e8d1e1460d6fde9f36f7250aec4032de9a988733a0"
+      "trace_sha256": "21bf7c3b53b9ebc85e7bf53f34b3fb396c3713ca4cf4a0e523529c2c71da2373"
     },
     {
       "behavior_exit_code": 0,
@@ -226,7 +226,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 1,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 1
       },
-      "trace_sha256": "7514c32d65ceb7fb1d5e61e770fe78c9ddacbda29cbf7eb4f66ca2f1c2ebfa0c"
+      "trace_sha256": "748352d1374d7ebb75f000c9b7ddc340fc59168ab7aeed7f080b1f81304bdd33"
     },
     {
       "behavior_exit_code": 0,
@@ -243,7 +243,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "bbd3c730961ef259a63eb7ebdfec8c928335cfa6edc59efcdbfd73059cb73bc2"
+      "trace_sha256": "4c40e2b0d833f8290bc0113c21ff2ed4f3633c69d727a4029bd899f9a253a30d"
     },
     {
       "behavior_exit_code": 0,
@@ -260,7 +260,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10
       },
-      "trace_sha256": "af711f897780cf3301adc8928ded53d9aaffff9b258e0201b80f3c326fdd8907"
+      "trace_sha256": "ebff87d548cc8c0b8ad666bff6167a2586ab2bfc31efe83ba850f7483533d149"
     },
     {
       "behavior_exit_code": 0,
@@ -278,7 +278,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "c2907587ffdd38f255284aa6c6933ac84ef149243bd2b29b0e1795bdb9b4f333"
+      "trace_sha256": "166dca7880bf6ad82054a6567a60eaa24ebc363e06c27767f5f1208059d5fa63"
     },
     {
       "behavior_exit_code": 0,
@@ -286,7 +286,7 @@
       "cell_id": "order-empty-first",
       "first_assertion": "",
       "first_divergence_signatures": [
-        "none"
+        "reordered:sink_publish_before"
       ],
       "kind": "explicit-order",
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -296,7 +296,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "bcf449d339eea6a988bd9ecb66820504cfc705e72f750887191cc7957d61b6bb"
+      "trace_sha256": "08e4c039d381c326fd16f66c6f4092ff92d40ba04678b991e7bd0b4260ebec80"
     },
     {
       "behavior_exit_code": 0,
@@ -314,7 +314,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "ff72e57cafd9a70e6dafcdce1e610b006f2d74cb819e31499216293bcd969cf0"
+      "trace_sha256": "d7a34ec62a4ba3d5cdddf7f415d6ce4311d88f23237b8af3c9f50092347b930e"
     },
     {
       "behavior_exit_code": 0,
@@ -322,7 +322,7 @@
       "cell_id": "shuffle-seed-28",
       "first_assertion": "",
       "first_divergence_signatures": [
-        "none"
+        "reordered:sink_publish_before"
       ],
       "kind": "fixed-shuffle",
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -332,7 +332,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "dc1f7006686047d9be1cfc305d247e542427bbee3f6c996a25c3b07be689dedd"
+      "trace_sha256": "4ff8a1c386723968af013f4226808f245cdc1dda572fd039a41999b5444b266e"
     },
     {
       "behavior_exit_code": 0,
@@ -350,7 +350,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "26157d4645f04a7fc21499f06b306bafc4d0354b726b542a81374928b1699267"
+      "trace_sha256": "61aab69db708abf15f40487a5818a1a0ae513326b88c5710ecc6db8abe0e6b99"
     },
     {
       "behavior_exit_code": 0,
@@ -368,7 +368,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "cc9709d2510c5d11d3d0eedd0471caa89dcdc6a3cd6c9c3cfa7a0c437dd956be"
+      "trace_sha256": "a7dd7afdf1967d3ac447f7682021670cf3189f13e611588af4fda53bd1c67f13"
     },
     {
       "behavior_exit_code": 0,
@@ -386,7 +386,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "77045011836ad965e61d05e856d2d7cb7d9356b876f59c304f5e85e429609303"
+      "trace_sha256": "f25f937ffa1666e32c1c6c6e8b2e19f8839c30052a49572fbf658f5e33bc679c"
     },
     {
       "behavior_exit_code": 0,
@@ -404,7 +404,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "8c512afc959c8d3a6d2555a727e53d91752face742e0329382c2c74d074ef3bc"
+      "trace_sha256": "e50bc427aceaca35f6673b7c57b3c33e3d73fbee4d994d0a664777289d2f706a"
     },
     {
       "behavior_exit_code": 0,
@@ -422,7 +422,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 1,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 1
       },
-      "trace_sha256": "78876e49dd10af5386a881b22b8f4d4183fe2486f31f2c1ceb203b7ccfeb95e1"
+      "trace_sha256": "ce723bb85720d5d235bdca67db7d32422ac260412dfad44ae21bf23020fa7183"
     }
   ],
   "passes": true,
