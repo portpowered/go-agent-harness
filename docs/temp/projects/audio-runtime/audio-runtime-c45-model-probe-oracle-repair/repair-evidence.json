@@ -1,0 +1,98 @@
+{
+  "schema": "audio-runtime-c45-runner-repair/v1",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "work": "audio-runtime-c45-model-probe-oracle-repair",
+  "branch": "codex/audio-runtime-c45-model-probe-oracle-repair",
+  "original_candidate": "9aaa3e732988c6d5b97ffcf5a8855b24243529b7",
+  "fetched_origin_main": "aa31d6d0e7261f7dcfc07e8f14a7ad29501f542b",
+  "main_integration_commit": "75204b45a6428ece53a18798415292d2ba0710f2",
+  "repair_commits": [
+    "e288408ed7a6662db89ab22f39443b6b2c2461f0",
+    "3f8de151695cbb43715081b903d56cd988ac6984",
+    "d04ecbb163f9011f16a58ac0d36fd5d206096f94"
+  ],
+  "candidate_revision": "75204b45a6428ece53a18798415292d2ba0710f2",
+  "tested_delivery_revision": "75204b45a6428ece53a18798415292d2ba0710f2",
+  "delivery_revision_change": "Current main was integrated before validation; the evidence ledger checkpoint is documentation-only over the tested source, verifier, and immutable executable inputs.",
+  "review_findings_repaired": {
+    "process_inspection": "Empty or malformed ps output raises EvidenceFailure; valid nonmatching rows still prove no survivors.",
+    "aggregate_deadline": "run_controls receives the main start time and checks the same total budget after every control; synthetic overrun fails.",
+    "aggregate_output": "The staged wrapper accumulates stdout and stderr across all controls and rejects cumulative output over 67108864 bytes; synthetic 80-byte output rejects against a 64-byte cap.",
+    "scratch_accounting": "Known staged-source, staged-binaries, unused-artifacts and unused-runs are measured and removed only after child/artifact checks; cleanup records bytes before/after and errors.",
+    "immutable_executable_mode": "Read-only staged binaries are copied to an independently writable, executable private run directory after byte/hash and non-hardlink checks; originals remain untouched."
+  },
+  "historical_failure": {
+    "recovered_report_sha256": "41b5c46a6c44ec7938d985da87336aef5d63de5c928daab9a1160d6569431fa0",
+    "raw_stderr_sha256": "83dfbc0f2c0c9a611dbea8ee4eeaf140222a0eeabbbf918e0fbf70c1e3a37d5e",
+    "original_verifier_sha256": "e798dbcaf24acf906fb1664e27e9ad44fb1c563aa3a1ff306ed6461d50032843",
+    "cause": "The preserved wrong-marker control accepted an exit-1 FileNotFoundError caused by reading case_dir stdout instead of run_process stdout_path."
+  },
+  "focused_controls": {
+    "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c45-model-probe-oracle-repair/test_oracle_controls.py --original-revision 5f14c45313cfdc71e000fda209e3408fcf863faf --child-timeout 60 --total-timeout 300",
+    "result": "PASS",
+    "assertions": [
+      "Preserved original false positive reproduced with FileNotFoundError and unchanged raw evidence.",
+      "Wrong marker and wrong PCM controls require their literal diagnostics and exit 1.",
+      "Missing stdout/PCM, malformed manifest, accidental marker success, process inspection exception, empty ps rows and malformed ps rows fail closed.",
+      "Synthetic aggregate output overrun fails at 80 bytes against a 64-byte cap.",
+      "Synthetic staged-control overrun fails the shared aggregate deadline.",
+      "Success and deadline-failure paths record nonzero scratch and zero bytes after cleanup."
+    ]
+  },
+  "latest_ci_rejection": {
+    "run": "34543119901",
+    "job": "103089888288",
+    "head": "1687f45316b0eb3420940c8be69bc17b36cd1c6f",
+    "check": "CI (hermetic)",
+    "result": "FAILURE",
+    "failures": [
+      "TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence: explicit max-turn boundary timed out",
+      "TestRoomUsesLiveLivenessForPeerFilteredEventsAndEvidence: SSE payload read timed out"
+    ],
+    "scope": "Both failures are outside the C45-owned Python verifier/evidence paths; the full log shows the integration package passed and no C45 defect was demonstrated.",
+    "next_action": "Submit this changed, current-main-integrated candidate to the script-owned CI gate without polling it; retain the same task for any exact current-head rejection."
+  },
+  "staged_probe": {
+    "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c45-model-probe-oracle-repair/run_staged_probe.py --staged-root $FACTORY_ROOT/docs/temp/probes/audio-runtime-c44-model-admission-vertical-probe --child-timeout 60 --total-timeout 1500 --max-output-bytes 67108864 --min-free-bytes 2147483648",
+    "result": "PASS",
+    "run_id": "staged-probe-20260910T235032Z-98596",
+    "tested_source_revision": "75204b45a6428ece53a18798415292d2ba0710f2",
+    "verifier_sha256": "93879a7647fd3003ad9036e9be7b25c4ad712d4c3b5454cc860f9949949d1bf2",
+    "artifact_hashes_before_after_equal": true,
+    "artifact_hashes": {
+      "yui": "d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe",
+      "consumer": "5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b",
+      "source_snapshot": "9a803dab9a439211ecf90617c5f063d8f3e27a4e1f8950d7006bd729170ff399",
+      "build_descriptor": "e62c5da67ff259dfdfe5ade71f2fb2d654b12617b58e84767d853c95a2319d11"
+    },
+    "free_space_samples_bytes": {
+      "before": 2973097984,
+      "during": 2861854720,
+      "after": 2919346176,
+      "minimum_required": 2147483648
+    },
+    "output_bytes": 4716,
+    "scratch_bytes_before_cleanup": 57472980,
+    "scratch_bytes_after_cleanup": 0,
+    "wrong_oracles": {
+      "wrong_marker": "exit 1 with wrong marker oracle rejected",
+      "wrong_pcm": "exit 1 with wrong PCM oracle rejected"
+    },
+    "replay_oracles": {
+      "audio_tool_pcm_bytes": 4800,
+      "audio_tool_pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+      "interruption_pcm_bytes": 3840,
+      "interruption_pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
+      "healthy_tail_bytes": 2400,
+      "healthy_tail_sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
+    },
+    "cleanup": {
+      "parent_reaped": true,
+      "surviving_process_group_pids": [],
+      "forced_timeout_term_sent": true,
+      "forced_timeout_kill_sent": false
+    }
+  },
+  "acceptance_boundary": "Executor candidate evidence only: script CI, independent review, guarded merge, and primary fresh exact-artifact acceptance remain required."
+}
