@@ -1,17 +1,17 @@
 {
   "schema_version": "c50-accumulated-regressions-v1",
   "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
-  "tested_source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
-  "candidate_revision": "530defefe307cda5a06249d9f287d338885d3c68",
-  "tested_candidate_revision": "acd072e991962defeae59a0ab80f58b0fe322d18",
-  "rerun_candidate_revision": "acd072e991962defeae59a0ab80f58b0fe322d18",
+  "tested_source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+  "candidate_revision": "f030d8a875d3fd84c2c30082946c7ff7f5cefb23",
+  "tested_candidate_revision": "f030d8a875d3fd84c2c30082946c7ff7f5cefb23",
+  "rerun_candidate_revision": "f030d8a875d3fd84c2c30082946c7ff7f5cefb23",
   "prior_report_candidate_revision": "fa3eacc0e8d317fabff5c1feb85ad7435b2abd6c",
   "executable_inputs_unchanged_from_prior_report": true,
   "source_revision_equivalence": {
     "from": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
     "to": "2456a5d1594e73faf85e1132d6050735bc3e4710",
     "production_and_build_inputs_unchanged": true,
-    "verification": "git diff --quiet acd072e991962defeae59a0ab80f58b0fe322d18 530defefe307cda5a06249d9f287d338885d3c68 -- agent-cli go-agent-runtime go-agent-loop go-audio go-device-gateway go-llm-gateway tests go.work go.work.sum"
+    "verification": "git diff --quiet acd072e991962defeae59a0ab80f58b0fe322d18 f030d8a875d3fd84c2c30082946c7ff7f5cefb23 -- agent-cli go-agent-runtime go-agent-loop go-audio go-device-gateway go-llm-gateway tests go.work go.work.sum"
   },
   "command": "COUNT=3 scripts/test-session-ci-regressions.sh all",
   "exit_code": 0,
@@ -29,9 +29,9 @@
   "negative_controls": "Expected replay mismatch and later-turn PCM/transcript rejection diagnostics remained asserted; all selected tests passed.",
   "credentials": "not used",
   "ci_polling": "not performed",
-  "observed_at": "2026-09-11T08:58:28Z",
-  "stdout_bytes": 133049,
-  "stdout_sha256": "82d1a98236b3fd063612348c0b2b68cd39c531227c13b506c94332345361c29a",
+  "observed_at": "2026-09-11T09:49:32Z",
+  "stdout_bytes": 132963,
+  "stdout_sha256": "678d4e17275cad1cb899ef013afa60bb8b7b750a6617126caef13ff7ea388fa0",
   "stderr_bytes": 0,
   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 }

@@ -36,18 +36,6 @@
     ],
     "audio-runtime-c47-live-probe-output-bound": [
       {
-        "last_output": "\n",
-        "state": "init",
-        "work_id": "work-review-56",
-        "work_type": "review"
-      },
-      {
-        "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}\nIndependent C47 resource, C45 regression, source-compile, diff-check, and exact staged-probe behavior passed on head e7ae3ec667829f406d65d89e62dacceedbfc6f33; all 9 PR checks are green. The required current-main integration gate is unmet: origin/main is 6b4f32b5940d43192774e86f05e3c7c9293c71e3 and is not an ancestor of the candidate (PR base remains cdf416a8). Executor must merge the latest origin/main into the preserved branch, resolve conflicts, refresh current-source/provenance evidence, rerun focused bounds, pinned C45 regressions, Python checks, diff check, and the exact immutable-artifact staged probe, then commit/push and resubmit to script CI without polling. Do not merge the current head; preserve prior C47 regression coverage.\n{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
-        "state": "in-review",
-        "work_id": "work-task-11",
-        "work_type": "task"
-      },
-      {
         "last_output": "\nIndependent current-head probes passed, but actionable defects remain. verify.py:462-474 handles unexpected post-Popen errors by killing/reaping only the parent; an injected reader-start failure left a forked descendant alive until external group cleanup, violating whole-group cleanup and no-survivor requirements. Add group termination, bounded inspection, fail-closed reporting, and a regression. run_staged_probe.py:366-397 preflights only stdout/stderr cap plus fixed report reserve, omitting replay outputs and actual report/metadata growth required by C47-02; include these in projected growth and negative-space coverage. The canonical live-07 report records tested_source_revision=98ec09a4 while PR head is d4c9c01d, and does not separately record required original revisions 9f869d1d and 5f14c453; regenerate evidence on the final head with explicit provenance. Required verification drivers run_c45_regressions.py and check_python_sources.py are absent despite prd.json:113-114. Finally, git diff --check fails at both live-04 and live-07 invalid-self-play-admission.stderr:21 due to a blank line at EOF; regenerate/normalize those artifacts and refresh dependent hashes, byte counts, and report_bytes. Executor must implement these repairs, rerun focused and exact staged evidence, achieve clean diff-check, and resubmit the resulting head to script CI; no CI polling or merge was performed.",
         "state": "fin",
         "work_id": "work-review-13",
@@ -64,6 +52,18 @@
         "state": "fin",
         "work_id": "work-review-47",
         "work_type": "review"
+      },
+      {
+        "last_output": "\nIndependent C47 resource controls, private C45 regressions, and Python compilation passed; PR #439 head af5874c9 has 9/9 required checks green. Defect: refresh_live_evidence.py:37-79 accepts arbitrary paths and writes historical/peer evidence without C47 containment or symlink-escape checks. It also updates report_bytes but leaves latest_report_bytes stale; a temp run produced declared 0 versus actual 304 bytes. Add fail-closed C47 path validation, refresh both byte fields with stabilization, add negative tests, rerun C47 evidence and required checks, then resubmit. No merge performed.",
+        "state": "fin",
+        "work_id": "work-review-56",
+        "work_type": "review"
+      },
+      {
+        "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}\nCI checks failed for PR #439 at head 5efc6a1e0f5e7d1c65debf562b53758b8b931125: required checks failed on current head 5efc6a1e0f5e7d1c65debf562b53758b8b931125: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34584105269/job/103214186726). Return this task to the executor with the listed failures.\n{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
+        "state": "failed",
+        "work_id": "work-task-11",
+        "work_type": "task"
       }
     ],
     "audio-runtime-c48-overlapping-tool-continuation": [
@@ -87,7 +87,7 @@
       }
     ]
   },
-  "board_sha256": "34e518ad5659297be98d932ac3b4e071f88bb5f612d8c1f5564bb34aa334f4ee",
+  "board_sha256": "1ca168ddfad5764b2d805544eaf4d3a06b118db607732456b11aba586faa48f5",
   "previous_review_findings_are_accounted_for": true,
   "prior_c50_reviews": [
     {

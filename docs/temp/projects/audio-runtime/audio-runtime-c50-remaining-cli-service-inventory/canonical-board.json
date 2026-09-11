@@ -21,22 +21,6 @@
       "workTypeName": "project"
     },
     {
-      "chainingTraceDepth": 14,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c51-audio-device-boundary-characterization",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
-      "state": {
-        "name": "init",
-        "type": "INITIAL"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-thoughts-58",
-      "workTypeName": "thoughts"
-    },
-    {
       "chainingTraceDepth": 8,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "name": "audio-runtime-c23-long-session-tool-characterization",
@@ -165,6 +149,38 @@
       "workTypeName": "idea"
     },
     {
+      "chainingTraceDepth": 12,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c53-provider-close-terminal-drain",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c53-provider-close-terminal-drain",
+          "targetWorkId": "work-thoughts-57",
+          "targetWorkName": "audio-runtime-c23-long-session-tool-characterization",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c53-provider-close-terminal-drain-20260911T0852Z",
+      "state": {
+        "name": "to-complete",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_parent_request_id": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
+        "_parent_work_id": "work-thoughts-57",
+        "_source_dispatch_id": "99a00bac-1025-4c77-a21f-19e2b259c713",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c53-provider-close-terminal-drain",
+        "_work_type": "idea"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c53-provider-close-terminal-drain-20260911T0852Z-audio-runtime-c53-provider-close-terminal-drain",
+      "workTypeName": "idea"
+    },
+    {
       "chainingTraceDepth": 2,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "name": "audio-runtime-c46-retire-cli-terminal-policy",
@@ -229,80 +245,6 @@
       "workTypeName": "idea"
     },
     {
-      "chainingTraceDepth": 12,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c53-provider-close-terminal-drain",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "relations": [
-        {
-          "sourceWorkName": "audio-runtime-c53-provider-close-terminal-drain",
-          "targetWorkId": "work-thoughts-57",
-          "targetWorkName": "audio-runtime-c23-long-session-tool-characterization",
-          "type": "PARENT_CHILD"
-        }
-      ],
-      "requestId": "audio-runtime-c53-provider-close-terminal-drain-20260911T0852Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "tags": {
-        "_parent_request_id": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
-        "_parent_work_id": "work-thoughts-57",
-        "_source_dispatch_id": "99a00bac-1025-4c77-a21f-19e2b259c713",
-        "_source_transition_id": "ideafy",
-        "_work_name": "audio-runtime-c53-provider-close-terminal-drain",
-        "_work_type": "idea"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "batch-audio-runtime-c53-provider-close-terminal-drain-20260911T0852Z-audio-runtime-c53-provider-close-terminal-drain",
-      "workTypeName": "idea"
-    },
-    {
-      "chainingTraceDepth": 5,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c47-live-probe-output-bound",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-review-56",
-      "workTypeName": "review"
-    },
-    {
-      "chainingTraceDepth": 4,
-      "content": [
-        {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
-          "type": "text"
-        }
-      ],
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c47-live-probe-output-bound",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
-      "state": {
-        "name": "in-review",
-        "type": "PROCESSING"
-      },
-      "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
-        "_rejection_feedback": "Independent C47 resource, C45 regression, source-compile, diff-check, and exact staged-probe behavior passed on head e7ae3ec667829f406d65d89e62dacceedbfc6f33; all 9 PR checks are green. The required current-main integration gate is unmet: origin/main is 6b4f32b5940d43192774e86f05e3c7c9293c71e3 and is not an ancestor of the candidate (PR base remains cdf416a8). Executor must merge the latest origin/main into the preserved branch, resolve conflicts, refresh current-source/provenance evidence, rerun focused bounds, pinned C45 regressions, Python checks, diff check, and the exact immutable-artifact staged probe, then commit/push and resubmit to script CI without polling. Do not merge the current head; preserve prior C47 regression coverage."
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-task-11",
-      "workTypeName": "task"
-    },
-    {
       "chainingTraceDepth": 13,
       "content": [
         {
@@ -315,14 +257,13 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
       "state": {
         "name": "init",
         "type": "PROCESSING"
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory\", \"branch\": \"codex/audio-runtime-c50-remaining-cli-service-inventory\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
-        "_rejection_feedback": "Independent analyzer and fresh exact-source YUI help/replay passed, including expected 4,800-byte PCM and clean shutdown. Actionable defects remain: provenance.json, verification-summary.json, and runs/public/report.json are bound to baf0dfed2d57a30cfaab58e315758ad20430d364, not submitted HEAD 7b0775ddb9409635696ad6ae4fb9fdb67204c264; this repeats the prior final-head finding. git diff --no-renames also deletes the shared C38 fixture outside C50 scope and hides it as a byte-identical rename to C50 runs/public/replay/tool-record/provider.json. Remove the generated unchecksummed __pycache__/verify.cpython-314.pyc. Restore the C38 fixture, regenerate and consistently rebind all evidence on the repaired candidate, commit/push, rerun SCRIPT CI, then request fresh review; do not merge.",
+        "_rejection_feedback": "CI checks failed for PR #442 at head f030d8a875d3fd84c2c30082946c7ff7f5cefb23: required checks failed on current head f030d8a875d3fd84c2c30082946c7ff7f5cefb23: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34582318618/job/103208519902). Return this task to the executor with the listed failures.",
         "continue_feedback": "PR #442 is pushed at 8c0fdb5e; admission, bounded verification, checksums, focused tests, and COUNT=3 regressions pass. Final evidence is bound to 0ad171de, not submitted head 8c0fdb5e. Rebind evidence to the submitted head, push the same task, then return ACCEPTED to SCRIPT CI without polling."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
@@ -342,17 +283,40 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c52-hermetic-room-liveness-characterization-20260911T0611Z",
       "state": {
         "name": "init",
         "type": "PROCESSING"
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization\", \"branch\": \"codex/audio-runtime-c52-hermetic-room-liveness-characterization\", \"baseRevision\": \"bb29005d0bb545db5e08ffda0205929b021d4fc1\", \"reused\": false}",
-        "_rejection_feedback": "PR #443 at eddfc7df has green current-head checks; independent 22/22 matrix, direct normal/race tests, and cleanup probe pass. Evidence verifier defects remain: run_regressions.py:58 omits group_survivor, term_error, and kill_error; verify.py:176-182 records but does not validate metadata_sha256 (tampering copied CI metadata still passes); verify.py:252-274 trusts embedded selection counts instead of raw stdout (changing a count to 1 still passes); verify.py:331-381 accepts duplicate/transformed checkpoints (duplicating terminal_observed still passes), contrary to C52-03. run.py:127-147 also reuses pre-existing archives without validating contents against the fixed revision. Previously reported stale-main, ambient-environment, order-check, and parent-exit issues appear addressed. Fix these fail-closed checks, rebuild archives, regenerate the complete matrix/regression/evidence bundle, rerun verify.py --mode all and focused checks, commit/push the same branch, and resubmit to SCRIPT CI. Do not merge this head."
+        "_rejection_feedback": "CI checks failed for PR #443 at head 543fbd3a99377f8d5784fe61127b03d59786a521: required checks failed on current head 543fbd3a99377f8d5784fe61127b03d59786a521: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34584401593/job/103215150685). Return this task to the executor with the listed failures."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-33",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 14,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain\", \"branch\": \"codex/audio-runtime-c53-provider-close-terminal-drain\", \"baseRevision\": \"2456a5d1594e73faf85e1132d6050735bc3e4710\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c53-provider-close-terminal-drain",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain\", \"branch\": \"codex/audio-runtime-c53-provider-close-terminal-drain\", \"baseRevision\": \"2456a5d1594e73faf85e1132d6050735bc3e4710\", \"reused\": false}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-60",
       "workTypeName": "task"
     },
     {
@@ -362,7 +326,21 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-2",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 5,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c47-live-probe-output-bound",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -377,15 +355,10 @@
     {
       "chainingTraceDepth": 5,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "failureDetail": {
-        "message": "runner returned failed outcome",
-        "reason": "unknown"
-      },
       "name": "audio-runtime-c46-retire-cli-terminal-policy",
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -401,7 +374,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -420,7 +392,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -439,7 +410,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -458,7 +428,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -477,7 +446,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -496,7 +464,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -515,7 +482,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -534,7 +500,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c52-hermetic-room-liveness-characterization-20260911T0611Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -553,7 +518,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -572,7 +536,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c52-hermetic-room-liveness-characterization-20260911T0611Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -591,7 +554,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
       "state": {
         "name": "fin",
         "type": "FAILED"
@@ -604,6 +566,24 @@
       "workTypeName": "review"
     },
     {
+      "chainingTraceDepth": 5,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c47-live-probe-output-bound",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "Independent C47 resource controls, private C45 regressions, and Python compilation passed; PR #439 head af5874c9 has 9/9 required checks green. Defect: refresh_live_evidence.py:37-79 accepts arbitrary paths and writes historical/peer evidence without C47 containment or symlink-escape checks. It also updates report_bytes but leaves latest_report_bytes stale; a temp run produced declared 0 versus actual 304 bytes. Add fail-closed C47 path validation, refresh both byte fields with stabilization, add negative tests, rerun C47 evidence and required checks, then resubmit. No merge performed."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-56",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 4,
       "content": [
         {
@@ -612,15 +592,10 @@
         }
       ],
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "failureDetail": {
-        "message": "runner returned failed outcome",
-        "reason": "unknown"
-      },
       "name": "audio-runtime-c46-retire-cli-terminal-policy",
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "failed",
         "type": "FAILED"
@@ -634,10 +609,10 @@
       "workTypeName": "task"
     },
     {
-      "chainingTraceDepth": 9,
+      "chainingTraceDepth": 4,
       "content": [
         {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c49-c46-wire-generation-repair\", \"branch\": \"codex/audio-runtime-c49-c46-wire-generation-repair\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
           "type": "text"
         }
       ],
@@ -646,11 +621,35 @@
         "message": "runner returned failed outcome",
         "reason": "unknown"
       },
+      "name": "audio-runtime-c47-live-probe-output-bound",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
+        "_rejection_feedback": "CI checks failed for PR #439 at head 5efc6a1e0f5e7d1c65debf562b53758b8b931125: required checks failed on current head 5efc6a1e0f5e7d1c65debf562b53758b8b931125: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34584105269/job/103214186726). Return this task to the executor with the listed failures."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-11",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 9,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c49-c46-wire-generation-repair\", \"branch\": \"codex/audio-runtime-c49-c46-wire-generation-repair\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "name": "audio-runtime-c49-c46-wire-generation-repair",
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c49-c46-wire-generation-repair-20260911T0354Z",
       "state": {
         "name": "failed",
         "type": "FAILED"
@@ -671,15 +670,10 @@
         }
       ],
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "failureDetail": {
-        "message": "runner returned failed outcome",
-        "reason": "unknown"
-      },
       "name": "audio-runtime-c23-long-session-tool-characterization",
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
       "state": {
         "name": "failed",
         "type": "FAILED"
@@ -702,6 +696,9 @@
       ],
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "name": "meta-bootstrap",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
       "requestId": "admit-audio-runtime-audio-runtime-v1",
       "state": {
         "name": "complete",
@@ -880,6 +877,39 @@
       "workTypeName": "idea"
     },
     {
+      "chainingTraceDepth": 15,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c51-audio-device-boundary-characterization-vertical-probe",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c51-audio-device-boundary-characterization-vertical-probe",
+          "targetWorkId": "work-thoughts-58",
+          "targetWorkName": "audio-runtime-c51-audio-device-boundary-characterization",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c51-audio-device-boundary-characterization-vertical-probe-20260911",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"project\": \"audio-runtime\", \"directory\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c51-audio-device-boundary-characterization-vertical-probe\", \"build\": {\"identity\": \"c51-yui-production-6b4f32b5-evidence-merge-2456a5d1\", \"path\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c51-audio-device-boundary-characterization-vertical-probe/artifact-0\", \"sha256\": \"1b9d9a0998470f4134bfe19be4d2f1e236ce4fd99f803a01ca42394fa6409049\"}, \"buildIdentity\": \"c51-yui-production-6b4f32b5-evidence-merge-2456a5d1\", \"validationWorkName\": \"audio-runtime-c51-audio-device-boundary-characterization-vertical-probe\", \"missionSha256\": \"d49e9847ee4e9e3d9b2f093edd64e20ed53004373dd68f4c1408e97605109496\"}",
+        "_parent_request_id": "audio-runtime-c50-c51-characterization-20260911T0438Z",
+        "_parent_work_id": "work-thoughts-58",
+        "_source_dispatch_id": "aa36777d-638b-491e-bd9a-dc165fe5a546",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c51-audio-device-boundary-characterization-vertical-probe",
+        "_work_type": "validation"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c51-audio-device-boundary-characterization-vertical-probe-20260911-audio-runtime-c51-audio-device-boundary-characterization-vertical-probe",
+      "workTypeName": "validation"
+    },
+    {
       "chainingTraceDepth": 2,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "name": "audio-runtime-c38-interruption-audio-retention",
@@ -956,7 +986,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -981,7 +1010,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c49-c46-wire-generation-repair-20260911T0354Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1006,7 +1034,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1031,7 +1058,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1056,7 +1082,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1081,7 +1106,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c52-hermetic-room-liveness-characterization-20260911T0611Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1106,7 +1130,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1131,7 +1154,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1156,7 +1178,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1166,6 +1187,30 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-plan-5",
+      "workTypeName": "plan"
+    },
+    {
+      "chainingTraceDepth": 13,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain\", \"branch\": \"codex/audio-runtime-c53-provider-close-terminal-drain\", \"baseRevision\": \"2456a5d1594e73faf85e1132d6050735bc3e4710\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c53-provider-close-terminal-drain",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain\", \"branch\": \"codex/audio-runtime-c53-provider-close-terminal-drain\", \"baseRevision\": \"2456a5d1594e73faf85e1132d6050735bc3e4710\", \"reused\": false}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-plan-59",
       "workTypeName": "plan"
     },
     {
@@ -1181,7 +1226,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1200,7 +1244,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1216,7 +1259,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1232,7 +1274,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1248,7 +1289,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1270,7 +1310,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1296,7 +1335,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1322,7 +1360,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1347,7 +1384,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1359,6 +1395,31 @@
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-9",
       "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 16,
+      "content": [
+        {
+          "text": "No new Work dispatched.\n\n- C51 vertical validation is canonically `complete` and independently `ACCEPTED` for scoped software device-boundary characterization.\n- Evidence covers the public consumer, queue-versus-callback consumption, immutable YUI replay/regression, negative controls, and clean shutdown. It is not physical/acoustic proof and closes no broad project criterion.\n- Four Luna owners are active: C47, C50, C52, and C53.\n- C46 remains gated on C52; C23 remains gated on reviewed, merged, and vertically accepted C53.\n- All nine project criteria remain open.\n\nThe evidence and exact next decision are recorded in [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md).",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c51-audio-device-boundary-characterization-vertical-probe",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c51-audio-device-boundary-characterization-vertical-probe-20260911",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "No new Work dispatched.\n\n- C51 vertical validation is canonically `complete` and independently `ACCEPTED` for scoped software device-boundary characterization.\n- Evidence covers the public consumer, queue-versus-callback consumption, immutable YUI replay/regression, negative controls, and clean shutdown. It is not physical/acoustic proof and closes no broad project criterion.\n- Four Luna owners are active: C47, C50, C52, and C53.\n- C46 remains gated on C52; C23 remains gated on reviewed, merged, and vertically accepted C53.\n- All nine project criteria remain open.\n\nThe evidence and exact next decision are recorded in [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md)."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-1",
+      "workTypeName": "thoughts"
     },
     {
       "chainingTraceDepth": 6,
@@ -1373,7 +1434,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1398,7 +1458,6 @@
       "previousChainingTraceIds": [
         "trace-request-time-fd4ab7a9cfd26694201476ebd61f1bc9"
       ],
-      "requestId": "request-time-fd4ab7a9cfd26694201476ebd61f1bc9",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1423,7 +1482,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c49-c46-wire-generation-repair-20260911T0354Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1433,31 +1491,6 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-thoughts-19",
-      "workTypeName": "thoughts"
-    },
-    {
-      "chainingTraceDepth": 4,
-      "content": [
-        {
-          "text": "No new Work dispatched.\n\n- Four Luna executors are running: C38, C46, C47, and C48.\n- C40 remains dependent on C38 merge plus vertical probe acceptance.\n- C23 remains dependent on C48 merge plus vertical probe acceptance.\n- Main remains `7f73c8b3`; no new merge or acceptance occurred.\n- Historical C05 dirty changes remain preserved.\n- All nine project criteria remain open.\n\nThe reconciliation and exact next probe decisions are recorded in [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md).",
-          "type": "text"
-        }
-      ],
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c38-interruption-audio-retention",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
-      "state": {
-        "name": "complete",
-        "type": "TERMINAL"
-      },
-      "tags": {
-        "_last_output": "No new Work dispatched.\n\n- Four Luna executors are running: C38, C46, C47, and C48.\n- C40 remains dependent on C38 merge plus vertical probe acceptance.\n- C23 remains dependent on C48 merge plus vertical probe acceptance.\n- Main remains `7f73c8b3`; no new merge or acceptance occurred.\n- Historical C05 dirty changes remain preserved.\n- All nine project criteria remain open.\n\nThe reconciliation and exact next probe decisions are recorded in [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md)."
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-thoughts-2",
       "workTypeName": "thoughts"
     },
     {
@@ -1473,7 +1506,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1498,7 +1530,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1523,7 +1554,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1548,7 +1578,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c38-interruption-audio-retention-vertical-probe-20260911",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1573,7 +1602,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1598,7 +1626,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1623,7 +1650,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1648,7 +1674,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1673,7 +1698,6 @@
       "previousChainingTraceIds": [
         "trace-request-time-475cb0c0365469c673240a1d7115c9ce"
       ],
-      "requestId": "request-time-475cb0c0365469c673240a1d7115c9ce",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1698,7 +1722,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1723,7 +1746,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1748,7 +1770,6 @@
       "previousChainingTraceIds": [
         "trace-request-time-475cb0c0365469c673240a1d7115c9ce"
       ],
-      "requestId": "audio-runtime-c40-interactive-policy-vertical-probe-20260911",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1773,7 +1794,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1783,6 +1803,30 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-thoughts-57",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 14,
+      "content": [
+        {
+          "text": "{\"request\":{\"requestId\":\"audio-runtime-c51-audio-device-boundary-characterization-vertical-probe-20260911\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c51-audio-device-boundary-characterization-vertical-probe\",\"workTypeName\":\"validation\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"scope\":\"vertical\",\"vertical\":\"audio-runtime-c51-audio-device-boundary-characterization\",\"sourceRevision\":\"2456a5d1594e73faf85e1132d6050735bc3e4710\",\"role\":\"engineering\",\"criteria\":[{\"id\":\"AUDIO\",\"rubric\":\"One independently testable audio subsystem owns packet parsing, formats, clocks, sample timing, DSP and buffer operations; the core loop uses buffers without direct device IO.\"},{\"id\":\"DEVICE\",\"rubric\":\"The adjacent device gateway owns physical device abstractions and lifecycle; playback evidence distinguishes actual consumption from queue admission.\"},{\"id\":\"EMBED\",\"rubric\":\"A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization.\"},{\"id\":\"TRACE\",\"rubric\":\"Correlated device capture/playback, provider send/receive, tool lifecycle, cancellation, queues/drops and terminal evidence use explicit timing domains and bounded recording resources.\"},{\"id\":\"QUALITY\",\"rubric\":\"Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions.\"},{\"id\":\"PARITY\",\"rubric\":\"Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits.\"}],\"budget\":{\"timeSeconds\":1800,\"realtimeSessions\":0,\"realtimeSeconds\":0},\"mission\":\"Independent Luna engineering scope=vertical probe of C51 PR441, reviewed head 37e9684e99edece5a0447a726d69b5c95b2a8a8d guarded-merged as 2456a5d1594e73faf85e1132d6050735bc3e4710 after all nine exact-head checks passed. Verify every staged hash before and after. The merge and reviewed-head trees are both 91914dddd3ae3a8bbe08394b1eec7cd486b095b5. The supplied YUI was built from production source 6b4f32b5940d43192774e86f05e3c7c9293c71e3; C51 is evidence-only, so independently verify the archived shipped-build manifest and executable-input equivalence to the reviewed/merged evidence descendant before use. If identity or prerequisites cannot be established, report BLOCKED, never PASS. Do not rebuild, substitute the executable, use credentials, Realtime, native endpoints, or edit any worktree.\\nExtract the exact merge archive privately and read the complete C51 README, provenance, boundary map, import graph, repair candidates, verifier and evidence. Independently validate exact reachable production callers and timing-domain/ownership claims for packet parsing, formats, clocks, timing, DSP, bounded buffers, core-loop buffer-only IO, device lifecycle, runtime service/Wire construction, and trace/replay. Reproduce fail-closed invalid comment/field/declaration caller controls. Confirm the map distinguishes QUEUE_ADMISSION, BUFFER_RECEIPT, FILE_OR_SOFTWARE_RECEIPT, SOFTWARE_DEVICE_CALLBACK_CONSUMPTION and PHYSICAL_HARDWARE_CONSUMPTION without promoting evidence. Native Windows hardware/endpoints and physical/acoustic proof are OUT OF SCOPE under the admitted amendment, never PASS; Windows software remains required.\\nExercise the changed public workflow from the archived standalone GOWORK=off consumer: run dependency inspection, normal and race tests with fixed literal PCM/order/sample-cursor assertions, service construction without agent-cli/flags/terminal/global initialization, queue-before-callback distinction, exact callback consumption and bounded idempotent close. The deliberately wrong receipt-equals-consumption oracle must fail for the intended reason. Independently exercise runner negative controls for timeout, output overflow, live disk/WAV quota, parent-exit descendant cleanup, reader-start failure and aggregate deadline; zero tests, stale evidence or surviving descendants fail. Source/test checks are supplemental, not runtime acceptance.\\nLaunch the exact staged YUI public program for --help and the archived credential-free healthy session --replay with --audio-out in probe-owned directories. Require assistant text, healthy close/terminal markers, mono 16 kHz PCM16 WAV with exactly 2 frames/4 PCM bytes, PCM SHA256 df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119 and WAV SHA256 3e9bdf4cffd0b09b1ce550cf199542cd54fdaf69bf4f53d2e1b8be88c02f5aa3, exit zero, bounded output/disk and no surviving process group. Recheck the existing tool-lifecycle fixture as a negative regression and require the exact call_weather_001 unresolved lifecycle error, nonzero exit for that intended reason and clean shutdown. Preserve first failures; children <=60 seconds and aggregate <=1800 seconds; no retry-until-green.\\nJudge only the C51 characterization contribution and public software process workflow. Report exact commands, exit status, observed effects, before/after hashes, canonical validationWorkId and limitations. This may prove process smoke plus software callback/file replay only. It does not close any broad project criterion, prove physical/acoustic consumption, or authorize final completion.\",\"reportPath\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization-vertical-probe.json\",\"build\":{\"identity\":\"c51-yui-production-6b4f32b5-evidence-merge-2456a5d1\",\"path\":\"/private/tmp/audio-runtime-c51-yui-f5dfc65\",\"sha256\":\"1b9d9a0998470f4134bfe19be4d2f1e236ce4fd99f803a01ca42394fa6409049\"},\"fixtures\":[{\"identity\":\"source-2456a5d1594e73faf85e1132d6050735bc3e4710\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c51-delivery-reconciliation-20260911/source.tar.gz\",\"sha256\":\"3cac044824f6c6112f77b238fbe21949701818e184c76b370ca73b4f8ab374d1\"}]}}],\"relations\":[]}}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c51-audio-device-boundary-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"request\":{\"requestId\":\"audio-runtime-c51-audio-device-boundary-characterization-vertical-probe-20260911\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c51-audio-device-boundary-characterization-vertical-probe\",\"workTypeName\":\"validation\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"scope\":\"vertical\",\"vertical\":\"audio-runtime-c51-audio-device-boundary-characterization\",\"sourceRevision\":\"2456a5d1594e73faf85e1132d6050735bc3e4710\",\"role\":\"engineering\",\"criteria\":[{\"id\":\"AUDIO\",\"rubric\":\"One independently testable audio subsystem owns packet parsing, formats, clocks, sample timing, DSP and buffer operations; the core loop uses buffers without direct device IO.\"},{\"id\":\"DEVICE\",\"rubric\":\"The adjacent device gateway owns physical device abstractions and lifecycle; playback evidence distinguishes actual consumption from queue admission.\"},{\"id\":\"EMBED\",\"rubric\":\"A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization.\"},{\"id\":\"TRACE\",\"rubric\":\"Correlated device capture/playback, provider send/receive, tool lifecycle, cancellation, queues/drops and terminal evidence use explicit timing domains and bounded recording resources.\"},{\"id\":\"QUALITY\",\"rubric\":\"Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions.\"},{\"id\":\"PARITY\",\"rubric\":\"Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits.\"}],\"budget\":{\"timeSeconds\":1800,\"realtimeSessions\":0,\"realtimeSeconds\":0},\"mission\":\"Independent Luna engineering scope=vertical probe of C51 PR441, reviewed head 37e9684e99edece5a0447a726d69b5c95b2a8a8d guarded-merged as 2456a5d1594e73faf85e1132d6050735bc3e4710 after all nine exact-head checks passed. Verify every staged hash before and after. The merge and reviewed-head trees are both 91914dddd3ae3a8bbe08394b1eec7cd486b095b5. The supplied YUI was built from production source 6b4f32b5940d43192774e86f05e3c7c9293c71e3; C51 is evidence-only, so independently verify the archived shipped-build manifest and executable-input equivalence to the reviewed/merged evidence descendant before use. If identity or prerequisites cannot be established, report BLOCKED, never PASS. Do not rebuild, substitute the executable, use credentials, Realtime, native endpoints, or edit any worktree.\\nExtract the exact merge archive privately and read the complete C51 README, provenance, boundary map, import graph, repair candidates, verifier and evidence. Independently validate exact reachable production callers and timing-domain/ownership claims for packet parsing, formats, clocks, timing, DSP, bounded buffers, core-loop buffer-only IO, device lifecycle, runtime service/Wire construction, and trace/replay. Reproduce fail-closed invalid comment/field/declaration caller controls. Confirm the map distinguishes QUEUE_ADMISSION, BUFFER_RECEIPT, FILE_OR_SOFTWARE_RECEIPT, SOFTWARE_DEVICE_CALLBACK_CONSUMPTION and PHYSICAL_HARDWARE_CONSUMPTION without promoting evidence. Native Windows hardware/endpoints and physical/acoustic proof are OUT OF SCOPE under the admitted amendment, never PASS; Windows software remains required.\\nExercise the changed public workflow from the archived standalone GOWORK=off consumer: run dependency inspection, normal and race tests with fixed literal PCM/order/sample-cursor assertions, service construction without agent-cli/flags/terminal/global initialization, queue-before-callback distinction, exact callback consumption and bounded idempotent close. The deliberately wrong receipt-equals-consumption oracle must fail for the intended reason. Independently exercise runner negative controls for timeout, output overflow, live disk/WAV quota, parent-exit descendant cleanup, reader-start failure and aggregate deadline; zero tests, stale evidence or surviving descendants fail. Source/test checks are supplemental, not runtime acceptance.\\nLaunch the exact staged YUI public program for --help and the archived credential-free healthy session --replay with --audio-out in probe-owned directories. Require assistant text, healthy close/terminal markers, mono 16 kHz PCM16 WAV with exactly 2 frames/4 PCM bytes, PCM SHA256 df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119 and WAV SHA256 3e9bdf4cffd0b09b1ce550cf199542cd54fdaf69bf4f53d2e1b8be88c02f5aa3, exit zero, bounded output/disk and no surviving process group. Recheck the existing tool-lifecycle fixture as a negative regression and require the exact call_weather_001 unresolved lifecycle error, nonzero exit for that intended reason and clean shutdown. Preserve first failures; children <=60 seconds and aggregate <=1800 seconds; no retry-until-green.\\nJudge only the C51 characterization contribution and public software process workflow. Report exact commands, exit status, observed effects, before/after hashes, canonical validationWorkId and limitations. This may prove process smoke plus software callback/file replay only. It does not close any broad project criterion, prove physical/acoustic consumption, or authorize final completion.\",\"reportPath\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization-vertical-probe.json\",\"build\":{\"identity\":\"c51-yui-production-6b4f32b5-evidence-merge-2456a5d1\",\"path\":\"/private/tmp/audio-runtime-c51-yui-f5dfc65\",\"sha256\":\"1b9d9a0998470f4134bfe19be4d2f1e236ce4fd99f803a01ca42394fa6409049\"},\"fixtures\":[{\"identity\":\"source-2456a5d1594e73faf85e1132d6050735bc3e4710\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c51-delivery-reconciliation-20260911/source.tar.gz\",\"sha256\":\"3cac044824f6c6112f77b238fbe21949701818e184c76b370ca73b4f8ab374d1\"}]}}],\"relations\":[]}}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-58",
       "workTypeName": "thoughts"
     },
     {
@@ -1798,7 +1842,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"
@@ -1823,7 +1866,6 @@
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
       "state": {
         "name": "complete",
         "type": "TERMINAL"

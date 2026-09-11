@@ -8,6 +8,17 @@ integration checkpoint is `8bdafc7f947a3a2c9856220abdc539437035bd21`.
 The branch is
 `codex/audio-runtime-c50-remaining-cli-service-inventory`.
 
+The final evidence refresh is bound to the candidate HEAD recorded in
+`provenance.json` and `verification-summary.json`. The prior script-CI run
+at that candidate passed every required job except hermetic, whose complete log
+failed only in the unrelated main-line room lifecycle test
+`TestRunnerRetainsTypedSilentTerminalAndIsolatesPeer` with
+`silent_provider_empty_response` at
+`go-agent-runtime/services/rooms/internal/lifecycle/runner_test.go:226`.
+The bounded focused reproduction passed locally. C50 has a docs-only write
+lease, so no production or peer-task repair is authorized for that failure;
+it remains explicit CI evidence for the script-owned resubmission.
+
 The task-local Go AST/import/call-site analyzer enumerates 120 production files,
 46,563 physical lines and 2,875 top-level symbols across the three admitted
 CLI roots. It records 143 excluded files, 55,405 excluded physical lines and
