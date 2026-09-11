@@ -159,7 +159,7 @@ func sanitizeBrowserConversationReportTexts(values []string) []string {
 
 func sanitizeBrowserConversationInputJSON(value string) string {
 	if browserConversationContainsCredentialMarker(value) {
-		return "[redacted]"
+		return browserConversationRedactedText
 	}
 	return value
 }
@@ -169,7 +169,7 @@ func sanitizeBrowserConversationRawJSON(value json.RawMessage) json.RawMessage {
 		return nil
 	}
 	if browserConversationContainsCredentialMarker(string(value)) {
-		return json.RawMessage(`"[redacted]"`)
+		return json.RawMessage(`"` + browserConversationRedactedText + `"`)
 	}
 	if json.Valid(value) {
 		return append(json.RawMessage(nil), value...)
@@ -183,7 +183,7 @@ func sanitizeBrowserConversationRawJSON(value json.RawMessage) json.RawMessage {
 
 func sanitizeBrowserConversationReportText(value string) string {
 	if browserConversationContainsCredentialMarker(value) {
-		return "[redacted]"
+		return browserConversationRedactedText
 	}
 	var builder strings.Builder
 	for _, char := range value {

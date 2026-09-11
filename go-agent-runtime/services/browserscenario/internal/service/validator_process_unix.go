@@ -11,18 +11,26 @@ func configureBrowserConversationProcess(command *exec.Cmd) {
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-func terminateBrowserConversationProcessGroup(command *exec.Cmd) {
+func terminateBrowserConversationProcessGroup(command *exec.Cmd) error {
 	if command.Process == nil {
-		return
+		return nil
 	}
-	_ = syscall.Kill(-command.Process.Pid, syscall.SIGTERM)
+	err := syscall.Kill(-command.Process.Pid, syscall.SIGTERM)
+	if err == syscall.ESRCH {
+		return nil
+	}
+	return err
 }
 
-func killBrowserConversationProcessGroup(command *exec.Cmd) {
+func killBrowserConversationProcessGroup(command *exec.Cmd) error {
 	if command.Process == nil {
-		return
+		return nil
 	}
-	_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+	err := syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+	if err == syscall.ESRCH {
+		return nil
+	}
+	return err
 }
 
 func browserConversationProcessGroupExists(command *exec.Cmd) bool {

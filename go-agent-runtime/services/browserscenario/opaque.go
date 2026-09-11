@@ -17,6 +17,7 @@ const (
 	browserConversationInvocationTimedOut     = "timed_out"
 	browserConversationInvocationOrphaned     = "orphaned"
 	browserConversationInvocationPolicyDenied = "policy_denied"
+	browserConversationRedactedText           = "[redacted]"
 )
 
 func browserConversationOpaqueString(value any) string {
@@ -24,44 +25,6 @@ func browserConversationOpaqueString(value any) string {
 		return ""
 	}
 	return fmt.Sprint(value)
-}
-
-func safeBrowserConversationError(err error) string {
-	if err == nil {
-		return ""
-	}
-	return safeBrowserConversationText(err.Error())
-}
-
-func safeBrowserConversationText(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	if browserConversationContainsCredentialMarker(value) {
-		return "[redacted]"
-	}
-	var builder strings.Builder
-	for _, char := range value {
-		switch char {
-		case '\n', '\r', '\t':
-			builder.WriteByte(' ')
-		default:
-			if char < 0x20 || char == 0x7f {
-				builder.WriteByte(' ')
-			} else {
-				builder.WriteRune(char)
-			}
-		}
-		if builder.Len() >= 256 {
-			break
-		}
-	}
-	result := strings.TrimSpace(builder.String())
-	if result == "" {
-		return "unknown error"
-	}
-	return result
 }
 
 func browserConversationOpaqueLen(value any) int {
@@ -78,9 +41,13 @@ func browserConversationOpaqueLen(value any) int {
 	switch rv.Kind() {
 	case reflect.Array, reflect.Slice, reflect.Map, reflect.String:
 		return rv.Len()
-	default:
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Chan, reflect.Func, reflect.Interface, reflect.Pointer, reflect.Struct, reflect.UnsafePointer:
 		return 0
 	}
+	return 0
 }
 
 func cloneBrowserConversationOpaque(value any) any {
@@ -109,9 +76,13 @@ func cloneBrowserConversationReflect(value reflect.Value) reflect.Value {
 		return cloneBrowserConversationArray(value)
 	case reflect.Map:
 		return cloneBrowserConversationMap(value)
-	default:
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Chan, reflect.Func, reflect.String, reflect.Struct, reflect.UnsafePointer:
 		return value
 	}
+	return reflect.Value{}
 }
 
 func cloneBrowserConversationInterface(value reflect.Value) reflect.Value {
@@ -178,12 +149,16 @@ func sanitizeBrowserConversationOpaque(value any) any {
 		return cloned.Interface()
 	case reflect.Map:
 		return sanitizeBrowserConversationMap(rv)
-	default:
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Chan, reflect.Func, reflect.Interface, reflect.Pointer, reflect.String, reflect.Struct, reflect.UnsafePointer:
 		if browserConversationContainsCredentialMarker(browserConversationOpaqueString(value)) {
-			return "[redacted]"
+			return browserConversationRedactedText
 		}
 		return cloneBrowserConversationOpaque(value)
 	}
+	return nil
 }
 
 func sanitizeBrowserConversationMap(value reflect.Value) any {
@@ -214,7 +189,10 @@ func browserConversationSanitizedValue(targetType reflect.Type, value any) refle
 		switch targetType.Kind() {
 		case reflect.Interface, reflect.Pointer, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
 			return reflect.Zero(targetType)
-		default:
+		case reflect.Invalid, reflect.Array, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+			reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+			reflect.String, reflect.Struct, reflect.UnsafePointer:
 			return reflect.Value{}
 		}
 	}
@@ -233,15 +211,6 @@ func opaqueEqual(left, right any) bool {
 		return left == nil && right == nil
 	}
 	return strings.TrimSpace(browserConversationOpaqueString(left)) == strings.TrimSpace(browserConversationOpaqueString(right))
-}
-
-func browserConversationStepByID(scenario BrowserConversationScenario, stepID string) *BrowserConversationStep {
-	for index := range scenario.Steps {
-		if scenario.Steps[index].ID == stepID {
-			return &scenario.Steps[index]
-		}
-	}
-	return nil
 }
 
 func browserConversationExpectedState(step *BrowserConversationStep) *BrowserStateTransition {

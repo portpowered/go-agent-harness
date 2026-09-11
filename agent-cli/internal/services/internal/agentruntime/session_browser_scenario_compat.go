@@ -52,10 +52,6 @@ func (e *BrowserConversationScenarioError) Unwrap() error {
 	return ErrInvalidBrowserConversationScenario
 }
 
-func browserScenarioError(path, format string, args ...any) error {
-	return fmt.Errorf("%w at %s: %s", ErrInvalidBrowserConversationScenario, path, fmt.Sprintf(format, args...))
-}
-
 func validateJSONObject(path string, raw json.RawMessage) error {
 	return legacyBrowserScenarioError((runtimeBrowser.BrowserConversationScenario{}).ValidateJSONObject(path, raw))
 }
@@ -309,7 +305,7 @@ func legacyBrowserScenarioError(err error) error {
 		return &BrowserConversationScenarioError{Path: source.Path, Reason: source.Reason}
 	}
 	if errors.Is(err, runtimeBrowser.ErrInvalidBrowserConversationScenario) {
-		return fmt.Errorf("%w: %v", ErrInvalidBrowserConversationScenario, err)
+		return fmt.Errorf("%w: %w", ErrInvalidBrowserConversationScenario, err)
 	}
 	return err
 }

@@ -17,6 +17,7 @@ const (
 	browserConversationInvocationTimedOut     = "timed_out"
 	browserConversationInvocationOrphaned     = "orphaned"
 	browserConversationInvocationPolicyDenied = "policy_denied"
+	browserConversationMaxSafeTextBytes       = 256
 )
 
 func browserConversationOpaqueString(value any) string {
@@ -53,7 +54,7 @@ func safeBrowserConversationText(value string) string {
 				builder.WriteRune(char)
 			}
 		}
-		if builder.Len() >= 256 {
+		if builder.Len() >= browserConversationMaxSafeTextBytes {
 			break
 		}
 	}
@@ -78,9 +79,13 @@ func browserConversationOpaqueLen(value any) int {
 	switch rv.Kind() {
 	case reflect.Array, reflect.Slice, reflect.Map, reflect.String:
 		return rv.Len()
-	default:
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Chan, reflect.Func, reflect.Interface, reflect.Pointer, reflect.Struct, reflect.UnsafePointer:
 		return 0
 	}
+	return 0
 }
 
 func cloneBrowserConversationOpaque(value any) any {
@@ -113,9 +118,11 @@ func cloneBrowserConversationReflect(value reflect.Value) reflect.Value {
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
 		reflect.Float32, reflect.Float64:
 		return value
-	default:
+	case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
+		reflect.Struct, reflect.UnsafePointer:
 		return value
 	}
+	return reflect.Value{}
 }
 
 func cloneBrowserConversationInterface(value reflect.Value) reflect.Value {
@@ -166,79 +173,6 @@ func cloneBrowserConversationMap(value reflect.Value) reflect.Value {
 		cloned.SetMapIndex(cloneBrowserConversationReflect(iter.Key()), cloneBrowserConversationReflect(iter.Value()))
 	}
 	return cloned
-}
-
-func sanitizeBrowserConversationOpaque(value any) any {
-	if value == nil {
-		return nil
-	}
-	rv := reflect.ValueOf(value)
-	switch rv.Kind() {
-	case reflect.Slice, reflect.Array:
-		return sanitizeBrowserConversationSequence(rv)
-	case reflect.Map:
-		return sanitizeBrowserConversationMap(rv)
-	default:
-		return sanitizeBrowserConversationScalar(value)
-	}
-}
-
-func sanitizeBrowserConversationSequence(value reflect.Value) any {
-	cloned := cloneBrowserConversationReflect(value)
-	for index := 0; index < cloned.Len(); index++ {
-		item := sanitizeBrowserConversationOpaque(cloned.Index(index).Interface())
-		setBrowserConversationSanitizedValue(cloned.Index(index), item)
-	}
-	return cloned.Interface()
-}
-
-func sanitizeBrowserConversationMap(value reflect.Value) any {
-	if value.IsNil() {
-		return reflect.Zero(value.Type()).Interface()
-	}
-	cloned := reflect.MakeMapWithSize(value.Type(), value.Len())
-	iter := value.MapRange()
-	for iter.Next() {
-		key := browserConversationSanitizedValue(value.Type().Key(), sanitizeBrowserConversationOpaque(iter.Key().Interface()))
-		item := browserConversationSanitizedValue(value.Type().Elem(), sanitizeBrowserConversationOpaque(iter.Value().Interface()))
-		if key.IsValid() && item.IsValid() {
-			cloned.SetMapIndex(key, item)
-		}
-	}
-	return cloned.Interface()
-}
-
-func sanitizeBrowserConversationScalar(value any) any {
-	if browserConversationContainsCredentialMarker(browserConversationOpaqueString(value)) {
-		return "[redacted]"
-	}
-	return cloneBrowserConversationOpaque(value)
-}
-
-func setBrowserConversationSanitizedValue(target reflect.Value, value any) {
-	converted := browserConversationSanitizedValue(target.Type(), value)
-	if converted.IsValid() && target.CanSet() {
-		target.Set(converted)
-	}
-}
-
-func browserConversationSanitizedValue(targetType reflect.Type, value any) reflect.Value {
-	if value == nil {
-		switch targetType.Kind() {
-		case reflect.Interface, reflect.Pointer, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
-			return reflect.Zero(targetType)
-		default:
-			return reflect.Value{}
-		}
-	}
-	converted := reflect.ValueOf(value)
-	if converted.Type().AssignableTo(targetType) {
-		return converted
-	}
-	if converted.Type().ConvertibleTo(targetType) {
-		return converted.Convert(targetType)
-	}
-	return reflect.Value{}
 }
 
 func opaqueEqual(left, right any) bool {

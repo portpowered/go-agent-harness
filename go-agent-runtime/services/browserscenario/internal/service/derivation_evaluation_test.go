@@ -95,8 +95,9 @@ func TestDeriveBrowserConversationRecoveryPreservesReferenceGenerations(t *testi
 	if !ok || len(refs) != 1 || refs[0] != "new-ref" {
 		t.Fatalf("relisted refs = %#v, want cloned fresh catalog", recovery.RelistedToolRefs)
 	}
-	refs[0] = "mutated"
-	if result.BrokerCalls[2].ToolRefs.([]string)[0] != "new-ref" {
+	refs[0] = browserConversationTestMutatedText
+	sourceRefs, ok := result.BrokerCalls[2].ToolRefs.([]string)
+	if !ok || len(sourceRefs) == 0 || sourceRefs[0] != "new-ref" {
 		t.Fatal("recovery derivation aliased the source tool catalog")
 	}
 }
@@ -198,11 +199,13 @@ func TestBrowserConversationRunAliasesAndOpaqueEvidenceAreDefensive(t *testing.T
 	}
 	refs[0] = "caller-mutated"
 	snapshot := run.Snapshot()
-	if snapshot.BrokerCalls[0].ToolRefs.([]toolRef)[0] != "ref-1" {
+	snapshotRefs, ok := snapshot.BrokerCalls[0].ToolRefs.([]toolRef)
+	if !ok || len(snapshotRefs) == 0 || snapshotRefs[0] != "ref-1" {
 		t.Fatalf("snapshot tool refs = %#v, caller mutation leaked", snapshot.BrokerCalls[0].ToolRefs)
 	}
-	snapshot.BrokerCalls[0].ToolRefs.([]toolRef)[0] = "snapshot-mutated"
-	if run.Snapshot().BrokerCalls[0].ToolRefs.([]toolRef)[0] != "ref-1" {
+	snapshotRefs[0] = browserConversationTestMutatedText
+	savedRefs, ok := run.Snapshot().BrokerCalls[0].ToolRefs.([]toolRef)
+	if !ok || len(savedRefs) == 0 || savedRefs[0] != "ref-1" {
 		t.Fatal("snapshot tool refs share run state")
 	}
 	if !opaqueEqual(toolRef("same"), "same") || opaqueEqual(toolRef("one"), "two") {

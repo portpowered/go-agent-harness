@@ -49,7 +49,7 @@ func TestBrowserConversationRunDerivesValidityInImmutableSnapshots(t *testing.T)
 	if first.InputJSONValidity.ValidObjectStrings != 1 || first.InputJSONValidity.TotalAttempts != 2 {
 		t.Fatalf("snapshot validity = %+v, want 1/2", first.InputJSONValidity)
 	}
-	first.InputJSONValidity.Attempts[0].InputJSON = "mutated"
+	first.InputJSONValidity.Attempts[0].InputJSON = browserConversationTestMutatedText
 	second := run.Snapshot()
 	if second.InputJSONValidity.Attempts[0].InputJSON != `{"value":1}` {
 		t.Fatalf("snapshot validity shares mutable attempt: %+v", second.InputJSONValidity)
@@ -80,7 +80,7 @@ func TestBrowserConversationReportSanitizesMetadataButPreservesSafeRawInput(t *t
 	if err != nil {
 		t.Fatalf("new report: %v", err)
 	}
-	if report.Metadata.Command != "[redacted]" || report.Metadata.Configuration != "[redacted]" {
+	if report.Metadata.Command != browserConversationTestRedactedText || report.Metadata.Configuration != browserConversationTestRedactedText {
 		t.Fatalf("metadata = %+v, want credential-shaped values redacted", report.Metadata)
 	}
 	if report.Evidence.BrokerCalls[0].InputJSON != input {
@@ -157,7 +157,9 @@ func TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict(t *tes
 		for _, name := range input.Rubric {
 			verdict.Checks = append(verdict.Checks, BrowserConversationValidatorCheck{Name: name, Passed: true})
 		}
-		_ = json.NewEncoder(os.Stdout).Encode(verdict)
+		if err := json.NewEncoder(os.Stdout).Encode(verdict); err != nil {
+			t.Fatalf("write validator verdict: %v", err)
+		}
 		os.Exit(0)
 	}
 

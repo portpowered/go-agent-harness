@@ -15,28 +15,40 @@ const validatorProcessTestTimeout = 5 * time.Second
 func TestC61ValidatorProcessHelper(t *testing.T) {
 	switch os.Getenv("C61_VALIDATOR_MODE") {
 	case "valid":
-		writeC61ValidatorVerdict()
+		writeC61ValidatorVerdict(t)
 	case "nonzero":
-		_, _ = os.Stderr.WriteString("validator failed for a causal test\n")
+		if _, err := os.Stderr.WriteString("validator failed for a causal test\n"); err != nil {
+			t.Fatalf("write validator failure: %v", err)
+		}
 		os.Exit(9)
 	case "malformed":
-		_, _ = os.Stdout.WriteString("{")
+		if _, err := os.Stdout.WriteString("{"); err != nil {
+			t.Fatalf("write malformed verdict: %v", err)
+		}
 	case "invalid":
-		_, _ = os.Stdout.WriteString(`{"version":"` + BrowserConversationValidatorVersion + `","status":"pass","passed":false}`)
+		if _, err := os.Stdout.WriteString(`{"version":"` + BrowserConversationValidatorVersion + `","status":"pass","passed":false}`); err != nil {
+			t.Fatalf("write invalid verdict: %v", err)
+		}
 	case "stdout-overflow":
-		_, _ = os.Stdout.WriteString(strings.Repeat("x", (1<<20)+1))
+		if _, err := os.Stdout.WriteString(strings.Repeat("x", (1<<20)+1)); err != nil {
+			t.Fatalf("write stdout overflow: %v", err)
+		}
 	case "stderr-overflow":
-		_, _ = os.Stderr.WriteString(strings.Repeat("x", (1<<20)+1))
-		writeC61ValidatorVerdict()
+		if _, err := os.Stderr.WriteString(strings.Repeat("x", (1<<20)+1)); err != nil {
+			t.Fatalf("write stderr overflow: %v", err)
+		}
+		writeC61ValidatorVerdict(t)
 	}
 }
 
-func writeC61ValidatorVerdict() {
+func writeC61ValidatorVerdict(t *testing.T) {
 	verdict := BrowserConversationValidatorVerdict{Version: BrowserConversationValidatorVersion, Status: BrowserConversationValidatorPass, Passed: true}
 	for _, name := range BrowserConversationValidatorRubric() {
 		verdict.Checks = append(verdict.Checks, BrowserConversationValidatorCheck{Name: name, Passed: true})
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(verdict)
+	if err := json.NewEncoder(os.Stdout).Encode(verdict); err != nil {
+		t.Fatalf("write validator verdict: %v", err)
+	}
 }
 
 func TestBrowserConversationCommandValidatorPreservesTypedProcessCauses(t *testing.T) {
@@ -121,15 +133,21 @@ func TestBrowserConversationCommandValidatorRejectsCredentialBoundaryAndFiltersA
 	}
 
 	ambient := append([]string(nil), os.Environ()...)
-	os.Setenv("C61_SECRET_SHOULD_NOT_CROSS", "sk-live-never-publish")
+	if err := os.Setenv("C61_SECRET_SHOULD_NOT_CROSS", "sk-live-never-publish"); err != nil {
+		t.Fatalf("set ambient credential: %v", err)
+	}
 	defer func() {
 		for _, entry := range ambient {
 			name, _, ok := strings.Cut(entry, "=")
 			if ok {
-				_ = os.Setenv(name, strings.TrimPrefix(entry, name+"="))
+				if err := os.Setenv(name, strings.TrimPrefix(entry, name+"=")); err != nil {
+					t.Errorf("restore environment %q: %v", name, err)
+				}
 			}
 		}
-		_ = os.Unsetenv("C61_SECRET_SHOULD_NOT_CROSS")
+		if err := os.Unsetenv("C61_SECRET_SHOULD_NOT_CROSS"); err != nil {
+			t.Errorf("unset ambient credential: %v", err)
+		}
 	}()
 	if got := browserConversationValidatorEnvironment(nil); slicesContainCredential(got) {
 		t.Fatalf("ambient validator environment contains a credential marker: %v", got)
@@ -154,7 +172,7 @@ func TestBrowserConversationReportRendersWritesAndSanitizesOpaqueValues(t *testi
 		t.Fatalf("report leaked opaque credential: %s", encoded)
 	}
 	refs, ok := report.Evidence.BrokerCalls[0].ToolRefs.([]secretRef)
-	if !ok || refs[0] != "safe" || refs[1] != "[redacted]" {
+	if !ok || refs[0] != "safe" || refs[1] != browserConversationTestRedactedText {
 		t.Fatalf("sanitized named refs = %#v, want shape-preserving redaction", report.Evidence.BrokerCalls[0].ToolRefs)
 	}
 	rendered, err := RenderBrowserConversationReport(result, BrowserConversationReportMetadata{Provider: "provider"})

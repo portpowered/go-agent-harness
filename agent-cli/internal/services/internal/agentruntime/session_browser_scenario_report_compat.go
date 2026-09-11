@@ -212,7 +212,9 @@ func legacyBrokerCallToRuntime(call BrowserConversationBrokerCall) runtimeBrowse
 		return runtimeBrowser.BrowserConversationBrokerCall{}
 	}
 	var converted runtimeBrowser.BrowserConversationBrokerCall
-	_ = json.Unmarshal(encoded, &converted)
+	if err := json.Unmarshal(encoded, &converted); err != nil {
+		return runtimeBrowser.BrowserConversationBrokerCall{}
+	}
 	return converted
 }
 
@@ -222,7 +224,9 @@ func runtimeValidityToLegacy(value runtimeBrowser.BrowserConversationInputJSONVa
 		return BrowserConversationInputJSONValidity{}
 	}
 	var converted BrowserConversationJSONValidityCompat
-	_ = json.Unmarshal(encoded, &converted)
+	if err := json.Unmarshal(encoded, &converted); err != nil {
+		return BrowserConversationInputJSONValidity{}
+	}
 	return converted.value()
 }
 
@@ -248,9 +252,14 @@ type BrowserConversationJSONAttemptCompat struct {
 func (v BrowserConversationJSONValidityCompat) value() BrowserConversationInputJSONValidity {
 	result := BrowserConversationInputJSONValidity{ValidObjectStrings: v.ValidObjectStrings, TotalAttempts: v.TotalAttempts, Percentage: v.Percentage}
 	for _, attempt := range v.Attempts {
-		encoded, _ := json.Marshal(attempt)
+		encoded, err := json.Marshal(attempt)
+		if err != nil {
+			continue
+		}
 		var converted BrowserConversationInputJSONAttempt
-		_ = json.Unmarshal(encoded, &converted)
+		if err := json.Unmarshal(encoded, &converted); err != nil {
+			continue
+		}
 		result.Attempts = append(result.Attempts, converted)
 	}
 	return result
@@ -262,7 +271,9 @@ func runtimeReportToLegacy(report runtimeBrowser.BrowserConversationReport) Brow
 		return BrowserConversationReport{}
 	}
 	var converted BrowserConversationReport
-	_ = json.Unmarshal(encoded, &converted)
+	if err := json.Unmarshal(encoded, &converted); err != nil {
+		return BrowserConversationReport{}
+	}
 	return converted
 }
 
@@ -272,7 +283,9 @@ func runtimeValidatorInputToLegacy(input runtimeBrowser.BrowserConversationValid
 		return BrowserConversationValidatorInput{}
 	}
 	var converted BrowserConversationValidatorInput
-	_ = json.Unmarshal(encoded, &converted)
+	if err := json.Unmarshal(encoded, &converted); err != nil {
+		return BrowserConversationValidatorInput{}
+	}
 	return converted
 }
 
@@ -282,7 +295,9 @@ func runtimeVerdictToLegacy(verdict runtimeBrowser.BrowserConversationValidatorV
 		return BrowserConversationValidatorVerdict{}
 	}
 	var converted BrowserConversationValidatorVerdict
-	_ = json.Unmarshal(encoded, &converted)
+	if err := json.Unmarshal(encoded, &converted); err != nil {
+		return BrowserConversationValidatorVerdict{}
+	}
 	return converted
 }
 
@@ -291,7 +306,7 @@ func legacyBrowserResultError(err error) error {
 		return nil
 	}
 	if errors.Is(err, runtimeBrowser.ErrInvalidBrowserConversationResult) {
-		return fmt.Errorf("%w: %v", ErrInvalidBrowserConversationResult, err)
+		return fmt.Errorf("%w: %w", ErrInvalidBrowserConversationResult, err)
 	}
 	return err
 }

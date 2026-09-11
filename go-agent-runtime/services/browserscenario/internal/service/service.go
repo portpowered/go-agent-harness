@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserscenario"
@@ -151,7 +152,10 @@ func (*Service) NewCommandValidator(config browserscenario.BrowserConversationVa
 	if err != nil {
 		return nil, err
 	}
-	command := validator.(*commandValidator)
+	command, ok := validator.(*commandValidator)
+	if !ok {
+		return nil, errors.New("command validator has unexpected implementation")
+	}
 	command.Dir = config.Dir
 	command.Env = append([]string(nil), config.Env...)
 	return command, nil

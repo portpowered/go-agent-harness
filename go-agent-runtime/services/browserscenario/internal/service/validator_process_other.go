@@ -2,20 +2,30 @@
 
 package service
 
-import "os/exec"
+import (
+	"errors"
+	"os"
+	"os/exec"
+)
 
 func configureBrowserConversationProcess(*exec.Cmd) {}
 
-func terminateBrowserConversationProcessGroup(command *exec.Cmd) {
+func terminateBrowserConversationProcessGroup(command *exec.Cmd) error {
 	if command.Process != nil {
-		_ = command.Process.Kill()
+		if err := command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return err
+		}
 	}
+	return nil
 }
 
-func killBrowserConversationProcessGroup(command *exec.Cmd) {
+func killBrowserConversationProcessGroup(command *exec.Cmd) error {
 	if command.Process != nil {
-		_ = command.Process.Kill()
+		if err := command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return err
+		}
 	}
+	return nil
 }
 
 func browserConversationProcessGroupExists(*exec.Cmd) bool { return false }

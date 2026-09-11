@@ -29,7 +29,9 @@ func deriveBrowserConversationCorrections(scenario BrowserConversationScenario, 
 		return nil
 	}
 	var converted []BrowserConversationCorrectionEvidence
-	_ = json.Unmarshal(encoded, &converted)
+	if err := json.Unmarshal(encoded, &converted); err != nil {
+		return nil
+	}
 	return converted
 }
 
@@ -48,7 +50,9 @@ func deriveBrowserConversationRecovery(scenario BrowserConversationScenario, res
 		return nil
 	}
 	var converted []BrowserConversationRecoveryEvidence
-	_ = json.Unmarshal(encoded, &converted)
+	if err := json.Unmarshal(encoded, &converted); err != nil {
+		return nil
+	}
 	return converted
 }
 
@@ -72,6 +76,8 @@ func evaluateBrowserConversation(scenario BrowserConversationScenario, result Br
 		return BrowserConversationMechanicalEvaluation{Failures: []string{err.Error()}}
 	}
 	var converted BrowserConversationMechanicalEvaluation
-	_ = json.Unmarshal(encoded, &converted)
+	if err := json.Unmarshal(encoded, &converted); err != nil {
+		return BrowserConversationMechanicalEvaluation{Failures: []string{err.Error()}}
+	}
 	return converted
 }

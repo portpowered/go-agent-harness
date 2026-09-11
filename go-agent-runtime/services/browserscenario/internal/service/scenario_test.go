@@ -84,7 +84,7 @@ func TestNewBrowserConversationScenarioValidatesAndCopiesContract(t *testing.T) 
 		t.Fatalf("validated scenario: %v", err)
 	}
 
-	scenario.Fixture.Pages[0].ID = "mutated"
+	scenario.Fixture.Pages[0].ID = browserConversationTestMutatedText
 	scenario.Steps[0].ExpectedState.After[2] = 'x'
 	if validated.Fixture.Pages[0].ID != "home" {
 		t.Fatalf("validated fixture shares caller pages: %#v", validated.Fixture.Pages)
@@ -306,11 +306,11 @@ func assertBrowserConversationSequence(t *testing.T, result BrowserConversationR
 
 func assertBrowserConversationImmutable(t *testing.T, run *BrowserConversationRun, result BrowserConversationResult, output json.RawMessage) {
 	t.Helper()
-	result.Turns[0].ObservedText = "mutated"
+	result.Turns[0].ObservedText = browserConversationTestMutatedText
 	result.BrokerCalls[0].Output[2] = 'x'
 	result.Oracles[0].State[2] = 'x'
 	snapshot := run.Snapshot()
-	if snapshot.Turns[0].ObservedText == "mutated" || string(snapshot.BrokerCalls[0].Output) != string(output) || string(snapshot.Oracles[0].State) != `{"label":"unset"}` {
+	if snapshot.Turns[0].ObservedText == browserConversationTestMutatedText || string(snapshot.BrokerCalls[0].Output) != string(output) || string(snapshot.Oracles[0].State) != `{"label":"unset"}` {
 		t.Fatalf("run retained caller mutations: %#v", snapshot)
 	}
 	if err := run.ObserveAssistantTurn("cancel", "late response"); !errors.Is(err, ErrBrowserConversationRunFinalized) {

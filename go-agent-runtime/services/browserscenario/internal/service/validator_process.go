@@ -20,9 +20,6 @@ type browserConversationValidatorProcessResult struct {
 }
 
 func runBrowserConversationValidator(ctx context.Context, command []string, dir string, env []string, payload []byte, timeout time.Duration) browserConversationValidatorProcessResult {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	boundedContext, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -53,15 +50,18 @@ func runBrowserConversationValidator(ctx context.Context, command []string, dir 
 		}
 		return browserConversationValidatorProcessResult{stdout: stdout.Bytes(), stdoutTruncated: stdout.truncated, stderrTruncated: stderr.truncated}
 	case <-boundedContext.Done():
-		terminateBrowserConversationProcessGroup(process)
+		cleanupErr := terminateBrowserConversationProcessGroup(process)
 		processExited := waitBrowserConversationProcess(waited, browserConversationValidatorCleanupGrace)
 		groupGone := waitBrowserConversationProcessGroupGone(process, browserConversationValidatorCleanupGrace)
 		if !processExited || !groupGone {
-			killBrowserConversationProcessGroup(process)
-			_ = waitBrowserConversationProcess(waited, time.Second)
-			_ = waitBrowserConversationProcessGroupGone(process, time.Second)
+			cleanupErr = errors.Join(cleanupErr, killBrowserConversationProcessGroup(process))
+			processExited = waitBrowserConversationProcess(waited, time.Second)
+			groupGone = waitBrowserConversationProcessGroupGone(process, time.Second)
 		}
-		return browserConversationValidatorProcessResult{err: browserscenario.ErrBrowserConversationValidatorTimeout}
+		if !processExited || !groupGone {
+			cleanupErr = errors.Join(cleanupErr, errors.New("validator process group did not finish cleanup"))
+		}
+		return browserConversationValidatorProcessResult{err: errors.Join(browserscenario.ErrBrowserConversationValidatorTimeout, cleanupErr)}
 	}
 }
 
