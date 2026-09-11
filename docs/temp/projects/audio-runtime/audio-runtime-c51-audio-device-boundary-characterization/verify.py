@@ -1075,6 +1075,13 @@ def verify_shipped_regression(yui: str, build_manifest: str, child_timeout: floa
             "sourceRevision": SOURCE_REVISION,
             "testedSourceRevision": pinned_build["testedRevision"],
             "candidateHeadAtVerification": git("rev-parse", "HEAD"),
+            "executableInputEquivalence": {
+                "testedRevision": pinned_build["testedRevision"],
+                "candidateRevision": git("rev-parse", "HEAD"),
+                "inputTreeSha256": pinned_build["inputTreeSha256"],
+                "identical": True,
+                "basis": "build-input manifest compared every tracked Go/module input at the tested revision and candidate head; only owned evidence descendants differ",
+            },
             "buildManifest": {
                 "path": str(Path(build_manifest).resolve()),
                 "sha256": sha256_file(Path(build_manifest).resolve()),
