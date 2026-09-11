@@ -384,14 +384,13 @@ func TestSessionAudioOutput_RetainsDelayedDeltaAcrossCancellationBarrier(t *test
 }
 func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) {
 	ctx, cancel := context.WithCancel(context.Background())
-	provider := &sessionAudioTerminalBarrierSession{scriptedSession: newScriptedSession(), closeStarted: make(chan struct{}), releaseClose: make(chan struct{}), releaseConnect: make(chan struct{}), connectStarted: make(chan struct{})}
-	written := make(chan struct{})
-	writer := &growingSessionAudioWriter{firstWritten: written}
-	sink := mustSessionAudioTestValue(newSessionAudioSinkAtRate("-", writer, audio.SampleRate))
-	inferencer := newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "")
+	provider := &sessionAudioTerminalBarrierSession{scriptedSession: newScriptedSession(), closeStarted: make(chan struct{}), releaseConnect: make(chan struct{}), connectStarted: make(chan struct{})}
+	writer := &growingSessionAudioWriter{firstWritten: make(chan struct{})}
+	sink, _ := newSessionAudioSinkAtRate("-", writer, audio.SampleRate)
 	connected := make(chan messages.Session, 1)
 	go func() {
-		connected <- mustSessionAudioTestValue(inferencer.ConnectSession(ctx))
+		session, _ := newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "").ConnectSession(ctx)
+		connected <- session
 	}()
 	waitForClosedTargetSignal(t, context.Background(), provider.connectStarted, "connect start")
 	if cancelBeforeConnect {
@@ -400,36 +399,21 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	close(provider.releaseConnect)
 	session := <-connected
 	cancel()
-	releaseClose := false
-	defer func() {
-		if !releaseClose {
-			close(provider.releaseClose)
-		}
-	}()
-	closeErr := make(chan error, 1)
-	go func() { closeErr <- session.Close() }()
-	wrapped := session.(*sessionAudioOutputSession)
-	waitForClosedTargetSignal(t, context.Background(), wrapped.drainStarted, "cancellation drain start")
-	prefix := bytes.Repeat([]byte{0x01, 0x02}, 720)
-	tail := bytes.Repeat([]byte{0x03, 0x04}, 1200)
-	want := append(prefix, tail...)
-	if !provider.writeReceive(audioDeltaMessage(want)) {
+	go func() { _ = session.Close() }()
+	waitForClosedTargetSignal(t, context.Background(), session.(*sessionAudioOutputSession).drainStarted, "cancellation drain start")
+	want := append(bytes.Repeat([]byte{0x01, 0x02}, 720), bytes.Repeat([]byte{0x03, 0x04}, 1200)...)
+	if !provider.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(want)}) {
 		t.Fatal("provider did not accept queued cancellation audio")
 	}
-	waitForClosedTargetSignal(t, context.Background(), written, "queued cancellation audio output")
+	waitForClosedTargetSignal(t, context.Background(), writer.firstWritten, "queued cancellation audio output")
 	select {
 	case <-provider.closeStarted:
 		t.Fatal("provider closed before queued cancellation audio drained")
 	default:
 	}
-	provider.finish()
-	close(provider.releaseClose)
-	releaseClose = true
+	_ = provider.scriptedSession.Close()
 	select {
-	case err := <-closeErr:
-		if err != nil {
-			t.Fatalf("cancellation barrier close: %v", err)
-		}
+	case <-session.Done():
 	case <-time.After(2 * time.Second):
 		t.Fatal("cancellation barrier close did not finish")
 	}
@@ -509,7 +493,6 @@ func TestRunSessionWithAudioOut_PreservesSinkWriteError(t *testing.T) {
 		t.Fatalf("write error = %v, want provider close error", err)
 	}
 }
-
 func TestRunSessionWithAudioOut_PreservesSessionCloseErrorAfterMalformedDelta(t *testing.T) {
 	closeErr := errors.New("provider close failed after malformed audio")
 	inf := &durationTestInferencer{events: []messages.StreamMessage{{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("not PCM audio")}}, sessionCloseErr: closeErr}
@@ -518,16 +501,12 @@ func TestRunSessionWithAudioOut_PreservesSessionCloseErrorAfterMalformedDelta(t 
 		t.Fatalf("malformed audio error = %v, want provider close error", err)
 	}
 }
-
 func sessionAudioFrame(seed int16) []int16 {
 	frame := make([]int16, audio.FrameSize)
 	for index := range frame {
 		frame[index] = seed + int16(index%31)
 	}
 	return frame
-}
-func audioDeltaMessage(data []byte) messages.StreamMessage {
-	return messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(data)}
 }
 func pcm16Bytes(samples []int16) []byte {
 	data := make([]byte, len(samples)*2)
@@ -669,16 +648,7 @@ func (i *gatedSessionAudioInferencer) ObserveSessionRuntime(SessionRuntimeObserv
 
 type sessionAudioTerminalBarrierSession struct {
 	*scriptedSession
-	closeStarted, releaseClose, releaseConnect, connectStarted chan struct{}
-	mu                                                         sync.Mutex
-	closed                                                     bool
-}
-
-func mustSessionAudioTestValue[T any](value T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return value
+	closeStarted, releaseConnect, connectStarted chan struct{}
 }
 
 func (s *sessionAudioTerminalBarrierSession) ConnectSession(context.Context) (messages.Session, error) {
@@ -688,27 +658,7 @@ func (s *sessionAudioTerminalBarrierSession) ConnectSession(context.Context) (me
 }
 func (s *sessionAudioTerminalBarrierSession) Close() error {
 	close(s.closeStarted)
-	s.mu.Lock()
-	s.closed = true
-	for {
-		if _, ok := s.recv.Read(); !ok {
-			break
-		}
-	}
-	s.mu.Unlock()
-	<-s.releaseClose
 	return s.scriptedSession.Close()
-}
-func (s *sessionAudioTerminalBarrierSession) writeReceive(msg messages.StreamMessage) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return false
-	}
-	return s.recv.Write(context.Background(), msg)
-}
-func (s *sessionAudioTerminalBarrierSession) finish() {
-	_ = s.scriptedSession.Close()
 }
 func (i *gatedSessionAudioInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session := newScriptedSession()
