@@ -17,9 +17,11 @@ import (
 type testInferencer struct {
 	session *testSession
 }
+
 func (i *testInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	return i.session, nil
 }
+
 type testSession struct {
 	receive             *messages.TypedBuffer[messages.StreamMessage]
 	done                chan struct{}
@@ -28,6 +30,7 @@ type testSession struct {
 	mu                  sync.Mutex
 	sent                []messages.StreamMessage
 }
+
 func requireLiveHandle(t *testing.T, opened session.LiveHandle) *handle {
 	t.Helper()
 	h, ok := opened.(*handle)
@@ -36,6 +39,7 @@ func requireLiveHandle(t *testing.T, opened session.LiveHandle) *handle {
 	}
 	return h
 }
+
 type failingLiveRecorder struct {
 	messageErr  error
 	finalized   chan struct{}
@@ -64,11 +68,13 @@ func (r *failingLiveRecorder) Finalize(context.Context, error) error {
 	}
 	return r.finalizeErr
 }
+
 type testLiveCapabilityHandle struct {
 	initialized chan struct{}
 	closed      chan struct{}
 	events      chan session.LiveCapabilityEvent
 }
+
 func (h *testLiveCapabilityHandle) Initialize(context.Context) error {
 	select {
 	case <-h.initialized:
@@ -524,6 +530,7 @@ func TestFailedToolContinuationWinsAcrossToolResultObservationOrder(t *testing.T
 		t.Run(tc.name, func(t *testing.T) { assertFailedContinuationOrder(t, tc) })
 	}
 }
+
 type failedContinuationOrder struct {
 	name                  string
 	outputBeforeAdmission bool

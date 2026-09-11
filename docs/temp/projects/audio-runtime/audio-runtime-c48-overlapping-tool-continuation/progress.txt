@@ -143,3 +143,23 @@ C48 final package-budget checkpoint — 2026-09-11
   with 184 packages, 1888 files, and 27814 functions. The next action is to
   checkpoint this layout, bind the public driver to that clean revision, rerun
   C21, then push and update PR #440.
+
+C48 current-head CI repair checkpoint — 2026-09-10
+
+- Current-head CI run `34569402086` failed static gofmt checks in
+  `observation.go` and `service_test.go`, and hermetic, coverage, and
+  integration all failed `TestReadImageSpokenFailedContinuationIsActionable`
+  because the failed continuation was classified as a clean replay completion.
+- The causal focused run showed the failed `response.done` carries explicit
+  `resp_read_image_reply` metadata although its preceding `response.created`
+  is anonymous. The coordinator now admits that terminal-only provider error
+  only to the sole active anonymous assembly; unknown non-terminal explicit
+  deltas and ambiguous siblings remain rejected. The live continuation path
+  then returns the typed image continuation failure. Added a focused
+  coordinator regression for this exact boundary and preserved the late-ID,
+  acknowledgement, overlap, and anonymous-lifecycle regressions.
+- Gofmt is clean. Normal and race live/subsystem packages, normal and race C21
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls`, and normal
+  and race spoken read-image success/failure composition all pass. The next
+  action is to commit this repair, fetch and merge current `origin/main`, rerun
+  clean evidence and final scope gates, then push the same PR for script CI.

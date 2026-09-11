@@ -279,6 +279,14 @@ func (c *Coordinator) modelResponseForDelta(delta messages.StreamMessage) (*mode
 		if assembly := c.modelResponses[responseID]; assembly != nil {
 			return assembly, nil
 		}
+		// Some provider replays omit the response ID on response.created but
+		// include one on a terminal failure. Preserve that terminal boundary
+		// only when it can belong to the sole active anonymous response; an
+		// unknown non-terminal event must still be rejected rather than routed
+		// into a live sibling.
+		if isTerminalOnlyModelError(delta) && len(c.modelResponses) == 0 && c.anonymousModelStream != nil {
+			return c.anonymousModelStream, nil
+		}
 		if len(c.modelResponses) == 0 && c.anonymousModelStream == nil && isTerminalOnlyModelError(delta) {
 			return nil, nil
 		}

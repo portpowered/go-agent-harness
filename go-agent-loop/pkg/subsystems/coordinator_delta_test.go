@@ -484,6 +484,20 @@ func TestCoordinator_RejectsLateExplicitDeltaAfterSiblingCompletion(t *testing.T
 	}
 }
 
+func TestCoordinator_ClosesAnonymousResponseWithExplicitTerminalFailure(t *testing.T) {
+	c := NewCoordinator(nil)
+	completed, err := c.observeModelResponses([]messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-failed", Value: &messages.MessageEndValue{Status: "failed", ProviderErrorCode: "token_limit_exceeded"}},
+	})
+	if err != nil {
+		t.Fatalf("anonymous terminal failure: %v", err)
+	}
+	if len(completed) != 1 || completed[0].Role != messages.RoleAssistant || c.anonymousModelStream != nil {
+		t.Fatalf("anonymous terminal failure reconstruction = %#v, want one failed message", completed)
+	}
+}
+
 func TestCoordinator_IgnoresToolAcknowledgementAssemblyDuringOverlap(t *testing.T) {
 	c := NewCoordinator(nil)
 	completed, err := c.observeModelResponses([]messages.StreamMessage{
