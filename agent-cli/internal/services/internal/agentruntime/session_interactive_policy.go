@@ -1,39 +1,33 @@
 package agentruntime
 
 import (
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
-// InteractiveToolClass determines which voice/realtime budget applies to an
-// admitted tool call.
-type InteractiveToolClass string
+// InteractiveToolClass is retained as a CLI compatibility alias while the
+// reusable tools service owns the runtime contract.
+type InteractiveToolClass = runtimeTools.InteractiveToolClass
 
 const (
-	// InteractiveToolClassFastRead is the safe default for read-shaped and
-	// unknown calls.
-	InteractiveToolClassFastRead InteractiveToolClass = "fast/read"
-	// InteractiveToolClassBoundedLongRunning is reserved for operations that
-	// are intentionally allowed to outlive the fast/read budget.
-	InteractiveToolClassBoundedLongRunning InteractiveToolClass = "bounded-long-running"
+	InteractiveToolClassFastRead           = runtimeTools.InteractiveToolClassFastRead
+	InteractiveToolClassBoundedLongRunning = runtimeTools.InteractiveToolClassBoundedLongRunning
 )
 
-// InteractiveToolPolicy is an immutable per-session snapshot of interactive
-// tool budgets and the class selected for every admitted definition. The
-// class map is private and every constructor/clone copies it, so parallel
-// sessions cannot mutate one another's timeout state.
+// InteractiveToolPolicy preserves the CLI's value-shaped fields and methods.
+// Resolution, classification, validation, and snapshot cloning are delegated
+// to the reusable tools service.
 type InteractiveToolPolicy struct {
 	FastReadTimeout          time.Duration
 	LongRunningTimeout       time.Duration
 	AcknowledgementThreshold time.Duration
 
-	toolClasses        map[string]InteractiveToolClass
-	dynamicLongRunning bool
+	runtimePolicy runtimeTools.InteractiveToolPolicy
 }
 
 // NewInteractiveToolPolicy resolves a session-local policy from operator
@@ -57,42 +51,18 @@ func NewInteractiveToolPolicyForSession(
 	baseDefinitions []messages.ToolDefinition,
 	browserDynamic bool,
 ) (InteractiveToolPolicy, error) {
-	if settings == (config.InteractiveToolConfig{}) {
-		settings = config.DefaultInteractiveToolConfig()
+	factory := runtimeToolsWire.NewInteractiveToolPolicy()
+	resolved, err := factory.Resolve(runtimeTools.InteractiveToolPolicyRequest{
+		Settings:                 interactiveToolPolicySettings(settings),
+		Definitions:              definitions,
+		BaseDefinitions:          baseDefinitions,
+		ExplicitLongRunningNames: browserLongRunningToolNames(),
+		DynamicLongRunning:       browserDynamic,
+	})
+	if err != nil {
+		return InteractiveToolPolicy{}, err
 	}
-	if err := settings.Validate(); err != nil {
-		return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
-	}
-
-	baseNames := make(map[string]struct{}, len(baseDefinitions))
-	for _, definition := range baseDefinitions {
-		if name := strings.TrimSpace(definition.Name); name != "" {
-			baseNames[name] = struct{}{}
-		}
-	}
-	classes := make(map[string]InteractiveToolClass, len(definitions))
-	for _, definition := range definitions {
-		name := strings.TrimSpace(definition.Name)
-		if name == "" {
-			continue
-		}
-		class := interactiveToolClassForName(name)
-		if len(baseNames) > 0 {
-			if _, inBase := baseNames[name]; !inBase {
-				// A definition beyond the immutable base is a first-class page
-				// tool resolved against the live browser catalog.
-				class = InteractiveToolClassBoundedLongRunning
-			}
-		}
-		classes[name] = class
-	}
-	return InteractiveToolPolicy{
-		FastReadTimeout:          settings.FastReadTimeout,
-		LongRunningTimeout:       settings.LongRunningTimeout,
-		AcknowledgementThreshold: settings.AcknowledgementThreshold,
-		toolClasses:              classes,
-		dynamicLongRunning:       browserDynamic,
-	}, nil
+	return newInteractiveToolPolicyCompatibilityValue(resolved), nil
 }
 
 // ResolveInteractiveToolPolicy derives a policy from one loaded configuration
@@ -101,20 +71,15 @@ func ResolveInteractiveToolPolicy(cfg *config.Config, definitions []messages.Too
 	if cfg == nil {
 		return NewInteractiveToolPolicy(config.DefaultInteractiveToolConfig(), definitions)
 	}
-	settings, err := cfg.ResolveInteractiveToolConfig()
-	if err != nil {
-		return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
-	}
-	return NewInteractiveToolPolicy(settings, definitions)
+	return NewInteractiveToolPolicy(cfg.Tools.Interactive, definitions)
 }
 
 // Clone returns an independent policy snapshot suitable for handing to a
 // runtime plan or executor.
 func (p InteractiveToolPolicy) Clone() InteractiveToolPolicy {
 	clone := p
-	clone.toolClasses = make(map[string]InteractiveToolClass, len(p.toolClasses))
-	for name, class := range p.toolClasses {
-		clone.toolClasses[name] = class
+	if p.runtimePolicy != nil {
+		clone.runtimePolicy = p.runtimePolicy.Clone()
 	}
 	return clone
 }
@@ -125,17 +90,17 @@ func (p InteractiveToolPolicy) Clone() InteractiveToolPolicy {
 // registrations are remote interactive operations and keep the bounded
 // long-running budget.
 func (p InteractiveToolPolicy) ClassForTool(name string) InteractiveToolClass {
-	if class, ok := p.toolClasses[name]; ok {
-		return class
-	}
-	if p.dynamicLongRunning {
-		return InteractiveToolClassBoundedLongRunning
+	if p.runtimePolicy != nil {
+		return p.runtimePolicy.ClassForTool(name)
 	}
 	return InteractiveToolClassFastRead
 }
 
 // TimeoutForTool returns the deadline for one call in this policy snapshot.
 func (p InteractiveToolPolicy) TimeoutForTool(name string) time.Duration {
+	if p.runtimePolicy != nil {
+		return p.runtimePolicy.TimeoutForTool(name)
+	}
 	if p.ClassForTool(name) == InteractiveToolClassBoundedLongRunning {
 		return p.LongRunningTimeout
 	}
@@ -145,29 +110,46 @@ func (p InteractiveToolPolicy) TimeoutForTool(name string) time.Duration {
 // Validate checks that a policy supplied directly by a service caller still
 // satisfies the same bounds as configuration-derived policies.
 func (p InteractiveToolPolicy) Validate() error {
-	return (config.InteractiveToolConfig{
+	if p.runtimePolicy != nil {
+		return p.runtimePolicy.Validate()
+	}
+	return runtimeToolsWire.NewInteractiveToolPolicy().ValidateSettings(runtimeTools.InteractiveToolPolicySettings{
 		FastReadTimeout:          p.FastReadTimeout,
 		LongRunningTimeout:       p.LongRunningTimeout,
 		AcknowledgementThreshold: p.AcknowledgementThreshold,
-	}).Validate()
+	})
 }
 
-// interactiveToolClassForName is intentionally small and explicit. Every
-// other current or future tool remains safe by using fast/read until it is
-// deliberately admitted as long-running. The stable WebMCP broker tools are
-// admitted: select_tab performs attach+enable+catalog against a real browser
-// and invoke runs a real page tool to its terminal status - both routinely
-// exceed a local-read deadline on a loaded machine (gate probe 11: composed
-// page reads died at the 5s fast/read budget while the browser was healthy).
-func interactiveToolClassForName(name string) InteractiveToolClass {
-	switch strings.TrimSpace(name) {
-	case "exec", "sleep":
-		return InteractiveToolClassBoundedLongRunning
-	case webmcp.SelectTabToolName, webmcp.InvokeToolName, webmcp.ListToolsToolName,
-		webmcp.ListTabsToolName, webmcp.GetContextToolName, webmcp.CancelToolName,
-		webmcp.ListCastDevicesToolName, webmcp.CastTabToolName, webmcp.StopCastingToolName:
-		return InteractiveToolClassBoundedLongRunning
-	default:
-		return InteractiveToolClassFastRead
+func interactiveToolPolicySettings(settings config.InteractiveToolConfig) runtimeTools.InteractiveToolPolicySettings {
+	return runtimeTools.InteractiveToolPolicySettings{
+		FastReadTimeout:          settings.FastReadTimeout,
+		LongRunningTimeout:       settings.LongRunningTimeout,
+		AcknowledgementThreshold: settings.AcknowledgementThreshold,
+	}
+}
+
+func newInteractiveToolPolicyCompatibilityValue(policy runtimeTools.InteractiveToolPolicy) InteractiveToolPolicy {
+	settings := policy.Settings()
+	return InteractiveToolPolicy{
+		FastReadTimeout:          settings.FastReadTimeout,
+		LongRunningTimeout:       settings.LongRunningTimeout,
+		AcknowledgementThreshold: settings.AcknowledgementThreshold,
+		runtimePolicy:            policy,
+	}
+}
+
+// browserLongRunningToolNames is the CLI's explicit value conversion. The
+// runtime policy package receives names only and never imports WebMCP.
+func browserLongRunningToolNames() []string {
+	return []string{
+		webmcp.SelectTabToolName,
+		webmcp.InvokeToolName,
+		webmcp.ListToolsToolName,
+		webmcp.ListTabsToolName,
+		webmcp.GetContextToolName,
+		webmcp.CancelToolName,
+		webmcp.ListCastDevicesToolName,
+		webmcp.CastTabToolName,
+		webmcp.StopCastingToolName,
 	}
 }

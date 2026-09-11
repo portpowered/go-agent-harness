@@ -61,6 +61,32 @@ func TestInteractiveToolPolicyHonorsOverrides(t *testing.T) {
 	}
 }
 
+func TestInteractiveToolPolicyDirectValueCompatibility(t *testing.T) {
+	var zero InteractiveToolPolicy
+	if got := zero.ClassForTool("exec"); got != InteractiveToolClassFastRead {
+		t.Fatalf("zero class(exec) = %s, want fast/read", got)
+	}
+	if got := zero.TimeoutForTool("exec"); got != 0 {
+		t.Fatalf("zero timeout(exec) = %s, want 0", got)
+	}
+	if err := zero.Validate(); err == nil || !strings.Contains(err.Error(), "fast_read_timeout") {
+		t.Fatalf("zero Validate() = %v, want fast_read_timeout error", err)
+	}
+
+	direct := InteractiveToolPolicy{
+		FastReadTimeout:          7 * time.Second,
+		LongRunningTimeout:       15 * time.Second,
+		AcknowledgementThreshold: 1200 * time.Millisecond,
+	}
+	if err := direct.Validate(); err != nil {
+		t.Fatalf("direct Validate() = %v", err)
+	}
+	clone := direct.Clone()
+	if clone.FastReadTimeout != direct.FastReadTimeout || clone.LongRunningTimeout != direct.LongRunningTimeout || clone.AcknowledgementThreshold != direct.AcknowledgementThreshold {
+		t.Fatalf("direct Clone() = %#v, want %#v", clone, direct)
+	}
+}
+
 func TestInteractiveToolExecutorUsesIndependentSessionBudgets(t *testing.T) {
 	policyA, err := NewInteractiveToolPolicy(config.InteractiveToolConfig{
 		FastReadTimeout:          3 * time.Second,

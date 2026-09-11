@@ -11,6 +11,7 @@ package wire
 import (
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/policy"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/service"
 )
 
@@ -18,5 +19,11 @@ import (
 // request by the returned service rather than during graph construction.
 func NewService() tools.Service {
 	wire.Build(service.New, wire.Bind(new(tools.Service), new(*service.Service)))
+	return nil
+}
+
+// NewInteractiveToolPolicy creates the reusable interactive-policy factory.
+func NewInteractiveToolPolicy() tools.InteractiveToolPolicyFactory {
+	wire.Build(policy.New, wire.Bind(new(tools.InteractiveToolPolicyFactory), new(*policy.Factory)))
 	return nil
 }
