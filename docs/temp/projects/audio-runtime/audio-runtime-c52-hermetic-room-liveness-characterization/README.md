@@ -4,20 +4,19 @@ This directory is the sole C52 executor lease. It contains an evidence-only
 comparison of PR438 (`823bd350fe5d11782c38bda87d7b7bfd7d89d7cd`) and the
 planning-time integrated main (`7f73c8b3b4ebc99b55b8bb5e802beff024385407`).
 The final tested evidence parent is the clean branch head
-`40ba6f40db277df506cd53da6bb95dd618716d34`, which includes refreshed
+`0ae5cd55802033e46d1ff64aaecb4aaf7421f92d`, which includes refreshed
 `origin/main` (`2456a5d1594e73faf85e1132d6050735bc3e4710`) as an ancestor.
 The fetched `origin/main` may advance; its exact revision is recorded in
 `provenance.json` and does not replace the declared comparison input.
 
 The matrix is frozen in `matrix.json` before `run.py` executes. `run.py` makes
-clean gzip-compressed git archives (the compression changes no extracted
-source bytes), applies only the generated scratch overlay, runs one
-bounded first-result-per-cell matrix, and removes only its known scratch trees
-after child groups are reaped. It never checks out, resets, or writes another
-worktree. Existing archive reuse is content-validated against the fixed
-revision. The overlay retains the original test assertions, records ordered
-checkpoints in JSONL, and uses only bounded deferred cleanup to capture the
-room outcome if an original assertion aborts first.
+clean git archives, applies only the generated scratch overlay, runs one
+bounded first-result-per-cell matrix, and removes its known scratch trees and
+run-local caches after child groups are reaped. It never checks out, resets,
+or writes another worktree. Existing archive reuse is content-validated
+against the fixed revision. The overlay retains the original test assertions,
+records ordered checkpoints in JSONL, and uses only bounded deferred cleanup
+to capture the room outcome if an original assertion aborts first.
 
 The raw PR438 observation is preserved under `ci/`. The primary's reported
 10/10 rerun is kept separately in `primary-rerun.json` and is explicitly
@@ -37,13 +36,17 @@ The first four executor attempts are retained as preflight history in
 `provenance.json`; they were rejected as invalid setup/overlay executions
 (toolchain selection, cache directory creation, module working directory, and
 overlay typing) and are not behavioral trials. The final canonical run is
-`20260911T091919Z`: 22/22 cells passed on both revisions in 65.363 seconds,
-within the 900-second aggregate bound; all five negative controls were
-rejected, normal parent-exit cleanup was proven, and all generated caches were
-removed after their retained reports were verified. Focused normal and race
-regressions also pass from `40ba6f4`. The repaired runner uses only the
+`20260911T113000Z-final-failclosed-v2`: 22/22 cells passed on both revisions
+in 66.031 seconds, within the 900-second aggregate bound; all five negative
+controls were rejected, normal parent-exit cleanup was proven, and the
+run-local cache was removed after its retained reports were written. Focused
+normal and race regressions also pass from `0ae5cd55`. The repaired runner uses only the
 declared environment allowlist and its classification controls reject a label
 when both explicit orders fail.
+
+The final fail-closed integrity probes reject deleted cleanup fields, survivor
+claims, tampered raw selection counts, duplicate checkpoints, and mismatched
+retained archives. `verify.py --mode all` passes against the final run.
 
 During repair, a pre-final local diagnostic attempt observed one planning-main
 `gomaxprocs-4` assertion failure with a peer-cancel snapshot at

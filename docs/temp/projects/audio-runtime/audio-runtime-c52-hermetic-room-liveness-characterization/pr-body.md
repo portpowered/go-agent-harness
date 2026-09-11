@@ -4,13 +4,13 @@
 
 This is an evidence-only characterization of the rejected PR438 hermetic room-liveness result. It contains no production, test, architecture, or CI changes.
 
-- Candidate source tested: `40ba6f40db277df506cd53da6bb95dd618716d34`, including refreshed `origin/main=2456a5d1594e73faf85e1132d6050735bc3e4710`.
+- Candidate source tested: `0ae5cd55802033e46d1ff64aaecb4aaf7421f92d`, including refreshed `origin/main=2456a5d1594e73faf85e1132d6050735bc3e4710`.
 - Comparison sources: planning main `7f73c8b3b4ebc99b55b8bb5e802beff024385407` and PR438 `823bd350fe5d11782c38bda87d7b7bfd7d89d7cd`.
 - Preserved prior CI evidence: run `34562579355`, job `103148160889`, whose failure reported `silent_provider_timeout` at `browser_parity_test.go:220`.
-- Canonical matrix: run `20260911T091919Z`, 11 cells per revision, 22/22 passing in 65.363 seconds within the 900-second aggregate bound.
+- Canonical matrix: run `20260911T113000Z-final-failclosed-v2`, 11 cells per revision, 22/22 passing in 66.031 seconds within the 900-second aggregate bound.
 - Negative controls rejected ambient environment forwarding, incorrect cell selection, wrong-package execution, timeout survivors, and normal-exit descendants.
-- Accumulated normal and focused race lifecycle regressions pass from the candidate source.
-- The runner now validates reused archive contents and uses bounded deferred cleanup only to preserve room outcome evidence after an assertion abort; production and test sources remain untouched.
+- Accumulated normal and focused race lifecycle regressions pass from the candidate source; the final fail-closed integrity probes reject cleanup-field deletion, raw-count tampering, duplicate checkpoints, and mismatched retained archives.
+- The runner validates reused archive contents, removes run-local caches after child reaping, and uses bounded deferred cleanup only to preserve room outcome evidence after an assertion abort; production and test sources remain untouched.
 
 ## Finding
 

@@ -1,7 +1,7 @@
 {
   "binary_output_bytes": 0,
   "cleanup": {
-    "known_generated_cache_and_scratch_removed": false,
+    "known_generated_cache_and_scratch_removed": true,
     "retained": [
       "run.json",
       "cell logs",
@@ -12,11 +12,11 @@
       "CI log/metadata"
     ]
   },
-  "fixture_report_bytes": 678372561,
-  "free_space_after_capture_bytes": 125625769984,
+  "fixture_report_bytes": 25329002,
+  "free_space_after_capture_bytes": 124043116544,
   "free_space_before_cleanup_bytes": null,
   "free_space_limitation": "pre-cleanup free space was not captured by the preflight runner; current free space and exact retained bytes are recorded",
-  "observed_at": "2026-09-11T09:28:11.637526+00:00",
+  "observed_at": "2026-09-11T10:11:34.687379+00:00",
   "reproducible_scratch_bytes_retained_after_cleanup": 0,
   "runs": [
     {
@@ -62,10 +62,10 @@
       "scratch_content_present": false
     },
     {
-      "cache_present": true,
-      "cleanup_verified": false,
-      "retained_bytes": 661300187,
-      "run_id": "20260911T091919Z",
+      "cache_present": false,
+      "cleanup_verified": true,
+      "retained_bytes": 8256628,
+      "run_id": "20260911T113000Z-final-failclosed-v2",
       "scratch_content_present": false
     }
   ],
