@@ -983,7 +983,12 @@ def validate_amended_report(
         or mission.get("amendment") != dict(amendment)
         or not _same_artifact(mission.get("build"), report.get("build"))
         or mission.get("sourceRevision") != source_revision
-        or mission.get("authority") != amendment["authority"]
+        # The amendment reference intentionally preserves the original
+        # authority as provenance, while prepare-validation stamps the
+        # currently admitted successor authority onto the fresh mission.
+        # Validate each value against its role in that lifecycle instead of
+        # requiring the staged mission to carry the historical authority.
+        or mission.get("authority") != contract["authority"]
         or mission.get("manifestSha256") != amendment["manifestSha256"]
         or mission.get("reportPath") != str(report_path)
     ):
