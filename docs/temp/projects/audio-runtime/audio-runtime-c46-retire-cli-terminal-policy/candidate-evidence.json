@@ -3,7 +3,7 @@
   "project": "audio-runtime",
   "contractRevision": "audio-runtime-v1",
   "branch": "codex/audio-runtime-c46-retire-cli-terminal-policy",
-  "testedRevision": "40a3fd582aa830e4f0ac04331c0976489a42058b",
+  "testedRevision": "75d0cfcf18620b605673a0a17c182187a9f1f8ed",
   "repairRevision": "40a3fd582aa830e4f0ac04331c0976489a42058b",
   "implementationRevision": "1e743f3e2d7ae3559c3c143939c9e4982abcef44",
   "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
@@ -37,13 +37,14 @@
     "coverage-manifest/go-agent-runtime/services/providers/internal/terminalpolicy/package.json": "da329d7b021ad0ddf8cccb3577be764dabf82ffa9d61cac73970f466f22c4a36",
     "consumer/go.mod": "463d43de2ca7bc6ed92dfcd21605b6b06a914678401e52a6ac4c85b762396a8b",
     "consumer/go.sum": "300a2c432b65a891ff450112e48e510b74c9450f5a7821e23a1e6a6554910e19",
-    "consumer/main.go": "6b46da87e8f737cdd6a3615f4413aeac31bf900a4175d04b4093928234a6aa88"
+    "consumer/main.go": "6b46da87e8f737cdd6a3615f4413aeac31bf900a4175d04b4093928234a6aa88",
+    "consumer/main_test.go": "392c8a63dc0347fc388b91a45c0591bad3f7f5d9634a6f8f4a5afbacad60ad91"
   },
   "consumer": {
     "module": "example.com/audio-runtime-c46-terminal-policy-consumer",
     "gowork": "off",
     "binarySha256": "3ca538442e56bc3d48fc0d9e437e4ad077c57badba9d9b17ddd5bffbd8641a03",
-    "normal": "PASS; positive=1.668s/eligible, legacy=1.5s, invalid=2s, tiny=1ns, capped=15s, cancellation=false, wrong-code=false, nil=false",
+    "normal": "PASS; tracked main_test.go exercises the public matrix; positive=1.668s/eligible, legacy=1.5s, invalid=2s, tiny=1ns, capped=15s, cancellation=false, wrong-code=false, nil=false",
     "wrongOracle": "PASS negative control; mutated expected 1.667s exited nonzero",
     "dependencyInventory": "PASS; providers, providers/wire, terminalpolicy, messages; no agent-cli import"
   },
@@ -58,7 +59,7 @@
     "wireCheck": "PASS; generic provider wire_gen.go unchanged",
     "coverageRegistration": "PASS; 175 workspace packages across 6 modules",
     "architectureSize": "PASS; 185 packages, 1893 files, 27794 functions",
-    "publicYuiReplay": "NOT RUN; deterministic local provider/session fixture used instead",
+    "publicYuiReplay": "NOT claimed for clean C46 source; the observed loopback retry required preserved unstaged livehost opt-in owned outside C46",
     "postMainIntegration": "PASS; the reviewed main merge changed only C45-owned evidence files, then all focused checks were rerun",
     "deadBaselineRetirement": "PASS; removed the unused CLI regex/liveness reference and exactly one matching mutable-global baseline entry; distinct architecture-policy.json runtime entry unchanged"
   },

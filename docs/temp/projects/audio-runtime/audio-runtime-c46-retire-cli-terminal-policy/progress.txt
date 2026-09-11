@@ -46,3 +46,51 @@ Dead-baseline retirement repair checkpoint
 
 Next action
 - Commit this evidence checkpoint, push the same PR, update PR #438 with the exact repair and test evidence, and return `ACCEPTED` to the script-owned CI gate without polling it. Retain this task for any exact current-head CI rejection.
+
+# C46 owned consumer oracle and final handoff checkpoint 2026-09-10
+
+- Re-read the required Factory policy/handoff, current C46 PRD, progress and
+  complete canonical board/PR inbox. Admission remains the sole `audio-runtime`
+  task; `project-control.py verify-work --type task --name
+  audio-runtime-c46-retire-cli-terminal-policy` returned `admitted`, the
+  isolated branch still matches `prd.json.branchName`, and fetched
+  `origin/main=7f73c8b3` is an ancestor together with baseline `3194edd9`,
+  startup integration `8bdafc7f`, and planned main `aa31d6d0`. No host checkout,
+  peer worktree, predecessor checkpoint, second project or waiver was changed.
+- The exact prior CI static rejection remains repaired by `40a3fd5`: the dead
+  CLI regex/import/liveness reference and exactly one matching mutable-global
+  baseline entry are gone; the distinct live-policy exception in
+  `architecture-policy.json` is untouched. No review rows or additional C46
+  rejection findings exist in the canonical inbox.
+- Added the previously ignored owned consumer test matrix in commit
+  `75d0cfcf18620b605673a0a17c182187a9f1f8ed`. Provider policy normal/race,
+  independent consumer normal/race, deliberate wrong-delay and
+  wrong-eligibility oracles, CLI rate-limit/scheduled/continuation normal/race,
+  Wire, coverage-registration, size, architecture, pinned golangci-lint
+  2.9.0, pinned staticcheck 2026.1 and diff checks pass. Clean-C46 architecture
+  dimensions remain `185` packages, `1893` files and `27794` functions.
+- A generated-header/Wire-isolation experiment was tested and rejected by the
+  architecture gate because C46 is not authorized to register a new generated
+  file in `architecture-policy.json`; those two dirty Wire files were restored
+  to the green c861 checkpoint. The separate ignored helper scripts remain
+  untracked and were not claimed. Unrelated dirty livehost request/test files
+  remain unstaged and preserved for the live-session owner.
+- A later public loopback run at source label `c861d1ff` observed failed then
+  completed responses, marker `c46 retry recovered`, 16 provider events,
+  two response.create messages, clean child reaping and an 8-byte output, but
+  it included the preserved unstaged livehost retry opt-in. It is therefore
+  not clean C46 source proof and is explicitly not claimed as such; primary
+  must probe the exact merged executable after the live-session ownership is
+  reconciled. The C46 provider/consumer/CLI behavior evidence remains valid.
+- Storage preflight is `149428292 KiB` available, well above the required 2 GiB
+  reserve; no new artifact build or cache expansion was performed in this
+  checkpoint. Candidate evidence records the new test hash and treats the
+  evidence update as a docs-only descendant of `75d0cfc`.
+
+Next action
+- Commit the evidence update, push the same PR #438, update it with the exact
+  `40a3fd5` static repair and `75d0cfc` consumer-oracle map, then return
+  `ACCEPTED` to script-owned current-head CI without polling. Keep ownership
+  through `CONTINUE` for any exact rejection; do not stage the preserved
+  livehost files or claim review, merge, vertical acceptance or project
+  completion.
