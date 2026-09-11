@@ -312,3 +312,50 @@ C23 C53 blocker reconciliation and regression checkpoint — 2026-09-11T12:42Z
   provenance to the new exact head, rerun the complete bounded C23 sequence
   and accumulated regressions, then commit/push the same PR and return
   `ACCEPTED` to script-owned CI without polling.
+
+C23 latest CI and ownership reconciliation — 2026-09-11T15:13Z
+
+- Re-read the canonical `~default` all/500 Work inbox and saved the complete
+  raw response at
+  `docs/temp/projects/audio-runtime/audio-runtime-c23-long-session-tool-characterization/board-inbox-admission-20260911.json`.
+  `project-control.py verify-work --type task --name
+  audio-runtime-c23-long-session-tool-characterization` returned
+  `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c23-long-session-tool-characterization"}`.
+  The admitted manifest is `audio-runtime/audio-runtime-v1`; the isolated
+  branch exactly matches `prd.json.branchName`, and no second project or
+  acceptance waiver was introduced.
+- Fetched `origin/main=904e1f4c3be6c1e629138632573bd2fb55d50938`; it remains an
+  ancestor of pushed HEAD `17abc4288718bc635af496672086eab13b67a10a`.
+  PR #415 has the same head/base and remains open. The candidate diff is still
+  exactly the seven owned C23 evidence paths; the worktree is clean.
+- The complete failed CI log for run `34600565652` was read and retained at
+  `/tmp/audio-runtime-c23-ci-34600565652-failed.log`. Unit, race, macOS audio,
+  Windows portable and WebMCP Chrome passed. Coverage and hermetic fail only
+  at the C47-owned `TestProductionWebMCPCLISelectAcceptsListedCompositeReference`
+  (`webmcp_composite_ref_test.go:108`, selected target reports no WebMCP).
+  Static fails only on the C47 package-count drift (`agent-cli/internal/transport/cli`
+  148 versus immutable baseline 147). Integration fails only in the C45-owned
+  `TestAgentBinaryTest45HighRateToolAudioRegression` trials 05 and 14, each
+  losing 6,400 compared samples with remote-device underflow. No C23 path is
+  implicated by this run.
+- Current C23-owned non-blocked checks pass: Python compilation, `git diff
+  --check`, direct normal/overflow process probes left no surviving process,
+  and accumulated C21 `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls`
+  normal `-count=5` in `12.704s` and race `-count=1` in `13.679s`. The full
+  bounded process-control runner evidence remains preserved from the prior
+  current-head checkpoint; it was not rerun through the known C53-red control
+  sequence.
+- The C53 recording regression remains unchanged and preserved, not retried or
+  waived: current-main recording-on 16-turn evidence has complete provider
+  terminal state and clean shutdown but `accepted_audio=0`, `audio_bytes=0`,
+  and no `audio/out-000.pcm`, versus the pre-C53 same-fixture `accepted_audio=32`
+  and `audio_bytes=2048`. C23 has no production lease for the
+  `terminalDrainSession` media/recording boundary, and generated C23 artifacts
+  remain bound to their prior tested source rather than this docs checkpoint.
+- Disposition remains `CONTINUE`, not `ACCEPTED`; no changed C23 candidate is
+  ready for script CI. Next action: primary/existing runtime owner supplies a
+  reviewed C53 media/recording repair and the out-of-lease CI owners repair or
+  disposition their exact failures; then fetch that reviewed main, rebuild and
+  rebind provenance, rerun the complete bounded C23 sequence and accumulated
+  regressions, commit/push the same PR, and return `ACCEPTED` to script-owned
+  CI without polling.
