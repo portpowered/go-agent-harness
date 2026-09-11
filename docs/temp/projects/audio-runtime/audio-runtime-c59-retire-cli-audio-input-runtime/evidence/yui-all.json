@@ -1,0 +1,92 @@
+{
+  "aggregate_timeout_seconds": 120.0,
+  "binary": "/private/tmp/yui-c59",
+  "case": "all",
+  "cases": [
+    {
+      "assertions": [
+        "help exits zero",
+        "audio flags are discoverable"
+      ],
+      "name": "text-only",
+      "result": {
+        "argv": [
+          "session",
+          "--help"
+        ],
+        "elapsed_ms": 538,
+        "process_group_killed": false,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "Run a bidirectional session inference capture or replay a session capture file.\nUse --record <file>.json to capture live session traffic, --record-dir <dir> for a complete both-side recording directory, or --replay <file>.json to replay a saved capture without live provider network calls.\nWith no capture, prompt, file-audio, scheduled-turn, image, or browser flags, bare `yui session` starts a live OpenAI Realtime voice session over WebSocket on the default microphone and speakers; use --provider, --model, --api-key, --voice, or --audio-in-device/--audio-out-device to override its live defaults.\nUse repeatable finite spoken-turn inputs with --record-dir to replay multiple turns through one persistent session; scheduled turns are completion-gated by default. The optional scheduled barge mode releases each later turn against its identified active, non-terminal prior response. Ordinary scheduled turns do not interrupt responses.\n\nWebMCP browser sessions: use --browser-tools webmcp without --browser-cdp-url or --browser-ws-endpoint for an agent-managed local Chrome; no CDP port is required. With only --browser-tools and a provider, the command starts an interactive microphone session, prints Starting and Listening state, and waits for cancellation or provider termination. Supplying either endpoint keeps the externally managed browser path, and the agent never closes an external browser.\n\nWebRTC customer availability is deferred and currently unavailable: --transport webrtc, --signaling, and --media-source are reserved for a future customer-reachable network signaling and spoken-audio implementation. The current CLI has only in-process loopback signaling and no WebRTC spoken-audio input wiring, so a valid WebRTC selection returns an actionable error before session setup. For file, stdin, or microphone speech input, use the supported --transport ws path with its file/stdin or device audio-input options.\n\nInput transcription is enabled by default only for live OpenAI sessions that accept audio input; use --no-input-transcription to opt out. Replay always follows its recorded session.update handshake.\n\nSession history management remains available through the show, list, and delete subcommands.\n\nFilesystem tool scope:\nWith no --workdir, the effective workdir is the process current directory and relative filesystem-tool paths resolve there. --workdir <directory> selects an existing accessible directory. Repeat --allow-path <directory> to add existing accessible roots; relative allow-path values resolve from the effective workdir and duplicate roots are normalized.\nRead and list operations refuse protected system and credential locations even when a broad --allow-path contains them. Shell-command deny-pattern policy is separate; filesystem confinement is not an operating-system sandbox.\n\nExamples:\n  allowed: agent --workdir ./project tool write_file path=notes/today.txt content=hello\n  refused: agent --workdir ./project tool write_file path=../outside.txt content=hello\n\nUsage:\n  yui session [flags]\n  yui session [command]\n\nExamples:\n  yui session\n  yui session --voice marin --model gpt-realtime-2.1\n  yui session --record session.json\n  yui session --browser-tools webmcp --browser-open https://example.com/\n\nAvailable Commands:\n  delete      Delete a session by ID\n  list        List saved sessions\n  replay      Replay recorded provider and tool events through the agent loop offline\n  self-play   Run two fixed-persona live agents through a PCM16 audio bridge\n  show        Show a session by ID\n\nFlags:\n      --api-key string                        Session provider API key for live record mode\n      --audio-device-server string            Use a loopback audio-device server host:port instead of platform devices\n      --audio-in string                       Stream a .wav/.pcm/.raw file incrementally; use - for raw PCM16 standard input\n      --audio-in-device string                Capture RTC audio from a registry device ID; empty or default selects the input default\n      --audio-in-turn stringArray             Add a finite .wav/.pcm/.raw spoken turn to one persistent --record-dir session (repeatable)\n      --audio-in-turn-barge                   Release later --audio-in-turn inputs against an active prior response; without this flag scheduled turns remain completion-gated\n      --audio-interrupt stringArray           Release finite .wav/.pcm/.raw audio after the first observed in-flight WebMCP invocation (repeatable; live browser sessions only)\n      --audio-interrupt-on-tool string        With --audio-interrupt, wait for this WebMCP tool's in-flight invocation instead of the first one\n      --audio-out string                      Write assistant PCM16 to a .wav/.pcm/.raw path or -; with --audio-out-device, tap device-bound PCM\n      --audio-out-device string               Play RTC audio to a registry device ID; empty or default selects the output default\n      --base-url string                       Session provider base URL override\n      --browser-activate-tab                  Activate the selected browser tab\n      --browser-allow-process-scan            Allow process-based browser endpoint discovery\n      --browser-allow-remote-cdp              Allow non-loopback DevTools endpoints\n      --browser-allowed-origin stringArray    Allow an exact browser page origin (repeatable)\n      --browser-approval string               Browser page approval policy: always, writes, or never\n      --browser-auto-select string            Browser target auto-selection: off, single, or persisted\n      --browser-browser string                Exact normalized browser ID\n      --browser-cancel-on-interrupt string    Browser invocation cancellation policy: never, read-only, or always\n      --browser-cdp-url string                Browser DevTools HTTP endpoint\n      --browser-close-on-exit                 Close the exact agent-managed browser when the session exits; external endpoints are never closed\n      --browser-denied-origin stringArray     Deny an exact browser page origin (repeatable)\n      --browser-headless                      Use headless mode for an agent-managed browser\n      --browser-invocation-timeout duration   Maximum browser invocation duration (Go duration)\n      --browser-max-input-bytes int           Maximum browser input_json bytes (decimal integer)\n      --browser-max-result-bytes int          Maximum browser result bytes (decimal integer)\n      --browser-open url                      Open exactly one startup URL in an agent-managed browser (default: about:blank)\n      --browser-origin string                 Exact browser page origin filter\n      --browser-persist-selection             Persist the selected browser ID and target metadata\n      --browser-record                        Record semantic browser events with the session capture\n      --browser-record-arguments              Include redacted browser tool arguments in recording\n      --browser-record-results                Include redacted browser tool results in recording\n      --browser-redact-url-fragment           Redact fragment data from browser URLs\n      --browser-redact-url-query              Redact query data from browser URLs\n      --browser-replay string                 Browser semantic replay fixture path\n      --browser-replay-strict                 Reject divergent browser replay events\n      --browser-serialize-per-target          Serialize browser page calls per target\n      --browser-tab string                    Exact browser target ID\n      --browser-tools string                  Enable WebMCP browser tools; without an endpoint, the agent manages a local Chrome\n      --browser-user-data-dir string          Browser profile directory used for DevTools discovery\n      --browser-ws-endpoint string            Browser DevTools WebSocket endpoint\n      --computer-use                          Expose host screen and pointer computer-control tools\n      --experimental-tools                    Expose experimental skill, sleep, and web tools\n  -h, --help                                  help for session\n      --image stringArray                     Attach a local image to the realtime user turn (repeatable; order is preserved)\n      --max-duration duration                 Maximum session duration as a Go duration; exits cleanly when the bound is reached\n      --media-source string                   Deferred/unavailable WebRTC receive-only external media source; requires --transport webrtc and cannot be combined with --audio-in\n      --model string                          Session model ID for live record mode\n      --no-input-transcription                Disable customer-speech transcription for live OpenAI audio-input sessions\n      --no-terminal-tools                     Hide built-in shell and filesystem tools from the model\n      --prompt string                         Seed the realtime session with text\n      --provider string                       Session provider ID (use grok or openai for live record mode)\n      --reasoning-effort string               OpenAI Realtime reasoning effort: minimal, low, medium, high, or xhigh\n      --record string                         Record bidirectional session traffic to a JSON capture file\n      --record-dir string                     Record a complete both-side session directory separately from --record\n      --replay string                         Replay bidirectional session traffic from a JSON capture file without live provider network calls\n      --replay-timing string                  Replay cadence: immediate for fast order validation, or recorded to preserve timestamp_ms timing (default \"immediate\")\n      --signaling string                      Deferred/unavailable WebRTC signaling endpoint; customer-reachable network signaling is not wired yet; requires --transport webrtc, and --transport webrtc requires this flag\n      --system-prompt string                  Path to system prompt file or literal text\n      --trace-audio                           Record audio boundary WAVs and timing JSONL (included automatically with --record-dir)\n      --transport string                      Session transport: ws (default, supported) or webrtc (deferred/unavailable customer path) (default \"ws\")\n      --voice string                          OpenAI Realtime audio output voice (supported: alloy, ash, ballad, cedar, coral, echo, marin, sage, shimmer, verse)\n      --wait-for-close                        Keep the session running after a completed response until the provider closes it\n      --web-cast                              Enable native-media and selected-tab Google Cast controls; requires --browser-tools webmcp\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui session [command] --help\" for more information about a command.\n",
+        "timed_out": false
+      }
+    },
+    {
+      "assertions": [
+        "replay is finite and exits zero",
+        "audio fixture produced frames",
+        "probe result passes"
+      ],
+      "name": "finite-audio",
+      "result": {
+        "argv": [
+          "probe",
+          "run",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c59-retire-cli-audio-input-runtime/agent-cli/internal/transport/cli/testdata/probe-scenarios/s2s-v2a-audio-in-basic.scenario.json",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c59-retire-cli-audio-input-runtime/agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s_v2a_audio_in_basic.session.json",
+          "--json"
+        ],
+        "elapsed_ms": 36,
+        "process_group_killed": false,
+        "returncode": 0,
+        "stderr": "{\"total\":1,\"passed\":1,\"failed\":0,\"stuck\":0,\"status\":\"pass\"}\n",
+        "stdout": "{\"name\":\"s2s-v2a-audio-in-basic\",\"pass\":true,\"expectations\":[{\"index\":0,\"kind\":\"transcript-contains\",\"passed\":true}],\"ticks\":278,\"frames\":282,\"terminal_reason\":\"synthetic\",\"input_drop_count\":0,\"output_drop_count\":0}\n",
+        "timed_out": false
+      }
+    },
+    {
+      "assertions": [
+        "uncommitted fixture exits nonzero with structured failure",
+        "unsupported WebRTC exits before network setup"
+      ],
+      "name": "negative-controls",
+      "results": {
+        "uncommitted_buffer": {
+          "argv": [
+            "probe",
+            "run",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c59-retire-cli-audio-input-runtime/agent-cli/internal/transport/cli/testdata/probe-scenarios/s2s-v2e-audio-in-truncated-uncommitted-negative.scenario.json",
+            "--replay",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c59-retire-cli-audio-input-runtime/agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s_v2e_audio_in_truncated_uncommitted.session.json",
+            "--json"
+          ],
+          "elapsed_ms": 24,
+          "process_group_killed": false,
+          "returncode": 1,
+          "stderr": "{\"total\":1,\"passed\":0,\"failed\":1,\"stuck\":0,\"status\":\"fail\"}\nError: 1 of 1 probe scenarios failed\n",
+          "stdout": "{\"name\":\"s2s-v2e-audio-in-truncated-uncommitted-negative\",\"pass\":false,\"expectations\":[{\"index\":0,\"kind\":\"buffer-disposition\",\"passed\":false,\"expected\":\"\\\"committed\\\"\",\"actual\":\"\\\"uncommitted\\\"\",\"error\":\"probe expectation \\\"buffer-disposition\\\" mismatch: expected \\\"committed\\\", actual \\\"uncommitted\\\"\"}],\"ticks\":138,\"frames\":141,\"terminal_reason\":\"synthetic\",\"input_drop_count\":0,\"output_drop_count\":0}\n",
+          "timed_out": false
+        },
+        "unsupported_webrtc": {
+          "argv": [
+            "session",
+            "--transport",
+            "webrtc",
+            "--signaling",
+            "ws://127.0.0.1:1"
+          ],
+          "elapsed_ms": 17,
+          "process_group_killed": false,
+          "returncode": 1,
+          "stderr": "Error: WebRTC CLI path is not yet customer-usable: no customer-reachable network signaling implementation and no supported spoken-audio input path are wired; use --transport ws with --audio-in or --audio-in-device\n",
+          "stdout": "",
+          "timed_out": false
+        }
+      }
+    }
+  ],
+  "child_timeout_seconds": 30.0,
+  "status": "pass"
+}

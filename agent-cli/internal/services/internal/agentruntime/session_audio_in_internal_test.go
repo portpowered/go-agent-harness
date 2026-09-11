@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioinput "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioinput"
+	audioinputwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioinput/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -44,6 +46,25 @@ type nopReadSeekCloser struct {
 }
 
 func (nopReadSeekCloser) Close() error { return nil }
+
+func newSessionTestWAVSource(path string, reader audioinput.ReadSeekCloser) (audio.AudioSource, error) {
+	service := audioinputwire.NewService(nil)
+	managed, err := service.Open(audioinput.InputSpec{Path: path, Present: true}, audioinput.Opener{
+		OpenWAV:  func(string) (audio.AudioSource, error) { return audio.NewWAVSource(path, reader) },
+		Classify: service.ClassifyOpenError,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return managed.Source, nil
+}
+
+func testSourceRate(source audio.AudioSource, fallback int) int {
+	if rated, ok := source.(interface{ SampleRate() int }); ok && rated.SampleRate() > 0 {
+		return rated.SampleRate()
+	}
+	return fallback
+}
 
 // sessionWAVTestBytes builds a canonical 44-byte-header PCM16 mono 16 kHz WAV
 // wrapping dataChunk, then applies byte-level mutations for rejection tests.
@@ -81,7 +102,7 @@ func TestNewSessionWAVSourceStreamsFrameByFrame(t *testing.T) {
 	}
 	wav := sessionWAVTestBytes(t, data, nil)
 	reader := &countingReadSeeker{r: bytes.NewReader(wav)}
-	source, err := newSessionWAVSource("utterance.wav", reader)
+	source, err := newSessionTestWAVSource("utterance.wav", reader)
 	if err != nil {
 		t.Fatalf("open wav: %v", err)
 	}
@@ -120,15 +141,12 @@ func TestNewSessionWAVSourceStreamsFrameByFrame(t *testing.T) {
 
 func TestSessionAudioReaderClosesOwnedPipeWhenDeadlineUnsupported(t *testing.T) {
 	reader := &ownedBlockingDeadlineReader{started: make(chan struct{}), closed: make(chan struct{})}
-	audioReader := newSessionAudioReader(reader, true)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	audioReader.bindContext(ctx)
 
 	result := make(chan error, 1)
 	go func() {
-		_, err := audioReader.Read(make([]byte, 4))
-		result <- err
+		result <- audioinputwire.NewService(nil).Stream(ctx, audioinput.Input{Reader: reader, CloseOnCancel: true, SendAudioInput: func(context.Context, []byte) error { return nil }}, nil)
 	}()
 	select {
 	case <-reader.started:
@@ -181,7 +199,7 @@ func TestSessionWAVSourceZeroPadsFinalShortFrame(t *testing.T) {
 	}
 	wav := sessionWAVTestBytes(t, data, nil)
 	reader := &countingReadSeeker{r: bytes.NewReader(wav)}
-	source, err := newSessionWAVSource("short.wav", reader)
+	source, err := newSessionTestWAVSource("short.wav", reader)
 	if err != nil {
 		t.Fatalf("open wav: %v", err)
 	}
@@ -269,7 +287,7 @@ func TestNewSessionWAVSourceRejectsMalformedHeaders(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			source, err := newSessionWAVSource(tc.name+".wav", nopReadSeekCloser{bytes.NewReader(tc.content)})
+			source, err := newSessionTestWAVSource(tc.name+".wav", nopReadSeekCloser{bytes.NewReader(tc.content)})
 			if err == nil {
 				_ = source.Close()
 				t.Fatal("expected format rejection")
@@ -312,7 +330,7 @@ func TestSessionWAVSourceCloseIsOnceAndGuardsReads(t *testing.T) {
 	data := make([]byte, audio.FrameSize*2)
 	wav := sessionWAVTestBytes(t, data, nil)
 	reader := &countingReadSeeker{r: bytes.NewReader(wav)}
-	source, err := newSessionWAVSource("close.wav", reader)
+	source, err := newSessionTestWAVSource("close.wav", reader)
 	if err != nil {
 		t.Fatalf("open wav: %v", err)
 	}
@@ -442,7 +460,7 @@ func TestNewSessionWAVSourceRetains24kHzHeaderRate(t *testing.T) {
 	if err := wavio.Write(&encoded, wavio.Rate24kHz, input); err != nil {
 		t.Fatalf("encode 24 kHz wav: %v", err)
 	}
-	source, err := newSessionWAVSource("utterance_24k.wav", struct {
+	source, err := newSessionTestWAVSource("utterance_24k.wav", struct {
 		io.ReadSeeker
 		io.Closer
 	}{bytes.NewReader(encoded.Bytes()), nopReadSeekCloser{}})
@@ -450,7 +468,7 @@ func TestNewSessionWAVSourceRetains24kHzHeaderRate(t *testing.T) {
 		t.Fatalf("open 24 kHz wav: %v", err)
 	}
 	defer func() { _ = source.Close() }()
-	if gotRate := sessionAudioSourceSampleRate(source, 0); gotRate != wavio.Rate24kHz {
+	if gotRate := testSourceRate(source, 0); gotRate != wavio.Rate24kHz {
 		t.Fatalf("source sample rate = %d, want %d", gotRate, wavio.Rate24kHz)
 	}
 

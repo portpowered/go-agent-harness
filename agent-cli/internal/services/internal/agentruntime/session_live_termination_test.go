@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audioinput "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioinput"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
@@ -160,7 +161,7 @@ func TestRunAgentLoopSessionTerminalOutcomesAlwaysDrainAcceptedDelta(t *testing.
 		{
 			name: "audio input failure",
 			setup: func(f *liveTerminalDrainFixture) func() {
-				f.options.AudioIn = &sessionAudioSource{source: &liveTerminalDrainFailingAudioSource{err: audioErr}}
+				f.options.AudioIn = newSessionAudioSource(&audioinput.ManagedSource{Source: &liveTerminalDrainFailingAudioSource{err: audioErr}})
 				return func() { f.acceptedOutput() }
 			},
 			wantErr: audioErr,

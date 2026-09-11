@@ -14,7 +14,9 @@ import (
 
 // Injectors from providers.go:
 
+// NewService creates an inert service. The caller supplies the clock used by
+// paced sources when a request does not provide a per-input clock.
 func NewService(source clock.Source) audioinput.Service {
-	streamService := stream.New(source)
-	return streamService
+	service := stream.New(source)
+	return service
 }
