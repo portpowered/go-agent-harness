@@ -23,5 +23,15 @@ Focused evidence before checkpoint commit
 - Exact staged mission live-01 passed in the working tree. Artifact hashes before/after were equivalent; staged binary bytes 57,445,940; fixture bytes 27,040; scratch before/after 57,472,980/0; output 4,768 of 67,108,864; minimum observed free space 11,506,757,632; staging method APFS clone.
 - Provisional report: evidence/staged-probe-live-01/latest-staged-probe.json. A committed-head exact rerun remains required.
 
+Committed-head final evidence
+- Implementation checkpoint commit: 0d6de1edad69eee1944899a3a3d0a55a140db19d.
+- Exact staged mission against the admitted C44 artifact bundle passed from that committed head.
+- Final report: evidence/staged-probe-live-03/latest-staged-probe.json.
+- Final report decision: ACCEPTED; tested_source_revision=0d6de1edad69eee1944899a3a3d0a55a140db19d.
+- Final staged binaries: 57,445,940 bytes copied by APFS clone; fixture staging 27,040 bytes; aggregate output 4,768/67,108,864 bytes; report bytes 314,622.
+- Final storage preflight projected 141,359,060 bytes and the minimum observed free space was 12,930,170,880 bytes, above the 2 GiB reserve plus projection.
+- Final scratch cleanup reclaimed 57,472,980 bytes and left 0 bytes with no errors; source artifact hashes were equivalent before/after.
+- Final focused regression set after the checkpoint commit: C47 capture/staging/all controls PASS, private unchanged C45 controls PASS, syntax compilation PASS, and git diff --check PASS.
+
 Next action
-- Commit this checkpoint, push the task branch, rerun the exact staged mission so tested_source_revision is the committed candidate, then update/open the PR and hand off to the script CI gate without polling it.
+- Push 0d6de1e plus the final evidence checkpoint, update/open the PR, and hand off to the script CI gate without polling it.
