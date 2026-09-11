@@ -236,6 +236,7 @@ def run_process(
     aggregate_deadline_hit = False
     output_limited = False
     owned_output_limited = False
+    capped_fds: set[int] = set()
     termination: dict[str, Any] | None = None
     while selector.get_map():
         child_remaining = timeout_seconds - (time.monotonic() - started)
@@ -273,6 +274,7 @@ def run_process(
             available = output_cap_bytes - len(buffers[fd])
             if len(chunk) > available:
                 buffers[fd].extend(chunk[: max(0, available)])
+                capped_fds.add(fd)
                 output_limited = True
                 termination = terminate_group(process, "output-cap")
                 break
@@ -307,8 +309,12 @@ def run_process(
             termination["wait_timeout"] = True
     stdout = bytes(buffers[process.stdout.fileno()])
     stderr = bytes(buffers[process.stderr.fileno()])
-    # Preserve the exact bounded bytes. Adding a newline after a capped stream
-    # would make the recorded artifact exceed the declared per-stream limit.
+    # Keep ordinary text artifacts diff-check clean while preserving exact
+    # bytes for a stream stopped at the declared cap.
+    if stdout and process.stdout.fileno() not in capped_fds:
+        stdout = stdout.rstrip(b"\n") + b"\n"
+    if stderr and process.stderr.fileno() not in capped_fds:
+        stderr = stderr.rstrip(b"\n") + b"\n"
     stdout_path.write_bytes(stdout)
     stderr_path.write_bytes(stderr)
     owned_after = owned_output_bytes()
