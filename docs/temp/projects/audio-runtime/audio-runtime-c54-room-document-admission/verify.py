@@ -85,8 +85,9 @@ def check_execution(value: dict[str, Any], label: str, *, success: bool, output_
         require(value.get("output_bounded") is True, f"{label} exceeded the output cap")
     elif success:
         require(value.get("returncode") == 0 and value.get("timed_out") is False, f"{label} did not succeed")
-        require(value.get("output_bounded") is True, f"{label} exceeded the output cap")
-        require(int(value.get("stdout_bytes", 10**18)) <= MAX_CHILD_OUTPUT_BYTES and int(value.get("stderr_bytes", 10**18)) <= MAX_CHILD_OUTPUT_BYTES, f"{label} exceeded the observed output cap")
+        if output_cap:
+            require(value.get("output_bounded") is True, f"{label} exceeded the output cap")
+            require(int(value.get("stdout_bytes", 10**18)) <= MAX_CHILD_OUTPUT_BYTES and int(value.get("stderr_bytes", 10**18)) <= MAX_CHILD_OUTPUT_BYTES, f"{label} exceeded the observed output cap")
     else:
         require(value.get("returncode") != 0 and value.get("timed_out") is False, f"{label} did not fail causally")
         if output_cap:
