@@ -280,3 +280,28 @@ validation, physical/acoustic proof, or project acceptance is claimed. The
 next action is fresh exact-source artifact replay/package provenance, then
 push/update PR `#430` and return `ACCEPTED` to script-owned current-head CI
 without polling; retain C38 ownership for any exact rejection.
+
+## Fresh exact-source replay/package — 2026-09-11T04:37Z
+
+From clean source `596d8e9a96b12d32e073a97f07552d4e236dfd20`,
+`repaired-20260911T043648Z-51985` returns `REPAIRED_ORACLE_PASS`. The new yui
+artifact is 50,895,362 bytes with SHA-256
+`79eb1eb02e813a9b427164a4938199f03c18c430b51b99c791ed2a8af20ec831`.
+Tool replay remains 18 wire events/1 tool call with 4,800 provider and 3,200
+rendered bytes and the frozen hashes; interruption remains 15/0 with 3,840
+provider and 3,360 rendered bytes, including the exact 2,400-byte healthy tail.
+Both strict replays pass, and the missing-timeline control rejects as expected.
+
+`package-20260911T043706Z-52052` returns `PACKAGE_READY` for the clean branch,
+with startup, baseline, planning, and fresh `origin/main=7f73c8b3` ancestry
+verified. The build manifest covers 2,185 inputs with SHA-256
+`b3ff27ac38d91183097cf162de890e0486e1804c0ec5e2d7f7b66a4ac9fe2fc4`;
+`repaired-build.json` is SHA-256
+`c1907f1259986fc10f659baa641fc690ad030e7178c6e9a31543b3d77e49e6b6`, and
+`package-manifest.json` is SHA-256
+`e194eef647aa183665840bf35d0711adc56ca09dc7ad5c125573cfe3298bd723`.
+
+The candidate is now ready to push and hand to the script-owned current-head
+CI gate. This does not claim CI green, independent review, guarded merge,
+post-delivery vertical validation, physical/acoustic proof, or project
+acceptance.
