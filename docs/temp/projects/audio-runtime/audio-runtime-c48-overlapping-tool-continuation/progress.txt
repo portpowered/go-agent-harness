@@ -163,3 +163,21 @@ C48 current-head CI repair checkpoint — 2026-09-10
   and race spoken read-image success/failure composition all pass. The next
   action is to commit this repair, fetch and merge current `origin/main`, rerun
   clean evidence and final scope gates, then push the same PR for script CI.
+
+C48 post-merge formatting and architecture checkpoint — 2026-09-10
+
+- Fetched `origin/main` at `bb29005d0bb545db5e08ffda0205929b021d4fc1` and
+  merged it into the isolated branch at `514013a6143c2056744a5daddf6184d47fd2c5f1`.
+  The required baseline, startup revision, and current-main ancestry checks
+  all pass; the C48 diff remains limited to the admitted paths.
+- Post-merge gofmt correctly added declaration spacing that initially put
+  `observation.go` and `service_test.go` over their physical budgets. The
+  prompt constant now lives in the existing service const block, and only
+  compact test declarations were used to retain the cross-file helper and
+  nearby regressions within budget. Final counts are observation 400, service
+  397, and service_test 600 lines.
+- `make architecture-size-check wire-check` passes with 184 packages, 1888
+  files, and 27853 functions. Normal and race live/subsystem packages and the
+  focused failed-continuation integration test pass after the merge. Next:
+  checkpoint this budget repair, rerun clean C48 public evidence plus C21 and
+  final ancestry/scope checks, then push the same PR for script CI.

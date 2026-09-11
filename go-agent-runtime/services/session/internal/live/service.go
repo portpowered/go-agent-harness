@@ -22,6 +22,7 @@ const (
 	defaultEventCapacity        = 128
 	minimumEventCapacity        = 4
 	maxPendingToolCallResponses = 128 // bounded by the admitted event window
+	deferredImageOpeningPrompt  = "Use the attached image to answer the user's next spoken question."
 )
 
 const defaultSessionUpdatedTimeout = 30 * time.Second

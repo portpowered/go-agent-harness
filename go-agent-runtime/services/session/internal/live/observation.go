@@ -163,8 +163,6 @@ func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLo
 	}
 }
 
-const deferredImageOpeningPrompt = "Use the attached image to answer the user's next spoken question."
-
 func (h *handle) claimOpeningMessage() (string, []messages.ContentPart, session.LiveOpeningMessageResponse, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
