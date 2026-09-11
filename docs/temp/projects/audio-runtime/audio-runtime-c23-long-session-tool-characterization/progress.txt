@@ -164,3 +164,53 @@ C23 executor admission and regression recheck 2026-09-10
 - Focused owned-code rechecks passed: Python compilation, `git diff --check`, and the named C21 `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` passed normal `-count=5` in `13.154s` and race `-count=1` in `11.833s`. No C21/shared or production file changed. The 2 GiB reserve remains barely available at `2,145,508 KiB`; no new build or stale artifact relabeling was performed.
 - The latest unresolved required behavior is unchanged and out of lease: the public fixture prefetched active `tool-resp-000`/`tool-resp-001`, observed four calls, delivered only `call-000-alpha`/`call-000-beta`, and left `call-001-alpha`/`call-001-beta` unresolved. No unchanged overlap/matrix rerun was made. This candidate is not ready for SCRIPT CI and makes no CI, review, merge, vertical, device, acoustic, or project-completion claim.
 - Next action: after a reviewed repair or explicit owner decision for response-scoped concurrent continuation routing in `go-agent-runtime/services/session/internal/live` or `go-agent-loop/pkg/subsystems/tool_result_forwarder.go`, fetch/integrate that changed main, rebuild and rebind all provenance, rerun the complete bounded C23 sequence and accumulated regressions, then update the same PR and return `ACCEPTED` only when no actionable candidate repair remains. Until then retain this task with `CONTINUE`.
+
+C23 current-head post-C48 interruption regression checkpoint — 2026-09-11
+
+- Admission, branch, and ancestry remain valid after fetching and merging
+  `origin/main=6b4f32b5940d43192774e86f05e3c7c9293c71e3` as candidate
+  `0304ec692497ddfc7b0c31f7fd67cd17a7bd3a1e`. The branch still matches
+  `prd.json.branchName`, startup `8bdafc7f947a3a2c9856220abdc539437035bd21`
+  and project baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` remain
+  ancestors, and the candidate diff remains limited to the seven admitted C23
+  evidence paths.
+- Fresh `prepare` passed against the exact current main with 947 hashed build
+  inputs, consumer SHA-256
+  `619b153cca1425089dc1cdd7414c10d7599473edbdce6e20d7aebb58c06cd322`,
+  same-source yui SHA-256
+  `5c6f2a7066b8c698f4037df1f39ec2757e4712b9ad6170d9d6a5ca6f080f01e4`, and
+  fixture SHA-256
+  `7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e`.
+  The tampered-fixture provenance negative control passed with the expected
+  digest rejection.
+- The first post-C48 bounded controls run failed at the interruption phase in
+  `2.41s`; it was not retried unchanged and no matrix run was started. The
+  preserved first failure is
+  `artifacts/first-failures/0304ec692497ddfc7b0c31f7fd67cd17a7bd3a1e-controls.json`
+  and its child report is
+  `artifacts/runs/20260911T082822Z-controls-interruption/consumer-report.json`.
+  The public trace proves the cancel boundary, 4-byte delayed provider audio
+  rejection, and healthy audio through `TEXT.DELTA`, but the runtime event
+  stream closes before the healthy `MESSAGE.END`; the terminal is loop
+  `partial_output`, `clean_shutdown=false`, and the child is reaped with no
+  live process group. Pre-C48 C23 reports contain the same fixture's healthy
+  `MESSAGE.END`, `SESSION.CLOSE`, and provider-authored completion, so this is
+  a current-main regression rather than stale provenance or a verifier retry.
+- Focused current-head C48/live/coordinator regressions passed in normal and
+  race modes. Accumulated C21
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` also passed
+  normal `-count=5` in `12.550s` and race `-count=1` in `13.199s`; no C21 or
+  shared file changed. The causal owner handoff is the public session shutdown
+  pipeline in `go-agent-runtime/services/session/internal/live` and its
+  `go-agent-loop` kernel-delta publication boundary: provider `SESSION.CLOSE`
+  requests graceful stop while the preceding healthy `MESSAGE.END` can still
+  be queued, allowing the kernel delta reader to close before that terminal
+  message reaches public `handle.Events()`.
+- Current disposition is `CONTINUE`, not `ACCEPTED`: C23 owns only its evidence
+  folder and has no lease to mutate those production paths. Next action is for
+  the assigned runtime owner to land a reviewed repair or provide an explicit
+  owner decision; then fetch/integrate that changed main, rebind provenance at
+  the new exact head, rerun controls, the complete off/on 16/64/128/256 matrix,
+  shipped regressions, self-check, report, and accumulated focused tests before
+  updating the same PR and submitting once to script CI. No CI-green, review,
+  merge, vertical, device, acoustic, or project-acceptance claim is made.
