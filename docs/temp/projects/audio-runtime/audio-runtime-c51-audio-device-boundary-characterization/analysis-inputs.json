@@ -6316,19 +6316,19 @@
       "module": "go-agent-loop",
       "path": "go-agent-loop/pkg/subsystems/coordinator.go",
       "role": "production",
-      "sha256": "cc9744f56d8a5e219f8c0154d2becc4886f086f899bdb7c6b503811b6d7c37b2"
+      "sha256": "f92646d25c980e6b78d7dbdff37d9e83ea52bda44fdae20e4bc886c7dd030309"
     },
     {
       "module": "go-agent-loop",
       "path": "go-agent-loop/pkg/subsystems/coordinator_delta.go",
       "role": "production",
-      "sha256": "bc833ba4abac769cf2e7a88a72e54ec3d1efd913723688d609f0bd294c8878a7"
+      "sha256": "ba9f4c1aa58ac1d22fbe91506fa117de35527f414bd9eaeae02f0bb6db72bd1a"
     },
     {
       "module": "go-agent-loop",
       "path": "go-agent-loop/pkg/subsystems/coordinator_delta_test.go",
       "role": "test",
-      "sha256": "19f1da1252e213495e4895088175445000cbf7ba8ee619d88297f42f7b8ec519"
+      "sha256": "f32c5e8cf46a0b8cd8acdece933bc5ee9b451c308693b758551f06ce76410c4e"
     },
     {
       "module": "go-agent-loop",
@@ -7930,13 +7930,13 @@
       "module": "go-agent-runtime",
       "path": "go-agent-runtime/services/session/internal/live/continuation.go",
       "role": "production",
-      "sha256": "9cfed00eaf497fb8acce6cff3ba1d8b40f58f82a9e9733a8d79f1183fa3a7864"
+      "sha256": "c9c5ce0257bf5e60c65b119c66b336009dc6c8ee9eeaf2c4d287de77669b0e2b"
     },
     {
       "module": "go-agent-runtime",
       "path": "go-agent-runtime/services/session/internal/live/control.go",
       "role": "production",
-      "sha256": "2172f541a2c2ee5994155cb414f42df36e5bcb315f2763401a5adf8da781fdd6"
+      "sha256": "e6520064f36fa1a26521938639ff3fc63c15e6b4d99a601e1405ee0ad2362dd4"
     },
     {
       "module": "go-agent-runtime",
@@ -7954,7 +7954,7 @@
       "module": "go-agent-runtime",
       "path": "go-agent-runtime/services/session/internal/live/lifecycle.go",
       "role": "production",
-      "sha256": "41c3287f8da20cf5eb38c6294fe3b76c9d947e070462fd34c34cdab522b9a6f3"
+      "sha256": "e0bf0bc8aaf2a6da1f0e955e50d274660fe8c2623766a362ec316557ce4b6988"
     },
     {
       "module": "go-agent-runtime",
@@ -7996,7 +7996,7 @@
       "module": "go-agent-runtime",
       "path": "go-agent-runtime/services/session/internal/live/observation.go",
       "role": "production",
-      "sha256": "d57a7b4996493f5a8e882be3d01ce4e56309fde70d3d28c98c003205af06c0b6"
+      "sha256": "bd4aea65e548e6c5c861849c493d6548376b6a2346379b9a8483961853eb531c"
     },
     {
       "module": "go-agent-runtime",
@@ -8032,19 +8032,19 @@
       "module": "go-agent-runtime",
       "path": "go-agent-runtime/services/session/internal/live/replay_readiness_test.go",
       "role": "test",
-      "sha256": "21ee26fbc4a149a03f00afa574d5db07cf3475dca89a4f16e39fff0df46860b6"
+      "sha256": "828752babecb13c81a256944bd5570831dc761d3d12ba87f500c3dde9be2cc7a"
     },
     {
       "module": "go-agent-runtime",
       "path": "go-agent-runtime/services/session/internal/live/service.go",
       "role": "production",
-      "sha256": "1615012b12f7753f90e74e7a7d32ee9c276081974e32eb33be5b80a9747dbeeb"
+      "sha256": "17cd23611c7b88ec13732d369f3adf399da3083463ab552b99a491ce115ce730"
     },
     {
       "module": "go-agent-runtime",
       "path": "go-agent-runtime/services/session/internal/live/service_test.go",
       "role": "test",
-      "sha256": "34518102b1c011ca8c0820215f350f0a56f4f13ef5080d627c5b59220f929287"
+      "sha256": "d880d19f484becd704153b2840e9144ce99a78028d8b7d4b95748593c2ce28cd"
     },
     {
       "module": "go-agent-runtime",
@@ -11066,5 +11066,5 @@
     }
   ],
   "schema": "audio-runtime-c51.analysis-inputs.v1",
-  "sourceRevision": "bb29005d0bb545db5e08ffda0205929b021d4fc1"
+  "sourceRevision": "cdf416a8060251a6b4bbf3680241f1ee79953cff"
 }

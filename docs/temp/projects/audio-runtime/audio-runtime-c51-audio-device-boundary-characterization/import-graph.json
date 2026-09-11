@@ -3915,7 +3915,7 @@
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/replay_readiness_test.go",
-          "line": 10
+          "line": 7
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/service_test.go",
@@ -4151,7 +4151,7 @@
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/replay_readiness_test.go",
-          "line": 13
+          "line": 10
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/service_test.go",
@@ -4255,7 +4255,7 @@
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/replay_readiness_test.go",
-          "line": 14
+          "line": 11
         }
       ],
       "from": "go-agent-runtime",
@@ -11156,7 +11156,7 @@
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/observation.go",
-          "line": 9
+          "line": 7
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/policies.go",
@@ -11380,7 +11380,7 @@
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/continuation.go",
-          "line": 8
+          "line": 5
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/control.go",
@@ -11400,7 +11400,7 @@
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/observation.go",
-          "line": 10
+          "line": 8
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/observations/observer.go",
@@ -11736,7 +11736,7 @@
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/observation.go",
-          "line": 15
+          "line": 13
         },
         {
           "file": "go-agent-runtime/services/session/internal/live/observations/observer.go",
@@ -12818,7 +12818,7 @@
     }
   ],
   "schema": "audio-runtime-c51.import-graph.v1",
-  "sourceRevision": "bb29005d0bb545db5e08ffda0205929b021d4fc1",
+  "sourceRevision": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
   "transitiveProductionClosure": {
     "agent-cli": [
       "go-agent-loop",
