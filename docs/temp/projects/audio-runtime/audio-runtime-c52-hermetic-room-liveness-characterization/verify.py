@@ -4,12 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
-import os
 import re
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 
@@ -24,10 +25,35 @@ BASELINE = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 TASK = "audio-runtime-c52-hermetic-room-liveness-characterization"
 OWNED_PREFIX = "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/"
 EXPECTED_PACKAGE = "./services/rooms/internal/lifecycle"
+TEST_PARENT = "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer"
+REQUIRED_PROCESS_FIELDS = (
+    "exit_code",
+    "timed_out",
+    "output_overflow",
+    "reader_survivor",
+    "cleanup",
+)
+REQUIRED_CLEANUP_FIELDS = (
+    "reason",
+    "parent_exit_code",
+    "term_sent",
+    "kill_sent",
+    "group_survivor",
+    "term_error",
+    "kill_error",
+)
+EXPECTED_NEGATIVE_CONTROLS = {
+    "environment_allowlist",
+    "zero_test_selection",
+    "wrong_test_selection",
+    "survivor_process",
+    "normal_exit_survivor",
+    "archive_reuse_mismatch",
+}
 
 # A valid overlay trace emits the same lifecycle shape for every individual
-# subtest invocation. Presence-only checks let a duplicated terminal or a
-# transformed checkpoint pass while retaining all of the expected names.
+# subtest invocation. Singular lifecycle checkpoints are exact-cardinality
+# controls; variable callback diagnostics remain lower-bounded below.
 PER_CASE_TRACE_COUNTS = {
     "case_started": 1,
     "live_open": 2,
@@ -116,20 +142,31 @@ def records(run: dict[str, object]) -> list[dict[str, object]]:
     return [value for value in values if isinstance(value, dict)]
 
 
-def process_failure(record: dict[str, object]) -> bool:
-    process = record.get("process")
-    if not isinstance(process, dict):
-        return True
+def process_cleanup_valid(process: object) -> bool:
+    if not isinstance(process, dict) or any(key not in process for key in REQUIRED_PROCESS_FIELDS):
+        return False
     cleanup = process.get("cleanup")
-    return bool(
-        process.get("timed_out")
-        or process.get("output_overflow")
-        or process.get("reader_survivor")
-        or (
-            isinstance(cleanup, dict)
-            and (cleanup.get("group_survivor") or cleanup.get("term_error") or cleanup.get("kill_error"))
-        )
+    if not isinstance(cleanup, dict) or any(key not in cleanup for key in REQUIRED_CLEANUP_FIELDS):
+        return False
+    return (
+        isinstance(process.get("timed_out"), bool)
+        and process.get("timed_out") is False
+        and isinstance(process.get("output_overflow"), bool)
+        and process.get("output_overflow") is False
+        and isinstance(process.get("reader_survivor"), bool)
+        and process.get("reader_survivor") is False
+        and cleanup.get("reason") == "parent_exit"
+        and cleanup.get("parent_exit_code") == process.get("exit_code")
+        and isinstance(cleanup.get("term_sent"), bool)
+        and isinstance(cleanup.get("kill_sent"), bool)
+        and cleanup.get("group_survivor") is False
+        and cleanup.get("term_error") is None
+        and cleanup.get("kill_error") is None
     )
+
+
+def process_failure(record: dict[str, object]) -> bool:
+    return not process_cleanup_valid(record.get("process"))
 
 
 def selection(record: dict[str, object]) -> dict[str, object]:
@@ -205,15 +242,27 @@ def parse_raw_go_json(
     required_test_pass_counts = {test: test_events.get(test, {}).get("pass", 0) for test in required_tests}
     required_test_fail_counts = {test: test_events.get(test, {}).get("fail", 0) for test in required_tests}
     required_test_skip_counts = {test: test_events.get(test, {}).get("skip", 0) for test in required_tests}
+    required_test_terminal_counts = {
+        test: required_test_pass_counts[test] + required_test_fail_counts[test]
+        for test in required_tests
+    }
+    relevant_test_names = sorted(name for name in test_events if name.startswith(TEST_PARENT))
+    expected_relevant_names = sorted({TEST_PARENT, *required_tests})
     selection_valid = (
         expected_count is not None
         and expected_count > 0
         and not invalid_lines
         and not cached_marker
+        and not no_tests_marker
         and all(test_events.get(test, {}).get("run", 0) == expected_count for test in required_tests)
+        and all(required_test_terminal_counts[test] == expected_count for test in required_tests)
+        and all(required_test_skip_counts[test] == 0 for test in required_tests)
+        and relevant_test_names == expected_relevant_names
+    )
+    behavior_passed = (
+        selection_valid
         and all(required_test_pass_counts[test] == expected_count for test in required_tests)
         and all(required_test_fail_counts[test] == 0 for test in required_tests)
-        and all(required_test_skip_counts[test] == 0 for test in required_tests)
     )
     return {
         "json_line_count": len(events),
@@ -224,9 +273,11 @@ def parse_raw_go_json(
         "required_test_pass_counts": required_test_pass_counts,
         "required_test_fail_counts": required_test_fail_counts,
         "required_test_skip_counts": required_test_skip_counts,
+        "required_test_terminal_counts": required_test_terminal_counts,
         "requested_count": expected_count,
         "selection_valid": selection_valid,
-        "relevant_test_names": sorted(name for name in test_events if name.startswith("TestRunnerRoutesTypedLivenessFaultAndPreservesPeer")),
+        "behavior_passed": behavior_passed,
+        "relevant_test_names": relevant_test_names,
         "package_events": [event for event in events if event.get("Package") == "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle" and not event.get("Test")],
         "cached_marker": cached_marker,
         "no_tests_marker": no_tests_marker,
@@ -297,13 +348,80 @@ def validate_raw_selection(
             "fail": counts.get("fail", 0),
             "skip": counts.get("skip", 0),
         }
-        expected_actions = {"run": expected, "pass": expected, "fail": 0, "skip": 0}
-        if actual != expected_actions:
-            raise VerificationError(f"{context} raw selection for {test} is {actual}, expected {expected_actions}")
+        if actual["run"] != expected or actual["pass"] + actual["fail"] != expected or actual["skip"] != 0:
+            raise VerificationError(
+                f"{context} raw selection for {test} is {actual}, expected run={expected}, "
+                f"terminal={expected}, skip=0"
+            )
     if require_selected and parsed.get("selection_valid") is not True:
         raise VerificationError(f"{context} raw selection is not valid")
     if not require_selected and parsed.get("selection_valid") is True:
         raise VerificationError(f"{context} unexpectedly validated a zero-test selection")
+
+
+def verify_embedded_selection(record: dict[str, object], raw: dict[str, object], context: str) -> None:
+    if selection(record) != raw:
+        raise VerificationError(f"embedded selection differs from raw go test JSON for {context}")
+
+
+def validate_ci_metadata(ci: dict[str, object], metadata_path: Path) -> dict[str, object]:
+    expected_hash = ci.get("metadata_sha256")
+    if not isinstance(expected_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_hash):
+        raise VerificationError("prior CI metadata hash is missing or malformed")
+    if not metadata_path.is_file() or digest(metadata_path) != expected_hash:
+        raise VerificationError("prior CI metadata hash does not match the retained file")
+    metadata = load(metadata_path)
+    if not isinstance(metadata, dict):
+        raise VerificationError("prior CI metadata must be an object")
+    metadata_identity = {
+        "databaseId": int(ci["run_id"]),
+        "headSha": PR438,
+        "status": ci.get("status"),
+        "conclusion": ci.get("conclusion"),
+        "attempt": ci.get("attempt"),
+    }
+    if any(metadata.get(key) != expected for key, expected in metadata_identity.items()):
+        raise VerificationError("prior CI metadata identity does not match the declared observation")
+    capture = metadata.get("capture")
+    if not isinstance(capture, dict):
+        raise VerificationError("prior CI metadata has no capture provenance")
+    if (
+        capture.get("logSha256") != ci.get("log_sha256")
+        or capture.get("logBytes") != ci.get("log_bytes")
+        or capture.get("logLines") != ci.get("log_lines")
+        or capture.get("logExitCode") != 0
+    ):
+        raise VerificationError("prior CI metadata capture does not match the declared log")
+    return metadata
+
+
+def validate_hash(value: object, context: str) -> None:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise VerificationError(f"{context} is missing or malformed")
+
+
+def validate_archive_entry(label: str, item: object) -> None:
+    if not isinstance(item, dict):
+        raise VerificationError(f"source archive entry is not an object: {label}")
+    expected_revision = PR438 if label == "pr438" else PLANNING_MAIN
+    if item.get("revision") != expected_revision or item.get("resolved_revision") != expected_revision:
+        raise VerificationError(f"source archive revision identity is incomplete: {label}")
+    if item.get("fixed_revision_verified") is not True or not isinstance(item.get("reused"), bool):
+        raise VerificationError(f"source archive fixed-revision reuse proof is incomplete: {label}")
+    for key in (
+        "sha256",
+        "content_sha256",
+        "generated_sha256",
+        "generated_content_sha256",
+        "retained_sha256",
+        "retained_content_sha256",
+    ):
+        validate_hash(item.get(key), f"source archive {label}.{key}")
+    if item.get("content_sha256") != item.get("retained_content_sha256") or item.get("content_sha256") != item.get("generated_content_sha256"):
+        raise VerificationError(f"source archive content hash binding is incomplete: {label}")
+    path = EVIDENCE / str(item.get("path", ""))
+    if not path.is_file() or digest(path) != item.get("sha256") or item.get("retained_sha256") != digest(path):
+        raise VerificationError(f"source archive hash mismatch: {path}")
 
 
 def verify_provenance() -> dict[str, object]:
@@ -361,12 +479,8 @@ def verify_provenance() -> dict[str, object]:
     archives = value.get("source_archives")
     if not isinstance(archives, dict) or set(archives) != {"pr438", "planning_main"}:
         raise VerificationError("both source archives are required")
-    for item in archives.values():
-        if not isinstance(item, dict) or not re.fullmatch(r"[0-9a-f]{64}", str(item.get("sha256", ""))):
-            raise VerificationError("source archive hash is incomplete")
-        path = EVIDENCE / str(item.get("path", ""))
-        if not path.is_file() or digest(path) != item["sha256"]:
-            raise VerificationError(f"source archive hash mismatch: {path}")
+    for label, item in archives.items():
+        validate_archive_entry(label, item)
     ci = value.get("ci_observation")
     if not isinstance(ci, dict) or ci.get("run_id") != "34562579355" or ci.get("job_id") != "103148160889" or ci.get("head_sha") != PR438:
         raise VerificationError("prior CI observation identity is incomplete")
@@ -381,28 +495,7 @@ def verify_provenance() -> dict[str, object]:
         or digest(metadata_path) != ci.get("metadata_sha256")
     ):
         raise VerificationError("complete prior CI log/metadata is missing or changed")
-    metadata = load(metadata_path)
-    if not isinstance(metadata, dict):
-        raise VerificationError("prior CI metadata must be an object")
-    metadata_identity = {
-        "databaseId": int(ci["run_id"]),
-        "headSha": PR438,
-        "status": ci.get("status"),
-        "conclusion": ci.get("conclusion"),
-        "attempt": ci.get("attempt"),
-    }
-    if any(metadata.get(key) != expected for key, expected in metadata_identity.items()):
-        raise VerificationError("prior CI metadata identity does not match the declared observation")
-    capture = metadata.get("capture")
-    if not isinstance(capture, dict):
-        raise VerificationError("prior CI metadata has no capture provenance")
-    if (
-        capture.get("logSha256") != ci.get("log_sha256")
-        or capture.get("logBytes") != ci.get("log_bytes")
-        or capture.get("logLines") != ci.get("log_lines")
-        or capture.get("logExitCode") != 0
-    ):
-        raise VerificationError("prior CI metadata capture does not match the declared log")
+    validate_ci_metadata(ci, metadata_path)
     primary = value.get("primary_observation")
     if not isinstance(primary, dict) or primary.get("status") != "REPORTED_UNDER_PAYLOAD" or primary.get("independently_verified") is not False:
         raise VerificationError("primary rerun must remain explicitly reported, not fabricated")
@@ -410,8 +503,18 @@ def verify_provenance() -> dict[str, object]:
     if not isinstance(runner, dict):
         raise VerificationError("runner/overlay provenance is missing")
     for key in ("matrix_sha256", "run_sha256", "overlay_sha256", "verify_sha256"):
-        if not re.fullmatch(r"[0-9a-f]{64}", str(runner.get(key, ""))):
-            raise VerificationError(f"runner hash missing: {key}")
+        validate_hash(runner.get(key), f"runner hash {key}")
+    integrity_path = EVIDENCE / "integrity-controls.json"
+    if integrity_path.is_file():
+        validate_hash(runner.get("integrity_controls_sha256"), "runner hash integrity_controls_sha256")
+        if digest(integrity_path) != runner.get("integrity_controls_sha256"):
+            raise VerificationError("integrity-control report hash mismatch")
+    storage_ref = value.get("storage")
+    if not isinstance(storage_ref, dict) or storage_ref.get("path") != "storage.json":
+        raise VerificationError("storage provenance reference is missing")
+    validate_hash(storage_ref.get("sha256"), "storage provenance hash")
+    if digest(EVIDENCE / "storage.json") != storage_ref.get("sha256"):
+        raise VerificationError("storage provenance hash does not match storage.json")
     if value.get("no_source_mutation") is not True:
         raise VerificationError("provenance does not prove source mutation isolation")
     return {"mode": "provenance", "passes": True, "candidate_source_revision": value.get("candidate_source_revision"), "ci_log_sha256": ci.get("log_sha256")}
@@ -517,21 +620,114 @@ def verify_matrix() -> dict[str, object]:
             f"{label}/{key[1]}",
             require_selected=True,
         )
-        embedded = selection(record)
-        if embedded != raw:
-            raise VerificationError(f"embedded selection differs from raw go test JSON for {key}")
+        verify_embedded_selection(record, raw, f"{label}/{key[1]}")
         counts = {str(name): int(value) for name, value in raw["required_test_run_counts"].items()}
         if not counts or any(value != expected_test_count for value in counts.values()):
             raise VerificationError(f"zero required test selection for {key}: {counts}")
         parsed = raw
         if int(parsed.get("invalid_json_lines", 0)) != 0 or parsed.get("cached_marker") is True:
             raise VerificationError(f"invalid/cached go test JSON for {key}")
-        if record.get("process", {}).get("exit_code") != 0:
-            behavioral_failures.append({"revision_label": label, "cell_id": cell.get("id"), "exit_code": record.get("process", {}).get("exit_code"), "first_failure": record.get("process", {}).get("first_failure")})
+        process = record.get("process", {})
+        if not isinstance(process, dict):
+            raise VerificationError(f"missing process record for {key}")
+        behavior_passed = parsed.get("behavior_passed") is True and process.get("exit_code") == 0
+        expected_status = "PASS" if behavior_passed else "FAIL"
+        if record.get("status") != expected_status:
+            raise VerificationError(f"matrix status does not match raw behavior for {key}")
+        if not behavior_passed:
+            behavioral_failures.append({
+                "revision_label": label,
+                "cell_id": cell.get("id"),
+                "exit_code": process.get("exit_code"),
+                "first_failure": process.get("first_failure"),
+                "selection_valid": parsed.get("selection_valid"),
+                "behavior_passed": parsed.get("behavior_passed"),
+            })
     negative = run.get("negative_controls")
     if not isinstance(negative, dict) or negative.get("all_rejected") is not True:
         raise VerificationError("selection/process negative controls did not all reject")
+    controls = negative.get("controls")
+    if not isinstance(controls, dict) or set(controls) != EXPECTED_NEGATIVE_CONTROLS:
+        raise VerificationError("negative control set is incomplete")
     return {"mode": "matrix", "passes": True, "cell_count": len(values), "behavioral_failures": behavioral_failures, "run_id": run.get("run_id")}
+
+
+def require_nonnegative_int(value: object, context: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise VerificationError(f"{context} is not a non-negative integer")
+    return value
+
+
+def verify_storage() -> dict[str, object]:
+    run, _ = latest_run()
+    storage = run.get("storage")
+    if not isinstance(storage, dict):
+        raise VerificationError("matrix run has no storage accounting")
+    numeric_fields = (
+        "source_staging_bytes",
+        "binary_output_bytes",
+        "fixture_report_bytes",
+        "reproducible_scratch_bytes_before_cleanup",
+        "cache_bytes_before_cleanup",
+        "reproducible_scratch_bytes_retained_after_cleanup",
+        "free_space_before_run_bytes",
+        "free_space_before_cleanup_bytes",
+        "free_space_after_cleanup_bytes",
+    )
+    for field in numeric_fields:
+        require_nonnegative_int(storage.get(field), f"matrix storage {field}")
+    if storage.get("source_staging_bytes", 0) == 0 or storage.get("fixture_report_bytes", 0) == 0:
+        raise VerificationError("matrix storage does not account for staged inputs and retained reports")
+    if storage.get("reproducible_scratch_bytes_retained_after_cleanup") != 0:
+        raise VerificationError("matrix storage retains reproducible scratch bytes")
+    cleanup = storage.get("cleanup")
+    if not isinstance(cleanup, dict) or cleanup != {
+        "cache_present_after_cleanup": False,
+        "known_generated_cache_and_scratch_removed": True,
+        "scratch_present_after_cleanup": False,
+    }:
+        raise VerificationError("matrix storage cleanup result is incomplete")
+    archive_reuse = storage.get("archive_reuse")
+    if not isinstance(archive_reuse, dict) or set(archive_reuse) != {"pr438", "planning-main"}:
+        raise VerificationError("matrix storage archive reuse identity is incomplete")
+    for label, item in archive_reuse.items():
+        if not isinstance(item, dict) or item.get("revision") != (PR438 if label == "pr438" else PLANNING_MAIN):
+            raise VerificationError(f"matrix storage archive revision is incomplete: {label}")
+        if item.get("fixed_revision_verified") is not True or not isinstance(item.get("reused"), bool):
+            raise VerificationError(f"matrix storage archive reuse is not verified: {label}")
+        for field in ("sha256", "content_sha256", "generated_content_sha256", "retained_content_sha256"):
+            validate_hash(item.get(field), f"matrix storage archive {label}.{field}")
+        if item.get("content_sha256") != item.get("generated_content_sha256") or item.get("content_sha256") != item.get("retained_content_sha256"):
+            raise VerificationError(f"matrix storage archive content identity is inconsistent: {label}")
+    archives = run.get("archives")
+    if not isinstance(archives, dict) or set(archives) != {"pr438", "planning-main"}:
+        raise VerificationError("matrix run source archives are incomplete")
+    expected_staging = 0
+    for label, item in archives.items():
+        validate_archive_entry("pr438" if label == "pr438" else "planning_main", item)
+        if not isinstance(item, dict):
+            raise VerificationError(f"matrix archive entry is invalid: {label}")
+        expected_staging += require_nonnegative_int(item.get("bytes"), f"matrix archive {label}.bytes")
+    if storage.get("source_staging_bytes") != expected_staging:
+        raise VerificationError("matrix storage source staging total does not match archives")
+    retained = load(EVIDENCE / "storage.json")
+    if not isinstance(retained, dict):
+        raise VerificationError("storage.json must be an object")
+    for field in ("free_space_before_cleanup_bytes", "free_space_after_cleanup_bytes"):
+        require_nonnegative_int(retained.get(field), f"storage.json {field}")
+    if retained.get("free_space_before_cleanup_bytes") != storage.get("free_space_before_cleanup_bytes") or retained.get("free_space_after_cleanup_bytes") != storage.get("free_space_after_cleanup_bytes"):
+        raise VerificationError("storage.json free-space measurements do not match the canonical run")
+    retained_reuse = retained.get("archive_reuse")
+    if retained_reuse != archive_reuse:
+        raise VerificationError("storage.json archive reuse evidence does not match the canonical run")
+    return {
+        "mode": "storage",
+        "passes": True,
+        "run_id": run.get("run_id"),
+        "free_space_before_cleanup_bytes": storage.get("free_space_before_cleanup_bytes"),
+        "free_space_after_cleanup_bytes": storage.get("free_space_after_cleanup_bytes"),
+        "archive_reuse_verified": True,
+    }
 
 
 def case_groups(events: list[dict[str, object]]) -> list[list[dict[str, object]]]:
@@ -667,8 +863,12 @@ def verify_checkpoints() -> dict[str, object]:
         peer_counts = [event_fields(event).get("count") for event in events if event.get("kind") == "peer_cancel_snapshot"]
         if missing:
             raise VerificationError(f"missing checkpoints for {record.get('revision_label')}/{record.get('cell', {}).get('id')}: {missing}")
-        if not peer_counts or any(count != "0" for count in peer_counts):
-            raise VerificationError("peer cancellation was not zero before external cancellation")
+        for group in groups:
+            failed = group in failed_groups
+            if not failed and any(event_fields(event).get("count") != "0" for event in group if event.get("kind") == "peer_cancel_snapshot"):
+                raise VerificationError("peer cancellation was not zero before external cancellation")
+        if not peer_counts:
+            raise VerificationError("peer cancellation checkpoint is missing")
         for event in events:
             if event.get("kind") == "live_event_received" and event_fields(event).get("event_kind") == "liveness_fault" and event_fields(event).get("liveness_classification") not in {"silent_provider_timeout", "silent_provider_empty_response"}:
                 raise VerificationError("liveness event lacks typed classification")
@@ -769,6 +969,114 @@ def verify_cleanup() -> dict[str, object]:
     if survivors:
         raise VerificationError(f"owned process survivors remain: {survivors}")
     return {"mode": "cleanup", "passes": True, "cells": cells, "negative_survivor_controls": ["survivor_process", "normal_exit_survivor"]}
+
+
+def verify_local_regressions() -> dict[str, object]:
+    summary = load(EVIDENCE / "regressions/summary.json")
+    if not isinstance(summary, dict) or summary.get("schema") != "audio-runtime-c52-local-regressions-v1" or summary.get("passes") is not True:
+        raise VerificationError("accumulated local regression summary is not passing")
+    checks = summary.get("checks")
+    if not isinstance(checks, dict) or set(checks) != {"normal", "race"}:
+        raise VerificationError("normal and race regression records are incomplete")
+    for name, check in checks.items():
+        if not isinstance(check, dict) or check.get("passes") is not True:
+            raise VerificationError(f"local regression check did not pass: {name}")
+        process = check.get("process")
+        if not process_cleanup_valid(process) or not isinstance(process, dict) or process.get("exit_code") != 0:
+            raise VerificationError(f"local regression cleanup/proc record is incomplete: {name}")
+        for stream in ("stdout", "stderr"):
+            path = EVIDENCE / f"regressions/{name}/{stream}.log"
+            field = f"{stream}_sha256"
+            if not path.is_file() or digest(path) != process.get(field) or process.get(f"{stream}_bytes") != path.stat().st_size:
+                raise VerificationError(f"local regression {stream} provenance is incomplete: {name}")
+    storage = summary.get("storage")
+    if not isinstance(storage, dict):
+        raise VerificationError("local regression storage accounting is missing")
+    for field in ("free_space_before_cleanup_bytes", "free_space_after_cleanup_bytes", "fixture_report_bytes"):
+        require_nonnegative_int(storage.get(field), f"local regression storage {field}")
+    if storage.get("cleanup_verified") is not True or storage.get("reproducible_scratch_bytes_retained_after_cleanup") != 0:
+        raise VerificationError("local regression cleanup accounting is incomplete")
+    return {"mode": "local-regressions", "passes": True, "checks": sorted(checks), "storage_recorded": True}
+
+
+def expect_rejection(name: str, action: object) -> dict[str, object]:
+    try:
+        action()
+    except VerificationError:
+        return {"name": name, "rejected": True}
+    raise VerificationError(f"integrity control was unexpectedly accepted: {name}")
+
+
+def verify_integrity_controls() -> dict[str, object]:
+    run, run_root = latest_run()
+    records_value = records(run)
+    if not records_value:
+        raise VerificationError("integrity controls have no matrix record")
+    record = records_value[0]
+    cell = record.get("cell")
+    if not isinstance(cell, dict):
+        raise VerificationError("integrity control matrix cell is malformed")
+    raw = raw_selection_for_record(run_root, record, cell)
+    tampered_record = copy.deepcopy(record)
+    tampered_selection = tampered_record.get("selection")
+    if not isinstance(tampered_selection, dict) or not isinstance(tampered_selection.get("required_test_run_counts"), dict):
+        raise VerificationError("integrity control selection is malformed")
+    first_test = next(iter(tampered_selection["required_test_run_counts"]))
+    tampered_selection["required_test_run_counts"][first_test] = 1
+    controls = [expect_rejection("tampered_embedded_raw_selection_count", lambda: verify_embedded_selection(tampered_record, raw, "tampered-selection"))]
+
+    events = record_trace(record, run_root)
+    groups = case_groups(events)
+    if not groups:
+        raise VerificationError("integrity control trace has no case group")
+    group = groups[0]
+    duplicate = copy.deepcopy(group)
+    duplicate.append(copy.deepcopy(next(event for event in group if event.get("kind") == "terminal_observed")))
+    controls.append(expect_rejection("duplicate_terminal_checkpoint", lambda: validate_case_trace(duplicate, record)))
+    transformed = copy.deepcopy(group)
+    liveness = next(event for event in transformed if event.get("kind") == "live_event_received" and event_fields(event).get("event_kind") == "liveness_fault")
+    liveness.setdefault("fields", {})["liveness_classification"] = "silent_provider_empty_response"
+    controls.append(expect_rejection("transformed_typed_liveness_checkpoint", lambda: validate_case_trace(transformed, record)))
+
+    provenance = load(EVIDENCE / "provenance.json")
+    if not isinstance(provenance, dict) or not isinstance(provenance.get("ci_observation"), dict):
+        raise VerificationError("integrity control CI observation is missing")
+    ci = provenance["ci_observation"]
+    metadata_path = EVIDENCE / str(ci.get("metadata_path", ""))
+    metadata = load(metadata_path)
+    if not isinstance(metadata, dict):
+        raise VerificationError("integrity control CI metadata is malformed")
+    metadata["conclusion"] = "success"
+    with tempfile.TemporaryDirectory(prefix=".c52-integrity-", dir=EVIDENCE) as temp_dir:
+        tampered_metadata_path = Path(temp_dir) / "metadata.json"
+        write(tampered_metadata_path, metadata)
+        controls.append(expect_rejection("tampered_ci_metadata_hash", lambda: validate_ci_metadata(ci, tampered_metadata_path)))
+
+        failing_path = Path(temp_dir) / "selected-failure.jsonl"
+        required = required_tests_for_cell(cell)
+        failure_events: list[dict[str, object]] = [{"Action": "run", "Test": TEST_PARENT}]
+        for test in required:
+            failure_events.extend([
+                {"Action": "run", "Test": test},
+                {"Action": "output", "Test": test, "Output": "browser_parity_test.go:220: bounded synthetic failure"},
+                {"Action": "fail", "Test": test},
+            ])
+        failing_path.write_text("\n".join(json.dumps(event) for event in failure_events) + "\n", encoding="utf-8")
+        parsed_failure = parse_raw_go_json(failing_path, required, EXPECTED_PACKAGE, 1)
+        validate_raw_selection(parsed_failure, required, 1, "synthetic-selected-failure", require_selected=True)
+        if parsed_failure.get("selection_valid") is not True or parsed_failure.get("behavior_passed") is not False:
+            raise VerificationError("selected failing test was not retained as a behavioral failure")
+        controls.append({"name": "selected_behavior_failure_retained", "rejected": True})
+
+    negative = run.get("negative_controls")
+    negative_controls = negative.get("controls") if isinstance(negative, dict) else None
+    archive_control = negative_controls.get("archive_reuse_mismatch") if isinstance(negative_controls, dict) else None
+    if not isinstance(archive_control, dict) or archive_control.get("rejected") is not True:
+        raise VerificationError("archive reuse mismatch control did not reject")
+    controls.append({"name": "archive_reuse_mismatch", "rejected": True})
+    result = {"schema": "audio-runtime-c52-integrity-controls-v1", "passes": True, "controls": controls}
+    write(EVIDENCE / "integrity-controls.json", result)
+    return {"mode": "integrity-controls", "passes": True, "controls": [item["name"] for item in controls]}
 
 
 def verify_no_retry_and_selection() -> dict[str, object]:
@@ -1003,19 +1311,34 @@ def causal_map() -> dict[str, object]:
 
 
 def all_modes() -> list[dict[str, object]]:
-    reports = [verify_provenance(), verify_matrix(), verify_overlay_integrity(), verify_checkpoints(), first_divergence(), verify_cleanup(), verify_no_retry_and_selection(), classification(), causal_map()]
+    reports = [
+        verify_provenance(),
+        verify_matrix(),
+        verify_storage(),
+        verify_overlay_integrity(),
+        verify_checkpoints(),
+        first_divergence(),
+        verify_cleanup(),
+        verify_local_regressions(),
+        verify_no_retry_and_selection(),
+        verify_integrity_controls(),
+        classification(),
+        causal_map(),
+    ]
     return reports
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["provenance", "matrix", "overlay-integrity", "checkpoints", "first-divergence", "cleanup", "no-retry-and-selection", "classification", "causal-finding-map", "all"], required=True)
+    parser.add_argument("--mode", choices=["provenance", "matrix", "storage", "overlay-integrity", "checkpoints", "first-divergence", "cleanup", "local-regressions", "no-retry-and-selection", "integrity-controls", "classification", "causal-finding-map", "all"], required=True)
     args = parser.parse_args()
     try:
         if args.mode == "provenance":
             report = verify_provenance()
         elif args.mode == "matrix":
             report = verify_matrix()
+        elif args.mode == "storage":
+            report = verify_storage()
         elif args.mode == "overlay-integrity":
             report = verify_overlay_integrity()
         elif args.mode == "checkpoints":
@@ -1024,8 +1347,12 @@ def main() -> int:
             report = first_divergence()
         elif args.mode == "cleanup":
             report = verify_cleanup()
+        elif args.mode == "local-regressions":
+            report = verify_local_regressions()
         elif args.mode == "no-retry-and-selection":
             report = verify_no_retry_and_selection()
+        elif args.mode == "integrity-controls":
+            report = verify_integrity_controls()
         elif args.mode == "classification":
             report = classification()
         elif args.mode == "causal-finding-map":

@@ -160,6 +160,7 @@ def archive_revision(repo: Path, revision: str, destination: Path) -> dict[str, 
     resolved = git_output(repo, "rev-parse", revision)
     if resolved != revision:
         raise RuntimeError(f"unexpected revision resolution for {revision}: {resolved}")
+    reused = destination.exists()
     # Generate a fresh archive on every invocation. A retained archive is
     # evidence input, not a cache: it may only be reused after its bytes have
     # been compared with the exact fixed revision requested by this run.
@@ -200,7 +201,13 @@ def archive_revision(repo: Path, revision: str, destination: Path) -> dict[str, 
         "path": str(destination.relative_to(EVIDENCE)),
         "bytes": destination.stat().st_size,
         "sha256": sha256_file(destination),
-        "content_sha256": archive_content_sha256(destination),
+        "content_sha256": retained_content_sha256,
+        "reused": reused,
+        "generated_sha256": generated_sha256,
+        "generated_content_sha256": generated_content_sha256,
+        "retained_sha256": sha256_file(destination),
+        "retained_content_sha256": retained_content_sha256,
+        "fixed_revision_verified": True,
     }
 
 
@@ -237,6 +244,14 @@ def safe_extract(archive: Path, destination: Path) -> None:
 
 def file_digest(path: Path) -> str:
     return sha256_file(path) if path.is_file() else ""
+
+
+def tree_bytes(root: Path) -> int:
+    if root.is_file():
+        return root.stat().st_size
+    if not root.is_dir():
+        return 0
+    return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
 
 
 def tree_manifest(root: Path) -> dict[str, object]:
@@ -428,22 +443,37 @@ def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, ex
         if action in counts:
             counts[action] += 1
     selected = {test: test_events.get(test, {}).get("run", 0) for test in required_tests}
-    relevant = [name for name in test_events if name.startswith("TestRunnerRoutesTypedLivenessFaultAndPreservesPeer")]
     package_events = [event for event in events if event.get("Package") == "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle" and not event.get("Test")]
     output = "\n".join(str(event.get("Output", "")) for event in events if event.get("Action") == "output")
+    no_tests_marker = "[no tests to run]" in output or any(
+        event.get("Action") == "output" and "no tests to run" in str(event.get("Output", ""))
+        for event in events
+    )
     requested_count = expected_count
     required_pass_counts = {test: test_events.get(test, {}).get("pass", 0) for test in required_tests}
     required_fail_counts = {test: test_events.get(test, {}).get("fail", 0) for test in required_tests}
     required_skip_counts = {test: test_events.get(test, {}).get("skip", 0) for test in required_tests}
+    terminal_counts = {
+        test: required_pass_counts[test] + required_fail_counts[test]
+        for test in required_tests
+    }
+    relevant_names = sorted(name for name in test_events if name.startswith("TestRunnerRoutesTypedLivenessFaultAndPreservesPeer"))
+    expected_relevant_names = sorted({"TestRunnerRoutesTypedLivenessFaultAndPreservesPeer", *required_tests})
     selection_valid = (
         requested_count is not None
         and requested_count > 0
         and not invalid_lines
         and "(cached)" not in output
+        and not no_tests_marker
         and all(test_events.get(test, {}).get("run", 0) == requested_count for test in required_tests)
+        and all(terminal_counts[test] == requested_count for test in required_tests)
+        and all(required_skip_counts[test] == 0 for test in required_tests)
+        and relevant_names == expected_relevant_names
+    )
+    behavior_passed = (
+        selection_valid
         and all(required_pass_counts[test] == requested_count for test in required_tests)
         and all(required_fail_counts[test] == 0 for test in required_tests)
-        and all(required_skip_counts[test] == 0 for test in required_tests)
     )
     return {
         "json_line_count": len(events),
@@ -454,9 +484,11 @@ def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, ex
         "required_test_pass_counts": required_pass_counts,
         "required_test_fail_counts": required_fail_counts,
         "required_test_skip_counts": required_skip_counts,
+        "required_test_terminal_counts": terminal_counts,
         "requested_count": requested_count,
         "selection_valid": selection_valid,
-        "relevant_test_names": sorted(relevant),
+        "behavior_passed": behavior_passed,
+        "relevant_test_names": relevant_names,
         "package_events": package_events,
         "cached_marker": "(cached)" in output,
         "no_tests_marker": "[no tests to run]" in output or any(event.get("Action") == "output" and "no tests to run" in str(event.get("Output", "")) for event in events),
@@ -761,6 +793,7 @@ def requested_count_for(cell: dict[str, object]) -> int | None:
 def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_timeout: float) -> dict[str, object]:
     started = time.monotonic()
     deadline = started + aggregate_timeout
+    free_space_before_run = shutil.disk_usage(EVIDENCE).free
     cache_root = run_dir / "cache"
     cache_root.mkdir(parents=True, exist_ok=True)
     for cache_name in ("gocache", "gomodcache", "gotmp"):
@@ -816,16 +849,51 @@ def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_t
                 "selection": parsed,
                 "trace_path": str(trace_path.relative_to(EVIDENCE)) if trace_path.exists() else None,
                 "trace_sha256": sha256_file(trace_path) if trace_path.exists() else None,
-                "status": "PASS" if process.get("exit_code") == 0 and not process.get("timed_out") and not process.get("output_overflow") and parsed.get("selection_valid") is True else "FAIL",
+                "status": "PASS" if process.get("exit_code") == 0 and not process.get("timed_out") and not process.get("output_overflow") and parsed.get("selection_valid") is True and parsed.get("behavior_passed") is True else "FAIL",
             }
             json_write(cell_dir / "cell.json", record)
             cells.append(record)
-    negative = run_negative_controls(matrix, scratch_roots["planning-main"], run_dir, cache_root, overlay_hash, deadline)
+    negative = run_negative_controls(matrix, scratch_roots["planning-main"], run_dir, cache_root, overlay_hash, deadline, repo, archives)
+    scratch_bytes_before_cleanup = tree_bytes(run_dir / "scratch")
+    cache_bytes_before_cleanup = tree_bytes(cache_root)
+    free_space_before_cleanup = shutil.disk_usage(EVIDENCE).free
     for scratch in scratch_roots.values():
         shutil.rmtree(scratch, ignore_errors=True)
+    shutil.rmtree(run_dir / "scratch", ignore_errors=True)
     # All child processes have been reaped before this point; retain reports and
     # hashes but remove the run-local tool caches from the evidence bundle.
     remove_run_cache(cache_root)
+    free_space_after_cleanup = shutil.disk_usage(EVIDENCE).free
+    scratch_bytes_after_cleanup = tree_bytes(run_dir / "scratch")
+    cache_present_after_cleanup = cache_root.exists()
+    storage = {
+        "source_staging_bytes": sum(int(item.get("bytes", 0)) for item in archives.values()),
+        "binary_output_bytes": 0,
+        "fixture_report_bytes": tree_bytes(run_dir),
+        "reproducible_scratch_bytes_before_cleanup": scratch_bytes_before_cleanup,
+        "cache_bytes_before_cleanup": cache_bytes_before_cleanup,
+        "reproducible_scratch_bytes_retained_after_cleanup": scratch_bytes_after_cleanup,
+        "free_space_before_run_bytes": free_space_before_run,
+        "free_space_before_cleanup_bytes": free_space_before_cleanup,
+        "free_space_after_cleanup_bytes": free_space_after_cleanup,
+        "archive_reuse": {
+            label: {
+                "revision": item.get("revision"),
+                "reused": item.get("reused"),
+                "sha256": item.get("sha256"),
+                "content_sha256": item.get("content_sha256"),
+                "generated_content_sha256": item.get("generated_content_sha256"),
+                "retained_content_sha256": item.get("retained_content_sha256"),
+                "fixed_revision_verified": item.get("fixed_revision_verified"),
+            }
+            for label, item in archives.items()
+        },
+        "cleanup": {
+            "known_generated_cache_and_scratch_removed": scratch_bytes_after_cleanup == 0 and not cache_present_after_cleanup,
+            "scratch_present_after_cleanup": (run_dir / "scratch").exists(),
+            "cache_present_after_cleanup": cache_present_after_cleanup,
+        },
+    }
     result = {
         "schema": "audio-runtime-c52-matrix-run-v1",
         "run_id": run_dir.name,
@@ -840,6 +908,7 @@ def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_t
         "cell_count": len(cells),
         "cells": cells,
         "negative_controls": negative,
+        "storage": storage,
     }
     json_write(run_dir / "run.json", result)
     json_write(EVIDENCE / "matrix-results.json", result)
@@ -849,7 +918,16 @@ def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_t
     return result
 
 
-def run_negative_controls(matrix: dict[str, object], scratch: Path, run_dir: Path, cache_root: Path, overlay_hash: str, deadline: float) -> dict[str, object]:
+def run_negative_controls(
+    matrix: dict[str, object],
+    scratch: Path,
+    run_dir: Path,
+    cache_root: Path,
+    overlay_hash: str,
+    deadline: float,
+    repo: Path,
+    archives: dict[str, dict[str, object]],
+) -> dict[str, object]:
     controls_dir = run_dir / "negative-controls"
     module_root = scratch / "go-agent-runtime"
     if not module_root.is_dir():
@@ -917,10 +995,40 @@ def run_negative_controls(matrix: dict[str, object], scratch: Path, run_dir: Pat
                 and cleanup.get("kill_error") is None
             ),
         }
+    if time.monotonic() < deadline:
+        archive_dir = controls_dir / "archive-reuse-mismatch"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        planning_archive = EVIDENCE / str(archives["planning-main"]["path"])
+        mismatched_archive = archive_dir / "stale-pr438.tar"
+        shutil.copyfile(planning_archive, mismatched_archive)
+        try:
+            archive_revision(repo, PR438, mismatched_archive)
+        except (RuntimeError, OSError, tarfile.TarError) as exc:
+            archive_rejected = True
+            archive_error = f"{type(exc).__name__}: {exc}"
+        else:
+            archive_rejected = False
+            archive_error = "archive reuse unexpectedly accepted mismatched contents"
+        mismatched_archive.unlink(missing_ok=True)
+        shutil.rmtree(archive_dir, ignore_errors=True)
+        controls["archive_reuse_mismatch"] = {
+            "source_revision": PR438,
+            "copied_from_revision": PLANNING_MAIN,
+            "rejected": archive_rejected,
+            "error": archive_error[:500],
+            "scratch_removed": not archive_dir.exists(),
+        }
     result = {
         "schema": "audio-runtime-c52-negative-controls-v2",
         "controls": controls,
-        "all_rejected": all(bool(value.get("rejected")) for value in controls.values() if isinstance(value, dict)) and len(controls) == 5,
+        "all_rejected": all(bool(value.get("rejected")) for value in controls.values() if isinstance(value, dict)) and set(controls) == {
+            "environment_allowlist",
+            "zero_test_selection",
+            "wrong_test_selection",
+            "survivor_process",
+            "normal_exit_survivor",
+            "archive_reuse_mismatch",
+        },
     }
     json_write(controls_dir / "negative-controls.json", result)
     return result

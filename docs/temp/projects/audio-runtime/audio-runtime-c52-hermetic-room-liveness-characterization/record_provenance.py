@@ -7,7 +7,6 @@ import argparse
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -123,27 +122,53 @@ def storage_record(run: dict[str, object], archives: dict[str, object]) -> dict[
         scratch = path / "scratch"
         cache = path / "cache"
         scratch_content_present = scratch.is_dir() and any(scratch.iterdir())
-        run_records.append({
+        record: dict[str, object] = {
             "run_id": run_id,
             "retained_bytes": tree_bytes(path),
             "scratch_content_present": scratch_content_present,
             "cache_present": cache.exists(),
             "cleanup_verified": not scratch_content_present and not cache.exists(),
-        })
+        }
+        run_json = path / "run.json"
+        if run_json.is_file():
+            run_value = load(run_json)
+            if isinstance(run_value, dict) and isinstance(run_value.get("storage"), dict):
+                run_storage = run_value["storage"]
+                record["storage"] = run_storage
+                record["free_space_before_cleanup_bytes"] = run_storage.get("free_space_before_cleanup_bytes")
+                record["free_space_after_cleanup_bytes"] = run_storage.get("free_space_after_cleanup_bytes")
+                record["archive_reuse"] = run_storage.get("archive_reuse")
+        run_records.append(record)
+    latest_storage = run.get("storage")
+    if not isinstance(latest_storage, dict):
+        raise RuntimeError("canonical matrix run has no storage accounting")
     archive_bytes = sum(int(item.get("bytes", 0)) for item in archives.values() if isinstance(item, dict))
+    archive_reuse = latest_storage.get("archive_reuse")
+    if not isinstance(archive_reuse, dict):
+        raise RuntimeError("canonical matrix run has no archive reuse identity")
     return {
         "schema": "audio-runtime-c52-storage-v1",
         "observed_at": datetime.now(timezone.utc).isoformat(),
-        "source_staging_bytes": archive_bytes,
-        "source_archives": {key: {"path": item.get("path"), "bytes": item.get("bytes"), "sha256": item.get("sha256")} for key, item in archives.items() if isinstance(item, dict)},
-        "binary_output_bytes": 0,
-        "fixture_report_bytes": sum(item["retained_bytes"] for item in run_records),
-        "reproducible_scratch_bytes_retained_after_cleanup": 0,
-        "free_space_before_cleanup_bytes": None,
-        "free_space_after_capture_bytes": shutil.disk_usage(EVIDENCE).free,
-        "free_space_limitation": "pre-cleanup free space was not captured by the preflight runner; current free space and exact retained bytes are recorded",
+        "source_staging_bytes": latest_storage.get("source_staging_bytes", archive_bytes),
+        "source_archives": archives,
+        "binary_output_bytes": latest_storage.get("binary_output_bytes", 0),
+        "fixture_report_bytes": sum(int(item["retained_bytes"]) for item in run_records),
+        "current_run_fixture_report_bytes": latest_storage.get("fixture_report_bytes"),
+        "reproducible_scratch_bytes_before_cleanup": latest_storage.get("reproducible_scratch_bytes_before_cleanup"),
+        "cache_bytes_before_cleanup": latest_storage.get("cache_bytes_before_cleanup"),
+        "reproducible_scratch_bytes_retained_after_cleanup": latest_storage.get("reproducible_scratch_bytes_retained_after_cleanup"),
+        "free_space_before_run_bytes": latest_storage.get("free_space_before_run_bytes"),
+        "free_space_before_cleanup_bytes": latest_storage.get("free_space_before_cleanup_bytes"),
+        "free_space_after_cleanup_bytes": latest_storage.get("free_space_after_cleanup_bytes"),
+        "free_space_limitation": "free space was measured immediately before and after cleanup; background filesystem activity is not controlled",
+        "archive_reuse": archive_reuse,
+        "reuse_identity": {key: {"revision": value.get("revision"), "content_sha256": value.get("content_sha256"), "retained_content_sha256": value.get("retained_content_sha256"), "fixed_revision_verified": value.get("fixed_revision_verified")} for key, value in archive_reuse.items() if isinstance(value, dict)},
         "runs": run_records,
-        "cleanup": {"known_generated_cache_and_scratch_removed": all(item["cleanup_verified"] for item in run_records), "retained": ["run.json", "cell logs", "traces", "overlay manifests", "negative controls", "source archives", "CI log/metadata"]},
+        "cleanup": {
+            "known_generated_cache_and_scratch_removed": all(item["cleanup_verified"] for item in run_records),
+            "current_run": latest_storage.get("cleanup"),
+            "retained": ["run.json", "cell logs", "traces", "overlay manifests", "negative controls", "source archives", "CI log/metadata"],
+        },
     }
 
 
@@ -189,6 +214,7 @@ def evidence_index(provenance: dict[str, object], run: dict[str, object]) -> dic
     files = [
         "README.md", "provenance.json", "storage.json", "matrix.json", "matrix-results.json", "expected-checkpoints.json",
         "first-divergence.json", "classification.json", "causal-finding-map.json",
+        "integrity-controls.json",
         "primary-rerun.json", "regressions/summary.json", "regressions/normal.json", "regressions/race.json",
         "ci/run-34562579355-job-103148160889.log",
         "ci/run-34562579355-job-103148160889.json",
@@ -287,6 +313,9 @@ def main() -> int:
         "capture_ci_sha256": sha256(EVIDENCE / "capture_ci.py"),
         "regressions_script_sha256": sha256(EVIDENCE / "run_regressions.py"),
     }
+    integrity_controls_path = EVIDENCE / "integrity-controls.json"
+    if integrity_controls_path.is_file():
+        runner_files["integrity_controls_sha256"] = sha256(integrity_controls_path)
     ancestry = {
         "baseline": ancestor(repo, BASELINE, candidate),
         "startup_integration": ancestor(repo, STARTUP_INTEGRATION, candidate),

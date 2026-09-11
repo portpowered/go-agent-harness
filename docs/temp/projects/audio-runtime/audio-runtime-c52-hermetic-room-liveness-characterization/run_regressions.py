@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
-from run import hermetic_base_environment, run_bounded
+from run import hermetic_base_environment, run_bounded, tree_bytes
 
 
 EVIDENCE = Path(__file__).resolve().parent
@@ -58,6 +59,8 @@ def main() -> int:
     repo = Path(git(EVIDENCE, "rev-parse", "--show-toplevel"))
     module = repo / "go-agent-runtime"
     output = EVIDENCE / "regressions"
+    free_space_before_run = shutil.disk_usage(EVIDENCE).free
+    failed = False
     with tempfile.TemporaryDirectory(prefix="c52-regressions-") as temp_dir:
         cache_root = Path(temp_dir)
         common = hermetic_base_environment(os.environ, cache_root)
@@ -86,10 +89,27 @@ def main() -> int:
             }
             write(output / f"{name}.json", results[name])
             if not results[name]["passes"]:
-                write(output / "summary.json", {"schema": "audio-runtime-c52-local-regressions-v1", "checks": results, "passes": False})
-                return 1
-    write(output / "summary.json", {"schema": "audio-runtime-c52-local-regressions-v1", "checks": results, "passes": True})
-    print(json.dumps({"status": "PASS", "checks": list(results), "passes": True}, sort_keys=True))
+                failed = True
+                break
+        free_space_before_cleanup = shutil.disk_usage(EVIDENCE).free
+        reproducible_scratch_bytes_before_cleanup = tree_bytes(cache_root)
+    free_space_after_cleanup = shutil.disk_usage(EVIDENCE).free
+    storage = {
+        "source_staging_bytes": 0,
+        "binary_output_bytes": 0,
+        "fixture_report_bytes": tree_bytes(output),
+        "reproducible_scratch_bytes_before_cleanup": reproducible_scratch_bytes_before_cleanup,
+        "reproducible_scratch_bytes_retained_after_cleanup": 0,
+        "free_space_before_run_bytes": free_space_before_run,
+        "free_space_before_cleanup_bytes": free_space_before_cleanup,
+        "free_space_after_cleanup_bytes": free_space_after_cleanup,
+        "cleanup_verified": not Path(temp_dir).exists(),
+    }
+    summary = {"schema": "audio-runtime-c52-local-regressions-v1", "checks": results, "passes": not failed, "storage": storage}
+    write(output / "summary.json", summary)
+    if failed:
+        return 1
+    print(json.dumps({"status": "PASS", "checks": list(results), "passes": True, "storage_recorded": True}, sort_keys=True))
     return 0
 
 
