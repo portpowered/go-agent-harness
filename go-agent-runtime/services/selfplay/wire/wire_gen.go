@@ -25,6 +25,11 @@ func NewService(deps Dependencies) selfplay.Service {
 	return service
 }
 
+func NewEvidenceFactory() selfplay.EvidenceFactory {
+	evidenceFactory := runtime.NewEvidenceFactory()
+	return evidenceFactory
+}
+
 // providers.go:
 
 // Dependencies are the host ports required by one self-play runtime.

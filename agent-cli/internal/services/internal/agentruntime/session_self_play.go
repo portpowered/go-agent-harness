@@ -2,11 +2,9 @@ package agentruntime
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sync"
 
 	serviceSelfPlay "github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay"
@@ -14,7 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	runtimeSelfPlayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay/wire"
 )
 
 const (
@@ -107,7 +105,7 @@ type selfPlayDiagnosticSink struct {
 
 func (s selfPlayDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
 	if s.observe != nil {
-		s.observe(runtimeSelfPlay.Diagnostic{Event: record.Event, Fields: runtimeSelfPlay.CloneStringMap(record.Fields)})
+		s.observe(runtimeSelfPlay.Diagnostic{Event: record.Event, Fields: cloneSelfPlayStringMap(record.Fields)})
 	}
 }
 
@@ -156,53 +154,75 @@ type selfPlayDiagnosticLine struct {
 }
 
 func cloneSelfPlayStringMap(fields map[string]string) map[string]string {
-	return runtimeSelfPlay.CloneStringMap(fields)
+	return selfPlayEvidenceFactory().CloneStringMap(fields)
 }
 
 func redactSelfPlayError(value, secret string) string {
-	return runtimeSelfPlay.RedactError(value, secret)
+	return selfPlayEvidenceFactory().RedactError(value, secret)
+}
+
+func selfPlayEvidenceFactory() runtimeSelfPlay.EvidenceFactory {
+	return runtimeSelfPlayWire.NewEvidenceFactory()
 }
 
 type selfPlayJSONLWriter struct {
 	path   string
-	file   *os.File
+	file   io.Writer
+	writer runtimeSelfPlay.JSONLWriter
 	mu     sync.Mutex
 	closed bool
 	err    error
 }
 
 func newSelfPlayJSONLWriter(path string) (*selfPlayJSONLWriter, error) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, 0o600)
+	writer, err := selfPlayEvidenceFactory().NewJSONLWriter(path, runtimeSelfPlay.EvidenceLimits{})
 	if err != nil {
 		return nil, err
 	}
-	return &selfPlayJSONLWriter{path: path, file: file}, nil
+	return &selfPlayJSONLWriter{path: path, writer: writer}, nil
+}
+
+func (w *selfPlayJSONLWriter) authorityLocked() (runtimeSelfPlay.JSONLWriter, error) {
+	if w.writer != nil {
+		return w.writer, nil
+	}
+	if w.file == nil {
+		return nil, errors.New("self-play JSONL writer is uninitialized")
+	}
+	writer, err := selfPlayEvidenceFactory().WrapJSONLWriter(w.path, w.file, runtimeSelfPlay.EvidenceLimits{})
+	if err != nil {
+		return nil, err
+	}
+	w.writer = writer
+	return writer, nil
 }
 
 func (w *selfPlayJSONLWriter) write(value any) error {
-	data, err := json.Marshal(value)
-	if err != nil {
-		return fmt.Errorf("marshal JSONL record: %w", err)
-	}
-	return w.writeRaw(data)
+	return w.writeWith(func(writer runtimeSelfPlay.JSONLWriter) error { return writer.Write(value) })
 }
 
 func (w *selfPlayJSONLWriter) writeRaw(data []byte) error {
+	return w.writeWith(func(writer runtimeSelfPlay.JSONLWriter) error { return writer.WriteRaw(data) })
+}
+
+func (w *selfPlayJSONLWriter) writeWith(write func(runtimeSelfPlay.JSONLWriter) error) error {
 	if w == nil {
 		return errors.New("self-play JSONL writer is nil")
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {
-		if w.err != nil {
-			return w.err
-		}
-		return errors.New("self-play JSONL writer is closed")
+		return selfPlayWriterError(w.err, "self-play JSONL writer is closed")
 	}
 	if w.err != nil {
 		return w.err
 	}
-	if err := runtimeSelfPlay.WriteJSONLine(w.file, data); err != nil {
+	writer, err := w.authorityLocked()
+	if err != nil {
+		w.err = err
+		return err
+	}
+	if err := write(writer); err != nil {
 		w.err = fmt.Errorf("write %s: %w", w.path, err)
 		return w.err
 	}
@@ -219,21 +239,28 @@ func (w *selfPlayJSONLWriter) close() error {
 		return w.err
 	}
 	w.closed = true
-	if w.file != nil {
-		if err := w.file.Sync(); err != nil {
-			w.err = errors.Join(w.err, fmt.Errorf("sync %s: %w", w.path, err))
-		}
-		if err := w.file.Close(); err != nil {
-			w.err = errors.Join(w.err, fmt.Errorf("close %s: %w", w.path, err))
-		}
+	writer, err := w.authorityLocked()
+	if err != nil {
+		w.err = err
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		w.err = errors.Join(w.err, fmt.Errorf("close %s: %w", w.path, err))
 	}
 	return w.err
+}
+
+func selfPlayWriterError(err error, fallback string) error {
+	if err != nil {
+		return err
+	}
+	return errors.New(fallback)
 }
 
 type selfPlayWAVRecorder struct {
 	path       string
 	sampleRate int
-	file       *os.File
+	writer     runtimeSelfPlay.WAVWriter
 	mu         sync.Mutex
 	dataBytes  uint64
 	closed     bool
@@ -241,23 +268,11 @@ type selfPlayWAVRecorder struct {
 }
 
 func newSelfPlayWAVRecorder(path string, sampleRate int) (*selfPlayWAVRecorder, error) {
-	if sampleRate <= 0 {
-		return nil, fmt.Errorf("WAV sample rate must be positive, got %d", sampleRate)
-	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	writer, err := selfPlayEvidenceFactory().NewWAVWriter(path, sampleRate, runtimeSelfPlay.EvidenceLimits{})
 	if err != nil {
 		return nil, err
 	}
-	header, err := wavio.PCM16Header(sampleRate, 0)
-	if err == nil {
-		_, err = runtimeSelfPlay.WriteAll(file, header[:])
-	}
-	if err != nil {
-		_ = file.Close()
-		_ = os.Remove(path)
-		return nil, fmt.Errorf("write WAV header: %w", err)
-	}
-	return &selfPlayWAVRecorder{path: path, sampleRate: sampleRate, file: file}, nil
+	return &selfPlayWAVRecorder{path: path, sampleRate: sampleRate, writer: writer}, nil
 }
 
 func (w *selfPlayWAVRecorder) write(ctx context.Context, pcm []byte) error {
@@ -280,16 +295,16 @@ func (w *selfPlayWAVRecorder) write(ctx context.Context, pcm []byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {
-		if w.err != nil {
-			return w.err
-		}
-		return errors.New("self-play WAV recorder is closed")
+		return selfPlayWriterError(w.err, "self-play WAV recorder is closed")
 	}
 	if w.err != nil {
 		return w.err
 	}
-	written, err := runtimeSelfPlay.WriteAll(w.file, pcm)
-	w.dataBytes += uint64(written)
+	if w.writer == nil {
+		return errors.New("self-play WAV recorder is uninitialized")
+	}
+	err := w.writer.Write(ctx, pcm)
+	w.dataBytes = uint64(w.writer.DataBytes())
 	if err != nil {
 		w.err = fmt.Errorf("write %s: %w", w.path, err)
 	}
@@ -306,27 +321,20 @@ func (w *selfPlayWAVRecorder) close() error {
 		return w.err
 	}
 	w.closed = true
-	if header, err := wavio.PCM16Header(w.sampleRate, w.dataBytes); err != nil {
-		w.err = errors.Join(w.err, err)
-	} else if _, err := w.file.Seek(0, io.SeekStart); err != nil {
-		w.err = errors.Join(w.err, fmt.Errorf("seek %s for WAV header: %w", w.path, err))
-	} else if _, err := runtimeSelfPlay.WriteAll(w.file, header[:]); err != nil {
-		w.err = errors.Join(w.err, fmt.Errorf("finalize %s WAV header: %w", w.path, err))
-	}
-	if err := w.file.Sync(); err != nil {
-		w.err = errors.Join(w.err, fmt.Errorf("sync %s: %w", w.path, err))
-	}
-	if err := w.file.Close(); err != nil {
-		w.err = errors.Join(w.err, fmt.Errorf("close %s: %w", w.path, err))
+	if w.writer != nil {
+		w.dataBytes = uint64(w.writer.DataBytes())
+		if err := w.writer.Close(); err != nil {
+			w.err = errors.Join(w.err, fmt.Errorf("close %s: %w", w.path, err))
+		}
 	}
 	return w.err
 }
 
 func writeSelfPlayAll(writer io.Writer, data []byte) error {
-	_, err := runtimeSelfPlay.WriteAll(writer, data)
+	_, err := selfPlayEvidenceFactory().WriteAll(writer, data)
 	return err
 }
 
 func writeSelfPlayAllCount(writer io.Writer, data []byte) (int, error) {
-	return runtimeSelfPlay.WriteAll(writer, data)
+	return selfPlayEvidenceFactory().WriteAll(writer, data)
 }

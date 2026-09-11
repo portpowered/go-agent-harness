@@ -32,6 +32,11 @@ func NewService(deps Dependencies) selfplay.Service {
 	return nil
 }
 
+func NewEvidenceFactory() selfplay.EvidenceFactory {
+	wire.Build(runtime.NewEvidenceFactory)
+	return nil
+}
+
 func newRuntimeDependencies(source clock.Source, admission providers.ModelAdmission, sessions selfplay.SessionFactory, runner selfplay.SessionRunner) selfplay.Dependencies {
 	return selfplay.Dependencies{Clock: source, ModelAdmission: admission, Sessions: sessions, Runner: runner}
 }

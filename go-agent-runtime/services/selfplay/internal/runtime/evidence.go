@@ -23,6 +23,7 @@ type evidence struct {
 	model       string
 	maxDuration time.Duration
 	maxTurns    int
+	factory     selfplay.EvidenceFactory
 	sides       [2]*sideEvidence
 
 	mu           sync.Mutex
@@ -38,9 +39,9 @@ type sideEvidence struct {
 	wavPath        string
 	diagnosticPath string
 	streamPath     string
-	audio          *selfplay.WAVWriter
-	diagnostics    *selfplay.JSONLWriter
-	streamDeltas   *selfplay.JSONLWriter
+	audio          selfplay.WAVWriter
+	diagnostics    selfplay.JSONLWriter
+	streamDeltas   selfplay.JSONLWriter
 	maxTurns       int
 
 	mu            sync.Mutex
@@ -55,6 +56,7 @@ type diagnosticLine struct {
 }
 
 func newEvidence(destination string, options selfplay.RunOptions, startedAt time.Time) (*evidence, error) {
+	factory := NewEvidenceFactory()
 	evidence := &evidence{
 		destination: destination,
 		startedAt:   startedAt.UTC(),
@@ -63,6 +65,7 @@ func newEvidence(destination string, options selfplay.RunOptions, startedAt time
 		model:       options.Model,
 		maxDuration: options.MaxDuration,
 		maxTurns:    options.MaxTurns,
+		factory:     factory,
 	}
 	configs := []struct {
 		id, role, persona, wav, diagnostics, stream string
@@ -79,18 +82,18 @@ func newEvidence(destination string, options selfplay.RunOptions, startedAt time
 		}
 		evidence.sides[index] = side
 		var err error
-		side.audio, err = selfplay.NewWAVWriter(side.wavPath, selfplay.EvidenceSampleRate, options.EvidenceLimits)
+		side.audio, err = factory.NewWAVWriter(side.wavPath, selfplay.EvidenceSampleRate, options.EvidenceLimits)
 		if err != nil {
 			evidence.cleanupSetup()
 			return nil, fmt.Errorf("create %s WAV evidence: %w", config.id, err)
 		}
-		side.diagnostics, err = selfplay.NewJSONLWriter(side.diagnosticPath, options.EvidenceLimits)
+		side.diagnostics, err = factory.NewJSONLWriter(side.diagnosticPath, options.EvidenceLimits)
 		if err != nil {
 			evidence.sides[index] = side
 			evidence.cleanupSetup()
 			return nil, fmt.Errorf("create %s diagnostics evidence: %w", config.id, err)
 		}
-		side.streamDeltas, err = selfplay.NewJSONLWriter(side.streamPath, options.EvidenceLimits)
+		side.streamDeltas, err = factory.NewJSONLWriter(side.streamPath, options.EvidenceLimits)
 		if err != nil {
 			evidence.sides[index] = side
 			evidence.cleanupSetup()
@@ -155,7 +158,7 @@ func (e *evidence) observeDiagnostic(index int, diagnostic selfplay.Diagnostic) 
 	if side == nil || side.diagnostics == nil {
 		return errors.New("self-play diagnostics sink is not initialized")
 	}
-	fields := selfplay.CloneStringMap(diagnostic.Fields)
+	fields := e.factory.CloneStringMap(diagnostic.Fields)
 	if diagnostic.Event == "session_turn_completed" && side.maxTurns > 0 && turnIndex(fields) > side.maxTurns {
 		return nil
 	}
@@ -306,7 +309,7 @@ func (e *evidence) writeManifest(result selfplay.Result, runErr error, endedAt t
 		},
 	}
 	if runErr != nil {
-		value.Error = selfplay.RedactError(runErr.Error(), e.apiKey)
+		value.Error = e.factory.RedactError(runErr.Error(), e.apiKey)
 	}
 	for index, side := range e.sides {
 		if side == nil {
@@ -323,7 +326,7 @@ func (e *evidence) writeManifest(result selfplay.Result, runErr error, endedAt t
 			terminalError = runErr.Error()
 		}
 		if terminalError != "" {
-			terminalError = selfplay.RedactError(terminalError, e.apiKey)
+			terminalError = e.factory.RedactError(terminalError, e.apiKey)
 		}
 		terminalOK := (terminalSeen && terminalClean) || (runErr == nil && result.StopReason != selfplay.StopFailure)
 		value.Agents[side.id] = agentManifest{
@@ -332,5 +335,5 @@ func (e *evidence) writeManifest(result selfplay.Result, runErr error, endedAt t
 			Artifacts: agentArtifactManifest{WAV: filepath.Base(side.wavPath), Diagnostics: filepath.Base(side.diagnosticPath), StreamDeltas: filepath.Base(side.streamPath)},
 		}
 	}
-	return selfplay.WriteAtomicJSON(filepath.Join(e.destination, selfplay.ManifestPath), value)
+	return e.factory.WriteAtomicJSON(filepath.Join(e.destination, selfplay.ManifestPath), value)
 }
