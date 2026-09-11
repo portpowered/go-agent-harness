@@ -4025,3 +4025,52 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same branch, update PR `#430`, and return `ACCEPTED` to script-owned
   current-head CI without polling; retain C38 ownership through `CONTINUE` for
   any exact rejection or actionable repair.
+
+# C40 post-C38 acceptance current-head handoff 2026-09-11T07:31Z
+
+- Reverified admission for the sole `audio-runtime` project and task
+  `audio-runtime-c40-retire-cli-interactive-tool-policy`; `prd.json.branchName`
+  matches the isolated branch `codex/audio-runtime-c40-retire-cli-interactive-tool-policy`.
+  The preserved branch was clean at `14986030`; fetched `origin/main=cdf416a8`
+  was merged as `ab08f6d3`, preserving baseline `926ded7b`, startup
+  `8bdafc7f`, and accepted C38 `bb29005d`. The running host checkout and peer
+  worktrees were not reset or modified.
+- Re-ran the bounded C40 inventory, standalone consumer, deliberate wrong-oracle,
+  shipped public-policy, cleanup, and replay modes. Exact run IDs are
+  `run-inventory-20260911T072916Z-41561`, `run-consumer-20260911T072925Z-41706`,
+  `run-wrong-oracle-20260911T072932Z-42370`,
+  `run-public-policy-20260911T072939Z-42431`,
+  `run-cleanup-control-20260911T072954Z-42638`, and
+  `run-replay-regression-20260911T073002Z-42688`; every mode returned
+  `ACCEPTED`. The prior C38 dependency is resolved by actual frozen-oracle
+  replay success, not by changing the oracle.
+- Inventory reports `247` runtime dependencies with no forbidden CLI/config/WebMCP
+  imports; policy/contract/private-policy/Wire are `155/80/159/29+28` physical
+  lines and aggregate CLI agentruntime production is `41,129`. The GOWORK=off
+  consumer rebuilt with SHA-256
+  `d465d99cb20ca04d0e532bec5a407ca43699538041a8662bbd88e85cf128c507`, proving
+  defaults, overrides, snapshot isolation and pre-effect invalid rejection;
+  wrong-oracle exits `1` at the expected literal class mismatch.
+- Public policy rebuilt YUI SHA-256
+  `f6e480b75f3c84910857e01bb781e90c07b09313755a611465e5c27e4c8431a2` and
+  preserves `PROBE_TOOL_MARKER_9182`, `strict replay continuation`, exact
+  `4,800`-byte tool PCM, and clean child shutdown. Cleanup-control proves
+  bounded SIGTERM/SIGKILL and descendant reaping. Replay now returns exact
+  `3,840`-byte interruption PCM SHA-256
+  `6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`, with
+  the `2,400`-byte healthy tail at offset `1440` and hash
+  `16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`;
+  audio-tool replay is `18` wire events/one tool call and interruption is `15`
+  events/zero tools. All replay negative controls reject as intended.
+- Focused normal/race tools pass `340` tests in `17` packages each; CLI policy
+  normal/race pass `13` each; replay-bundle `19`, strict allowlist `2`, policy
+  coverage `98.3%` against the authorized `80.0%` floor, coverage registration
+  `175` packages across `6` modules, architecture-size `185/1,891/27,887`,
+  Wire, fmt/vet, pinned staticcheck `2026.1`, pinned golangci-lint `2.9.0`
+  (`0` issues in `15` modules), and diff-check pass.
+- This is executor handoff evidence only. No SCRIPT CI result, independent
+  review, guarded merge, primary vertical acceptance, physical/acoustic proof,
+  or project completion is claimed. Exact next action: commit and push the
+  same PR `#435`, update its body with the repair/evidence map, then return
+  `ACCEPTED` to the script-owned current-head CI gate without polling; retain
+  this task through `CONTINUE` for any exact CI rejection or actionable repair.
