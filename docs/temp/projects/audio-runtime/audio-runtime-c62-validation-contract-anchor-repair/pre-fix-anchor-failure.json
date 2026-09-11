@@ -1,0 +1,101 @@
+{
+  "schema": "audio-runtime-c62-pre-fix-failure.v1",
+  "status": "FAILED",
+  "phase": "admitted_contract_before_validator_dispatch",
+  "sourceRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "controllerSourceSha256Before": "4b66b92c91cb7b3bfbc4f0b0f105fdfb9391d7a4d312ef8142e8457cc71c72b0",
+  "command": "rtk proxy env -u FACTORY_PROJECT_MANIFEST PYTHONPATH=factory/scripts FACTORY_ROOT=\"$FACTORY_ROOT\" python3 -c 'import importlib.util, json, os; from pathlib import Path; root=Path(os.environ[\"FACTORY_ROOT\"]); spec=importlib.util.spec_from_file_location(\"prepare_validation\", root/\"factory/scripts/prepare-validation.py\"); module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); batch=json.loads((root/\"docs/temp/projects/audio-runtime/c47-c55-vertical-probes-batch.json\").read_text()); packet=batch[\"works\"][0][\"payload\"]; module.prepare(root, \"audio-runtime-c62-anchor-preflight-before\", json.dumps(packet))'",
+  "exitCode": 1,
+  "stderrDiagnostic": "project_contract.ContractError: original manifest digest is not the reviewed anchor",
+  "currentManifest": {
+    "path": "factory/projects/audio-runtime/manifest.json",
+    "sha256": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34"
+  },
+  "trustedOriginalManifest": {
+    "path": "factory/projects/audio-runtime/manifest.json",
+    "sha256": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d"
+  },
+  "reviewedTransition": {
+    "originalManifestSha256": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+    "successorManifestSha256": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
+    "changedAuthority": {
+      "path": "factory/projects/audio-runtime/acceptance.md",
+      "originalSha256": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5",
+      "successorSha256": "edd1f5cbca1de8b49f96cdf8f039732d28a0082ef3718015e10535ff2e6a441a"
+    },
+    "unchangedAuthority": {
+      "sourcePlan": {
+        "path": "factory/projects/audio-runtime/source-plan.md",
+        "sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
+      },
+      "request": {
+        "path": "factory/projects/audio-runtime/request.md",
+        "sha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0"
+      }
+    },
+    "changedCriterion": {
+      "index": 3,
+      "id": "SERVICE",
+      "originalRubric": "Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction; CLI transport delegates business behavior.",
+      "successorRubric": "Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction. The legacy agent-cli/internal/services/internal/agentruntime production package is fully deprecated: all production callers use service-owned contracts and transport integrations, and the package contains no business policy, reusable runtime behavior, composition ownership, or device/audio implementation. Any temporary compatibility symbols are explicit Deprecated: aliases or thin adapters with no independent decisions or mutable state. CLI packages own only presentation, argument/input adaptation, and transport integration into those services."
+    },
+    "unchangedCriterionIds": [
+      "AUDIO",
+      "DEVICE",
+      "EMBED",
+      "TRACE",
+      "REPLAY",
+      "FAILURES",
+      "QUALITY",
+      "PARITY"
+    ],
+    "unchangedProjectIdentity": {
+      "project": "audio-runtime",
+      "contractRevision": "audio-runtime-v1",
+      "realtimeBudget": {
+        "sessionsPerMission": 3,
+        "totalSecondsPerMission": 120
+      },
+      "excludedSubproof": [
+        {
+          "criterionId": "DEVICE",
+          "subproof": "Native Windows hardware/endpoints testing",
+          "verdict": "OUT_OF_SCOPE"
+        },
+        {
+          "criterionId": "PARITY",
+          "subproof": "Physical acoustic testing",
+          "verdict": "OUT_OF_SCOPE"
+        }
+      ],
+      "retainedProof": [
+        "Windows software execution and compilation CI",
+        "Hermetic capture-energy/codec tests",
+        "All nine architectural and software criteria",
+        "Original Realtime budget",
+        "Fresh independent scoped and final artifact evidence"
+      ],
+      "historicalReport": {
+        "path": "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json",
+        "sha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+        "canonicalState": "failed",
+        "decision": "FAILED",
+        "deviceVerdict": "BLOCKED"
+      }
+    }
+  },
+  "validatorDispatch": false,
+  "probeDirectory": {
+    "path": "docs/temp/probes/audio-runtime-c62-anchor-preflight-before",
+    "existedBefore": false,
+    "existedAfter": false
+  },
+  "reportPathsCreated": [],
+  "preparedBatchSha256": "b03c30d1225e2fd1d533c90524e5aac9ab256627b39cc3ae4a1ce71d98361a3f",
+  "preservedInputs": {
+    "amendmentSha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa",
+    "authorizationSha256": "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
+    "historicalReportSha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960"
+  },
+  "notes": "The controller rejected the exact admitted strengthened manifest before project admission, scope, artifact, fixture, staging, or validator work. No manifest, amendment, authority, historical report, packet, artifact, report, or probe directory was mutated."
+}
