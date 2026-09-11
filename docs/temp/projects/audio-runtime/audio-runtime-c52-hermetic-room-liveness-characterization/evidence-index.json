@@ -16,19 +16,19 @@
   },
   "indexed_files": [
     {
-      "bytes": 3529,
+      "bytes": 3922,
       "path": "README.md",
-      "sha256": "b217e4b770703625be0223e930af9677f46069a7df8ec3ffc78a1f906621fa3e"
+      "sha256": "df5e41b2f7c93f89152c597cfffa74fe4d01e9e0537caea5967affa080453dd6"
     },
     {
-      "bytes": 48641,
+      "bytes": 48070,
       "path": "provenance.json",
-      "sha256": "b5e4f61e8d55367a03af87a8fb59b77de7594b691acb9a4455824f9eb2b6de27"
+      "sha256": "3d521fe396ffa27a6e010374ea17fa93f93159b662b38b993b81898600f89bbe"
     },
     {
       "bytes": 9174,
       "path": "storage.json",
-      "sha256": "fd1991b41e739523708211b6e7c5b29579d779bef11e766c8e032331309d4ff0"
+      "sha256": "7fb509be614c2fa8fe7b023eb614b1a6e656a7ab849282dc1f89130b36336359"
     },
     {
       "bytes": 3933,
@@ -46,14 +46,14 @@
       "sha256": "4107e8692145f50f73fa6d4b49085d082741e382859cec098156420e176a01df"
     },
     {
-      "bytes": 713499,
+      "bytes": 710476,
       "path": "first-divergence.json",
-      "sha256": "244bbb28a3d14eb221bae8adbdf3b56a52ef906d24f9aa3ea74c74538f7b69fe"
+      "sha256": "587c9c2c6f085e1462cb892270e7be2607349969e4c73b59e147af2f07e2f061"
     },
     {
-      "bytes": 16216,
+      "bytes": 16140,
       "path": "classification.json",
-      "sha256": "cd3556cea8d533f9dad65a88c7e6bf85c8d7f58f3c04a94980b0356ca004f091"
+      "sha256": "452f5d002b28be1ca16fec922daa3828978c92210468868eaa97f5a1126398fc"
     },
     {
       "bytes": 1084,

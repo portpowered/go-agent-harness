@@ -3,9 +3,11 @@
 This directory is the sole C52 executor lease. It contains an evidence-only
 comparison of PR438 (`823bd350fe5d11782c38bda87d7b7bfd7d89d7cd`) and the
 planning-time integrated main (`7f73c8b3b4ebc99b55b8bb5e802beff024385407`).
-The final tested evidence parent is the clean branch head
-`1ae02396f1162c0b9c1f444609617f28b4c21f46`, which includes refreshed
+The final tested evidence parent is the clean evidence-bearing branch head
+`c05d910a44c306a30e55f8478931e34503fd890e`, which includes refreshed
 `origin/main` (`2456a5d1594e73faf85e1132d6050735bc3e4710`) as an ancestor.
+The final handoff commit is an evidence-only descendant of that tested source;
+the executable and test inputs are unchanged.
 The fetched `origin/main` may advance; its exact revision is recorded in
 `provenance.json` and does not replace the declared comparison input.
 
@@ -40,7 +42,7 @@ overlay typing) and are not behavioral trials. The final canonical run is
 in 69.655 seconds, within the 900-second aggregate bound; all six negative
 controls were rejected, normal parent-exit cleanup was proven, and the
 run-local cache was removed after its retained reports were written. Focused
-normal and race regressions also pass from `1ae02396`. The repaired runner uses
+normal and race regressions also pass from `c05d910a`. The repaired runner uses
 only the declared environment allowlist and its classification controls reject
 a label when both explicit orders fail. `storage.json` records source staging,
 fixture/report, scratch/cache, free-space before/after, archive reuse identity,
