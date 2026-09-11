@@ -3,6 +3,13 @@ Project: audio-runtime
 Implementation checkpoint: 1e743f3e2d7ae3559c3c143939c9e4982abcef44
 Integrated/tested checkpoint: 9894a18401bb5f4ca6a43b92093f6f671ab06656
 
+CI rejection repair checkpoint
+- Canonical task feedback and PR #438's completed static job identify the exact old-head failures: golangci-lint reported the unused `rateLimitRetryDelayPattern` variable; staticcheck 2026.1 additionally reported unused `parseRateLimitRetryDelay` and `legacyStatusDetailField` at `session_rate_limit_retry.go`.
+- The two unused wrappers were removed because `rg` found no callers or tests; the provider policy remains the sole parser/normalizer/eligibility implementation. The pre-existing regex global was then retained as an explicit liveness reference because its shared architecture-baseline entry is outside this task's `ownedPaths`; no shared baseline mutation or linter waiver was added.
+- Focused provider normal/race tests (19/19 each) and CLI rate-limit/scheduled/cancellation/metadata regressions (27/27 each) passed before the baseline-symbol liveness adjustment. `make fmt`, `make wire-check`, `make coverage-registration`, `make test-architecture-gate`, and provider package tests (67) passed on the candidate.
+- The first post-removal architecture check correctly reported only the stale shared baseline entry for `rateLimitRetryDelayPattern`. After restoring the existing baselined symbol, the follow-up analyzer/architecture commands could not complete because the shared volume exhausted its reserve: `df -k .` reported 202376 KiB available and Go reported `no space left on device`. No source, peer artifact, evidence, or shared cache was deleted.
+- No new CI/review feedback exists beyond the exact PR #438 static rejection; PR #438 has no reviews. This remains an implementation checkpoint, not CI, review, merge, vertical acceptance, or project acceptance.
+
 Admission and ancestry
 - project-control.py verify-work --type task --name audio-runtime-c46-retire-cli-terminal-policy: admitted.
 - prd.branchName matches codex/audio-runtime-c46-retire-cli-terminal-policy.

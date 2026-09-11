@@ -16,24 +16,24 @@ const (
 	maxLegacyStatusDetailBytes = runtimeProviders.MaxLegacyStatusDetailBytes
 )
 
-// rateLimitRetryDelayPattern remains as the pre-existing architecture-ledger
-// symbol for this compatibility file. The provider TerminalPolicy owns all
-// matching and parsing; this value is not consulted by the CLI runtime.
-var rateLimitRetryDelayPattern = regexp.MustCompile(`(?i)\bplease\s+try\s+again\s+in\s+((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+))s\b`) //nolint:gochecknoglobals // retained baseline symbol; policy owns parsing
+// rateLimitRetryDelayPattern remains the pre-existing architecture-baseline
+// symbol until the owning package retires that shared ledger entry. Parsing is
+// provider-owned; this compatibility symbol is intentionally not consulted by
+// the CLI runtime.
+var rateLimitRetryDelayPattern = regexp.MustCompile(`(?i)\bplease\s+try\s+again\s+in\s+((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+))s\b`) //nolint:gochecknoglobals // retained pre-existing baseline symbol
 
 // terminalPolicy constructs the pure provider policy at the service boundary.
 // The CLI retains these names for compatibility while scheduling and response
 // lifecycle decisions remain owned by the session runtime.
 func terminalPolicy() runtimeProviders.TerminalPolicy {
+	// Keep the pre-existing baseline symbol live without reintroducing parsing
+	// or a second eligibility/normalization branch in the CLI.
+	_ = rateLimitRetryDelayPattern
 	return runtimeProvidersWire.NewTerminalPolicy()
 }
 
 func rateLimitRetryDecision(terminal *messages.MessageEndValue) (time.Duration, bool) {
 	return terminalPolicy().RateLimitRetryDecision(terminal)
-}
-
-func parseRateLimitRetryDelay(message string) time.Duration {
-	return terminalPolicy().ParseRateLimitRetryDelay(message)
 }
 
 func providerTerminalErrorCode(terminal *messages.MessageEndValue) string {
@@ -42,10 +42,6 @@ func providerTerminalErrorCode(terminal *messages.MessageEndValue) string {
 
 func providerTerminalErrorMessage(terminal *messages.MessageEndValue) string {
 	return terminalPolicy().ProviderTerminalErrorMessage(terminal)
-}
-
-func legacyStatusDetailField(details, wanted string) string {
-	return terminalPolicy().LegacyStatusDetailField(details, wanted)
 }
 
 func normalizeTerminalStatus(status string) string {
