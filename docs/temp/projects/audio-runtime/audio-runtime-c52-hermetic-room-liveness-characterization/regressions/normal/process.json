@@ -18,8 +18,8 @@
     "./services/session/internal/live"
   ],
   "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go-agent-runtime",
-  "duration_seconds": 16.690798500087112,
-  "ended_at": "2026-09-11T15:51:15.135238+00:00",
+  "duration_seconds": 16.86743583297357,
+  "ended_at": "2026-09-11T17:28:15.789138+00:00",
   "exit_code": 0,
   "first_failure": {
     "line": 1,
@@ -28,10 +28,10 @@
   },
   "output_overflow": false,
   "reader_survivor": false,
-  "started_at": "2026-09-11T15:50:58.444132+00:00",
+  "started_at": "2026-09-11T17:27:58.920900+00:00",
   "stderr_bytes": 309,
-  "stderr_sha256": "b72b0be0ce5f6be94d18712f76c4ebbc2061f398cdf8f8d6668515346518b6f1",
+  "stderr_sha256": "e73e3399d64fa65c5e3a68dcba276ddb5856d2885bbae28828001c00227e4694",
   "stdout_bytes": 203,
-  "stdout_sha256": "7dc5dab6a6ded376f4772352057c944d7c4ab059d81ba87ed9bec20fb69f32eb",
+  "stdout_sha256": "1a278f97f7d12742832b2ae5528cc7b127e7791d9ac0f32f4085dfcfa85b7ab7",
   "timed_out": false
 }
