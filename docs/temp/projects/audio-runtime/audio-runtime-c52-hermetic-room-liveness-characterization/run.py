@@ -12,6 +12,7 @@ import signal
 import subprocess
 import sys
 import tarfile
+import tempfile
 import threading
 import time
 from collections.abc import Mapping
@@ -127,18 +128,30 @@ def git_output(repo: Path, *args: str) -> str:
 def archive_revision(repo: Path, revision: str, destination: Path) -> dict[str, object]:
     destination.parent.mkdir(parents=True, exist_ok=True)
     resolved = git_output(repo, "rev-parse", revision)
-    if resolved != revision and revision not in {PR438, PLANNING_MAIN}:
+    if resolved != revision:
         raise RuntimeError(f"unexpected revision resolution for {revision}: {resolved}")
-    if not destination.exists():
-        partial = destination.with_suffix(destination.suffix + ".partial")
-        if partial.exists():
-            partial.unlink()
+    # Generate a fresh archive on every invocation. A retained archive is
+    # evidence input, not a cache: it may only be reused after its bytes have
+    # been compared with the exact fixed revision requested by this run.
+    with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=f".{destination.name}.", suffix=".partial", delete=False) as stream:
+        partial = Path(stream.name)
+    try:
         with partial.open("wb") as stream:
             result = subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", revision], stdout=stream, stderr=subprocess.PIPE, check=False)
         if result.returncode != 0:
-            partial.unlink(missing_ok=True)
             raise RuntimeError(f"git archive {revision} failed: {result.stderr.decode(errors='replace')}")
-        partial.replace(destination)
+        generated_sha256 = sha256_file(partial)
+        if destination.exists():
+            existing_sha256 = sha256_file(destination)
+            if existing_sha256 != generated_sha256:
+                raise RuntimeError(
+                    f"pre-existing source archive does not match fixed revision {revision}: "
+                    f"{destination} has {existing_sha256}, generated {generated_sha256}"
+                )
+        else:
+            partial.replace(destination)
+    finally:
+        partial.unlink(missing_ok=True)
     return {
         "revision": revision,
         "resolved_revision": resolved,

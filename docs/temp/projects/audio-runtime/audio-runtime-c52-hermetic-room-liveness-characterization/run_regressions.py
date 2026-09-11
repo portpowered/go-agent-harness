@@ -55,7 +55,17 @@ def main() -> int:
                 "cwd": str(module),
                 "source_revision": git(repo, "rev-parse", "HEAD"),
                 "process": process,
-                "passes": process.get("exit_code") == 0 and not process.get("timed_out") and not process.get("output_overflow") and not process.get("reader_survivor"),
+                "passes": (
+                    process.get("exit_code") == 0
+                    and not process.get("timed_out")
+                    and not process.get("output_overflow")
+                    and not process.get("reader_survivor")
+                    and isinstance(process.get("cleanup"), dict)
+                    and process["cleanup"].get("reason") == "parent_exit"
+                    and process["cleanup"].get("group_survivor") is False
+                    and not process["cleanup"].get("term_error")
+                    and not process["cleanup"].get("kill_error")
+                ),
             }
             write(output / f"{name}.json", results[name])
             if not results[name]["passes"]:

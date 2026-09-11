@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 
@@ -22,6 +23,39 @@ STARTUP_INTEGRATION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 BASELINE = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 TASK = "audio-runtime-c52-hermetic-room-liveness-characterization"
 OWNED_PREFIX = "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/"
+EXPECTED_PACKAGE = "./services/rooms/internal/lifecycle"
+
+# A valid overlay trace emits the same lifecycle shape for every individual
+# subtest invocation. Presence-only checks let a duplicated terminal or a
+# transformed checkpoint pass while retaining all of the expected names.
+PER_CASE_TRACE_COUNTS = {
+    "case_started": 1,
+    "live_open": 2,
+    "event_drain_created": 2,
+    "handle_start": 2,
+    "live_event_received": 3,
+    "terminal_observed": 1,
+    "terminal_metadata_latched": 1,
+    "peer_cancel_snapshot": 1,
+    "room_context_cancel_requested": 1,
+    "participant_wait_returned": 2,
+    "participant_handle_closed": 2,
+    "participant_result_recorded": 2,
+    "room_result_snapshot": 1,
+    "room_run_return": 1,
+    "handle_wait_returned": 2,
+    "handle_close_returned": 2,
+    "participant_event_drain_waited": 2,
+    "participant_wait_completed": 2,
+}
+PER_CASE_TRACE_MIN_COUNTS = {
+    "liveness_cancel_requested": 1,
+    "handle_cancel": 3,
+    "sink_publish_before": 3,
+    "sink_publish": 3,
+    "sink_publish_returned": 3,
+    "diagnostic_published": 5,
+}
 
 
 class VerificationError(Exception):
@@ -112,6 +146,83 @@ def required_run_counts(record: dict[str, object]) -> dict[str, int]:
     return {str(key): int(value) for key, value in value.items()}
 
 
+def required_tests_for_cell(cell: dict[str, object]) -> list[str]:
+    args = [str(value) for value in cell.get("args", [])]
+    if "-run" not in args:
+        raise VerificationError(f"matrix cell {cell.get('id')} has no -run selector")
+    run = args[args.index("-run") + 1]
+    if run.endswith("/provider_timeout$"):
+        return ["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"]
+    if run.endswith("/empty_response$"):
+        return ["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"]
+    return [
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout",
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response",
+    ]
+
+
+def parse_raw_go_json(stdout_path: Path, required_tests: list[str], package: str) -> dict[str, object]:
+    if not stdout_path.is_file():
+        raise VerificationError(f"missing raw go test output: {stdout_path}")
+    events: list[dict[str, object]] = []
+    invalid_lines: list[str] = []
+    for raw in stdout_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError:
+            invalid_lines.append(raw)
+            continue
+        if isinstance(value, dict):
+            events.append(value)
+    test_events: dict[str, dict[str, int]] = {}
+    for event in events:
+        test = event.get("Test")
+        if not isinstance(test, str) or not test:
+            continue
+        action = str(event.get("Action", ""))
+        counts = test_events.setdefault(test, {"run": 0, "pass": 0, "fail": 0, "skip": 0})
+        if action in counts:
+            counts[action] += 1
+    output = "\n".join(str(event.get("Output", "")) for event in events if event.get("Action") == "output")
+    return {
+        "json_line_count": len(events),
+        "invalid_json_lines": len(invalid_lines),
+        "invalid_json_samples": invalid_lines[:3],
+        "test_events": test_events,
+        "required_test_run_counts": {test: test_events.get(test, {}).get("run", 0) for test in required_tests},
+        "relevant_test_names": sorted(name for name in test_events if name.startswith("TestRunnerRoutesTypedLivenessFaultAndPreservesPeer")),
+        "package_events": [event for event in events if event.get("Package") == "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle" and not event.get("Test")],
+        "cached_marker": "(cached)" in output,
+        "no_tests_marker": "[no tests to run]" in output or any(event.get("Action") == "output" and "no tests to run" in str(event.get("Output", "")) for event in events),
+        "first_assertion": next((line for line in output.splitlines() if "browser_parity_test.go:" in line), ""),
+        "package": package,
+    }
+
+
+def raw_selection_for_process(stdout_path: Path, process: dict[str, object], required_tests: list[str], package: str) -> dict[str, object]:
+    if not isinstance(process, dict):
+        raise VerificationError(f"missing process record for {stdout_path}")
+    if not stdout_path.is_file():
+        raise VerificationError(f"missing raw go test output: {stdout_path}")
+    if process.get("stdout_bytes") != stdout_path.stat().st_size or process.get("stdout_sha256") != digest(stdout_path):
+        raise VerificationError(f"raw stdout does not match process provenance: {stdout_path}")
+    return parse_raw_go_json(stdout_path, required_tests, package)
+
+
+def raw_selection_for_record(run_root: Path, record: dict[str, object], cell: dict[str, object]) -> dict[str, object]:
+    label = str(record.get("revision_label"))
+    cell_id = str(cell.get("id"))
+    stdout_path = run_root / "cells" / label / cell_id / "stdout.log"
+    try:
+        stdout_path.resolve().relative_to(run_root.resolve())
+    except ValueError as exc:
+        raise VerificationError(f"matrix stdout path escapes run root: {stdout_path}") from exc
+    process = record.get("process")
+    if not isinstance(process, dict):
+        raise VerificationError(f"missing process record for {label}/{cell_id}")
+    return raw_selection_for_process(stdout_path, process, required_tests_for_cell(cell), EXPECTED_PACKAGE)
+
+
 def verify_provenance() -> dict[str, object]:
     value = load(EVIDENCE / "provenance.json")
     if not isinstance(value, dict):
@@ -178,7 +289,14 @@ def verify_provenance() -> dict[str, object]:
         raise VerificationError("prior CI observation identity is incomplete")
     log_path = EVIDENCE / str(ci.get("log_path", ""))
     metadata_path = EVIDENCE / str(ci.get("metadata_path", ""))
-    if not log_path.is_file() or not metadata_path.is_file() or digest(log_path) != ci.get("log_sha256"):
+    if (
+        not log_path.is_file()
+        or not metadata_path.is_file()
+        or not re.fullmatch(r"[0-9a-f]{64}", str(ci.get("log_sha256", "")))
+        or not re.fullmatch(r"[0-9a-f]{64}", str(ci.get("metadata_sha256", "")))
+        or digest(log_path) != ci.get("log_sha256")
+        or digest(metadata_path) != ci.get("metadata_sha256")
+    ):
         raise VerificationError("complete prior CI log/metadata is missing or changed")
     primary = value.get("primary_observation")
     if not isinstance(primary, dict) or primary.get("status") != "REPORTED_UNDER_PAYLOAD" or primary.get("independently_verified") is not False:
@@ -198,6 +316,7 @@ def trace_events(path: Path) -> list[dict[str, object]]:
     if not path.is_file():
         raise VerificationError(f"missing trace: {path}")
     result: list[dict[str, object]] = []
+    sequences: set[int] = set()
     for line_number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
         try:
             value = json.loads(line)
@@ -205,6 +324,10 @@ def trace_events(path: Path) -> list[dict[str, object]]:
             raise VerificationError(f"invalid trace JSON at {path}:{line_number}: {exc}") from exc
         if not isinstance(value, dict) or value.get("schema") != "audio-runtime-c52-trace-v1":
             raise VerificationError(f"invalid trace record at {path}:{line_number}")
+        sequence = value.get("seq")
+        if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence in sequences:
+            raise VerificationError(f"invalid or duplicate trace sequence at {path}:{line_number}")
+        sequences.add(sequence)
         result.append(value)
     if not result:
         raise VerificationError(f"empty trace: {path}")
@@ -242,7 +365,9 @@ def verify_matrix() -> dict[str, object]:
     if run.get("matrix_sha256") != digest(MATRIX):
         raise VerificationError("matrix changed after execution")
     values = records(run)
-    expected_count = len(matrix.get("cells", [])) * 2 if isinstance(matrix.get("cells"), list) else 0
+    matrix_cells = matrix.get("cells")
+    expected_cells = {str(cell.get("id")): cell for cell in matrix_cells if isinstance(cell, dict)} if isinstance(matrix_cells, list) else {}
+    expected_count = len(expected_cells) * 2
     if len(values) != expected_count or expected_count != 22:
         raise VerificationError(f"matrix cell count {len(values)} != frozen 22")
     if float(run.get("aggregate_timeout_seconds", 0)) > 900 or run.get("aggregate_deadline_met") is not True:
@@ -259,15 +384,21 @@ def verify_matrix() -> dict[str, object]:
         if key in seen:
             raise VerificationError(f"duplicate matrix result: {key}")
         seen.add(key)
+        if key[1] not in expected_cells or cell != expected_cells[key[1]]:
+            raise VerificationError(f"matrix cell was changed after execution for {key}")
         if record.get("status") == "NOT_RUN_AGGREGATE_DEADLINE" or process_failure(record):
             raise VerificationError(f"runner control failed for {key}")
         cleanup = record.get("process", {}).get("cleanup") if isinstance(record.get("process"), dict) else None
         if not isinstance(cleanup, dict) or cleanup.get("reason") != "parent_exit":
             raise VerificationError(f"normal parent-exit group cleanup was not recorded for {key}")
-        counts = required_run_counts(record)
+        raw = raw_selection_for_record(run_root, record, expected_cells[key[1]])
+        embedded = selection(record)
+        if embedded != raw:
+            raise VerificationError(f"embedded selection differs from raw go test JSON for {key}")
+        counts = {str(name): int(value) for name, value in raw["required_test_run_counts"].items()}
         if not counts or any(value <= 0 for value in counts.values()):
             raise VerificationError(f"zero required test selection for {key}: {counts}")
-        parsed = selection(record)
+        parsed = raw
         if int(parsed.get("invalid_json_lines", 0)) != 0 or parsed.get("cached_marker") is True:
             raise VerificationError(f"invalid/cached go test JSON for {key}")
         if record.get("process", {}).get("exit_code") != 0:
@@ -328,11 +459,61 @@ REQUIRED_TRACE_KINDS = [
 ]
 
 
+def validate_case_trace(group: list[dict[str, object]], record: dict[str, object]) -> None:
+    if not group or group[0].get("kind") != "case_started":
+        raise VerificationError(f"case trace does not start with case_started for {record.get('revision_label')}/{record.get('cell', {}).get('id')}")
+    counts = Counter(str(event.get("kind")) for event in group)
+    for kind, expected in PER_CASE_TRACE_COUNTS.items():
+        if counts.get(kind, 0) != expected:
+            raise VerificationError(
+                f"checkpoint cardinality for {kind} is {counts.get(kind, 0)}, expected {expected} "
+                f"for {record.get('revision_label')}/{record.get('cell', {}).get('id')}"
+            )
+    for kind, minimum in PER_CASE_TRACE_MIN_COUNTS.items():
+        if counts.get(kind, 0) < minimum:
+            raise VerificationError(
+                f"checkpoint count for {kind} is {counts.get(kind, 0)}, expected at least {minimum} "
+                f"for {record.get('revision_label')}/{record.get('cell', {}).get('id')}"
+            )
+    classification = event_fields(group[0]).get("classification")
+    if classification not in {"silent_provider_timeout", "silent_provider_empty_response"}:
+        raise VerificationError("case_started lacks a valid typed liveness classification")
+    liveness = [event_fields(event) for event in group if event.get("kind") == "live_event_received" and event_fields(event).get("event_kind") == "liveness_fault"]
+    if len(liveness) != 1 or liveness[0].get("liveness_classification") != classification:
+        raise VerificationError("typed liveness event is missing or transformed")
+    terminal = [event_fields(event) for event in group if event.get("kind") == "terminal_observed"]
+    latched = [event_fields(event) for event in group if event.get("kind") == "terminal_metadata_latched"]
+    if terminal[0].get("liveness_classification") != classification or latched[0].get("classification") != classification:
+        raise VerificationError("terminal metadata does not preserve typed liveness classification")
+    if any(event_fields(event).get("count") != "0" or event_fields(event).get("before") != "external_room_cancel" for event in group if event.get("kind") == "peer_cancel_snapshot"):
+        raise VerificationError("peer cancellation was not zero before external room cancellation")
+    if any(event_fields(event).get("reason") != "test_external_cancel" for event in group if event.get("kind") == "room_context_cancel_requested"):
+        raise VerificationError("room cancellation checkpoint has an unexpected reason")
+    for kind in ("participant_wait_returned", "participant_handle_closed", "participant_result_recorded"):
+        participants = sorted(str(event.get("participant")) for event in group if event.get("kind") == kind)
+        if participants != ["peer", "silent"]:
+            raise VerificationError(f"{kind} does not close exactly the peer and silent participants")
+    sink_keys = {
+        kind: sorted((str(event.get("participant")), event_fields(event).get("event_kind", "")) for event in group if event.get("kind") == kind)
+        for kind in ("sink_publish_before", "sink_publish", "sink_publish_returned")
+    }
+    if not (sink_keys["sink_publish_before"] == sink_keys["sink_publish"] == sink_keys["sink_publish_returned"]):
+        raise VerificationError("diagnostic/sink checkpoint routing was transformed")
+
+
 def verify_checkpoints() -> dict[str, object]:
     run, run_root = latest_run()
     outcomes: list[dict[str, object]] = []
     for record in records(run):
         events = record_trace(record, run_root)
+        groups = case_groups(events)
+        args = record.get("cell", {}).get("args", []) if isinstance(record.get("cell"), dict) else []
+        count_values = [str(value) for value in args if str(value).startswith("-count=")]
+        expected_cases = int(count_values[0].split("=", 1)[1]) * len(required_tests_for_cell(record["cell"])) if len(count_values) == 1 and isinstance(record.get("cell"), dict) else -1
+        if len(count_values) != 1 or len(groups) != expected_cases:
+            raise VerificationError(f"trace case count does not match frozen test count for {record.get('revision_label')}/{record.get('cell', {}).get('id')}")
+        for group in groups:
+            validate_case_trace(group, record)
         kinds = [str(event.get("kind")) for event in events]
         missing = [kind for kind in REQUIRED_TRACE_KINDS if kind not in kinds]
         peer_counts = [event_fields(event).get("count") for event in events if event.get("kind") == "peer_cancel_snapshot"]
@@ -359,6 +540,7 @@ def first_divergence() -> dict[str, object]:
     for record in records(run):
         events = record_trace(record, run_root)
         for group_index, group in enumerate(case_groups(events), start=1):
+            validate_case_trace(group, record)
             by_kind: dict[str, list[dict[str, object]]] = {}
             for event in group:
                 by_kind.setdefault(str(event.get("kind")), []).append(event)
@@ -439,7 +621,7 @@ def verify_cleanup() -> dict[str, object]:
 
 def verify_no_retry_and_selection() -> dict[str, object]:
     matrix = load(MATRIX)
-    run, _ = latest_run()
+    run, run_root = latest_run()
     ids = [str(record.get("cell", {}).get("id")) for record in records(run)]
     expected_ids = {str(cell.get("id")) for cell in matrix.get("cells", []) if isinstance(cell, dict)} if isinstance(matrix, dict) else set()
     counts = {cell_id: ids.count(cell_id) for cell_id in set(ids)}
@@ -454,7 +636,20 @@ def verify_no_retry_and_selection() -> dict[str, object]:
         value = negative.get(name, {}) if isinstance(negative, dict) else {}
         if not isinstance(value, dict) or value.get("rejected") is not True:
             raise VerificationError(f"{name} was not fail-closed")
-        selected = value.get("selection", {}).get("required_test_run_counts", {}) if isinstance(value.get("selection"), dict) else {}
+        process = value.get("process")
+        if not isinstance(process, dict):
+            raise VerificationError(f"{name} has no process record")
+        package = EXPECTED_PACKAGE if name == "zero_test_selection" else "./services/session/internal/live"
+        control_directory = "zero-test-selection" if name == "zero_test_selection" else "wrong-package-selection"
+        raw = raw_selection_for_process(
+            run_root / "negative-controls" / control_directory / "stdout.log",
+            process,
+            ["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"],
+            package,
+        )
+        if value.get("selection") != raw:
+            raise VerificationError(f"{name} embedded selection differs from raw go test JSON")
+        selected = raw.get("required_test_run_counts", {})
         if any(int(count) != 0 for count in selected.values()):
             raise VerificationError(f"{name} unexpectedly selected a required test")
     return {"mode": "no-retry-and-selection", "passes": True, "attempts": "one per frozen cell", "negative_controls": ["zero_test_selection", "wrong_test_selection"]}
