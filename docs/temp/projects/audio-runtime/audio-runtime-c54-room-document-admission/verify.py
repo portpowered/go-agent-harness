@@ -73,14 +73,17 @@ def executions(value: Any) -> Iterator[dict[str, Any]]:
             yield from executions(child)
 
 
-def check_execution(value: dict[str, Any], label: str, *, success: bool, output_cap: bool = True) -> None:
+def check_execution(value: dict[str, Any], label: str, *, success: bool, output_cap: bool = True, timeout_expected: bool = False) -> None:
     require(value.get("label") == label, f"execution label mismatch: {label}")
     require(int(value.get("elapsed_ms", 10**9)) <= MAX_CHILD_SECONDS * 1000, f"{label} exceeded the child budget")
     require(value.get("cleanup", {}).get("parent_reaped") is True, f"{label} did not reap its parent")
     require(value.get("cleanup", {}).get("reader_threads_joined") is True, f"{label} left an output reader")
     require(value.get("cleanup", {}).get("group_alive_after") is False, f"{label} left a process-group survivor")
     require(value.get("disk_bounded") is True and int(value.get("disk_bytes", 10**18)) <= MAX_RETAINED_DISK_BYTES, f"{label} exceeded the retained-disk cap")
-    if success:
+    if timeout_expected:
+        require(value.get("timed_out") is True and value.get("returncode") != 0, f"{label} did not fail by timeout")
+        require(value.get("output_bounded") is True, f"{label} exceeded the output cap")
+    elif success:
         require(value.get("returncode") == 0 and value.get("timed_out") is False, f"{label} did not succeed")
         require(value.get("output_bounded") is True, f"{label} exceeded the output cap")
         require(int(value.get("stdout_bytes", 10**18)) <= MAX_CHILD_OUTPUT_BYTES and int(value.get("stderr_bytes", 10**18)) <= MAX_CHILD_OUTPUT_BYTES, f"{label} exceeded the observed output cap")
@@ -180,7 +183,7 @@ def check_all(cases: dict[str, Any], source: str, candidate: str) -> None:
         check_execution(execution, f"focused-{name}", success=True)
     cleanup = cases["cleanup_controls"]
     timeout = cleanup["forced_timeout"]["execution"]
-    check_execution(timeout, "forced-timeout-process-group", success=False)
+    check_execution(timeout, "forced-timeout-process-group", success=False, timeout_expected=True)
     require(timeout["timed_out"] and timeout["cleanup"]["term_sent"] and timeout["cleanup"]["kill_sent"], "forced timeout did not prove escalation")
     overflow = cleanup["overflow"]["execution"]
     check_execution(overflow, "bounded-output-overflow", success=True, output_cap=False)
