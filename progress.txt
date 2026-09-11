@@ -3906,3 +3906,43 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   and exact provenance, then return `ACCEPTED` to the script-owned current-head
   CI gate without polling. Retain C38 ownership through `CONTINUE` for any
   exact CI rejection or actionable repair.
+
+# C38 provider-close ordering repair and clean candidate — 2026-09-11T03:48Z
+
+- The admitted sole `audio-runtime` task remains on the exact isolated branch
+  `codex/audio-runtime-c38-interruption-audio-retention`; no second project,
+  acceptance waiver, host-checkout reset, or unrelated edit was introduced.
+  Current-main ancestry and the predecessor checkpoints remain preserved.
+- Checkpoint `c51ccb78528fe7513df265ee357c327cb2fe38ec` repairs the teardown
+  order in `session_audio_out.go`: accepted messages are drained with the
+  bounded non-cancellable retention context before the provider `Close`
+  starts, and the forwarder joins the inner close before exposing completion.
+  Checkpoint `b13c7aa5bdb1848fea4d7acca1aac277f6dc4935` consolidates the
+  deterministic cancellation-barrier regression back to the unchanged
+  684-line test baseline; no architecture threshold was lowered.
+- Final focused controls at `b13c7aa` pass: normal and race C38 patterns
+  report `19` tests each; targeted `go vet` reports no issues; `make size-check`
+  passes `184` packages, `1,888` files, and `27,817` functions; and
+  `git diff --check` is clean. The prescribed accumulated review regressions
+  remain passing in normal and race `COUNT=3` modes, including their expected
+  negative-control diagnostics.
+- Clean causal evidence is
+  `evidence-b13c7aa/runs/causal-20260911T034525Z-25422`: `CAUSAL_PROOF`, exact
+  source identity `b13c7aa5bdb1848fea4d7acca1aac277f6dc4935`, causal regression
+  exit `0` in `6.834s`, parent reaped, and no surviving process group. It
+  resolves the cancellation-drop, provider-ingress, and PCM-before-publication
+  boundaries and scopes retention to accepted assistant audio deltas. Frozen
+  tool/interruption wire counts and PCM/rendered/healthy-tail hashes, strict
+  replay, same-length PCM mutation rejection, and missing-timeline rejection
+  remain unchanged and proven.
+- The broad package race command still has the previously observed unrelated
+  timing-only failures in
+  `TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict` and
+  `TestSessionDynamicToolPublisher_CoalescesSelectionCatalogBurst`; the narrow
+  C38 race gate passes and no out-of-scope repair was made. This candidate is
+  executor evidence only: no script-CI success, independent review, guarded
+  merge, post-delivery vertical validation, physical/acoustic proof, or project
+  completion is claimed. Exact next action is to push `b13c7aa` and update PR
+  `#430`, then return `ACCEPTED` to the script-owned current-head CI gate
+  without polling; retain C38 ownership through `CONTINUE` for any exact
+  rejection or actionable repair.

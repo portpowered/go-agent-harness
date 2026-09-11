@@ -219,3 +219,27 @@ handoff evidence, not CI-green, review, merge, vertical, physical/acoustic, or
 project acceptance. The next action is to push this same task and return
 `ACCEPTED` to script-owned current-head CI without polling; retain C38 through
 `CONTINUE` for any exact rejection or actionable repair.
+
+## Clean provider-close retention candidate — 2026-09-11T03:48Z
+
+`c51ccb78528fe7513df265ee357c327cb2fe38ec` repairs teardown ordering so
+accepted audio is drained under the bounded retention context before provider
+close; `b13c7aa5bdb1848fea4d7acca1aac277f6dc4935` consolidates its deterministic
+cancellation-barrier regression to the unchanged 684-line test baseline.
+
+At `b13c7aa`, the focused C38 normal/race gates pass 19 tests each, targeted
+vet is clean, `make size-check` passes 184 packages / 1,888 files / 27,817
+functions, and the accumulated review regressions pass in normal/race
+`COUNT=3` modes. Clean causal evidence is
+`evidence-b13c7aa/runs/causal-20260911T034525Z-25422`: `CAUSAL_PROOF`, exact
+source identity `b13c7aa5bdb1848fea4d7acca1aac277f6dc4935`, regression exit 0
+in 6.834s, reaped parent, and no survivors. Frozen wire/PCM/rendered/healthy-
+tail, strict replay, mutation, and missing-timeline controls remain proven.
+
+The broad package race retains only the known unrelated timing failures in
+`TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict` and
+`TestSessionDynamicToolPublisher_CoalescesSelectionCatalogBurst`; no
+out-of-scope repair was made. This is executor handoff evidence, not CI-green,
+review, merge, vertical, physical/acoustic, or project acceptance. Next action:
+push `b13c7aa`, update PR `#430`, and return `ACCEPTED` to script-owned
+current-head CI without polling.
