@@ -300,3 +300,60 @@ func assertForwardedLiveness(t *testing.T, sink *recordingRoomEventSink, classif
 		t.Fatalf("forwarded %s liveness events = %d, want one", classification, count)
 	}
 }
+
+func TestRunnerPublishesLivenessBeforeCancellingParticipant(t *testing.T) {
+	silent := newFakeLiveHandle()
+	silent.startEvents = []session.LiveEvent{{
+		Kind: string(session.LiveEventLiveness),
+		Liveness: &session.LiveLivenessFailure{
+			Classification: "silent_provider_empty_response",
+			TerminalReason: messages.TerminalReasonTerminalFailure,
+		},
+	}}
+	peer := newFakeLiveHandle()
+	service := &fakeLiveService{handles: map[string]*fakeLiveHandle{
+		typedLivenessSilentID: silent,
+		"peer":                peer,
+	}}
+	sink := &livenessOrderingSink{silent: silent, peer: peer, seen: make(chan struct{})}
+	runner := New(Dependencies{Live: service, Clock: platformclock.Real{}})
+	manifest := typedLivenessManifest()
+	resultCh := make(chan error, 1)
+	go func() {
+		_, err := runner.Run(context.Background(), nil, rooms.RoomRunOptions{Manifest: manifest, EventSink: sink})
+		resultCh <- err
+	}()
+	select {
+	case <-sink.seen:
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not publish typed liveness")
+	}
+	if got := sink.silentCancels; got != 0 {
+		t.Fatalf("silent participant cancelled before liveness publication: %d", got)
+	}
+	select {
+	case err := <-resultCh:
+		if err != nil {
+			t.Fatalf("room run error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("room did not finish participant cleanup")
+	}
+}
+
+type livenessOrderingSink struct {
+	silent        *fakeLiveHandle
+	peer          *fakeLiveHandle
+	seen          chan struct{}
+	silentCancels int
+	once          sync.Once
+}
+
+func (s *livenessOrderingSink) Publish(_ context.Context, participantID string, event session.LiveEvent) error {
+	if participantID == typedLivenessSilentID && event.Liveness != nil {
+		s.silentCancels = s.silent.cancelCallsSnapshot()
+		s.peer.Cancel(nil)
+		s.once.Do(func() { close(s.seen) })
+	}
+	return nil
+}

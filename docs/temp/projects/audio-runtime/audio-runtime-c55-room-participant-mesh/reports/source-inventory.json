@@ -1,0 +1,51 @@
+{
+  "baseline_line_count": 962,
+  "baseline_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+  "final_line_count": 349,
+  "path": "agent-cli/internal/room/mesh.go",
+  "retained": {
+    "func NewLoopbackMesh": {
+      "baseline_present": true,
+      "final_present": true
+    },
+    "func NewLoopbackPairFactory": {
+      "baseline_present": true,
+      "final_present": true
+    },
+    "func NewParticipantMesh": {
+      "baseline_present": true,
+      "final_present": true
+    },
+    "type LoopbackPeerPair": {
+      "baseline_present": true,
+      "final_present": true
+    },
+    "type loopbackConn": {
+      "baseline_present": true,
+      "final_present": true
+    }
+  },
+  "retired": {
+    "closing []*meshPair": {
+      "baseline_present": true,
+      "final_present": false
+    },
+    "mutateMu": {
+      "baseline_present": true,
+      "final_present": false
+    },
+    "pairs        map[": {
+      "baseline_present": true,
+      "final_present": false
+    },
+    "participants map": {
+      "baseline_present": true,
+      "final_present": false
+    },
+    "pendingPair": {
+      "baseline_present": true,
+      "final_present": false
+    }
+  },
+  "schema": "audio-runtime.c55.source-inventory.v1"
+}

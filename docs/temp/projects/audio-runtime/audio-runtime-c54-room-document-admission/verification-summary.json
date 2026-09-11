@@ -1,0 +1,739 @@
+{
+  "candidate_revision": "67d98d3a13fd9d01ac92acc3a8ec8467f06803e0",
+  "cases": {
+    "baseline": {
+      "candidate_revision": "67d98d3a13fd9d01ac92acc3a8ec8467f06803e0",
+      "execution": {
+        "argv": [
+          "go",
+          "build",
+          "-mod=readonly",
+          "-trimpath",
+          "-o",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c54-base-9nmmm3s1/baseline-consumer",
+          "."
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": "<temporary-base-archive>",
+        "disk_bounded": true,
+        "disk_bytes": 392,
+        "elapsed_ms": 412,
+        "label": "baseline-without-c54-provider",
+        "output_bounded": true,
+        "returncode": 1,
+        "stderr": "artifacts/baseline-failure/stderr.log",
+        "stderr_bytes": 392,
+        "stdout": "artifacts/baseline-failure/stdout.log",
+        "stdout_bytes": 0,
+        "timed_out": false
+      },
+      "expected_outcome": "baseline-api-missing",
+      "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710"
+    },
+    "cleanup_controls": {
+      "forced_timeout": {
+        "execution": {
+          "argv": [
+            "/opt/homebrew/opt/python@3.14/bin/python3.14",
+            "-c",
+            "import os,signal,time; child=os.fork(); signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(1000)"
+          ],
+          "cleanup": {
+            "group_alive_after": false,
+            "group_alive_before": true,
+            "kill_sent": true,
+            "parent_reaped": true,
+            "reader_threads_joined": true,
+            "setup_error": "",
+            "term_sent": true
+          },
+          "cwd": ".",
+          "disk_bounded": true,
+          "disk_bytes": 0,
+          "elapsed_ms": 3050,
+          "label": "forced-timeout-process-group",
+          "output_bounded": true,
+          "returncode": -9,
+          "stderr": "artifacts/cleanup-timeout/stderr.log",
+          "stderr_bytes": 0,
+          "stdout": "artifacts/cleanup-timeout/stdout.log",
+          "stdout_bytes": 0,
+          "timed_out": true
+        },
+        "expected_failure": "timeout"
+      },
+      "overflow": {
+        "execution": {
+          "argv": [
+            "/opt/homebrew/opt/python@3.14/bin/python3.14",
+            "-c",
+            "import sys; sys.stdout.write('x' * 131072); sys.stdout.flush()"
+          ],
+          "cleanup": {
+            "group_alive_after": false,
+            "group_alive_before": true,
+            "kill_sent": false,
+            "parent_reaped": true,
+            "reader_threads_joined": true,
+            "setup_error": "",
+            "term_sent": false
+          },
+          "cwd": ".",
+          "disk_bounded": true,
+          "disk_bytes": 65536,
+          "elapsed_ms": 67,
+          "label": "bounded-output-overflow",
+          "output_bounded": false,
+          "returncode": 0,
+          "stderr": "artifacts/cleanup-overflow/stderr.log",
+          "stderr_bytes": 0,
+          "stdout": "artifacts/cleanup-overflow/stdout.log",
+          "stdout_bytes": 131072,
+          "timed_out": false
+        },
+        "expected_failure": "output-cap"
+      },
+      "passed": true,
+      "schema": "audio-runtime.c54.cleanup-controls/v1"
+    },
+    "consumer": {
+      "binary": {
+        "bytes": 4484242,
+        "path": "artifacts/c54-consumer",
+        "sha256": "a15f2f973e383d938b71e25c3519ea0c8632f4e2fb5aa37dd4c1255ba1b20077"
+      },
+      "execution": {
+        "argv": [
+          "go",
+          "build",
+          "-mod=readonly",
+          "-trimpath",
+          "-o",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/c54-consumer",
+          "."
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": "consumer",
+        "disk_bounded": true,
+        "disk_bytes": 0,
+        "elapsed_ms": 210,
+        "label": "build-external-consumer",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/build-consumer/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/build-consumer/stdout.log",
+        "stdout_bytes": 0,
+        "timed_out": false
+      }
+    },
+    "consumer_positive": {
+      "execution": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/c54-consumer"
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": "consumer",
+        "disk_bounded": true,
+        "disk_bytes": 1400,
+        "elapsed_ms": 96,
+        "label": "public-external-consumer",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/consumer-positive/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/consumer-positive/stdout.log",
+        "stdout_bytes": 1400,
+        "timed_out": false
+      },
+      "report": {
+        "admit_aliases": true,
+        "candidate_revision": "67d98d3a13fd9d01ac92acc3a8ec8467f06803e0",
+        "constructed_via": "rooms/wire.NewManifestProviderFromRegistry",
+        "file_admission": true,
+        "json_yaml_equal": true,
+        "lifecycle": {
+          "closed": true,
+          "validated": true
+        },
+        "normalized": {
+          "browser_cdp_url": "http://127.0.0.1:9222/json/version",
+          "browser_default_match": true,
+          "browser_max_input": 1024,
+          "browser_max_result": 2048,
+          "browser_timeout": "2m30s",
+          "browser_ws_path": "ws://127.0.0.1:9222/%3Credacted%3E",
+          "max_duration": "30s",
+          "max_turns": 3,
+          "model": "gpt-realtime",
+          "participant_ids": [
+            "alpha",
+            "beta"
+          ],
+          "participant_kinds": [
+            "agent",
+            "agent"
+          ],
+          "provider": "openai",
+          "recording_directory": "/tmp/c54-evidence",
+          "schema_version": 1,
+          "tools": [
+            "sleep"
+          ]
+        },
+        "redaction": {
+          "endpoint_query_removed": true,
+          "error_secret_free": true,
+          "serialized_secret_free": true,
+          "websocket_path_redacted": true
+        },
+        "registry_snapshot_isolated": true,
+        "schema": "audio-runtime.c54.public-admission/v1",
+        "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+        "typed_errors": {
+          "missing_credential_cause": true,
+          "missing_credential_field": "participants[1].api_key_env",
+          "missing_credential_problem": "environment variable is unset or empty",
+          "missing_credential_value": "",
+          "multiple_document_cause": true,
+          "no_opener_cause": true,
+          "unknown_nested_cause": true,
+          "unknown_nested_field": "document",
+          "unsafe_endpoint_cause": true,
+          "unsafe_endpoint_field": "participants[0].browserTools.connection.cdp_url"
+        }
+      }
+    },
+    "consumer_tests": {
+      "normal": {
+        "argv": [
+          "go",
+          "test",
+          "-count=1",
+          "-timeout=50s",
+          "./..."
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": "consumer",
+        "disk_bounded": true,
+        "disk_bytes": 103,
+        "elapsed_ms": 953,
+        "label": "external-consumer-normal",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/consumer-test-normal/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/consumer-test-normal/stdout.log",
+        "stdout_bytes": 103,
+        "timed_out": false
+      },
+      "race": {
+        "argv": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "-timeout=50s",
+          "./..."
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": "consumer",
+        "disk_bounded": true,
+        "disk_bytes": 103,
+        "elapsed_ms": 1951,
+        "label": "external-consumer-race",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/consumer-test-race/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/consumer-test-race/stdout.log",
+        "stdout_bytes": 103,
+        "timed_out": false
+      }
+    },
+    "focused": {
+      "cli-normal": {
+        "argv": [
+          "go",
+          "test",
+          "-count=1",
+          "-timeout=50s",
+          "./internal/room",
+          "./internal/services/rooms/internal/launch",
+          "./internal/transport/cli"
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": "agent-cli",
+        "disk_bounded": true,
+        "disk_bytes": 273,
+        "elapsed_ms": 19219,
+        "label": "focused-cli-normal",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/focused-cli-normal/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/focused-cli-normal/stdout.log",
+        "stdout_bytes": 273,
+        "timed_out": false
+      },
+      "cli-race": {
+        "argv": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "-timeout=50s",
+          "./internal/room"
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": "agent-cli",
+        "disk_bounded": true,
+        "disk_bytes": 76,
+        "elapsed_ms": 6125,
+        "label": "focused-cli-race",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/focused-cli-race/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/focused-cli-race/stdout.log",
+        "stdout_bytes": 76,
+        "timed_out": false
+      },
+      "runtime-normal": {
+        "argv": [
+          "go",
+          "test",
+          "-count=1",
+          "-timeout=50s",
+          "./services/rooms/..."
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": "go-agent-runtime",
+        "disk_bounded": true,
+        "disk_bytes": 919,
+        "elapsed_ms": 1430,
+        "label": "focused-runtime-normal",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/focused-runtime-normal/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/focused-runtime-normal/stdout.log",
+        "stdout_bytes": 919,
+        "timed_out": false
+      },
+      "runtime-race": {
+        "argv": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "-timeout=50s",
+          "./services/rooms/..."
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": "go-agent-runtime",
+        "disk_bounded": true,
+        "disk_bytes": 919,
+        "elapsed_ms": 2583,
+        "label": "focused-runtime-race",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/focused-runtime-race/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/focused-runtime-race/stdout.log",
+        "stdout_bytes": 919,
+        "timed_out": false
+      }
+    },
+    "negative_controls": {
+      "controls": [
+        {
+          "environment": "C54_WRONG_NORMALIZED_ORACLE",
+          "execution": {
+            "argv": [
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/c54-consumer"
+            ],
+            "cleanup": {
+              "group_alive_after": false,
+              "group_alive_before": true,
+              "kill_sent": false,
+              "parent_reaped": true,
+              "reader_threads_joined": true,
+              "setup_error": "",
+              "term_sent": false
+            },
+            "cwd": "consumer",
+            "disk_bounded": true,
+            "disk_bytes": 75,
+            "elapsed_ms": 20,
+            "label": "consumer-wrong-normalized-oracle",
+            "output_bounded": true,
+            "returncode": 1,
+            "stderr": "artifacts/consumer-wrong-normalized/stderr.log",
+            "stderr_bytes": 75,
+            "stdout": "artifacts/consumer-wrong-normalized/stdout.log",
+            "stdout_bytes": 0,
+            "timed_out": false
+          },
+          "name": "normalized"
+        },
+        {
+          "environment": "C54_WRONG_ERROR_ORACLE",
+          "execution": {
+            "argv": [
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/c54-consumer"
+            ],
+            "cleanup": {
+              "group_alive_after": false,
+              "group_alive_before": true,
+              "kill_sent": false,
+              "parent_reaped": true,
+              "reader_threads_joined": true,
+              "setup_error": "",
+              "term_sent": false
+            },
+            "cwd": "consumer",
+            "disk_bounded": true,
+            "disk_bytes": 80,
+            "elapsed_ms": 20,
+            "label": "consumer-wrong-error-oracle",
+            "output_bounded": true,
+            "returncode": 1,
+            "stderr": "artifacts/consumer-wrong-error/stderr.log",
+            "stderr_bytes": 80,
+            "stdout": "artifacts/consumer-wrong-error/stdout.log",
+            "stdout_bytes": 0,
+            "timed_out": false
+          },
+          "name": "error"
+        },
+        {
+          "environment": "C54_WRONG_REGISTRY_ORACLE",
+          "execution": {
+            "argv": [
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/c54-consumer"
+            ],
+            "cleanup": {
+              "group_alive_after": false,
+              "group_alive_before": true,
+              "kill_sent": false,
+              "parent_reaped": true,
+              "reader_threads_joined": true,
+              "setup_error": "",
+              "term_sent": false
+            },
+            "cwd": "consumer",
+            "disk_bounded": true,
+            "disk_bytes": 94,
+            "elapsed_ms": 26,
+            "label": "consumer-wrong-registry-oracle",
+            "output_bounded": true,
+            "returncode": 1,
+            "stderr": "artifacts/consumer-wrong-registry/stderr.log",
+            "stderr_bytes": 94,
+            "stdout": "artifacts/consumer-wrong-registry/stdout.log",
+            "stdout_bytes": 0,
+            "timed_out": false
+          },
+          "name": "registry"
+        },
+        {
+          "environment": "C54_WRONG_REDACTION_ORACLE",
+          "execution": {
+            "argv": [
+              "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/c54-consumer"
+            ],
+            "cleanup": {
+              "group_alive_after": false,
+              "group_alive_before": true,
+              "kill_sent": false,
+              "parent_reaped": true,
+              "reader_threads_joined": true,
+              "setup_error": "",
+              "term_sent": false
+            },
+            "cwd": "consumer",
+            "disk_bounded": true,
+            "disk_bytes": 76,
+            "elapsed_ms": 20,
+            "label": "consumer-wrong-redaction-oracle",
+            "output_bounded": true,
+            "returncode": 1,
+            "stderr": "artifacts/consumer-wrong-redaction/stderr.log",
+            "stderr_bytes": 76,
+            "stdout": "artifacts/consumer-wrong-redaction/stdout.log",
+            "stdout_bytes": 0,
+            "timed_out": false
+          },
+          "name": "redaction"
+        }
+      ],
+      "passed": true,
+      "schema": "audio-runtime.c54.negative-controls/v1"
+    },
+    "replay": {
+      "binary": {
+        "path": "artifacts/yui",
+        "sha256": "3601f3502fdea48b64e56c192bd72dcb46d3f601e39e3263c45b1186dbeefdfa"
+      },
+      "candidate_revision": "67d98d3a13fd9d01ac92acc3a8ec8467f06803e0",
+      "effects": {
+        "acoustic": "not_attempted",
+        "clean_shutdown": true,
+        "physical_device": "not_attempted",
+        "response_text": "strict replay continuation",
+        "tool_marker": "PROBE_TOOL_MARKER_9182"
+      },
+      "execution": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/yui",
+          "--config-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T085856-38923/config",
+          "--log-to-stdout",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T085856-38923/audio.wav",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T085856-38923/tool-record",
+          "--trace-audio",
+          "--workdir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T085856-38923",
+          "--allow-path",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T085856-38923"
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": "artifacts/shipped-yui-replay-20260911T085856-38923",
+        "disk_bounded": true,
+        "disk_bytes": 828,
+        "elapsed_ms": 150,
+        "label": "shipped-yui-audio-tool-replay",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/shipped-yui-replay-20260911T085856-38923/process/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/shipped-yui-replay-20260911T085856-38923/process/stdout.log",
+        "stdout_bytes": 828,
+        "timed_out": false
+      },
+      "fixture": {
+        "bytes": 14060,
+        "event_count": 18,
+        "ordered_types": [
+          "session.update",
+          "session.created",
+          "conversation.item.create",
+          "response.create",
+          "response.created",
+          "response.output_item.added",
+          "response.function_call_arguments.done",
+          "response.done",
+          "conversation.item.create",
+          "response.create",
+          "response.created",
+          "response.output_audio.delta",
+          "response.output_audio.delta",
+          "response.output_audio.done",
+          "response.output_text.delta",
+          "response.output_text.done",
+          "response.done",
+          "session.closed"
+        ],
+        "path": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+        "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+      },
+      "passed": true,
+      "record": {
+        "artifact_count": 5,
+        "manifest": "artifacts/shipped-yui-replay-20260911T085856-38923/tool-record/manifest.json",
+        "pcm": "artifacts/shipped-yui-replay-20260911T085856-38923/tool-record/audio/out-000.pcm",
+        "pcm_bytes": 4800,
+        "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+        "provider": "artifacts/shipped-yui-replay-20260911T085856-38923/tool-record/provider.json",
+        "session_log": "artifacts/shipped-yui-replay-20260911T085856-38923/tool-record/session-log.jsonl"
+      },
+      "schema": "audio-runtime.c54.shipped-replay/v1",
+      "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710"
+    },
+    "yui": {
+      "binary": {
+        "bytes": 50913458,
+        "path": "artifacts/yui",
+        "sha256": "3601f3502fdea48b64e56c192bd72dcb46d3f601e39e3263c45b1186dbeefdfa"
+      },
+      "execution": {
+        "argv": [
+          "go",
+          "build",
+          "-tags=nomicrophone",
+          "-trimpath",
+          "-o",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/yui",
+          "./agent-cli/cmd/yui"
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": ".",
+        "disk_bounded": true,
+        "disk_bytes": 0,
+        "elapsed_ms": 474,
+        "label": "build-shipped-yui",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "artifacts/build-yui/stderr.log",
+        "stderr_bytes": 0,
+        "stdout": "artifacts/build-yui/stdout.log",
+        "stdout_bytes": 0,
+        "timed_out": false
+      }
+    },
+    "yui_admission": {
+      "delegation": {
+        "cli_parser_absent": true,
+        "observable_typed_error_surface": "participant-qualified strict browser field error",
+        "runtime_raw_decoder_present": true,
+        "source_has_runtime_provider": true
+      },
+      "execution": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/yui",
+          "--config-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/cli-admission-20260911T085856-38923/config",
+          "--log-to-stdout",
+          "room",
+          "run",
+          "--config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/fixtures/cli-invalid-nested-browser.yaml",
+          "--out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/cli-admission-20260911T085856-38923/out",
+          "--workdir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission",
+          "--allow-path",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission"
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_alive_before": true,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "reader_threads_joined": true,
+          "setup_error": "",
+          "term_sent": false
+        },
+        "cwd": ".",
+        "disk_bounded": true,
+        "disk_bytes": 1532,
+        "elapsed_ms": 447,
+        "label": "shipped-yui-room-admission",
+        "output_bounded": true,
+        "returncode": 1,
+        "stderr": "artifacts/cli-admission-20260911T085856-38923/process/stderr.log",
+        "stderr_bytes": 1532,
+        "stdout": "artifacts/cli-admission-20260911T085856-38923/process/stdout.log",
+        "stdout_bytes": 0,
+        "timed_out": false
+      },
+      "expected_error": "field unknown not found in a participant's browserTools",
+      "fixture": {
+        "bytes": 432,
+        "path": "fixtures/cli-invalid-nested-browser.yaml",
+        "sha256": "b195f49a495ef5cb4ad49411bbdcde0df50a5a5771c336df50c2cf4d56bc360d"
+      }
+    }
+  },
+  "passed": true,
+  "project": "audio-runtime",
+  "provenance": "provenance.json",
+  "provenance_candidate_revision": "67d98d3a13fd9d01ac92acc3a8ec8467f06803e0",
+  "schema": "audio-runtime.c54.verification-summary.v1",
+  "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+  "task": "audio-runtime-c54-room-document-admission"
+}
