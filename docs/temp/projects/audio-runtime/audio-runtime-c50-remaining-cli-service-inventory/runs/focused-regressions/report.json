@@ -14,7 +14,7 @@
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/agent-cli",
       "deadline_seconds": 60,
-      "elapsed_seconds": 0.224021,
+      "elapsed_seconds": 0.220513,
       "environment": {
         "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
         "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -35,8 +35,8 @@
       "label": "room-normal",
       "output_cap_bytes_per_stream": 2097152,
       "output_limited": false,
-      "owned_output_bytes_after": 27373839,
-      "owned_output_bytes_before": 27373839,
+      "owned_output_bytes_after": 27376557,
+      "owned_output_bytes_before": 27376557,
       "owned_output_limited": false,
       "owned_output_quota_bytes": 134217728,
       "passed_tests": [
@@ -47,7 +47,7 @@
         "TestMeshRemovalClosesOnlyRemovedPairAndLeavesSurvivors"
       ],
       "process_group_gone": true,
-      "process_group_id": 94240,
+      "process_group_id": 97929,
       "residual_group_detected": false,
       "stderr_bytes": 0,
       "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/focused-regressions/room-normal.stderr",
@@ -70,7 +70,7 @@
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/agent-cli",
       "deadline_seconds": 60,
-      "elapsed_seconds": 0.241616,
+      "elapsed_seconds": 0.225774,
       "environment": {
         "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
         "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -88,8 +88,8 @@
       "label": "room-race",
       "output_cap_bytes_per_stream": 2097152,
       "output_limited": false,
-      "owned_output_bytes_after": 27373839,
-      "owned_output_bytes_before": 27373839,
+      "owned_output_bytes_after": 27376557,
+      "owned_output_bytes_before": 27376557,
       "owned_output_limited": false,
       "owned_output_quota_bytes": 134217728,
       "passed_tests": [
@@ -97,7 +97,7 @@
         "TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair"
       ],
       "process_group_gone": true,
-      "process_group_id": 94246,
+      "process_group_id": 97934,
       "residual_group_detected": false,
       "stderr_bytes": 0,
       "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/focused-regressions/room-race.stderr",
@@ -119,7 +119,7 @@
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/agent-cli",
       "deadline_seconds": 60,
-      "elapsed_seconds": 0.457158,
+      "elapsed_seconds": 0.462106,
       "environment": {
         "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
         "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -138,8 +138,8 @@
       "label": "agentruntime-normal",
       "output_cap_bytes_per_stream": 2097152,
       "output_limited": false,
-      "owned_output_bytes_after": 27373839,
-      "owned_output_bytes_before": 27373839,
+      "owned_output_bytes_after": 27376557,
+      "owned_output_bytes_before": 27376557,
       "owned_output_limited": false,
       "owned_output_quota_bytes": 134217728,
       "passed_tests": [
@@ -148,7 +148,7 @@
         "TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration"
       ],
       "process_group_gone": true,
-      "process_group_id": 94253,
+      "process_group_id": 97939,
       "residual_group_detected": false,
       "stderr_bytes": 0,
       "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/focused-regressions/agentruntime-normal.stderr",

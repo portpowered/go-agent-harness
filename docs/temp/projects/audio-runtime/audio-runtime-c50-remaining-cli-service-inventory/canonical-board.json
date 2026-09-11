@@ -245,6 +245,38 @@
       "workTypeName": "idea"
     },
     {
+      "chainingTraceDepth": 1,
+      "currentChainingTraceId": "trace-request-7ce4658b-fff1-4e43-93e4-da36b9470b68",
+      "name": "operator-capacity-reconcile-20260911T1110Z",
+      "requestId": "request-7ce4658b-fff1-4e43-93e4-da36b9470b68",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_work_name": "operator-capacity-reconcile-20260911T1110Z",
+        "_work_type": "thoughts"
+      },
+      "traceId": "trace-request-7ce4658b-fff1-4e43-93e4-da36b9470b68",
+      "workId": "batch-request-7ce4658b-fff1-4e43-93e4-da36b9470b68-operator-capacity-reconcile-20260911T1110Z",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 15,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c53-provider-close-terminal-drain",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-5",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 13,
       "content": [
         {
@@ -309,7 +341,7 @@
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
       "state": {
-        "name": "ci-pending",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "tags": {

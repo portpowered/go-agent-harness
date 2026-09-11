@@ -2,12 +2,12 @@
   "schema_version": "c50-accumulated-regressions-v1",
   "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
   "tested_source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
-  "candidate_revision": "4b5288ba923f701ad4597371356fa9a26232202c",
-  "tested_candidate_revision": "4b5288ba923f701ad4597371356fa9a26232202c",
-  "rerun_candidate_revision": "4b5288ba923f701ad4597371356fa9a26232202c",
-  "prior_report_candidate_revision": "c0b6d77ae938e043b1a50be772de9d7afc8a560c",
-  "prior_report_observed_at": "2026-09-11T10:34:09Z",
-  "prior_report_stdout_sha256": "fe03ec9ce919708c67d5cff2f9d6434a59cf8ba346623a28d82b2bc78f454548",
+  "candidate_revision": "a930e80ba09aeecf28e2c80dc4b4c9c84d5afca8",
+  "tested_candidate_revision": "a930e80ba09aeecf28e2c80dc4b4c9c84d5afca8",
+  "rerun_candidate_revision": "a930e80ba09aeecf28e2c80dc4b4c9c84d5afca8",
+  "prior_report_candidate_revision": "4b5288ba923f701ad4597371356fa9a26232202c",
+  "prior_report_observed_at": "2026-09-11T11:08:45Z",
+  "prior_report_stdout_sha256": "de1d81fcff6707663a3a07f0cc4d8e00996acd0c10686fc279bc52829c00e29b",
   "executable_inputs_unchanged_from_prior_report": true,
   "source_revision_equivalence": {
     "from": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
@@ -16,10 +16,10 @@
     "verification": "git diff --quiet acd072e991962defeae59a0ab80f58b0fe322d18 f030d8a875d3fd84c2c30082946c7ff7f5cefb23 -- agent-cli go-agent-runtime go-agent-loop go-audio go-device-gateway go-llm-gateway tests go.work go.work.sum"
   },
   "candidate_revision_equivalence": {
-    "from": "c0b6d77ae938e043b1a50be772de9d7afc8a560c",
-    "to": "4b5288ba923f701ad4597371356fa9a26232202c",
+    "from": "4b5288ba923f701ad4597371356fa9a26232202c",
+    "to": "a930e80ba09aeecf28e2c80dc4b4c9c84d5afca8",
     "production_and_build_inputs_unchanged": true,
-    "verification": "git diff --quiet c0b6d77ae938e043b1a50be772de9d7afc8a560c 4b5288ba923f701ad4597371356fa9a26232202c -- agent-cli go-agent-runtime go-agent-loop go-audio go-device-gateway go-llm-gateway tests go.work go.work.sum"
+    "verification": "git diff --quiet 4b5288ba923f701ad4597371356fa9a26232202c a930e80ba09aeecf28e2c80dc4b4c9c84d5afca8 -- agent-cli go-agent-runtime go-agent-loop go-audio go-device-gateway go-llm-gateway tests go.work go.work.sum"
   },
   "command": "COUNT=3 scripts/test-session-ci-regressions.sh all",
   "exit_code": 0,
