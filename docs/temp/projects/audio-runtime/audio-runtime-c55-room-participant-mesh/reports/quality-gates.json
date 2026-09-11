@@ -1,0 +1,31 @@
+{
+  "schema": "audio-runtime.c55.quality-gates.v1",
+  "candidate_revision": "b7b776ec90dca570213c442d9e55a391827b882c",
+  "passed": [
+    {"command": "make fmt", "exit_code": 0},
+    {"command": "make wire-check", "exit_code": 0},
+    {"command": "make coverage-registration", "exit_code": 0, "workspace_packages": 175, "modules": 6},
+    {"command": "make vet", "exit_code": 0},
+    {"command": "make lint", "exit_code": 0, "pinned_version": "2.9.0"},
+    {"command": "make staticcheck", "exit_code": 0, "pinned_version": "2026.1"},
+    {"command": "make test-regressions", "exit_code": 0}
+  ],
+  "architecture_size_gate": {
+    "command": "make architecture-size-check",
+    "exit_code": 2,
+    "finding_count": 9,
+    "handoff_status": "shared_or_unowned_findings_retained_without_policy_edits",
+    "findings": [
+      "baseline-drift agent-cli/internal/transport/cli package files 148 > baseline 147",
+      "baseline-stale agent-cli/internal/room/mesh.go file-lines exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go *Mesh.Close cognitive-complexity exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go *Mesh.Join cognitive-complexity exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go *Mesh.Join cyclomatic-complexity exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go *Mesh.Join function-lines exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go *Mesh.Join function-statements exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go func-literal@553:17 cognitive-complexity exemption",
+      "package-files go-agent-runtime/services/rooms/internal/lifecycle 16 > baseline 15 after required mesh.go extraction"
+    ],
+    "scope_note": "The admitted C55 manifest permits only existing mesh paths and the C55 evidence directory; architecture baseline and peer package paths remain unowned. No waiver, baseline growth, or policy edit was made."
+  }
+}
