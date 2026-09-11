@@ -1,0 +1,25 @@
+{
+  "schema": "audio-runtime-c48.v1",
+  "scenario": "overlapping_tool_continuation",
+  "responses": [
+    {"id": "tool-resp-000", "calls": ["call-000-alpha", "call-000-beta"]},
+    {"id": "tool-resp-001", "calls": ["call-001-alpha", "call-001-beta"]},
+    {"id": "final-resp-000", "text": "answer-000"},
+    {"id": "final-resp-001", "text": "answer-001"}
+  ],
+  "calls": [
+    {"id": "call-000-alpha", "name": "lookup_alpha", "arguments": "{\"key\":\"alpha\",\"turn\":0}", "result": "result:lookup_alpha:000"},
+    {"id": "call-000-beta", "name": "lookup_beta", "arguments": "{\"key\":\"beta\",\"turn\":0}", "result": "result:lookup_beta:000"},
+    {"id": "call-001-alpha", "name": "lookup_alpha", "arguments": "{\"key\":\"alpha\",\"turn\":1}", "result": "result:lookup_alpha:001"},
+    {"id": "call-001-beta", "name": "lookup_beta", "arguments": "{\"key\":\"beta\",\"turn\":1}", "result": "result:lookup_beta:001"}
+  ],
+  "controls": ["missing", "duplicate", "swapped"],
+  "barrier": "both_response_ids_and_all_four_calls_before_first_result",
+  "completion": "tool_executor_returns_beta_before_alpha_per_batch",
+  "limits": {
+    "event_capacity": 128,
+    "max_trace_events": 4096,
+    "max_report_bytes": 262144,
+    "run_timeout_seconds": 10
+  }
+}

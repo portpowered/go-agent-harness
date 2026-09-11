@@ -2,6 +2,8 @@ package subsystems
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -15,12 +17,22 @@ import (
 
 type Coordinator struct {
 	logger logging.Logger
+
+	// The engine's historical reconstruction window is intentionally single
+	// response. Keep a bounded per-response copy here so a duplex provider can
+	// leave one response active while another response produces a continuation.
+	modelResponses        map[string]*modelResponseAssembly
+	modelResponseOrder    []string
+	latestModelResponse   *modelResponseAssembly
+	anonymousModelStream  *modelResponseAssembly
+	modelResponsesOverlap bool
 }
 
 func NewCoordinator(
 	logger logging.Logger) *Coordinator {
 	return &Coordinator{
-		logger: logger,
+		logger:         logger,
+		modelResponses: make(map[string]*modelResponseAssembly),
 	}
 }
 
@@ -50,6 +62,18 @@ func (c *Coordinator) sendInferenceResult(ctx context.Context, state *state.Loop
 // tool output -> triggers agent
 // agent -(if has no tool call)-> user (close current loop on current turn end)
 func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error {
+	completedModelResponses, err := c.observeModelResponses(curr.Inputs.ModelInputDelta)
+	if err != nil {
+		return err
+	}
+	if c.modelResponsesOverlap {
+		c.replaceEngineModelOutputs(curr, completedModelResponses)
+	} else { // The engine output is authoritative for a single response.
+	}
+	// Completed response assemblies are dispatched only after their boundary.
+	// This keeps overlapping provider responses correlated before tool routing.
+	// Each completed assembly is retired before the next continuation tick.
+
 	if len(curr.Inputs.ToolOutputMessage) > 0 {
 		c.logInfo("Coordinator: tool text output message", logging.Field{Key: "curr.Inputs.ToolOutputMessage", Value: curr.Inputs.ToolOutputMessage})
 		// Dispatch tool messages to kernel via unified delta inbox.
@@ -59,7 +83,7 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 		// if the input receives a message from the tool gateway, then trigger a new assistant message from that call.
 		curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
 		curr.History.CurrentModelDeltaCount = 0
-		curr.History.CurrentPassID++
+		passID := c.nextToolContinuationPass(curr)
 		// The kernel records full messages asynchronously through the shared
 		// delta inbox. Include this completed tool batch in the request snapshot
 		// as well, so a session model runner can deliver rich results to the
@@ -69,12 +93,10 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 			conversation = append(conversation, curr.Inputs.ToolOutputMessage...)
 		}
 		curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
-			conversation, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults,
+			conversation, curr.Tools, passID, curr.InferenceDefaults,
 		))
 		return nil
-	}
-
-	if len(curr.Inputs.ModelOutputMessage) > 0 {
+	} else if len(curr.Inputs.ModelOutputMessage) > 0 {
 		// Dispatch model messages to kernel via unified delta inbox. Ordering is
 		// guaranteed because SYSTEM.FULL_MESSAGE and streaming deltas share the
 		// same FIFO queue. CoordinatorDelta (which runs after Coordinator) sends
@@ -101,10 +123,10 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 				hasFinalResponse = true
 			case len(message.ToolCalls) > 0:
 				c.logInfo("Coordinator: model tool call output message", logging.Field{Key: "message", Value: message})
-				curr.History.CurrentPassID++
+				passID := c.nextToolBatchPass(curr)
 				curr.Outputs.ToolInbox.Write(ctx, messages.ToolBatchRequest{
 					Calls:      message.ToolCalls,
-					LoopPassID: curr.History.CurrentPassID,
+					LoopPassID: passID,
 				})
 			case !message.HasOnlyReasoning():
 				c.logInfo("Coordinator: model output message", logging.Field{Key: "message", Value: message})
@@ -132,56 +154,29 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 		// dispatching the completed response so a later response (for example an
 		// acknowledgement or an interruption response) cannot reconstruct and
 		// execute tool calls from this response a second time.
-		curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
-		curr.History.CurrentModelDeltaCount = 0
+		c.resetModelDeltaWindow(curr)
 		return nil
 	}
 
-	// In DuplexSession, check for session_close or stop control plane messages
-	// from the user. These trigger graceful loop termination.
-	if curr.Mode == state.DuplexSession {
-		for _, msg := range curr.Inputs.UserControlPlaneMessage {
-			if cpType := extractControlPlaneType(msg); cpType == messages.ControlPlaneMessageTypeSessionClose ||
-				cpType == messages.ControlPlaneMessageTypeStop {
-				c.logInfo("Coordinator: session close requested via control plane",
-					logging.Field{Key: "type", Value: string(cpType)})
-				curr.Inputs.TerminateLoop = true
-				return nil
+	// In DuplexSession, check for session_close or stop control plane messages.
+	if curr.Mode == state.DuplexSession && c.hasSessionCloseControl(curr) {
+		curr.Inputs.TerminateLoop = true
+	} else {
+		if len(curr.Inputs.UserOutputMessage) > 0 {
+			// Dispatch user messages to kernel via unified delta inbox.
+			for _, message := range curr.Inputs.UserOutputMessage {
+				c.logInfo("Coordinator: user text output message", logging.Field{Key: "message", Value: message})
+				c.sendInferenceResult(ctx, curr, messages.User, message)
 			}
+			c.resetModelDeltaWindow(curr)
+			curr.History.CurrentPassID++
+			curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
+				curr.History.ConversationBuffer, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults,
+			))
+		} else { // No user message needs dispatch on this tick.
 		}
-	}
-
-	if len(curr.Inputs.UserOutputMessage) > 0 {
-		// Dispatch user messages to kernel via unified delta inbox.
-		for _, message := range curr.Inputs.UserOutputMessage {
-			c.logInfo("Coordinator: user text output message", logging.Field{Key: "message", Value: message})
-			c.sendInferenceResult(ctx, curr, messages.User, message)
-		}
-		curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
-		curr.History.CurrentModelDeltaCount = 0
-		curr.History.CurrentPassID++
-		curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
-			curr.History.ConversationBuffer, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults,
-		))
 	}
 	return nil
-}
-
-// toolResultsAtHistoryTail handles the race between the coordinator's
-// inference-request tick and the kernel tick that records SYSTEM.FULL_MESSAGE.
-// A request must contain the current tool batch exactly once whether the
-// kernel has already appended it or not.
-func toolResultsAtHistoryTail(history, results []messages.Message) bool {
-	if len(results) == 0 || len(history) < len(results) {
-		return false
-	}
-	tail := history[len(history)-len(results):]
-	for index := range results {
-		if tail[index].Role != results[index].Role || tail[index].ToolCallID != results[index].ToolCallID {
-			return false
-		}
-	}
-	return true
 }
 
 // TickGroup implements [Subsystem].
@@ -198,4 +193,199 @@ func extractControlPlaneType(msg messages.Message) messages.ControlPlaneMessageT
 		}
 	}
 	return ""
+}
+
+type modelResponseAssembly struct {
+	key               string
+	deltas            []messages.StreamMessage
+	implicitToolCalls bool
+}
+
+const maxTrackedModelResponses = 16
+
+// observeModelResponses keeps a bounded assembly window per provider response.
+func (c *Coordinator) observeModelResponses(deltas []messages.StreamMessage) ([]messages.Message, error) {
+	if len(deltas) == 0 {
+		return nil, nil
+	}
+	if c.modelResponses == nil {
+		c.modelResponses = make(map[string]*modelResponseAssembly)
+	}
+	completed := make([]messages.Message, 0, 1)
+	for _, delta := range deltas {
+		assembly, err := c.modelResponseAssemblyForDelta(delta)
+		if err != nil {
+			return completed, err
+		}
+		if assembly == nil {
+			continue
+		}
+		assembly.deltas = append(assembly.deltas, delta)
+		if delta.ResponseID == "" && isToolCallDelta(delta.Type) {
+			assembly.implicitToolCalls = true
+		}
+		if delta.Type == messages.StreamTypeMessageEnd {
+			completed = append(completed, c.completeModelResponse(assembly))
+		}
+	}
+	return completed, nil
+}
+
+func (c *Coordinator) startModelResponse(delta messages.StreamMessage) (*modelResponseAssembly, error) {
+	if delta.Type != messages.StreamTypeMessageStart {
+		return nil, nil
+	}
+	responseID := strings.TrimSpace(delta.ResponseID)
+	key := responseID
+	if key == "" {
+		key = c.anonymousResponseKey()
+	}
+	if c.hasActiveModelResponse(key) {
+		c.modelResponsesOverlap = true
+	}
+	if responseID != "" && c.modelResponses[key] == nil && len(c.modelResponses) >= maxTrackedModelResponses {
+		return nil, fmt.Errorf("model response assembly limit %d exceeded", maxTrackedModelResponses)
+	}
+	assembly := &modelResponseAssembly{key: key}
+	if responseID == "" {
+		c.anonymousModelStream = assembly
+	} else {
+		c.modelResponses[key] = assembly
+		c.modelResponseOrder = append(c.modelResponseOrder, key)
+	}
+	c.latestModelResponse = assembly
+	return assembly, nil
+}
+
+func (c *Coordinator) anonymousResponseKey() string {
+	if c.anonymousModelStream != nil {
+		return c.anonymousModelStream.key
+	}
+	return "anonymous"
+}
+
+func (c *Coordinator) hasActiveModelResponse(excluding string) bool {
+	for key := range c.modelResponses {
+		if key != excluding {
+			return true
+		}
+	}
+	return c.anonymousModelStream != nil && c.anonymousModelStream.key != excluding
+}
+
+func (c *Coordinator) modelResponseForDelta(delta messages.StreamMessage) (*modelResponseAssembly, error) {
+	responseID := strings.TrimSpace(delta.ResponseID)
+	if responseID != "" {
+		if assembly := c.modelResponses[responseID]; assembly != nil {
+			return assembly, nil
+		}
+		// Some provider replays omit the response ID on response.created but
+		// include one on a terminal failure. Preserve that terminal boundary
+		// only when it can belong to the sole active anonymous response; an
+		// unknown non-terminal event must still be rejected rather than routed
+		// into a live sibling.
+		if isTerminalOnlyModelError(delta) && len(c.modelResponses) == 0 && c.anonymousModelStream != nil {
+			return c.anonymousModelStream, nil
+		}
+		if len(c.modelResponses) == 0 && c.anonymousModelStream == nil && isTerminalOnlyModelError(delta) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("model response delta references unknown response %q", responseID)
+	}
+	if c.latestModelResponse != nil {
+		return c.latestModelResponse, nil
+	}
+	return c.onlyModelResponse(), nil
+}
+
+func (c *Coordinator) onlyModelResponse() *modelResponseAssembly {
+	if len(c.modelResponses) != 1 {
+		return nil
+	}
+	for _, assembly := range c.modelResponses {
+		return assembly
+	}
+	return nil
+}
+
+func (c *Coordinator) removeModelResponse(assembly *modelResponseAssembly) {
+	if assembly == nil {
+		return
+	}
+	if c.anonymousModelStream == assembly {
+		c.anonymousModelStream = nil
+	}
+	if current := c.modelResponses[assembly.key]; current == assembly {
+		c.deleteModelResponseKey(assembly.key)
+	}
+	if c.latestModelResponse == assembly {
+		c.restoreLatestModelResponse()
+	}
+}
+
+func (c *Coordinator) deleteModelResponseKey(key string) {
+	delete(c.modelResponses, key)
+	for index, activeKey := range c.modelResponseOrder {
+		if activeKey == key {
+			c.modelResponseOrder = append(c.modelResponseOrder[:index], c.modelResponseOrder[index+1:]...)
+			return
+		}
+	}
+}
+
+func (c *Coordinator) restoreLatestModelResponse() {
+	c.latestModelResponse = nil
+	for index := len(c.modelResponseOrder) - 1; index >= 0; index-- {
+		if active := c.modelResponses[c.modelResponseOrder[index]]; active != nil {
+			c.latestModelResponse = active
+			return
+		}
+	}
+	c.latestModelResponse = c.anonymousModelStream
+}
+
+func isToolCallDelta(deltaType messages.StreamMessageType) bool {
+	return deltaType == messages.StreamTypeToolCallStart ||
+		deltaType == messages.StreamTypeToolCallDelta ||
+		deltaType == messages.StreamTypeToolCallEnd
+}
+
+// completeModelResponse joins only provider responses whose tool events were
+// unscoped. Some Realtime events omit response_id even though response.created
+// opened multiple response IDs; those siblings are one provider tool turn from
+// the loop's point of view. Explicitly scoped C48 responses remain independent.
+func (c *Coordinator) completeModelResponse(assembly *modelResponseAssembly) messages.Message {
+	assemblies := make([]*modelResponseAssembly, 0, len(c.modelResponses)+1)
+	for _, key := range c.modelResponseOrder {
+		candidate := c.modelResponses[key]
+		if candidate == assembly || (assembly.implicitToolCalls && candidate != nil && candidate.implicitToolCalls) {
+			assemblies = append(assemblies, candidate)
+		}
+	}
+	if len(assemblies) == 0 {
+		assemblies = append(assemblies, assembly)
+	}
+	var deltas []messages.StreamMessage
+	for _, candidate := range assemblies {
+		deltas = append(deltas, candidate.deltas...)
+	}
+	for _, candidate := range assemblies {
+		c.removeModelResponse(candidate)
+	}
+	return messages.ReconstructModelMessageFromDeltas(deltas)
+}
+
+// toolResultsAtHistoryTail handles the race between coordinator and kernel
+// ticks, ensuring a continuation request includes each tool batch once.
+func toolResultsAtHistoryTail(history, results []messages.Message) bool {
+	if len(results) == 0 || len(history) < len(results) {
+		return false
+	}
+	tail := history[len(history)-len(results):]
+	for index := range results {
+		if tail[index].Role != results[index].Role || tail[index].ToolCallID != results[index].ToolCallID {
+			return false
+		}
+	}
+	return true
 }
