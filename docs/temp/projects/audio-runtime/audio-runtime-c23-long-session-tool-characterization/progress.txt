@@ -214,3 +214,61 @@ C23 current-head post-C48 interruption regression checkpoint — 2026-09-11
   shipped regressions, self-check, report, and accumulated focused tests before
   updating the same PR and submitting once to script CI. No CI-green, review,
   merge, vertical, device, acoustic, or project-acceptance claim is made.
+
+C23 current-main C53 integration and recording regression checkpoint — 2026-09-11
+
+- Admission remains admitted through `factory/scripts/project-control.py
+  verify-work`; the isolated branch still matches `prd.json.branchName`. Fresh
+  `origin/main=904e1f4c3be6c1e629138632573bd2fb55d50938` was fetched and merged
+  into this branch as `bd849397b1af722c3ad5926edf805c7390c475b4`, preserving
+  startup `8bdafc7f947a3a2c9856220abdc539437035bd21`, project baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and reviewed C53 merge `9779b236`.
+  The host checkout was not touched; the candidate diff remains the seven
+  admitted C23 evidence paths.
+- Fresh `characterize.py prepare --source-revision 904e1f4c3be6c1e629138632573bd2fb55d50938 --child-timeout-seconds 60`
+  passed with ancestry verified, 947 hashed build inputs, build-input SHA-256
+  `12c43c6a3bf5715319a0b8f7887023c2b85accec6c21ceb66a970afd30513508`,
+  consumer SHA-256
+  `a2a90d63982bb91d34ea2bc02011d3e61271f57721c06502800a5d7207ef14da`,
+  same-source YUI SHA-256
+  `c4cbd26750fd8c068a878f1eac54f1f7e5f4da0c1ca1c955922d3cc48b64e86b`, and
+  fixture SHA-256
+  `7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e`.
+  `verify-provenance --negative-control tampered-fixture` passed with the
+  expected fixture digest rejection.
+- The first post-C53 `controls --child-timeout-seconds 60
+  --total-timeout-seconds 600` run stopped at the recording-on 16-turn
+  validation with `recording manifest artifact set changed`. Its preserved
+  child report is
+  `artifacts/runs/20260911T123004Z-controls-on-16/consumer-report.json` and
+  budget record is `budget.json`. The public trace still contains 16
+  `AUDIO.DELTA` and 16 `AUDIO.END` events, 355 events total, provider-authored
+  complete terminal state, 275 provider-capture items / 80,620 bytes, clean
+  shutdown, and zero live-event drops; however recording usage reports
+  `accepted_audio=0`, `audio_bytes=0`, and no `audio/out-000.pcm`, so the
+  validator correctly stops before claiming PCM recording parity.
+- This is a demonstrated production regression, not a validator waiver: the
+  pre-C53 identical C23 run at
+  `artifacts/runs/20260910T224914Z-controls-on-16/consumer-report.json`
+  recorded `accepted_audio=32`, `audio_bytes=2048`, and the expected PCM
+  manifest entry. The reviewed C53 `terminalDrainSession` wrapper introduced in
+  `go-agent-runtime/services/session/internal/live/service.go` and
+  `start_support.go` forwards stream messages but does not preserve the
+  optional media/recording surface used by the public session. Hand off this
+  exact boundary to the existing C53 runtime owner/primary; C23 must not mutate
+  those production paths or relax the complete PCM/manifest oracle.
+- Accumulated C21
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` passed from
+  `agent-cli/test/integration` at normal `-count=5` in `12.933s` and race
+  `-count=1` in `11.622s`; Python compilation and `git diff --check` also passed.
+  No C21/shared or production file was changed by C23. The matrix,
+  shipped-regressions, self-check, and report were not rerun after this first
+  causal failure; no unchanged retry, CI-green, review, merge, vertical,
+  device, acoustic, or project-completion claim is made.
+- Current disposition is `CONTINUE`, not `ACCEPTED`. Next action: the existing
+  runtime owner repairs or explicitly reassigns the C53 terminal-drain/media
+  contract and proves the recording regression; then fetch that reviewed main,
+  rebuild/rebind exact provenance, rerun provenance, controls, the complete
+  off/on 16/64/128/256 matrix, shipped replay, self-check, report, and the
+  accumulated C21 regressions before pushing the same PR and returning
+  `ACCEPTED` to script-owned CI without polling.
