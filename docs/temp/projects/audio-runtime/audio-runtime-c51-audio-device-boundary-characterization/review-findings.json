@@ -17,6 +17,13 @@
       "pullRequest": 441,
       "head": "a3595af3877cc3e6f6c0769a9e174207cab2c335",
       "feedback": "PR #441 head a3595af3877cc3e6f6c0769a9e174207cab2c335 has all required CI checks green. Independent consumer normal/race tests, wrong-oracle failure, fresh yui build, WAV oracle, and tool negative control passed. Reject for actionable evidence defects: boundary-map.json:19,56-57 cite unrelated lines (e.g. device_simulated.go:298 is `}`, processor.go:23 is a comment, :42 a field), while verify.py:564-575 checks only line ranges; the map also omits explicit production callers, timing domains, and evidence strength. provenance.json lacks project-control output, toolchain/GOOS/GOARCH, clean candidate SHA, fetched-main identity, and required startup/planning ancestry; verify.py:421-525 does not enforce these. shipped-regression.json records only an external binary path/hash, omits build-input provenance and SOFTWARE_REPLAY_PROCESS_ONLY classification, and verify.py:655-705 accepts any supplied binary. Runner controls lack owned disk/WAV bounds, strict aggregate enforcement, bounded archive execution, and descendant cleanup before the reader-survival failure path (verify.py:122-203,220-246,655-719). Executor must correct citations/schema/verifier fail-closed checks, fetch and pin main, record complete provenance, build and retain an exact-head yui with build-input manifest, harden runner quotas/group cleanup, regenerate all dependent evidence, then commit/push and resubmit the changed head to SCRIPT CI. Do not merge this head."
+    },
+    {
+      "workId": "work-review-35",
+      "state": "fin/FAILED",
+      "pullRequest": 441,
+      "head": "097f87c3ad18f924dc994af3dea62febd93a4e2c",
+      "feedback": "PR #441 head 097f87c3ad18f924dc994af3dea62febd93a4e2c has all required checks green and independent boundary, consumer, wrong-oracle, provenance, build, and shipped replay evidence passed. Reject for residual actionable defects: verify.py lines 136-137 skip process-group termination once the parent exits; a parent-exits-with-descendant reader-survival control reproduced a live descendant. Disk/WAV limits are post-hoc only (verify.py:284-285,1034-1071); a 40 MiB child write completed before rejection against the 32 MiB bound. boundary-map.json labels non-call sites as production callers (examples lines 97,114,133,152,170-171), and verify.py:897 only rejects comment lines, not declarations/fields. The build manifest filters only Go/module files (verify.py:461-482), but yui embeds local JS/JSON including siteadapter extensions and go-agent-loop/pkg/probe/testdata/goal_catalog.json; include hashes and regenerate shipped/provenance/regression. Fix the same PR, run focused controls and direct shipped replay, commit/push, and resubmit the same task to SCRIPT CI; do not merge 097f87c3."
     }
   ],
   "previousRejectionFeedback": [
@@ -31,6 +38,18 @@
         "project-control/toolchain/GOOS/GOARCH/candidate/fetched-main/ancestry provenance",
         "exact-head shipped build-input manifest and SOFTWARE_REPLAY_PROCESS_ONLY classification",
         "owned disk/WAV budgets, strict aggregate deadline, bounded archive, and descendant cleanup"
+      ]
+    },
+    {
+      "source": "canonical board work-task-22 and work-review-35 _rejection_feedback",
+      "pullRequest": 441,
+      "head": "097f87c3ad18f924dc994af3dea62febd93a4e2c",
+      "status": "actionable_repairs_required",
+      "repairScope": [
+        "process-group cleanup after parent exit and reader failure",
+        "live disk/file quota enforcement and negative controls",
+        "fail-closed production caller declaration/field rejection",
+        "all tracked embedded Go/JS/JSON yui build-input hashes and dependent evidence regeneration"
       ]
     }
   ],

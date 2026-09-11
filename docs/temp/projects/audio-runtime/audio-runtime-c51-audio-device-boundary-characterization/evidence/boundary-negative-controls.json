@@ -1,0 +1,16 @@
+{
+  "controls": [
+    {
+      "error": "C51 verification failed: boundary packet_parsing production caller needle is not a call expression: go-device-gateway/pkg/devices/device_simulated.go:42 (ImpulseResponseQ15) line='\\tImpulseResponseQ15 []int16 `json:\"impulse_response_q15,omitempty\"`'",
+      "name": "field_is_not_a_production_call",
+      "rejected": true
+    },
+    {
+      "error": "C51 verification failed: boundary packet_parsing production caller points at a declaration, not a call: go-device-gateway/pkg/devices/device_simulated.go:214 (Open)",
+      "name": "declaration_is_not_a_production_call",
+      "rejected": true
+    }
+  ],
+  "sourceRevision": "bb29005d0bb545db5e08ffda0205929b021d4fc1",
+  "status": "verified"
+}

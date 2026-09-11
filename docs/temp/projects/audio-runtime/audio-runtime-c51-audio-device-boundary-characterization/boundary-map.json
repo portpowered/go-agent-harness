@@ -21,8 +21,8 @@
         {"path": "go-audio/pkg/codec/pcm16.go", "line": 81, "symbol": "DecodePCM16", "kind": "owner_api", "needle": "func DecodePCM16("}
       ],
       "productionCallers": [
-        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 314, "symbol": "DecodePCM16Into", "kind": "production_caller", "needle": "codec.DecodePCM16Into"},
-        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 306, "symbol": "EncodePCM16Into", "kind": "production_caller", "needle": "codec.EncodePCM16Into"}
+        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 314, "symbol": "DecodePCM16Into", "kind": "production_caller", "caller": "Write", "needle": "codec.DecodePCM16Into"},
+        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 306, "symbol": "EncodePCM16Into", "kind": "production_caller", "caller": "Read", "needle": "codec.EncodePCM16Into"}
       ],
       "evidence": {"status": "MAPPED_AND_CONSUMER_VERIFIED", "disposition": "Parsing is a pure audio-package concern; the device gateway only decodes or encodes at its byte-stream adapter edge."}
     },
@@ -38,8 +38,8 @@
         {"path": "go-device-gateway/pkg/devices/device_format.go", "line": 14, "symbol": "DeviceFormatOpener", "kind": "owner_api", "needle": "type DeviceFormatOpener interface"}
       ],
       "productionCallers": [
-        {"path": "go-agent-runtime/services/devices/internal/media/factory.go", "line": 57, "symbol": "requestFormat", "kind": "production_caller", "needle": "f.requestFormat"},
-        {"path": "go-agent-runtime/services/devices/internal/media/factory.go", "line": 100, "symbol": "NewRTCDeviceSinkAtRateWithOptions", "kind": "production_caller", "needle": "devicert.NewRTCDeviceSinkAtRateWithOptions"}
+        {"path": "go-agent-runtime/services/devices/internal/media/factory.go", "line": 57, "symbol": "requestFormat", "kind": "production_caller", "caller": "Open", "needle": "f.requestFormat"},
+        {"path": "go-agent-runtime/services/devices/internal/media/factory.go", "line": 100, "symbol": "NewRTCDeviceSinkAtRateWithOptions", "kind": "production_caller", "caller": "openOutput", "needle": "devicert.NewRTCDeviceSinkAtRateWithOptions"}
       ],
       "evidence": {"status": "MAPPED_AND_CONSUMER_VERIFIED", "disposition": "The runtime request supplies provider shape; gateway opening owns the selected device shape and conversion boundary."}
     },
@@ -56,8 +56,8 @@
         {"path": "go-audio/pkg/audio/pcm16_frame_size.go", "line": 30, "symbol": "PCM16FrameSamples", "kind": "owner_api", "needle": "func PCM16FrameSamples("}
       ],
       "productionCallers": [
-        {"path": "go-audio/pkg/mixer/mixer.go", "line": 86, "symbol": "scheduler.Now", "kind": "production_caller", "needle": "m.scheduler.Now()"},
-        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 388, "symbol": "Advance", "kind": "production_caller", "needle": "func (r *SimulatedDuplexRegistry) Advance("}
+        {"path": "go-audio/pkg/mixer/mixer.go", "line": 86, "symbol": "scheduler.Now", "kind": "production_caller", "caller": "run", "needle": "m.scheduler.Now()"},
+        {"path": "go-device-gateway/pkg/devices/device_server.go", "line": 368, "symbol": "Advance", "kind": "production_caller", "caller": "handleAdvance", "needle": "controller.Advance("}
       ],
       "evidence": {"status": "MAPPED", "disposition": "The device callback clock is explicit and sample-indexed; no wall-clock claim is made for the simulated callback."}
     },
@@ -74,8 +74,8 @@
         {"path": "go-audio/pkg/mixer/mixer.go", "line": 54, "symbol": "New", "kind": "owner_api", "needle": "func New("}
       ],
       "productionCallers": [
-        {"path": "go-device-gateway/pkg/runtime/rtc_device_sink.go", "line": 383, "symbol": "NewPlaybackProcessor", "kind": "production_caller", "needle": "audio.NewPlaybackProcessor"},
-        {"path": "go-device-gateway/pkg/runtime/rtc_device_sink.go", "line": 421, "symbol": "Process", "kind": "production_caller", "needle": "pending.Process"}
+        {"path": "go-device-gateway/pkg/runtime/rtc_device_sink.go", "line": 383, "symbol": "NewPlaybackProcessor", "kind": "production_caller", "caller": "Pump", "needle": "audio.NewPlaybackProcessor"},
+        {"path": "go-device-gateway/pkg/runtime/rtc_device_sink.go", "line": 421, "symbol": "Process", "kind": "production_caller", "caller": "writeProviderFrame", "needle": "pending.Process"}
       ],
       "evidence": {"status": "MAPPED_AND_CONSUMER_VERIFIED", "disposition": "The consumer uses equal negotiated rates so callback PCM is an exact no-resampling oracle; unequal-rate conversion remains owned by the audio processor."}
     },
@@ -93,8 +93,8 @@
         {"path": "go-audio/pkg/audio/device_playback.go", "line": 239, "symbol": "RenderInto", "kind": "owner_api", "needle": "func (q *PlaybackQueue) RenderInto("}
       ],
       "productionCallers": [
-        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 263, "symbol": "Enqueue", "kind": "production_caller", "needle": "s.registry.playback.Enqueue"},
-        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 405, "symbol": "DeviceTraceEvent", "kind": "production_caller", "needle": "[]DeviceTraceEvent"}
+        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 263, "symbol": "Enqueue", "kind": "production_caller", "caller": "WriteSamples", "needle": "s.registry.playback.Enqueue"},
+        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 501, "symbol": "RenderInto", "kind": "production_caller", "caller": "advanceRenderLocked", "needle": "r.playback.RenderInto"}
       ],
       "evidence": {"status": "OBSERVED", "disposition": "The consumer records queued samples before Advance and rendered samples after Advance; no implicit dropped-sample claim is made."}
     },
@@ -110,8 +110,8 @@
         {"path": "go-agent-loop/pkg/subsystems/audio/audio.go", "line": 25, "symbol": "BufferPort", "kind": "owner_api", "needle": "type BufferPort interface"}
       ],
       "productionCallers": [
-        {"path": "go-agent-loop/pkg/subsystems/audio/audio.go", "line": 102, "symbol": "AudioState", "kind": "production_caller", "needle": "state.AudioState"},
-        {"path": "go-agent-loop/pkg/agentloop/agent_loop.go", "line": 391, "symbol": "Run", "kind": "production_caller", "needle": "func (al *AgentLoop) Run("}
+        {"path": "go-agent-loop/pkg/subsystems/audio/audio.go", "line": 96, "symbol": "Snapshot", "kind": "production_caller", "caller": "Execute", "needle": "s.ports.Capture.Snapshot"},
+        {"path": "go-agent-loop/pkg/engine/engine.go", "line": 316, "symbol": "Execute", "kind": "production_caller", "caller": "executeWorldState", "needle": "h.Execute("}
       ],
       "evidence": {"status": "MAPPED", "disposition": "The import graph confirms no production go-device-gateway edge from go-agent-loop; device acquisition remains outside the core loop."}
     },
@@ -129,8 +129,8 @@
         {"path": "go-device-gateway/pkg/devices/sink_device.go", "line": 220, "symbol": "Close", "kind": "owner_api", "needle": "func (s *DeviceSink) Close("}
       ],
       "productionCallers": [
-        {"path": "go-agent-runtime/services/devices/internal/media/factory.go", "line": 100, "symbol": "NewRTCDeviceSinkAtRateWithOptions", "kind": "production_caller", "needle": "devicert.NewRTCDeviceSinkAtRateWithOptions"},
-        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 214, "symbol": "Open", "kind": "production_caller", "needle": "func (r *SimulatedDuplexRegistry) Open("}
+        {"path": "go-agent-runtime/services/devices/internal/media/factory.go", "line": 100, "symbol": "NewRTCDeviceSinkAtRateWithOptions", "kind": "production_caller", "caller": "openOutput", "needle": "devicert.NewRTCDeviceSinkAtRateWithOptions"},
+        {"path": "go-device-gateway/pkg/devices/device_open.go", "line": 141, "symbol": "Open", "kind": "production_caller", "caller": "acquireDeviceWithFormat", "needle": "registry.Open("}
       ],
       "evidence": {"status": "OBSERVED", "disposition": "The external consumer selects simulated-duplex:output through the public service and closes the returned handle idempotently."}
     },
@@ -148,8 +148,8 @@
         {"path": "go-agent-runtime/services/devices/internal/media/factory.go", "line": 45, "symbol": "Open", "kind": "owner_api", "needle": "func (f *Factory) Open("}
       ],
       "productionCallers": [
-        {"path": "go-agent-runtime/services/devices/wire/wire_gen.go", "line": 24, "symbol": "newFactory", "kind": "production_caller", "needle": "factory := newFactory"},
-        {"path": "go-device-gateway/pkg/runtime/rtc_device_sink.go", "line": 350, "symbol": "Pump", "kind": "production_caller", "needle": "func (s *RTCDeviceSink) Pump("}
+        {"path": "go-agent-runtime/services/devices/wire/wire_gen.go", "line": 24, "symbol": "newFactory", "kind": "production_caller", "caller": "NewService", "needle": "newFactory("},
+        {"path": "go-agent-runtime/services/rooms/internal/lifecycle/media.go", "line": 43, "symbol": "Playback.Pump", "kind": "production_caller", "caller": "newMediaBridge", "needle": "local.Playback.Pump("}
       ],
       "evidence": {"status": "OBSERVED", "disposition": "A clean external module imports only public service/wire, audio, and device-gateway packages and drives a runtime playback worker."}
     },
@@ -167,8 +167,8 @@
         {"path": "go-audio/pkg/recording/trace.go", "line": 253, "symbol": "Close", "kind": "trace_observation", "needle": "func (t *Trace) Close("}
       ],
       "productionCallers": [
-        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 405, "symbol": "DeviceTraceEvent", "kind": "production_caller", "needle": "[]DeviceTraceEvent"},
-        {"path": "go-audio/pkg/recording/trace.go", "line": 260, "symbol": "events", "kind": "production_caller", "needle": "close(t.events)"}
+        {"path": "go-device-gateway/pkg/devices/device_simulated.go", "line": 507, "symbol": "traceFor", "kind": "production_caller", "caller": "advanceRenderLocked", "needle": "traceFor("},
+        {"path": "agent-cli/internal/services/internal/agentruntime/trace.go", "line": 62, "symbol": "CaptureSpeakerEnqueued", "kind": "production_caller", "caller": "prepareTrace", "needle": "trace.CaptureSpeakerEnqueued("}
       ],
       "evidence": {"status": "OBSERVED", "disposition": "The simulator trace proves software callback consumption; the shipped yui run proves the public replay process and lifecycle markers, not a physical speaker."}
     }
