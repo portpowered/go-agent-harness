@@ -23,11 +23,14 @@ func TestAssembleLiveRequestWaitForCloseOverridesFiniteAudioPolicy(t *testing.T)
 		name          string
 		waitForClose  bool
 		audioInput    bool
+		scheduledTurn bool
 		promptPresent bool
 		wantFinite    bool
 		wantResponses int
+		wantRetry     bool
 	}{
 		{name: "finite audio", audioInput: true, wantFinite: true, wantResponses: 1},
+		{name: "finite scheduled audio", scheduledTurn: true, wantFinite: true, wantResponses: 1, wantRetry: true},
 		{name: "finite prompt", promptPresent: true, wantFinite: true},
 		{name: "provider owns close", waitForClose: true, audioInput: true, wantFinite: false, wantResponses: 1},
 		{name: "provider owns prompted close", waitForClose: true, promptPresent: true, wantFinite: false},
@@ -37,6 +40,9 @@ func TestAssembleLiveRequestWaitForCloseOverridesFiniteAudioPolicy(t *testing.T)
 				WaitForClose: test.waitForClose,
 				AudioInput:   serviceSession.AudioInput{Present: test.audioInput},
 			}
+			if test.scheduledTurn {
+				request.AudioTurns = []string{"turn.raw"}
+			}
 			caseInputs := inputs
 			caseInputs.promptPresent = test.promptPresent
 			got := assembleLiveRequest(request, caseInputs)
@@ -45,6 +51,9 @@ func TestAssembleLiveRequestWaitForCloseOverridesFiniteAudioPolicy(t *testing.T)
 			}
 			if got.ExpectedResponses != test.wantResponses {
 				t.Fatalf("ExpectedResponses = %d, want %d", got.ExpectedResponses, test.wantResponses)
+			}
+			if got.RateLimitRetry.Enabled != test.wantRetry || got.RateLimitRetry.MaxRetries != map[bool]int{false: 0, true: 1}[test.wantRetry] {
+				t.Fatalf("RateLimitRetry = %#v, want enabled=%t max=%d", got.RateLimitRetry, test.wantRetry, map[bool]int{false: 0, true: 1}[test.wantRetry])
 			}
 		})
 	}
