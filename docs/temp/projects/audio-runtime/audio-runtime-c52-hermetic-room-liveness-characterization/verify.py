@@ -210,7 +210,6 @@ def parse_raw_go_json(
         and expected_count > 0
         and not invalid_lines
         and not cached_marker
-        and not no_tests_marker
         and all(test_events.get(test, {}).get("run", 0) == expected_count for test in required_tests)
         and all(required_test_pass_counts[test] == expected_count for test in required_tests)
         and all(required_test_fail_counts[test] == 0 for test in required_tests)

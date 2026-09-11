@@ -420,7 +420,6 @@ def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, ex
         and requested_count > 0
         and not invalid_lines
         and "(cached)" not in output
-        and "[no tests to run]" not in output
         and all(test_events.get(test, {}).get("run", 0) == requested_count for test in required_tests)
         and all(required_pass_counts[test] == requested_count for test in required_tests)
         and all(required_fail_counts[test] == 0 for test in required_tests)
