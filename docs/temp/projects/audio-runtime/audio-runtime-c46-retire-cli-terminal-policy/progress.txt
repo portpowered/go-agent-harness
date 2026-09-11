@@ -36,3 +36,13 @@ Focused evidence
 
 Next action
 - Push this changed candidate, open/update the same task PR, and return ACCEPTED to the script-owned CI gate. Do not poll CI; repair any exact rejection on this same task and retain ownership with CONTINUE.
+
+Dead-baseline retirement repair checkpoint
+- Current-head CI run `34548179094` / static job `103105220727` was inspected from the job log. The sole failure was `nolintlint` on the unused `gochecknoglobals` directive attached to the dead `rateLimitRetryDelayPattern`; staticcheck completed without findings. The exact prior rejection was not retried unchanged.
+- Repair commit `40a3fd582aa830e4f0ac04331c0976489a42058b` removes the obsolete CLI `regexp` import, regex declaration, liveness reference and compatibility comments, and deletes only the matching `mutable-global` entry from `docs/architecture/architecture-size-baseline.json`. The distinct `rateLimitRetryDelayPattern` entry in `docs/architecture/architecture-policy.json` remains unchanged and is owned by the live runtime policy.
+- Focused normal tests pass (`1075` tests across the provider policy and CLI agent-runtime packages); focused race policy/rate-limit/scheduled tests pass (`72` across both packages). A full-package race run had one unrelated timeout in `TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict`; no affected terminal-policy test failed.
+- `make fmt`, `make wire-check`, `make coverage-registration` (`175` packages), `make architecture-size-check` (`185` packages, `1893` files, `27794` functions), pinned `make lint` (golangci-lint `2.9.0`, `0` issues) and pinned `make staticcheck` (`2026.1`) pass. Free space after bounded checks was `3064532 KiB`, above the required 2 GiB reserve.
+- Updated candidate evidence to tested revision `40a3fd5` with CLI source SHA256 `d4d9a6a1648a660c6801250a9211907666931f307d3f9cb01f1c7445b794ae07` and baseline SHA256 `f2b91bb24e20b42a8a00dbc48efd5560969c29de2177008ba5a880012d159038`. No script CI success, independent review, guarded merge, post-merge vertical acceptance, physical/acoustic proof or project completion is claimed.
+
+Next action
+- Commit this evidence checkpoint, push the same PR, update PR #438 with the exact repair and test evidence, and return `ACCEPTED` to the script-owned CI gate without polling it. Retain this task for any exact current-head CI rejection.

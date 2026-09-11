@@ -3,7 +3,8 @@
   "project": "audio-runtime",
   "contractRevision": "audio-runtime-v1",
   "branch": "codex/audio-runtime-c46-retire-cli-terminal-policy",
-  "testedRevision": "9894a18401bb5f4ca6a43b92093f6f671ab06656",
+  "testedRevision": "40a3fd582aa830e4f0ac04331c0976489a42058b",
+  "repairRevision": "40a3fd582aa830e4f0ac04331c0976489a42058b",
   "implementationRevision": "1e743f3e2d7ae3559c3c143939c9e4982abcef44",
   "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "integrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
@@ -26,7 +27,8 @@
     "hostCheckoutResetOrMerged": false
   },
   "sourceHashes": {
-    "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go": "9d4b9a6241a8c98a9806b1a2a221fee4232dabea1865bbdc9449b41ce68a266d",
+    "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go": "d4d9a6a1648a660c6801250a9211907666931f307d3f9cb01f1c7445b794ae07",
+    "docs/architecture/architecture-size-baseline.json": "f2b91bb24e20b42a8a00dbc48efd5560969c29de2177008ba5a880012d159038",
     "go-agent-runtime/services/providers/terminal_policy.go": "132e241263e2919fae3fd48d7bc9f66edddaff7ddf0436faff79c35e0a528eaa",
     "go-agent-runtime/services/providers/internal/terminalpolicy/terminal_policy.go": "2d94485bca29cac81b6ecab544d5efaa91a455a1954378a23dca358f8345a929",
     "go-agent-runtime/services/providers/internal/terminalpolicy/terminal_policy_test.go": "5cbac68399bf0efb7f53d165c540263a4820e59faaf684e567cba0dd9b6829d8",
@@ -47,15 +49,18 @@
   },
   "tests": {
     "terminalpolicyNormal": "PASS; 95.5% statements",
-    "terminalpolicyRace": "PASS",
+    "terminalpolicyRace": "PASS; focused policy/rate-limit/scheduled set",
     "cliRateLimitNormal": "PASS; all rate-limit, retry, continuation, lifecycle and metadata regressions",
-    "cliRateLimitRace": "PASS; same focused regression set",
+    "cliRateLimitRace": "PASS; 72 focused policy/rate-limit/scheduled tests; unrelated full-package browser validator timeout retained",
+    "pinnedLint": "PASS; golangci-lint v2.9.0, 0 issues in all 15 modules",
+    "pinnedStaticcheck": "PASS; staticcheck 2026.1",
     "focusedVet": "PASS",
     "wireCheck": "PASS; generic provider wire_gen.go unchanged",
     "coverageRegistration": "PASS; 175 workspace packages across 6 modules",
-    "architectureSize": "PASS; 185 packages, 1893 files, 27796 functions",
+    "architectureSize": "PASS; 185 packages, 1893 files, 27794 functions",
     "publicYuiReplay": "NOT RUN; deterministic local provider/session fixture used instead",
-    "postMainIntegration": "PASS; the reviewed main merge changed only C45-owned evidence files, then all focused checks were rerun"
+    "postMainIntegration": "PASS; the reviewed main merge changed only C45-owned evidence files, then all focused checks were rerun",
+    "deadBaselineRetirement": "PASS; removed the unused CLI regex/liveness reference and exactly one matching mutable-global baseline entry; distinct architecture-policy.json runtime entry unchanged"
   },
   "storage": {
     "availableKiBAfterBoundedBuild": 2138372,
