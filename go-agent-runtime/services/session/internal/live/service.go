@@ -18,8 +18,11 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-const defaultEventCapacity = 128
-const minimumEventCapacity = 4
+const (
+	defaultEventCapacity        = 128
+	minimumEventCapacity        = 4
+	maxPendingToolCallResponses = 128 // bounded by the admitted event window
+)
 
 const defaultSessionUpdatedTimeout = 30 * time.Second
 
@@ -27,13 +30,17 @@ const defaultPlaybackDrainTimeout = 5 * time.Second
 
 type mediaRequirements struct{ inbound, outbound bool }
 
+type replayVirtualPlaybackController struct{}
+
+func (replayVirtualPlaybackController) StartPlayback(sharedaudio.PlaybackResponse) {}
+func (replayVirtualPlaybackController) InterruptPlayback(sharedaudio.PlaybackResponse) (int, bool) {
+	return 0, true
+}
+
 var _ session.LiveService = (*Service)(nil)
 var _ session.LiveRunner = (*Service)(nil)
 
 // Dependencies are the explicit provider and tool edges for one live service.
-// The inferencer factory is intentionally called only by Start, keeping
-// construction inert for embedders that create services during application
-// setup or dependency graph validation.
 type Dependencies struct {
 	InferencerFactory session.LiveInferencerFactory
 	CapabilityFactory session.LiveCapabilityFactory
@@ -44,7 +51,6 @@ type Dependencies struct {
 	Scheduler         platformclock.Scheduler
 }
 
-// Service implements session.LiveService.
 type Service struct {
 	inferencerFactory session.LiveInferencerFactory
 	capabilityFactory session.LiveCapabilityFactory
@@ -71,7 +77,6 @@ func New(deps Dependencies) *Service {
 	}
 }
 
-// OpenLive validates only the service edge and allocates bounded local ports; it does not call the provider factory, open a socket, read a replay path, or create device resources.
 func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (session.LiveHandle, error) {
 	if s == nil || s.inferencerFactory == nil {
 		return nil, errors.New("live inferencer factory is required")
@@ -126,13 +131,10 @@ type handle struct {
 	captureComplete       bool
 	responseStarted       bool
 	responseActive        bool
-	// responsePending records a client-owned response boundary that has been
-	// admitted to the provider session but has not produced its first inbound
-	// lifecycle event yet. Realtime adapters commonly queue the
-	// input_audio_buffer.commit/response.create pair asynchronously; keeping
-	// this separate from responseActive lets a following finite turn reserve
-	// cancellation without treating every queued response as an already
-	// streaming response after the boundary has settled.
+	activeResponseIDs     map[string]struct{}
+	anonymousResponses    int
+	// responsePending reserves an admitted provider boundary until its first
+	// inbound lifecycle event.
 	responsePending       bool
 	responseObserved      uint64
 	responseStartWake     chan struct{}
@@ -140,16 +142,10 @@ type handle struct {
 	captureResponseTarget int
 	replayResponseWake    chan struct{}
 	responseTerminalWake  chan struct{}
-	// scheduledAudioCount is configured by the invocation owner when finite
-	// sources are admitted. These counters are deliberately kept on the handle
-	// so the terminal event and Wait result carry the same outcome, even when a
-	// provider closes before the capture worker returns its own error.
+	// Scheduled counters keep terminal and Wait outcomes aligned.
 	scheduledAudioCount  int
 	dispatchedAudioCount int
-	// captureTurnWake lets an active scheduled tool worker wait until the next
-	// finite input has crossed the ordered provider ingress. This preserves the
-	// same boundary as the response-driven scheduler without blocking ordinary
-	// response deltas that the capture worker needs in order to advance.
+	// captureTurnWake gates the next finite input on ordered provider ingress.
 	captureTurnWake                chan struct{}
 	activeScheduledAudio           bool
 	scheduledResponseBase          int
@@ -337,6 +333,7 @@ func newHandle(request session.LiveRequest, factory session.LiveInferencerFactor
 		livenessWake:             make(chan struct{}, 1),
 		toolContinuations:        make(map[string]*liveToolContinuation),
 		pendingToolCallResponses: make(map[string]string),
+		activeResponseIDs:        make(map[string]struct{}),
 	}
 	h.media = mediagate.New(h.mediaFailure)
 	return h

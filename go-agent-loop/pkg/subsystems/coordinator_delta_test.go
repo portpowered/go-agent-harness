@@ -465,3 +465,39 @@ func TestCoordinator_ModelResponseAssemblyIsBounded(t *testing.T) {
 		t.Fatalf("response assembly accepted more than %d active responses", maxTrackedModelResponses)
 	}
 }
+
+func TestCoordinator_RejectsLateExplicitDeltaAfterSiblingCompletion(t *testing.T) {
+	c := NewCoordinator(nil)
+	_, err := c.observeModelResponses([]messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, ResponseID: "response-live", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeMessageStart, ResponseID: "response-done", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeMessageEnd, ResponseID: "response-done", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	})
+	if err != nil {
+		t.Fatalf("initial responses: %v", err)
+	}
+	if _, err := c.observeModelResponses([]messages.StreamMessage{{Type: messages.StreamTypeTextDelta, ResponseID: "response-done", Value: messages.NewTextDeltaValue("late")}}); err == nil {
+		t.Fatal("late explicit delta was routed into the live sibling")
+	}
+	if got := len(c.modelResponses["response-live"].deltas); got != 1 {
+		t.Fatalf("live sibling delta count = %d, want 1", got)
+	}
+}
+
+func TestCoordinator_IgnoresToolAcknowledgementAssemblyDuringOverlap(t *testing.T) {
+	c := NewCoordinator(nil)
+	completed, err := c.observeModelResponses([]messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-live", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ResponseID: "response-live", ToolCallId: "call-live", Value: messages.NewToolCallEndValue("call-live", "lookup", `{}`)},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: messages.ResponsePurposeToolAcknowledgement, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: messages.ResponsePurposeToolAcknowledgement, Value: messages.NewTextDeltaValue("still working")},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: messages.ResponsePurposeToolAcknowledgement, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-live", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	})
+	if err != nil {
+		t.Fatalf("overlap with acknowledgement: %v", err)
+	}
+	if len(completed) != 1 || len(completed[0].ToolCalls) != 1 || completed[0].ToolCalls[0].ID != "call-live" {
+		t.Fatalf("completed model turns = %#v, want one non-ack tool turn", completed)
+	}
+}

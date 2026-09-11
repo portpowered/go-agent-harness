@@ -213,12 +213,9 @@ func (c *Coordinator) observeModelResponses(deltas []messages.StreamMessage) ([]
 	}
 	completed := make([]messages.Message, 0, 1)
 	for _, delta := range deltas {
-		assembly, err := c.startModelResponse(delta)
+		assembly, err := c.modelResponseAssemblyForDelta(delta)
 		if err != nil {
 			return completed, err
-		}
-		if assembly == nil {
-			assembly = c.modelResponseForDelta(delta)
 		}
 		if assembly == nil {
 			continue
@@ -276,21 +273,21 @@ func (c *Coordinator) hasActiveModelResponse(excluding string) bool {
 	return c.anonymousModelStream != nil && c.anonymousModelStream.key != excluding
 }
 
-func (c *Coordinator) modelResponseForDelta(delta messages.StreamMessage) *modelResponseAssembly {
+func (c *Coordinator) modelResponseForDelta(delta messages.StreamMessage) (*modelResponseAssembly, error) {
 	responseID := strings.TrimSpace(delta.ResponseID)
 	if responseID != "" {
 		if assembly := c.modelResponses[responseID]; assembly != nil {
-			return assembly
+			return assembly, nil
 		}
-		if c.anonymousModelStream == nil {
-			return c.onlyModelResponse()
+		if len(c.modelResponses) == 0 && c.anonymousModelStream == nil && isTerminalOnlyModelError(delta) {
+			return nil, nil
 		}
-		return nil
+		return nil, fmt.Errorf("model response delta references unknown response %q", responseID)
 	}
 	if c.latestModelResponse != nil {
-		return c.latestModelResponse
+		return c.latestModelResponse, nil
 	}
-	return c.onlyModelResponse()
+	return c.onlyModelResponse(), nil
 }
 
 func (c *Coordinator) onlyModelResponse() *modelResponseAssembly {

@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
@@ -19,8 +20,7 @@ type recordingAudioInputSender struct {
 }
 
 func (s *recordingAudioInputSender) sendAudioInput(_ context.Context, payload []byte, policy messages.SessionAudioInputPolicy) error {
-	s.payload = append([]byte(nil), payload...)
-	s.policy = policy
+	s.payload, s.policy = append([]byte(nil), payload...), policy
 	return nil
 }
 func TestLoopAudioOutboundUsesOrderedPCMInputPolicy(t *testing.T) {
@@ -52,7 +52,6 @@ func (i *replayReadinessInferencer) ConnectSession(context.Context) (messages.Se
 	return i.session, nil
 }
 func awaitSessionOpen(t testing.TB, events <-chan session.LiveEvent) []session.LiveEvent {
-	t.Helper()
 	var got []session.LiveEvent
 	deadline := time.NewTimer(2 * time.Second)
 	defer deadline.Stop()
@@ -75,17 +74,7 @@ func awaitSessionOpen(t testing.TB, events <-chan session.LiveEvent) []session.L
 	}
 }
 func waitForSentText(t testing.TB, provider *testSession, text string) {
-	t.Helper()
-	deadline := time.NewTimer(2 * time.Second)
-	defer deadline.Stop()
-	for !provider.hasText(text) {
-		select {
-		case <-deadline.C:
-			t.Fatalf("text %q was not delivered", text)
-		default:
-			time.Sleep(time.Millisecond)
-		}
-	}
+	require.Eventually(t, func() bool { return provider.hasText(text) }, 2*time.Second, time.Millisecond, "text %q was not delivered", text)
 }
 func collectTestLiveEvents(events <-chan session.LiveEvent) (got []session.LiveEvent) {
 	for event := range events {
@@ -94,28 +83,24 @@ func collectTestLiveEvents(events <-chan session.LiveEvent) (got []session.LiveE
 	return
 }
 func queueProviderMessages(t testing.TB, provider *testSession, messagesToQueue []messages.StreamMessage) {
-	t.Helper()
 	for _, message := range messagesToQueue {
-		if !provider.receive.Write(context.Background(), message) {
-			t.Fatalf("queue provider message %s", message.Type)
-		}
+		require.True(t, provider.receive.Write(context.Background(), message), "queue provider message %s", message.Type)
 	}
 }
 func assertEmptyResponseEvents(t testing.TB, events []session.LiveEvent) {
-	t.Helper()
 	faultIndex, terminalIndex := -1, -1
 	for index, event := range events {
 		switch event.Kind {
 		case string(session.LiveEventLiveness):
 			faultIndex = index
-			if event.Liveness == nil || event.Liveness.Classification != "silent_provider_empty_response" || event.Liveness.ResponseID != "response-empty" {
-				t.Fatalf("liveness event = %+v", event)
-			}
+			require.NotNil(t, event.Liveness)
+			require.Equal(t, "silent_provider_empty_response", event.Liveness.Classification)
+			require.Equal(t, "response-empty", event.Liveness.ResponseID)
 		case string(session.LiveEventTerminal):
 			terminalIndex = index
-			if event.Terminal == nil || event.Terminal.Classification != "silent_provider_empty_response" || event.Terminal.TerminalReason != messages.TerminalReasonTerminalFailure {
-				t.Fatalf("terminal event = %+v", event)
-			}
+			require.NotNil(t, event.Terminal)
+			require.Equal(t, "silent_provider_empty_response", event.Terminal.Classification)
+			require.Equal(t, messages.TerminalReasonTerminalFailure, event.Terminal.TerminalReason)
 		}
 	}
 	if faultIndex < 0 || terminalIndex < 0 || faultIndex >= terminalIndex {
@@ -168,7 +153,6 @@ func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 	require.ErrorIs(t, handle.Wait(), cause)
 }
 func assertFiniteResponseReplacement(t testing.TB, h *handle, interrupted messages.StreamMessage, replacementID string) {
-	t.Helper()
 	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: interrupted.ResponseID})
 	require.True(t, h.observeFiniteResponse(interrupted))
 	require.False(t, h.gracefulStop)
@@ -179,7 +163,6 @@ func assertFiniteResponseReplacement(t testing.TB, h *handle, interrupted messag
 	require.Equal(t, 1, h.replayResponses)
 }
 func assertFiniteResponseCompletes(t testing.TB, h *handle, responseID string, value *messages.MessageEndValue) {
-	t.Helper()
 	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID})
 	require.True(t, h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: value}))
 	require.True(t, h.gracefulStop)
@@ -412,9 +395,11 @@ func TestOverlappingFiniteResponsesCountOnlyTheirOwnPendingTools(t *testing.T) {
 			h.observeProviderToolCall(call)
 			h.observeFiniteResponse(call)
 		}
-		h.observeFiniteResponse(end(batch.id, messages.RoleAssistant))
 	}
-	require.Zero(t, h.replayResponses)
+	for index, batch := range batches {
+		h.observeFiniteResponse(end(batch.id, messages.RoleAssistant))
+		require.True(t, index != 0 || h.responseIsActive(), "ending one overlapping response released its active sibling")
+	}
 	require.Equal(t, 4, h.pendingToolCalls)
 	finalIDs := []string{"final-zero", "final-one"}
 	for index, batch := range batches {
@@ -432,6 +417,17 @@ func TestOverlappingFiniteResponsesCountOnlyTheirOwnPendingTools(t *testing.T) {
 			t.Fatalf("final state = graceful:%t replay:%d pending:%d", h.gracefulStop, h.replayResponses, h.pendingToolCalls)
 		}
 	}
+	clear(h.pendingToolCallResponses)
+	for index := 0; index < maxPendingToolCallResponses; index++ {
+		h.pendingToolCallResponses[fmt.Sprintf("bounded-%d", index)] = ""
+	}
+	h.pendingToolCalls = len(h.pendingToolCallResponses)
+	if err := h.notePendingToolCallLocked(messages.StreamMessage{ToolCallId: "bounded-over-limit"}); err == nil {
+		t.Fatal("pending tool call response admission exceeded its bound")
+	}
+	h.Cancel(errors.New("test pending cleanup"))
+	require.Zero(t, h.pendingToolCalls)
+	require.Empty(t, h.pendingToolCallResponses)
 }
 func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 	h := newHandle(session.LiveRequest{OpeningContentParts: []messages.ContentPart{messages.ImagePart{Bytes: []byte{1, 2, 3}}}}, nil, nil, nil, nil, defaultEventCapacity, nil, nil)
@@ -449,6 +445,12 @@ func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("opening wait did not release after provider admission")
 	}
+	h.parentCtx = context.Background()
+	h.pendingToolCallResponses["shutdown-call"] = "response"
+	h.pendingToolCalls = 1
+	require.NoError(t, h.Close())
+	require.Empty(t, h.pendingToolCallResponses)
+	require.Zero(t, h.pendingToolCalls)
 }
 func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *testing.T) {
 	gate := mediagate.New(nil)

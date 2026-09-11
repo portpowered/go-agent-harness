@@ -130,6 +130,25 @@ func (c *Coordinator) resetModelDeltaWindow(curr *state.LoopState) {
 	curr.History.CurrentModelDeltaCount = 0
 }
 
+func (c *Coordinator) modelResponseAssemblyForDelta(delta messages.StreamMessage) (*modelResponseAssembly, error) {
+	if delta.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		return nil, nil
+	}
+	assembly, err := c.startModelResponse(delta)
+	if err != nil || assembly != nil {
+		return assembly, err
+	}
+	return c.modelResponseForDelta(delta)
+}
+
+func isTerminalOnlyModelError(delta messages.StreamMessage) bool {
+	if delta.Type != messages.StreamTypeMessageEnd {
+		return false
+	}
+	value, ok := delta.Value.(*messages.MessageEndValue)
+	return ok && value != nil && (value.Status != "" || value.ProviderErrorCode != "" || value.ProviderErrorMessage != "")
+}
+
 func (c *Coordinator) hasSessionCloseControl(curr *state.LoopState) bool {
 	for _, msg := range curr.Inputs.UserControlPlaneMessage {
 		if cpType := extractControlPlaneType(msg); cpType == messages.ControlPlaneMessageTypeSessionClose || cpType == messages.ControlPlaneMessageTypeStop {

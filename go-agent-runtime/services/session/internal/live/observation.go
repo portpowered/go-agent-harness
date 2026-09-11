@@ -30,12 +30,6 @@ func (i *liveInvocation) bindPlaybackController() {
 	}
 }
 
-type replayVirtualPlaybackController struct{}
-
-func (replayVirtualPlaybackController) StartPlayback(sharedaudio.PlaybackResponse) {}
-func (replayVirtualPlaybackController) InterruptPlayback(sharedaudio.PlaybackResponse) (int, bool) {
-	return 0, true
-}
 func (h *handle) consumeDeltas(ctx context.Context, loop *agentloop.AgentLoop) {
 	defer h.runWG.Done()
 	for {
@@ -317,7 +311,11 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...b
 		}
 		return finish
 	}
-	h.observeFiniteResponseMessage(msg)
+	if err := h.observeFiniteResponseMessage(msg); err != nil {
+		h.mu.Unlock()
+		h.Cancel(err)
+		return false
+	}
 	if deferredResponseComplete && h.activeScheduledAudio && h.scheduledAudioCount > 0 && h.interruptedScheduledResponses > h.scheduledContinuationTerminals {
 		h.scheduledContinuationTerminals++
 	}
@@ -328,27 +326,31 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...b
 	}
 	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool
 }
-func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
+func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) error {
 	switch msg.Type {
 	case messages.StreamTypeMessageStart:
 		if msg.Role != messages.RoleTool {
-			h.responseStarted, h.responseActive = true, true
-			h.responseObserved++
-			close(h.responseStartWake)
-			h.responseStartWake = make(chan struct{})
+			if h.observeResponseStartLocked(msg.ResponseID) {
+				h.responseStarted = true
+				h.responseObserved++
+				close(h.responseStartWake)
+				h.responseStartWake = make(chan struct{})
+			}
 		}
 	case messages.StreamTypeToolCallEnd:
-		h.notePendingToolCallLocked(msg)
+		return h.notePendingToolCallLocked(msg)
 	case messages.StreamTypeMessageEnd:
 		if msg.Role != messages.RoleTool {
 			h.observeFiniteResponseEnd(msg)
 		}
 	case messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
 	}
+	return nil
 }
 func (h *handle) observeFiniteResponseEnd(msg messages.StreamMessage) {
-	responseWasOpen := h.responseActive || h.responsePending
-	h.responseActive, h.responsePending = false, false
+	responseWasOpen := h.retireResponseLocked(msg.ResponseID)
+	responseWasOpen = responseWasOpen || h.responseActive || h.responsePending
+	h.responsePending = false
 	interrupted := h.finiteResponseWasInterrupted(msg)
 	if h.pendingToolCalls > 0 || interrupted {
 		if h.pendingToolCalls > 0 && !h.pendingToolCallsForResponse(msg.ResponseID) {
@@ -361,40 +363,38 @@ func (h *handle) observeFiniteResponseEnd(msg messages.StreamMessage) {
 	}
 	h.replayResponses++
 }
-func (h *handle) notePendingToolCallLocked(msg messages.StreamMessage) {
-	callID, _ := providerToolCallIdentity(msg)
-	responseID := strings.TrimSpace(msg.ResponseID)
-	if h.pendingToolCallResponses == nil {
-		h.pendingToolCallResponses = make(map[string]string)
-	}
-	if callID != "" {
-		h.pendingToolCallResponses[callID] = responseID
-	}
-	h.pendingToolCalls = len(h.pendingToolCallResponses)
-}
-func (h *handle) pendingToolCallsForResponse(responseID string) bool {
+func (h *handle) observeResponseStartLocked(responseID string) bool {
 	responseID = strings.TrimSpace(responseID)
-	if responseID == "" || h.pendingToolCallResponses == nil {
-		return h.pendingToolCalls > 0
-	}
-	for _, callResponseID := range h.pendingToolCallResponses {
-		if callResponseID == "" || callResponseID == responseID {
-			return true
+	if responseID == "" {
+		h.anonymousResponses++
+	} else {
+		if h.activeResponseIDs == nil {
+			h.activeResponseIDs = make(map[string]struct{})
 		}
+		if _, exists := h.activeResponseIDs[responseID]; exists {
+			return false
+		}
+		h.activeResponseIDs[responseID] = struct{}{}
 	}
-	return false
+	h.responsePending, h.responseActive = false, true
+	return true
 }
-func (h *handle) retireCompletedToolCallsLocked() {
-	h.toolMu.Lock()
-	completed := make([]string, 0, len(h.toolContinuations))
-	for callID, state := range h.toolContinuations {
-		if state != nil && state.toolResponseComplete && strings.TrimSpace(callID) != "" {
-			completed = append(completed, callID)
+func (h *handle) retireResponseLocked(responseID string) bool {
+	responseID = strings.TrimSpace(responseID)
+	switch {
+	case responseID != "":
+		if _, exists := h.activeResponseIDs[responseID]; !exists {
+			return false
 		}
+		delete(h.activeResponseIDs, responseID)
+	case h.anonymousResponses > 0:
+		h.anonymousResponses--
+	case len(h.activeResponseIDs) == 1:
+		h.activeResponseIDs = nil
+	default:
+		h.responseActive = len(h.activeResponseIDs) > 0 || h.anonymousResponses > 0
+		return false
 	}
-	h.toolMu.Unlock()
-	for _, callID := range completed {
-		delete(h.pendingToolCallResponses, callID)
-	}
-	h.pendingToolCalls = len(h.pendingToolCallResponses)
+	h.responseActive = len(h.activeResponseIDs) > 0 || h.anonymousResponses > 0
+	return true
 }
