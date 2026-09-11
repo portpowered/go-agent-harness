@@ -152,10 +152,7 @@ func (h *handle) refreshLiveTools(ctx context.Context, loop *agentloop.AgentLoop
 func liveControlEvent(control session.LiveControl) (messages.StreamMessage, error) {
 	switch control.Kind {
 	case session.LiveControlText:
-		// The session runner's text admission path ultimately sends this same
-		// provider TEXT.DELTA event. Using its ordered session ingress lets the
-		// live boundary wait for provider admission without adding a second
-		// untracked text queue.
+		// Text uses the same ordered provider ingress as other controls.
 		return messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(control.Text)}, nil
 	case session.LiveControlAudioCommit:
 		return messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}, nil
@@ -179,13 +176,11 @@ func (h *handle) Cancel(err error) {
 	}
 	h.mu.Lock()
 	h.cancelRequested = true
-	// Preserve the first cancellation cause. Provider/media teardown often
-	// reports context.Canceled after a typed liveness, persistence, or device
-	// failure; replacing that cause would make the public Wait result lose the
-	// actionable root error.
+	// Preserve the first cancellation cause for actionable terminal errors.
 	if h.cancelCause == nil {
 		h.cancelCause = err
 	}
+	h.clearPendingToolCallsLocked()
 	cancel := h.cancel
 	started := h.started
 	h.mu.Unlock()
@@ -250,13 +245,12 @@ func (h *handle) Close() error {
 	cancel := h.cancel
 	if started {
 		h.cancelRequested = true
-		// Close is teardown. Preserve a typed cause already recorded by the
-		// session (for example liveness, replay, or device failure) so the
-		// provider/media cancellation it triggers cannot mask the first fault.
+		// Close preserves any typed cause already recorded by the session.
 		if h.cancelCause == nil {
 			h.cancelCause = context.Canceled
 		}
 	}
+	h.clearPendingToolCallsLocked()
 	h.mu.Unlock()
 	if started && cancel != nil {
 		cancel(context.Canceled)
@@ -269,6 +263,11 @@ func (h *handle) Close() error {
 	}
 	<-h.done
 	return mediaErr
+}
+
+func (h *handle) clearPendingToolCallsLocked() {
+	clear(h.pendingToolCallResponses)
+	h.pendingToolCalls = 0
 }
 
 func (h *handle) noteCaptureDispatched() {
