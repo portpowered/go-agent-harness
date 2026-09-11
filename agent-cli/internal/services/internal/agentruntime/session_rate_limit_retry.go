@@ -1,103 +1,53 @@
 package agentruntime
 
 import (
-	"math"
 	"regexp"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimeProvidersWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 )
 
 const (
-	rateLimitRetryCode         = "rate_limit_exceeded"
-	defaultRateLimitRetryDelay = 2 * time.Second
-	maxRateLimitRetryDelay     = 15 * time.Second
-	maxLegacyStatusDetailBytes = 256
+	rateLimitRetryCode         = runtimeProviders.RateLimitRetryCode
+	defaultRateLimitRetryDelay = runtimeProviders.DefaultRateLimitRetryDelay
+	maxRateLimitRetryDelay     = runtimeProviders.MaxRateLimitRetryDelay
+	maxLegacyStatusDetailBytes = runtimeProviders.MaxLegacyStatusDetailBytes
 )
 
-var rateLimitRetryDelayPattern = regexp.MustCompile(`(?i)\bplease\s+try\s+again\s+in\s+((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+))s\b`)
+// rateLimitRetryDelayPattern remains as the pre-existing architecture-ledger
+// symbol for this compatibility file. The provider TerminalPolicy owns all
+// matching and parsing; this value is not consulted by the CLI runtime.
+var rateLimitRetryDelayPattern = regexp.MustCompile(`(?i)\bplease\s+try\s+again\s+in\s+((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+))s\b`) //nolint:gochecknoglobals // retained baseline symbol; policy owns parsing
 
-// rateLimitRetryDecision classifies one provider response terminal and, when
-// eligible, returns the bounded delay requested by the provider. The session
-// runtime owns the resulting retry policy; this helper only interprets the
-// provider-neutral terminal metadata.
+// terminalPolicy constructs the pure provider policy at the service boundary.
+// The CLI retains these names for compatibility while scheduling and response
+// lifecycle decisions remain owned by the session runtime.
+func terminalPolicy() runtimeProviders.TerminalPolicy {
+	return runtimeProvidersWire.NewTerminalPolicy()
+}
+
 func rateLimitRetryDecision(terminal *messages.MessageEndValue) (time.Duration, bool) {
-	if terminal == nil || normalizeTerminalStatus(terminal.Status) != "failed" || terminal.TerminalReason == messages.TerminalReasonCancellation {
-		return 0, false
-	}
-	if providerTerminalErrorCode(terminal) != rateLimitRetryCode {
-		return 0, false
-	}
-	return parseRateLimitRetryDelay(providerTerminalErrorMessage(terminal)), true
+	return terminalPolicy().RateLimitRetryDecision(terminal)
 }
 
 func parseRateLimitRetryDelay(message string) time.Duration {
-	match := rateLimitRetryDelayPattern.FindStringSubmatch(message)
-	if len(match) != 2 {
-		return defaultRateLimitRetryDelay
-	}
-
-	seconds, err := strconv.ParseFloat(match[1], 64)
-	if err != nil || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds <= 0 {
-		return defaultRateLimitRetryDelay
-	}
-	if seconds > maxRateLimitRetryDelay.Seconds() {
-		return maxRateLimitRetryDelay
-	}
-
-	// Round to the nearest representable nanosecond and retain a positive
-	// duration for a valid value that is smaller than one nanosecond.
-	delay := time.Duration(math.Round(seconds * float64(time.Second)))
-	if delay <= 0 {
-		return time.Nanosecond
-	}
-	return delay
+	return terminalPolicy().ParseRateLimitRetryDelay(message)
 }
 
 func providerTerminalErrorCode(terminal *messages.MessageEndValue) string {
-	if terminal == nil {
-		return ""
-	}
-	if code := strings.TrimSpace(terminal.ProviderErrorCode); code != "" {
-		return code
-	}
-	return legacyStatusDetailField(terminal.StatusDetails, "code")
+	return terminalPolicy().ProviderTerminalErrorCode(terminal)
 }
 
 func providerTerminalErrorMessage(terminal *messages.MessageEndValue) string {
-	if terminal == nil {
-		return ""
-	}
-	if message := strings.TrimSpace(terminal.ProviderErrorMessage); message != "" {
-		return message
-	}
-	return legacyStatusDetailField(terminal.StatusDetails, "message")
+	return terminalPolicy().ProviderTerminalErrorMessage(terminal)
 }
 
 func legacyStatusDetailField(details, wanted string) string {
-	parts := strings.Split(details, ",")
-	for index, part := range parts {
-		key, value, ok := strings.Cut(part, "=")
-		if !ok || strings.TrimSpace(key) != wanted {
-			continue
-		}
-		value = strings.TrimSpace(value)
-		if wanted == "message" && index+1 < len(parts) {
-			// The compact legacy representation places message last, but the
-			// provider text itself may contain commas. Rejoin the remainder so
-			// retry guidance is not lost when the explicit field is unavailable.
-			value = strings.TrimSpace(strings.Join(append([]string{value}, parts[index+1:]...), ","))
-		}
-		if len(value) > maxLegacyStatusDetailBytes {
-			value = value[:maxLegacyStatusDetailBytes]
-		}
-		return value
-	}
-	return ""
+	return terminalPolicy().LegacyStatusDetailField(details, wanted)
 }
 
 func normalizeTerminalStatus(status string) string {
-	return strings.ToLower(strings.TrimSpace(status))
+	return terminalPolicy().NormalizeTerminalStatus(status)
 }
