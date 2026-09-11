@@ -23,54 +23,82 @@ const roomInputTranscriptionTestTimeout = 2 * time.Second
 // participant-specific transcript so the test proves both request isolation
 // and role attribution at the room stream seam.
 func TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant(t *testing.T) {
-	const (
-		model          = openAIRealtimeDefaultModel
-		alphaID        = "alpha"
-		betaID         = "beta"
-		alphaSecret    = "room-alpha-key"
-		betaSecret     = "room-beta-key"
-		alphaUser      = "alpha customer words"
-		betaUser       = "beta customer words"
-		alphaAssistant = "alpha assistant words"
-		betaAssistant  = "beta assistant words"
-	)
-
+	const model = openAIRealtimeDefaultModel
 	servers := map[string]*roomInputTranscriptionServer{
-		alphaID: newRoomInputTranscriptionServer(alphaID, model, alphaUser, alphaAssistant),
-		betaID:  newRoomInputTranscriptionServer(betaID, model, betaUser, betaAssistant),
+		"alpha": newRoomInputTranscriptionServer("alpha", model, "alpha customer words", "alpha assistant words"),
+		"beta":  newRoomInputTranscriptionServer("beta", model, "beta customer words", "beta assistant words"),
 	}
+	observations := make(chan roomTranscriptObservation, 16)
+	credentials := map[string]string{
+		"ROOM_ALPHA_KEY": "room-alpha-key",
+		"ROOM_BETA_KEY":  "room-beta-key",
+	}
+	result := runRoomInputTranscriptionScenario(t, model, servers, credentials, observations)
+	if result.Reason != RoomTerminationMaxTurnsReached || len(result.Participants) != len(servers) {
+		t.Fatalf("room result = %+v, want max-turn result for %d participants", result, len(servers))
+	}
+	wantTranscripts := map[string]roomTranscriptExpectation{
+		"alpha:delta":           {role: messages.RoleUser, kind: messages.StreamTypeTranscriptDelta, text: "alpha customer words"},
+		"alpha:end":             {role: messages.RoleUser, kind: messages.StreamTypeTranscriptEnd, text: "alpha customer words"},
+		"alpha:assistant-delta": {role: messages.RoleAssistant, kind: messages.StreamTypeTranscriptDelta, text: "alpha assistant words"},
+		"alpha:assistant-end":   {role: messages.RoleAssistant, kind: messages.StreamTypeTranscriptEnd, text: "alpha assistant words"},
+		"beta:delta":            {role: messages.RoleUser, kind: messages.StreamTypeTranscriptDelta, text: "beta customer words"},
+		"beta:end":              {role: messages.RoleUser, kind: messages.StreamTypeTranscriptEnd, text: "beta customer words"},
+		"beta:assistant-delta":  {role: messages.RoleAssistant, kind: messages.StreamTypeTranscriptDelta, text: "beta assistant words"},
+		"beta:assistant-end":    {role: messages.RoleAssistant, kind: messages.StreamTypeTranscriptEnd, text: "beta assistant words"},
+	}
+	assertRoomInputTranscriptionObservations(t, observations, wantTranscripts)
+	assertRoomInputTranscriptionServers(t, servers, model)
+}
+
+func runRoomInputTranscriptionScenario(t *testing.T, model string, servers map[string]*roomInputTranscriptionServer, credentials map[string]string, observations chan<- roomTranscriptObservation) RoomResult {
+	t.Helper()
 	configDir := t.TempDir()
 	writeSessionConfigFile(t, configDir, "model:\n  provider: openai\n")
-
 	manifest := room.Manifest{
 		SchemaVersion: room.SchemaVersion,
 		Room:          room.Room{MaxTurns: 1},
 		Participants: []room.Participant{
-			{ID: alphaID, SystemPrompt: "alpha system", Provider: config.ProviderOpenAI, Model: model, APIKeyEnv: "ROOM_ALPHA_KEY", Tools: []string{}},
-			{ID: betaID, SystemPrompt: "beta system", Provider: config.ProviderOpenAI, Model: model, APIKeyEnv: "ROOM_BETA_KEY", Tools: []string{}},
+			{ID: "alpha", SystemPrompt: "alpha system", Provider: config.ProviderOpenAI, Model: model, APIKeyEnv: "ROOM_ALPHA_KEY", Tools: []string{}},
+			{ID: "beta", SystemPrompt: "beta system", Provider: config.ProviderOpenAI, Model: model, APIKeyEnv: "ROOM_BETA_KEY", Tools: []string{}},
 		},
-	}
-
-	observations := make(chan roomTranscriptObservation, 16)
-	credentials := map[string]string{
-		"ROOM_ALPHA_KEY": alphaSecret,
-		"ROOM_BETA_KEY":  betaSecret,
 	}
 	cadenceReady := make(chan *roomRealtimeReplayCadence, len(servers))
-	mixerConfig := room.PCM16MixerConfig{
-		Format:            room.PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond},
-		InputQueueFrames:  4,
-		OutputQueueFrames: 4,
-		CadenceFactory: func(time.Duration) room.PCM16Cadence {
-			cadence := newRoomRealtimeReplayCadence()
-			cadenceReady <- cadence
-			return cadence
-		},
-	}
 	opened := make(chan string, len(servers))
-	opts := RoomRunOptions{
+	opts := roomInputTranscriptionRunOptions(manifest, configDir, servers, credentials, cadenceReady, opened, observations)
+	ctx, cancel := context.WithTimeout(context.Background(), roomInputTranscriptionTestTimeout)
+	defer cancel()
+	runDone := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		runDone <- roomTestRunOutcome{result: result, err: err}
+	}()
+	advanceRoomInputTranscriptionMedia(t, ctx, servers, cadenceReady, opened, runDone)
+	select {
+	case outcome := <-runDone:
+		if outcome.err != nil {
+			t.Fatalf("RunRoomWithResult: %v", outcome.err)
+		}
+		return outcome.result
+	case <-ctx.Done():
+		t.Fatalf("RunRoomWithResult: %v", ctx.Err())
+		return RoomResult{}
+	}
+}
+
+func roomInputTranscriptionRunOptions(manifest room.Manifest, configDir string, servers map[string]*roomInputTranscriptionServer, credentials map[string]string, cadenceReady chan<- *roomRealtimeReplayCadence, opened chan<- string, observations chan<- roomTranscriptObservation) RoomRunOptions {
+	return RoomRunOptions{
 		Manifest:  manifest,
-		ConfigDir: configDir, ModelCatalog: testModelCatalog(), MixerConfig: mixerConfig,
+		ConfigDir: configDir, ModelCatalog: testModelCatalog(), MixerConfig: room.PCM16MixerConfig{
+			Format:            room.PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond},
+			InputQueueFrames:  4,
+			OutputQueueFrames: 4,
+			CadenceFactory: func(time.Duration) room.PCM16Cadence {
+				cadence := newRoomRealtimeReplayCadence()
+				cadenceReady <- cadence
+				return cadence
+			},
+		},
 		BaseURL: "wss://room-input-transcription.invalid/v1/realtime",
 		CredentialLookup: func(name string) (string, bool) {
 			value, ok := credentials[name]
@@ -98,15 +126,10 @@ func TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant(t *testin
 			observations <- observation
 		},
 	}
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), roomInputTranscriptionTestTimeout)
-	defer cancel()
-	runDone := make(chan roomTestRunOutcome, 1)
-	go func() {
-		result, err := RunRoomWithResult(ctx, io.Discard, opts)
-		runDone <- roomTestRunOutcome{result: result, err: err}
-	}()
-
+func advanceRoomInputTranscriptionMedia(t *testing.T, ctx context.Context, servers map[string]*roomInputTranscriptionServer, cadenceReady <-chan *roomRealtimeReplayCadence, opened <-chan string, runDone <-chan roomTestRunOutcome) {
+	t.Helper()
 	cadences := make([]*roomRealtimeReplayCadence, 0, len(servers))
 	for range servers {
 		select {
@@ -114,6 +137,8 @@ func TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant(t *testin
 			cadences = append(cadences, cadence)
 		case <-ctx.Done():
 			t.Fatalf("room mixer cadence was not created: %v", ctx.Err())
+		case <-runDone:
+			t.Fatalf("room stopped before creating its mixer cadence")
 		}
 	}
 	openedParticipants := make(map[string]struct{}, len(servers))
@@ -129,12 +154,13 @@ func TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant(t *testin
 			openedParticipants[participantID] = struct{}{}
 		case <-ctx.Done():
 			t.Fatalf("room sessions did not observe session.open: %v", ctx.Err())
+		case <-runDone:
+			t.Fatalf("room stopped before observing every session.open")
 		}
 	}
-	// The fake provider withholds its response completion until it receives
-	// media. Advancing every cadence only after both SESSION.OPEN observations
-	// forces the real room mixer to produce the post-handshake append that CI
-	// observed, without a wall-clock sleep or a production synchronization seam.
+	// The fake provider withholds response completion until it receives media.
+	// Advancing only after both SESSION.OPEN observations forces the real room
+	// mixer to produce the post-handshake append without a wall-clock sleep.
 	for _, cadence := range cadences {
 		cadence.Advance()
 	}
@@ -143,56 +169,37 @@ func TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant(t *testin
 		case <-server.appendSeen:
 		case <-ctx.Done():
 			t.Fatalf("participant %q did not receive deterministic post-handshake media: %v", participantID, ctx.Err())
+		case <-runDone:
+			t.Fatalf("room stopped before participant %q media was observed", participantID)
 		}
 	}
+}
 
-	var outcome roomTestRunOutcome
-	select {
-	case outcome = <-runDone:
-	case <-ctx.Done():
-		t.Fatalf("RunRoomWithResult: %v", ctx.Err())
-	}
-	if outcome.err != nil {
-		t.Fatalf("RunRoomWithResult: %v", outcome.err)
-	}
-	result := outcome.result
-	if result.Reason != RoomTerminationMaxTurnsReached {
-		t.Fatalf("room termination reason = %q, want %q", result.Reason, RoomTerminationMaxTurnsReached)
-	}
-	if len(result.Participants) != 2 {
-		t.Fatalf("participant results = %d, want two", len(result.Participants))
-	}
-
-	wantTranscripts := map[string]roomTranscriptExpectation{
-		alphaID + ":delta":           {role: messages.RoleUser, kind: messages.StreamTypeTranscriptDelta, text: alphaUser},
-		alphaID + ":end":             {role: messages.RoleUser, kind: messages.StreamTypeTranscriptEnd, text: alphaUser},
-		alphaID + ":assistant-delta": {role: messages.RoleAssistant, kind: messages.StreamTypeTranscriptDelta, text: alphaAssistant},
-		alphaID + ":assistant-end":   {role: messages.RoleAssistant, kind: messages.StreamTypeTranscriptEnd, text: alphaAssistant},
-		betaID + ":delta":            {role: messages.RoleUser, kind: messages.StreamTypeTranscriptDelta, text: betaUser},
-		betaID + ":end":              {role: messages.RoleUser, kind: messages.StreamTypeTranscriptEnd, text: betaUser},
-		betaID + ":assistant-delta":  {role: messages.RoleAssistant, kind: messages.StreamTypeTranscriptDelta, text: betaAssistant},
-		betaID + ":assistant-end":    {role: messages.RoleAssistant, kind: messages.StreamTypeTranscriptEnd, text: betaAssistant},
-	}
-	seen := make(map[string]struct{}, len(wantTranscripts))
+func assertRoomInputTranscriptionObservations(t *testing.T, observations <-chan roomTranscriptObservation, want map[string]roomTranscriptExpectation) {
+	t.Helper()
+	seen := make(map[string]struct{}, len(want))
 	deadline := time.NewTimer(roomInputTranscriptionTestTimeout)
 	defer deadline.Stop()
-	for len(seen) < len(wantTranscripts) {
+	for len(seen) < len(want) {
 		select {
 		case observation := <-observations:
 			key := transcriptObservationKey(observation)
-			want, ok := wantTranscripts[key]
+			expectation, ok := want[key]
 			if !ok {
 				t.Fatalf("unexpected transcript observation = %+v", observation)
 			}
-			if observation.role != want.role || observation.kind != want.kind || observation.text != want.text {
-				t.Fatalf("transcript %q = %+v, want role=%q kind=%q text=%q", key, observation, want.role, want.kind, want.text)
+			if observation.role != expectation.role || observation.kind != expectation.kind || observation.text != expectation.text {
+				t.Fatalf("transcript %q = %+v, want role=%q kind=%q text=%q", key, observation, expectation.role, expectation.kind, expectation.text)
 			}
 			seen[key] = struct{}{}
 		case <-deadline.C:
 			t.Fatalf("timed out waiting for participant transcript observations: seen=%v", seen)
 		}
 	}
+}
 
+func assertRoomInputTranscriptionServers(t *testing.T, servers map[string]*roomInputTranscriptionServer, model string) {
+	t.Helper()
 	for participantID, server := range servers {
 		if calls := server.dialCallsSnapshot(); calls != 1 {
 			t.Fatalf("participant %q provider connections = %d, want exactly one", participantID, calls)
