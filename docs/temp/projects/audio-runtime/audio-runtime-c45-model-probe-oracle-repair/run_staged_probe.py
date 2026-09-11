@@ -33,12 +33,21 @@ EXPECTED_ARTIFACTS = {
     "artifact-2-source-snapshot": {"name": "artifact-2.tar", "sha256": "9a803dab9a439211ecf90617c5f063d8f3e27a4e1f8950d7006bd729170ff399", "bytes": 245760},
     "artifact-3-build-descriptor": {"name": "artifact-3.json", "sha256": "e62c5da67ff259dfdfe5ade71f2fb2d654b12617b58e84767d853c95a2319d11", "bytes": 50257},
 }
+ORIGINAL_TESTED_SOURCE_REVISION = "9f869d1db0a1724128f7c7d083a0054270def68"
+INTEGRATED_C44_SOURCE_REVISION = "5f14c45313cfdc71e000fda209e3408fcf863faf"
 REQUIRED_FIXTURES = {
     "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-interruption.session.json",
 }
 COPY_CHUNK_BYTES = 1024 * 1024
 REPORT_RESERVE_BYTES = 16 * 1024 * 1024
+REPLAY_METADATA_RESERVE_BYTES = 4 * 1024 * 1024
+REPLAY_TEXT_OUTPUT_RESERVE_BYTES = 8 * 1024 * 1024
+CONTROL_METADATA_RESERVE_BYTES = 4 * 1024 * 1024
+LATEST_REPORT_RESERVE_BYTES = REPORT_RESERVE_BYTES
+PCM_OUTPUT_BYTES = 4800 + 3840
+AUDIO_WAV_BYTES = (4800 + 44) + (3840 + 44)
+AUDIO_TRACE_WAV_BYTES = (4800 + 44) + (3840 + 44)
 RESERVE_SAMPLE_INTERVAL_SECONDS = 0.1
 CLEANUP_GRACE_SECONDS = 2.0
 STAGING_METHODS: dict[str, str] = {}
@@ -363,6 +372,27 @@ def extract_required_fixtures(
     return destination / "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures"
 
 
+def replay_output_budget(fixture_bytes: int) -> dict[str, int]:
+    provider_fixture_bytes = fixture_bytes
+    total = (
+        provider_fixture_bytes
+        + PCM_OUTPUT_BYTES
+        + AUDIO_WAV_BYTES
+        + AUDIO_TRACE_WAV_BYTES
+        + REPLAY_TEXT_OUTPUT_RESERVE_BYTES
+        + REPLAY_METADATA_RESERVE_BYTES
+    )
+    return {
+        "provider_fixture_copy_bytes": provider_fixture_bytes,
+        "pcm_output_bytes": PCM_OUTPUT_BYTES,
+        "audio_wav_bytes": AUDIO_WAV_BYTES,
+        "audio_trace_wav_bytes": AUDIO_TRACE_WAV_BYTES,
+        "text_output_reserve_bytes": REPLAY_TEXT_OUTPUT_RESERVE_BYTES,
+        "metadata_reserve_bytes": REPLAY_METADATA_RESERVE_BYTES,
+        "total_bytes": total,
+    }
+
+
 def prospective_storage_budget(staged_root: pathlib.Path, max_output_bytes: int) -> dict[str, Any]:
     staged = check_staged_artifacts(staged_root)
     archive = staged_root / EXPECTED_ARTIFACTS["artifact-2-source-snapshot"]["name"]
@@ -376,7 +406,10 @@ def prospective_storage_budget(staged_root: pathlib.Path, max_output_bytes: int)
             "prospective_fixture_bytes": 0,
             "prospective_scratch_bytes": 0,
             "prospective_output_bytes": 0,
+            "prospective_replay_output_bytes": 0,
+            "prospective_metadata_bytes": 0,
             "prospective_report_bytes": 0,
+            "prospective_latest_report_bytes": 0,
             "projected_growth_bytes": 0,
             "artifact_input_bytes": sum(item["bytes"] for item in staged.values()),
         }
@@ -384,14 +417,27 @@ def prospective_storage_budget(staged_root: pathlib.Path, max_output_bytes: int)
     binary_bytes = sum(staged[key]["bytes"] for key in ("artifact-0-yui", "artifact-1-consumer"))
     fixture_bytes = sum(item["bytes"] for item in fixture_members.values())
     scratch_bytes = binary_bytes + fixture_bytes
-    projected_growth = scratch_bytes + max_output_bytes + REPORT_RESERVE_BYTES
+    replay_outputs = replay_output_budget(fixture_bytes)
+    metadata_bytes = CONTROL_METADATA_RESERVE_BYTES
+    projected_growth = (
+        scratch_bytes
+        + max_output_bytes
+        + replay_outputs["total_bytes"]
+        + metadata_bytes
+        + REPORT_RESERVE_BYTES
+        + LATEST_REPORT_RESERVE_BYTES
+    )
     return {
         "synthetic_input": False,
         "prospective_binary_copy_bytes": binary_bytes,
         "prospective_fixture_bytes": fixture_bytes,
         "prospective_scratch_bytes": scratch_bytes,
         "prospective_output_bytes": max_output_bytes,
+        "prospective_replay_output_bytes": replay_outputs["total_bytes"],
+        "replay_output_breakdown": replay_outputs,
+        "prospective_metadata_bytes": metadata_bytes,
         "prospective_report_bytes": REPORT_RESERVE_BYTES,
+        "prospective_latest_report_bytes": LATEST_REPORT_RESERVE_BYTES,
         "projected_growth_bytes": projected_growth,
         "fixture_members": fixture_members,
         "artifact_input_bytes": sum(item["bytes"] for item in staged.values()),
@@ -512,15 +558,22 @@ def free_space_report(monitor: ReserveMonitor) -> dict[str, Any]:
 
 def write_outcome(outcome: dict[str, Any], run_dir: pathlib.Path, output_root: pathlib.Path) -> None:
     report_path = run_dir / "outcome.json"
+    latest_path = output_root / "latest-staged-probe.json"
     for _ in range(8):
-        report_path.write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")
+        serialized = json.dumps(outcome, indent=2) + "\n"
+        report_path.write_text(serialized, encoding="utf-8")
+        latest_path.write_text(serialized, encoding="utf-8")
         measured = tree_bytes(run_dir)
-        if outcome.get("report_bytes") == measured:
+        latest_measured = latest_path.stat().st_size
+        if (
+            outcome.get("report_bytes") == measured
+            and outcome.get("latest_report_bytes") == latest_measured
+        ):
             break
         outcome["report_bytes"] = measured
+        outcome["latest_report_bytes"] = latest_measured
     else:
         raise RuntimeError("final report size did not stabilize")
-    (output_root / "latest-staged-probe.json").write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> int:
@@ -570,7 +623,7 @@ def main() -> int:
 
     def reserve_check(phase: str) -> int:
         require_deadline(started, args.total_timeout, phase)
-        return monitor.sample(phase)
+        return monitor.sample(phase, projected_growth_bytes)
 
     def record_cleanup() -> dict[str, Any]:
         cleanup = cleanup_scratch(scratch_paths, deadline=deadline)
@@ -586,6 +639,7 @@ def main() -> int:
         require_deadline(started, args.total_timeout, "storage preflight")
         storage_budget = prospective_storage_budget(staged_root, args.max_output_bytes)
         outcome["storage_preflight"] = storage_budget
+        projected_growth_bytes = storage_budget["projected_growth_bytes"]
         require_deadline(started, args.total_timeout, "storage reserve preflight")
         free_before = monitor.sample("preflight", storage_budget["projected_growth_bytes"])
         require_deadline(started, args.total_timeout, "descriptor read")
@@ -640,7 +694,18 @@ def main() -> int:
         if outcome["forbidden_helpers_called"]:
             raise RuntimeError(f"forbidden verifier helpers called: {outcome['forbidden_helpers_called']}")
         require_deadline(started, args.total_timeout, "staged controls")
-        free_during = monitor.sample("after-controls")
+        outcome["observed_run_tree_bytes_before_cleanup"] = tree_bytes(run_dir)
+        outcome["observed_replay_output_bytes_before_cleanup"] = sum(
+            tree_bytes(run_dir / label)
+            for label in ("replay-audio-tool", "replay-interruption")
+            if (run_dir / label).is_dir()
+        )
+        outcome["observed_control_metadata_bytes_before_cleanup"] = max(
+            0,
+            outcome["observed_run_tree_bytes_before_cleanup"]
+            - outcome["observed_replay_output_bytes_before_cleanup"],
+        )
+        free_during = monitor.sample("after-controls", projected_growth_bytes)
         staged_after = check_staged_artifacts(staged_root)
         if staged_before != staged_after:
             raise RuntimeError(f"staged artifact changed during probe: before={staged_before}, after={staged_after}")
@@ -652,8 +717,9 @@ def main() -> int:
         outcome["scratch_cleanup"] = cleanup
         if cleanup["errors"] or cleanup["deadline_exceeded"] or cleanup["bytes_after"] != 0:
             raise RuntimeError(f"staged probe scratch cleanup incomplete: {cleanup}")
+        outcome["observed_run_tree_bytes_after_cleanup"] = tree_bytes(run_dir)
         require_deadline(started, args.total_timeout, "scratch cleanup")
-        free_after = monitor.sample("after-cleanup")
+        free_after = monitor.sample("after-cleanup", projected_growth_bytes)
         outcome["free_space_samples_bytes"] = {
             "before": free_before,
             "during": free_during,
@@ -662,9 +728,25 @@ def main() -> int:
             "sample_interval_seconds": RESERVE_SAMPLE_INTERVAL_SECONDS,
             "samples": monitor.samples,
         }
-        outcome["tested_source_revision"] = subprocess.run(
+        tested_source_revision = subprocess.run(
             ["rtk", "proxy", "git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True, timeout=10
         ).stdout.strip()
+        outcome["tested_source_revision"] = tested_source_revision
+        outcome["original_tested_source_revision"] = ORIGINAL_TESTED_SOURCE_REVISION
+        outcome["integrated_c44_source_revision"] = INTEGRATED_C44_SOURCE_REVISION
+        outcome["repaired_tooling_provenance"] = {
+            "tested_source_revision": tested_source_revision,
+            "verify_path": str(VERIFY),
+            "verify_sha256": sha256(VERIFY),
+            "run_staged_probe_path": str(pathlib.Path(__file__).resolve()),
+            "run_staged_probe_sha256": sha256(pathlib.Path(__file__).resolve()),
+            "original_tested_source_revision": ORIGINAL_TESTED_SOURCE_REVISION,
+            "integrated_c44_source_revision": INTEGRATED_C44_SOURCE_REVISION,
+        }
+        outcome["binary_identity"] = {
+            key: outcome["artifact_hashes_before"][key]
+            for key in ("artifact-0-yui", "artifact-1-consumer")
+        }
         outcome["decision"] = "ACCEPTED"
     except StorageBlocked as exc:
         outcome["decision"] = "BLOCKED"

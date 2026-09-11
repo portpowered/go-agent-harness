@@ -1,0 +1,59 @@
+{
+  "schema": "audio-runtime-c47-python-source-check/v1",
+  "decision": "ACCEPTED",
+  "sources": [
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/verify.py",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c45-model-probe-oracle-repair/run_staged_probe.py",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/check_python_sources.py",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/run_c45_controls_private.py",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/run_c45_regressions.py",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/refresh_live_evidence.py",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/test_resource_bounds.py"
+  ],
+  "bytecode_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/python-check",
+  "compiled": [
+    {
+      "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/verify.py",
+      "source_sha256": "7e79e235865826942b002fa50e10031892ec287e3ee6cb4bb14c5aff1871c6c3",
+      "bytecode": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/python-check/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/verify.pyc",
+      "bytecode_bytes": 84348
+    },
+    {
+      "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c45-model-probe-oracle-repair/run_staged_probe.py",
+      "source_sha256": "7170b42d3fb54f032565614d85e66c213df3ea79eb993cd08af80fa8e86f66db",
+      "bytecode": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/python-check/docs/temp/projects/audio-runtime/audio-runtime-c45-model-probe-oracle-repair/run_staged_probe.pyc",
+      "bytecode_bytes": 52110
+    },
+    {
+      "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/check_python_sources.py",
+      "source_sha256": "6dc090caed0276a586f41b3c77f128686e916ea4bbb1cfa9cfc43e4472b4e446",
+      "bytecode": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/python-check/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/check_python_sources.pyc",
+      "bytecode_bytes": 4700
+    },
+    {
+      "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/run_c45_controls_private.py",
+      "source_sha256": "3869fae31993cc634a70386ee4476581e2fc1acba77057f4812ec31fb42bbeaf",
+      "bytecode": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/python-check/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/run_c45_controls_private.pyc",
+      "bytecode_bytes": 8250
+    },
+    {
+      "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/run_c45_regressions.py",
+      "source_sha256": "4ca5d8db04223fb43b4b7a3750fc3546f53f409831d79de967989487ce1115dc",
+      "bytecode": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/python-check/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/run_c45_regressions.pyc",
+      "bytecode_bytes": 603
+    },
+    {
+      "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/refresh_live_evidence.py",
+      "source_sha256": "1e94fd5c4a5f72b6920969aa928ceced300c80b3f1ad931801688af2b2b4d6d4",
+      "bytecode": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/python-check/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/refresh_live_evidence.pyc",
+      "bytecode_bytes": 6007
+    },
+    {
+      "source": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/test_resource_bounds.py",
+      "source_sha256": "4f1d57c10b6fe7c1a24612efa3d5d292566833c480e81197aefc9547bc5ec59c",
+      "bytecode": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/python-check/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/test_resource_bounds.pyc",
+      "bytecode_bytes": 36090
+    }
+  ],
+  "elapsed_seconds": 0.019967
+}

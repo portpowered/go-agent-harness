@@ -246,6 +246,87 @@ def _bounded_wait(process: subprocess.Popen[bytes], deadline: float) -> bool:
     return True
 
 
+def _terminate_process_group_after_failure(
+    process: subprocess.Popen[bytes],
+    pgid: int,
+    cleanup_deadline: float,
+    cleanup_failures: list[dict[str, str]],
+) -> tuple[bool, bool, list[int], bool, str | None]:
+    """Stop a failed runner's complete group and report inspection uncertainty."""
+
+    term_sent = False
+    kill_sent = False
+    survivors: list[int] = []
+    inspection_available = True
+    inspection_error: str | None = None
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+        term_sent = True
+    except ProcessLookupError:
+        pass
+    except OSError as exc:
+        cleanup_failures.append({"operation": "SIGTERM", "error": str(exc)})
+    try:
+        process.wait(timeout=min(0.5, max(0.01, cleanup_deadline - time.monotonic())))
+    except subprocess.TimeoutExpired:
+        pass
+
+    group_empty = False
+    while time.monotonic() < cleanup_deadline:
+        try:
+            group_pids = process_group_pids(pgid)
+        except BaseException as exc:
+            inspection_available = False
+            inspection_error = str(exc)
+            cleanup_failures.append({"operation": "post-failure-process-inspection", "error": str(exc)})
+            break
+        if not group_pids:
+            group_empty = True
+            break
+        survivors = group_pids
+        time.sleep(0.02)
+
+    if not group_empty:
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+            kill_sent = True
+        except ProcessLookupError:
+            pass
+        except OSError as exc:
+            cleanup_failures.append({"operation": "SIGKILL", "error": str(exc)})
+        if not _bounded_wait(process, cleanup_deadline):
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+            except OSError as exc:
+                cleanup_failures.append({"operation": "parent-kill", "error": str(exc)})
+            if not _bounded_wait(process, cleanup_deadline):
+                cleanup_failures.append({"operation": "parent-reap", "error": "parent remained running after bounded cleanup"})
+
+    try:
+        survivors = process_group_pids(pgid)
+    except BaseException as exc:
+        inspection_available = False
+        inspection_error = str(exc)
+        cleanup_failures.append({"operation": "final-process-inspection", "error": str(exc)})
+        survivors = []
+    return term_sent, kill_sent, survivors, inspection_available, inspection_error
+
+
+def _normalize_trailing_blank_lines(path: pathlib.Path) -> None:
+    """Keep one terminal newline without changing diagnostic content."""
+
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return
+    if data.endswith(b"\n\n"):
+        normalized = data.rstrip(b"\n") + b"\n"
+        if normalized != data:
+            path.write_bytes(normalized)
+
+
 def _attach_result(error: BaseException, result: dict[str, Any]) -> BaseException:
     try:
         setattr(error, "result", result)
@@ -280,7 +361,10 @@ def run_process(
     primary_failure: dict[str, Any] | None = None
     survivors_before_final_kill: list[int] = []
     survivors: list[int] = []
+    process_group_inspection_available = True
+    process_group_inspection_error: str | None = None
     process: subprocess.Popen[bytes] | None = None
+    pgid: int | None = None
     state = _CaptureState()
 
     def write_not_started(message: str, error: BaseException) -> None:
@@ -299,6 +383,8 @@ def run_process(
             "kill_sent": False,
             "parent_reaped": False,
             "surviving_process_group_pids": [],
+            "process_group_inspection_available": True,
+            "process_group_inspection_error": None,
             "stdout_bytes": 0,
             "stdout_sha256": sha256_bytes(b""),
             "stderr_bytes": 0,
@@ -335,6 +421,10 @@ def run_process(
             stderr=subprocess.PIPE,
             start_new_session=True,
         )
+        # start_new_session makes the child its own process-group leader. Keep
+        # the pid fallback so a post-Popen failure cannot strand descendants
+        # merely because querying the group id failed.
+        pgid = process.pid
         pgid = os.getpgid(process.pid)
         reader = threading.Thread(
             target=_capture_outputs,
@@ -446,11 +536,17 @@ def run_process(
             state.stop.set()
             reader.join(timeout=0.1)
 
+        if not reader.is_alive():
+            _normalize_trailing_blank_lines(stdout_path)
+            _normalize_trailing_blank_lines(stderr_path)
+
         if state.failure is not None and primary_failure is None:
             primary_failure = state.failure
         try:
             survivors = process_group_pids(pgid)
         except BaseException as exc:
+            process_group_inspection_available = False
+            process_group_inspection_error = str(exc)
             cleanup_failures.append({"operation": "final-process-inspection", "error": str(exc)})
             if primary_failure is None:
                 primary_exception = primary_exception or exc
@@ -465,13 +561,33 @@ def run_process(
             primary_failure = {"kind": "runner", "message": str(exc)}
         else:
             cleanup_failures.append({"operation": "runner-cleanup", "error": str(exc)})
-        if process is not None:
+        if process is not None and pgid is not None:
+            state.stop.set()
+            (
+                fallback_term_sent,
+                fallback_kill_sent,
+                fallback_survivors,
+                process_group_inspection_available,
+                process_group_inspection_error,
+            ) = _terminate_process_group_after_failure(
+                process,
+                pgid,
+                time.monotonic() + CLEANUP_GRACE_SECONDS,
+                cleanup_failures,
+            )
+            term_sent = term_sent or fallback_term_sent
+            kill_sent = kill_sent or fallback_kill_sent
+            survivors = fallback_survivors
+        elif process is not None:
             state.stop.set()
             try:
                 process.kill()
             except (ProcessLookupError, OSError):
                 pass
             _bounded_wait(process, time.monotonic() + 0.5)
+            process_group_inspection_available = False
+            process_group_inspection_error = "process group id was unavailable after Popen"
+            cleanup_failures.append({"operation": "process-group-cleanup", "error": process_group_inspection_error})
     finally:
         if process is not None:
             if process.stdout is not None:
@@ -511,6 +627,8 @@ def run_process(
         "parent_reaped": process.returncode is not None,
         "surviving_process_group_pids": survivors,
         "survivors_before_final_kill": survivors_before_final_kill,
+        "process_group_inspection_available": process_group_inspection_available,
+        "process_group_inspection_error": process_group_inspection_error,
         "stdout_bytes": stdout_bytes,
         "stdout_sha256": sha256(stdout_path),
         "stderr_bytes": stderr_bytes,
@@ -536,7 +654,7 @@ def run_process(
         state.output_overflow or cleanup_failures or primary_failure["kind"] not in {"timeout", "exit_code"}
     ):
         raise _attach_result(EvidenceFailure(primary_failure["message"]), result)
-    if cleanup_failures or survivors:
+    if cleanup_failures or survivors or not process_group_inspection_available:
         raise _attach_result(EvidenceFailure(f"{label} cleanup proof failed; see {record_path}"), result)
     if state.output_overflow:
         raise _attach_result(EvidenceFailure(primary_failure["message"] if primary_failure else f"{label} exceeded output budget"), result)
@@ -549,6 +667,7 @@ def require_ok(result: dict[str, Any]) -> None:
         or result["exit_code"] != 0
         or not result["parent_reaped"]
         or result["surviving_process_group_pids"]
+        or result.get("process_group_inspection_available") is not True
         or result.get("output_overflow")
         or result.get("capture_failure")
         or result.get("cleanup_failures")

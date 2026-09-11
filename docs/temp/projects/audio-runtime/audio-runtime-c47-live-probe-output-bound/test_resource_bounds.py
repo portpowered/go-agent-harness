@@ -65,6 +65,7 @@ def run_child(
 def assert_clean_result(result: dict[str, Any]) -> None:
     assert result["parent_reaped"], result
     assert result["surviving_process_group_pids"] == [], result
+    assert result["process_group_inspection_available"] is True, result
 
 
 def capture_controls(timeout: float) -> dict[str, Any]:
@@ -287,6 +288,35 @@ def capture_controls(timeout: float) -> dict[str, Any]:
             for item in overflow_inspection["cleanup_failures"]
         )
 
+        original_thread_start = module["threading"].Thread.start
+
+        def fail_reader_start(thread: Any, *args: Any, **kwargs: Any) -> Any:
+            if thread.name == "capture-reader-start-failure":
+                time.sleep(0.2)
+                raise RuntimeError("injected capture reader start failure")
+            return original_thread_start(thread, *args, **kwargs)
+
+        module["threading"].Thread.start = fail_reader_start
+        try:
+            post_popen_message, post_popen_failure = expect_failure(
+                lambda: run_child(
+                    module,
+                    root,
+                    "reader-start-failure",
+                    "import os, signal, time;\nr, w = os.pipe()\nif os.fork() == 0:\n os.close(r)\n signal.signal(signal.SIGTERM, signal.SIG_IGN)\n os.write(w, b'1')\n os.close(w)\n while True: time.sleep(1)\nelse:\n os.close(w)\n os.read(r, 1)\n time.sleep(30)",
+                    module["OutputBudget"](4096),
+                    timeout,
+                ),
+                "post-Popen reader start failure",
+            )
+        finally:
+            module["threading"].Thread.start = original_thread_start
+        assert "injected capture reader start failure" in post_popen_message
+        assert post_popen_failure is not None
+        assert post_popen_failure["primary_failure"]["kind"] == "runner"
+        assert post_popen_failure["term_sent"] and post_popen_failure["kill_sent"]
+        assert_clean_result(post_popen_failure)
+
         original_ps_run = verifier_globals["subprocess"].run
         try:
             for ps_output in ("", "424242 only\n"):
@@ -334,6 +364,7 @@ def capture_controls(timeout: float) -> dict[str, Any]:
             "timeout_cleanup": timeout_result,
             "injected_cleanup": cleanup_failure,
             "inspection_failure": inspection,
+            "post_popen_group_cleanup": post_popen_failure,
             "reserve_failure": reserve_result,
         }
 
@@ -380,6 +411,21 @@ def staging_controls() -> dict[str, Any]:
         assert not budget["synthetic_input"]
         assert budget["prospective_binary_copy_bytes"] == 21
         assert budget["prospective_fixture_bytes"] == len(b"audio fixture") + len(b"interrupt fixture")
+        assert budget["prospective_replay_output_bytes"] > budget["prospective_fixture_bytes"]
+        assert budget["replay_output_breakdown"]["pcm_output_bytes"] == module["PCM_OUTPUT_BYTES"]
+        assert budget["replay_output_breakdown"]["audio_wav_bytes"] == module["AUDIO_WAV_BYTES"]
+        assert budget["replay_output_breakdown"]["audio_trace_wav_bytes"] == module["AUDIO_TRACE_WAV_BYTES"]
+        assert budget["prospective_metadata_bytes"] == module["CONTROL_METADATA_RESERVE_BYTES"]
+        assert budget["prospective_report_bytes"] == module["REPORT_RESERVE_BYTES"]
+        assert budget["prospective_latest_report_bytes"] == module["LATEST_REPORT_RESERVE_BYTES"]
+        assert budget["projected_growth_bytes"] == (
+            budget["prospective_scratch_bytes"]
+            + budget["prospective_output_bytes"]
+            + budget["prospective_replay_output_bytes"]
+            + budget["prospective_metadata_bytes"]
+            + budget["prospective_report_bytes"]
+            + budget["prospective_latest_report_bytes"]
+        )
         assert budget["projected_growth_bytes"] > budget["prospective_scratch_bytes"]
 
         run_dir = root / "run"

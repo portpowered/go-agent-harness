@@ -18,4 +18,3 @@ Global Flags:
       --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)
   -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)
       --workdir string           Filesystem-tool workdir (default: the process current directory)
-

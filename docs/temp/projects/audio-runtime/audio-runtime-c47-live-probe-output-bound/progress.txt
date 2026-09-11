@@ -2,6 +2,16 @@ Work: audio-runtime-c47-live-probe-output-bound
 Project: audio-runtime
 Factory session: ~default
 
+Review rejection repair continuation
+- The concluded C47 review identified five actionable defects: post-Popen reader-start cleanup could strand descendants, reserve preflight omitted replay/metadata/report growth, live-07 provenance was not final-head or explicit about the original revisions, the two PRD-named drivers were absent, and live-04/live-07 invalid-self-play stderr artifacts ended with a blank line.
+- `verify.py` now has fail-closed post-Popen group cleanup with TERM/KILL, bounded group inspection, parent reap, survivor reporting, and a reader-start regression with a TERM-ignoring forked descendant.
+- `run_staged_probe.py` now budgets replay provider copies, PCM/WAV/trace outputs, bounded textual replay metadata, control metadata, stdout/stderr, run report and latest-report growth; reserve samples carry the full projection through active execution and cleanup. Reports record observed run/replay/control bytes and explicit original/integrated/current source and repaired-tooling provenance.
+- Added the PRD-named `run_c45_regressions.py`, `check_python_sources.py`, and `refresh_live_evidence.py` task-local utilities. The private C45 runner accepts `--original-revision` and isolates its output root.
+- `test_resource_bounds.py --group capture --child-timeout 10 --total-timeout 120`: PASS in 7.238s. `--group all --child-timeout 10 --total-timeout 120`: PASS in 7.270s; the nested shortfall control truthfully reports BLOCKED before staging.
+- `run_c45_regressions.py --original-revision 5f14c45313cfdc71e000fda209e3408fcf863faf --child-timeout 60 --total-timeout 300`: PASS. The original negative reproduction, staged success, aggregate-output, deadline, and preserved C45 regressions all completed in private C47 roots.
+- `check_python_sources.py`: PASS for both owned production-tool sources and all C47 Python drivers. Working-tree `rtk git diff --check`: PASS after normalizing the two retained stderr artifacts; their dependent hashes/byte counts and report_bytes were refreshed (`1410` bytes, SHA256 `a517d4aabd15138b5e9b332d3c392dfc7c3c99f93e626ef8e342829b46d98966`; report bytes `379243` and `379479`).
+- Next checkpoint is commit of these repairs and then the exact PRD staged-probe command on that committed head; no CI result is claimed.
+
 Admission and ancestry
 - Admission command: rtk python3 "$FACTORY_ROOT/factory/scripts/project-control.py" verify-work --type task --name audio-runtime-c47-live-probe-output-bound
 - Admission result: admitted, project audio-runtime.

@@ -51,14 +51,23 @@ PRIVATE_ROOT = PRIVATE_BASE
 
 
 def main() -> int:
-    global PRIVATE_ROOT
+    global PRIVATE_BASE, PRIVATE_ROOT
     parser = argparse.ArgumentParser()
+    parser.add_argument("--original-revision", default=ORIGINAL_REVISION)
+    parser.add_argument("--output-root", type=pathlib.Path)
     parser.add_argument("--child-timeout", type=float, default=60)
     parser.add_argument("--total-timeout", type=float, default=300)
     args = parser.parse_args()
     if args.child_timeout <= 0 or args.child_timeout > 60 or args.total_timeout <= 0 or args.total_timeout > 300:
         raise SystemExit("C47 C45-focused bounds exceeded")
 
+    original_revision = args.original_revision
+    PRIVATE_BASE = (args.output_root or HERE / "c45-regressions").resolve()
+    try:
+        PRIVATE_BASE.relative_to(HERE.resolve())
+    except ValueError as exc:
+        raise SystemExit(f"C47 private output root must remain inside {HERE}: {PRIVATE_BASE}") from exc
+    PRIVATE_BASE.mkdir(parents=True, exist_ok=True)
     PRIVATE_ROOT = PRIVATE_BASE / f"run-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.getpid()}"
     PRIVATE_ROOT.mkdir(parents=True, exist_ok=False)
     controls = real_runpy.run_path(str(C45_CONTROLS), run_name="c47_c45_controls")
@@ -74,8 +83,8 @@ def main() -> int:
         }
     )
     started = time.monotonic()
-    old_source = globals_["git_show"](ORIGINAL_REVISION)
-    reproduction = globals_["reproduce_original"](ORIGINAL_REVISION, old_source, PRIVATE_ROOT / "reproduction")
+    old_source = globals_["git_show"](original_revision)
+    reproduction = globals_["reproduce_original"](original_revision, old_source, PRIVATE_ROOT / "reproduction")
     verify_module = globals_["load_verify"](VERIFY)
     success_path = globals_["run_staged_probe_success_path"]()
     aggregate_output = globals_["run_staged_probe_aggregate_output_control"]()
@@ -95,7 +104,7 @@ def main() -> int:
     result = {
         "schema": "audio-runtime-c47-c45-focused-controls/v1",
         "decision": "ACCEPTED",
-        "original_revision": ORIGINAL_REVISION,
+        "original_revision": original_revision,
         "private_root": str(PRIVATE_ROOT),
         "reproduction": reproduction,
         "staged_probe_success_path": success_path,
