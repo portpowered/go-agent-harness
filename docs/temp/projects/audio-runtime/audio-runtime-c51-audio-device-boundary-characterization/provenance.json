@@ -91,9 +91,9 @@
   "source": {
     "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
     "branch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
-    "candidateStatusAtCapture": "M docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/provenance.json",
-    "candidateWasCleanAtCapture": false,
-    "cleanCandidateSHA": "73b72f08dafddcf3f291e576ec21482dfca6698c",
+    "candidateStatusAtCapture": "",
+    "candidateWasCleanAtCapture": true,
+    "cleanCandidateSHA": "7afa3816b68199db8f9ba50c29b90ccfe2828c8d",
     "currentMainRevision": "bb29005d0bb545db5e08ffda0205929b021d4fc1",
     "expectedBranch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
     "fetchedMain": {
@@ -126,7 +126,7 @@
     "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
   },
   "storage": {
-    "freeBytesAtGeneration": 140101853184,
+    "freeBytesAtGeneration": 140048277504,
     "requiredCompileReserveBytes": 2147483648
   },
   "task": "audio-runtime-c51-audio-device-boundary-characterization",
