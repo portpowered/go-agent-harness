@@ -2,16 +2,24 @@
   "schema_version": "c50-accumulated-regressions-v1",
   "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
   "tested_source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
-  "candidate_revision": "c0b6d77ae938e043b1a50be772de9d7afc8a560c",
-  "tested_candidate_revision": "c0b6d77ae938e043b1a50be772de9d7afc8a560c",
-  "rerun_candidate_revision": "c0b6d77ae938e043b1a50be772de9d7afc8a560c",
-  "prior_report_candidate_revision": "fa3eacc0e8d317fabff5c1feb85ad7435b2abd6c",
+  "candidate_revision": "4b5288ba923f701ad4597371356fa9a26232202c",
+  "tested_candidate_revision": "4b5288ba923f701ad4597371356fa9a26232202c",
+  "rerun_candidate_revision": "4b5288ba923f701ad4597371356fa9a26232202c",
+  "prior_report_candidate_revision": "c0b6d77ae938e043b1a50be772de9d7afc8a560c",
+  "prior_report_observed_at": "2026-09-11T10:34:09Z",
+  "prior_report_stdout_sha256": "fe03ec9ce919708c67d5cff2f9d6434a59cf8ba346623a28d82b2bc78f454548",
   "executable_inputs_unchanged_from_prior_report": true,
   "source_revision_equivalence": {
     "from": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
     "to": "2456a5d1594e73faf85e1132d6050735bc3e4710",
     "production_and_build_inputs_unchanged": true,
     "verification": "git diff --quiet acd072e991962defeae59a0ab80f58b0fe322d18 f030d8a875d3fd84c2c30082946c7ff7f5cefb23 -- agent-cli go-agent-runtime go-agent-loop go-audio go-device-gateway go-llm-gateway tests go.work go.work.sum"
+  },
+  "candidate_revision_equivalence": {
+    "from": "c0b6d77ae938e043b1a50be772de9d7afc8a560c",
+    "to": "4b5288ba923f701ad4597371356fa9a26232202c",
+    "production_and_build_inputs_unchanged": true,
+    "verification": "git diff --quiet c0b6d77ae938e043b1a50be772de9d7afc8a560c 4b5288ba923f701ad4597371356fa9a26232202c -- agent-cli go-agent-runtime go-agent-loop go-audio go-device-gateway go-llm-gateway tests go.work go.work.sum"
   },
   "command": "COUNT=3 scripts/test-session-ci-regressions.sh all",
   "exit_code": 0,
@@ -29,9 +37,9 @@
   "negative_controls": "Expected replay mismatch and later-turn PCM/transcript rejection diagnostics remained asserted; all selected tests passed.",
   "credentials": "not used",
   "ci_polling": "not performed",
-  "observed_at": "2026-09-11T10:34:09Z",
-  "stdout_bytes": 133135,
-  "stdout_sha256": "fe03ec9ce919708c67d5cff2f9d6434a59cf8ba346623a28d82b2bc78f454548",
+  "observed_at": "2026-09-11T11:08:45Z",
+  "stdout_bytes": 132963,
+  "stdout_sha256": "de1d81fcff6707663a3a07f0cc4d8e00996acd0c10686fc279bc52829c00e29b",
   "stderr_bytes": 0,
   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 }

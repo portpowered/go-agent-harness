@@ -245,21 +245,6 @@
       "workTypeName": "idea"
     },
     {
-      "chainingTraceDepth": 9,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c52-hermetic-room-liveness-characterization",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-review-4",
-      "workTypeName": "review"
-    },
-    {
       "chainingTraceDepth": 13,
       "content": [
         {
@@ -278,7 +263,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory\", \"branch\": \"codex/audio-runtime-c50-remaining-cli-service-inventory\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
-        "_rejection_feedback": "PR #442 current head is 262cdbfafa0d31df67612788096eda1bac960081 with all 9 required checks green, but review found actionable defects. Evidence remains bound to f030d8a875d3fd84c2c30082946c7ff7f5cefb23 in provenance.json, verification-summary.json, and runs/public/report.json; rebind all evidence and checksums to the actual head. Also fix verify.py:146-179: a SIGTERM-exiting parent with a SIGTERM-ignoring descendant leaves the process group alive (independent probe: timed_out=true, exit=-15, group_gone=false, survivor=true). Add bounded residual-group SIGKILL/reap handling and a deterministic ignoring-descendant negative control. Then rerun full bounded verification and accumulated regressions, commit/push, resubmit current-head CI, and request fresh review. Independent analyzer, fresh YUI replay, focused tests, and prior analyzer/fixture findings otherwise pass; do not merge this head.",
+        "_rejection_feedback": "CI checks failed for PR #442 at head 4b5288ba923f701ad4597371356fa9a26232202c: required checks failed on current head 4b5288ba923f701ad4597371356fa9a26232202c: CI (coverage)=FAILURE; checks: CI (coverage)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34590075947/job/103233095188). Return this task to the executor with the listed failures.",
         "continue_feedback": "PR #442 is pushed at 8c0fdb5e; admission, bounded verification, checksums, focused tests, and COUNT=3 regressions pass. Final evidence is bound to 0ad171de, not submitted head 8c0fdb5e. Rebind evidence to the submitted head, push the same task, then return ACCEPTED to SCRIPT CI without polling."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
@@ -299,12 +284,12 @@
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
       "state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization\", \"branch\": \"codex/audio-runtime-c52-hermetic-room-liveness-characterization\", \"baseRevision\": \"bb29005d0bb545db5e08ffda0205929b021d4fc1\", \"reused\": false}",
-        "_rejection_feedback": "CI checks failed for PR #443 at head 543fbd3a99377f8d5784fe61127b03d59786a521: required checks failed on current head 543fbd3a99377f8d5784fe61127b03d59786a521: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34584401593/job/103215150685). Return this task to the executor with the listed failures."
+        "_rejection_feedback": "PR #443 head faa4493c76a1edddea558095885542cb4c84f8d7 has all nine required checks green, and independent normal/race lifecycle tests pass. Blockers: verify.py:500-513 and 748-760 accept all 22 normal-cell records after cleanup fields are deleted; require the complete cleanup schema and safe values. verify.py:274-306 rejects an actual selected test failure, making behavioral_failures classification unreachable; retain bounded failing selections for NON_REPRODUCED/reproduction classification. storage.json:15-18 records free_space_before_cleanup_bytes as null and omits required after-cleanup and reuse identity/hash evidence, contrary implementation-handoff.md:404-407. Executor must fix these fail-closed and artifact-accounting gaps, add tamper/failure-path controls, regenerate the canonical matrix, provenance/index/storage evidence, run verify --mode all and focused tests, commit/push the same branch, and resubmit current-head script CI. Do not merge until a fresh independent review passes."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-33",
@@ -324,11 +309,12 @@
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
       "state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain\", \"branch\": \"codex/audio-runtime-c53-provider-close-terminal-drain\", \"baseRevision\": \"2456a5d1594e73faf85e1132d6050735bc3e4710\", \"reused\": false}"
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c53-provider-close-terminal-drain\", \"branch\": \"codex/audio-runtime-c53-provider-close-terminal-drain\", \"baseRevision\": \"2456a5d1594e73faf85e1132d6050735bc3e4710\", \"reused\": false}",
+        "_rejection_feedback": "CI checks failed for PR #444 at head c6b3ec3242ff4f0f0faf180a648cd3992e397f7f: required checks failed on current head c6b3ec3242ff4f0f0faf180a648cd3992e397f7f: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34590257586/job/103233678370). Return this task to the executor with the listed failures."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-60",
@@ -491,6 +477,24 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-review-35",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 9,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c52-hermetic-room-liveness-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #443 head faa4493c76a1edddea558095885542cb4c84f8d7 has all nine required checks green, and independent normal/race lifecycle tests pass. Blockers: verify.py:500-513 and 748-760 accept all 22 normal-cell records after cleanup fields are deleted; require the complete cleanup schema and safe values. verify.py:274-306 rejects an actual selected test failure, making behavioral_failures classification unreachable; retain bounded failing selections for NON_REPRODUCED/reproduction classification. storage.json:15-18 records free_space_before_cleanup_bytes as null and omits required after-cleanup and reuse identity/hash evidence, contrary implementation-handoff.md:404-407. Executor must fix these fail-closed and artifact-accounting gaps, add tamper/failure-path controls, regenerate the canonical matrix, provenance/index/storage evidence, run verify --mode all and focused tests, commit/push the same branch, and resubmit current-head script CI. Do not merge until a fresh independent review passes."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-4",
       "workTypeName": "review"
     },
     {
