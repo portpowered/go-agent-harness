@@ -33,9 +33,9 @@
     "workId": "work-task-22"
   },
   "analysisInputs": {
-    "fileCount": 1844,
+    "fileCount": 1847,
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/analysis-inputs.json",
-    "sha256": "da71abf57aab7ad70f175d7f35f75ed37e84dd9b766ce0d3da0d22b259f8d1be"
+    "sha256": "9a1e8419e9bd758062920715479b6825fd98289ac7e3e4329327b40234bdff76"
   },
   "authorityInputs": [
     {
@@ -70,7 +70,7 @@
   "boundaryMap": {
     "boundaryCount": 9,
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/boundary-map.json",
-    "sha256": "e771176cd0fa252ffed7f778c482e990ac846eb0dffbb1ec8e1258404f0b6689"
+    "sha256": "d0f687f1555d71551dff32b95aec328176f4c05098ccf224de3bfd21a9fb9450"
   },
   "contractRevision": "audio-runtime-v1",
   "project": "audio-runtime",
@@ -86,24 +86,24 @@
   "scripts": [
     {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/verify.py",
-      "sha256": "4537f5e0d788b388ce1a234bed45236edac80f6ef034f40e59a686940ae21594"
+      "sha256": "4b0afac2a8a30eaf37844c4890f00e8dfd7c6639833bd08687b1ecfb56ea6332"
     }
   ],
   "shippedBuildManifest": {
-    "inputCount": 2181,
-    "inputTreeSha256": "28c856003c288fe2db83bed651d3b4084bf1658ffe9d0ffc3f03f382e6ad3ad9",
+    "inputCount": 2184,
+    "inputTreeSha256": "2008b41710cf25bf9258471474950f7d180f74af13364a4ddba5c1ebf512a026",
     "nonGoInputCount": 329,
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/evidence/shipped-build.json",
-    "sha256": "f92ea7e0a426365d3fb86f15813f1a7ef4c45d0835bab361945153351a6b2ddb",
-    "sourceRevision": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
-    "testedRevision": "bd8cabcd6fdc8a6b6aba760ff065bb93aabe986e"
+    "sha256": "a95a67076e4ab18f300797de1ca75d634e1d5890fb76be757343dff83e0b6e4a",
+    "sourceRevision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+    "testedRevision": "f5dfc65d2ccd45fca812294b5f71fa4586165498"
   },
   "source": {
     "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
     "branch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
     "candidateStatusAtCapture": "",
     "candidateWasCleanAtCapture": true,
-    "cleanCandidateSHA": "d341d06a808c673b009622b31aae0707cac179a3",
+    "cleanCandidateSHA": "5b3cf6d7a170d738e63d84c1184f5d74b2369f2d",
     "currentMainRevision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
     "expectedBranch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
     "fetchedMain": {
@@ -114,7 +114,7 @@
     "planningMainRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
     "requiredAncestry": {
       "fetchedMain": {
-        "isAncestor": false,
+        "isAncestor": true,
         "revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3"
       },
       "planningMain": {
@@ -127,16 +127,16 @@
       }
     },
     "sourceArchive": {
-      "bytes": 141680640,
+      "bytes": 141813760,
       "command": "git archive --format=tar <sourceRevision>",
       "maxBytes": 1073741824,
-      "sha256": "731b181d1dc584c6f48abf3c250003dd54ac8f7a3ab7024838254b813228fc08"
+      "sha256": "b109887b282261ad80d52edf2ec2ab972e30d53861ea3161b95d31f53d644296"
     },
-    "sourceRevision": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
+    "sourceRevision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
     "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
   },
   "storage": {
-    "freeBytesAtGeneration": 130378010624,
+    "freeBytesAtGeneration": 130859524096,
     "requiredCompileReserveBytes": 2147483648
   },
   "task": "audio-runtime-c51-audio-device-boundary-characterization",
