@@ -12,7 +12,11 @@
       "./..."
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/consumer",
-    "durationSeconds": 0.799111,
+    "diskBytesAfter": null,
+    "diskBytesBefore": null,
+    "diskBytesDelta": null,
+    "diskLimitBytes": null,
+    "durationSeconds": 0.791161,
     "processGroupAlive": false,
     "returnCode": 1,
     "stderr": "",

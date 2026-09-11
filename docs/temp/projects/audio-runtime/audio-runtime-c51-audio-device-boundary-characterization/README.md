@@ -7,9 +7,12 @@ integration `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main, and
 baseline ancestry are recorded in `provenance.json`. No production, shared
 fixture, baseline, acceptance, or sibling-owner file is changed.
 
-`review-findings.json` records the exact canonical-board lookup. The C51 task
-has no concluded review row and no prior rejection feedback. `progress.txt`
-has no C51 entry, so no finding is invented from predecessor history.
+`review-findings.json` records the exact canonical-board lookup and the
+concluded C51 review row `work-review-27` for PR #441. Its rejection is
+actionable evidence repair, not a CI waiver: citations, provenance, shipped
+build binding, and runner cleanup must all be corrected before resubmission.
+`progress.txt` has no earlier C51 checkpoint; the board rejection is the
+authoritative prior review inbox.
 
 ## Boundary result
 
@@ -28,10 +31,12 @@ devices.Request
   -> PlaybackQueue.RenderInto
 ```
 
-`boundary-map.json` names the owner, consumers, citations, and evidence
-disposition for packet parsing, format negotiation, clocks/timing, DSP and
-resampling, bounded buffers, the core-loop boundary, device lifecycle, the
-runtime adapter, and trace/replay.
+`boundary-map.json` names the owner, consumers, exact production callers,
+timing domain, citations, evidence strength, and evidence disposition for
+packet parsing, format negotiation, clocks/timing, DSP and resampling, bounded
+buffers, the core-loop boundary, device lifecycle, the runtime adapter, and
+trace/replay. The verifier checks every citation against the pinned source
+line and rejects comments, fields, or unrelated line-range hits.
 
 The consumption labels are deliberately separate:
 
@@ -74,7 +79,8 @@ Build the shipped binary from the exact source before the process check:
 ```sh
 export C51_YUI=/tmp/audio-runtime-c51-yui-7f73c8b3
 (cd agent-cli && GOWORK=off go build -trimpath -o "$C51_YUI" ./cmd/yui)
-python3 docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/verify.py --mode shipped-regression --binary "$C51_YUI" --child-timeout 60 --total-timeout 600
+python3 docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/verify.py --mode write-build-manifest --binary "$C51_YUI"
+python3 docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/verify.py --mode shipped-regression --binary "$C51_YUI" --build-manifest docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/evidence/shipped-build.json --child-timeout 60 --total-timeout 600
 ```
 
 The shipped regression runs the committed healthy session replay through the
@@ -89,8 +95,14 @@ control and requires the exact `call_weather_001` lifecycle error. Every child
 is bounded, and the report records return code, output limits, and process-group
 reap status.
 
-`provenance.json` is the final clean-tree gate: it checks branch/PRD identity,
-origin/main pin and required ancestry, source/archive and authority hashes,
-all import-analysis input hashes, the script hash, owned-path-only changes, and
-the 2 GiB compile reserve. Native Windows endpoints and physical/acoustic proof
-remain `OUT_OF_SCOPE`; no project-wide acceptance or CI result is claimed here.
+`provenance.json` is the final clean-tree gate: it records and rechecks the
+project-control admission result, Go toolchain/GOOS/GOARCH, clean candidate
+SHA, fetched `origin/main`, required startup/planning ancestry, source/archive
+and authority hashes, all import-analysis input hashes, the verifier hash,
+and the exact shipped build-input manifest. The shipped regression is
+classified exactly `SOFTWARE_REPLAY_PROCESS_ONLY`; its binary is accepted only
+when the manifest proves its hash, Go inputs, toolchain, fixtures, and clean
+tested revision. Child output, WAV output, temporary owned disk growth,
+aggregate deadlines, and descendant process cleanup are bounded and recorded.
+Native Windows endpoints and physical/acoustic proof remain `OUT_OF_SCOPE`; no
+project-wide acceptance or CI result is claimed here.

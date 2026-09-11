@@ -35,6 +35,17 @@ BASELINE_REVISION = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 EXPECTED_BRANCH = "codex/audio-runtime-c51-audio-device-boundary-characterization"
 MAX_OUTPUT = 64 * 1024
 REQUIRED_RESERVE_BYTES = 2 * 1024 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024
+MAX_WAV_BYTES = 8 * 1024 * 1024
+MAX_RUN_DISK_BYTES = 32 * 1024 * 1024
+BUILD_INPUT_ROOTS = (
+    "agent-cli",
+    "go-agent-loop",
+    "go-agent-runtime",
+    "go-audio",
+    "go-device-gateway",
+    "go-llm-gateway",
+)
 
 MODULES = {
     "go-agent-loop": {
@@ -111,12 +122,79 @@ def _drain(stream, sink: list[bytes], limit: int, overflow: list[bool]) -> None:
         chunk = stream.read(8192)
         if not chunk:
             return
+        if len(chunk) > max(0, limit - retained):
+            overflow[0] = True
         if retained < limit:
             keep = chunk[: limit - retained]
             sink.append(keep)
             retained += len(keep)
-        if retained < len(b"".join(sink)) or len(chunk) > max(0, limit - retained):
-            overflow[0] = True
+
+
+def terminate_process_group(process: subprocess.Popen, *, term_timeout: float = 1.0, kill_timeout: float = 2.0) -> None:
+    """Terminate the complete process group, including descendants."""
+
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=term_timeout)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=kill_timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"process group survived TERM/KILL: {process.args}") from exc
+
+
+def directory_size(root: Path) -> int:
+    total = 0
+    if not root.exists():
+        return 0
+    for directory, _, names in os.walk(root):
+        for name in names:
+            path = Path(directory) / name
+            try:
+                stat = path.lstat()
+            except FileNotFoundError:
+                continue
+            if not path.is_symlink():
+                total += stat.st_size
+    return total
+
+
+def assert_disk_budget(root: Path, before: int, limit: int, label: str) -> tuple[int, int]:
+    after = directory_size(root)
+    delta = max(0, after - before)
+    if delta > limit:
+        die(f"{label} grew by {delta} bytes, exceeding owned limit {limit}")
+    return after, delta
+
+
+def pid_is_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def wait_for_pid_exit(pid: int, timeout: float = 2.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not pid_is_alive(pid):
+            return True
+        time.sleep(0.01)
+    return not pid_is_alive(pid)
 
 
 def run_bounded(
@@ -126,12 +204,21 @@ def run_bounded(
     timeout: float = 60.0,
     output_limit: int = MAX_OUTPUT,
     env: dict[str, str] | None = None,
+    deadline: float | None = None,
+    disk_root: Path | None = None,
+    disk_limit: int | None = None,
+    inject_reader_start_failure: bool = False,
 ) -> dict:
-    """Run a process group with bounded output and TERM/KILL cleanup."""
+    """Run a process group with bounded output, time, disk, and group cleanup."""
 
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
+    if deadline is not None:
+        timeout = min(timeout, deadline - time.monotonic())
+    if timeout <= 0:
+        die(f"aggregate deadline exhausted before starting {' '.join(argv)}")
+    disk_before = directory_size(disk_root) if disk_root is not None else None
     started = time.monotonic()
     try:
         process = subprocess.Popen(
@@ -150,35 +237,54 @@ def run_bounded(
     stderr_parts: list[bytes] = []
     stdout_overflow = [False]
     stderr_overflow = [False]
-    stdout_thread = threading.Thread(target=_drain, args=(process.stdout, stdout_parts, output_limit, stdout_overflow), daemon=True)
-    stderr_thread = threading.Thread(target=_drain, args=(process.stderr, stderr_parts, output_limit, stderr_overflow), daemon=True)
-    stdout_thread.start()
-    stderr_thread.start()
+    stdout_thread: threading.Thread | None = None
+    stderr_thread: threading.Thread | None = None
     timed_out = False
     try:
+        if inject_reader_start_failure:
+            time.sleep(0.1)
+            raise RuntimeError("injected output-reader start failure")
+        stdout_thread = threading.Thread(target=_drain, args=(process.stdout, stdout_parts, output_limit, stdout_overflow), daemon=True)
+        stderr_thread = threading.Thread(target=_drain, args=(process.stderr, stderr_parts, output_limit, stderr_overflow), daemon=True)
+        stdout_thread.start()
+        stderr_thread.start()
         return_code = process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         timed_out = True
         try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
-            process.wait(timeout=1.0)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            try:
-                process.wait(timeout=2.0)
-            except subprocess.TimeoutExpired:
-                die(f"process group survived TERM/KILL: {' '.join(argv)}")
+            terminate_process_group(process)
+        except RuntimeError as exc:
+            die(str(exc))
         return_code = process.returncode
-    stdout_thread.join(timeout=2.0)
-    stderr_thread.join(timeout=2.0)
-    if stdout_thread.is_alive() or stderr_thread.is_alive():
-        die(f"output reader survived process cleanup: {' '.join(argv)}")
+    except BaseException:
+        # This cleanup runs before any reader-survival error is reported. A
+        # reader-start failure must not leave a forked descendant behind.
+        try:
+            terminate_process_group(process)
+        except RuntimeError as exc:
+            die(str(exc))
+        raise
+    finally:
+        if process.poll() is None:
+            try:
+                terminate_process_group(process)
+            except RuntimeError as exc:
+                die(str(exc))
+        if stdout_thread is not None:
+            stdout_thread.join(timeout=2.0)
+        if stderr_thread is not None:
+            stderr_thread.join(timeout=2.0)
+        if (stdout_thread is not None and stdout_thread.is_alive()) or (stderr_thread is not None and stderr_thread.is_alive()):
+            # Re-assert group cleanup before surfacing a reader failure.
+            try:
+                terminate_process_group(process)
+            except RuntimeError as exc:
+                die(str(exc))
+            die(f"output reader survived process cleanup: {' '.join(argv)}")
+    if disk_root is not None and disk_limit is not None:
+        disk_after, disk_delta = assert_disk_budget(disk_root, disk_before or 0, disk_limit, "bounded child output")
+    else:
+        disk_after, disk_delta = None, None
     try:
         os.killpg(process.pid, 0)
         group_alive = True
@@ -200,6 +306,10 @@ def run_bounded(
         "stdoutTruncated": stdout_overflow[0] or stdout_truncated,
         "stderrTruncated": stderr_overflow[0] or stderr_truncated,
         "processGroupAlive": group_alive,
+        "diskBytesBefore": disk_before,
+        "diskBytesAfter": disk_after,
+        "diskBytesDelta": disk_delta,
+        "diskLimitBytes": disk_limit,
     }
 
 
@@ -229,21 +339,19 @@ def git_archive_hash(revision: str) -> tuple[str, int]:
         )
     except OSError as exc:
         die(f"start git archive: {exc}")
-    digest = hashlib.sha256()
-    size = 0
-    while True:
-        chunk = process.stdout.read(1024 * 1024)
-        if not chunk:
-            break
-        digest.update(chunk)
-        size += len(chunk)
-        if size > 1024 * 1024 * 1024:
-            process.kill()
-            die("source archive exceeded 1 GiB bound")
-    stderr = process.stderr.read().decode("utf-8", errors="replace")
-    if process.wait() != 0:
-        die(f"git archive failed: {stderr[-2000:]}")
-    return digest.hexdigest(), size
+    try:
+        archive, stderr = process.communicate(timeout=120.0)
+    except subprocess.TimeoutExpired:
+        try:
+            terminate_process_group(process)
+        except RuntimeError as exc:
+            die(str(exc))
+        die(f"git archive timed out for {revision}")
+    if process.returncode != 0:
+        die(f"git archive failed: {stderr.decode('utf-8', errors='replace')[-2000:]}")
+    if len(archive) > MAX_ARCHIVE_BYTES:
+        die(f"source archive exceeded {MAX_ARCHIVE_BYTES}-byte bound")
+    return sha256_bytes(archive), len(archive)
 
 
 def source_files() -> list[tuple[str, str, Path]]:
@@ -284,6 +392,172 @@ def build_analysis_inputs() -> dict:
         "sourceRevision": SOURCE_REVISION,
         "files": sorted(files, key=lambda item: item["path"]),
     }
+
+
+def command_record(argv: list[str], *, cwd: Path = REPO_ROOT, timeout: float = 60.0, output_limit: int = MAX_OUTPUT, env: dict[str, str] | None = None) -> dict:
+    result = run_bounded(argv, cwd=cwd, timeout=timeout, output_limit=output_limit, env=env)
+    record = {
+        "argv": argv,
+        "cwd": str(cwd),
+        "returnCode": result["returnCode"],
+        "timedOut": result["timedOut"],
+        "processGroupAlive": result["processGroupAlive"],
+        "stdout": result["stdout"],
+        "stderr": result["stderr"],
+        "stdoutTruncated": result["stdoutTruncated"],
+        "stderrTruncated": result["stderrTruncated"],
+    }
+    if result["returnCode"] == 0 and not result["timedOut"]:
+        try:
+            record["json"] = json.loads(result["stdout"])
+        except json.JSONDecodeError:
+            pass
+    return record
+
+
+def project_control_record() -> dict:
+    argv = [
+        "python3",
+        "factory/scripts/project-control.py",
+        "verify-work",
+        "--type",
+        "task",
+        "--name",
+        TASK,
+        "--root",
+        str(FACTORY_ROOT),
+    ]
+    result = command_record(argv, cwd=FACTORY_ROOT, timeout=30.0)
+    if result["returnCode"] != 0 or result.get("json", {}).get("status") != "admitted":
+        die(f"project admission verification failed: {result}")
+    return result
+
+
+def go_toolchain_record() -> dict:
+    version = command_record(["go", "version"], timeout=30.0)
+    env_result = run_bounded(
+        ["go", "env", "GOOS", "GOARCH", "GOVERSION", "GOTOOLCHAIN"],
+        timeout=30.0,
+        output_limit=4096,
+        env={"GOWORK": "off"},
+    )
+    if version["returnCode"] != 0 or env_result["returnCode"] != 0:
+        die(f"Go toolchain identification failed: version={version} env={env_result}")
+    names = ["GOOS", "GOARCH", "GOVERSION", "GOTOOLCHAIN"]
+    values = env_result["stdout"].splitlines()
+    if len(values) != len(names):
+        die(f"unexpected go env identity output: {env_result['stdout']!r}")
+    return {
+        "version": version["stdout"].strip(),
+        "env": dict(zip(names, values)),
+        "environment": {"GOWORK": "off"},
+    }
+
+
+def is_ancestor(ancestor: str, descendant: str) -> bool:
+    return run_bounded(["git", "merge-base", "--is-ancestor", ancestor, descendant], timeout=30.0)["returnCode"] == 0
+
+
+def build_input_manifest(revision: str) -> dict:
+    pathspecs = ["go.work", "go.work.sum", *BUILD_INPUT_ROOTS]
+    listing = run_bounded(
+        ["git", "ls-tree", "-r", "--name-only", revision, *pathspecs],
+        timeout=60.0,
+        output_limit=8 * 1024 * 1024,
+    )
+    if listing["returnCode"] != 0:
+        die(f"cannot enumerate Go build inputs at {revision}: {listing}")
+    paths = []
+    for path in listing["stdout"].splitlines():
+        if path == "go.work" or path == "go.work.sum" or path.endswith(".go") or path.endswith("/go.mod") or path.endswith("/go.sum"):
+            paths.append(path)
+    if not paths:
+        die(f"empty Go build input manifest at {revision}")
+    files = [{"path": path, "sha256": sha256_bytes(git_bytes_at(revision, path))} for path in sorted(set(paths))]
+    canonical = "".join(f"{item['path']}\t{item['sha256']}\n" for item in files).encode("utf-8")
+    return {
+        "sourceRevision": revision,
+        "files": files,
+        "inputTreeSha256": sha256_bytes(canonical),
+    }
+
+
+def replay_fixture_inputs() -> list[dict]:
+    relatives = [
+        "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
+        "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
+    ]
+    result = []
+    for relative in relatives:
+        path = REPO_ROOT / relative
+        if not path.is_file():
+            die(f"missing shipped replay fixture: {path}")
+        result.append({"path": relative, "sha256": sha256_file(path), "bytes": path.stat().st_size})
+    return result
+
+
+def write_build_manifest(binary: str) -> None:
+    path = Path(binary).resolve()
+    if not path.is_file() or not os.access(path, os.X_OK):
+        die(f"cannot write build manifest for non-executable binary: {path}")
+    status = git("status", "--short")
+    if status:
+        die(f"build manifest must be captured from a clean candidate:\n{status}")
+    revision = git("rev-parse", "HEAD")
+    if not is_ancestor(SOURCE_REVISION, revision):
+        die("build candidate is not descended from the characterized source revision")
+    inputs = build_input_manifest(revision)
+    manifest = {
+        "schema": "audio-runtime-c51.shipped-build.v1",
+        "testedRevision": revision,
+        "branch": git("branch", "--show-current"),
+        "workingTreeStatusAtCapture": status,
+        "sourceRevision": SOURCE_REVISION,
+        "inputTreeSha256": inputs["inputTreeSha256"],
+        "inputs": inputs["files"],
+        "toolchain": go_toolchain_record(),
+        "build": {
+            "command": ["go", "build", "-trimpath", "-o", "<C51_YUI>", "./cmd/yui"],
+            "cwd": "agent-cli",
+            "environment": {"GOWORK": "off"},
+        },
+        "binary": {"path": str(path), "sha256": sha256_file(path), "bytes": path.stat().st_size},
+        "replayFixtures": replay_fixture_inputs(),
+        "retention": "External exact-head executable retained at the recorded path; evidence-only descendants must prove identical Go build inputs.",
+    }
+    write_json(EVIDENCE_ROOT / "evidence/shipped-build.json", manifest)
+    print(json.dumps({"status": "written", "testedRevision": revision, "binarySHA256": manifest["binary"]["sha256"], "inputTreeSha256": manifest["inputTreeSha256"]}, sort_keys=True))
+
+
+def verify_build_manifest(binary: Path, manifest_path: Path) -> dict:
+    manifest = read_json(manifest_path)
+    if manifest.get("schema") != "audio-runtime-c51.shipped-build.v1":
+        die("shipped build manifest schema mismatch")
+    if manifest.get("workingTreeStatusAtCapture") != "":
+        die("shipped build manifest was not captured from a clean candidate")
+    tested_revision = manifest.get("testedRevision")
+    head = git("rev-parse", "HEAD")
+    if not isinstance(tested_revision, str) or not is_ancestor(tested_revision, head):
+        die("shipped build tested revision is not an ancestor of the candidate head")
+    if not is_ancestor(SOURCE_REVISION, tested_revision):
+        die("shipped build tested revision does not contain the characterized source")
+    if manifest.get("sourceRevision") != SOURCE_REVISION:
+        die("shipped build source revision mismatch")
+    expected_inputs = build_input_manifest(head)
+    if expected_inputs["inputTreeSha256"] != manifest.get("inputTreeSha256") or expected_inputs["files"] != manifest.get("inputs"):
+        die("candidate Go build inputs differ from the pinned shipped-build manifest")
+    recorded_binary = manifest.get("binary", {})
+    if Path(recorded_binary.get("path", "")).resolve() != binary:
+        die("supplied shipped binary does not match the pinned build manifest path")
+    if not binary.is_file() or sha256_file(binary) != recorded_binary.get("sha256") or binary.stat().st_size != recorded_binary.get("bytes"):
+        die("supplied shipped binary does not match the pinned build manifest hash/size")
+    toolchain = go_toolchain_record()
+    if toolchain != manifest.get("toolchain"):
+        die("current Go toolchain identity differs from the pinned shipped-build manifest")
+    current_fixtures = replay_fixture_inputs()
+    if current_fixtures != manifest.get("replayFixtures"):
+        die("replay fixture inputs differ from the pinned shipped-build manifest")
+    return manifest
 
 
 def parse_imports(path: Path) -> list[dict]:
@@ -421,12 +695,17 @@ def authority_hashes() -> list[dict]:
 def write_provenance(analysis_inputs: dict) -> dict:
     current_main = git("rev-parse", "origin/main")
     branch = git("branch", "--show-current")
+    candidate = git("rev-parse", "HEAD")
+    candidate_status = git("status", "--short")
     archive_hash, archive_bytes = git_archive_hash(SOURCE_REVISION)
     manifest = read_json(FACTORY_ROOT / "factory/projects/audio-runtime/manifest.json")
     authority = authority_hashes()
     analysis_path = EVIDENCE_ROOT / "analysis-inputs.json"
+    control = project_control_record()
+    toolchain = go_toolchain_record()
+    build_manifest_path = EVIDENCE_ROOT / "evidence/shipped-build.json"
     return {
-        "schema": "audio-runtime-c51.provenance.v1",
+        "schema": "audio-runtime-c51.provenance.v2",
         "project": "audio-runtime",
         "contractRevision": manifest.get("contractRevision"),
         "task": TASK,
@@ -436,7 +715,9 @@ def write_provenance(analysis_inputs: dict) -> dict:
             "project": "audio-runtime",
             "name": TASK,
             "workId": "work-task-22",
+            "projectControl": control,
         },
+        "toolchain": toolchain,
         "source": {
             "branch": branch,
             "expectedBranch": EXPECTED_BRANCH,
@@ -445,10 +726,20 @@ def write_provenance(analysis_inputs: dict) -> dict:
             "currentMainRevision": current_main,
             "startupIntegrationRevision": STARTUP_INTEGRATION_REVISION,
             "baselineRevision": BASELINE_REVISION,
+            "cleanCandidateSHA": candidate,
+            "candidateStatusAtCapture": candidate_status,
+            "candidateWasCleanAtCapture": candidate_status == "",
+            "fetchedMain": {"ref": "origin/main", "revision": current_main, "identityVerified": True},
+            "requiredAncestry": {
+                "startupIntegration": {"revision": STARTUP_INTEGRATION_REVISION, "isAncestor": is_ancestor(STARTUP_INTEGRATION_REVISION, candidate)},
+                "planningMain": {"revision": PLANNING_MAIN_REVISION, "isAncestor": is_ancestor(PLANNING_MAIN_REVISION, candidate)},
+                "fetchedMain": {"revision": current_main, "isAncestor": is_ancestor(current_main, candidate)},
+            },
             "sourceArchive": {
                 "command": "git archive --format=tar <sourceRevision>",
                 "sha256": archive_hash,
                 "bytes": archive_bytes,
+                "maxBytes": MAX_ARCHIVE_BYTES,
             },
         },
         "authorityInputs": authority,
@@ -458,6 +749,10 @@ def write_provenance(analysis_inputs: dict) -> dict:
             "fileCount": len(analysis_inputs["files"]),
         },
         "scripts": [{"path": __file__.replace(str(REPO_ROOT) + "/", ""), "sha256": sha256_file(Path(__file__))}],
+        "shippedBuildManifest": {
+            "path": build_manifest_path.relative_to(REPO_ROOT).as_posix(),
+            "sha256": sha256_file(build_manifest_path),
+        } if build_manifest_path.is_file() else None,
         "scope": {
             "ownedPath": OWNED_REL.as_posix(),
             "productionEdits": "none",
@@ -486,7 +781,7 @@ def mode_generate() -> None:
 def verify_provenance() -> None:
     path = EVIDENCE_ROOT / "provenance.json"
     provenance = read_json(path)
-    if provenance.get("schema") != "audio-runtime-c51.provenance.v1":
+    if provenance.get("schema") != "audio-runtime-c51.provenance.v2":
         die("provenance schema mismatch")
     if git("branch", "--show-current") != EXPECTED_BRANCH:
         die("branch does not match the admitted PRD branch")
@@ -496,7 +791,7 @@ def verify_provenance() -> None:
     if status:
         die(f"worktree is not clean:\n{status}")
     head = git("rev-parse", "HEAD")
-    if run_bounded(["git", "merge-base", "--is-ancestor", SOURCE_REVISION, head])["returnCode"] != 0:
+    if not is_ancestor(SOURCE_REVISION, head):
         die("candidate head is not descended from the characterized source revision")
     changed = git("diff", "--name-only", f"{SOURCE_REVISION}..{head}")
     changed_paths = [Path(line) for line in changed.splitlines() if line]
@@ -505,9 +800,32 @@ def verify_provenance() -> None:
     prd = read_json(REPO_ROOT / "prd.json")
     if prd.get("branchName") != EXPECTED_BRANCH:
         die("prd.json.branchName does not match the isolated branch")
+    admission = provenance.get("admission", {})
+    control = admission.get("projectControl", {})
+    if admission.get("status") != "admitted" or admission.get("project") != "audio-runtime" or admission.get("name") != TASK:
+        die("provenance admission identity is incomplete")
+    if control.get("returnCode") != 0 or control.get("timedOut") or control.get("processGroupAlive") or control.get("json", {}).get("status") != "admitted":
+        die("provenance lacks a successful project-control admission result")
+    current_control = project_control_record()
+    if current_control.get("json") != control.get("json"):
+        die("project-control admission output changed since provenance capture")
     recorded = provenance["source"]
-    if recorded["sourceRevision"] != SOURCE_REVISION or recorded["currentMainRevision"] != PLANNING_MAIN_REVISION:
+    if recorded["sourceRevision"] != SOURCE_REVISION or recorded["planningMainRevision"] != PLANNING_MAIN_REVISION or recorded["currentMainRevision"] != PLANNING_MAIN_REVISION:
         die("provenance revision pins do not match the admitted integration checkpoint")
+    if recorded.get("fetchedMain", {}).get("revision") != git("rev-parse", "origin/main"):
+        die("provenance fetched-main identity does not match origin/main")
+    candidate = recorded.get("cleanCandidateSHA")
+    if not candidate or not recorded.get("candidateWasCleanAtCapture") or recorded.get("candidateStatusAtCapture") != "":
+        die("provenance does not record a clean candidate SHA")
+    if not is_ancestor(candidate, head):
+        die("clean candidate SHA is not an ancestor of the submitted head")
+    required_ancestry = recorded.get("requiredAncestry", {})
+    for key, revision in (("startupIntegration", STARTUP_INTEGRATION_REVISION), ("planningMain", PLANNING_MAIN_REVISION), ("fetchedMain", PLANNING_MAIN_REVISION)):
+        entry = required_ancestry.get(key, {})
+        if entry.get("revision") != revision or entry.get("isAncestor") is not True or not is_ancestor(revision, head):
+            die(f"required ancestry is not pinned and verified for {key}")
+    if provenance.get("toolchain") != go_toolchain_record():
+        die("toolchain/GOOS/GOARCH identity changed since provenance capture")
     archive_hash, archive_bytes = git_archive_hash(SOURCE_REVISION)
     if archive_hash != recorded["sourceArchive"]["sha256"] or archive_bytes != recorded["sourceArchive"]["bytes"]:
         die("source archive hash changed for the pinned revision")
@@ -527,6 +845,12 @@ def verify_provenance() -> None:
         actual = sha256_file(REPO_ROOT / item["path"])
         if actual != item["sha256"]:
             die(f"analysis script changed at {item['path']}")
+    build_manifest = provenance.get("shippedBuildManifest")
+    if not build_manifest:
+        die("provenance does not pin the shipped build-input manifest")
+    build_manifest_path = REPO_ROOT / build_manifest["path"]
+    if not build_manifest_path.is_file() or sha256_file(build_manifest_path) != build_manifest["sha256"]:
+        die("shipped build-input manifest is missing or changed")
     free = shutil.disk_usage(REPO_ROOT).free
     if free < REQUIRED_RESERVE_BYTES:
         die(f"free storage {free} is below the required 2 GiB compile reserve")
@@ -547,7 +871,30 @@ def verify_imports() -> None:
 
 
 def citation_text(citation: dict) -> str:
-    return f"{citation.get('path')}:{citation.get('line')}"
+    return f"{citation.get('path')}:{citation.get('line')} ({citation.get('symbol')})"
+
+
+def verify_source_citation(citation: dict, *, boundary_id: str) -> None:
+    required = {"path", "line", "symbol", "kind", "needle"}
+    if not required.issubset(citation):
+        die(f"boundary {boundary_id} citation lacks schema fields: {citation}")
+    if citation["kind"] not in {"owner_api", "production_caller", "downstream_consumer", "timing_source", "trace_observation"}:
+        die(f"boundary {boundary_id} citation has unknown kind: {citation}")
+    relative = citation["path"]
+    source_paths = {item[2].relative_to(REPO_ROOT).as_posix() for item in source_files()}
+    if not isinstance(relative, str) or relative.startswith("/") or relative not in source_paths:
+        die(f"boundary {boundary_id} citation is not a pinned production-source path: {citation_text(citation)}")
+    source = git_bytes_at(SOURCE_REVISION, relative).decode("utf-8", errors="replace").splitlines()
+    try:
+        line_number = int(citation["line"])
+    except (TypeError, ValueError):
+        die(f"boundary {boundary_id} citation line is not an integer: {citation_text(citation)}")
+    if line_number < 1 or line_number > len(source):
+        die(f"boundary citation line is out of range: {citation_text(citation)}")
+    line = source[line_number - 1]
+    needle = str(citation["needle"])
+    if needle not in line or str(citation["symbol"]) not in line or line.lstrip().startswith("//"):
+        die(f"boundary citation does not identify the claimed source symbol: {citation_text(citation)} line={line!r}")
 
 
 def verify_boundaries() -> None:
@@ -561,16 +908,16 @@ def verify_boundaries() -> None:
     for item in boundary["boundaries"]:
         if not item.get("owner") or not item.get("consumers"):
             die(f"boundary {item.get('id')} lacks owner/consumer labels")
+        if not item.get("productionCallers"):
+            die(f"boundary {item.get('id')} lacks explicit production callers")
+        if not item.get("timingDomain") or not item.get("evidenceStrength"):
+            die(f"boundary {item.get('id')} lacks timing domain/evidence strength")
         for citation in item.get("citations", []):
-            if citation.get("external"):
-                continue
-            path = REPO_ROOT / citation["path"]
-            if not path.is_file():
-                die(f"missing boundary citation {citation_text(citation)}")
-            lines = path.read_text(encoding="utf-8").splitlines()
-            line = int(citation["line"])
-            if line < 1 or line > len(lines):
-                die(f"boundary citation line is out of range: {citation_text(citation)}")
+            verify_source_citation(citation, boundary_id=item["id"])
+        for citation in item["productionCallers"]:
+            if citation.get("kind") != "production_caller":
+                die(f"boundary {item['id']} production caller has wrong citation kind")
+            verify_source_citation(citation, boundary_id=item["id"])
         if not item.get("evidence"):
             die(f"boundary {item.get('id')} has no evidence disposition")
     print(json.dumps({"status": "verified", "boundaries": len(boundary["boundaries"]), "citations": sum(len(i["citations"]) for i in boundary["boundaries"])}, sort_keys=True))
@@ -652,21 +999,39 @@ def wav_summary(path: Path) -> dict:
         }
 
 
-def verify_shipped_regression(yui: str, child_timeout: float = 60.0, total_timeout: float = 600.0) -> None:
+def remaining_budget(deadline: float, label: str) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        die(f"aggregate {label} deadline exhausted")
+    return remaining
+
+
+def verify_shipped_regression(yui: str, build_manifest: str, child_timeout: float = 60.0, total_timeout: float = 600.0) -> None:
     binary = Path(yui).resolve()
     if not binary.is_file():
         die(f"shipped yui binary is missing: {binary}")
+    pinned_build = verify_build_manifest(binary, Path(build_manifest).resolve())
     fixture = REPO_ROOT / "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
     tool_fixture = REPO_ROOT / "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json"
     with tempfile.TemporaryDirectory(prefix="audio-runtime-c51-") as temporary:
         temp = Path(temporary)
+        disk_before = directory_size(temp)
+        deadline = time.monotonic() + total_timeout
         output = temp / "healthy.wav"
-        started = time.monotonic()
-        healthy = run_bounded([str(binary), "--config-dir", str(temp / "config"), "session", "--replay", str(fixture), "--audio-out", str(output)], timeout=min(child_timeout, 60.0, total_timeout), output_limit=MAX_OUTPUT)
+        healthy = run_bounded(
+            [str(binary), "--config-dir", str(temp / "config"), "session", "--replay", str(fixture), "--audio-out", str(output)],
+            timeout=min(child_timeout, 60.0),
+            deadline=deadline,
+            output_limit=MAX_OUTPUT,
+            disk_root=temp,
+            disk_limit=MAX_RUN_DISK_BYTES,
+        )
         if healthy["returnCode"] != 0 or healthy["timedOut"] or healthy["processGroupAlive"]:
             die(f"shipped healthy audio replay failed: {healthy}")
         if not output.is_file():
             die("shipped healthy audio replay did not write WAV output")
+        if output.stat().st_size > MAX_WAV_BYTES:
+            die(f"healthy replay WAV exceeded {MAX_WAV_BYTES}-byte bound")
         healthy_wav = wav_summary(output)
         expected_wav = {
             "pcmSHA256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
@@ -689,16 +1054,42 @@ def verify_shipped_regression(yui: str, child_timeout: float = 60.0, total_timeo
                 die(f"shipped replay missing lifecycle marker {marker!r}: {healthy['stdout']}")
 
         tool_output = temp / "tool.wav"
-        remaining = max(0.1, total_timeout - (time.monotonic() - started))
-        tool = run_bounded([str(binary), "--config-dir", str(temp / "tool-config"), "session", "--replay", str(tool_fixture), "--audio-out", str(tool_output)], timeout=min(child_timeout, 60.0, remaining), output_limit=MAX_OUTPUT)
+        tool = run_bounded(
+            [str(binary), "--config-dir", str(temp / "tool-config"), "session", "--replay", str(tool_fixture), "--audio-out", str(tool_output)],
+            timeout=min(child_timeout, 60.0, remaining_budget(deadline, "shipped replay")),
+            deadline=deadline,
+            output_limit=MAX_OUTPUT,
+            disk_root=temp,
+            disk_limit=MAX_RUN_DISK_BYTES,
+        )
         tool_combined = tool["stdout"] + tool["stderr"]
         tool_marker = "tool results were not delivered for 1 unresolved call(s): call_weather_001"
         if tool["returnCode"] == 0 or tool["timedOut"] or tool["processGroupAlive"] or tool_marker not in tool_combined:
             die(f"shipped tool lifecycle negative control changed: {tool}")
+        if tool_output.is_file() and tool_output.stat().st_size > MAX_WAV_BYTES:
+            die(f"tool negative-control WAV exceeded {MAX_WAV_BYTES}-byte bound")
+        disk_after, disk_delta = assert_disk_budget(temp, disk_before, MAX_RUN_DISK_BYTES, "shipped replay temporary outputs")
         report = {
             "status": "verified",
+            "classification": "SOFTWARE_REPLAY_PROCESS_ONLY",
             "sourceRevision": SOURCE_REVISION,
-            "binary": {"path": str(binary), "sha256": sha256_file(binary)},
+            "testedSourceRevision": pinned_build["testedRevision"],
+            "candidateHeadAtVerification": git("rev-parse", "HEAD"),
+            "buildManifest": {
+                "path": str(Path(build_manifest).resolve()),
+                "sha256": sha256_file(Path(build_manifest).resolve()),
+                "inputTreeSha256": pinned_build["inputTreeSha256"],
+            },
+            "binary": {"path": str(binary), "sha256": sha256_file(binary), "bytes": binary.stat().st_size},
+            "limits": {
+                "childTimeoutSeconds": child_timeout,
+                "aggregateTimeoutSeconds": total_timeout,
+                "outputBytesPerStream": MAX_OUTPUT,
+                "wavBytes": MAX_WAV_BYTES,
+                "ownedTemporaryGrowthBytes": MAX_RUN_DISK_BYTES,
+                "aggregateDeadlineEnforced": True,
+            },
+            "temporaryOutput": {"bytesBefore": disk_before, "bytesAfter": disk_after, "bytesDelta": disk_delta},
             "healthyReplay": {"fixture": str(fixture.relative_to(REPO_ROOT)), "result": healthy, "wav": healthy_wav, "expectedWav": expected_wav, "markers": lifecycle_markers},
             "toolLifecycleNegativeControl": {"fixture": str(tool_fixture.relative_to(REPO_ROOT)), "result": tool, "expectedMarker": tool_marker, "audioOutputWritten": tool_output.is_file()},
         }
@@ -707,17 +1098,70 @@ def verify_shipped_regression(yui: str, child_timeout: float = 60.0, total_timeo
 
 
 def verify_runner_negative_controls(child_timeout: float = 60.0, total_timeout: float = 600.0) -> None:
-    started = time.monotonic()
-    timeout_control = run_bounded([sys.executable, "-c", "import time; print('C51_TIMEOUT_CONTROL', flush=True); time.sleep(5)"], timeout=min(0.25, child_timeout, total_timeout), output_limit=1024)
-    if not timeout_control["timedOut"] or timeout_control["processGroupAlive"] or "C51_TIMEOUT_CONTROL" not in timeout_control["stdout"]:
-        die(f"bounded timeout/reap control failed: {timeout_control}")
-    remaining = max(0.1, total_timeout - (time.monotonic() - started))
-    overflow_control = run_bounded([sys.executable, "-c", "import sys; sys.stdout.write('x' * 10000)"], timeout=min(5.0, child_timeout, remaining), output_limit=1024)
-    if overflow_control["returnCode"] != 0 or not overflow_control["stdoutTruncated"] or overflow_control["processGroupAlive"]:
-        die(f"bounded output control failed: {overflow_control}")
-    report = {"status": "verified", "timeoutAndReap": timeout_control, "outputBound": overflow_control}
+    deadline = time.monotonic() + total_timeout
+    with tempfile.TemporaryDirectory(prefix="audio-runtime-c51-runner-") as temporary:
+        temp = Path(temporary)
+        disk_before = directory_size(temp)
+        timeout_control = run_bounded(
+            [sys.executable, "-c", "import time; print('C51_TIMEOUT_CONTROL', flush=True); time.sleep(5)"],
+            timeout=min(0.25, child_timeout),
+            deadline=deadline,
+            output_limit=1024,
+            disk_root=temp,
+            disk_limit=MAX_RUN_DISK_BYTES,
+        )
+        if not timeout_control["timedOut"] or timeout_control["processGroupAlive"] or "C51_TIMEOUT_CONTROL" not in timeout_control["stdout"]:
+            die(f"bounded timeout/reap control failed: {timeout_control}")
+        overflow_control = run_bounded(
+            [sys.executable, "-c", "import sys; sys.stdout.write('x' * 10000)"],
+            timeout=min(5.0, child_timeout, remaining_budget(deadline, "runner controls")),
+            deadline=deadline,
+            output_limit=1024,
+            disk_root=temp,
+            disk_limit=MAX_RUN_DISK_BYTES,
+        )
+        if overflow_control["returnCode"] != 0 or not overflow_control["stdoutTruncated"] or overflow_control["processGroupAlive"]:
+            die(f"bounded output control failed: {overflow_control}")
+        descendant_pid_file = temp / "child.pid"
+        descendant_script = "import pathlib, subprocess, sys, time; child=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(30)"
+        reader_failure = {"status": "caught", "error": "injected output-reader start failure"}
+        try:
+            run_bounded(
+                [sys.executable, "-c", descendant_script, str(descendant_pid_file)],
+                timeout=min(5.0, child_timeout, remaining_budget(deadline, "reader cleanup")),
+                deadline=deadline,
+                output_limit=1024,
+                disk_root=temp,
+                disk_limit=MAX_RUN_DISK_BYTES,
+                inject_reader_start_failure=True,
+            )
+            die("injected reader-start failure unexpectedly returned")
+        except RuntimeError as exc:
+            if str(exc) != "injected output-reader start failure":
+                raise
+            reader_failure["error"] = str(exc)
+        if not descendant_pid_file.is_file():
+            die("reader-start failure control did not create its descendant marker")
+        descendant_pid = int(descendant_pid_file.read_text(encoding="utf-8"))
+        if not wait_for_pid_exit(descendant_pid):
+            die(f"reader-start failure left descendant alive: pid={descendant_pid}")
+        disk_after, disk_delta = assert_disk_budget(temp, disk_before, MAX_RUN_DISK_BYTES, "runner control temporary outputs")
+        report = {
+            "status": "verified",
+            "limits": {
+                "childTimeoutSeconds": child_timeout,
+                "aggregateTimeoutSeconds": total_timeout,
+                "outputBytesPerStream": 1024,
+                "ownedTemporaryGrowthBytes": MAX_RUN_DISK_BYTES,
+                "aggregateDeadlineEnforced": True,
+            },
+            "timeoutAndReap": timeout_control,
+            "outputBound": overflow_control,
+            "readerStartFailureGroupCleanup": {**reader_failure, "descendantPID": descendant_pid, "descendantAliveAfterCleanup": False},
+            "ownedDisk": {"bytesBefore": disk_before, "bytesAfter": disk_after, "bytesDelta": disk_delta},
+        }
     write_json(EVIDENCE_ROOT / "evidence/runner-negative-controls.json", report)
-    print(json.dumps({"status": "verified", "timeoutReaped": True, "outputBounded": True}, sort_keys=True))
+    print(json.dumps({"status": "verified", "timeoutReaped": True, "outputBounded": True, "descendantReaped": True}, sort_keys=True))
 
 
 def verify_repairs() -> None:
@@ -740,8 +1184,9 @@ def verify_repairs() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", required=True, choices=["generate", "provenance", "imports", "boundaries", "consumption-levels", "consumer", "wrong-consumption-oracle", "shipped-regression", "runner-negative-controls", "repair-candidates"])
+    parser.add_argument("--mode", required=True, choices=["generate", "provenance", "imports", "boundaries", "consumption-levels", "consumer", "wrong-consumption-oracle", "write-build-manifest", "shipped-regression", "runner-negative-controls", "repair-candidates"])
     parser.add_argument("--binary", "--yui", dest="yui", help="exact shipped yui binary for --mode shipped-regression")
+    parser.add_argument("--build-manifest", default=str(EVIDENCE_ROOT / "evidence/shipped-build.json"), help="pinned build-input manifest for shipped-regression")
     parser.add_argument("--child-timeout", type=float, default=60.0, help="maximum seconds for one child process")
     parser.add_argument("--total-timeout", type=float, default=600.0, help="maximum seconds for the aggregate regression")
     args = parser.parse_args()
@@ -759,10 +1204,14 @@ def main() -> None:
         verify_consumer()
     elif args.mode == "wrong-consumption-oracle":
         verify_wrong_oracle()
+    elif args.mode == "write-build-manifest":
+        if not args.yui:
+            die("--binary is required for write-build-manifest")
+        write_build_manifest(args.yui)
     elif args.mode == "shipped-regression":
         if not args.yui:
             die("--yui is required for shipped-regression")
-        verify_shipped_regression(args.yui, args.child_timeout, args.total_timeout)
+        verify_shipped_regression(args.yui, args.build_manifest, args.child_timeout, args.total_timeout)
     elif args.mode == "runner-negative-controls":
         verify_runner_negative_controls(args.child_timeout, args.total_timeout)
     elif args.mode == "repair-candidates":

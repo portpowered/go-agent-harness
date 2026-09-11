@@ -1,4 +1,11 @@
 {
+  "limits": {
+    "aggregateDeadlineEnforced": true,
+    "aggregateTimeoutSeconds": 600.0,
+    "childTimeoutSeconds": 60.0,
+    "outputBytesPerStream": 1024,
+    "ownedTemporaryGrowthBytes": 33554432
+  },
   "outputBound": {
     "argv": [
       "/opt/homebrew/opt/python@3.14/bin/python3.14",
@@ -6,7 +13,11 @@
       "import sys; sys.stdout.write('x' * 10000)"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
-    "durationSeconds": 0.037572,
+    "diskBytesAfter": 0,
+    "diskBytesBefore": 0,
+    "diskBytesDelta": 0,
+    "diskLimitBytes": 33554432,
+    "durationSeconds": 0.022867,
     "processGroupAlive": false,
     "returnCode": 0,
     "stderr": "",
@@ -14,6 +25,17 @@
     "stdout": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
     "stdoutTruncated": true,
     "timedOut": false
+  },
+  "ownedDisk": {
+    "bytesAfter": 5,
+    "bytesBefore": 0,
+    "bytesDelta": 5
+  },
+  "readerStartFailureGroupCleanup": {
+    "descendantAliveAfterCleanup": false,
+    "descendantPID": 12290,
+    "error": "injected output-reader start failure",
+    "status": "caught"
   },
   "status": "verified",
   "timeoutAndReap": {
@@ -23,7 +45,11 @@
       "import time; print('C51_TIMEOUT_CONTROL', flush=True); time.sleep(5)"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
-    "durationSeconds": 0.261545,
+    "diskBytesAfter": 0,
+    "diskBytesBefore": 0,
+    "diskBytesDelta": 0,
+    "diskLimitBytes": 33554432,
+    "durationSeconds": 0.254303,
     "processGroupAlive": false,
     "returnCode": -15,
     "stderr": "",

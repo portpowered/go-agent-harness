@@ -3,9 +3,21 @@
 The characterized source is `7f73c8b3b4ebc99b55b8bb5e802beff024385407`, the
 isolated branch's planning-main checkpoint. `import-graph.json` is generated
 from production Go imports with file/line citations and checked with
-`GOWORK=off go list -json ./...` for every workspace module. The map names the
-first owner of each signal and the downstream consumer; it does not infer
-physical playback from a queue write.
+`GOWORK=off go list -json ./...` for every workspace module.
+
+`boundary-map.json` is the machine-readable responsibility map. Each of its
+nine responsibilities has:
+
+- an owning package and downstream consumers;
+- exact pinned-source citations for the owner API;
+- explicit production caller citations (not tests, comments, or fields);
+- a named timing domain and evidence strength; and
+- an evidence disposition that does not infer hardware consumption from queue
+  admission or software callback output.
+
+The verifier reads each cited line from the pinned Git revision and requires
+the recorded symbol and source needle to occur on that line. A stale,
+out-of-range, comment-only, or unrelated citation fails closed.
 
 The public embedded seam is:
 
@@ -20,13 +32,6 @@ devices.Request
   -> audio.PlaybackQueue.Enqueue
   -> simulated callback: registry.Advance -> PlaybackQueue.RenderInto
 ```
-
-The external consumer proves the two adjacent observations independently:
-`PlaybackStats.QueuedSamples` is the queue-admission observation, while
-`SimulatedDuplexRegistry.RenderedSamples` and `DeviceTraceEvent` are the
-software device-callback observation after `Advance`. The deliberate wrong
-oracle runs the same consumer with `C51_WRONG_ORACLE=1` and must fail before
-the callback with the exact `wrong consumption oracle` marker.
 
 Consumption labels are `QUEUE_ADMISSION`, `BUFFER_RECEIPT`,
 `FILE_OR_SOFTWARE_RECEIPT`, `SOFTWARE_DEVICE_CALLBACK_CONSUMPTION`, and
