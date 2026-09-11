@@ -80,46 +80,48 @@ type browserNodeField struct {
 	children []browserNodeField
 }
 
-var manifestBrowserToolsFields = []browserNodeField{
-	{name: "backend", kind: browserNodeString},
-	{name: "connection", kind: browserNodeObject, children: []browserNodeField{
-		{name: "cdp_url", kind: browserNodeString},
-		{name: "ws_endpoint", kind: browserNodeString},
-		{name: "user_data_dir", kind: browserNodeString},
-		{name: "allow_process_scan", kind: browserNodeBool},
-		{name: "allow_remote_cdp", kind: browserNodeBool},
-	}},
-	{name: "selection", kind: browserNodeObject, children: []browserNodeField{
-		{name: "browser", kind: browserNodeString},
-		{name: "tab", kind: browserNodeString},
-		{name: "origin", kind: browserNodeString},
-		{name: "auto_select", kind: browserNodeString},
-		{name: "activate_tab", kind: browserNodeBool},
-		{name: "persist", kind: browserNodeBool},
-	}},
-	{name: "policy", kind: browserNodeObject, children: []browserNodeField{
-		{name: "allowed_origins", kind: browserNodeStringList},
-		{name: "denied_origins", kind: browserNodeStringList},
-		{name: "approval", kind: browserNodeString},
-		{name: "cancel_on_interrupt", kind: browserNodeString},
-	}},
-	{name: "limits", kind: browserNodeObject, children: []browserNodeField{
-		{name: "invocation_timeout", kind: browserNodeString},
-		{name: "max_input_bytes", kind: browserNodeInteger},
-		{name: "max_result_bytes", kind: browserNodeInteger},
-		{name: "serialize_per_target", kind: browserNodeBool},
-	}},
-	{name: "recording", kind: browserNodeObject, children: []browserNodeField{
-		{name: "enabled", kind: browserNodeBool},
-		{name: "include_arguments", kind: browserNodeBool},
-		{name: "include_results", kind: browserNodeBool},
-		{name: "redact_url_query", kind: browserNodeBool},
-		{name: "redact_url_fragment", kind: browserNodeBool},
-	}},
-	{name: "replay", kind: browserNodeObject, children: []browserNodeField{
-		{name: "path", kind: browserNodeString},
-		{name: "strict", kind: browserNodeBool},
-	}},
+func manifestBrowserToolsFields() []browserNodeField {
+	return []browserNodeField{
+		{name: "backend", kind: browserNodeString},
+		{name: "connection", kind: browserNodeObject, children: []browserNodeField{
+			{name: "cdp_url", kind: browserNodeString},
+			{name: "ws_endpoint", kind: browserNodeString},
+			{name: "user_data_dir", kind: browserNodeString},
+			{name: "allow_process_scan", kind: browserNodeBool},
+			{name: "allow_remote_cdp", kind: browserNodeBool},
+		}},
+		{name: "selection", kind: browserNodeObject, children: []browserNodeField{
+			{name: "browser", kind: browserNodeString},
+			{name: "tab", kind: browserNodeString},
+			{name: "origin", kind: browserNodeString},
+			{name: "auto_select", kind: browserNodeString},
+			{name: "activate_tab", kind: browserNodeBool},
+			{name: "persist", kind: browserNodeBool},
+		}},
+		{name: "policy", kind: browserNodeObject, children: []browserNodeField{
+			{name: "allowed_origins", kind: browserNodeStringList},
+			{name: "denied_origins", kind: browserNodeStringList},
+			{name: "approval", kind: browserNodeString},
+			{name: "cancel_on_interrupt", kind: browserNodeString},
+		}},
+		{name: "limits", kind: browserNodeObject, children: []browserNodeField{
+			{name: "invocation_timeout", kind: browserNodeString},
+			{name: "max_input_bytes", kind: browserNodeInteger},
+			{name: "max_result_bytes", kind: browserNodeInteger},
+			{name: "serialize_per_target", kind: browserNodeBool},
+		}},
+		{name: "recording", kind: browserNodeObject, children: []browserNodeField{
+			{name: "enabled", kind: browserNodeBool},
+			{name: "include_arguments", kind: browserNodeBool},
+			{name: "include_results", kind: browserNodeBool},
+			{name: "redact_url_query", kind: browserNodeBool},
+			{name: "redact_url_fragment", kind: browserNodeBool},
+		}},
+		{name: "replay", kind: browserNodeObject, children: []browserNodeField{
+			{name: "path", kind: browserNodeString},
+			{name: "strict", kind: browserNodeBool},
+		}},
+	}
 }
 
 // validateManifestBrowserToolsShape performs a presence-aware preflight
@@ -128,8 +130,8 @@ var manifestBrowserToolsFields = []browserNodeField{
 // object, and list mismatches stable participant-qualified errors.
 func validateManifestBrowserToolsShape(data []byte) error {
 	var document yamlv3.Node
-	if err := yamlv3.Unmarshal(data, &document); err != nil || len(document.Content) == 0 {
-		return nil
+	if yamlv3.Unmarshal(data, &document) != nil || len(document.Content) == 0 {
+		return ignoreBrowserShapeParseError()
 	}
 	root := document.Content[0]
 	if root.Kind == yamlv3.DocumentNode && len(root.Content) > 0 {
@@ -148,13 +150,13 @@ func validateManifestBrowserToolsShape(data []byte) error {
 		if browserTools.Kind != yamlv3.MappingNode {
 			return browserToolsShapeError(field, "must be an object")
 		}
-		if err := validateBrowserYAMLNodeFields(browserTools, field, manifestBrowserToolsFields); err != nil {
+		if err := validateBrowserYAMLNodeFields(browserTools, field, manifestBrowserToolsFields()); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-
+func ignoreBrowserShapeParseError() error { return nil }
 func validateBrowserYAMLNodeFields(node *yamlv3.Node, field string, fields []browserNodeField) error {
 	for _, spec := range fields {
 		value, present := browserYAMLMappingValue(node, spec.name)
@@ -175,28 +177,39 @@ func validateBrowserYAMLNodeFields(node *yamlv3.Node, field string, fields []bro
 }
 
 func validateBrowserYAMLNodeValue(node *yamlv3.Node, field string, kind browserNodeValueKind) error {
-	valid := false
+	if kind == browserNodeStringList {
+		return validateBrowserStringList(node, field)
+	}
+	if browserNodeValueMatches(node, kind) {
+		return nil
+	}
+	return browserToolsShapeError(field, browserNodeValueProblem(kind))
+}
+
+func browserNodeValueMatches(node *yamlv3.Node, kind browserNodeValueKind) bool {
 	switch kind {
 	case browserNodeString:
-		valid = node.Kind == yamlv3.ScalarNode && node.Tag == "!!str"
+		return node.Kind == yamlv3.ScalarNode && node.Tag == "!!str"
 	case browserNodeBool:
-		valid = node.Kind == yamlv3.ScalarNode && node.Tag == "!!bool" && (node.Value == "true" || node.Value == "false")
+		return node.Kind == yamlv3.ScalarNode && node.Tag == "!!bool" && (node.Value == "true" || node.Value == "false")
 	case browserNodeInteger:
-		valid = node.Kind == yamlv3.ScalarNode && node.Tag == "!!int"
-	case browserNodeStringList:
-		if node.Kind == yamlv3.SequenceNode {
-			valid = true
-			for index, item := range node.Content {
-				if item.Kind != yamlv3.ScalarNode || item.Tag != "!!str" {
-					return browserToolsShapeError(fmt.Sprintf("%s[%d]", field, index), "must be a string")
-				}
-			}
-		}
+		return node.Kind == yamlv3.ScalarNode && node.Tag == "!!int"
 	case browserNodeObject:
-		valid = node.Kind == yamlv3.MappingNode
+		return node.Kind == yamlv3.MappingNode
+	case browserNodeStringList:
+		return false
 	}
-	if !valid {
-		return browserToolsShapeError(field, browserNodeValueProblem(kind))
+	return false
+}
+
+func validateBrowserStringList(node *yamlv3.Node, field string) error {
+	if node.Kind != yamlv3.SequenceNode {
+		return browserToolsShapeError(field, browserNodeValueProblem(browserNodeStringList))
+	}
+	for index, item := range node.Content {
+		if item.Kind != yamlv3.ScalarNode || item.Tag != "!!str" {
+			return browserToolsShapeError(fmt.Sprintf("%s[%d]", field, index), "must be a string")
+		}
 	}
 	return nil
 }
@@ -214,7 +227,7 @@ func browserYAMLMappingValue(node *yamlv3.Node, key string) (*yamlv3.Node, bool)
 }
 
 func browserToolsShapeError(field, problem string) error {
-	return invalid(field, problem, errors.Join(rooms.ErrInvalidBrowserTools, rooms.ErrInvalidBrowserOption))
+	return invalid(field, problem, errors.Join(rooms.ErrInvalidBrowserTools, rooms.ErrInvalidBrowserOption, rooms.ErrInvalidBrowserToolsOption))
 }
 
 func browserNodeValueProblem(kind browserNodeValueKind) string {
@@ -235,111 +248,144 @@ func browserNodeValueProblem(kind browserNodeValueKind) string {
 }
 
 func normalizeBrowser(raw *manifestBrowserTools, field string) (rooms.BrowserToolsConfig, error) {
-	configValue := rooms.DefaultBrowserToolsConfig()
+	configValue := rooms.BrowserToolsDefaults{}.Config()
 	if raw == nil {
 		return configValue, nil
 	}
 	if raw.Backend != nil {
 		configValue.Backend = normalizeString(raw.Backend)
 	}
-	if raw.Connection != nil {
-		if raw.Connection.CDPURL != nil {
-			configValue.Connection.CDPURL = normalizeString(raw.Connection.CDPURL)
-		}
-		if raw.Connection.WSEndpoint != nil {
-			configValue.Connection.WSEndpoint = normalizeString(raw.Connection.WSEndpoint)
-		}
-		if raw.Connection.UserDataDir != nil {
-			configValue.Connection.UserDataDir = normalizeString(raw.Connection.UserDataDir)
-		}
-		if raw.Connection.AllowProcessScan != nil {
-			configValue.Connection.AllowProcessScan = *raw.Connection.AllowProcessScan
-		}
-		if raw.Connection.AllowRemoteCDP != nil {
-			configValue.Connection.AllowRemoteCDP = *raw.Connection.AllowRemoteCDP
-		}
+	applyBrowserConnection(&configValue, raw.Connection)
+	applyBrowserSelection(&configValue, raw.Selection)
+	applyBrowserPolicy(&configValue, raw.Policy)
+	if err := applyBrowserLimits(&configValue, raw.Limits, field); err != nil {
+		return rooms.BrowserToolsConfig{}, err
 	}
-	if raw.Selection != nil {
-		if raw.Selection.Browser != nil {
-			configValue.Selection.Browser = normalizeString(raw.Selection.Browser)
-		}
-		if raw.Selection.Tab != nil {
-			configValue.Selection.Tab = normalizeString(raw.Selection.Tab)
-		}
-		if raw.Selection.Origin != nil {
-			configValue.Selection.Origin = normalizeString(raw.Selection.Origin)
-		}
-		if raw.Selection.AutoSelect != nil {
-			configValue.Selection.AutoSelect = normalizeString(raw.Selection.AutoSelect)
-		}
-		if raw.Selection.ActivateTab != nil {
-			configValue.Selection.ActivateTab = *raw.Selection.ActivateTab
-		}
-		if raw.Selection.Persist != nil {
-			configValue.Selection.Persist = *raw.Selection.Persist
-		}
-	}
-	if raw.Policy != nil {
-		if raw.Policy.AllowedOrigins != nil {
-			configValue.Policy.AllowedOrigins = normalizeBrowserToolsStrings(*raw.Policy.AllowedOrigins)
-		}
-		if raw.Policy.DeniedOrigins != nil {
-			configValue.Policy.DeniedOrigins = normalizeBrowserToolsStrings(*raw.Policy.DeniedOrigins)
-		}
-		if raw.Policy.Approval != nil {
-			configValue.Policy.Approval = normalizeString(raw.Policy.Approval)
-		}
-		if raw.Policy.CancelOnInterrupt != nil {
-			configValue.Policy.CancelOnInterrupt = normalizeString(raw.Policy.CancelOnInterrupt)
-		}
-	}
-	if raw.Limits != nil {
-		if raw.Limits.InvocationTimeout != nil {
-			duration, err := time.ParseDuration(strings.TrimSpace(*raw.Limits.InvocationTimeout))
-			if err != nil || duration <= 0 {
-				return rooms.BrowserToolsConfig{}, invalid(field+".limits.invocation_timeout", "must be a positive Go duration such as 30s", rooms.ErrInvalidBrowserToolsOption)
-			}
-			configValue.Limits.InvocationTimeout = duration
-		}
-		if raw.Limits.MaxInputBytes != nil {
-			configValue.Limits.MaxInputBytes = *raw.Limits.MaxInputBytes
-		}
-		if raw.Limits.MaxResultBytes != nil {
-			configValue.Limits.MaxResultBytes = *raw.Limits.MaxResultBytes
-		}
-		if raw.Limits.SerializePerTarget != nil {
-			configValue.Limits.SerializePerTarget = *raw.Limits.SerializePerTarget
-		}
-	}
-	if raw.Recording != nil {
-		if raw.Recording.Enabled != nil {
-			configValue.Recording.Enabled = *raw.Recording.Enabled
-		}
-		if raw.Recording.IncludeArguments != nil {
-			configValue.Recording.IncludeArguments = *raw.Recording.IncludeArguments
-		}
-		if raw.Recording.IncludeResults != nil {
-			configValue.Recording.IncludeResults = *raw.Recording.IncludeResults
-		}
-		if raw.Recording.RedactURLQuery != nil {
-			configValue.Recording.RedactURLQuery = *raw.Recording.RedactURLQuery
-		}
-		if raw.Recording.RedactURLFragment != nil {
-			configValue.Recording.RedactURLFragment = *raw.Recording.RedactURLFragment
-		}
-	}
-	if raw.Replay != nil {
-		if raw.Replay.Path != nil {
-			configValue.Replay.Path = normalizeString(raw.Replay.Path)
-		}
-		if raw.Replay.Strict != nil {
-			configValue.Replay.Strict = *raw.Replay.Strict
-		}
-	}
+	applyBrowserRecording(&configValue, raw.Recording)
+	applyBrowserReplay(&configValue, raw.Replay)
 	if err := configValue.ValidateAt(field); err != nil {
 		return rooms.BrowserToolsConfig{}, err
 	}
 	return configValue, nil
+}
+
+func applyBrowserConnection(config *rooms.BrowserToolsConfig, raw *manifestBrowserConnection) {
+	if raw == nil {
+		return
+	}
+	if raw.CDPURL != nil {
+		config.Connection.CDPURL = normalizeString(raw.CDPURL)
+	}
+	if raw.WSEndpoint != nil {
+		config.Connection.WSEndpoint = normalizeString(raw.WSEndpoint)
+	}
+	if raw.UserDataDir != nil {
+		config.Connection.UserDataDir = normalizeString(raw.UserDataDir)
+	}
+	if raw.AllowProcessScan != nil {
+		config.Connection.AllowProcessScan = *raw.AllowProcessScan
+	}
+	if raw.AllowRemoteCDP != nil {
+		config.Connection.AllowRemoteCDP = *raw.AllowRemoteCDP
+	}
+}
+
+func applyBrowserSelection(config *rooms.BrowserToolsConfig, raw *manifestBrowserSelection) {
+	if raw == nil {
+		return
+	}
+	if raw.Browser != nil {
+		config.Selection.Browser = normalizeString(raw.Browser)
+	}
+	if raw.Tab != nil {
+		config.Selection.Tab = normalizeString(raw.Tab)
+	}
+	if raw.Origin != nil {
+		config.Selection.Origin = normalizeString(raw.Origin)
+	}
+	if raw.AutoSelect != nil {
+		config.Selection.AutoSelect = normalizeString(raw.AutoSelect)
+	}
+	if raw.ActivateTab != nil {
+		config.Selection.ActivateTab = *raw.ActivateTab
+	}
+	if raw.Persist != nil {
+		config.Selection.Persist = *raw.Persist
+	}
+}
+
+func applyBrowserPolicy(config *rooms.BrowserToolsConfig, raw *manifestBrowserPolicy) {
+	if raw == nil {
+		return
+	}
+	if raw.AllowedOrigins != nil {
+		config.Policy.AllowedOrigins = normalizeBrowserToolsStrings(*raw.AllowedOrigins)
+	}
+	if raw.DeniedOrigins != nil {
+		config.Policy.DeniedOrigins = normalizeBrowserToolsStrings(*raw.DeniedOrigins)
+	}
+	if raw.Approval != nil {
+		config.Policy.Approval = normalizeString(raw.Approval)
+	}
+	if raw.CancelOnInterrupt != nil {
+		config.Policy.CancelOnInterrupt = normalizeString(raw.CancelOnInterrupt)
+	}
+}
+
+func applyBrowserLimits(config *rooms.BrowserToolsConfig, raw *manifestBrowserLimits, field string) error {
+	if raw == nil {
+		return nil
+	}
+	if raw.InvocationTimeout != nil {
+		duration, err := time.ParseDuration(strings.TrimSpace(*raw.InvocationTimeout))
+		if err != nil || duration <= 0 {
+			return invalid(field+".limits.invocation_timeout", "must be a positive Go duration such as 30s", rooms.ErrInvalidBrowserToolsOption)
+		}
+		config.Limits.InvocationTimeout = duration
+	}
+	if raw.MaxInputBytes != nil {
+		config.Limits.MaxInputBytes = *raw.MaxInputBytes
+	}
+	if raw.MaxResultBytes != nil {
+		config.Limits.MaxResultBytes = *raw.MaxResultBytes
+	}
+	if raw.SerializePerTarget != nil {
+		config.Limits.SerializePerTarget = *raw.SerializePerTarget
+	}
+	return nil
+}
+
+func applyBrowserRecording(config *rooms.BrowserToolsConfig, raw *manifestBrowserRecording) {
+	if raw == nil {
+		return
+	}
+	if raw.Enabled != nil {
+		config.Recording.Enabled = *raw.Enabled
+	}
+	if raw.IncludeArguments != nil {
+		config.Recording.IncludeArguments = *raw.IncludeArguments
+	}
+	if raw.IncludeResults != nil {
+		config.Recording.IncludeResults = *raw.IncludeResults
+	}
+	if raw.RedactURLQuery != nil {
+		config.Recording.RedactURLQuery = *raw.RedactURLQuery
+	}
+	if raw.RedactURLFragment != nil {
+		config.Recording.RedactURLFragment = *raw.RedactURLFragment
+	}
+}
+
+func applyBrowserReplay(config *rooms.BrowserToolsConfig, raw *manifestBrowserReplay) {
+	if raw == nil {
+		return
+	}
+	if raw.Path != nil {
+		config.Replay.Path = normalizeString(raw.Path)
+	}
+	if raw.Strict != nil {
+		config.Replay.Strict = *raw.Strict
+	}
 }
 
 func normalizeBrowserToolsStrings(values []string) []string {

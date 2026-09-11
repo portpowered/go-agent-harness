@@ -5,6 +5,7 @@ package manifest
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -33,7 +34,7 @@ func Parse(data []byte, options ...rooms.ValidationOptions) (rooms.Manifest, err
 		return rooms.Manifest{}, invalid("document", "must be one valid JSON or YAML object: "+sanitizeDecodeError(err), rooms.ErrInvalidDocument)
 	}
 	var extra yamlv3.Node
-	if err := decoder.Decode(&extra); err != io.EOF {
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err == nil {
 			return rooms.Manifest{}, invalid("document", "must contain exactly one document", rooms.ErrInvalidDocument)
 		}
@@ -64,19 +65,16 @@ type manifestDocument struct {
 	Room          *manifestRoomDocument `json:"room" yaml:"room"`
 	Participants  []manifestParticipant `json:"participants" yaml:"participants"`
 }
-
 type manifestRoomDocument struct {
 	MaxTurns    *int                       `json:"max_turns" yaml:"max_turns"`
 	MaxDuration *string                    `json:"max_duration" yaml:"max_duration"`
 	Interactive *bool                      `json:"interactive" yaml:"interactive"`
 	Recording   *manifestRecordingDocument `json:"recording" yaml:"recording"`
 }
-
 type manifestRecordingDocument struct {
 	Enabled   *bool   `json:"enabled" yaml:"enabled"`
 	Directory *string `json:"directory" yaml:"directory"`
 }
-
 type manifestParticipant struct {
 	Kind          *string               `json:"kind" yaml:"kind"`
 	ID            *string               `json:"id" yaml:"id"`
@@ -93,126 +91,162 @@ type manifestParticipant struct {
 }
 
 func normalizeManifest(raw manifestDocument) (rooms.Manifest, error) {
-	if raw.SchemaVersion == nil {
-		return rooms.Manifest{}, invalid("schema_version", fmt.Sprintf("must be %d", rooms.SchemaVersion), rooms.ErrUnsupportedSchema)
+	if err := validateRawDocument(raw); err != nil {
+		return rooms.Manifest{}, err
 	}
-	if *raw.SchemaVersion != rooms.SchemaVersion {
-		return rooms.Manifest{}, invalid("schema_version", fmt.Sprintf("must be %d", rooms.SchemaVersion), rooms.ErrUnsupportedSchema)
+	roomValue, err := normalizeRoom(raw.Room)
+	if err != nil {
+		return rooms.Manifest{}, err
 	}
-	if raw.Room == nil {
-		return rooms.Manifest{}, invalid("room", "must be provided with a positive max_turns and/or max_duration", rooms.ErrMissingBound)
-	}
-
-	roomValue := rooms.Room{}
-	if raw.Room.MaxTurns != nil {
-		roomValue.MaxTurns = *raw.Room.MaxTurns
-		if roomValue.MaxTurns <= 0 {
-			return rooms.Manifest{}, invalidValue("room.max_turns", fmt.Sprint(roomValue.MaxTurns), "must be positive", rooms.ErrInvalidBound)
-		}
-	}
-	if raw.Room.MaxDuration != nil {
-		durationText := strings.TrimSpace(*raw.Room.MaxDuration)
-		duration, err := time.ParseDuration(durationText)
-		if err != nil || duration <= 0 {
-			return rooms.Manifest{}, invalidValue("room.max_duration", "", "must be a positive Go duration such as 30s or 2m", rooms.ErrInvalidBound)
-		}
-		roomValue.MaxDuration = duration
-	}
-	if raw.Room.Interactive != nil {
-		roomValue.Interactive = *raw.Room.Interactive
-	}
-	if raw.Room.Recording != nil {
-		directory := ""
-		if raw.Room.Recording.Directory != nil {
-			directory = strings.TrimSpace(*raw.Room.Recording.Directory)
-		}
-		roomValue.Recording = &rooms.RoomRecordingConfig{Enabled: cloneBool(raw.Room.Recording.Enabled), Directory: directory}
-	}
-	if roomValue.MaxTurns == 0 && roomValue.MaxDuration == 0 && !roomValue.Interactive {
-		return rooms.Manifest{}, invalid("room", "must set a positive max_turns and/or max_duration", rooms.ErrMissingBound)
+	if err := validateRoomBound(roomValue); err != nil {
+		return rooms.Manifest{}, err
 	}
 	if len(raw.Participants) < 2 {
 		return rooms.Manifest{}, invalid("participants", "must contain at least two participants", rooms.ErrTooFewParticipants)
 	}
-
-	participants := make([]rooms.Participant, len(raw.Participants))
-	for index, rawParticipant := range raw.Participants {
-		participant := rooms.Participant{
-			Kind:          rooms.NormalizeParticipantKind(rooms.ParticipantKind(normalizeString(rawParticipant.Kind))),
-			ID:            normalizeString(rawParticipant.ID),
-			SystemPrompt:  normalizeString(rawParticipant.SystemPrompt),
-			OpeningPrompt: normalizeString(rawParticipant.OpeningPrompt),
-			Provider:      strings.ToLower(normalizeString(rawParticipant.Provider)),
-			Model:         normalizeString(rawParticipant.Model),
-			APIKeyEnv:     normalizeString(rawParticipant.APIKeyEnv),
-			Voice:         normalizeString(rawParticipant.Voice),
-			InputDevice:   normalizeString(rawParticipant.InputDevice),
-			OutputDevice:  normalizeString(rawParticipant.OutputDevice),
-		}
-		if rawParticipant.Tools != nil {
-			participant.Tools = make([]string, len(*rawParticipant.Tools))
-			for toolIndex, tool := range *rawParticipant.Tools {
-				participant.Tools[toolIndex] = strings.ToLower(strings.TrimSpace(tool))
-			}
-		}
-		if rawParticipant.BrowserTools != nil {
-			browserTools, err := normalizeBrowser(rawParticipant.BrowserTools, fmt.Sprintf("participants[%d].browserTools", index))
-			if err != nil {
-				return rooms.Manifest{}, err
-			}
-			participant.BrowserTools = &browserTools
-		}
-		participants[index] = participant
+	participants, err := normalizeParticipants(raw.Participants)
+	if err != nil {
+		return rooms.Manifest{}, err
 	}
-
 	manifest := rooms.Manifest{SchemaVersion: *raw.SchemaVersion, Room: roomValue, Participants: participants}
 	if err := validateRawRequiredFields(raw.Participants, manifest.Participants); err != nil {
 		return rooms.Manifest{}, err
 	}
 	return manifest, nil
 }
-
+func validateRawDocument(raw manifestDocument) error {
+	if raw.SchemaVersion == nil || *raw.SchemaVersion != rooms.SchemaVersion {
+		return invalid("schema_version", fmt.Sprintf("must be %d", rooms.SchemaVersion), rooms.ErrUnsupportedSchema)
+	}
+	if raw.Room == nil {
+		return invalid("room", "must be provided with a positive max_turns and/or max_duration", rooms.ErrMissingBound)
+	}
+	return nil
+}
+func normalizeRoom(raw *manifestRoomDocument) (rooms.Room, error) {
+	roomValue := rooms.Room{}
+	if raw.MaxTurns != nil {
+		roomValue.MaxTurns = *raw.MaxTurns
+		if roomValue.MaxTurns <= 0 {
+			return rooms.Room{}, invalidValue("room.max_turns", fmt.Sprint(roomValue.MaxTurns), "must be positive", rooms.ErrInvalidBound)
+		}
+	}
+	if raw.MaxDuration != nil {
+		duration, err := time.ParseDuration(strings.TrimSpace(*raw.MaxDuration))
+		if err != nil || duration <= 0 {
+			return rooms.Room{}, invalidValue("room.max_duration", "", "must be a positive Go duration such as 30s or 2m", rooms.ErrInvalidBound)
+		}
+		roomValue.MaxDuration = duration
+	}
+	if raw.Interactive != nil {
+		roomValue.Interactive = *raw.Interactive
+	}
+	if raw.Recording != nil {
+		directory := ""
+		if raw.Recording.Directory != nil {
+			directory = strings.TrimSpace(*raw.Recording.Directory)
+		}
+		roomValue.Recording = &rooms.RoomRecordingConfig{Enabled: cloneBool(raw.Recording.Enabled), Directory: directory}
+	}
+	return roomValue, nil
+}
+func validateRoomBound(room rooms.Room) error {
+	if room.MaxTurns == 0 && room.MaxDuration == 0 && !room.Interactive {
+		return invalid("room", "must set a positive max_turns and/or max_duration", rooms.ErrMissingBound)
+	}
+	return nil
+}
+func normalizeParticipants(raw []manifestParticipant) ([]rooms.Participant, error) {
+	participants := make([]rooms.Participant, len(raw))
+	for index, rawParticipant := range raw {
+		participant, err := normalizeParticipant(rawParticipant, index)
+		if err != nil {
+			return nil, err
+		}
+		participants[index] = participant
+	}
+	return participants, nil
+}
+func normalizeParticipant(raw manifestParticipant, index int) (rooms.Participant, error) {
+	participant := rooms.Participant{
+		Kind:          NormalizeParticipantKind(rooms.ParticipantKind(normalizeString(raw.Kind))),
+		ID:            normalizeString(raw.ID),
+		SystemPrompt:  normalizeString(raw.SystemPrompt),
+		OpeningPrompt: normalizeString(raw.OpeningPrompt),
+		Provider:      strings.ToLower(normalizeString(raw.Provider)),
+		Model:         normalizeString(raw.Model),
+		APIKeyEnv:     normalizeString(raw.APIKeyEnv),
+		Voice:         normalizeString(raw.Voice),
+		InputDevice:   normalizeString(raw.InputDevice),
+		OutputDevice:  normalizeString(raw.OutputDevice),
+	}
+	if raw.Tools != nil {
+		participant.Tools = make([]string, len(*raw.Tools))
+		for toolIndex, tool := range *raw.Tools {
+			participant.Tools[toolIndex] = strings.ToLower(strings.TrimSpace(tool))
+		}
+	}
+	if raw.BrowserTools == nil {
+		return participant, nil
+	}
+	browserTools, err := normalizeBrowser(raw.BrowserTools, fmt.Sprintf("participants[%d].browserTools", index))
+	if err != nil {
+		return rooms.Participant{}, err
+	}
+	participant.BrowserTools = &browserTools
+	return participant, nil
+}
 func validateRawRequiredFields(raw []manifestParticipant, normalized []rooms.Participant) error {
 	for index, rawParticipant := range raw {
-		field := func(name string) string { return fmt.Sprintf("participants[%d].%s", index, name) }
-		participant := normalized[index]
-		if rawParticipant.ID == nil || participant.ID == "" {
-			return invalid(field("id"), "must not be empty", rooms.ErrInvalidParticipant)
-		}
-		if rawParticipant.SystemPrompt == nil || strings.TrimSpace(participant.SystemPrompt) == "" {
-			return invalid(field("system_prompt"), "must not be empty", rooms.ErrInvalidParticipant)
-		}
-		if participant.Kind != rooms.ParticipantKindAgent && participant.Kind != rooms.ParticipantKindHuman {
-			return invalid(field("kind"), "must be agent or human", rooms.ErrUnknownParticipantKind)
-		}
-		if participant.Kind == rooms.ParticipantKindHuman {
-			if rawParticipant.InputDevice == nil || participant.InputDevice == "" {
-				return invalid(field("input_device"), "must name a non-empty device ID", rooms.ErrInvalidParticipant)
-			}
-			if rawParticipant.OutputDevice == nil || participant.OutputDevice == "" {
-				return invalid(field("output_device"), "must name a non-empty device ID", rooms.ErrInvalidParticipant)
-			}
-			if rawParticipant.Tools == nil {
-				return invalid(field("tools"), "must be provided as a list; use [] when no tools are enabled", rooms.ErrInvalidParticipant)
-			}
-			continue
-		}
-		if rawParticipant.Provider == nil || participant.Provider == "" {
-			return invalid(field("provider"), "must not be empty", rooms.ErrInvalidParticipant)
-		}
-		if rawParticipant.Model == nil || participant.Model == "" {
-			return invalid(field("model"), "must not be empty", rooms.ErrInvalidParticipant)
-		}
-		if rawParticipant.APIKeyEnv == nil || participant.APIKeyEnv == "" {
-			return invalid(field("api_key_env"), "must name a non-empty environment variable", rooms.ErrCredential)
-		}
-		if rawParticipant.Tools == nil {
-			return invalid(field("tools"), "must be provided as a list; use [] when no tools are enabled", rooms.ErrInvalidParticipant)
+		if err := validateRawParticipant(index, rawParticipant, normalized[index]); err != nil {
+			return err
 		}
 	}
 	return nil
 }
-
+func validateRawParticipant(index int, raw manifestParticipant, participant rooms.Participant) error {
+	field := func(name string) string { return fmt.Sprintf("participants[%d].%s", index, name) }
+	if raw.ID == nil || participant.ID == "" {
+		return invalid(field("id"), "must not be empty", rooms.ErrInvalidParticipant)
+	}
+	if raw.SystemPrompt == nil || strings.TrimSpace(participant.SystemPrompt) == "" {
+		return invalid(field("system_prompt"), "must not be empty", rooms.ErrInvalidParticipant)
+	}
+	if participant.Kind != rooms.ParticipantKindAgent && participant.Kind != rooms.ParticipantKindHuman {
+		return invalid(field("kind"), "must be agent or human", rooms.ErrUnknownParticipantKind)
+	}
+	if participant.Kind == rooms.ParticipantKindHuman {
+		return validateRawHumanParticipant(field, raw, participant)
+	}
+	return validateRawAgentParticipant(field, raw, participant)
+}
+func validateRawHumanParticipant(field func(string) string, raw manifestParticipant, participant rooms.Participant) error {
+	if raw.InputDevice == nil || participant.InputDevice == "" {
+		return invalid(field("input_device"), "must name a non-empty device ID", rooms.ErrInvalidParticipant)
+	}
+	if raw.OutputDevice == nil || participant.OutputDevice == "" {
+		return invalid(field("output_device"), "must name a non-empty device ID", rooms.ErrInvalidParticipant)
+	}
+	if raw.Tools == nil {
+		return invalid(field("tools"), "must be provided as a list; use [] when no tools are enabled", rooms.ErrInvalidParticipant)
+	}
+	return nil
+}
+func validateRawAgentParticipant(field func(string) string, raw manifestParticipant, participant rooms.Participant) error {
+	if raw.Provider == nil || participant.Provider == "" {
+		return invalid(field("provider"), "must not be empty", rooms.ErrInvalidParticipant)
+	}
+	if raw.Model == nil || participant.Model == "" {
+		return invalid(field("model"), "must not be empty", rooms.ErrInvalidParticipant)
+	}
+	if raw.APIKeyEnv == nil || participant.APIKeyEnv == "" {
+		return invalid(field("api_key_env"), "must name a non-empty environment variable", rooms.ErrCredential)
+	}
+	if raw.Tools == nil {
+		return invalid(field("tools"), "must be provided as a list; use [] when no tools are enabled", rooms.ErrInvalidParticipant)
+	}
+	return nil
+}
 func normalizeString(value *string) string {
 	if value == nil {
 		return ""
@@ -223,9 +257,15 @@ func normalizeString(value *string) string {
 // NormalizeParticipantKind applies the document-boundary compatibility
 // spelling for service-local consumers that serialize room evidence.
 func NormalizeParticipantKind(kind rooms.ParticipantKind) rooms.ParticipantKind {
-	return rooms.NormalizeParticipantKind(kind)
+	switch normalized := rooms.ParticipantKind(strings.ToLower(strings.TrimSpace(string(kind)))); normalized {
+	case "", rooms.ParticipantKindAgent:
+		return rooms.ParticipantKindAgent
+	case rooms.ParticipantKindHuman, rooms.ParticipantKindCustomer:
+		return rooms.ParticipantKindHuman
+	default:
+		return normalized
+	}
 }
-
 func cloneBool(value *bool) *bool {
 	if value == nil {
 		return nil
@@ -233,48 +273,128 @@ func cloneBool(value *bool) *bool {
 	copy := *value
 	return &copy
 }
-
 func validationOption(options []rooms.ValidationOptions) rooms.ValidationOptions {
 	if len(options) == 1 {
 		return options[0]
 	}
 	return rooms.ValidationOptions{}
 }
-
-var decodeTypePattern = regexp.MustCompile(`type [^\s.]+\.(\w+)`)
-
-var decodeTypeLabels = map[string]string{
-	"manifestDocument":          "the manifest",
-	"manifestRoomDocument":      "room",
-	"manifestRecordingDocument": "room.recording",
-	"manifestParticipant":       "a participant",
-	"manifestBrowserTools":      "a participant's browserTools",
-	"manifestBrowserConnection": "a participant's browserTools",
-	"manifestBrowserSelection":  "a participant's browserTools",
-	"manifestBrowserPolicy":     "a participant's browserTools",
-	"manifestBrowserLimits":     "a participant's browserTools",
-	"manifestBrowserRecording":  "a participant's browserTools",
-	"manifestBrowserReplay":     "a participant's browserTools",
+func decodeTypeLabels() map[string]string {
+	return map[string]string{
+		"manifestDocument":          "the manifest",
+		"manifestRoomDocument":      "room",
+		"manifestRecordingDocument": "room.recording",
+		"manifestParticipant":       "a participant",
+		"manifestBrowserTools":      "a participant's browserTools",
+		"manifestBrowserConnection": "a participant's browserTools",
+		"manifestBrowserSelection":  "a participant's browserTools",
+		"manifestBrowserPolicy":     "a participant's browserTools",
+		"manifestBrowserLimits":     "a participant's browserTools",
+		"manifestBrowserRecording":  "a participant's browserTools",
+		"manifestBrowserReplay":     "a participant's browserTools",
+	}
 }
-
 func sanitizeDecodeError(err error) string {
 	if err == nil {
 		return ""
 	}
-	return decodeTypePattern.ReplaceAllStringFunc(err.Error(), func(match string) string {
-		name := decodeTypePattern.FindStringSubmatch(match)[1]
-		label, ok := decodeTypeLabels[name]
+	pattern := regexp.MustCompile(`type [^\s.]+\.(\w+)`)
+	labels := decodeTypeLabels()
+	return pattern.ReplaceAllStringFunc(err.Error(), func(match string) string {
+		name := pattern.FindStringSubmatch(match)[1]
+		label, ok := labels[name]
 		if !ok {
 			label = "the manifest"
 		}
 		return label
 	})
 }
-
 func invalid(field, problem string, cause error) error {
 	return &rooms.ValidationError{Field: field, Problem: problem, Cause: cause}
 }
-
 func invalidValue(field, value, problem string, cause error) error {
 	return &rooms.ValidationError{Field: field, Value: value, Problem: problem, Cause: cause}
+}
+
+// Provider is the runtime-owned admission implementation exposed through the
+// public wire interface. It retains only copied callbacks and no host state.
+type Provider struct {
+	options rooms.ValidationOptions
+}
+
+func NewProvider(options rooms.ValidationOptions) *Provider {
+	return &Provider{options: options}
+}
+func NewProviderFromRegistry(registry rooms.ValidationRegistry, lookupCredential func(string) (string, bool)) *Provider {
+	options := cloneValidationRegistry(registry).Options()
+	options.LookupCredential = lookupCredential
+	return NewProvider(options)
+}
+func (p *Provider) Parse(data []byte, overrides ...rooms.ValidationOptions) (rooms.Manifest, error) {
+	options, err := p.optionsFor(overrides)
+	if err != nil {
+		return rooms.Manifest{}, err
+	}
+	return Parse(data, options)
+}
+func (p *Provider) Read(path string, overrides ...rooms.ValidationOptions) (rooms.Manifest, error) {
+	options, err := p.optionsFor(overrides)
+	if err != nil {
+		return rooms.Manifest{}, err
+	}
+	return Read(path, options)
+}
+func (p *Provider) Admit(data []byte, overrides ...rooms.ValidationOptions) (rooms.Manifest, error) {
+	return p.Parse(data, overrides...)
+}
+func (p *Provider) AdmitFile(path string, overrides ...rooms.ValidationOptions) (rooms.Manifest, error) {
+	return p.Read(path, overrides...)
+}
+func (p *Provider) Validate(value rooms.Manifest, overrides ...rooms.ValidationOptions) error {
+	options, err := p.optionsFor(overrides)
+	if err != nil {
+		return err
+	}
+	return value.Validate(options)
+}
+func (*Provider) Close() error { return nil }
+func (p *Provider) optionsFor(overrides []rooms.ValidationOptions) (rooms.ValidationOptions, error) {
+	if p == nil {
+		return rooms.ValidationOptions{}, fmt.Errorf("%w: manifest provider is nil", rooms.ErrInvalidManifest)
+	}
+	if len(overrides) > 1 {
+		return rooms.ValidationOptions{}, invalid("options", "at most one validation option set is supported", rooms.ErrInvalidManifest)
+	}
+	if len(overrides) == 1 {
+		return overrides[0], nil
+	}
+	return p.options, nil
+}
+func cloneValidationRegistry(value rooms.ValidationRegistry) rooms.ValidationRegistry {
+	return rooms.ValidationRegistry{
+		Providers: cloneStringSet(value.Providers),
+		Models:    cloneNestedStringSet(value.Models),
+		Tools:     cloneStringSet(value.Tools),
+		Voices:    cloneNestedStringSet(value.Voices),
+	}
+}
+func cloneStringSet(value map[string]struct{}) map[string]struct{} {
+	if value == nil {
+		return nil
+	}
+	clone := make(map[string]struct{}, len(value))
+	for key := range value {
+		clone[key] = struct{}{}
+	}
+	return clone
+}
+func cloneNestedStringSet(value map[string]map[string]struct{}) map[string]map[string]struct{} {
+	if value == nil {
+		return nil
+	}
+	clone := make(map[string]map[string]struct{}, len(value))
+	for key, nested := range value {
+		clone[key] = cloneStringSet(nested)
+	}
+	return clone
 }

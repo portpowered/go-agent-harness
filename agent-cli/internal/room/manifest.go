@@ -5,6 +5,7 @@ package room
 
 import (
 	"os"
+	"strings"
 
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
@@ -49,14 +50,21 @@ type Participant = runtimeRooms.Participant
 type ValidationOptions = runtimeRooms.ValidationOptions
 type ValidationRegistry = runtimeRooms.ValidationRegistry
 
-// NormalizeParticipantKind retains the CLI helper while delegating the
-// compatibility spelling to runtime rooms.
+// NormalizeParticipantKind retains the CLI helper for existing callers while
+// keeping the compatibility spelling at the document boundary.
 func NormalizeParticipantKind(kind ParticipantKind) ParticipantKind {
-	return runtimeRooms.NormalizeParticipantKind(kind)
+	switch normalized := ParticipantKind(strings.ToLower(strings.TrimSpace(string(kind)))); normalized {
+	case "", ParticipantKindAgent:
+		return ParticipantKindAgent
+	case ParticipantKindHuman, ParticipantKindCustomer:
+		return ParticipantKindHuman
+	default:
+		return normalized
+	}
 }
 
 func NewValidationRegistry(providers []string, models map[string][]string, tools []string, voices map[string][]string) ValidationRegistry {
-	return runtimeRooms.NewValidationRegistry(providers, models, tools, voices)
+	return runtimeWire.NewValidationRegistry(providers, models, tools, voices)
 }
 
 // ParseManifest preserves the historical CLI behavior of checking named
@@ -84,6 +92,6 @@ func cliValidationOptions(options []ValidationOptions) []ValidationOptions {
 	return []ValidationOptions{resolved}
 }
 
-func newCLIManifestProvider() *runtimeWire.ManifestProvider {
+func newCLIManifestProvider() runtimeWire.ManifestAdmission {
 	return runtimeWire.NewManifestProvider(ValidationOptions{LookupCredential: os.LookupEnv})
 }

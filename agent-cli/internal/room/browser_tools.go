@@ -33,5 +33,5 @@ type BrowserReplayConfig = runtimeRooms.BrowserReplayConfig
 // DefaultBrowserToolsConfig retains the CLI helper while using runtime's
 // canonical, configuration-independent defaults.
 func DefaultBrowserToolsConfig() BrowserToolsConfig {
-	return runtimeRooms.DefaultBrowserToolsConfig()
+	return runtimeRooms.BrowserToolsDefaults{}.Config()
 }

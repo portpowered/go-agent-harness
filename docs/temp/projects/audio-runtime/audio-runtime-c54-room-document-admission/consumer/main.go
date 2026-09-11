@@ -228,12 +228,12 @@ func credentialLookup(name string) (string, bool) {
 	}
 }
 
-func newProvider(registry rooms.ValidationRegistry) *roomwire.ManifestProvider {
+func newProvider(registry rooms.ValidationRegistry) roomwire.ManifestAdmission {
 	return roomwire.NewManifestProviderFromRegistry(registry, credentialLookup)
 }
 
 func run() (report, error) {
-	registry := rooms.NewValidationRegistry(
+	registry := roomwire.NewValidationRegistry(
 		[]string{"openai"},
 		map[string][]string{"openai": {"gpt-realtime"}},
 		[]string{"sleep"},
@@ -288,7 +288,7 @@ func run() (report, error) {
 	if err != nil {
 		return report{}, fmt.Errorf("parse browser-default fixture: %w", err)
 	}
-	if defaults.Participants[0].BrowserTools == nil || !reflect.DeepEqual(*defaults.Participants[0].BrowserTools, rooms.DefaultBrowserToolsConfig()) {
+	if defaults.Participants[0].BrowserTools == nil || !reflect.DeepEqual(*defaults.Participants[0].BrowserTools, rooms.BrowserToolsDefaults{}.Config()) {
 		return report{}, errors.New("browser empty-object defaults differ from the public runtime defaults")
 	}
 
@@ -381,7 +381,7 @@ func run() (report, error) {
 			BrowserTimeout:      jsonManifest.Participants[0].BrowserTools.Limits.InvocationTimeout.String(),
 			BrowserMaxInput:     jsonManifest.Participants[0].BrowserTools.Limits.MaxInputBytes,
 			BrowserMaxResult:    jsonManifest.Participants[0].BrowserTools.Limits.MaxResultBytes,
-			BrowserDefaultMatch: reflect.DeepEqual(*defaults.Participants[0].BrowserTools, rooms.DefaultBrowserToolsConfig()),
+			BrowserDefaultMatch: reflect.DeepEqual(*defaults.Participants[0].BrowserTools, rooms.BrowserToolsDefaults{}.Config()),
 		},
 		TypedErrors: typedErrorReport{
 			MissingCredentialCause:   true,
