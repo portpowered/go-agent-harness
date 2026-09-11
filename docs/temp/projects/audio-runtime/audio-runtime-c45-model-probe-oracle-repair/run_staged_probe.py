@@ -25,6 +25,7 @@ from typing import Any, Callable
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[4]
 VERIFY = ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/verify.py"
+C47_OUTPUT_ROOT = ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound"
 RUNS = HERE / "runs"
 EXPECTED_ARTIFACTS = {
     "artifact-0-yui": {"name": "artifact-0", "sha256": "d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe", "bytes": 51042338},
@@ -38,6 +39,8 @@ REQUIRED_FIXTURES = {
 }
 COPY_CHUNK_BYTES = 1024 * 1024
 REPORT_RESERVE_BYTES = 16 * 1024 * 1024
+RESERVE_SAMPLE_INTERVAL_SECONDS = 0.1
+CLEANUP_GRACE_SECONDS = 2.0
 STAGING_METHODS: dict[str, str] = {}
 
 
@@ -80,14 +83,20 @@ class ReserveMonitor:
         self.minimum_free_bytes = minimum_free_bytes
         self.samples: list[dict[str, Any]] = []
         self.minimum_observed_bytes: int | None = None
+        self._last_sample_monotonic: float | None = None
 
     def sample(self, phase: str, projected_growth_bytes: int = 0) -> int:
+        sampled_at = time.monotonic()
         available = free_bytes(self.root)
         required = self.minimum_free_bytes + max(0, projected_growth_bytes)
         self.minimum_observed_bytes = available if self.minimum_observed_bytes is None else min(self.minimum_observed_bytes, available)
+        interval = None if self._last_sample_monotonic is None else max(0.0, sampled_at - self._last_sample_monotonic)
+        self._last_sample_monotonic = sampled_at
         self.samples.append(
             {
                 "phase": phase,
+                "timestamp_monotonic": round(sampled_at, 6),
+                "interval_seconds": None if interval is None else round(interval, 6),
                 "free_bytes": available,
                 "projected_growth_bytes": max(0, projected_growth_bytes),
                 "required_free_bytes": required,
@@ -132,30 +141,67 @@ def path_bytes(path: pathlib.Path) -> int:
     return 0
 
 
-def cleanup_scratch(paths: list[pathlib.Path]) -> dict[str, Any]:
-    before = [{"path": str(path), "bytes": path_bytes(path)} for path in paths]
-    removed: list[str] = []
+def _safe_path_facts(path: pathlib.Path, phase: str, errors: list[dict[str, str]]) -> dict[str, Any]:
+    try:
+        return {"path": str(path), "bytes": path_bytes(path)}
+    except BaseException as exc:
+        errors.append({"operation": f"{phase}-inspection", "path": str(path), "error": str(exc)})
+        return {"path": str(path), "bytes": None, "inspection_error": str(exc)}
+
+
+def _known_bytes(entries: list[dict[str, Any]]) -> int | None:
+    values = [entry.get("bytes") for entry in entries]
+    if any(not isinstance(value, int) for value in values):
+        return None
+    return sum(values)
+
+
+def cleanup_scratch(paths: list[pathlib.Path], deadline: float | None = None) -> dict[str, Any]:
     errors: list[dict[str, str]] = []
+    removed: list[str] = []
+    deadline_exceeded = False
+    cleanup_grace_deadline: float | None = None
+
+    def check_cleanup_budget(path: pathlib.Path) -> bool:
+        nonlocal cleanup_grace_deadline, deadline_exceeded
+        now = time.monotonic()
+        if deadline is not None and now >= deadline and not deadline_exceeded:
+            deadline_exceeded = True
+            cleanup_grace_deadline = now + CLEANUP_GRACE_SECONDS
+        if cleanup_grace_deadline is not None and now >= cleanup_grace_deadline:
+            errors.append({"operation": "cleanup-grace-deadline", "path": str(path), "error": "bounded cleanup grace exceeded"})
+            return False
+        return True
+
+    def safe_facts(path: pathlib.Path, phase: str) -> dict[str, Any]:
+        if not check_cleanup_budget(path):
+            return {"path": str(path), "bytes": None, "inspection_skipped": True}
+        return _safe_path_facts(path, phase, errors)
+
+    before = [safe_facts(path, "before") for path in paths]
     for path in paths:
-        if not path.exists() and not path.is_symlink():
-            continue
+        if not check_cleanup_budget(path):
+            break
         try:
+            if not path.exists() and not path.is_symlink():
+                continue
             if path.is_symlink() or path.is_file():
                 path.unlink()
             elif path.is_dir():
                 shutil.rmtree(path)
             removed.append(str(path))
-        except OSError as exc:
-            errors.append({"path": str(path), "error": str(exc)})
-    after = [{"path": str(path), "bytes": path_bytes(path)} for path in paths]
+        except BaseException as exc:
+            errors.append({"operation": "remove", "path": str(path), "error": str(exc)})
+    after = [safe_facts(path, "after") for path in paths]
     return {
         "paths": [str(path) for path in paths],
-        "bytes_before": sum(item["bytes"] for item in before),
-        "bytes_after": sum(item["bytes"] for item in after),
+        "bytes_before": _known_bytes(before),
+        "bytes_after": _known_bytes(after),
         "before": before,
         "after": after,
         "removed": removed,
         "errors": errors,
+        "deadline_exceeded": deadline_exceeded,
     }
 
 
@@ -174,14 +220,12 @@ def _path_is_within(path: pathlib.Path, parent: pathlib.Path) -> bool:
 
 def validate_output_root(output_root: pathlib.Path, explicit: bool) -> None:
     output_root = output_root.resolve()
-    forbidden_roots = (
-        (ROOT / "docs/temp/probes").resolve(),
-        (ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission").resolve(),
-        (ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c45-model-probe-oracle-repair").resolve(),
-    )
-    for forbidden in forbidden_roots:
-        if _path_is_within(output_root, forbidden):
-            raise ValueError(f"output root must not overwrite historical or peer evidence: {output_root}")
+    allowed_root = C47_OUTPUT_ROOT.resolve()
+    if not _path_is_within(output_root, allowed_root):
+        raise ValueError(
+            "output root must be within the C47-owned evidence tree and must not overwrite "
+            f"historical or peer evidence: {output_root}"
+        )
 
 
 def _clonefile(source: pathlib.Path, destination: pathlib.Path) -> bool:
@@ -458,6 +502,27 @@ def run_controls(
     }
 
 
+def free_space_report(monitor: ReserveMonitor) -> dict[str, Any]:
+    return {
+        "minimum_observed": monitor.minimum_observed_bytes,
+        "sample_interval_seconds": RESERVE_SAMPLE_INTERVAL_SECONDS,
+        "samples": monitor.samples,
+    }
+
+
+def write_outcome(outcome: dict[str, Any], run_dir: pathlib.Path, output_root: pathlib.Path) -> None:
+    report_path = run_dir / "outcome.json"
+    for _ in range(8):
+        report_path.write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")
+        measured = tree_bytes(run_dir)
+        if outcome.get("report_bytes") == measured:
+            break
+        outcome["report_bytes"] = measured
+    else:
+        raise RuntimeError("final report size did not stabilize")
+    (output_root / "latest-staged-probe.json").write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--staged-root", type=pathlib.Path, required=True)
@@ -476,9 +541,11 @@ def main() -> int:
     if args.min_free_bytes < 2 * 1024 * 1024 * 1024:
         raise SystemExit("C45 free-space reserve is below 2 GiB")
 
+    started = time.monotonic()
     staged_root = args.staged_root.resolve()
     output_root = (args.output_root or HERE).resolve()
     validate_output_root(output_root, args.output_root is not None)
+    output_root.mkdir(parents=True, exist_ok=True)
     runs_root = output_root / "runs"
     runs_root.mkdir(parents=True, exist_ok=True)
     run_dir = runs_root / f"staged-probe-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.getpid()}"
@@ -494,25 +561,44 @@ def main() -> int:
         "total_timeout_seconds": args.total_timeout,
         "max_output_bytes": args.max_output_bytes,
         "min_free_bytes": args.min_free_bytes,
+        "reserve_filesystem_root": str(output_root),
         "forbidden_helpers_called": [],
         "scratch_paths": [str(path) for path in scratch_paths],
     }
-    started = time.monotonic()
-    monitor = ReserveMonitor(ROOT, args.min_free_bytes)
+    deadline = started + args.total_timeout
+    monitor = ReserveMonitor(output_root, args.min_free_bytes)
+
+    def reserve_check(phase: str) -> int:
+        require_deadline(started, args.total_timeout, phase)
+        return monitor.sample(phase)
+
+    def record_cleanup() -> dict[str, Any]:
+        cleanup = cleanup_scratch(scratch_paths, deadline=deadline)
+        if "scratch_cleanup" in outcome:
+            outcome["cleanup_after_failure"] = cleanup
+        else:
+            outcome["scratch_cleanup"] = cleanup
+        return cleanup
+
     try:
+        require_deadline(started, args.total_timeout, "artifact verification")
         staged_before = check_staged_artifacts(staged_root)
+        require_deadline(started, args.total_timeout, "storage preflight")
         storage_budget = prospective_storage_budget(staged_root, args.max_output_bytes)
         outcome["storage_preflight"] = storage_budget
+        require_deadline(started, args.total_timeout, "storage reserve preflight")
         free_before = monitor.sample("preflight", storage_budget["projected_growth_bytes"])
+        require_deadline(started, args.total_timeout, "descriptor read")
         descriptor = json.loads((staged_root / "artifact-3.json").read_text(encoding="utf-8"))
-        reserve_check = lambda phase: monitor.sample(phase)
         executable_paths = _call_with_reserve(stage_executables, staged_root, run_dir, reserve_check=reserve_check)
+        require_deadline(started, args.total_timeout, "executable staging")
         fixture_root = _call_with_reserve(
             extract_required_fixtures,
             staged_root / "artifact-2.tar",
             run_dir / "staged-source",
             reserve_check=reserve_check,
         )
+        require_deadline(started, args.total_timeout, "fixture extraction")
         outcome["artifact_hashes_before"] = staged_before
         outcome["verifier_sha256"] = sha256(VERIFY)
         outcome["staged_binary_bytes"] = staged_before["artifact-0-yui"]["bytes"] + staged_before["artifact-1-consumer"]["bytes"]
@@ -561,20 +647,21 @@ def main() -> int:
         outcome["artifact_hashes_after"] = staged_after
         outcome["artifact_input_equivalence"] = staged_before == staged_after
         outcome["fixture_bytes"] = tree_bytes(fixture_root)
-        cleanup = cleanup_scratch(scratch_paths)
+        cleanup = cleanup_scratch(scratch_paths, deadline=deadline)
         outcome["scratch_bytes"] = cleanup["bytes_before"]
         outcome["scratch_cleanup"] = cleanup
-        if cleanup["errors"] or cleanup["bytes_after"] != 0:
+        if cleanup["errors"] or cleanup["deadline_exceeded"] or cleanup["bytes_after"] != 0:
             raise RuntimeError(f"staged probe scratch cleanup incomplete: {cleanup}")
+        require_deadline(started, args.total_timeout, "scratch cleanup")
         free_after = monitor.sample("after-cleanup")
         outcome["free_space_samples_bytes"] = {
             "before": free_before,
             "during": free_during,
             "after": free_after,
             "minimum_observed": monitor.minimum_observed_bytes,
+            "sample_interval_seconds": RESERVE_SAMPLE_INTERVAL_SECONDS,
             "samples": monitor.samples,
         }
-        outcome["report_bytes"] = tree_bytes(run_dir)
         outcome["tested_source_revision"] = subprocess.run(
             ["rtk", "proxy", "git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True, timeout=10
         ).stdout.strip()
@@ -583,33 +670,24 @@ def main() -> int:
         outcome["decision"] = "BLOCKED"
         outcome["storage_status"] = "BLOCKED"
         outcome["error"] = f"{type(exc).__name__}: {exc}"
-        cleanup = cleanup_scratch(scratch_paths)
+        cleanup = record_cleanup()
         outcome["scratch_bytes"] = cleanup["bytes_before"]
-        outcome["scratch_cleanup"] = cleanup
-        outcome["report_bytes"] = tree_bytes(run_dir)
-        outcome["free_space_samples_bytes"] = {
-            "minimum_observed": monitor.minimum_observed_bytes,
-            "samples": monitor.samples,
-        }
+        outcome["free_space_samples_bytes"] = free_space_report(monitor)
         outcome["elapsed_seconds"] = round(time.monotonic() - started, 6)
-        (run_dir / "outcome.json").write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")
-        (output_root / "latest-staged-probe.json").write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")
+        write_outcome(outcome, run_dir, output_root)
         print(json.dumps(outcome, indent=2))
         return 1
     except Exception as exc:
         outcome["error"] = f"{type(exc).__name__}: {exc}"
-        cleanup = cleanup_scratch(scratch_paths)
+        cleanup = record_cleanup()
         outcome["scratch_bytes"] = cleanup["bytes_before"]
-        outcome["scratch_cleanup"] = cleanup
-        outcome["report_bytes"] = tree_bytes(run_dir)
+        outcome["free_space_samples_bytes"] = free_space_report(monitor)
         outcome["elapsed_seconds"] = round(time.monotonic() - started, 6)
-        (run_dir / "outcome.json").write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")
-        (output_root / "latest-staged-probe.json").write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")
+        write_outcome(outcome, run_dir, output_root)
         print(json.dumps(outcome, indent=2))
         return 1
     outcome["elapsed_seconds"] = round(time.monotonic() - started, 6)
-    (run_dir / "outcome.json").write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")
-    (output_root / "latest-staged-probe.json").write_text(json.dumps(outcome, indent=2) + "\n", encoding="utf-8")
+    write_outcome(outcome, run_dir, output_root)
     print(json.dumps(outcome, indent=2))
     return 0
 

@@ -191,6 +191,19 @@ def capture_controls(timeout: float) -> dict[str, Any]:
         assert descendant is not None and descendant["survivors_before_final_kill"]
         assert descendant["kill_sent"] and descendant["surviving_process_group_pids"] == []
 
+        nonzero_descendant = run_child(
+            module,
+            root,
+            "nonzero-parent-with-descendant",
+            "import os, signal, time;\nif os.fork() == 0:\n signal.signal(signal.SIGTERM, signal.SIG_IGN)\n time.sleep(30)\nelse:\n os._exit(7)",
+            module["OutputBudget"](4096),
+            timeout,
+        )
+        assert nonzero_descendant["primary_failure"]["kind"] == "exit_code"
+        assert nonzero_descendant["primary_failure"]["exit_code"] == 7
+        assert nonzero_descendant["kill_sent"]
+        assert_clean_result(nonzero_descendant)
+
         timeout_result = run_child(
             module,
             root,
@@ -292,6 +305,7 @@ def capture_controls(timeout: float) -> dict[str, Any]:
             "shared_budget_not_started": second,
             "combined_overflow": combined,
             "descendant_cleanup": descendant,
+            "nonzero_descendant": nonzero_descendant,
             "timeout_cleanup": timeout_result,
             "injected_cleanup": cleanup_failure,
             "inspection_failure": inspection,
@@ -371,7 +385,40 @@ def staging_controls() -> dict[str, Any]:
         cleanup = module["cleanup_scratch"]([cleanup_path])
         assert cleanup["bytes_before"] == 5 and cleanup["bytes_after"] == 0 and cleanup["errors"] == []
 
-        module["main"].__globals__["free_bytes"] = lambda _path: MIN_FREE_BYTES + budget["projected_growth_bytes"] - 1
+        inspect_path = root / "cleanup-inspection-failure"
+        inspect_path.mkdir()
+        (inspect_path / "owned.txt").write_bytes(b"owned")
+        cleanup_globals = module["cleanup_scratch"].__globals__
+        original_path_bytes = cleanup_globals["path_bytes"]
+
+        def failing_path_bytes(_path: pathlib.Path) -> int:
+            raise OSError("injected cleanup inspection failure")
+
+        cleanup_globals["path_bytes"] = failing_path_bytes
+        try:
+            inspection_cleanup = module["cleanup_scratch"]([inspect_path])
+        finally:
+            cleanup_globals["path_bytes"] = original_path_bytes
+        assert inspection_cleanup["bytes_before"] is None and inspection_cleanup["bytes_after"] is None
+        assert any(item["operation"] == "before-inspection" for item in inspection_cleanup["errors"])
+        assert any(item["operation"] == "after-inspection" for item in inspection_cleanup["errors"])
+
+        deadline_path = root / "cleanup-deadline"
+        deadline_path.write_bytes(b"owned")
+        deadline_cleanup = module["cleanup_scratch"]([deadline_path], deadline=time.monotonic() - 1)
+        assert deadline_cleanup["deadline_exceeded"]
+        assert not deadline_path.exists() and deadline_cleanup["bytes_after"] == 0
+
+        observed_free_paths: list[pathlib.Path] = []
+
+        def synthetic_free_bytes(path: pathlib.Path) -> int:
+            observed_free_paths.append(path.resolve())
+            return MIN_FREE_BYTES + budget["projected_growth_bytes"] - 1
+
+        original_free_bytes = module["main"].__globals__["free_bytes"]
+        original_main_path_bytes = module["main"].__globals__["path_bytes"]
+        module["main"].__globals__["free_bytes"] = synthetic_free_bytes
+        module["main"].__globals__["path_bytes"] = failing_path_bytes
         output_root = root / "private-output"
         original_argv = sys.argv
         sys.argv = [
@@ -393,10 +440,20 @@ def staging_controls() -> dict[str, Any]:
             exit_code = module["main"]()
         finally:
             sys.argv = original_argv
+            module["main"].__globals__["free_bytes"] = original_free_bytes
+            module["main"].__globals__["path_bytes"] = original_main_path_bytes
         report = json.loads((output_root / "latest-staged-probe.json").read_text(encoding="utf-8"))
         assert exit_code == 1 and report["decision"] == "BLOCKED"
         assert "available=" in report["error"] and "needed=" in report["error"]
+        assert observed_free_paths and all(path == output_root.resolve() for path in observed_free_paths)
+        assert report["scratch_cleanup"]["errors"]
+        run_dir = pathlib.Path(report["run_dir"])
+        assert report["report_bytes"] == module["tree_bytes"](run_dir)
+        samples = report["free_space_samples_bytes"]["samples"]
+        assert samples and all("timestamp_monotonic" in sample and "interval_seconds" in sample for sample in samples)
         assert not (pathlib.Path(report["run_dir"]) / "staged-binaries").exists()
+
+        module["validate_output_root"](root / "private-output-allowed", True)
 
         for forbidden in (
             module["HERE"],

@@ -372,6 +372,12 @@ def run_process(
 
         if state.failure is not None and primary_failure is None:
             primary_failure = state.failure
+        if process.returncode not in (None, 0) and primary_failure is None:
+            primary_failure = {
+                "kind": "exit_code",
+                "message": f"{label} exited with nonzero status {process.returncode}",
+                "exit_code": process.returncode,
+            }
         cleanup_needed = timed_out or primary_failure is not None
         if not cleanup_needed:
             try:
@@ -525,7 +531,9 @@ def run_process(
 
     if primary_exception is not None:
         raise _attach_result(primary_exception, result)
-    if primary_failure is not None and (state.output_overflow or cleanup_failures or primary_failure["kind"] != "timeout"):
+    if primary_failure is not None and (
+        state.output_overflow or cleanup_failures or primary_failure["kind"] not in {"timeout", "exit_code"}
+    ):
         raise _attach_result(EvidenceFailure(primary_failure["message"]), result)
     if cleanup_failures or survivors:
         raise _attach_result(EvidenceFailure(f"{label} cleanup proof failed; see {record_path}"), result)
