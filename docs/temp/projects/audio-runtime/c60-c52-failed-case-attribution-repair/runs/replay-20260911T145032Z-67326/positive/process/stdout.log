@@ -1,0 +1,15 @@
+Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive; additional_allowed_roots=none
+Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.
+Tools: exec
+Tool result: PROBE_TOOL_MARKER_9182
+
+STDERR:
+sh: evidence/runs/exec-invocations-v4.log: No such file or directory
+
+
+[session closed: provider_closed]
+[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=session output_state=not_applicable]
+live session terminated: session error: replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected ...(truncated)PROBE_TOOL_MARKER_9182\n", actual ...(truncated)PROBE_TOOL_MARKER_9182\n\nSTDERR:\nsh: evidence/...(truncated)
+replay mismatch
+replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected ...(truncated)PROBE_TOOL_MARKER_9182\n", actual ...(truncated)PROBE_TOOL_MARKER_9182\n\nSTDERR:\nsh: evidence/...(truncated)
+replay mismatch

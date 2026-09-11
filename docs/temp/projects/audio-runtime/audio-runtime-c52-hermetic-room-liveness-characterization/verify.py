@@ -16,15 +16,21 @@ from pathlib import Path
 
 
 EVIDENCE = Path(__file__).resolve().parent
+C60_EVIDENCE = EVIDENCE.parent / "c60-c52-failed-case-attribution-repair"
+C60_FIXTURE = C60_EVIDENCE / "failed-case-attribution-fixture.json"
 MATRIX = EVIDENCE / "matrix.json"
 EXPECTED = EVIDENCE / "expected-checkpoints.json"
 PR438 = "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd"
 PLANNING_MAIN = "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
 STARTUP_INTEGRATION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 BASELINE = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
-TASK = "audio-runtime-c52-hermetic-room-liveness-characterization"
-OWNED_PREFIX = "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/"
+TASK = "audio-runtime-c60-c52-failed-case-attribution-repair"
+OWNED_PREFIXES = (
+    "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/",
+    "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/",
+)
 EXPECTED_PACKAGE = "./services/rooms/internal/lifecycle"
+EXPECTED_GO_PACKAGE = "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
 TEST_PARENT = "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer"
 REQUIRED_PROCESS_FIELDS = (
     "exit_code",
@@ -211,6 +217,7 @@ def parse_raw_go_json(
     required_tests: list[str],
     package: str,
     expected_count: int | None = None,
+    binding: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if not stdout_path.is_file():
         raise VerificationError(f"missing raw go test output: {stdout_path}")
@@ -225,6 +232,8 @@ def parse_raw_go_json(
         if isinstance(value, dict):
             events.append(value)
     test_events: dict[str, dict[str, int]] = {}
+    required_test_terminal_actions: dict[str, list[dict[str, object]]] = {test: [] for test in required_tests}
+    action_package_mismatches: list[dict[str, object]] = []
     for event in events:
         test = event.get("Test")
         if not isinstance(test, str) or not test:
@@ -233,6 +242,16 @@ def parse_raw_go_json(
         counts = test_events.setdefault(test, {"run": 0, "pass": 0, "fail": 0, "skip": 0})
         if action in counts:
             counts[action] += 1
+        if test in required_test_terminal_actions and action in {"pass", "fail", "skip"}:
+            event_package = event.get("Package")
+            if event_package != EXPECTED_GO_PACKAGE:
+                action_package_mismatches.append({"test": test, "action": action, "package": event_package})
+            required_test_terminal_actions[test].append({
+                "ordinal": len(required_test_terminal_actions[test]),
+                "action": action,
+                "package": event_package,
+                "test": test,
+            })
     output = "\n".join(str(event.get("Output", "")) for event in events if event.get("Action") == "output")
     cached_marker = "(cached)" in output
     no_tests_marker = any(
@@ -260,6 +279,8 @@ def parse_raw_go_json(
         and all(required_test_terminal_counts[test] == expected_count for test in required_tests)
         and all(required_test_skip_counts[test] == 0 for test in required_tests)
         and relevant_test_names == expected_relevant_names
+        and all(len(required_test_terminal_actions[test]) == expected_count for test in required_tests)
+        and not action_package_mismatches
     )
     behavior_passed = (
         selection_valid
@@ -285,6 +306,9 @@ def parse_raw_go_json(
         "no_tests_marker": no_tests_marker,
         "first_assertion": next((line for line in output.splitlines() if "browser_parity_test.go:" in line), ""),
         "package": package,
+        "required_test_terminal_actions": required_test_terminal_actions,
+        "action_package_mismatches": action_package_mismatches,
+        "raw_action_binding": binding,
     }
 
 
@@ -294,6 +318,7 @@ def raw_selection_for_process(
     required_tests: list[str],
     package: str,
     expected_count: int | None = None,
+    binding: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if not isinstance(process, dict):
         raise VerificationError(f"missing process record for {stdout_path}")
@@ -301,7 +326,19 @@ def raw_selection_for_process(
         raise VerificationError(f"missing raw go test output: {stdout_path}")
     if process.get("stdout_bytes") != stdout_path.stat().st_size or process.get("stdout_sha256") != digest(stdout_path):
         raise VerificationError(f"raw stdout does not match process provenance: {stdout_path}")
-    return parse_raw_go_json(stdout_path, required_tests, package, expected_count)
+    return parse_raw_go_json(stdout_path, required_tests, package, expected_count, binding)
+
+
+def raw_action_binding(run_id: str, record: dict[str, object], cell: dict[str, object]) -> dict[str, object]:
+    required_tests = required_tests_for_cell(cell)
+    return {
+        "revision": record.get("revision"),
+        "run_id": run_id,
+        "matrix_cell": str(cell.get("id")),
+        "package": EXPECTED_GO_PACKAGE,
+        "parent_test": TEST_PARENT,
+        "subtests": required_tests,
+    }
 
 
 def raw_selection_for_record(run_root: Path, record: dict[str, object], cell: dict[str, object]) -> dict[str, object]:
@@ -315,12 +352,14 @@ def raw_selection_for_record(run_root: Path, record: dict[str, object], cell: di
     process = record.get("process")
     if not isinstance(process, dict):
         raise VerificationError(f"missing process record for {label}/{cell_id}")
+    binding = raw_action_binding(run_root.name, record, cell)
     return raw_selection_for_process(
         stdout_path,
         process,
         required_tests_for_cell(cell),
         EXPECTED_PACKAGE,
         requested_count_for_cell(cell),
+        binding,
     )
 
 
@@ -355,6 +394,19 @@ def validate_raw_selection(
                 f"{context} raw selection for {test} is {actual}, expected run={expected}, "
                 f"terminal={expected}, skip=0"
             )
+    if require_selected:
+        actions = parsed.get("required_test_terminal_actions")
+        if not isinstance(actions, dict):
+            raise VerificationError(f"{context} has no raw selected terminal actions")
+        for test in required_tests:
+            values = actions.get(test)
+            if not isinstance(values, list) or len(values) != expected_count:
+                raise VerificationError(f"{context} raw terminal action count is incomplete for {test}")
+            for ordinal, action in enumerate(values):
+                if not isinstance(action, dict) or action.get("ordinal") != ordinal or action.get("test") != test:
+                    raise VerificationError(f"{context} raw terminal action identity is malformed for {test}")
+                if action.get("action") not in {"pass", "fail", "skip"} or action.get("package") != EXPECTED_GO_PACKAGE:
+                    raise VerificationError(f"{context} raw terminal action package/status is invalid for {test}")
     if require_selected and parsed.get("selection_valid") is not True:
         raise VerificationError(f"{context} raw selection is not valid")
     if not require_selected and parsed.get("selection_valid") is True:
@@ -435,7 +487,7 @@ def verify_provenance() -> dict[str, object]:
         "candidate_source_revision", "evidence_candidate_revision", "startup_integration_revision", "planning_main_revision",
         "pr438_head_revision", "refreshed_origin_main_revision", "ancestry", "toolchain",
         "environment_allowlist", "workspace_inputs", "source_archives", "ci_observation",
-        "primary_observation", "runner_inputs", "no_source_mutation",
+        "primary_observation", "runner_inputs", "c60_evidence", "no_source_mutation",
     ]
     missing = [key for key in required if key not in value]
     if missing:
@@ -470,7 +522,7 @@ def verify_provenance() -> dict[str, object]:
     if not isinstance(fixed_environment, dict) or not {"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TZ", "GOENV", "GOPROXY"}.issubset(fixed_environment):
         raise VerificationError("fixed hermetic environment is incomplete")
     runner_injected = environment_allowlist.get("runner_injected")
-    if not isinstance(runner_injected, list) or not {"C52_REVISION", "C52_MATRIX_CELL", "C52_TRACE_PATH", "C52_OVERLAY_HASH", "GOCACHE", "GOMODCACHE", "GOTMPDIR", "GOWORK"}.issubset(runner_injected):
+    if not isinstance(runner_injected, list) or not {"C52_REVISION", "C52_MATRIX_CELL", "C52_RUN_ID", "C52_TRACE_PATH", "C52_OVERLAY_HASH", "GOCACHE", "GOMODCACHE", "GOTMPDIR", "GOWORK"}.issubset(runner_injected):
         raise VerificationError("runner environment allowlist is incomplete")
     workspace = value.get("workspace_inputs")
     if not isinstance(workspace, list) or not workspace:
@@ -504,7 +556,7 @@ def verify_provenance() -> dict[str, object]:
     runner = value.get("runner_inputs")
     if not isinstance(runner, dict):
         raise VerificationError("runner/overlay provenance is missing")
-    for key in ("matrix_sha256", "run_sha256", "overlay_sha256", "verify_sha256"):
+    for key in ("matrix_sha256", "run_sha256", "overlay_sha256", "verify_sha256", "fixture_sha256", "attribution_controls_sha256", "replay_sha256", "replay_wrapper_sha256"):
         validate_hash(runner.get(key), f"runner hash {key}")
     integrity_path = EVIDENCE / "integrity-controls.json"
     if integrity_path.is_file():
@@ -517,6 +569,22 @@ def verify_provenance() -> dict[str, object]:
     validate_hash(storage_ref.get("sha256"), "storage provenance hash")
     if digest(EVIDENCE / "storage.json") != storage_ref.get("sha256"):
         raise VerificationError("storage provenance hash does not match storage.json")
+    c60 = value.get("c60_evidence")
+    if not isinstance(c60, dict):
+        raise VerificationError("C60 evidence references are missing")
+    expected_c60_files = {
+        "fixture": C60_FIXTURE,
+        "attribution_controls": C60_EVIDENCE / "attribution-controls.json",
+        "replay": C60_EVIDENCE / "replay-report.json",
+        "replay_wrapper": C60_EVIDENCE / "verify_replay.py",
+    }
+    for name, path in expected_c60_files.items():
+        reference = c60.get(name)
+        if not isinstance(reference, dict) or reference.get("path") != path.name:
+            raise VerificationError(f"C60 evidence reference is incomplete: {name}")
+        validate_hash(reference.get("sha256"), f"C60 evidence hash {name}")
+        if not path.is_file() or digest(path) != reference.get("sha256"):
+            raise VerificationError(f"C60 evidence hash does not match retained file: {name}")
     if value.get("no_source_mutation") is not True:
         raise VerificationError("provenance does not prove source mutation isolation")
     return {"mode": "provenance", "passes": True, "candidate_source_revision": value.get("candidate_source_revision"), "ci_log_sha256": ci.get("log_sha256")}
@@ -554,6 +622,32 @@ def trace_events(path: Path) -> list[dict[str, object]]:
     return ordered
 
 
+def validate_record_identity(run: dict[str, object], run_root: Path, record: dict[str, object], cell: dict[str, object]) -> None:
+    run_id = run.get("run_id")
+    revision = record.get("revision")
+    cell_id = cell.get("id")
+    if not isinstance(run_id, str) or not run_id or not isinstance(revision, str) or not revision or not isinstance(cell_id, str) or not cell_id:
+        raise VerificationError("matrix record identity is incomplete")
+    environment = record.get("environment")
+    if not isinstance(environment, dict):
+        raise VerificationError(f"missing matrix environment for {revision}/{cell_id}")
+    expected_trace = (run_root / "cells" / str(record.get("revision_label")) / cell_id / "trace.jsonl").resolve()
+    expected_environment = {
+        "C52_REVISION": revision,
+        "C52_MATRIX_CELL": cell_id,
+        "C52_RUN_ID": run_id,
+        "C52_TRACE_PATH": str(expected_trace),
+        "C52_OVERLAY_HASH": run.get("overlay_sha256"),
+    }
+    for key, expected in expected_environment.items():
+        if environment.get(key) != expected:
+            raise VerificationError(f"matrix identity mismatch for {revision}/{cell_id}: {key}")
+    expected_binding = raw_action_binding(run_id, record, cell)
+    embedded = record.get("selection")
+    if not isinstance(embedded, dict) or embedded.get("raw_action_binding") != expected_binding:
+        raise VerificationError(f"raw action identity binding is incomplete for {revision}/{cell_id}")
+
+
 def record_trace(record: dict[str, object], run_root: Path) -> list[dict[str, object]]:
     relative = record.get("trace_path")
     if not isinstance(relative, str) or not relative:
@@ -566,8 +660,13 @@ def record_trace(record: dict[str, object], run_root: Path) -> list[dict[str, ob
     if record.get("trace_sha256") and digest(path) != record.get("trace_sha256"):
         raise VerificationError(f"trace hash mismatch: {relative}")
     events = trace_events(path)
+    expected_run_id = run_root.name
     for event in events:
-        if event.get("revision") != record.get("revision") or event.get("matrix_cell") != record.get("cell", {}).get("id"):
+        if (
+            event.get("revision") != record.get("revision")
+            or event.get("matrix_cell") != record.get("cell", {}).get("id")
+            or event.get("run_id") != expected_run_id
+        ):
             raise VerificationError(f"trace provenance mismatch in {relative}")
     return events
 
@@ -637,6 +736,7 @@ def verify_matrix() -> dict[str, object]:
         frozen_cell = expected_cells[key[1]]
         required_tests = required_tests_for_cell(frozen_cell)
         expected_test_count = requested_count_for_cell(frozen_cell)
+        validate_record_identity(run, run_root, record, frozen_cell)
         raw = raw_selection_for_record(run_root, record, frozen_cell)
         validate_raw_selection(
             raw,
@@ -660,6 +760,7 @@ def verify_matrix() -> dict[str, object]:
         if record.get("status") != expected_status:
             raise VerificationError(f"matrix status does not match raw behavior for {key}")
         if not behavior_passed:
+            failed_actions = raw_failed_actions(parsed, required_tests, f"{label}/{key[1]}")
             behavioral_failures.append({
                 "revision_label": label,
                 "cell_id": cell.get("id"),
@@ -667,6 +768,7 @@ def verify_matrix() -> dict[str, object]:
                 "first_failure": process.get("first_failure"),
                 "selection_valid": parsed.get("selection_valid"),
                 "behavior_passed": parsed.get("behavior_passed"),
+                "raw_failed_actions": failed_actions,
             })
     negative = run.get("negative_controls")
     if not isinstance(negative, dict) or negative.get("all_rejected") is not True:
@@ -790,7 +892,11 @@ def verify_overlay_integrity() -> dict[str, object]:
     code, output, _ = run_git("status", "--porcelain", "--untracked-files=all")
     if code != 0:
         raise VerificationError("cannot inspect source mutation")
-    outside = [line[3:] for line in output.splitlines() if len(line) >= 4 and not line[3:].startswith(OWNED_PREFIX)]
+    outside = [
+        line[3:]
+        for line in output.splitlines()
+        if len(line) >= 4 and not any(line[3:].startswith(prefix) for prefix in OWNED_PREFIXES)
+    ]
     if outside:
         raise VerificationError(f"tracked/source files changed outside C52 ownership: {outside}")
     return {"mode": "overlay-integrity", "passes": True, "manifests": manifests, "outside_owned_changes": []}
@@ -808,6 +914,16 @@ REQUIRED_TRACE_KINDS = [
 def validate_case_trace(group: list[dict[str, object]], record: dict[str, object], observed_failure: bool = False) -> None:
     if not group or group[0].get("kind") != "case_started":
         raise VerificationError(f"case trace does not start with case_started for {record.get('revision_label')}/{record.get('cell', {}).get('id')}")
+    started_fields = event_fields(group[0])
+    if started_fields.get("parent_test") != TEST_PARENT:
+        raise VerificationError("case_started does not bind the expected parent test")
+    cell = record.get("cell")
+    if not isinstance(cell, dict):
+        raise VerificationError("case trace has no matrix cell")
+    required_tests = required_tests_for_cell(cell)
+    subtest = started_fields.get("subtest")
+    if subtest not in required_tests:
+        raise VerificationError(f"case_started does not bind a selected subtest: {subtest!r}")
     counts = Counter(str(event.get("kind")) for event in group)
     for kind, expected in PER_CASE_TRACE_COUNTS.items():
         if counts.get(kind, 0) != expected:
@@ -821,7 +937,7 @@ def validate_case_trace(group: list[dict[str, object]], record: dict[str, object
                 f"checkpoint count for {kind} is {counts.get(kind, 0)}, expected at least {minimum} "
                 f"for {record.get('revision_label')}/{record.get('cell', {}).get('id')}"
             )
-    classification = event_fields(group[0]).get("classification")
+    classification = started_fields.get("classification")
     if classification not in {"silent_provider_timeout", "silent_provider_empty_response"}:
         raise VerificationError("case_started lacks a valid typed liveness classification")
     if group[0].get("participant") != "silent":
@@ -836,14 +952,14 @@ def validate_case_trace(group: list[dict[str, object]], record: dict[str, object
     outcomes = [event for event in group if event.get("kind") == "test_outcome"]
     deferred_outcomes = [event for event in group if event.get("kind") == "test_deferred_outcome"]
     if observed_failure:
-        if outcomes or len(deferred_outcomes) != 1:
-            raise VerificationError("failed case does not have exactly one bounded deferred outcome")
+        if not ((len(outcomes) == 1 and not deferred_outcomes) or (not outcomes and len(deferred_outcomes) == 1)):
+            raise VerificationError("failed case does not have exactly one direct or bounded deferred outcome")
     elif len(outcomes) != 1 or deferred_outcomes:
         raise VerificationError("passing case does not have exactly one direct outcome")
     peer_snapshots = [event_fields(event) for event in group if event.get("kind") == "peer_cancel_snapshot"]
     if observed_failure:
-        if len(peer_snapshots) != 1 or peer_snapshots[0].get("before") != "external_room_cancel" or peer_snapshots[0].get("count") == "0":
-            raise VerificationError("failed case lacks the observed non-zero peer cancellation boundary")
+        if len(peer_snapshots) != 1 or peer_snapshots[0].get("before") != "external_room_cancel" or not peer_snapshots[0].get("count", "").isdigit():
+            raise VerificationError("failed case lacks a valid peer-preservation boundary")
     elif any(fields.get("count") != "0" or fields.get("before") != "external_room_cancel" for fields in peer_snapshots):
         raise VerificationError("peer cancellation was not zero before external room cancellation")
     allowed_cancel_reasons = {"test_external_cancel"}
@@ -863,6 +979,321 @@ def validate_case_trace(group: list[dict[str, object]], record: dict[str, object
         raise VerificationError("diagnostic/sink checkpoint routing was transformed")
 
 
+def failed_case_classification(test: str) -> str:
+    if test == f"{TEST_PARENT}/provider_timeout":
+        return "silent_provider_timeout"
+    if test == f"{TEST_PARENT}/empty_response":
+        return "silent_provider_empty_response"
+    raise VerificationError(f"raw failed action is not a declared selected subtest: {test}")
+
+
+def raw_failed_actions(parsed: dict[str, object], required_tests: list[str], context: str) -> list[dict[str, object]]:
+    actions = parsed.get("required_test_terminal_actions")
+    if not isinstance(actions, dict):
+        raise VerificationError(f"{context} has no raw selected terminal actions")
+    failed: list[dict[str, object]] = []
+    for test in required_tests:
+        values = actions.get(test)
+        if not isinstance(values, list):
+            raise VerificationError(f"{context} has no terminal action list for {test}")
+        for value in values:
+            if not isinstance(value, dict):
+                raise VerificationError(f"{context} has a malformed terminal action for {test}")
+            if value.get("test") != test or value.get("package") != EXPECTED_GO_PACKAGE:
+                raise VerificationError(f"{context} selected terminal action has mismatched package/test identity")
+            if value.get("action") == "fail":
+                failed.append(value)
+    return failed
+
+
+def attribute_failed_case(
+    run: dict[str, object],
+    run_root: Path,
+    record: dict[str, object],
+    raw: dict[str, object],
+    groups: list[list[dict[str, object]]],
+    context: str,
+) -> dict[str, object]:
+    cell = record.get("cell")
+    if not isinstance(cell, dict):
+        raise VerificationError(f"{context} has no matrix cell")
+    required_tests = required_tests_for_cell(cell)
+    expected_binding = raw_action_binding(run_root.name, record, cell)
+    if raw.get("raw_action_binding") != expected_binding:
+        raise VerificationError(f"{context} raw action binding does not match revision/run/cell/package/test identity")
+    for group in groups:
+        for event in group:
+            if (
+                event.get("run_id") != run_root.name
+                or event.get("revision") != record.get("revision")
+                or event.get("matrix_cell") != cell.get("id")
+            ):
+                raise VerificationError(f"{context} trace event identity does not match revision/run/cell")
+    process = record.get("process")
+    if not isinstance(process, dict) or isinstance(process.get("exit_code"), bool) or not isinstance(process.get("exit_code"), int):
+        raise VerificationError(f"{context} has no concrete process exit status")
+    failed = raw_failed_actions(raw, required_tests, context)
+    process_failed = process.get("exit_code") != 0
+    if not process_failed:
+        if failed:
+            raise VerificationError(f"{context} has a raw failed action despite a passing process")
+        for group in groups:
+            validate_case_trace(group, record, observed_failure=False)
+        return {"failed": False, "failed_action": None, "failed_group_index": None, "attributed_case_count": 0}
+    if len(failed) != 1:
+        raise VerificationError(f"{context} process exit is not bound to exactly one selected failed test action")
+    failed_action = failed[0]
+    failed_test = failed_action.get("test")
+    if not isinstance(failed_test, str):
+        raise VerificationError(f"{context} selected failed action has no test name")
+    expected_classification = failed_case_classification(failed_test)
+    ordinal = failed_action.get("ordinal")
+    if isinstance(ordinal, bool) or not isinstance(ordinal, int) or ordinal < 0:
+        raise VerificationError(f"{context} selected failed action has no valid invocation ordinal")
+    candidates: list[tuple[int, list[dict[str, object]]]] = []
+    for index, group in enumerate(groups):
+        if not group:
+            continue
+        fields = event_fields(group[0])
+        if fields.get("parent_test") != TEST_PARENT or fields.get("subtest") != failed_test:
+            continue
+        if fields.get("classification") != expected_classification:
+            raise VerificationError(f"{context} failed raw action maps to a transformed typed-liveness classification")
+        candidates.append((index, group))
+    if ordinal >= len(candidates):
+        raise VerificationError(f"{context} raw failed action ordinal has no matching trace case")
+    target_index, _ = candidates[ordinal]
+    for index, group in enumerate(groups):
+        validate_case_trace(group, record, observed_failure=index == target_index)
+    return {
+        "failed": True,
+        "failed_action": failed_action,
+        "failed_group_index": target_index,
+        "attributed_case_count": 1,
+        "failed_test": failed_test,
+        "classification": expected_classification,
+    }
+
+
+def immutable_source_report_path(fixture: dict[str, object]) -> Path:
+    source = fixture.get("source_report")
+    if not isinstance(source, dict):
+        raise VerificationError("failed-case fixture has no immutable source-report binding")
+    relative = source.get("path")
+    expected_hash = source.get("sha256")
+    if not isinstance(relative, str) or not relative or not isinstance(expected_hash, str):
+        raise VerificationError("failed-case fixture source-report binding is incomplete")
+    candidates = [
+        EVIDENCE.parent / Path(relative).name,
+        EVIDENCE.parent.parent.parent.parent.parent / relative,
+    ]
+    factory_root = Path(__import__("os").environ.get("FACTORY_ROOT", ""))
+    if str(factory_root):
+        candidates.insert(0, factory_root / relative)
+    for candidate in candidates:
+        if candidate.is_file():
+            if digest(candidate) != expected_hash:
+                raise VerificationError("immutable corrected source report hash changed")
+            return candidate
+    raise VerificationError("immutable corrected source report is unavailable")
+
+
+def fixture_case_record(fixture: dict[str, object]) -> tuple[dict[str, object], dict[str, object], list[list[dict[str, object]]]]:
+    case = fixture.get("case")
+    trace_source = fixture.get("trace_source")
+    if not isinstance(case, dict) or not isinstance(trace_source, dict):
+        raise VerificationError("failed-case fixture case/trace binding is incomplete")
+    source_report = immutable_source_report_path(fixture)
+    expected_report = fixture.get("source_report")
+    if not isinstance(expected_report, dict) or expected_report.get("decision") != "FAILED":
+        raise VerificationError("failed-case fixture does not preserve the failed source report")
+    trace_path = (C60_EVIDENCE / str(trace_source.get("path", ""))).resolve()
+    if not trace_path.is_file() or digest(trace_path) != trace_source.get("sha256"):
+        raise VerificationError("failed-case fixture retained trace source is missing or changed")
+    source_groups = case_groups(trace_events(trace_path))
+    classification = case.get("classification")
+    source_group = next((group for group in source_groups if event_fields(group[0]).get("classification") == classification), None)
+    if source_group is None:
+        raise VerificationError("failed-case fixture retained trace has no matching typed-liveness case")
+    matrix = load(MATRIX)
+    if not isinstance(matrix, dict) or not isinstance(matrix.get("cells"), list):
+        raise VerificationError("failed-case fixture cannot load the frozen matrix")
+    source_cell = next((copy.deepcopy(item) for item in matrix["cells"] if isinstance(item, dict) and item.get("id") == case.get("cell_id")), None)
+    if not isinstance(source_cell, dict):
+        raise VerificationError("failed-case fixture cell is not in the frozen matrix")
+    source_cell["args"] = ["-count=1" if str(value).startswith("-count=") else value for value in source_cell.get("args", [])]
+    record = {
+        "revision_label": case.get("revision_label"),
+        "revision": case.get("revision"),
+        "cell": source_cell,
+        "environment": {
+            "C52_REVISION": case.get("revision"),
+            "C52_MATRIX_CELL": case.get("cell_id"),
+            "C52_RUN_ID": case.get("run_id"),
+            "C52_TRACE_PATH": "fixture/trace.jsonl",
+            "C52_OVERLAY_HASH": "fixture-overlay-hash",
+        },
+        "process": {
+            "exit_code": case.get("process_exit_code"),
+            "timed_out": False,
+            "output_overflow": False,
+            "reader_survivor": False,
+            "cleanup": {
+                "reason": "parent_exit",
+                "parent_exit_code": case.get("process_exit_code"),
+                "term_sent": False,
+                "kill_sent": False,
+                "group_survivor": False,
+                "term_error": None,
+                "kill_error": None,
+            },
+        },
+    }
+    required_tests = [str(item) for item in case.get("required_subtests", [])]
+    failed_test = str(case.get("subtest"))
+    test_events = {
+        TEST_PARENT: {"run": 1, "pass": 0, "fail": 1, "skip": 0},
+    }
+    terminal_actions: dict[str, list[dict[str, object]]] = {}
+    for test in required_tests:
+        action = "fail" if test == failed_test else "pass"
+        test_events[test] = {"run": 1, "pass": int(action == "pass"), "fail": int(action == "fail"), "skip": 0}
+        terminal_actions[test] = [{"ordinal": 0, "action": action, "package": EXPECTED_GO_PACKAGE, "test": test}]
+    binding = raw_action_binding(str(case.get("run_id")), record, source_cell)
+    raw = {
+        "json_line_count": 8,
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "test_events": test_events,
+        "required_test_run_counts": {test: 1 for test in required_tests},
+        "required_test_pass_counts": {test: int(test != failed_test) for test in required_tests},
+        "required_test_fail_counts": {test: int(test == failed_test) for test in required_tests},
+        "required_test_skip_counts": {test: 0 for test in required_tests},
+        "required_test_terminal_counts": {test: 1 for test in required_tests},
+        "requested_count": 1,
+        "selection_valid": True,
+        "behavior_passed": False,
+        "relevant_test_names": sorted({TEST_PARENT, *required_tests}),
+        "package_events": [],
+        "cached_marker": False,
+        "no_tests_marker": False,
+        "first_assertion": str(case.get("first_assertion")),
+        "package": case.get("package_selector"),
+        "required_test_terminal_actions": terminal_actions,
+        "action_package_mismatches": [],
+        "raw_action_binding": binding,
+    }
+    groups = []
+    for event in source_group:
+        copied = copy.deepcopy(event)
+        copied["run_id"] = str(case.get("run_id"))
+        if copied.get("kind") == "case_started":
+            fields = event_fields(copied)
+            fields.update({"parent_test": str(case.get("parent_test")), "subtest": failed_test})
+            copied["fields"] = fields
+        groups.append(copied)
+    return record, raw, [groups]
+
+
+def validate_fixture_failure_shape(fixture: dict[str, object], group: list[dict[str, object]], failed_action: dict[str, object]) -> None:
+    case = fixture.get("case")
+    if not isinstance(case, dict):
+        raise VerificationError("failed-case fixture case is malformed")
+    fields = event_fields(group[0])
+    if fields.get("classification") != case.get("classification") or fields.get("parent_test") != case.get("parent_test") or fields.get("subtest") != case.get("subtest"):
+        raise VerificationError("preserved failed case identity was transformed")
+    expected_peer = case.get("peer_cancel_snapshot")
+    peers = [event_fields(event) for event in group if event.get("kind") == "peer_cancel_snapshot"]
+    if not isinstance(expected_peer, dict) or peers != [expected_peer]:
+        raise VerificationError("preserved peer-cancellation boundary was transformed")
+    cancellations = [event_fields(event).get("reason") for event in group if event.get("kind") == "room_context_cancel_requested"]
+    if cancellations != ["test_external_cancel"]:
+        raise VerificationError("preserved room-cancellation boundary was transformed")
+    outcomes = [event for event in group if event.get("kind") == "test_outcome"]
+    if len(outcomes) != 1 or outcomes[0].get("participant") != "room":
+        raise VerificationError("preserved direct test outcome is missing or transformed")
+    expected_action = fixture.get("derivation", {}).get("raw_failed_action") if isinstance(fixture.get("derivation"), dict) else None
+    if not isinstance(expected_action, dict) or failed_action.get("action") != expected_action.get("Action") or failed_action.get("package") != expected_action.get("Package") or failed_action.get("test") != expected_action.get("Test"):
+        raise VerificationError("preserved raw failed action identity was transformed")
+
+
+def verify_failed_case_attribution_controls() -> dict[str, object]:
+    fixture = load(C60_FIXTURE)
+    if not isinstance(fixture, dict) or fixture.get("schema") != "audio-runtime-c60-failed-case-attribution-fixture-v1":
+        raise VerificationError("failed-case attribution fixture schema is invalid")
+    source_report = immutable_source_report_path(fixture)
+    trace_source = fixture.get("trace_source")
+    raw_source = fixture.get("raw_source")
+    if not isinstance(trace_source, dict) or not isinstance(raw_source, dict):
+        raise VerificationError("failed-case attribution fixture source hashes are incomplete")
+    raw_path = (C60_EVIDENCE / str(raw_source.get("path", ""))).resolve()
+    if not raw_path.is_file() or digest(raw_path) != raw_source.get("sha256"):
+        raise VerificationError("failed-case fixture retained raw source is missing or changed")
+    record, raw, groups = fixture_case_record(fixture)
+    validate_raw_selection(raw, required_tests_for_cell(record["cell"]), requested_count_for_cell(record["cell"]), "valid-single-failure", require_selected=True)
+    valid = attribute_failed_case(record={**record}, run={"run_id": record["environment"]["C52_RUN_ID"], "overlay_sha256": "fixture-overlay-hash"}, run_root=Path(str(record["environment"]["C52_RUN_ID"])), raw=raw, groups=groups, context="valid-single-failure")
+    if valid.get("attributed_case_count") != 1 or not isinstance(valid.get("failed_action"), dict):
+        raise VerificationError("valid single failed case was not attributed exactly once")
+    validate_fixture_failure_shape(fixture, groups[0], valid["failed_action"])
+    controls: list[dict[str, object]] = [{"name": "valid_single_failure", "accepted": True, "attributed_case_count": valid.get("attributed_case_count"), "failed_action": valid.get("failed_action")}]
+
+    def control(name: str, mutate: object) -> None:
+        variant_record, variant_raw, variant_groups = fixture_case_record(fixture)
+        mutate(variant_record, variant_raw, variant_groups)
+        try:
+            validate_raw_selection(variant_raw, required_tests_for_cell(variant_record["cell"]), requested_count_for_cell(variant_record["cell"]), name, require_selected=True)
+            attributed = attribute_failed_case(
+                run={"run_id": variant_record["environment"]["C52_RUN_ID"], "overlay_sha256": "fixture-overlay-hash"},
+                run_root=Path(str(variant_record["environment"]["C52_RUN_ID"])),
+                record=variant_record,
+                raw=variant_raw,
+                groups=variant_groups,
+                context=name,
+            )
+            if name == "changed_peer_boundary":
+                validate_fixture_failure_shape(fixture, variant_groups[attributed["failed_group_index"]], attributed["failed_action"])
+        except VerificationError as exc:
+            controls.append({"name": name, "rejected": True, "reason": str(exc)})
+            return
+        raise VerificationError(f"focused attribution control was unexpectedly accepted: {name}")
+
+    def set_group_field(groups: list[list[dict[str, object]]], kind: str, key: str, value: str) -> None:
+        event = next(event for event in groups[0] if event.get("kind") == kind)
+        fields = event.setdefault("fields", {})
+        if not isinstance(fields, dict):
+            raise VerificationError(f"focused control cannot mutate {kind} fields")
+        fields[key] = value
+
+    control("process_exit_only", lambda _record, raw_value, _groups: raw_value["required_test_terminal_actions"].__setitem__(str(fixture["case"]["subtest"]), []))
+    control("zero_failed_outcomes", lambda _record, raw_value, _groups: raw_value["required_test_terminal_actions"][str(fixture["case"]["subtest"])].__setitem__(0, {"ordinal": 0, "action": "pass", "package": EXPECTED_GO_PACKAGE, "test": str(fixture["case"]["subtest"])}))
+    control("duplicate_failed_outcomes", lambda record, raw_value, _groups: raw_value["required_test_terminal_actions"][str(fixture["case"]["subtest"])].extend([{"ordinal": 1, "action": "fail", "package": EXPECTED_GO_PACKAGE, "test": str(fixture["case"]["subtest"])}]))
+    control("passing_outcome_not_failure", lambda record, _raw_value, _groups: record["process"].__setitem__("exit_code", 0))
+    control("transformed_checkpoint", lambda _record, _raw_value, variant_groups: set_group_field(variant_groups, "terminal_observed", "liveness_classification", "silent_provider_timeout"))
+    control("mismatched_raw_selection", lambda _record, raw_value, _groups: raw_value["raw_action_binding"].__setitem__("matrix_cell", "wrong-cell"))
+    control("multiple_failed_cases", lambda _record, raw_value, _groups: raw_value["required_test_terminal_actions"][str(fixture["case"]["required_subtests"][0])].__setitem__(0, {"ordinal": 0, "action": "fail", "package": EXPECTED_GO_PACKAGE, "test": str(fixture["case"]["required_subtests"][0])}))
+    control("stale_run_identity", lambda _record, raw_value, _groups: raw_value["raw_action_binding"].__setitem__("run_id", "20260911T000000Z-stale"))
+    control("cross_run_trace_substitution", lambda _record, _raw_value, variant_groups: variant_groups[0][0].__setitem__("run_id", "20260911T000000Z-other-run"))
+    control("changed_peer_boundary", lambda _record, _raw_value, variant_groups: set_group_field(variant_groups, "peer_cancel_snapshot", "count", "1"))
+    C60_EVIDENCE.mkdir(parents=True, exist_ok=True)
+    result = {
+        "schema": "audio-runtime-c60-failed-case-attribution-controls-v1",
+        "passes": True,
+        "source_report": {"path": fixture["source_report"]["path"], "sha256": fixture["source_report"]["sha256"], "verified_path": str(source_report)},
+        "trace_source": trace_source,
+        "raw_source": raw_source,
+        "accepted": controls[0],
+        "controls": controls[1:],
+        "attribution_contract": {
+            "identity": ["revision", "run_id", "matrix_cell", "package", "parent_test", "subtest"],
+            "process_exit_alone": False,
+            "passing_action_is_failure": False,
+            "exactly_one_selected_failed_action": True,
+        },
+    }
+    write(C60_EVIDENCE / "attribution-controls.json", result)
+    return {"mode": "failed-case-attribution-controls", "passes": True, "accepted_case_count": 1, "rejected_controls": [item["name"] for item in controls[1:]]}
+
+
 def verify_checkpoints() -> dict[str, object]:
     run, run_root = latest_run()
     outcomes: list[dict[str, object]] = []
@@ -874,22 +1305,18 @@ def verify_checkpoints() -> dict[str, object]:
         expected_cases = int(count_values[0].split("=", 1)[1]) * len(required_tests_for_cell(record["cell"])) if len(count_values) == 1 and isinstance(record.get("cell"), dict) else -1
         if len(count_values) != 1 or len(groups) != expected_cases:
             raise VerificationError(f"trace case count does not match frozen test count for {record.get('revision_label')}/{record.get('cell', {}).get('id')}")
-        process = record.get("process")
-        process_failed = isinstance(process, dict) and process.get("exit_code") != 0
-        failed_groups = [group for group in groups if not any(event.get("kind") == "test_outcome" for event in group)]
-        if failed_groups and not process_failed:
-            raise VerificationError(f"trace has an unattributed failed case despite a passing process for {record.get('revision_label')}/{record.get('cell', {}).get('id')}")
-        if process_failed and len(failed_groups) != 1:
-            raise VerificationError(f"failed process does not have exactly one attributable failed case for {record.get('revision_label')}/{record.get('cell', {}).get('id')}")
-        for group in groups:
-            validate_case_trace(group, record, observed_failure=group in failed_groups)
+        validate_record_identity(run, run_root, record, record["cell"])
+        raw = raw_selection_for_record(run_root, record, record["cell"])
+        validate_raw_selection(raw, required_tests_for_cell(record["cell"]), requested_count_for_cell(record["cell"]), f"{record.get('revision_label')}/{record.get('cell', {}).get('id')}", require_selected=True)
+        attribution = attribute_failed_case(run, run_root, record, raw, groups, f"{record.get('revision_label')}/{record.get('cell', {}).get('id')}")
         kinds = [str(event.get("kind")) for event in events]
         missing = [kind for kind in REQUIRED_TRACE_KINDS if kind not in kinds]
         peer_counts = [event_fields(event).get("count") for event in events if event.get("kind") == "peer_cancel_snapshot"]
         if missing:
             raise VerificationError(f"missing checkpoints for {record.get('revision_label')}/{record.get('cell', {}).get('id')}: {missing}")
-        for group in groups:
-            failed = group in failed_groups
+        failed_group_index = attribution.get("failed_group_index")
+        for group_index, group in enumerate(groups):
+            failed = failed_group_index == group_index
             if not failed and any(event_fields(event).get("count") != "0" for event in group if event.get("kind") == "peer_cancel_snapshot"):
                 raise VerificationError("peer cancellation was not zero before external cancellation")
         if not peer_counts:
@@ -897,7 +1324,7 @@ def verify_checkpoints() -> dict[str, object]:
         for event in events:
             if event.get("kind") == "live_event_received" and event_fields(event).get("event_kind") == "liveness_fault" and event_fields(event).get("liveness_classification") not in {"silent_provider_timeout", "silent_provider_empty_response"}:
                 raise VerificationError("liveness event lacks typed classification")
-        outcomes.append({"revision_label": record.get("revision_label"), "cell_id": record.get("cell", {}).get("id"), "event_count": len(events), "kinds": sorted(set(kinds)), "peer_cancel_counts": peer_counts})
+        outcomes.append({"revision_label": record.get("revision_label"), "cell_id": record.get("cell", {}).get("id"), "event_count": len(events), "kinds": sorted(set(kinds)), "peer_cancel_counts": peer_counts, "attribution": attribution})
     return {"mode": "checkpoints", "passes": True, "cells": outcomes}
 
 
@@ -912,8 +1339,16 @@ def first_divergence() -> dict[str, object]:
     cases: list[dict[str, object]] = []
     for record in records(run):
         events = record_trace(record, run_root)
+        cell = record.get("cell")
+        if not isinstance(cell, dict):
+            raise VerificationError("first-divergence record has no matrix cell")
+        validate_record_identity(run, run_root, record, cell)
+        raw = raw_selection_for_record(run_root, record, cell)
+        validate_raw_selection(raw, required_tests_for_cell(cell), requested_count_for_cell(cell), f"{record.get('revision_label')}/{cell.get('id')}", require_selected=True)
+        attribution = attribute_failed_case(run, run_root, record, raw, case_groups(events), f"{record.get('revision_label')}/{cell.get('id')}")
+        failed_group_index = attribution.get("failed_group_index")
         for group_index, group in enumerate(case_groups(events), start=1):
-            observed_failure = not any(event.get("kind") == "test_outcome" for event in group)
+            observed_failure = failed_group_index == group_index - 1
             validate_case_trace(group, record, observed_failure=observed_failure)
             by_kind: dict[str, list[dict[str, object]]] = {}
             for event in group:
@@ -938,6 +1373,9 @@ def first_divergence() -> dict[str, object]:
                 finding = f"missing:{missing[0]}"
             elif order_violations:
                 finding = f"reordered:{order_violations[0]['checkpoint']}"
+            if observed_failure and finding == "none":
+                failed_test = attribution.get("failed_test")
+                finding = f"test_outcome:{failed_test}"
             fields = event_fields(next((event for event in reversed(group) if event.get("kind") in {"test_outcome", "test_deferred_outcome"}), {}))
             cases.append({
                 "revision_label": record.get("revision_label"),
@@ -949,6 +1387,7 @@ def first_divergence() -> dict[str, object]:
                 "missing_checkpoints": missing,
                 "order_violations": order_violations,
                 "observed_signature": signature,
+                "attribution": attribution if observed_failure else {"failed": False, "attributed_case_count": 0},
                 "later_consequences": {
                     "room_run_error": fields.get("run_error", ""),
                     "room_termination_reason": fields.get("termination_reason", ""),
@@ -1090,12 +1529,12 @@ def verify_integrity_controls() -> dict[str, object]:
 
         failing_path = Path(temp_dir) / "selected-failure.jsonl"
         required = required_tests_for_cell(cell)
-        failure_events: list[dict[str, object]] = [{"Action": "run", "Test": TEST_PARENT}]
+        failure_events: list[dict[str, object]] = [{"Action": "run", "Package": EXPECTED_GO_PACKAGE, "Test": TEST_PARENT}]
         for test in required:
             failure_events.extend([
-                {"Action": "run", "Test": test},
-                {"Action": "output", "Test": test, "Output": "browser_parity_test.go:220: bounded synthetic failure"},
-                {"Action": "fail", "Test": test},
+                {"Action": "run", "Package": EXPECTED_GO_PACKAGE, "Test": test},
+                {"Action": "output", "Package": EXPECTED_GO_PACKAGE, "Test": test, "Output": "browser_parity_test.go:220: bounded synthetic failure"},
+                {"Action": "fail", "Package": EXPECTED_GO_PACKAGE, "Test": test},
             ])
         failing_path.write_text("\n".join(json.dumps(event) for event in failure_events) + "\n", encoding="utf-8")
         parsed_failure = parse_raw_go_json(failing_path, required, EXPECTED_PACKAGE, 1)
@@ -1248,21 +1687,21 @@ def classification() -> dict[str, object]:
             "cell_id": record.get("cell", {}).get("id"),
             "kind": record.get("cell", {}).get("kind"),
             "behavior_exit_code": process.get("exit_code") if isinstance(process, dict) else None,
-            "behavior_passed": isinstance(process, dict) and process.get("exit_code") == 0,
+            "behavior_passed": isinstance(process, dict) and process.get("exit_code") == 0 and isinstance(record.get("selection"), dict) and record["selection"].get("behavior_passed") is True,
             "first_assertion": first_assertion,
             "first_divergence_signatures": [item.get("first_divergence") for item in failures] or ["none"],
             "trace_sha256": record.get("trace_sha256"),
             "selected": record.get("selection", {}).get("required_test_run_counts", {}) if isinstance(record.get("selection"), dict) else {},
             "runner_controls_valid": not process_failure(record),
-        })
+    })
     runner_valid = all(item["runner_controls_valid"] for item in outcomes)
-    label = classify_outcomes(outcomes, runner_valid)
     controls = classification_controls()
     behavior_failures = [item for item in outcomes if item["behavior_passed"] is False]
+    label = "INCONCLUSIVE" if not runner_valid else ("REPRODUCED" if behavior_failures else "NON_REPRODUCED")
     result = {
         "schema": "audio-runtime-c52-classification-v1",
         "classification": label,
-        "passes": False,
+        "passes": runner_valid,
         "within_declared_matrix": True,
         "behavioral_failure_count": len(behavior_failures),
         "trial_numerator_denominator": {
@@ -1283,7 +1722,7 @@ def classification() -> dict[str, object]:
             "A clean matrix supports NON_REPRODUCED within bounds, not proof that the hosted CI observation was flaky or absent.",
             "The primary 10/10 report remains separately reported because its raw command and environment are unavailable.",
         ],
-        "source_observation": "PR438 run 34562579355/job 103148160889 selected provider_timeout and reported a non-nil silent_provider_timeout room error at browser_parity_test.go:220; this is not inferred as causal.",
+        "source_observation": "The preserved PR438 run 34562579355/job 103148160889 reported silent_provider_timeout at browser_parity_test.go:220; the immutable independent C52 report separately observed pr438/order-timeout-first empty_response at browser_parity_test.go:245. Neither observation is inferred as causal from this classification alone.",
         "matrix_report": matrix_report,
         "classification_controls": controls,
     }
@@ -1340,6 +1779,12 @@ def causal_map() -> dict[str, object]:
             "positive_reproduction": reproduced,
             "causal_negative_control": "The opposite explicit order, serialized package setting, and identical comparison revision controls remain required before assigning sensitivity.",
             "expected_repaired_checkpoint": "The first divergent checkpoint identified above must change while later result and cleanup controls remain asserted.",
+            "later_production_owner": {
+                "owner": "go-agent-runtime/services/rooms/internal/lifecycle Runner finishRun/finalizeRun and state result propagation",
+                "paths": ["go-agent-runtime/services/rooms/internal/lifecycle/runner.go", "go-agent-runtime/services/rooms/internal/lifecycle/state.go"],
+                "next_action": "A separately admitted production task must reproduce the raw-selected failure under the retained matrix and repair the named result/error boundary without changing this evidence slice.",
+                "scope": "bounded later owner lead only; no production source is changed by C60"
+            },
             "repair_implemented": False,
         }
     write(EVIDENCE / "causal-finding-map.json", result)
@@ -1357,6 +1802,7 @@ def all_modes() -> list[dict[str, object]]:
         verify_cleanup(),
         verify_local_regressions(),
         verify_no_retry_and_selection(),
+        verify_failed_case_attribution_controls(),
         verify_integrity_controls(),
         classification(),
         causal_map(),
@@ -1366,7 +1812,7 @@ def all_modes() -> list[dict[str, object]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["provenance", "matrix", "storage", "overlay-integrity", "checkpoints", "first-divergence", "cleanup", "local-regressions", "no-retry-and-selection", "integrity-controls", "classification", "causal-finding-map", "all"], required=True)
+    parser.add_argument("--mode", choices=["provenance", "matrix", "storage", "overlay-integrity", "checkpoints", "first-divergence", "cleanup", "local-regressions", "no-retry-and-selection", "failed-case-attribution-controls", "integrity-controls", "classification", "causal-finding-map", "all"], required=True)
     args = parser.parse_args()
     try:
         if args.mode == "provenance":
@@ -1387,6 +1833,8 @@ def main() -> int:
             report = verify_local_regressions()
         elif args.mode == "no-retry-and-selection":
             report = verify_no_retry_and_selection()
+        elif args.mode == "failed-case-attribution-controls":
+            report = verify_failed_case_attribution_controls()
         elif args.mode == "integrity-controls":
             report = verify_integrity_controls()
         elif args.mode == "classification":

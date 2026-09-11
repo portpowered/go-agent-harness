@@ -1,66 +1,43 @@
-# C52 hermetic room-liveness characterization
+# C60 failed-case attribution repair
 
-This directory is the sole C52 executor lease. It contains an evidence-only
-comparison of PR438 (`823bd350fe5d11782c38bda87d7b7bfd7d89d7cd`) and the
-planning-time integrated main (`7f73c8b3b4ebc99b55b8bb5e802beff024385407`).
-The final tested evidence parent is the clean candidate merge
-`3af52f8bb74850bbc3d7102ea4302b6b2b9a3401`, which includes refreshed
-`origin/main` (`4a3f83430be6fde42ef3b25d39e25a9492980e30`) as an ancestor.
-The final handoff commit is an evidence-only descendant of that tested source;
-the executable and test inputs are unchanged.
-The fetched `origin/main` may advance; its exact revision is recorded in
-`provenance.json` and does not replace the declared comparison input.
+This retained C52 evidence directory is the matrix and lifecycle-test input for
+the admitted task `audio-runtime-c60-c52-failed-case-attribution-repair`. It
+preserves the fixed PR438 revision
+`823bd350fe5d11782c38bda87d7b7bfd7d89d7cd`, planning revision
+`7f73c8b3b4ebc99b55b8bb5e802beff024385407`, frozen 11-cell matrix, prior CI
+log, canonical archives, and predecessor checkpoints. It does not modify
+production or tracked test sources.
 
-The matrix is frozen in `matrix.json` before `run.py` executes. `run.py` makes
-clean git archives, applies only the generated scratch overlay, runs one
-bounded first-result-per-cell matrix, and removes its known scratch trees and
-run-local caches after child groups are reaped. It never checks out, resets,
-or writes another worktree. Existing archive reuse is content-validated
-against the fixed revision. The overlay retains the original test assertions,
-records ordered checkpoints in JSONL, and uses only bounded deferred cleanup
-to capture the room outcome if an original assertion aborts first.
+The repaired runner records raw Go terminal actions for every selected
+parent/subtest, binds those actions to revision, run ID, matrix cell, full Go
+package, and test identity, and carries the same run identity into every trace
+event. The verifier now attributes a failed process only when exactly one
+selected raw `Action=fail` is bound to exactly one trace case. It accepts the
+preserved direct `test_outcome` failure shape and retains the deferred-outcome
+shape for assertion-abort cases; process exit alone, duplicate/multiple or
+transformed actions, identity changes, cross-run traces, and changed peer
+boundaries fail closed.
 
-The raw PR438 observation is preserved under `ci/`. The primary's reported
-10/10 rerun is kept separately in `primary-rerun.json` and is explicitly
-`REPORTED_UNDER_PAYLOAD` when its command/output transcript is unavailable.
+Fresh matrix evidence is run
+`c60-final-20260911T145200Z`: both fixed revisions, all 22 cells, and all six
+runner negative controls passed in 69.298678 seconds under the existing
+900-second aggregate cap. Normal/race lifecycle regressions, storage/cleanup,
+overlay, selection/no-retry, and seven integrity controls pass. The resulting
+classification is `NON_REPRODUCED` within the declared matrix; it does not
+relabel the immutable C52 source report or claim hosted CI is green.
 
-Run order:
+The task-local C60 fixture and focused controls are in the sibling
+`c60-c52-failed-case-attribution-repair/` directory. Its bounded replay uses
+the immutable staged artifact-0 and exact credential-free C16/config inputs;
+the positive replay preserves the marker, continuation, exact 4800-byte PCM,
+session-log hash, and clean process group, while a mutated fixture is rejected.
+No live Realtime provider, native endpoint, or acoustic claim is made.
 
-1. `capture_ci.py` captures the complete failed job log and metadata.
-2. `run.py --matrix matrix.json --aggregate-timeout 900` executes the frozen
-   comparison.
-3. `verify.py` runs the fail-closed provenance, matrix, overlay, checkpoint,
-   cleanup, classification, and causal-map checks.
-4. Focused accumulated lifecycle normal/race checks are run from the clean
-   candidate source before the evidence-only commit and handoff.
+Run the final local evidence gate with:
 
-The first four executor attempts are retained as preflight history in
-`provenance.json`; they were rejected as invalid setup/overlay executions
-(toolchain selection, cache directory creation, module working directory, and
-overlay typing) and are not behavioral trials. The final canonical run is
-`20260911T143300Z-review52-repair-v2`: 22/22 cells passed on both revisions
-in 69.655 seconds, within the 900-second aggregate bound; all six negative
-controls were rejected, normal parent-exit cleanup was proven, and the
-run-local cache was removed after its retained reports were written. Focused
-normal and race regressions also pass from `3af52f8b`. The repaired runner uses
-only the declared environment allowlist and its classification controls reject
-a label when both explicit orders fail. `storage.json` records source staging,
-fixture/report, scratch/cache, free-space before/after, archive reuse identity,
-and cleanup values for the canonical run.
+```sh
+rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/verify.py --mode all
+```
 
-The final fail-closed integrity probes reject deleted cleanup fields, survivor
-claims, tampered raw selection counts, duplicate or transformed checkpoints,
-cross-run trace substitution, tampered CI metadata, selected behavior failures
-hidden as selection errors, and mismatched retained archives. `verify.py --mode
-all` passes against the final run.
-
-During repair, a pre-final local diagnostic attempt observed one planning-main
-`gomaxprocs-4` assertion failure with a peer-cancel snapshot at
-`browser_parity_test.go:224`. The fresh canonical run after the cleanup and
-verification repairs did not reproduce it. This is disclosed as a bounded
-local observation, not as a hosted-CI flake or a causal attribution; the
-classification remains `NON_REPRODUCED` for the declared final matrix.
-
-This slice does not repair production code and does not claim PASS, vertical
-acceptance, project completion, physical/acoustic proof, Realtime use, or a
-CI/review/merge result.
+The candidate is handed to script CI and independent review after commit/push;
+this evidence does not assert either result.

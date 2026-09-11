@@ -1,0 +1,223 @@
+{
+  "aggregate_deadline_met": true,
+  "aggregate_elapsed_seconds": 0.175332,
+  "aggregate_timeout_seconds": 1800.0,
+  "candidate_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+  "child_timeout_seconds": 59.0,
+  "environment": {
+    "credential_free": true,
+    "forwarded_keys": [
+      "GOWORK",
+      "HOME",
+      "LANG",
+      "LC_ALL",
+      "NO_COLOR",
+      "PATH",
+      "TMPDIR",
+      "TZ"
+    ],
+    "realtime_network": "not used; staged artifact replayed an offline file fixture",
+    "removed_secret_keys": [
+      "OPENAI_API_KEY",
+      "ANTHROPIC_API_KEY",
+      "GEMINI_API_KEY",
+      "GOOGLE_API_KEY",
+      "OPENROUTER_API_KEY"
+    ]
+  },
+  "help": {
+    "root": {
+      "matched_literals": [
+        "Available Commands:",
+        "session",
+        "--workdir",
+        "--allow-path"
+      ],
+      "required_literals": [
+        "Available Commands:",
+        "session",
+        "--workdir",
+        "--allow-path"
+      ]
+    },
+    "session": {
+      "matched_literals": [
+        "Usage:",
+        "--replay",
+        "--record-dir",
+        "--trace-audio"
+      ],
+      "required_literals": [
+        "Usage:",
+        "--replay",
+        "--record-dir",
+        "--trace-audio"
+      ]
+    }
+  },
+  "inputs": {
+    "artifact": {
+      "bytes": 51200178,
+      "identity": "immutable staged artifact-0",
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c52-hermetic-room-liveness-characterization-corrected-vertical-probe/artifact-0",
+      "sha256": "ab4d99ed1e7aa3fd96d643d09f703fb5a6d46e1d34e5a5ed6a4c10c82621b9b4"
+    },
+    "capture": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+      "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+    },
+    "config": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/fixtures/yui-config/config.yaml",
+      "sha256": "b48242a57dd47ad90a32b6ecab83513768a268cee272c62021cfdd53df19ddbd"
+    },
+    "immutable_source_report": {
+      "decision": "FAILED",
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization-corrected-vertical-probe.json",
+      "sha256": "8b4f23539aceb6f687e4adafef711b4fc65cc91862a0af5670add5f7b7379a25"
+    },
+    "models": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/fixtures/yui-config/models.yaml",
+      "sha256": "cd5c7765b3a4ffe1e2996879ed80c480153bb20a13a426fab0f4d0c3d99ddff1"
+    }
+  },
+  "limitations": [
+    "This is software/file replay evidence only; it does not prove native-device or acoustic behavior.",
+    "No live Realtime provider or credential was used."
+  ],
+  "negative": {
+    "fixture": "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/mutated.session.json",
+    "mutation": {
+      "purpose": "real replay fixture order/digest rejection",
+      "records[1].sequence": 999
+    },
+    "process": {
+      "cleanup": {
+        "group_survivor": false,
+        "kill_error": null,
+        "kill_sent": false,
+        "parent_exit_code": 1,
+        "reason": "parent_exit",
+        "term_error": null,
+        "term_sent": false
+      },
+      "command": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c52-hermetic-room-liveness-characterization-corrected-vertical-probe/artifact-0",
+        "-C",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/config",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/mutated.session.json",
+        "--audio-out",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/audio.wav",
+        "--record-dir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/tool-record",
+        "--trace-audio",
+        "--workdir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative",
+        "--allow-path",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative",
+      "duration_seconds": 0.02583091566339135,
+      "ended_at": "2026-09-11T14:50:50.716759+00:00",
+      "exit_code": 1,
+      "label": "artifact-mutated-fixture-rejection",
+      "output_overflow": false,
+      "process_record_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/process/process.json",
+      "reader_survivor": false,
+      "started_at": "2026-09-11T14:50:50.690939+00:00",
+      "stderr_bytes": 989,
+      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/process/stderr.log",
+      "stderr_sha256": "9bfdb32bb2ea39af03d444131e8ed8fd50d92455583610a25cbcb0c7abbe364b",
+      "stdout_bytes": 0,
+      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/process/stdout.log",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "timed_out": false
+    },
+    "rejected": true
+  },
+  "observed_at": "2026-09-11T14:50:50.732735+00:00",
+  "passed": true,
+  "positive": {
+    "artifacts": {
+      "artifact_paths": [
+        "agent.transcript.jsonl",
+        "audio/out-000.pcm",
+        "client.transcript.jsonl",
+        "provider.json",
+        "session-log.jsonl"
+      ],
+      "audio_out": "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/audio.wav",
+      "audio_out_bytes": 3244,
+      "audio_out_sha256": "961bd1b82b54dcc2ada46e1f913b6e78bab172f1e3f5190be93747e7fe1e18dc",
+      "manifest": "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record/manifest.json",
+      "manifest_sha256": "be4cdbe3bc1a6f14eec01af080ea67da8cfde17ea429f413ab5125933d298c6e",
+      "marker": "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/evidence/runs/exec-invocations-v4.log",
+      "marker_sha256": "f91134b50758e6d4418ab08f6a3afa9f2acceb91117c3f67d0db515b762eb43e",
+      "pcm": "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record/audio/out-000.pcm",
+      "pcm_bytes": 4800,
+      "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+      "provider_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "record_dir": "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record",
+      "session_log": "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record/session-log.jsonl",
+      "session_log_sha256": "039d49adc0239cb447de0bf28e3fe009a4601e1618ebd5449553e2d903cb4cf3",
+      "terminal": {
+        "classification": "provider_close",
+        "output_state": "not_applicable",
+        "reason": "fixture_complete",
+        "terminal_provenance": "provider",
+        "terminal_reason": "provider_close"
+      }
+    },
+    "process": {
+      "cleanup": {
+        "group_survivor": false,
+        "kill_error": null,
+        "kill_sent": false,
+        "parent_exit_code": 0,
+        "reason": "parent_exit",
+        "term_error": null,
+        "term_sent": false
+      },
+      "command": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c52-hermetic-room-liveness-characterization-corrected-vertical-probe/artifact-0",
+        "-C",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/config",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+        "--audio-out",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/audio.wav",
+        "--record-dir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record",
+        "--trace-audio",
+        "--workdir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive",
+        "--allow-path",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive",
+      "duration_seconds": 0.0849637920036912,
+      "ended_at": "2026-09-11T14:50:50.686896+00:00",
+      "exit_code": 0,
+      "label": "artifact-positive-replay",
+      "output_overflow": false,
+      "process_record_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/process/process.json",
+      "reader_survivor": false,
+      "started_at": "2026-09-11T14:50:50.601948+00:00",
+      "stderr_bytes": 0,
+      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/process/stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 829,
+      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/process/stdout.log",
+      "stdout_sha256": "682248a7ed40c101a939c022d3cec645fbb7447fa673ff2a42b81f11396df306",
+      "timed_out": false
+    },
+    "stdout_contains": [
+      "PROBE_TOOL_MARKER_9182",
+      "strict replay continuation"
+    ]
+  },
+  "run_id": "replay-20260911T145050Z-67358",
+  "schema": "audio-runtime-c60-software-file-replay-v1"
+}

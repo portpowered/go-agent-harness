@@ -29,7 +29,7 @@
     "cell_count": 22,
     "mode": "matrix",
     "passes": true,
-    "run_id": "20260911T143300Z-review52-repair-v2"
+    "run_id": "c60-final-20260911T145200Z"
   },
   "outcomes": [
     {
@@ -47,7 +47,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "98a2a51a0b81d2aaa13a6e7fd253325fdc87ad17dc39cd4d4ded66a30e6cdf37"
+      "trace_sha256": "bb0d0510de4ee2badef17a5a131ab40dd0ab3e40f1920fc2501266ba6464b882"
     },
     {
       "behavior_exit_code": 0,
@@ -64,7 +64,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10
       },
-      "trace_sha256": "1f19f26cd99bf7742a9ca46d77660e6c3b2ddb59de1c0e37f09b1c5fde33a7e5"
+      "trace_sha256": "394b787002c68d2475dee5e74f101089d04bad36941a3fe35f18701a28398e7c"
     },
     {
       "behavior_exit_code": 0,
@@ -82,7 +82,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "76d0eff35f188ec1cc6c4e8120533a61da7428b7f44248e70dd1601df52c2c8d"
+      "trace_sha256": "fc9234f640a0b8db5153a4b40f86931df4671cf28327e2cd509b299810d6076b"
     },
     {
       "behavior_exit_code": 0,
@@ -100,7 +100,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "9f040b0af2ec452e2cdec80c2ace7bafa8bde5241c205c34dc4a5dd34efca280"
+      "trace_sha256": "ac22857d75a9d338f7ddbf26fc1ee437dd758b253c095ace83d054caf0f3bd9a"
     },
     {
       "behavior_exit_code": 0,
@@ -118,7 +118,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "1958bec627ad7751aafbbd27e11ce1793c3dfe86a8803048308ffa2d4872ac2d"
+      "trace_sha256": "26662d35b9b3261154deecd7f74aca115742cea5e372a927c2e368e138d7b132"
     },
     {
       "behavior_exit_code": 0,
@@ -126,7 +126,7 @@
       "cell_id": "shuffle-seed-28",
       "first_assertion": "",
       "first_divergence_signatures": [
-        "none"
+        "reordered:sink_publish_before"
       ],
       "kind": "fixed-shuffle",
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -136,7 +136,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "2c2a73911a519ae4dfaaef578c30aa8d76a2e0bf72479e60d34ac23d6b4cac59"
+      "trace_sha256": "f105f677aec38fbbaf4ce104b21b9840ebc48452767f2b3db60c63cf5026e292"
     },
     {
       "behavior_exit_code": 0,
@@ -154,7 +154,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "9370bc0575f70fb452f07a5adad8be0c0787e71f33a6cee83d162838a3378f97"
+      "trace_sha256": "2d8275b2f33f9f6a245d0958909499a0ea980897eb178393f4b0d54ffd1e09e8"
     },
     {
       "behavior_exit_code": 0,
@@ -172,7 +172,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "b0c208e3f745a18bff17620e0a95bc46e7fc0154525114d2f783a5a5dd2e1ca6"
+      "trace_sha256": "acd248b3299de09f39c2fc4c5365907db8f0f24d726337b4e702e8f5d7ddd95d"
     },
     {
       "behavior_exit_code": 0,
@@ -190,7 +190,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "16cdf08d16e2da7574b6769970674fd4bff46bcf8f1cd90306549e7452b02dc5"
+      "trace_sha256": "119620db40a8bee2f885eb57849e84a6e60ec2b836b4b244e3d6ffbfefd84e42"
     },
     {
       "behavior_exit_code": 0,
@@ -208,7 +208,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "8c34bc255b21ab96d6962c338aaa21ab638fafafe6250c513d242bfcf7e6cf14"
+      "trace_sha256": "a7eb0ce4a51d0ee9858b39e8d1e1460d6fde9f36f7250aec4032de9a988733a0"
     },
     {
       "behavior_exit_code": 0,
@@ -226,7 +226,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 1,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 1
       },
-      "trace_sha256": "717786b8e825a95db954316cc40b1843158d1b99c52b67ba9705c820b37239d6"
+      "trace_sha256": "7514c32d65ceb7fb1d5e61e770fe78c9ddacbda29cbf7eb4f66ca2f1c2ebfa0c"
     },
     {
       "behavior_exit_code": 0,
@@ -243,7 +243,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "5f5a1f5964b4e0e0710cd315eaede23c6b1c5add67a30a4b700510fd3456eca2"
+      "trace_sha256": "bbd3c730961ef259a63eb7ebdfec8c928335cfa6edc59efcdbfd73059cb73bc2"
     },
     {
       "behavior_exit_code": 0,
@@ -260,7 +260,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10
       },
-      "trace_sha256": "a79083fd4ca56e5ed98054e09256a88d2ed6b5dac1dc1f2653e31044c4debb47"
+      "trace_sha256": "af711f897780cf3301adc8928ded53d9aaffff9b258e0201b80f3c326fdd8907"
     },
     {
       "behavior_exit_code": 0,
@@ -268,7 +268,7 @@
       "cell_id": "order-timeout-first",
       "first_assertion": "",
       "first_divergence_signatures": [
-        "reordered:sink_publish_before"
+        "none"
       ],
       "kind": "explicit-order",
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -278,7 +278,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "67485ae5e3319c8957f4e6433973e2f5393bcc4899ca59bad8ee7a0baacda3ea"
+      "trace_sha256": "c2907587ffdd38f255284aa6c6933ac84ef149243bd2b29b0e1795bdb9b4f333"
     },
     {
       "behavior_exit_code": 0,
@@ -296,7 +296,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "cdd1ca8a03d257fe1e43561d05c869a412726a0f7593be8210bad74cca209d24"
+      "trace_sha256": "bcf449d339eea6a988bd9ecb66820504cfc705e72f750887191cc7957d61b6bb"
     },
     {
       "behavior_exit_code": 0,
@@ -314,7 +314,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "34c7af3dd3905cfc1c52dab20797d6eebbd4e699295b7e53ceb08ab07f7c1348"
+      "trace_sha256": "ff72e57cafd9a70e6dafcdce1e610b006f2d74cb819e31499216293bcd969cf0"
     },
     {
       "behavior_exit_code": 0,
@@ -332,7 +332,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "772be46215bd5b7d925fd15f8b0ade64457982d3e71f65bb7d442873ae1a0e5e"
+      "trace_sha256": "dc1f7006686047d9be1cfc305d247e542427bbee3f6c996a25c3b07be689dedd"
     },
     {
       "behavior_exit_code": 0,
@@ -340,7 +340,7 @@
       "cell_id": "package-serialized",
       "first_assertion": "",
       "first_divergence_signatures": [
-        "reordered:sink_publish_before"
+        "none"
       ],
       "kind": "package-concurrency",
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -350,7 +350,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "714eb28bdd11b34d84314daa569b23519f74aa96482d0665fd54fb73fc2f10c1"
+      "trace_sha256": "26157d4645f04a7fc21499f06b306bafc4d0354b726b542a81374928b1699267"
     },
     {
       "behavior_exit_code": 0,
@@ -368,7 +368,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "16c96102e341673a3e811f2d515993e6963b005e626f279b523edff0918d4a13"
+      "trace_sha256": "cc9709d2510c5d11d3d0eedd0471caa89dcdc6a3cd6c9c3cfa7a0c437dd956be"
     },
     {
       "behavior_exit_code": 0,
@@ -386,7 +386,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "c0e1c911d4938c7e980943bc5a0b406ea4c7143095d4cb965fc8b771ae1996f6"
+      "trace_sha256": "77045011836ad965e61d05e856d2d7cb7d9356b876f59c304f5e85e429609303"
     },
     {
       "behavior_exit_code": 0,
@@ -404,7 +404,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "143442172c595488715f4a2439844c47804f69967e91a2156ca88a6312f05ecd"
+      "trace_sha256": "8c512afc959c8d3a6d2555a727e53d91752face742e0329382c2c74d074ef3bc"
     },
     {
       "behavior_exit_code": 0,
@@ -422,12 +422,12 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 1,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 1
       },
-      "trace_sha256": "4815fb9570e977c21a3eaa6f2a7422c4693fcccac7c277b84c27b9917bc98145"
+      "trace_sha256": "78876e49dd10af5386a881b22b8f4d4183fe2486f31f2c1ceb203b7ccfeb95e1"
     }
   ],
-  "passes": false,
+  "passes": true,
   "schema": "audio-runtime-c52-classification-v1",
-  "source_observation": "PR438 run 34562579355/job 103148160889 selected provider_timeout and reported a non-nil silent_provider_timeout room error at browser_parity_test.go:220; this is not inferred as causal.",
+  "source_observation": "The preserved PR438 run 34562579355/job 103148160889 reported silent_provider_timeout at browser_parity_test.go:220; the immutable independent C52 report separately observed pr438/order-timeout-first empty_response at browser_parity_test.go:245. Neither observation is inferred as causal from this classification alone.",
   "trial_numerator_denominator": {
     "all_cells": {
       "denominator": 22,

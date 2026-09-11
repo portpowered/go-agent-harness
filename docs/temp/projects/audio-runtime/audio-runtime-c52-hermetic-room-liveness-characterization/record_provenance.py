@@ -17,17 +17,21 @@ from run import apply_declared_environment, hermetic_base_environment
 
 
 EVIDENCE = Path(__file__).resolve().parent
-TASK = "audio-runtime-c52-hermetic-room-liveness-characterization"
+TASK = "audio-runtime-c60-c52-failed-case-attribution-repair"
 PROJECT = "audio-runtime"
 CONTRACT_REVISION = "audio-runtime-v1"
-BRANCH = "codex/audio-runtime-c52-hermetic-room-liveness-characterization"
+BRANCH = "codex/audio-runtime-c60-c52-failed-case-attribution-repair"
 PR438 = "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd"
 PLANNING_MAIN = "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
 STARTUP_INTEGRATION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 BASELINE = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 CI_RUN = "34562579355"
 CI_JOB = "103148160889"
-OWNED_PREFIX = "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/"
+OWNED_PREFIXES = (
+    "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/",
+    "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/",
+)
+C60_EVIDENCE = EVIDENCE.parent / "c60-c52-failed-case-attribution-repair"
 
 
 def load(path: Path) -> object:
@@ -224,8 +228,12 @@ def evidence_index(provenance: dict[str, object], run: dict[str, object]) -> dic
         path = EVIDENCE / item
         if path.is_file():
             indexed.append({"path": item, "bytes": path.stat().st_size, "sha256": sha256(path)})
+    for item in ("failed-case-attribution-fixture.json", "attribution-controls.json", "replay-report.json", "verify_replay.py"):
+        path = C60_EVIDENCE / item
+        if path.is_file():
+            indexed.append({"path": f"../c60-c52-failed-case-attribution-repair/{item}", "bytes": path.stat().st_size, "sha256": sha256(path)})
     return {
-        "schema": "audio-runtime-c52-evidence-index-v1",
+        "schema": "audio-runtime-c60-evidence-index-v1",
         "project": PROJECT,
         "task": TASK,
         "comparison": {"pr438": PR438, "planning_main": PLANNING_MAIN},
@@ -282,7 +290,7 @@ def main() -> int:
     tested_source = previous_source if previous_candidate and previous_candidate == candidate else candidate
     refreshed_main = git(repo, "rev-parse", "refs/remotes/origin/main")
     status_paths = dirty_paths(repo)
-    outside_owned = [path for path in status_paths if not path.startswith(OWNED_PREFIX)]
+    outside_owned = [path for path in status_paths if not any(path.startswith(prefix) for prefix in OWNED_PREFIXES)]
     base = matrix.get("base_environment", {}) if isinstance(matrix.get("base_environment"), dict) else {}
     with tempfile.TemporaryDirectory(prefix="c52-provenance-") as temp_dir:
         go_env = hermetic_base_environment(os.environ, Path(temp_dir))
@@ -316,6 +324,19 @@ def main() -> int:
     integrity_controls_path = EVIDENCE / "integrity-controls.json"
     if integrity_controls_path.is_file():
         runner_files["integrity_controls_sha256"] = sha256(integrity_controls_path)
+    c60_fixture_path = C60_EVIDENCE / "failed-case-attribution-fixture.json"
+    c60_controls_path = C60_EVIDENCE / "attribution-controls.json"
+    c60_replay_path = C60_EVIDENCE / "replay-report.json"
+    c60_replay_wrapper_path = C60_EVIDENCE / "verify_replay.py"
+    for path, key in (
+        (c60_fixture_path, "fixture_sha256"),
+        (c60_controls_path, "attribution_controls_sha256"),
+        (c60_replay_path, "replay_sha256"),
+        (c60_replay_wrapper_path, "replay_wrapper_sha256"),
+    ):
+        if not path.is_file():
+            raise SystemExit(f"missing required C60 evidence: {path}")
+        runner_files[key] = sha256(path)
     ancestry = {
         "baseline": ancestor(repo, BASELINE, candidate),
         "startup_integration": ancestor(repo, STARTUP_INTEGRATION, candidate),
@@ -323,13 +344,13 @@ def main() -> int:
         "refreshed_origin_main": ancestor(repo, refreshed_main, candidate),
     }
     provenance = {
-        "schema": "audio-runtime-c52-provenance-v1",
+        "schema": "audio-runtime-c60-provenance-v1",
         "project": PROJECT,
         "task": TASK,
         "contract_revision": CONTRACT_REVISION,
         "factory": {"root": str(factory_root), "server": server, "session": "~default", "status_command": status, "verify_work_command": verify, "verify_work_result": verify_json},
         "branch": {"expected": BRANCH, "actual": git(repo, "branch", "--show-current"), "matches": git(repo, "branch", "--show-current") == BRANCH},
-        "worktree": {"root": str(repo), "isolated": ".claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization" in str(repo), "prd_branch_name": BRANCH},
+        "worktree": {"root": str(repo), "isolated": ".claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair" in str(repo), "prd_branch_name": BRANCH},
         "candidate_source_revision": tested_source,
         "candidate_evidence_parent_revision": candidate,
         "evidence_candidate_revision": candidate,
@@ -343,7 +364,7 @@ def main() -> int:
             "base": base,
             "cell_overrides": {str(cell.get("id")): cell.get("env", {}) for cell in matrix.get("cells", []) if isinstance(cell, dict)},
             "fixed": {key: go_env[key] for key in ("PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TZ", "GOENV", "GOPROXY", "GOPRIVATE", "GONOPROXY", "GONOSUMDB")},
-            "runner_injected": ["C52_REVISION", "C52_MATRIX_CELL", "C52_TRACE_PATH", "C52_OVERLAY_HASH", "GOCACHE", "GOMODCACHE", "GOTMPDIR", "GOWORK"],
+            "runner_injected": ["C52_REVISION", "C52_MATRIX_CELL", "C52_RUN_ID", "C52_TRACE_PATH", "C52_OVERLAY_HASH", "GOCACHE", "GOMODCACHE", "GOTMPDIR", "GOWORK"],
             "removed_secret_keys": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"],
             "ambient_environment_forwarded": False,
             "cpu_count": os.cpu_count(),
@@ -353,8 +374,14 @@ def main() -> int:
         "ci_observation": ci,
         "primary_observation": primary,
         "runner_inputs": runner_files,
+        "c60_evidence": {
+            "fixture": {"path": c60_fixture_path.name, "sha256": sha256(c60_fixture_path)},
+            "attribution_controls": {"path": c60_controls_path.name, "sha256": sha256(c60_controls_path)},
+            "replay": {"path": c60_replay_path.name, "sha256": sha256(c60_replay_path)},
+            "replay_wrapper": {"path": c60_replay_wrapper_path.name, "sha256": sha256(c60_replay_wrapper_path)},
+        },
         "no_source_mutation": not outside_owned,
-        "source_mutation_audit": {"dirty_paths": status_paths, "outside_owned_paths": outside_owned, "owned_prefix": OWNED_PREFIX, "production_source_unchanged": not outside_owned},
+        "source_mutation_audit": {"dirty_paths": status_paths, "outside_owned_paths": outside_owned, "owned_prefixes": list(OWNED_PREFIXES), "production_source_unchanged": not outside_owned},
         "matrix_run": {"run_id": run_id, "path": rel(run_path), "matrix_results_sha256": sha256(results_path), "aggregate_deadline_met": run.get("aggregate_deadline_met"), "cell_count": run.get("cell_count"), "negative_controls": run.get("negative_controls")},
         "storage": {"path": rel(EVIDENCE / "storage.json"), "sha256": sha256(EVIDENCE / "storage.json"), "summary": storage},
         "local_regressions": {"path": rel(local_regressions_path), "sha256": sha256(local_regressions_path), "summary": local_regressions} if isinstance(local_regressions, dict) else {"path": rel(local_regressions_path), "available": False},

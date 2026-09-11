@@ -11,24 +11,24 @@
     "cell_count": 22,
     "matrix_results_path": "matrix-results.json",
     "negative_controls_rejected": true,
-    "run_id": "20260911T143300Z-review52-repair-v2",
-    "run_path": "runs/20260911T143300Z-review52-repair-v2/run.json"
+    "run_id": "c60-final-20260911T145200Z",
+    "run_path": "runs/c60-final-20260911T145200Z/run.json"
   },
   "indexed_files": [
     {
-      "bytes": 3939,
+      "bytes": 2347,
       "path": "README.md",
-      "sha256": "1afc519117023741a8e38fbd1d3c1c195b84ed6cdb783907e572dc3bc2c00945"
+      "sha256": "49af80ea64c86937b79fa71af6b42b0624c2e8417bb3a03d4936b852c89b6b66"
     },
     {
-      "bytes": 49324,
+      "bytes": 61340,
       "path": "provenance.json",
-      "sha256": "4aa229da7b803d9d11a83cf41a6d73237d7a38c37d71d8d1733e65aeb50aa288"
+      "sha256": "d949e2b077585f88d30ed7be2b9271fa7a2a7a2f1cc9dc4f35b2e442e1f96145"
     },
     {
-      "bytes": 9174,
+      "bytes": 9157,
       "path": "storage.json",
-      "sha256": "cef9b1050f9399fa378ecf5056156f286e02a49ce7d904185d3b80f1afa344f7"
+      "sha256": "24b6778a2afec889b5664b660d8f2e9d7c3d15f1c11838ef0b7aae10dcb72031"
     },
     {
       "bytes": 3933,
@@ -36,9 +36,9 @@
       "sha256": "16003084e9c6415dcbdb9cd90bfcc5d255c55b3d38824776a803533041bdc45c"
     },
     {
-      "bytes": 199087,
+      "bytes": 297068,
       "path": "matrix-results.json",
-      "sha256": "2a0bc3603e506473043c158f14794bfca1eade8f302431eac53e20ed69602340"
+      "sha256": "66b4ab0e866fbf40382cf248479a3a1012357003494718a030184a716ccbc3fe"
     },
     {
       "bytes": 1257,
@@ -46,14 +46,14 @@
       "sha256": "4107e8692145f50f73fa6d4b49085d082741e382859cec098156420e176a01df"
     },
     {
-      "bytes": 710476,
+      "bytes": 739281,
       "path": "first-divergence.json",
-      "sha256": "587c9c2c6f085e1462cb892270e7be2607349969e4c73b59e147af2f07e2f061"
+      "sha256": "29e13bd3eaf6f29a695ef9f0a78ca4d4bc409712547026e7d8d69007e2f99f61"
     },
     {
-      "bytes": 16140,
+      "bytes": 16239,
       "path": "classification.json",
-      "sha256": "452f5d002b28be1ca16fec922daa3828978c92210468868eaa97f5a1126398fc"
+      "sha256": "1e2f35f3be229243465389754c87390af5d3c2af7d046182039615ed6743b214"
     },
     {
       "bytes": 1084,
@@ -71,19 +71,19 @@
       "sha256": "bd2e467947859ef3d2bed2bb9b686e5158bc690b2e3c4260310dde8acf2d6d81"
     },
     {
-      "bytes": 4067,
+      "bytes": 4046,
       "path": "regressions/summary.json",
-      "sha256": "1cfd603bc71c3e5a7ed86879028b8a59a52bde07cdb50a11375552ddcad5f58b"
+      "sha256": "c79a3f864c4b9402bdab5304b8b1dc53d3c760806f30c1db0f2de9b09ff1526e"
     },
     {
-      "bytes": 1651,
+      "bytes": 1642,
       "path": "regressions/normal.json",
-      "sha256": "f98e656e56ed153842645a2b4aef2cfbe005cd86599e3534e266eb97800c43bb"
+      "sha256": "05ae04908027b8f8549d1c55d61b3f8255ecc7366b04f0db3bd002553b71360d"
     },
     {
-      "bytes": 1493,
+      "bytes": 1484,
       "path": "regressions/race.json",
-      "sha256": "54207bd05421bdd7574dca0d20667a19e72f0743a47d98d3b803004b9ca5b5fe"
+      "sha256": "d24e099bd5de632359678d642c894dc92b3e42df4e37641b304a7531bfba179e"
     },
     {
       "bytes": 33120,
@@ -94,6 +94,26 @@
       "bytes": 1106,
       "path": "ci/run-34562579355-job-103148160889.json",
       "sha256": "ea41431affacdec3ee3cf55ec63664c294f6de6c2eec43596d7971668ea5a4a1"
+    },
+    {
+      "bytes": 4259,
+      "path": "../c60-c52-failed-case-attribution-repair/failed-case-attribution-fixture.json",
+      "sha256": "ebfa301cfd6f6ef5e0b61e8e4418c31c26cf5defbfce64731383ac71a9f89835"
+    },
+    {
+      "bytes": 3811,
+      "path": "../c60-c52-failed-case-attribution-repair/attribution-controls.json",
+      "sha256": "deafe6d46dcc854f45a8850a7fdaaa977ab26759eeecea5be87fcc01927fe676"
+    },
+    {
+      "bytes": 13286,
+      "path": "../c60-c52-failed-case-attribution-repair/replay-report.json",
+      "sha256": "f05ab04d682c3973984e5c8cb201758cf1e4568ccdc91d05416f1b11abafb683"
+    },
+    {
+      "bytes": 22588,
+      "path": "../c60-c52-failed-case-attribution-repair/verify_replay.py",
+      "sha256": "f59e11c0329828487b05aba828a10fa7597d9a0936d640e3067f376864fa08c1"
     }
   ],
   "primary_observation": {
@@ -147,6 +167,6 @@
     "workflow": "CI"
   },
   "project": "audio-runtime",
-  "schema": "audio-runtime-c52-evidence-index-v1",
-  "task": "audio-runtime-c52-hermetic-room-liveness-characterization"
+  "schema": "audio-runtime-c60-evidence-index-v1",
+  "task": "audio-runtime-c60-c52-failed-case-attribution-repair"
 }

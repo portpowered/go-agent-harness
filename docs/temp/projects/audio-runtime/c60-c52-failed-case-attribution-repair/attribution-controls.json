@@ -1,0 +1,94 @@
+{
+  "accepted": {
+    "accepted": true,
+    "attributed_case_count": 1,
+    "failed_action": {
+      "action": "fail",
+      "ordinal": 0,
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+      "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+    },
+    "name": "valid_single_failure"
+  },
+  "attribution_contract": {
+    "exactly_one_selected_failed_action": true,
+    "identity": [
+      "revision",
+      "run_id",
+      "matrix_cell",
+      "package",
+      "parent_test",
+      "subtest"
+    ],
+    "passing_action_is_failure": false,
+    "process_exit_alone": false
+  },
+  "controls": [
+    {
+      "name": "process_exit_only",
+      "reason": "process_exit_only raw terminal action count is incomplete for TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response",
+      "rejected": true
+    },
+    {
+      "name": "zero_failed_outcomes",
+      "reason": "zero_failed_outcomes process exit is not bound to exactly one selected failed test action",
+      "rejected": true
+    },
+    {
+      "name": "duplicate_failed_outcomes",
+      "reason": "duplicate_failed_outcomes raw terminal action count is incomplete for TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response",
+      "rejected": true
+    },
+    {
+      "name": "passing_outcome_not_failure",
+      "reason": "passing_outcome_not_failure has a raw failed action despite a passing process",
+      "rejected": true
+    },
+    {
+      "name": "transformed_checkpoint",
+      "reason": "terminal metadata does not preserve typed liveness classification",
+      "rejected": true
+    },
+    {
+      "name": "mismatched_raw_selection",
+      "reason": "mismatched_raw_selection raw action binding does not match revision/run/cell/package/test identity",
+      "rejected": true
+    },
+    {
+      "name": "multiple_failed_cases",
+      "reason": "multiple_failed_cases process exit is not bound to exactly one selected failed test action",
+      "rejected": true
+    },
+    {
+      "name": "stale_run_identity",
+      "reason": "stale_run_identity raw action binding does not match revision/run/cell/package/test identity",
+      "rejected": true
+    },
+    {
+      "name": "cross_run_trace_substitution",
+      "reason": "cross_run_trace_substitution trace event identity does not match revision/run/cell",
+      "rejected": true
+    },
+    {
+      "name": "changed_peer_boundary",
+      "reason": "preserved peer-cancellation boundary was transformed",
+      "rejected": true
+    }
+  ],
+  "passes": true,
+  "raw_source": {
+    "path": "../audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T143300Z-review52-repair-v2/cells/pr438/order-timeout-first/stdout.log",
+    "purpose": "Preserves the exact selected parent/subtest/package action shape; the independent failed transcript is unavailable and is never represented as this passing historical file.",
+    "sha256": "2785c23c42d6974e7f4d94a7ef455cf26c09d3850f034419f99ea0a9d5c4ff40"
+  },
+  "schema": "audio-runtime-c60-failed-case-attribution-controls-v1",
+  "source_report": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization-corrected-vertical-probe.json",
+    "sha256": "8b4f23539aceb6f687e4adafef711b4fc65cc91862a0af5670add5f7b7379a25",
+    "verified_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization-corrected-vertical-probe.json"
+  },
+  "trace_source": {
+    "path": "../audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T143300Z-review52-repair-v2/cells/pr438/order-timeout-first/trace.jsonl",
+    "sha256": "76d0eff35f188ec1cc6c4e8120533a61da7428b7f44248e70dd1601df52c2c8d"
+  }
+}
