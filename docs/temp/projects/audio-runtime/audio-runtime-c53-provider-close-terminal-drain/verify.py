@@ -12,6 +12,7 @@ from pathlib import Path
 
 OWNED_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=OWNED_ROOT, check=True, capture_output=True, text=True).stdout.strip())
+OWNED_REL = OWNED_ROOT.relative_to(REPO_ROOT)
 PEER_ROOT = REPO_ROOT.parent / "audio-runtime-c23-long-session-tool-characterization"
 C05_ROOT = REPO_ROOT.parent / "audio-runtime-c05-provider-terminal-policy"
 REPORT_ROOT = OWNED_ROOT / "reports"
