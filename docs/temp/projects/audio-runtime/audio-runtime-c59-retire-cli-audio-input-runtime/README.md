@@ -54,3 +54,17 @@ at `189` packages, `1,907` files, and `28,165` functions; the full agentloop
 normal/race package tests and the accumulated normal/coverage/race session
 regression matrix pass. The subsequent script CI jobs were still running at
 handoff, so no CI-green claim is made here.
+
+## Current exact-source shipped refresh
+
+After the repair, source revision `4fbf1c20be29518abd837b962097813a1f3b09d4`
+was built with `go build -trimpath ./cmd/yui` and exercised by
+`run.py --case all --child-timeout 60 --aggregate-timeout 600`. The rebuilt
+binary is `/private/tmp/yui-c59-0d39c5d`, SHA-256
+`ae787f5e5f703cced9cb7dd7f1e8c55e3c957acade4b31802c06cbf604734e2e`; the
+structured evidence is SHA-256
+`67a04f59c7b63bd00b185bd6c8f629d38a576c25c44800657c17a27ed7f0f4d5`. Text,
+finite-audio, uncommitted-buffer, and unsupported-WebRTC controls pass with
+bounded child shutdown and no survivors. The evidence is bound to execution
+`origin/main d5d6f84363d8569d5dc1a59985f8d45cf50e1d06` by this checkpoint; it
+does not claim CI, review, merge, or vertical acceptance.

@@ -1,6 +1,6 @@
 {
-  "aggregate_timeout_seconds": 120.0,
-  "binary": "/private/tmp/yui-c59",
+  "aggregate_timeout_seconds": 600.0,
+  "binary": "/private/tmp/yui-c59-0d39c5d",
   "case": "all",
   "cases": [
     {
@@ -38,7 +38,7 @@
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c59-retire-cli-audio-input-runtime/agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s_v2a_audio_in_basic.session.json",
           "--json"
         ],
-        "elapsed_ms": 40,
+        "elapsed_ms": 51,
         "process_group_killed": false,
         "returncode": 0,
         "stderr": "{\"total\":1,\"passed\":1,\"failed\":0,\"stuck\":0,\"status\":\"pass\"}\n",
@@ -62,7 +62,7 @@
             "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c59-retire-cli-audio-input-runtime/agent-cli/internal/transport/cli/testdata/probe-fixtures/s2s_v2e_audio_in_truncated_uncommitted.session.json",
             "--json"
           ],
-          "elapsed_ms": 33,
+          "elapsed_ms": 35,
           "process_group_killed": false,
           "returncode": 1,
           "stderr": "{\"total\":1,\"passed\":0,\"failed\":1,\"stuck\":0,\"status\":\"fail\"}\nError: 1 of 1 probe scenarios failed\n",
@@ -77,7 +77,7 @@
             "--signaling",
             "ws://127.0.0.1:1"
           ],
-          "elapsed_ms": 24,
+          "elapsed_ms": 29,
           "process_group_killed": false,
           "returncode": 1,
           "stderr": "Error: WebRTC CLI path is not yet customer-usable: no customer-reachable network signaling implementation and no supported spoken-audio input path are wired; use --transport ws with --audio-in or --audio-in-device\n",
@@ -87,6 +87,6 @@
       }
     }
   ],
-  "child_timeout_seconds": 30.0,
+  "child_timeout_seconds": 60.0,
   "status": "pass"
 }
