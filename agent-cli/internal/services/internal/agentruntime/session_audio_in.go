@@ -25,14 +25,6 @@ import (
 func PrepareSessionAudioInputs(paths []string) ([]ScheduledAudioInput, error) {
 	return prepareScheduledAudioInputs(paths)
 }
-
-func sessionAudioParentContext(parent context.Context) context.Context {
-	if parent != nil {
-		return parent
-	}
-	return context.Background()
-}
-
 func StartSessionAudioInterruptionsOnBrowserInvocation(parent context.Context, events <-chan webmcp.BrokerEvent, inputs []ScheduledAudioInput) (<-chan ScheduledAudioInput, func()) {
 	return StartSessionAudioInterruptionsOnBrowserTool(parent, events, "", inputs)
 }
@@ -116,7 +108,6 @@ func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(c
 		return planSessionWithResolvedInstructions(opts, instructions)
 	})
 }
-
 func prepareInstructionAudioSession(opts *SessionRunOptions, audioOutPath string, maxDuration time.Duration, seed SessionTextSeed, input SessionAudioInput) (SessionAudioInput, *sessionRecordingClaim, error) {
 	if audioOutPath != "" {
 		opts.AudioOutputRequested = true
@@ -134,7 +125,6 @@ func prepareInstructionAudioSession(opts *SessionRunOptions, audioOutPath string
 	claim, err := ensureSessionRecordingClaim(opts)
 	return input, claim, err
 }
-
 func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input SessionAudioInput, audioOutPath string, seed SessionTextSeed, planFactory func() (sessionRuntimePlan, error)) (runErr error) {
 	source, err := openSessionAudioInput(input)
 	if err != nil {
@@ -167,7 +157,6 @@ func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input Sess
 	}
 	return runErr
 }
-
 func configureSessionAudioOutput(plan *sessionRuntimePlan, audioOutPath string, out io.Writer, seed string) (io.Writer, *sessionAudioOutputInferencer, func() error, error) {
 	if audioOutPath == "" {
 		return out, nil, nil, nil
@@ -295,7 +284,6 @@ func openSessionWAVSource(path string) (audio.AudioSource, error) {
 	}
 	return source, err
 }
-
 func resolveSessionAudioSampleRate(opts SessionRunOptions, plan sessionRuntimePlan) (int, error) {
 	inRate, outRate := plan.inputAudioSampleRate, plan.outputAudioSampleRate
 	if requested, ok := plan.inferencer.(sessionAudioRequestProvider); ok {
