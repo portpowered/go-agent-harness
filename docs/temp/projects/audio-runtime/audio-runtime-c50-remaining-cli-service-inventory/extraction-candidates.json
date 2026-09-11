@@ -1,6 +1,6 @@
 {
   "schema_version": "c50-extraction-candidates-v1",
-  "source_revision": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
+  "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
   "selection_rule": "Exactly the smallest two demonstrated slices whose current writer paths, proposed runtime writer paths, and observable regressions are pairwise disjoint. This is an evidence-only handoff; no production source is changed here.",
   "excluded_active_owners": {
     "audio-runtime-c38-interruption-audio-retention": [

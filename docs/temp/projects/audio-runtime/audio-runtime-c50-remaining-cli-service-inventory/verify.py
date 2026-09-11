@@ -68,7 +68,7 @@ OWNED_OUTPUT_QUOTA_BYTES = 128 * 1024 * 1024
 REPLAY_OUTPUT_QUOTA_BYTES = 16 * 1024 * 1024
 REPLAY_FIXTURE = ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json"
 EXPECTED_COUNTS = {
-    "agent-cli/internal/services/internal/agentruntime": (107, 41147, 2478),
+    "agent-cli/internal/services/internal/agentruntime": (107, 41129, 2480),
     "agent-cli/internal/transport/cli/internal/livehost": (9, 2077, 138),
     "agent-cli/internal/room": (4, 3357, 257),
 }
@@ -776,7 +776,7 @@ def run_analyzer() -> dict[str, Any]:
         if actual is None or tuple(actual.get(key) for key in ("production_files", "production_lines", "production_symbols")) != expected:
             raise EvidenceFailure(f"inventory count changed for {root}: {actual!r}, expected {expected!r}")
     totals = document.get("totals", {})
-    if tuple(totals.get(key) for key in ("production_files", "production_lines", "production_symbols")) != (120, 46581, 2873):
+    if tuple(totals.get(key) for key in ("production_files", "production_lines", "production_symbols")) != (120, 46563, 2875):
         raise EvidenceFailure(f"inventory totals changed: {totals!r}")
     classifications = validate_classifications()
     paths = validate_call_paths()
@@ -784,7 +784,7 @@ def run_analyzer() -> dict[str, Any]:
         "schema_version": "c50-inventory-validation-v1",
         "source_revision": source_revision,
         "counts": {root: list(value) for root, value in EXPECTED_COUNTS.items()},
-        "totals": {"production_files": 120, "physical_lines": 46581, "top_level_symbols": 2873},
+        "totals": {"production_files": 120, "physical_lines": 46563, "top_level_symbols": 2875},
         "historical_observation": {"production_files": 107, "physical_lines": 41305, "comparison": "inventory-only; no migration percentage"},
         "determinism": comparisons,
         "classification": classifications,
@@ -1312,6 +1312,9 @@ def main() -> int:
                 reports[mode] = run_mode(mode)
                 if time.monotonic() - started > REQUESTED_AGGREGATE_DEADLINE_SECONDS:
                     raise EvidenceFailure("aggregate verification deadline exceeded")
+            accumulated = HERE / "runs" / "accumulated-regressions" / "report.json"
+            if accumulated.exists():
+                reports["accumulated-regressions"] = json.loads(accumulated.read_text(encoding="utf-8"))
             reports["checksum_manifest"] = write_checksums()
             write_json(HERE / "verification-summary.json", {"schema_version": "c50-verification-summary-v1", "candidate_revision": git_output("rev-parse", "HEAD"), "elapsed_seconds": round(time.monotonic() - started, 6), "aggregate_deadline_seconds": REQUESTED_AGGREGATE_DEADLINE_SECONDS, "reports": reports, "all_project_criteria": "OPEN", "checksum_note": "SHA256SUMS intentionally excludes this summary because the summary records the manifest digest; all other task-local evidence is covered without a self-referential digest cycle."})
             print(json.dumps({"status": "passed", "mode": "all", "elapsed_seconds": round(time.monotonic() - started, 6), "candidate_revision": git_output("rev-parse", "HEAD")}, sort_keys=True))
