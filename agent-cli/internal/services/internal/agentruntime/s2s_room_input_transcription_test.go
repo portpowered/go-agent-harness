@@ -56,9 +56,21 @@ func TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant(t *testin
 		"ROOM_ALPHA_KEY": alphaSecret,
 		"ROOM_BETA_KEY":  betaSecret,
 	}
+	cadenceReady := make(chan *roomRealtimeReplayCadence, len(servers))
+	mixerConfig := room.PCM16MixerConfig{
+		Format:            room.PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond},
+		InputQueueFrames:  4,
+		OutputQueueFrames: 4,
+		CadenceFactory: func(time.Duration) room.PCM16Cadence {
+			cadence := newRoomRealtimeReplayCadence()
+			cadenceReady <- cadence
+			return cadence
+		},
+	}
+	opened := make(chan string, len(servers))
 	opts := RoomRunOptions{
 		Manifest:  manifest,
-		ConfigDir: configDir, ModelCatalog: testModelCatalog(),
+		ConfigDir: configDir, ModelCatalog: testModelCatalog(), MixerConfig: mixerConfig,
 		BaseURL: "wss://room-input-transcription.invalid/v1/realtime",
 		CredentialLookup: func(name string) (string, bool) {
 			value, ok := credentials[name]
@@ -66,6 +78,9 @@ func TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant(t *testin
 		},
 		WebSocketDialerFactory: func(participant room.Participant) transport.Dialer {
 			return servers[participant.ID]
+		},
+		onParticipantSessionOpen: func(participantID string) {
+			opened <- participantID
 		},
 		onParticipantStream: func(participantID string, msg messages.StreamMessage) {
 			if msg.Type != messages.StreamTypeTranscriptDelta && msg.Type != messages.StreamTypeTranscriptEnd {
@@ -86,10 +101,61 @@ func TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant(t *testin
 
 	ctx, cancel := context.WithTimeout(context.Background(), roomInputTranscriptionTestTimeout)
 	defer cancel()
-	result, err := RunRoomWithResult(ctx, io.Discard, opts)
-	if err != nil {
-		t.Fatalf("RunRoomWithResult: %v", err)
+	runDone := make(chan roomTestRunOutcome, 1)
+	go func() {
+		result, err := RunRoomWithResult(ctx, io.Discard, opts)
+		runDone <- roomTestRunOutcome{result: result, err: err}
+	}()
+
+	cadences := make([]*roomRealtimeReplayCadence, 0, len(servers))
+	for range servers {
+		select {
+		case cadence := <-cadenceReady:
+			cadences = append(cadences, cadence)
+		case <-ctx.Done():
+			t.Fatalf("room mixer cadence was not created: %v", ctx.Err())
+		}
 	}
+	openedParticipants := make(map[string]struct{}, len(servers))
+	for range servers {
+		select {
+		case participantID := <-opened:
+			if _, duplicate := openedParticipants[participantID]; duplicate {
+				t.Fatalf("participant %q observed duplicate session.open", participantID)
+			}
+			if _, known := servers[participantID]; !known {
+				t.Fatalf("unknown participant observed session.open: %q", participantID)
+			}
+			openedParticipants[participantID] = struct{}{}
+		case <-ctx.Done():
+			t.Fatalf("room sessions did not observe session.open: %v", ctx.Err())
+		}
+	}
+	// The fake provider withholds its response completion until it receives
+	// media. Advancing every cadence only after both SESSION.OPEN observations
+	// forces the real room mixer to produce the post-handshake append that CI
+	// observed, without a wall-clock sleep or a production synchronization seam.
+	for _, cadence := range cadences {
+		cadence.Advance()
+	}
+	for participantID, server := range servers {
+		select {
+		case <-server.appendSeen:
+		case <-ctx.Done():
+			t.Fatalf("participant %q did not receive deterministic post-handshake media: %v", participantID, ctx.Err())
+		}
+	}
+
+	var outcome roomTestRunOutcome
+	select {
+	case outcome = <-runDone:
+	case <-ctx.Done():
+		t.Fatalf("RunRoomWithResult: %v", ctx.Err())
+	}
+	if outcome.err != nil {
+		t.Fatalf("RunRoomWithResult: %v", outcome.err)
+	}
+	result := outcome.result
 	if result.Reason != RoomTerminationMaxTurnsReached {
 		t.Fatalf("room termination reason = %q, want %q", result.Reason, RoomTerminationMaxTurnsReached)
 	}
@@ -137,8 +203,8 @@ func TestRunRoomWithResult_EnablesInputTranscriptionOncePerParticipant(t *testin
 		}
 		assertRoomInputTranscriptionHandshake(t, participantID, updates[0], model)
 		writes := server.writeTypesSnapshot()
-		if len(writes) != 1 || writes[0] != "session.update" {
-			t.Fatalf("participant %q outbound event types = %v, want one initial session.update", participantID, writes)
+		if err := validateRoomInputTranscriptionWire(writes); err != nil {
+			t.Fatalf("participant %q outbound event types = %v: %v", participantID, writes, err)
 		}
 	}
 }
@@ -166,6 +232,60 @@ func transcriptObservationKey(observation roomTranscriptObservation) string {
 		suffix = "end"
 	}
 	return observation.participant + ":" + label + suffix
+}
+
+func validateRoomInputTranscriptionWire(writes []string) error {
+	if len(writes) == 0 {
+		return fmt.Errorf("missing initial session.update")
+	}
+	if writes[0] != "session.update" {
+		return fmt.Errorf("first outbound event is %q, want session.update", writes[0])
+	}
+	updates := 0
+	appends := 0
+	for index, writeType := range writes {
+		switch writeType {
+		case "session.update":
+			updates++
+			if index != 0 {
+				return fmt.Errorf("duplicate or out-of-order session.update at wire index %d", index)
+			}
+		case "input_audio_buffer.append":
+			appends++
+		default:
+			return fmt.Errorf("unexpected outbound event %q at wire index %d", writeType, index)
+		}
+	}
+	if updates != 1 {
+		return fmt.Errorf("got %d session.update events, want exactly one", updates)
+	}
+	if appends == 0 {
+		return fmt.Errorf("missing post-handshake input_audio_buffer.append")
+	}
+	return nil
+}
+
+func TestRoomInputTranscriptionWireContractRejectsDuplicateOrOutOfOrderHandshake(t *testing.T) {
+	tests := []struct {
+		name   string
+		writes []string
+	}{
+		{name: "missing handshake", writes: []string{"input_audio_buffer.append"}},
+		{name: "duplicate handshake", writes: []string{"session.update", "session.update", "input_audio_buffer.append"}},
+		{name: "out of order handshake", writes: []string{"input_audio_buffer.append", "session.update"}},
+		{name: "unexpected control", writes: []string{"session.update", "response.create"}},
+		{name: "missing media", writes: []string{"session.update"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := validateRoomInputTranscriptionWire(test.writes); err == nil {
+				t.Fatalf("validateRoomInputTranscriptionWire(%v) unexpectedly passed", test.writes)
+			}
+		})
+	}
+	if err := validateRoomInputTranscriptionWire([]string{"session.update", "input_audio_buffer.append", "input_audio_buffer.append"}); err != nil {
+		t.Fatalf("valid post-handshake media sequence rejected: %v", err)
+	}
 }
 
 func assertRoomInputTranscriptionHandshake(t *testing.T, participantID string, payload []byte, model string) {
@@ -210,6 +330,9 @@ type roomInputTranscriptionServer struct {
 	events         chan []byte
 	closed         chan struct{}
 	closeOnce      sync.Once
+	appendSeen     chan struct{}
+	appendOnce     sync.Once
+	responseOnce   sync.Once
 }
 
 func newRoomInputTranscriptionServer(participantID, model, userText, assistantText string) *roomInputTranscriptionServer {
@@ -220,6 +343,7 @@ func newRoomInputTranscriptionServer(participantID, model, userText, assistantTe
 		assistantText: assistantText,
 		events:        make(chan []byte, 16),
 		closed:        make(chan struct{}),
+		appendSeen:    make(chan struct{}),
 	}
 }
 
@@ -299,6 +423,16 @@ func (c *roomInputTranscriptionConn) WriteMessage(_ int, payload []byte) error {
 		c.server.sessionUpdates = append(c.server.sessionUpdates, append([]byte(nil), payload...))
 	}
 	c.server.mu.Unlock()
+	if envelope.Type == "input_audio_buffer.append" {
+		c.server.appendOnce.Do(func() { close(c.server.appendSeen) })
+		c.server.responseOnce.Do(func() {
+			c.server.enqueue(`{"type":"response.created","response":{"id":"response-room"}}`)
+			c.server.enqueue(fmt.Sprintf(`{"type":"response.output_audio_transcript.delta","delta":%q}`, c.server.assistantText))
+			c.server.enqueue(fmt.Sprintf(`{"type":"response.output_audio_transcript.done","transcript":%q}`, c.server.assistantText))
+			c.server.enqueue(`{"type":"response.done","response":{"id":"response-room","status":"completed"}}`)
+		})
+		return nil
+	}
 	if envelope.Type != "session.update" {
 		return nil
 	}
@@ -306,10 +440,6 @@ func (c *roomInputTranscriptionConn) WriteMessage(_ int, payload []byte) error {
 	c.server.enqueue(fmt.Sprintf(`{"type":"session.created","session":{"id":"room-%s","model":%q}}`, c.server.participantID, c.server.model))
 	c.server.enqueue(fmt.Sprintf(`{"type":"conversation.item.input_audio_transcription.delta","delta":%q}`, c.server.userText))
 	c.server.enqueue(fmt.Sprintf(`{"type":"conversation.item.input_audio_transcription.completed","transcript":%q}`, c.server.userText))
-	c.server.enqueue(`{"type":"response.created","response":{"id":"response-room"}}`)
-	c.server.enqueue(fmt.Sprintf(`{"type":"response.output_audio_transcript.delta","delta":%q}`, c.server.assistantText))
-	c.server.enqueue(fmt.Sprintf(`{"type":"response.output_audio_transcript.done","transcript":%q}`, c.server.assistantText))
-	c.server.enqueue(`{"type":"response.done","response":{"id":"response-room","status":"completed"}}`)
 	return nil
 }
 
