@@ -6,7 +6,7 @@
       "import sys; sys.stdout.write('x' * 10000)"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
-    "durationSeconds": 0.045457,
+    "durationSeconds": 0.037572,
     "processGroupAlive": false,
     "returnCode": 0,
     "stderr": "",
@@ -23,7 +23,7 @@
       "import time; print('C51_TIMEOUT_CONTROL', flush=True); time.sleep(5)"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
-    "durationSeconds": 0.263409,
+    "durationSeconds": 0.261545,
     "processGroupAlive": false,
     "returnCode": -15,
     "stderr": "",
