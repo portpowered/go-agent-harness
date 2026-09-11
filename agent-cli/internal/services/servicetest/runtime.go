@@ -2,6 +2,11 @@
 // Production callers must use the injected service contracts instead.
 package servicetest
 
+import (
+	"io"
+	"time"
+)
+
 import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 
 import serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
@@ -10,67 +15,79 @@ import impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services
 
 import runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 
+import runtimeBrowser "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserscenario"
+
+import browserScenarioWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserscenario/wire"
+
 import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 
-const BrowserConversationAssistantTurn = impl.BrowserConversationAssistantTurn
+const BrowserConversationAssistantTurn = runtimeBrowser.BrowserConversationAssistantTurn
 
-type BrowserConversationBrokerCall = impl.BrowserConversationBrokerCall
+type BrowserConversationBrokerCall = runtimeBrowser.BrowserConversationBrokerCall
 
-const BrowserConversationCancel = impl.BrowserConversationCancel
+const BrowserConversationCancel = runtimeBrowser.BrowserConversationCancel
 
-type BrowserConversationCancelRequest = impl.BrowserConversationCancelRequest
-type BrowserConversationCancellationEvidence = impl.BrowserConversationCancellationEvidence
-type BrowserConversationCorrection = impl.BrowserConversationCorrection
+type BrowserConversationCancelRequest = runtimeBrowser.BrowserConversationCancelRequest
+type BrowserConversationCancellationEvidence = runtimeBrowser.BrowserConversationCancellationEvidence
+type BrowserConversationCorrection = runtimeBrowser.BrowserConversationCorrection
 
-const BrowserConversationCustomerNavigate = impl.BrowserConversationCustomerNavigate
-const BrowserConversationCustomerTurn = impl.BrowserConversationCustomerTurn
+const BrowserConversationCustomerNavigate = runtimeBrowser.BrowserConversationCustomerNavigate
+const BrowserConversationCustomerTurn = runtimeBrowser.BrowserConversationCustomerTurn
 
-type BrowserConversationFixture = impl.BrowserConversationFixture
-type BrowserConversationInterrupt = impl.BrowserConversationInterrupt
+type BrowserConversationFixture = runtimeBrowser.BrowserConversationFixture
+type BrowserConversationInterrupt = runtimeBrowser.BrowserConversationInterrupt
 
-const BrowserConversationInvoke = impl.BrowserConversationInvoke
-const BrowserConversationLifecycleCanceled = impl.BrowserConversationLifecycleCanceled
+const BrowserConversationInvoke = runtimeBrowser.BrowserConversationInvoke
+const BrowserConversationLifecycleCanceled = runtimeBrowser.BrowserConversationLifecycleCanceled
 
-type BrowserConversationLifecycleEvidence = impl.BrowserConversationLifecycleEvidence
+type BrowserConversationLifecycleEvidence = runtimeBrowser.BrowserConversationLifecycleEvidence
 
-const BrowserConversationListTools = impl.BrowserConversationListTools
-const BrowserConversationOracleAfter = impl.BrowserConversationOracleAfter
-const BrowserConversationOracleBefore = impl.BrowserConversationOracleBefore
+const BrowserConversationListTools = runtimeBrowser.BrowserConversationListTools
+const BrowserConversationOracleAfter = runtimeBrowser.BrowserConversationOracleAfter
+const BrowserConversationOracleBefore = runtimeBrowser.BrowserConversationOracleBefore
 
-type BrowserConversationOraclePhase = impl.BrowserConversationOraclePhase
+type BrowserConversationOraclePhase = runtimeBrowser.BrowserConversationOraclePhase
 
-const BrowserConversationOraclePostSession = impl.BrowserConversationOraclePostSession
+const BrowserConversationOraclePostSession = runtimeBrowser.BrowserConversationOraclePostSession
 
-type BrowserConversationOracleSnapshot = impl.BrowserConversationOracleSnapshot
-type BrowserConversationPage = impl.BrowserConversationPage
-type BrowserConversationReportMetadata = impl.BrowserConversationReportMetadata
-type BrowserConversationResult = impl.BrowserConversationResult
-type BrowserConversationScenario = impl.BrowserConversationScenario
+type BrowserConversationOracleSnapshot = runtimeBrowser.BrowserConversationOracleSnapshot
+type BrowserConversationPage = runtimeBrowser.BrowserConversationPage
+type BrowserConversationReportMetadata = runtimeBrowser.BrowserConversationReportMetadata
+type BrowserConversationResult = runtimeBrowser.BrowserConversationResult
+type BrowserConversationScenario = runtimeBrowser.BrowserConversationScenario
 
-const BrowserConversationScenarioVersion = impl.BrowserConversationScenarioVersion
+const BrowserConversationScenarioVersion = runtimeBrowser.BrowserConversationScenarioVersion
 
-type BrowserConversationStep = impl.BrowserConversationStep
-type BrowserConversationTabStateRequired = impl.BrowserConversationTabStateRequired
-type BrowserConversationTurn = impl.BrowserConversationTurn
+type BrowserConversationStep = runtimeBrowser.BrowserConversationStep
+type BrowserConversationTabStateRequired = runtimeBrowser.BrowserConversationTabStateRequired
+type BrowserConversationTurn = runtimeBrowser.BrowserConversationTurn
 
-const BrowserConversationValidatorNotRun = impl.BrowserConversationValidatorNotRun
+const BrowserConversationValidatorNotRun = runtimeBrowser.BrowserConversationValidatorNotRun
 
-type BrowserConversationValidatorVerdict = impl.BrowserConversationValidatorVerdict
+type BrowserConversationValidatorVerdict = runtimeBrowser.BrowserConversationValidatorVerdict
 
-const BrowserConversationValidatorVersion = impl.BrowserConversationValidatorVersion
+const BrowserConversationValidatorVersion = runtimeBrowser.BrowserConversationValidatorVersion
 
-type BrowserCustomerNavigation = impl.BrowserCustomerNavigation
+type BrowserCustomerNavigation = runtimeBrowser.BrowserCustomerNavigation
 
-const BrowserInterruptOnInFlightInvocation = impl.BrowserInterruptOnInFlightInvocation
+const BrowserInterruptOnInFlightInvocation = runtimeBrowser.BrowserInterruptOnInFlightInvocation
 
-type BrowserStateTransition = impl.BrowserStateTransition
+type BrowserStateTransition = runtimeBrowser.BrowserStateTransition
 
-var ComputeBrowserConversationInputJSONValidity = impl.ComputeBrowserConversationInputJSONValidity
+func ComputeBrowserConversationInputJSONValidity(calls []runtimeBrowser.BrowserConversationBrokerCall) runtimeBrowser.BrowserConversationInputJSONValidity {
+	return browserScenarioWire.NewService().ComputeInputJSONValidity(calls)
+}
 
 const DefaultOpenAIRealtimeModel = impl.DefaultOpenAIRealtimeModel
 
-var DeriveBrowserConversationCorrections = impl.DeriveBrowserConversationCorrections
-var DeriveBrowserConversationRecovery = impl.DeriveBrowserConversationRecovery
+func DeriveBrowserConversationCorrections(scenario runtimeBrowser.BrowserConversationScenario, result runtimeBrowser.BrowserConversationResult) []runtimeBrowser.BrowserConversationCorrectionEvidence {
+	return browserScenarioWire.NewService().DeriveCorrections(scenario, result)
+}
+
+func DeriveBrowserConversationRecovery(scenario runtimeBrowser.BrowserConversationScenario, result runtimeBrowser.BrowserConversationResult) []runtimeBrowser.BrowserConversationRecoveryEvidence {
+	return browserScenarioWire.NewService().DeriveRecovery(scenario, result)
+}
+
 var ErrInvalidOpenAIRealtimeVoice = sessioncontract.ErrInvalidOpenAIRealtimeVoice
 var ErrRTCSessionMediaUnavailable = impl.ErrRTCSessionMediaUnavailable
 var ErrRoomLaunchPathConflict = runtimeRooms.ErrLaunchPathConflict
@@ -83,11 +100,40 @@ var ErrSessionAudioResponseIncomplete = impl.ErrSessionAudioResponseIncomplete
 var ErrSessionImageContinuationIncomplete = impl.ErrSessionImageContinuationIncomplete
 var ErrSessionScheduledAudioIncomplete = runtimeSession.ErrLiveScheduledAudioIncomplete
 var ErrSessionUnresolvedToolResults = sessioncontract.ErrSessionUnresolvedToolResults
-var EvaluateBrowserConversation = impl.EvaluateBrowserConversation
+
+func EvaluateBrowserConversation(scenario runtimeBrowser.BrowserConversationScenario, result runtimeBrowser.BrowserConversationResult, rootErr error) (runtimeBrowser.BrowserConversationMechanicalEvaluation, error) {
+	return browserScenarioWire.NewService().Evaluate(scenario, result, rootErr)
+}
 
 type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
 
-var NewBrowserConversationCommandValidator = impl.NewBrowserConversationCommandValidator
+type BrowserConversationCommandValidator struct {
+	Command []string
+	Dir     string
+	Env     []string
+	Timeout time.Duration
+}
+
+func NewBrowserConversationCommandValidator(command []string, timeout time.Duration) (*BrowserConversationCommandValidator, error) {
+	if _, err := browserScenarioWire.NewService().NewCommandValidator(runtimeBrowser.BrowserConversationValidatorCommand{Command: command, Timeout: timeout}); err != nil {
+		return nil, err
+	}
+	return &BrowserConversationCommandValidator{Command: append([]string(nil), command...), Timeout: timeout}, nil
+}
+
+func (validator *BrowserConversationCommandValidator) ValidateBrowserConversation(result runtimeBrowser.BrowserConversationResult) (runtimeBrowser.BrowserConversationValidatorVerdict, error) {
+	if validator == nil {
+		return runtimeBrowser.BrowserConversationValidatorVerdict{}, runtimeBrowser.ErrBrowserConversationValidatorCommand
+	}
+	serviceValidator, err := browserScenarioWire.NewService().NewCommandValidator(runtimeBrowser.BrowserConversationValidatorCommand{
+		Command: validator.Command, Dir: validator.Dir, Env: validator.Env, Timeout: validator.Timeout,
+	})
+	if err != nil {
+		return runtimeBrowser.BrowserConversationValidatorVerdict{}, err
+	}
+	return serviceValidator.ValidateBrowserConversation(result)
+}
+
 var NewOpenAIRealtimeSessionInferencerWithOptions = impl.NewOpenAIRealtimeSessionInferencerWithOptions
 var NewOpenAIRealtimeSessionInferencerWithToolsAndOptions = impl.NewOpenAIRealtimeSessionInferencerWithToolsAndOptions
 var NewGrokSessionInferencer = impl.NewGrokSessionInferencer
@@ -104,7 +150,9 @@ type RTCDeviceBindingError = impl.RTCDeviceBindingError
 var PrepareRTCDeviceBindings = impl.PrepareRTCDeviceBindings
 var ValidateSessionAudioDeviceConflicts = serviceDevices.ValidateSessionAudioDeviceConflicts
 
-var RenderBrowserConversationReport = impl.RenderBrowserConversationReport
+func RenderBrowserConversationReport(result runtimeBrowser.BrowserConversationResult, metadata runtimeBrowser.BrowserConversationReportMetadata) (string, error) {
+	return browserScenarioWire.NewService().RenderReport(result, metadata)
+}
 
 var RunSession = impl.RunSession
 var RunSessionWithInstructions = impl.RunSessionWithInstructions
@@ -147,4 +195,6 @@ const SessionTransportWebRTC = impl.SessionTransportWebRTC
 
 type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
 
-var WriteBrowserConversationReport = impl.WriteBrowserConversationReport
+func WriteBrowserConversationReport(out io.Writer, result runtimeBrowser.BrowserConversationResult, metadata runtimeBrowser.BrowserConversationReportMetadata) error {
+	return browserScenarioWire.NewService().WriteReport(out, result, metadata)
+}

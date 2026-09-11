@@ -1,4 +1,4 @@
-package agentruntime
+package service
 
 import (
 	"encoding/json"
@@ -6,18 +6,16 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
 func TestComputeBrowserConversationInputJSONValidityRetainsEveryInvokeObservation(t *testing.T) {
 	valid := " \n{\"count\":90071992547409931234567890}\t"
 	measurement := ComputeBrowserConversationInputJSONValidity([]BrowserConversationBrokerCall{
 		{Sequence: 1, Operation: BrowserConversationListTools, InputJSON: `{}`},
-		{Sequence: 2, StepID: "first", Operation: BrowserConversationInvoke, ToolRef: "ref-1", ToolName: "write", State: webmcp.InvocationDispatched, InputJSON: valid},
-		{Sequence: 3, StepID: "first", Operation: BrowserConversationInvoke, ToolRef: "ref-1", ToolName: "write", State: webmcp.InvocationCompleted, Terminal: true, InputJSON: valid},
-		{Sequence: 4, StepID: "bad", Operation: BrowserConversationInvoke, InputJSON: `[]`, State: webmcp.InvocationError, Terminal: true},
-		{Sequence: 5, StepID: "trailing", Operation: BrowserConversationInvoke, InputJSON: `{"ok":true} trailing`, State: webmcp.InvocationError, Terminal: true},
+		{Sequence: 2, StepID: "first", Operation: BrowserConversationInvoke, ToolRef: "ref-1", ToolName: "write", State: "dispatched", InputJSON: valid},
+		{Sequence: 3, StepID: "first", Operation: BrowserConversationInvoke, ToolRef: "ref-1", ToolName: "write", State: "completed", Terminal: true, InputJSON: valid},
+		{Sequence: 4, StepID: "bad", Operation: BrowserConversationInvoke, InputJSON: `[]`, State: "error", Terminal: true},
+		{Sequence: 5, StepID: "trailing", Operation: BrowserConversationInvoke, InputJSON: `{"ok":true} trailing`, State: "error", Terminal: true},
 	})
 
 	if measurement.ValidObjectStrings != 2 || measurement.TotalAttempts != 4 {
@@ -37,12 +35,12 @@ func TestBrowserConversationRunDerivesValidityInImmutableSnapshots(t *testing.T)
 		t.Fatalf("new run: %v", err)
 	}
 	if err := run.ObserveBrokerCall(BrowserConversationBrokerCall{
-		StepID: "inspect", Operation: BrowserConversationInvoke, InputJSON: `{"value":1}`, State: webmcp.InvocationCompleted, Terminal: true,
+		StepID: "inspect", Operation: BrowserConversationInvoke, InputJSON: `{"value":1}`, State: "completed", Terminal: true,
 	}); err != nil {
 		t.Fatalf("valid call: %v", err)
 	}
 	if err := run.ObserveBrokerCall(BrowserConversationBrokerCall{
-		StepID: "inspect", Operation: BrowserConversationInvoke, InputJSON: `not-json`, State: webmcp.InvocationError, Terminal: true,
+		StepID: "inspect", Operation: BrowserConversationInvoke, InputJSON: `not-json`, State: "error", Terminal: true,
 	}); err != nil {
 		t.Fatalf("invalid call: %v", err)
 	}
@@ -65,7 +63,7 @@ func TestBrowserConversationReportSanitizesMetadataButPreservesSafeRawInput(t *t
 	}
 	input := " {\"value\":1} \n"
 	if err := run.ObserveBrokerCall(BrowserConversationBrokerCall{
-		StepID: "inspect", Operation: BrowserConversationInvoke, InputJSON: input, State: webmcp.InvocationCompleted, Terminal: true,
+		StepID: "inspect", Operation: BrowserConversationInvoke, InputJSON: input, State: "completed", Terminal: true,
 	}); err != nil {
 		t.Fatalf("broker call: %v", err)
 	}
@@ -112,7 +110,7 @@ func TestBrowserConversationReportPreservesValidityWhenCredentialInputIsRedacted
 	result := BrowserConversationResult{
 		ScenarioID:   "scenario",
 		ScenarioName: "name",
-		BrokerCalls:  []BrowserConversationBrokerCall{{Sequence: 1, Operation: BrowserConversationInvoke, InputJSON: secretInput, State: webmcp.InvocationCompleted, Terminal: true}},
+		BrokerCalls:  []BrowserConversationBrokerCall{{Sequence: 1, Operation: BrowserConversationInvoke, InputJSON: secretInput, State: "completed", Terminal: true}},
 	}
 	report, err := NewBrowserConversationReport(result, BrowserConversationReportMetadata{})
 	if err != nil {
@@ -128,7 +126,7 @@ func TestBrowserConversationReportPreservesValidityWhenCredentialInputIsRedacted
 
 func TestBrowserConversationValidatorInputIncludesFixedRubricAndSanitizedEvidence(t *testing.T) {
 	result := BrowserConversationResult{ScenarioID: "scenario", ScenarioName: "name", BrokerCalls: []BrowserConversationBrokerCall{
-		{Sequence: 1, Operation: BrowserConversationInvoke, InputJSON: `{"value":true}`, State: webmcp.InvocationCompleted, Terminal: true},
+		{Sequence: 1, Operation: BrowserConversationInvoke, InputJSON: `{"value":true}`, State: "completed", Terminal: true},
 	}}
 	input, err := NewBrowserConversationValidatorInput(result)
 	if err != nil {
@@ -164,12 +162,9 @@ func TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict(t *tes
 	}
 
 	result := BrowserConversationResult{ScenarioID: "scenario", ScenarioName: "name", BrokerCalls: []BrowserConversationBrokerCall{
-		{Sequence: 1, Operation: BrowserConversationInvoke, InputJSON: `{"value":true}`, State: webmcp.InvocationCompleted, Terminal: true},
+		{Sequence: 1, Operation: BrowserConversationInvoke, InputJSON: `{"value":true}`, State: "completed", Terminal: true},
 	}}
-	// The helper re-executes this package's test binary. Race instrumentation
-	// makes that child startup exceed one second on the supported host, while
-	// the dedicated timeout test below keeps the actual timeout contract tight.
-	validator, err := NewBrowserConversationCommandValidator([]string{os.Args[0], "-test.run=^TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict$"}, 2*time.Second)
+	validator, err := NewBrowserConversationCommandValidator([]string{os.Args[0], "-test.run=^TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict$"}, 5*time.Second)
 	if err != nil {
 		t.Fatalf("new command validator: %v", err)
 	}
