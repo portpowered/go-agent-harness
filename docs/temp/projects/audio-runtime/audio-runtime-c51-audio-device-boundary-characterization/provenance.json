@@ -2,6 +2,32 @@
   "admission": {
     "name": "audio-runtime-c51-audio-device-boundary-characterization",
     "project": "audio-runtime",
+    "projectControl": {
+      "argv": [
+        "python3",
+        "factory/scripts/project-control.py",
+        "verify-work",
+        "--type",
+        "task",
+        "--name",
+        "audio-runtime-c51-audio-device-boundary-characterization",
+        "--root",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+      "json": {
+        "name": "audio-runtime-c51-audio-device-boundary-characterization",
+        "project": "audio-runtime",
+        "status": "admitted"
+      },
+      "processGroupAlive": false,
+      "returnCode": 0,
+      "stderr": "",
+      "stderrTruncated": false,
+      "stdout": "{\"status\": \"admitted\", \"project\": \"audio-runtime\", \"name\": \"audio-runtime-c51-audio-device-boundary-characterization\"}\n",
+      "stdoutTruncated": false,
+      "timedOut": false
+    },
     "status": "admitted",
     "verifyCommand": "python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work --type task --name audio-runtime-c51-audio-device-boundary-characterization --root $FACTORY_ROOT",
     "workId": "work-task-22"
@@ -43,7 +69,7 @@
   ],
   "contractRevision": "audio-runtime-v1",
   "project": "audio-runtime",
-  "schema": "audio-runtime-c51.provenance.v1",
+  "schema": "audio-runtime-c51.provenance.v2",
   "scope": {
     "ownedPath": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization",
     "physicalAcousticProof": "OUT_OF_SCOPE",
@@ -55,26 +81,62 @@
   "scripts": [
     {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/verify.py",
-      "sha256": "2dab720dfe07fe3d381248970c70db8be164633c97e3526e3a98fb03721212f4"
+      "sha256": "344e065f9d6e0ff3a37ca18408e5e92a7d223fbbe00992fdb096b13538b9db6c"
     }
   ],
+  "shippedBuildManifest": null,
   "source": {
     "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
     "branch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
+    "candidateStatusAtCapture": "",
+    "candidateWasCleanAtCapture": true,
+    "cleanCandidateSHA": "16bb50a58b5fd28fa288e4d8e5c516a20bda8e74",
     "currentMainRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
     "expectedBranch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
+    "fetchedMain": {
+      "identityVerified": true,
+      "ref": "origin/main",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
+    },
     "planningMainRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+    "requiredAncestry": {
+      "fetchedMain": {
+        "isAncestor": true,
+        "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
+      },
+      "planningMain": {
+        "isAncestor": true,
+        "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
+      },
+      "startupIntegration": {
+        "isAncestor": true,
+        "revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
+      }
+    },
     "sourceArchive": {
       "bytes": 141281280,
       "command": "git archive --format=tar <sourceRevision>",
+      "maxBytes": 1073741824,
       "sha256": "4abaf8995d7b63bcc9c6b551f53b829c5e44e1cba8661e81ee3fb5028ca9ba00"
     },
     "sourceRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
     "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
   },
   "storage": {
-    "freeBytesAtGeneration": 144962228224,
+    "freeBytesAtGeneration": 141372162048,
     "requiredCompileReserveBytes": 2147483648
   },
-  "task": "audio-runtime-c51-audio-device-boundary-characterization"
+  "task": "audio-runtime-c51-audio-device-boundary-characterization",
+  "toolchain": {
+    "env": {
+      "GOARCH": "arm64",
+      "GOOS": "darwin",
+      "GOTOOLCHAIN": "go1.26.7",
+      "GOVERSION": "go1.26.7"
+    },
+    "environment": {
+      "GOWORK": "off"
+    },
+    "version": "go version go1.26.7 darwin/arm64"
+  }
 }
