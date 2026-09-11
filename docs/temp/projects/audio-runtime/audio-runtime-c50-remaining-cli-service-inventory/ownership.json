@@ -87,13 +87,18 @@
       }
     ]
   },
-  "board_sha256": "1ca168ddfad5764b2d805544eaf4d3a06b118db607732456b11aba586faa48f5",
+  "board_sha256": "42ea241c62db00ce3a2eb27fef40137f0b40cf860860a2a5fe8045a4d7817cf1",
   "previous_review_findings_are_accounted_for": true,
   "prior_c50_reviews": [
     {
       "state": "fin",
       "text": "\nPR #442 head f6fbaa97fb7bc85166b256878e1b39ec01394ae7 has all nine required checks SUCCESS. Independent fresh yui build/replay, focused tests, and deterministic analyzer reruns passed. Rejecting for actionable evidence defects: provenance omits the required source-archive and build-input hashes and records 7f73c8b3 as candidate_revision instead of reviewed head f6fbaa97; verification-summary records checksum-manifest hash ea026565... while current SHA256SUMS hashes to 75bcc52f...; analyzer method-call resolution misses mesh.Join/Remove/Close, classifications contradict the committed inventory, Peers has no production caller, cited callers are type/wrapper declarations rather than exact calls, and all 96 public call paths are target-local because the prefix validation is too broad; verifier accepts no-test runs by matching only ok, rejects its documented timeout/binary flags, lacks a shared aggregate deadline and owned-output quota, and does not assert required help literals. Exact executor action: repair analyzer, call-path/classification evidence, provenance, and verifier bounds/assertions while retaining the origin/main source scope; regenerate the complete evidence bundle with candidate head f6fbaa97, make checksum records self-consistent, rerun the full verification and required checks through the CI script, push the replacement head, and request fresh review. Do not merge this head.",
       "work_id": "work-review-28"
+    },
+    {
+      "state": "fin",
+      "text": "\nPR #442 current head is 262cdbfafa0d31df67612788096eda1bac960081 with all 9 required checks green, but review found actionable defects. Evidence remains bound to f030d8a875d3fd84c2c30082946c7ff7f5cefb23 in provenance.json, verification-summary.json, and runs/public/report.json; rebind all evidence and checksums to the actual head. Also fix verify.py:146-179: a SIGTERM-exiting parent with a SIGTERM-ignoring descendant leaves the process group alive (independent probe: timed_out=true, exit=-15, group_gone=false, survivor=true). Add bounded residual-group SIGKILL/reap handling and a deterministic ignoring-descendant negative control. Then rerun full bounded verification and accumulated regressions, commit/push, resubmit current-head CI, and request fresh review. Independent analyzer, fresh YUI replay, focused tests, and prior analyzer/fixture findings otherwise pass; do not merge this head.",
+      "work_id": "work-review-3"
     },
     {
       "state": "fin",
@@ -110,6 +115,10 @@
     {
       "sha256": "d70018ac3c3a0e321b0da5872e48f751fc89d33277b0abba3b511a3c7e53950e",
       "work_id": "work-review-28"
+    },
+    {
+      "sha256": "b64f6be1dc37c2f6f612c30f8bd5e1ad4d5e37f2fc29dac2ecda737af6aae965",
+      "work_id": "work-review-3"
     },
     {
       "sha256": "07bc373e02a1d8a47f308b24441ddfde5c36a6ec0714948561f4bc860a801d50",

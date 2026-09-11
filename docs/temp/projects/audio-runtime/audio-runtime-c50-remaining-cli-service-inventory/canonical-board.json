@@ -245,6 +245,21 @@
       "workTypeName": "idea"
     },
     {
+      "chainingTraceDepth": 9,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c52-hermetic-room-liveness-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-4",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 13,
       "content": [
         {
@@ -263,7 +278,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory\", \"branch\": \"codex/audio-runtime-c50-remaining-cli-service-inventory\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
-        "_rejection_feedback": "CI checks failed for PR #442 at head f030d8a875d3fd84c2c30082946c7ff7f5cefb23: required checks failed on current head f030d8a875d3fd84c2c30082946c7ff7f5cefb23: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34582318618/job/103208519902). Return this task to the executor with the listed failures.",
+        "_rejection_feedback": "PR #442 current head is 262cdbfafa0d31df67612788096eda1bac960081 with all 9 required checks green, but review found actionable defects. Evidence remains bound to f030d8a875d3fd84c2c30082946c7ff7f5cefb23 in provenance.json, verification-summary.json, and runs/public/report.json; rebind all evidence and checksums to the actual head. Also fix verify.py:146-179: a SIGTERM-exiting parent with a SIGTERM-ignoring descendant leaves the process group alive (independent probe: timed_out=true, exit=-15, group_gone=false, survivor=true). Add bounded residual-group SIGKILL/reap handling and a deterministic ignoring-descendant negative control. Then rerun full bounded verification and accumulated regressions, commit/push, resubmit current-head CI, and request fresh review. Independent analyzer, fresh YUI replay, focused tests, and prior analyzer/fixture findings otherwise pass; do not merge this head.",
         "continue_feedback": "PR #442 is pushed at 8c0fdb5e; admission, bounded verification, checksums, focused tests, and COUNT=3 regressions pass. Final evidence is bound to 0ad171de, not submitted head 8c0fdb5e. Rebind evidence to the submitted head, push the same task, then return ACCEPTED to SCRIPT CI without polling."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
@@ -284,7 +299,7 @@
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
       "state": {
-        "name": "init",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "tags": {
@@ -318,21 +333,6 @@
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-60",
       "workTypeName": "task"
-    },
-    {
-      "chainingTraceDepth": 5,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c47-live-probe-output-bound",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-thoughts-2",
-      "workTypeName": "thoughts"
     },
     {
       "chainingTraceDepth": 5,
@@ -437,6 +437,24 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-review-28",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 14,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c50-remaining-cli-service-inventory",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #442 current head is 262cdbfafa0d31df67612788096eda1bac960081 with all 9 required checks green, but review found actionable defects. Evidence remains bound to f030d8a875d3fd84c2c30082946c7ff7f5cefb23 in provenance.json, verification-summary.json, and runs/public/report.json; rebind all evidence and checksums to the actual head. Also fix verify.py:146-179: a SIGTERM-exiting parent with a SIGTERM-ignoring descendant leaves the process group alive (independent probe: timed_out=true, exit=-15, group_gone=false, survivor=true). Add bounded residual-group SIGKILL/reap handling and a deterministic ignoring-descendant negative control. Then rerun full bounded verification and accumulated regressions, commit/push, resubmit current-head CI, and request fresh review. Independent analyzer, fresh YUI replay, focused tests, and prior analyzer/fixture findings otherwise pass; do not merge this head."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-3",
       "workTypeName": "review"
     },
     {
@@ -1491,6 +1509,30 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-thoughts-19",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 5,
+      "content": [
+        {
+          "text": "No new Work dispatched.\n\n- C51 vertical probe is canonically complete and `ACCEPTED` for software callback/file replay only.\n- C47 remains unmerged and blocked on C53\u2019s provider-close/final-marker repair. PR #439 is undergoing CI at `a22498d9`; this is not acceptance.\n- Active Luna owners: C50, C52, and C53. C46 and C23 retain explicit dependencies.\n- No independent fourth slice is ready without conflicting ownership or relying on the unaccepted C50 inventory.\n- All nine project-level criteria remain open.\n\nThe evidence ledger is updated at [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md).",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c47-live-probe-output-bound",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "No new Work dispatched.\n\n- C51 vertical probe is canonically complete and `ACCEPTED` for software callback/file replay only.\n- C47 remains unmerged and blocked on C53\u2019s provider-close/final-marker repair. PR #439 is undergoing CI at `a22498d9`; this is not acceptance.\n- Active Luna owners: C50, C52, and C53. C46 and C23 retain explicit dependencies.\n- No independent fourth slice is ready without conflicting ownership or relying on the unaccepted C50 inventory.\n- All nine project-level criteria remain open.\n\nThe evidence ledger is updated at [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md)."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-2",
       "workTypeName": "thoughts"
     },
     {
