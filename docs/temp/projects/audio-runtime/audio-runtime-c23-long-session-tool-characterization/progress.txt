@@ -584,3 +584,53 @@ C23 causal repair handoff checkpoint — 2026-09-11T23:32:58Z
   sequence plus C21 regressions, and submit this same task to script CI only
   after the changed sequence passes. Current disposition is `CONTINUE`; do not
   poll CI or relabel the preserved recording failure.
+
+C23 current-main/C53 characterization checkpoint — 2026-09-11T23:41:07Z
+
+- Admission was reverified for the sole `audio-runtime` project with
+  `project-control.py verify-work --type task --name
+  audio-runtime-c23-long-session-tool-characterization`; the isolated branch
+  remains `codex/audio-runtime-c23-long-session-tool-characterization` and the
+  worktree was clean before this run. `git fetch origin main` returned
+  `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`, already an ancestor of the
+  preserved candidate; startup, project-baseline and C53 ancestry remain
+  intact. The candidate still changes only the seven admitted C23 evidence
+  paths.
+- Fresh `prepare --source-revision d5d6f84363d8569d5dc1a59985f8d45cf50e1d06
+  --child-timeout-seconds 60` passed at candidate `7a5653b50d2b19dad543880365670a1e0a0a9607`.
+  It recorded 951 build inputs with digest
+  `05e9d0ee4b1c8a563935b94f4f5157e6b536a6068a5ee1c541496753f1150aab`,
+  consumer SHA-256
+  `5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17`,
+  same-source yui SHA-256
+  `ab769e04aa8029ede164a4f7b88e3363b02316c3d165fa13051a333a1a81280c`, and
+  fixture SHA-256
+  `7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e`.
+  `verify-provenance --negative-control tampered-fixture` rejected the altered
+  fixture digest as expected.
+- The required bounded `controls --child-timeout-seconds 60
+  --total-timeout-seconds 600` stopped at its first recording-on/16 failure
+  after 2,940 ms. Immutable first-failure evidence is
+  `artifacts/first-failures/7a5653b50d2b19dad543880365670a1e0a0a9607-controls.json`;
+  the child report is
+  `artifacts/runs/20260911T234107Z-controls-on-16/consumer-report.json`.
+  The public consumer completed 355 ordered events, 32 tool calls/results,
+  2,048 PCM bytes, provider-authored completion and clean shutdown, with zero
+  event overflow; the recording manifest contained only
+  `provider.json`, `client.transcript.jsonl`, `agent.transcript.jsonl` and
+  `session-log.jsonl`, omitting the required `audio/out-000.pcm`. The exact
+  failure is the known C53/C56 recording boundary; the C23 recording oracle
+  was not weakened and no production path was edited.
+- Independent accumulated C21
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` passed
+  normal `-count=5` (`13.221s`, 15/15) and race `-count=1` (`12.497s`, 3/3).
+  Python compilation and `git diff --check` also passed. Matrix,
+  shipped-regressions, self-check and final report were not relabeled after
+  the first required failure; no unchanged retry was run.
+- Disposition remains `CONTINUE`, not `ACCEPTED`. The exact next action is for
+  the reviewed recording/media repair to reach `origin/main` (or for primary
+  to issue an explicit ownership decision); then fetch that exact main,
+  rebuild/rebind provenance, rerun the complete bounded C23 sequence plus C21
+  regressions, and only after it passes update and submit the same PR #415 to
+  script CI without polling. CI, review, merge, vertical, device, acoustic
+  and project-completion claims remain open.
