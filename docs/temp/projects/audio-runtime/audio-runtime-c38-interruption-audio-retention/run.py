@@ -59,6 +59,7 @@ TARGETED_TIMEOUT_SECONDS = 120.0
 AGGREGATE_TIMEOUT_SECONDS = 600.0
 TERM_GRACE_SECONDS = 2.0
 KILL_GRACE_SECONDS = 2.0
+AGGREGATE_CLEANUP_RESERVE_SECONDS = TERM_GRACE_SECONDS + KILL_GRACE_SECONDS + 1.0
 OUTPUT_LIMIT_BYTES = 256 * 1024
 
 FIXTURE_TYPES: dict[str, list[str]] = {
@@ -171,6 +172,35 @@ class EvidenceFailure(RuntimeError):
 
 class RunnerBlocked(RuntimeError):
     """A required host prerequisite is unavailable, not a product failure."""
+
+
+@dataclass
+class AggregateDeadline:
+    """Bound a complete public matrix, including child cleanup overhead."""
+
+    timeout_seconds: float
+    started: float = field(default_factory=time.monotonic)
+
+    def elapsed(self) -> float:
+        return time.monotonic() - self.started
+
+    def check(self, label: str) -> None:
+        elapsed = self.elapsed()
+        if elapsed >= self.timeout_seconds:
+            raise EvidenceFailure(
+                f"aggregate public matrix exceeded {self.timeout_seconds:.3f}s before {label}; "
+                f"elapsed={elapsed:.3f}s"
+            )
+
+    def child_timeout(self, label: str) -> float:
+        self.check(label)
+        remaining = self.timeout_seconds - self.elapsed() - AGGREGATE_CLEANUP_RESERVE_SECONDS
+        if remaining <= 0:
+            raise EvidenceFailure(
+                f"aggregate public matrix has no bounded child budget for {label}; "
+                f"elapsed={self.elapsed():.3f}s deadline={self.timeout_seconds:.3f}s"
+            )
+        return min(CHILD_TIMEOUT_SECONDS, remaining)
 
 
 @dataclass
@@ -898,6 +928,7 @@ def run_public_case(
     run_dir: Path,
     *,
     allow_historical_failure: bool = False,
+    timeout_seconds: float = CHILD_TIMEOUT_SECONDS,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     case_dir = run_dir / label
     workdir = case_dir / "workdir"
@@ -925,7 +956,7 @@ def run_public_case(
         "60s",
         "--trace-audio",
     ]
-    result = run_process(f"yui-{label}", argv, cwd=workdir, run_dir=case_dir, timeout_seconds=CHILD_TIMEOUT_SECONDS)
+    result = run_process(f"yui-{label}", argv, cwd=workdir, run_dir=case_dir, timeout_seconds=timeout_seconds)
     require_exit(result, 0, f"yui {label} public replay")
     if label == "audio-tool":
         marker = workdir / "evidence" / "runs" / "exec-invocations-v4.log"
@@ -942,12 +973,19 @@ def run_public_case(
     return result, observation
 
 
-def run_strict_replay(artifact: Path, case_dir: Path, label: str, run_dir: Path) -> dict[str, Any]:
+def run_strict_replay(
+    artifact: Path,
+    case_dir: Path,
+    label: str,
+    run_dir: Path,
+    *,
+    timeout_seconds: float = CHILD_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
     config = case_dir / "config"
     workdir = case_dir / "workdir"
     bundle = case_dir / "bundle"
     argv = [str(artifact), "-C", str(config), "--workdir", str(workdir), "--allow-path", str(workdir), "session", "replay", str(bundle)]
-    result = run_process(f"strict-{label}", argv, cwd=workdir, run_dir=run_dir, timeout_seconds=CHILD_TIMEOUT_SECONDS)
+    result = run_process(f"strict-{label}", argv, cwd=workdir, run_dir=run_dir, timeout_seconds=timeout_seconds)
     require_exit(result, 0, f"strict {label} bundle replay")
     expected = EXPECTED[label]
     if f"Replay verified: {expected['wire_events']} wire events, {expected['tool_calls']} tool calls" not in result["stderr"]:
@@ -955,7 +993,14 @@ def run_strict_replay(artifact: Path, case_dir: Path, label: str, run_dir: Path)
     return result
 
 
-def run_missing_timeline_control(artifact: Path, case_dir: Path, label: str, run_dir: Path) -> dict[str, Any]:
+def run_missing_timeline_control(
+    artifact: Path,
+    case_dir: Path,
+    label: str,
+    run_dir: Path,
+    *,
+    timeout_seconds: float = CHILD_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
     broken = run_dir / f"{label}-missing-timeline-bundle"
     if broken.exists():
         raise EvidenceFailure(f"derived negative-control target already exists: {broken}")
@@ -967,7 +1012,13 @@ def run_missing_timeline_control(artifact: Path, case_dir: Path, label: str, run
     config = case_dir / "config"
     workdir = case_dir / "workdir"
     argv = [str(artifact), "-C", str(config), "--workdir", str(workdir), "--allow-path", str(workdir), "session", "replay", str(broken)]
-    result = run_process(f"strict-{label}-missing-timeline", argv, cwd=workdir, run_dir=run_dir, timeout_seconds=CHILD_TIMEOUT_SECONDS)
+    result = run_process(
+        f"strict-{label}-missing-timeline",
+        argv,
+        cwd=workdir,
+        run_dir=run_dir,
+        timeout_seconds=timeout_seconds,
+    )
     require_exit(result, None, f"strict {label} missing-timeline control")
     if result["exit_code"] == 0 or "missing timeline.jsonl" not in (result["stdout"] + "\n" + result["stderr"]):
         raise EvidenceFailure(f"missing-timeline strict replay was not causally rejected: {result}")
@@ -975,8 +1026,16 @@ def run_missing_timeline_control(artifact: Path, case_dir: Path, label: str, run
 
 
 def run_public_matrix(artifact: Path, fixtures: Path, run_dir: Path, *, enforce_pcm: bool) -> dict[str, Any]:
-    help_result = run_process("yui-help", [str(artifact), "--help"], cwd=run_dir, run_dir=run_dir, timeout_seconds=CHILD_TIMEOUT_SECONDS)
+    aggregate = AggregateDeadline(AGGREGATE_TIMEOUT_SECONDS)
+    help_result = run_process(
+        "yui-help",
+        [str(artifact), "--help"],
+        cwd=run_dir,
+        run_dir=run_dir,
+        timeout_seconds=aggregate.child_timeout("yui help"),
+    )
     require_exit(help_result, 0, "yui help")
+    aggregate.check("after yui help")
     cases: dict[str, Any] = {}
     strict: dict[str, Any] = {}
     for label in ("audio-tool", "interruption"):
@@ -987,16 +1046,42 @@ def run_public_matrix(artifact: Path, fixtures: Path, run_dir: Path, *, enforce_
             label,
             run_dir,
             allow_historical_failure=not enforce_pcm,
+            timeout_seconds=aggregate.child_timeout(f"public {label}"),
         )
+        aggregate.check(f"after public {label}")
         if enforce_pcm:
             # Re-run the assertion against the already-recorded bytes without
             # touching the public artifact; this makes the mode's oracle
             # requirement explicit in its own report.
             observation = inspect_public_case(label, fixture, run_dir / label, enforce_pcm=True)
-        strict[label] = run_strict_replay(artifact, run_dir / label, label, run_dir)
+            aggregate.check(f"after {label} PCM inspection")
+        strict[label] = run_strict_replay(
+            artifact,
+            run_dir / label,
+            label,
+            run_dir,
+            timeout_seconds=aggregate.child_timeout(f"strict {label}"),
+        )
+        aggregate.check(f"after strict {label}")
         cases[label] = {"public": public_result, "observation": observation, "strict": strict[label]}
-    missing = run_missing_timeline_control(artifact, run_dir / "interruption", "interruption", run_dir)
-    return {"help": help_result, "cases": cases, "missing_timeline_control": missing}
+    missing = run_missing_timeline_control(
+        artifact,
+        run_dir / "interruption",
+        "interruption",
+        run_dir,
+        timeout_seconds=aggregate.child_timeout("missing timeline"),
+    )
+    aggregate.check("after missing timeline")
+    return {
+        "help": help_result,
+        "cases": cases,
+        "missing_timeline_control": missing,
+        "aggregate": {
+            "deadline_seconds": AGGREGATE_TIMEOUT_SECONDS,
+            "elapsed_seconds": round(aggregate.elapsed(), 6),
+            "timed_out": False,
+        },
+    }
 
 
 def build_repaired_artifact(source_root: Path, evidence_dir: Path, run_dir: Path, requested_artifact: Path | None = None) -> tuple[Path, dict[str, Any]]:
@@ -1050,6 +1135,51 @@ def assert_new_artifact(artifact: Path) -> dict[str, Any]:
     return {"path": str(artifact), "sha256": actual, "bytes": artifact.stat().st_size}
 
 
+def validate_build_provenance(
+    source_root: Path,
+    evidence_dir: Path,
+    artifact_info: dict[str, Any],
+    *,
+    require_clean: bool,
+) -> dict[str, Any]:
+    """Require the selected artifact and build manifest to describe this source."""
+    build_manifest = evidence_dir / "artifacts" / "repaired-build.json"
+    if not build_manifest.is_file():
+        raise RunnerBlocked(f"repaired build provenance is unavailable: {build_manifest}")
+    build_record = load_json(build_manifest)
+    if not isinstance(build_record, dict):
+        raise EvidenceFailure(f"repaired build provenance is not an object: {build_manifest}")
+
+    status = git_output(source_root, "status", "--short", "--untracked-files=all")
+    if require_clean and status:
+        raise EvidenceFailure(f"build provenance requires a clean source tree: {status}")
+    source_revision = git_output(source_root, "rev-parse", "HEAD")
+    source_id = source_identity(source_root)
+    inputs = build_input_manifest(source_root)
+    if build_record.get("build_inputs") != inputs:
+        raise EvidenceFailure("repaired artifact build-input manifest does not match the selected source")
+    if build_record.get("source_revision") != source_revision or build_record.get("source_identity") != source_id:
+        raise EvidenceFailure(
+            "repaired build provenance source mismatch: "
+            f"recorded revision={build_record.get('source_revision')!r} identity={build_record.get('source_identity')!r}; "
+            f"current revision={source_revision!r} identity={source_id!r}"
+        )
+    recorded_artifact = Path(str(build_record.get("artifact", ""))).expanduser().resolve()
+    if (
+        recorded_artifact != Path(str(artifact_info["path"])).resolve()
+        or build_record.get("artifact_sha256") != artifact_info["sha256"]
+        or build_record.get("artifact_bytes") != artifact_info["bytes"]
+    ):
+        raise EvidenceFailure(f"repaired artifact provenance mismatch: build={build_record} package={artifact_info}")
+    return {
+        "manifest": str(build_manifest),
+        "record": build_record,
+        "source_revision": source_revision,
+        "source_identity": source_id,
+        "build_inputs": inputs,
+    }
+
+
 def run_original(source_root: Path, fixtures: Path, evidence_dir: Path) -> dict[str, Any]:
     run_dir = make_run_dir(evidence_dir, "original")
     archived = canonical_reference()
@@ -1082,6 +1212,7 @@ def run_original(source_root: Path, fixtures: Path, evidence_dir: Path) -> dict[
 
 def run_repaired(source_root: Path, fixtures: Path, evidence_dir: Path, requested_artifact: Path | None, build_artifact: Path | None) -> dict[str, Any]:
     run_dir = make_run_dir(evidence_dir, "repaired")
+    source_root = validate_source_root(source_root)
     if requested_artifact is not None and build_artifact is not None:
         raise EvidenceFailure("repaired mode accepts either --artifact or --build-artifact, not both")
     if build_artifact is not None:
@@ -1090,18 +1221,24 @@ def run_repaired(source_root: Path, fixtures: Path, evidence_dir: Path, requeste
         artifact, build = build_repaired_artifact(source_root, evidence_dir, run_dir / "build")
     else:
         artifact = requested_artifact.expanduser().resolve()
-        build = None
     artifact_info = assert_new_artifact(artifact)
+    provenance = validate_build_provenance(source_root, evidence_dir, artifact_info, require_clean=True)
+    build = provenance["record"]
     public = run_public_matrix(artifact, fixtures, run_dir / "public", enforce_pcm=True)
     return {
         "status": "pass",
         "decision": "REPAIRED_ORACLE_PASS",
         "run_dir": str(run_dir),
         "source_root": str(source_root),
-        "source_revision": git_output(source_root, "rev-parse", "HEAD"),
-        "source_identity": source_identity(source_root),
+        "source_revision": provenance["source_revision"],
+        "source_identity": provenance["source_identity"],
         "artifact": artifact_info,
         "build": build,
+        "build_provenance": {
+            "manifest": provenance["manifest"],
+            "source_revision": provenance["source_revision"],
+            "build_inputs_sha256": provenance["build_inputs"]["sha256"],
+        },
         "public": public,
         "note": "This is credential-free software/file replay evidence, not physical or acoustic device proof and not script CI green status.",
     }
@@ -1399,22 +1536,19 @@ def run_package(source_root: Path, fixtures: Path, evidence_dir: Path, requested
     if requested_artifact is None:
         raise RunnerBlocked("package mode requires --artifact for the exact rebuilt candidate")
     artifact_info = assert_new_artifact(requested_artifact)
-    build_manifest = evidence_dir / "artifacts" / "repaired-build.json"
-    if not build_manifest.is_file():
-        raise RunnerBlocked(f"repaired build provenance is unavailable: {build_manifest}")
-    build_record = load_json(build_manifest)
-    if not isinstance(build_record, dict):
-        raise EvidenceFailure(f"repaired build provenance is not an object: {build_manifest}")
-    inputs = build_input_manifest(source_root)
-    if build_record.get("build_inputs") != inputs:
-        raise EvidenceFailure("repaired artifact build-input manifest does not match the clean package source")
-    if build_record.get("source_revision") != source_revision or build_record.get("source_identity") != source_revision:
-        raise EvidenceFailure(f"repaired build provenance source mismatch: {build_record}")
-    recorded_artifact = Path(str(build_record.get("artifact", ""))).expanduser().resolve()
-    if recorded_artifact != Path(artifact_info["path"]).resolve() or build_record.get("artifact_sha256") != artifact_info["sha256"] or build_record.get("artifact_bytes") != artifact_info["bytes"]:
-        raise EvidenceFailure(f"repaired artifact provenance mismatch: build={build_record} package={artifact_info}")
+    provenance = validate_build_provenance(source_root, evidence_dir, artifact_info, require_clean=True)
+    build_record = provenance["record"]
+    inputs = provenance["build_inputs"]
     helper = architecture_helper_reference()
     references = canonical_reference()
+    ancestry_checks = ancestry(source_root)
+    failed_ancestry = {
+        name: check
+        for name, check in ancestry_checks.items()
+        if not check.get("is_ancestor", False)
+    }
+    if failed_ancestry:
+        raise EvidenceFailure(f"package ancestry checks failed: {failed_ancestry}")
     record = {
         "schema": "audio-runtime-c38-package.v1",
         "status": "pass",
@@ -1426,7 +1560,7 @@ def run_package(source_root: Path, fixtures: Path, evidence_dir: Path, requested
         "source_revision": source_revision,
         "source_identity": source_id,
         "source_clean": True,
-        "ancestry": ancestry(source_root),
+        "ancestry": ancestry_checks,
         "working_tree_status": [],
         "owned_paths": prd.get("ownedPaths", []),
         "build_inputs": inputs,
@@ -1434,7 +1568,7 @@ def run_package(source_root: Path, fixtures: Path, evidence_dir: Path, requested
         "canonical_c30": references,
         "fixtures": fixture_inventory(fixtures),
         "artifact": artifact_info,
-        "build_provenance": {"manifest": str(build_manifest), "source_revision": build_record["source_revision"], "build_inputs_sha256": build_record["build_inputs"]["sha256"]},
+        "build_provenance": {"manifest": provenance["manifest"], "source_revision": build_record["source_revision"], "build_inputs_sha256": build_record["build_inputs"]["sha256"]},
         "limits": {"child_seconds": CHILD_TIMEOUT_SECONDS, "targeted_seconds": TARGETED_TIMEOUT_SECONDS, "aggregate_seconds": AGGREGATE_TIMEOUT_SECONDS, "realtime_sessions": 0, "physical_device": False},
         "external_gates": ["script current-head CI", "independent Luna review", "guarded merge-reviewed.py", "fresh post-delivery vertical validation"],
     }
