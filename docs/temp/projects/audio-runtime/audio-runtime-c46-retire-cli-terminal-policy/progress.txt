@@ -1,11 +1,13 @@
 Task: audio-runtime-c46-retire-cli-terminal-policy
 Project: audio-runtime
-Candidate checkpoint: 1e743f3e2d7ae3559c3c143939c9e4982abcef44
+Implementation checkpoint: 1e743f3e2d7ae3559c3c143939c9e4982abcef44
+Integrated/tested checkpoint: 9894a18401bb5f4ca6a43b92093f6f671ab06656
 
 Admission and ancestry
 - project-control.py verify-work --type task --name audio-runtime-c46-retire-cli-terminal-policy: admitted.
 - prd.branchName matches codex/audio-runtime-c46-retire-cli-terminal-policy.
 - Fetched origin/main at aa31d6d0e7261f7dcfc07e8f14a7ad29501f542b; baseline 3194edd, startup integration 8bdafc7, manifest intended main ddebb8 and fetched main are ancestors.
+- Remote main advanced through reviewed C45 to 7f73c8b3; merged it with --no-ff as 9894a184. The merge changed only C45-owned evidence files, and no C46 owned path conflicted.
 - Worktree is clean after the source checkpoint; no host checkout reset or merge was used.
 - Canonical board has no C46 rejection feedback or prior review attempt. C38/C40/C45 leases remain disjoint.
 
@@ -22,6 +24,7 @@ Focused evidence
 - Focused provider/CLI vet PASS.
 - Wire check PASS; coverage registration PASS (175 packages); architecture-size PASS (185 packages, 1893 files, 27796 functions).
 - Standalone consumer PASS; mutated delay oracle exits nonzero as expected. Exact public YUI replay was not run; deterministic local provider/session fixture is the bounded route used here.
+- After the main merge, provider/CLI normal and race regressions, standalone consumer/negative oracle, Wire, coverage-registration and architecture-size checks all passed again.
 - No script CI, independent review, guarded merge, post-merge vertical acceptance or project completion is claimed.
 
 Next action

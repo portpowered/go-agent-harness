@@ -3,10 +3,12 @@
   "project": "audio-runtime",
   "contractRevision": "audio-runtime-v1",
   "branch": "codex/audio-runtime-c46-retire-cli-terminal-policy",
-  "testedRevision": "1e743f3e2d7ae3559c3c143939c9e4982abcef44",
+  "testedRevision": "9894a18401bb5f4ca6a43b92093f6f671ab06656",
+  "implementationRevision": "1e743f3e2d7ae3559c3c143939c9e4982abcef44",
   "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "integrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "fetchedMain": "aa31d6d0e7261f7dcfc07e8f14a7ad29501f542b",
+  "integratedMain": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
   "admission": {
     "verifyWork": "admitted",
     "prdBranchMatchesWorktree": true,
@@ -20,6 +22,7 @@
     "integrationIsAncestor": true,
     "manifestIntendedMainIsAncestor": true,
     "fetchedMainIsAncestor": true,
+    "integratedMainIsAncestor": true,
     "hostCheckoutResetOrMerged": false
   },
   "sourceHashes": {
@@ -51,7 +54,8 @@
     "wireCheck": "PASS; generic provider wire_gen.go unchanged",
     "coverageRegistration": "PASS; 175 workspace packages across 6 modules",
     "architectureSize": "PASS; 185 packages, 1893 files, 27796 functions",
-    "publicYuiReplay": "NOT RUN; deterministic local provider/session fixture used instead"
+    "publicYuiReplay": "NOT RUN; deterministic local provider/session fixture used instead",
+    "postMainIntegration": "PASS; the reviewed main merge changed only C45-owned evidence files, then all focused checks were rerun"
   },
   "storage": {
     "availableKiBAfterBoundedBuild": 2138372,
