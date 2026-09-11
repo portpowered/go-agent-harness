@@ -186,3 +186,11 @@ The exact immutable C45 staged mission is `ACCEPTED` at raw run `runs/runs/stage
 The independent C55 script run `34634760206` is preserved as peer evidence: static was reported failed, while unit/race/WebMCP/macOS/Windows were successful and integration/coverage/hermetic were unfinished at observation. That peer result is not relabeled as C47 evidence; local lint/staticcheck pass, and no C55-owned path was repaired here. The earlier C47 run `34634266467` was reconciled separately with all nine checks successful at its pre-C55 head.
 
 This candidate is ready for the script-owned CI gate. The evidence/ledger checkpoint after the tested merge is documentation-only; no executable input changes follow the exact probe. No current-head CI result, independent review, guarded merge, post-merge vertical acceptance or project acceptance is claimed.
+
+## Exact-head focused revalidation
+
+Candidate source `5bf4d6cda32d583bc5669e2add768f203566ceb3` is a clean evidence-only descendant of the authorized C55 integration `1ab5b487dc927d1a65a6475e3e7f2db8b1d49e9b`; `origin/main=904e1f4c3be6c1e629138632573bd2fb55d50938` and exact C55 `48ce53e80a516dae13d995b198b330d1103395d1` remain ancestors. The bounded C47 resource suite returned top-level `ACCEPTED` in `7.692938s` with its deterministic reserve-shortfall control truthfully `BLOCKED` before launch (`available=2197842496`, `needed=2197842497`); pinned private C45 regressions returned `ACCEPTED` in `2.243404s`; and all seven Python sources compiled.
+
+The C55 room-liveness control passed `10` normal and `10` race tests. `make wire-check`, architecture-size (`186` packages / `1,896` files / `27,974` functions), and `git diff --check` passed. The exact immutable mission remains `ACCEPTED` from raw run `runs/runs/staged-probe-20260911T185431Z-98911` at tested source `1ab5b487`, with no executable input changed afterward; its PRD artifact equivalence, APFS COW staging, `174966628` projected bytes, `4718` binary output bytes, and `57472980 -> 0` scratch cleanup with no errors/survivors remain applicable.
+
+This same PR is ready for the script-owned CI gate. No CI result, independent review, guarded merge, vertical acceptance or project acceptance is claimed or polled. Any exact gate rejection remains actionable on this task.
