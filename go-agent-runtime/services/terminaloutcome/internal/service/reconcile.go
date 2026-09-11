@@ -24,121 +24,124 @@ func (r *reporter) Publish(out io.Writer, runErr error) error {
 	if hasIndependentFailure(runErr) {
 		r.markRunFailure()
 	}
-	candidate, replayDone := r.reconcileLocked(runErr)
+	selected, replayDone := r.reconcileLocked(runErr)
 	r.mu.Unlock()
-	if candidate == nil {
+	if selected == nil {
 		return nil
 	}
-	return writePublishedTerminal(writeDiscardIfNil(out), candidate, replayDone)
+	return writePublishedTerminal(writeDiscardIfNil(out), selected, replayDone)
 }
 
 func (r *reporter) reconcileLocked(runErr error) (*candidate, bool) {
+	switch {
+	case r.outcome.fatalError != nil:
+		return r.reconcileFatalLocked()
+	case r.outcome.replayComplete:
+		return r.reconcileReplayLocked()
+	case r.outcome.cancellation != nil:
+		return r.reconcileCancellationLocked()
+	case r.outcome.observedTerminal != nil:
+		return r.reconcileObservedLocked()
+	case r.outcome.durationTerminal != nil || r.outcome.durationExpired:
+		return r.reconcileDurationLocked()
+	case sessionErrorIsCancellation(runErr):
+		return r.reconcileRunCancellationLocked()
+	default:
+		return r.reconcileFallbackLocked()
+	}
+}
+
+func (r *reporter) reconcileFatalLocked() (*candidate, bool) {
 	o := &r.outcome
-	if o.fatalError != nil {
-		selected := o.failure
-		if selected == nil {
-			selected = &candidate{
-				value: messages.NewSessionCloseValueWithTerminal(
-					"",
-					string(messages.TerminalReasonTerminalFailure),
-					string(messages.TerminalReasonTerminalFailure),
-					messages.TerminalReasonTerminalFailure,
-					messages.TerminalProvenanceSession,
-					outputStateOrNone(o),
-				),
-				leadingNewline: true,
-			}
-		}
-		selected.value = normalizeTerminalValue(selected.value, messages.TerminalReasonTerminalFailure, outputStateOrNone(o))
-		o.cause = selected.value.TerminalReason
-		o.completion = completionIncomplete
-		return selected, false
-	}
-	if o.replayComplete {
-		selected := &candidate{
+	selected := o.failure
+	if selected == nil {
+		selected = &candidate{
 			value: messages.NewSessionCloseValueWithTerminal(
-				"",
-				"",
-				replayComplete,
-				messages.TerminalReasonReplayComplete,
-				messages.TerminalProvenanceReplay,
-				messages.TerminalOutputComplete,
+				"", string(messages.TerminalReasonTerminalFailure), string(messages.TerminalReasonTerminalFailure),
+				messages.TerminalReasonTerminalFailure, messages.TerminalProvenanceSession, outputStateOrNone(o),
 			),
 			leadingNewline: true,
 		}
-		o.cause = messages.TerminalReasonReplayComplete
-		o.outputState = messages.TerminalOutputComplete
-		o.completion = completionComplete
-		return selected, true
 	}
-	if o.cancellation != nil {
-		selected := o.cancellation
-		selected.value = normalizeTerminalValue(selected.value, messages.TerminalReasonCancellation, outputStateOrNone(o))
-		o.cause = messages.TerminalReasonCancellation
-		o.completion = completionIncomplete
-		return selected, false
-	}
-	if o.observedTerminal != nil {
-		selected := o.observedTerminal
-		selected.value = normalizeTerminalValue(selected.value, terminalReasonOrDefault(selected.value, messages.TerminalReasonSessionClose), outputStateOrNone(o))
-		o.cause = selected.value.TerminalReason
-		if successfulReason(o.cause) {
-			o.completion = completionComplete
-		} else {
-			o.completion = completionIncomplete
-		}
-		return selected, false
-	}
-	if o.durationTerminal != nil || o.durationExpired {
-		selected := o.durationTerminal
-		if selected == nil {
-			selected = &candidate{
-				value: messages.NewSessionCloseValueWithTerminal(
-					"",
-					string(maxDurationReason),
-					string(maxDurationReason),
-					maxDurationReason,
-					messages.TerminalProvenanceLoop,
-					outputStateOrNone(o),
-				),
-				leadingNewline: true,
-			}
-		}
-		selected.value = normalizeTerminalValue(selected.value, maxDurationReason, outputStateOrNone(o))
-		o.cause = maxDurationReason
-		o.completion = completionIncomplete
-		return selected, false
-	}
-	if sessionErrorIsCancellation(runErr) {
-		selected := &candidate{
-			value: messages.NewSessionCloseValueWithTerminal(
-				"",
-				"",
-				string(messages.TerminalReasonCancellation),
-				messages.TerminalReasonCancellation,
-				messages.TerminalProvenanceSession,
-				outputStateOrNone(o),
-			),
-			leadingNewline: true,
-		}
-		o.cause = messages.TerminalReasonCancellation
-		o.completion = completionIncomplete
-		return selected, false
-	}
-	selected := &candidate{
-		value: messages.NewSessionCloseValueWithTerminal(
-			"",
-			string(messages.TerminalReasonSessionClose),
-			string(messages.TerminalReasonSessionClose),
-			messages.TerminalReasonSessionClose,
-			messages.TerminalProvenanceSession,
-			outputStateOrNone(o),
-		),
-		leadingNewline: true,
-	}
-	o.cause = messages.TerminalReasonSessionClose
+	selected.value = normalizeTerminalValue(selected.value, messages.TerminalReasonTerminalFailure, outputStateOrNone(o))
+	o.cause = selected.value.TerminalReason
 	o.completion = completionIncomplete
 	return selected, false
+}
+
+func (r *reporter) reconcileReplayLocked() (*candidate, bool) {
+	r.outcome.cause = messages.TerminalReasonReplayComplete
+	r.outcome.outputState = messages.TerminalOutputComplete
+	r.outcome.completion = completionComplete
+	return &candidate{
+		value: messages.NewSessionCloseValueWithTerminal(
+			"", "", replayComplete, messages.TerminalReasonReplayComplete,
+			messages.TerminalProvenanceReplay, messages.TerminalOutputComplete,
+		),
+		leadingNewline: true,
+	}, true
+}
+
+func (r *reporter) reconcileCancellationLocked() (*candidate, bool) {
+	selected := r.outcome.cancellation
+	selected.value = normalizeTerminalValue(selected.value, messages.TerminalReasonCancellation, outputStateOrNone(&r.outcome))
+	r.outcome.cause = messages.TerminalReasonCancellation
+	r.outcome.completion = completionIncomplete
+	return selected, false
+}
+
+func (r *reporter) reconcileObservedLocked() (*candidate, bool) {
+	selected := r.outcome.observedTerminal
+	selected.value = normalizeTerminalValue(selected.value, terminalReasonOrDefault(selected.value, messages.TerminalReasonSessionClose), outputStateOrNone(&r.outcome))
+	r.outcome.cause = selected.value.TerminalReason
+	if successfulReason(r.outcome.cause) {
+		r.outcome.completion = completionComplete
+	} else {
+		r.outcome.completion = completionIncomplete
+	}
+	return selected, false
+}
+
+func (r *reporter) reconcileDurationLocked() (*candidate, bool) {
+	o := &r.outcome
+	selected := o.durationTerminal
+	if selected == nil {
+		selected = &candidate{
+			value: messages.NewSessionCloseValueWithTerminal(
+				"", string(maxDurationReason), string(maxDurationReason), maxDurationReason,
+				messages.TerminalProvenanceLoop, outputStateOrNone(o),
+			),
+			leadingNewline: true,
+		}
+	}
+	selected.value = normalizeTerminalValue(selected.value, maxDurationReason, outputStateOrNone(o))
+	o.cause = maxDurationReason
+	o.completion = completionIncomplete
+	return selected, false
+}
+
+func (r *reporter) reconcileRunCancellationLocked() (*candidate, bool) {
+	r.outcome.cause = messages.TerminalReasonCancellation
+	r.outcome.completion = completionIncomplete
+	return &candidate{
+		value: messages.NewSessionCloseValueWithTerminal(
+			"", "", string(messages.TerminalReasonCancellation), messages.TerminalReasonCancellation,
+			messages.TerminalProvenanceSession, outputStateOrNone(&r.outcome),
+		),
+		leadingNewline: true,
+	}, false
+}
+
+func (r *reporter) reconcileFallbackLocked() (*candidate, bool) {
+	r.outcome.cause = messages.TerminalReasonSessionClose
+	r.outcome.completion = completionIncomplete
+	return &candidate{
+		value: messages.NewSessionCloseValueWithTerminal(
+			"", string(messages.TerminalReasonSessionClose), string(messages.TerminalReasonSessionClose),
+			messages.TerminalReasonSessionClose, messages.TerminalProvenanceSession, outputStateOrNone(&r.outcome),
+		),
+		leadingNewline: true,
+	}, false
 }
 
 func terminalReasonOrDefault(value *messages.SessionCloseValue, fallback messages.TerminalReason) messages.TerminalReason {

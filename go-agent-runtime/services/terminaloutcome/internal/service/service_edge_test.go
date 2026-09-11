@@ -118,7 +118,7 @@ func TestFatalRetentionIsBoundedWhileSmallErrorIdentitySurvives(t *testing.T) {
 	long := errors.New(strings.Repeat("x", maxRetainedErrorBytes+1))
 	r = newReporter()
 	r.RecordArtifactFinalization(true, long)
-	if r.outcome.fatalError == long || len(r.outcome.fatalError.Error()) > maxRetainedErrorBytes {
+	if errors.Is(r.outcome.fatalError, long) || len(r.outcome.fatalError.Error()) > maxRetainedErrorBytes {
 		t.Fatalf("long artifact error was retained unbounded: %q", r.outcome.fatalError)
 	}
 	deep := error(error(nil))
@@ -129,7 +129,7 @@ func TestFatalRetentionIsBoundedWhileSmallErrorIdentitySurvives(t *testing.T) {
 	if err := r.Publish(io.Discard, deep); err != nil {
 		t.Fatalf("publish deep failure: %v", err)
 	}
-	if r.outcome.fatalError != errTerminalRunFailure {
+	if !errors.Is(r.outcome.fatalError, errTerminalRunFailure) {
 		t.Fatalf("deep run error retention = %v, want bounded marker", r.outcome.fatalError)
 	}
 }

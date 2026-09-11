@@ -15,16 +15,7 @@ func (r *reporter) observeStreamMessageLocked(msg messages.StreamMessage, leadin
 	switch {
 	case msg.Type == messages.StreamTypeMessageStart:
 		r.outcome.outputState = messages.TerminalOutputNone
-	case msg.Type == messages.StreamTypeTextDelta ||
-		msg.Type == messages.StreamTypeReasoningDelta ||
-		msg.Type == messages.StreamTypeAudioDelta ||
-		msg.Type == messages.StreamTypeImageDelta ||
-		msg.Type == messages.StreamTypeVideoDelta ||
-		msg.Type == messages.StreamTypeFileDelta ||
-		msg.Type == messages.StreamTypeEmbeddingDelta ||
-		msg.Type == messages.StreamTypeToolCallDelta ||
-		msg.Type == messages.StreamTypeToolCallEnd ||
-		msg.Type == messages.StreamTypeRefusal:
+	case isOutputMessageType(msg.Type):
 		if streamMessageHasOutput(msg) {
 			r.outcome.outputState = messages.TerminalOutputPartial
 		}
@@ -48,33 +39,86 @@ func (r *reporter) observeStreamMessageLocked(msg messages.StreamMessage, leadin
 	}
 }
 
+func isOutputMessageType(typ messages.StreamMessageType) bool {
+	return typ == messages.StreamTypeTextDelta ||
+		typ == messages.StreamTypeReasoningDelta ||
+		typ == messages.StreamTypeAudioDelta ||
+		typ == messages.StreamTypeImageDelta ||
+		typ == messages.StreamTypeVideoDelta ||
+		typ == messages.StreamTypeFileDelta ||
+		typ == messages.StreamTypeEmbeddingDelta ||
+		typ == messages.StreamTypeToolCallDelta ||
+		typ == messages.StreamTypeToolCallEnd ||
+		typ == messages.StreamTypeRefusal
+}
+
 func streamMessageHasOutput(msg messages.StreamMessage) bool {
 	switch value := msg.Value.(type) {
 	case *messages.TextDeltaValue:
-		return value != nil && value.Content != ""
+		return textDeltaHasOutput(value)
 	case *messages.ReasoningDeltaValue:
-		return value != nil && value.Content != ""
+		return reasoningDeltaHasOutput(value)
 	case *messages.AudioDeltaValue:
-		return value != nil && len(value.Content) > 0
+		return audioDeltaHasOutput(value)
 	case *messages.ImageDeltaValue:
-		return value != nil && len(value.Content) > 0
+		return imageDeltaHasOutput(value)
 	case *messages.VideoDeltaValue:
-		return value != nil && len(value.Content) > 0
+		return videoDeltaHasOutput(value)
 	case *messages.FileDeltaValue:
-		return value != nil && len(value.Content) > 0
+		return fileDeltaHasOutput(value)
 	case *messages.EmbeddingDeltaValue:
-		return value != nil && len(value.Content) > 0
+		return embeddingDeltaHasOutput(value)
 	case *messages.ToolCallDeltaValue:
-		return value != nil && value.PartialJSON != ""
+		return toolCallDeltaHasOutput(value)
 	case *messages.ToolCallEndValue:
 		return value != nil
 	case *messages.RefusalValue:
-		return value != nil && value.Message != ""
+		return refusalHasOutput(value)
 	case *messages.TranscriptDeltaValue:
-		return value != nil && value.Text != ""
+		return transcriptDeltaHasOutput(value)
 	default:
 		return false
 	}
+}
+
+func textDeltaHasOutput(value *messages.TextDeltaValue) bool {
+	return value != nil && value.Content != ""
+}
+
+func reasoningDeltaHasOutput(value *messages.ReasoningDeltaValue) bool {
+	return value != nil && value.Content != ""
+}
+
+func audioDeltaHasOutput(value *messages.AudioDeltaValue) bool {
+	return value != nil && len(value.Content) > 0
+}
+
+func imageDeltaHasOutput(value *messages.ImageDeltaValue) bool {
+	return value != nil && len(value.Content) > 0
+}
+
+func videoDeltaHasOutput(value *messages.VideoDeltaValue) bool {
+	return value != nil && len(value.Content) > 0
+}
+
+func fileDeltaHasOutput(value *messages.FileDeltaValue) bool {
+	return value != nil && len(value.Content) > 0
+}
+
+func embeddingDeltaHasOutput(value *messages.EmbeddingDeltaValue) bool {
+	return value != nil && len(value.Content) > 0
+}
+
+func toolCallDeltaHasOutput(value *messages.ToolCallDeltaValue) bool {
+	return value != nil && value.PartialJSON != ""
+}
+
+func refusalHasOutput(value *messages.RefusalValue) bool {
+	return value != nil && value.Message != ""
+}
+
+func transcriptDeltaHasOutput(value *messages.TranscriptDeltaValue) bool {
+	return value != nil && value.Text != ""
 }
 
 func (r *reporter) observeSessionCloseLocked(msg messages.StreamMessage, leadingNewline bool) {
@@ -129,12 +173,7 @@ func (r *reporter) observeErrorLocked(value *messages.ErrorValue, leadingNewline
 	}
 	candidate := &candidate{
 		value: messages.NewSessionCloseValueWithTerminal(
-			"",
-			"",
-			classification,
-			reason,
-			provenance,
-			outputState,
+			"", "", classification, reason, provenance, outputState,
 		),
 		leadingNewline: leadingNewline,
 	}
