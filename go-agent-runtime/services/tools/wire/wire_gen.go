@@ -8,6 +8,7 @@ package wire
 
 import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/policy"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/service"
 )
 
@@ -18,4 +19,10 @@ import (
 func NewService() tools.Service {
 	serviceService := service.New()
 	return serviceService
+}
+
+// NewInteractiveToolPolicy creates the reusable interactive-policy factory.
+func NewInteractiveToolPolicy() tools.InteractiveToolPolicyFactory {
+	factory := policy.New()
+	return factory
 }
