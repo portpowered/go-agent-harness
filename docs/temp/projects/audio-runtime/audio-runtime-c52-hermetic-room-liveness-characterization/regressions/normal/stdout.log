@@ -1,2 +1,2 @@
-ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle	0.373s
-ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live	0.299s
+ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle	0.331s
+ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live	0.303s
