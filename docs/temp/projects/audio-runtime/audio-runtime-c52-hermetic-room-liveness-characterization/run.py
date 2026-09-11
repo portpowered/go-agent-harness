@@ -803,6 +803,9 @@ def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_t
     negative = run_negative_controls(matrix, scratch_roots["planning-main"], run_dir, cache_root, overlay_hash, deadline)
     for scratch in scratch_roots.values():
         shutil.rmtree(scratch, ignore_errors=True)
+    # All child processes have been reaped before this point; retain reports and
+    # hashes but remove the run-local tool caches from the evidence bundle.
+    shutil.rmtree(cache_root, ignore_errors=True)
     result = {
         "schema": "audio-runtime-c52-matrix-run-v1",
         "run_id": run_dir.name,
