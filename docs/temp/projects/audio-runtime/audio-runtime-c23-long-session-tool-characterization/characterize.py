@@ -428,6 +428,16 @@ def process_group_alive(process_id: int) -> bool:
     return True
 
 
+def wait_for_process_group_exit(process_id: int, timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while process_group_alive(process_id):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(0.01, remaining))
+    return True
+
+
 def terminate_process_group(process: subprocess.Popen[Any]) -> dict[str, Any]:
     alive_before = process_group_alive(process.pid)
     term_sent = False
@@ -444,6 +454,8 @@ def terminate_process_group(process: subprocess.Popen[Any]) -> dict[str, Any]:
         try:
             process.wait(timeout=2)
         except subprocess.TimeoutExpired:
+            pass
+        if process_group_alive(process.pid):
             try:
                 os.killpg(process.pid, signal.SIGKILL)
                 kill_sent = True
@@ -451,11 +463,16 @@ def terminate_process_group(process: subprocess.Popen[Any]) -> dict[str, Any]:
                 pass
             except OSError as error:
                 errors.append(f"SIGKILL: {error}")
-            try:
-                process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                errors.append("parent did not reap after SIGKILL")
-    alive_after = process_group_alive(process.pid)
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            errors.append("parent did not reap after process-group termination")
+    if process.returncode is None:
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            errors.append("parent did not reap after cleanup")
+    alive_after = not wait_for_process_group_exit(process.pid, 2)
     return {
         "attempted": True,
         "term_sent": term_sent,
@@ -539,6 +556,7 @@ def run_child(command: list[str], label: str, run_root: Path, source_revision: s
     elapsed_ms = int((time.monotonic() - started) * 1000)
     stdout_bytes = len(stdout_retained)
     stderr_bytes = len(stderr_retained)
+    output_overflow = output_overflow or stdout_overflow[0] or stderr_overflow[0]
     output_bounded = not output_overflow and stdout_bytes <= MAX_CHILD_OUTPUT_BYTES and stderr_bytes <= MAX_CHILD_OUTPUT_BYTES
     result = {
         "label": label,
