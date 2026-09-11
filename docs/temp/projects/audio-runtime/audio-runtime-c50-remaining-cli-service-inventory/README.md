@@ -57,7 +57,9 @@ It refreshes `origin/main`, verifies admission and ancestry, checks source
 cleanliness outside this directory, reruns the analyzer and determinism check,
 builds the same-source `yui`, exercises top-level and session help plus the
 credential-free C16 local replay, runs focused normal/race tests, and records a
-timeout/process-group negative control. Each child is bounded by
+timeout/process-group negative controls, including a deterministic descendant
+that ignores SIGTERM and must be removed by bounded residual-group SIGKILL/reap.
+Each child is bounded by
 `--child-timeout`, all phases share `--total-timeout`, and the owned evidence
 tree has a fixed output quota. `--binary PATH` is accepted for script handoff
 and checked against a fresh same-source build. The nine project acceptance

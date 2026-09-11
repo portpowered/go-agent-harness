@@ -143,8 +143,35 @@ def selected_environment(env: dict[str, str]) -> dict[str, str]:
     return {key: env.get(key, "") for key in keys}
 
 
+def process_group_gone(process_group_id: int) -> bool:
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return True
+    except OSError as exc:
+        return exc.errno == errno.ESRCH
+    return False
+
+
+def wait_for_process_group_gone(process_group_id: int, timeout_seconds: float) -> bool:
+    deadline = time.monotonic() + max(0.0, timeout_seconds)
+    while True:
+        if process_group_gone(process_group_id):
+            return True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(0.05, remaining))
+
+
 def terminate_group(process: subprocess.Popen[bytes], reason: str) -> dict[str, Any]:
-    termination: dict[str, Any] = {"reason": reason, "term_sent": False, "kill_sent": False}
+    termination: dict[str, Any] = {
+        "reason": reason,
+        "term_sent": False,
+        "kill_sent": False,
+        "residual_group_detected": False,
+        "residual_kill_sent": False,
+    }
     try:
         os.killpg(process.pid, signal.SIGTERM)
         termination["term_sent"] = True
@@ -176,17 +203,28 @@ def terminate_group(process: subprocess.Popen[bytes], reason: str) -> dict[str, 
                 process.wait(timeout=0.5)
             except subprocess.TimeoutExpired:
                 pass
+    # A parent can honor SIGTERM and exit while a descendant ignores it. The
+    # parent wait above is therefore not sufficient evidence that the private
+    # process group is gone. Detect that residual group, then force-kill and
+    # boundedly wait for every member to disappear before returning evidence.
+    group_wait_budget = min(0.5, max(0.05, aggregate_remaining() or 0.5))
+    if not wait_for_process_group_gone(process.pid, group_wait_budget):
+        termination["residual_group_detected"] = True
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+            termination["residual_kill_sent"] = True
+        except ProcessLookupError:
+            pass
+        except OSError as exc:
+            termination["residual_kill_error"] = str(exc)
+        kill_wait_budget = min(2.0, max(0.05, aggregate_remaining() or 2.0))
+        if not wait_for_process_group_gone(process.pid, kill_wait_budget):
+            termination["residual_group_wait_timeout"] = True
+        else:
+            termination["residual_group_gone"] = True
+    else:
+        termination["residual_group_gone"] = True
     return termination
-
-
-def process_group_gone(process_group_id: int) -> bool:
-    try:
-        os.killpg(process_group_id, 0)
-    except ProcessLookupError:
-        return True
-    except OSError as exc:
-        return exc.errno == errno.ESRCH
-    return False
 
 
 def run_process(
@@ -307,6 +345,14 @@ def run_process(
         except subprocess.TimeoutExpired:
             termination = termination or {"reason": "reader-stop"}
             termination["wait_timeout"] = True
+    if not process_group_gone(process_group_id):
+        residual_termination = terminate_group(process, "residual-process-group")
+        residual_termination["residual_group_detected"] = True
+        if termination is None:
+            termination = residual_termination
+        else:
+            termination.update(residual_termination)
+            termination["reason"] = termination.get("reason") or "residual-process-group"
     stdout = bytes(buffers[process.stdout.fileno()])
     stderr = bytes(buffers[process.stderr.fileno()])
     # Keep ordinary text artifacts diff-check clean while preserving exact
@@ -344,6 +390,7 @@ def run_process(
         "stderr_path": str(stderr_path),
         "process_group_id": process_group_id,
         "process_group_gone": process_group_gone(process_group_id),
+        "residual_group_detected": bool(termination and termination.get("residual_group_detected")),
         "termination": termination,
     }
     write_json(result_path, result)
@@ -351,7 +398,7 @@ def run_process(
 
 
 def require_ok(result: dict[str, Any]) -> None:
-    if result["timed_out"] or result.get("aggregate_deadline_hit") or result["output_limited"] or result.get("owned_output_limited") or result["exit_code"] != 0 or not result["process_group_gone"]:
+    if result["timed_out"] or result.get("aggregate_deadline_hit") or result["output_limited"] or result.get("owned_output_limited") or result.get("residual_group_detected") or result["exit_code"] != 0 or not result["process_group_gone"]:
         raise EvidenceFailure(f"{result['label']} failed; see {result['stderr_path']} and {result['stdout_path']}")
 
 
@@ -1189,6 +1236,27 @@ def negative_controls() -> dict[str, Any]:
     )
     if not timeout_result["timed_out"] or not timeout_result["process_group_gone"] or timeout_result["exit_code"] == 0:
         raise EvidenceFailure("timeout negative control did not fail closed and reap its process group")
+    ignoring_child_script = "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(120)"
+    ignoring_descendant_script = (
+        "import subprocess,sys,time; "
+        f"subprocess.Popen([sys.executable, '-c', {ignoring_child_script!r}]); "
+        "time.sleep(120)"
+    )
+    ignoring_descendant_result = run_process(
+        "sigterm-ignoring-descendant-cleanup",
+        [sys.executable, "-c", ignoring_descendant_script],
+        ROOT,
+        run_dir,
+        timeout_seconds=2,
+    )
+    if (
+        not ignoring_descendant_result["timed_out"]
+        or ignoring_descendant_result["exit_code"] != -signal.SIGTERM
+        or not ignoring_descendant_result.get("residual_group_detected")
+        or not ignoring_descendant_result.get("termination", {}).get("residual_kill_sent")
+        or not ignoring_descendant_result["process_group_gone"]
+    ):
+        raise EvidenceFailure("SIGTERM-ignoring descendant negative control did not prove residual-group cleanup")
     overflow_result = run_process(
         "output-cap",
         [sys.executable, "-c", "import sys; sys.stdout.write('x' * 4000000)"],
@@ -1203,6 +1271,7 @@ def negative_controls() -> dict[str, Any]:
         "schema_version": "c50-negative-controls-v1",
         "source_revision": source_revision,
         "timeout_descendant_cleanup": timeout_result,
+        "sigterm_ignoring_descendant_cleanup": ignoring_descendant_result,
         "output_cap": overflow_result,
         "bounded_child_deadline_seconds": REQUESTED_CHILD_DEADLINE_SECONDS,
         "aggregate_deadline_seconds": REQUESTED_AGGREGATE_DEADLINE_SECONDS,
