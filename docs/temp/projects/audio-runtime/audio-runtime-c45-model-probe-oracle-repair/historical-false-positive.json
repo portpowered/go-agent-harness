@@ -1,0 +1,21 @@
+{
+  "schema": "audio-runtime-c45-historical-false-positive/v1",
+  "description": "The preserved verifier accepted an exit-1 child whose only failure was FileNotFoundError while reading the wrong case-dir stdout path.",
+  "reproduction": {
+    "original_revision": "5f14c45313cfdc71e000fda209e3408fcf863faf",
+    "original_verify_sha256": "e798dbcaf24acf906fb1664e27e9ad44fb1c563aa3a1ff306ed6461d50032843",
+    "actual_run_dir_stdout_exists": true,
+    "wrong_case_dir_stdout_exists": false,
+    "wrapper_returned_exit_code": 1,
+    "wrapper_returned_parent_reaped": true,
+    "wrapper_returned_survivors": [],
+    "child_stderr_contains": "FileNotFoundError",
+    "child_stderr_normalized_sha256": "02dcc026ce4351a5e2398531fc2719c4b602df0ee280c083d3315d722091a852",
+    "child_stderr_normalized": "Traceback (most recent call last):\n  File \"<string>\", line 7, in <module>\n    stdout = pathlib.Path(sys.argv[2]).read_text()\n  File \"/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py\", line 787, in read_text\n    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:\n         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py\", line 771, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: '<private-run>/run/replay-audio-tool/yui-replay-audio-tool.stdout'\n"
+  },
+  "preserved_raw_failure": {
+    "path": "/tmp/audio-runtime-c44-probe.QccmvA/private-report/run-20260910T-probe/negative-wrong-marker-oracle.stderr",
+    "exists": true,
+    "sha256": "83dfbc0f2c0c9a611dbea8ee4eeaf140222a0eeabbbf918e0fbf70c1e3a37d5e"
+  }
+}
