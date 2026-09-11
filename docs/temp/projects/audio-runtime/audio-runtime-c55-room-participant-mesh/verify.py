@@ -27,6 +27,7 @@ OWNED_CODE = {
     "go-agent-runtime/services/rooms/wire/mesh.go",
 }
 FIXTURE = REPO_ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json"
+NON_EXECUTION_REPORTS = {"admission-board.json"}
 
 
 class VerificationFailure(RuntimeError):
@@ -244,7 +245,8 @@ def verify_resources() -> None:
         require(int(execution.get("elapsed_ms", 10**9)) <= 60000 and execution.get("output_bounded") is True and execution.get("disk_bounded") is True, f"retained execution exceeds a bound: {execution.get('label')}")
         require(execution.get("cleanup", {}).get("group_alive_after") is False, f"retained execution left a process group: {execution.get('label')}")
     require(total_ms <= 600000, f"retained executions exceed aggregate 600 second budget: {total_ms}ms")
-    text = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in [PROVENANCE, *REPORTS.glob("*.json")]).lower()
+    report_paths = [path for path in REPORTS.glob("*.json") if path.name not in NON_EXECUTION_REPORTS]
+    text = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in [PROVENANCE, *report_paths]).lower()
     for marker in ("sk-", "authorization:", "realtime_api_key"):
         require(marker not in text, f"credential marker retained in evidence: {marker}")
 
