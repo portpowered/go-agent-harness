@@ -23,8 +23,9 @@ OWNED_CODE = {
     "agent-cli/internal/room/mesh.go",
     "agent-cli/internal/room/mesh_test.go",
     "go-agent-runtime/services/rooms/mesh.go",
-    "go-agent-runtime/services/rooms/internal/lifecycle/mesh.go",
+    "go-agent-runtime/services/rooms/internal/mesh/mesh.go",
     "go-agent-runtime/services/rooms/wire/mesh.go",
+    "coverage-manifest/go-agent-runtime/services/rooms/internal/mesh/package.json",
 }
 FIXTURE = REPO_ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json"
 NON_EXECUTION_REPORTS = {"admission-board.json"}
@@ -178,15 +179,15 @@ def verify_build_inputs(provenance: dict) -> None:
 
 
 def verify_scope() -> None:
-    lifecycle = (REPO_ROOT / "go-agent-runtime/services/rooms/internal/lifecycle/mesh.go").read_text(encoding="utf-8")
+    mesh = (REPO_ROOT / "go-agent-runtime/services/rooms/internal/mesh/mesh.go").read_text(encoding="utf-8")
     public = (REPO_ROOT / "go-agent-runtime/services/rooms/mesh.go").read_text(encoding="utf-8")
     cli = (REPO_ROOT / "agent-cli/internal/room/mesh.go").read_text(encoding="utf-8")
     wire = (REPO_ROOT / "go-agent-runtime/services/rooms/wire/mesh.go").read_text(encoding="utf-8")
     require("participants map" not in cli and "pairs map" not in cli and "pendingPair" not in cli and "mutateMu" not in cli, "CLI retained mutable mesh state")
-    require("participants map" in lifecycle and "pairs        map" in lifecycle and "pending" in lifecycle and "closing" in lifecycle and "mutateMu" in lifecycle, "private lifecycle does not own all mesh state")
+    require("participants map" in mesh and "pairs        map" in mesh and "pending" in mesh and "closing" in mesh and "mutateMu" in mesh, "private mesh does not own all mesh state")
     require("agent-cli" not in public and "rtc" not in public and "flag" not in public and "terminal" not in public.lower(), "public rooms contract leaked host concerns")
-    require("internal/lifecycle" in wire and "func NewMesh" in wire and "PairFactory" in wire, "Wire mesh provider is not explicit")
-    require(len(lifecycle.splitlines()) <= 400, "private lifecycle exceeds the new-file size budget")
+    require("internal/mesh" in wire and "func NewMesh" in wire and "PairFactory" in wire, "Wire mesh provider is not explicit")
+    require(len(mesh.splitlines()) <= 400, "private mesh exceeds the new-file size budget")
     require(len(public.splitlines()) <= 400 and len(cli.splitlines()) <= 400, "mesh public/adapter file exceeds size budget")
     baseline_wire = subprocess.run(["rtk", "proxy", "git", "show", f"{SOURCE_REVISION}:go-agent-runtime/services/rooms/wire/wire_gen.go"], cwd=REPO_ROOT, check=True, capture_output=True).stdout
     require(hashlib.sha256(baseline_wire).hexdigest() == sha256_file(REPO_ROOT / "go-agent-runtime/services/rooms/wire/wire_gen.go"), "wire_gen.go changed")
