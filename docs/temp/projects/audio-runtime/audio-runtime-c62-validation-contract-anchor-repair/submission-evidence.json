@@ -4,7 +4,8 @@
   "candidateStatus": "READY_FOR_SCRIPT_CI",
   "candidate": {
     "branch": "codex/audio-runtime-c62-validation-contract-anchor-repair",
-    "revision": "63988c0af875f2fd379b0fc866282dee600ea09e",
+    "revision": "bf768189ccb2a4f61f6413e914567d2756ea7e1d",
+    "implementationRevision": "63988c0af875f2fd379b0fc866282dee600ea09e",
     "pullRequest": 453,
     "pullRequestUrl": "https://github.com/portpowered/go-agent-harness/pull/453",
     "baselineOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
@@ -118,6 +119,32 @@
     "realtimeSecondsUsed": 0,
     "validatorsLaunched": false
   },
+  "reviewFindings": [
+    {
+      "finding": "validate_amended_report compared the staged successor mission authority with the original amendment authority and rejected a prepared mission during completion.",
+      "repairRevision": "63988c0af875f2fd379b0fc866282dee600ea09e",
+      "repair": "The staged mission is checked against the admitted successor contract authority; the amendment reference remains bound to the original authority as provenance.",
+      "causalControl": "test_successor_mission_authority_reaches_completion",
+      "result": "PASS; both role missions prepare and project-control verify_completion returns status=verified."
+    },
+    {
+      "finding": "test_prepare_validation depended on ignored running-root inputs and was absent from the default Makefile selector.",
+      "repairRevision": "63988c0af875f2fd379b0fc866282dee600ea09e",
+      "repair": "The test builds a disposable same-project root from tracked C62 fixtures and unsets FACTORY_ROOT/FACTORY_PROJECT_MANIFEST for the clean-checkout run; the owned module is run directly and through an explicit FACTORY_TEST_MODULES selector without changing Makefile scope.",
+      "causalControl": "env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST python3 -B -m unittest factory.scripts.tests.test_prepare_validation",
+      "result": "PASS; 6 tests."
+    }
+  ],
+  "ciRejection": {
+    "run": 34656009510,
+    "job": 103448454678,
+    "head": "bf768189ccb2a4f61f6413e914567d2756ea7e1d",
+    "failedCheck": "CI (integration)",
+    "result": "REJECTED_EXTERNAL_C47_OWNER",
+    "diagnostic": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_02 rendered 171191/177591 compared samples, losing exactly 6400; provider/playback accounting reported zero drops, overflows and discards.",
+    "scope": "C47-owned shipped audio integration; no C62 factory-script check failed.",
+    "nextAction": "Do not resubmit this unchanged C47 failure. After C47 repairs and accepted-main ancestry is available, integrate the accepted head into this same C62 branch, rerun the focused C62 selector and current-head handoff checks, then submit the changed task head to SCRIPT CI without polling."
+  },
   "successorCompletionRegression": {
     "result": "PASS",
     "test": "test_successor_mission_authority_reaches_completion",
@@ -183,9 +210,9 @@
   "handoff": {
     "scriptCi": {
       "owner": "SCRIPT",
-      "status": "PENDING",
+      "status": "REJECTED_EXTERNAL_C47_OWNER",
       "pollingByExecutor": false,
-      "nextAction": "Run the broad required checks for PR 453 after this repaired candidate is pushed; implementation revision 63988c0af875f2fd379b0fc866282dee600ea09e. On rejection, return the same task to this executor with exact logs."
+      "nextAction": "Preserve run 34656009510/job 103448454678 as the exact C47-owned rejection. Do not retry unchanged. Once C47's reviewed repair is on accepted main, integrate it here, rerun focused C62 checks, and submit the changed same-task head to SCRIPT CI without polling."
     },
     "independentReview": "PENDING_SCRIPT_CI_GREEN",
     "guardedMerge": "PENDING_INDEPENDENT_REVIEW",
