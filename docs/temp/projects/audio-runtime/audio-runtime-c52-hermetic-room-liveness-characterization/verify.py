@@ -288,7 +288,9 @@ def validate_raw_selection(
     for test in required_tests:
         counts = test_events.get(test)
         if not isinstance(counts, dict):
-            raise VerificationError(f"{context} did not emit raw actions for {test}")
+            if require_selected:
+                raise VerificationError(f"{context} did not emit raw actions for {test}")
+            counts = {"run": 0, "pass": 0, "fail": 0, "skip": 0}
         actual = {
             "run": counts.get("run", 0),
             "pass": counts.get("pass", 0),
