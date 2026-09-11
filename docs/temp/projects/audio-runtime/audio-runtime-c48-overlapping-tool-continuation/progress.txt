@@ -91,3 +91,27 @@ C48 overlap review-repair and handoff checkpoint — 2026-09-11
   the same branch, update PR #440 with this evidence, and return `ACCEPTED` to
   the script-owned current-head gate without polling; retain ownership for any
   exact rejection or actionable repair.
+
+C48 CI rejection repair checkpoint — 2026-09-11
+
+- The latest PR #440 run `34567223532` at head `5cb266ff` was read in full. The
+  hermetic and coverage jobs both included the same actionable failure from
+  `TestSessionCommand_OverlappingToolResultsWaitIndependently`: after both
+  provider tool results were accepted, the test timed out waiting for client
+  close. The integration job reproduced the same failure; other reported
+  replay/error text was expected negative-control output.
+- The focused reproduction showed that the provider-shaped fixture emits two
+  anonymous `MESSAGE.START` events for one tool-bearing response. The live
+  response counter treated each start as a separate owner, so its one terminal
+  left `responseActive` true and prevented the final graceful close.
+- The owned repair keeps anonymous response ownership at one when a repeated
+  start has no response ID, while explicit response IDs retain independent
+  ownership. Added `TestAnonymousFiniteResponseTreatsRepeatedStartsAsOneLifecycleOwner`
+  to preserve the regression and prove the terminal clears active state and
+  finishes the finite session.
+- Normal and race live/subsystem packages pass, and the exact failing CLI
+  integration test passes in normal and race modes. The first post-edit public
+  driver invocation correctly refused the dirty source tree before evidence
+  binding; no public artifact was relabeled. The next action is to commit this
+  repair, rerun the clean bounded C48 driver, then run the focused accumulated
+  C21 regression and final scope/provenance checks before pushing the same PR.
