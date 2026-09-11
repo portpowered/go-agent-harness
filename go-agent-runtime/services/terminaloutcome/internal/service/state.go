@@ -147,6 +147,9 @@ func (r *reporter) markRunFailure() {
 }
 
 func retainFatalError(err error) error {
+	if err == nil {
+		return nil
+	}
 	leaves, bounded := errorLeaves(err)
 	if !bounded || len(err.Error()) > maxRetainedErrorBytes {
 		return errTerminalRunFailure
