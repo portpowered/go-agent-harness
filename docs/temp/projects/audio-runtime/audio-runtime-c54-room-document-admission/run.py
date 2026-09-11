@@ -290,9 +290,9 @@ def check_no_secret(value: str, label: str) -> None:
 
 def build_consumer(source_revision: str) -> dict[str, Any]:
     result = run_child(
-        ["go", "build", "-mod=readonly", "-trimpath", "-o", str(CONSUMER_BINARY), "./consumer"],
+        ["go", "build", "-mod=readonly", "-trimpath", "-o", str(CONSUMER_BINARY), "."],
         "build-external-consumer",
-        CONSUMER_DIR.parent,
+        CONSUMER_DIR,
         ARTIFACTS / "build-consumer",
         source_revision,
         MAX_CHILD_SECONDS,
@@ -399,10 +399,11 @@ def run_baseline_failure(source_revision: str, candidate_revision: str) -> dict[
                 destination = archived_task / "consumer" / path
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(source.read_bytes())
+        baseline_binary = temporary_root / "baseline-consumer"
         result = run_child(
-            ["go", "build", "-mod=readonly", "-trimpath", "-o", str(archived_task / "bin" / "c54-consumer"), "./consumer"],
+            ["go", "build", "-mod=readonly", "-trimpath", "-o", str(baseline_binary), "."],
             "baseline-without-c54-provider",
-            archived_task,
+            archived_task / "consumer",
             ARTIFACTS / "baseline-failure",
             BASE_REVISION,
             MAX_CHILD_SECONDS,
