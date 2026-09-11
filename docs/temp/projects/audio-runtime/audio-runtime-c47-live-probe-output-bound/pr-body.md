@@ -81,3 +81,9 @@ The final committed-head exact staged mission is `runs/latest-staged-probe.json`
 Immutable YUI, consumer, source snapshot and descriptor hashes remain the PRD values with `artifact_input_equivalence=true`; APFS clone staging was used. The run projected `174966628` bytes, observed minimum free space `125790531584`, produced `4718` bytes of binary output, and recorded `report_bytes=381193` equal to the run-tree measurement and `latest_report_bytes=66599` equal to the latest-report file. Scratch cleanup was `57472980 -> 0` with no errors, no survivors and no forbidden helpers. Post-commit C47 resource controls, private C45 regressions, seven-source compilation and diff check pass; the deterministic low-space control remains `BLOCKED` before launch.
 
 This remains executor evidence only; CI, independent review, guarded merge, vertical acceptance and project acceptance are external.
+
+## Submitted head
+
+Evidence-only checkpoint `c86fb9a6687dfcb38e35447b42242ca64d6742db` is pushed to `codex/audio-runtime-c47-live-probe-output-bound` and contains the repair ledger, focused reports and exact raw staged run. No executable Python source, Go source, immutable artifact, fixture or peer path changed after tested source `7b03664b9c355709c592998026b093ab547f6290`.
+
+PR #439 is open at this head against `main` and is ready for the script-owned CI gate. No CI result, independent review, guarded merge, vertical acceptance or project acceptance is claimed here.
