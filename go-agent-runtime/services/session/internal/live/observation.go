@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
@@ -13,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/eventcodec"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"strings"
 )
 
 func (i *liveInvocation) bindPlaybackController() {
@@ -30,14 +29,6 @@ func (i *liveInvocation) bindPlaybackController() {
 		controlled.SetPlaybackController(controller)
 	}
 }
-
-type replayVirtualPlaybackController struct{}
-
-func (replayVirtualPlaybackController) StartPlayback(sharedaudio.PlaybackResponse) {}
-func (replayVirtualPlaybackController) InterruptPlayback(sharedaudio.PlaybackResponse) (int, bool) {
-	return 0, true
-}
-
 func (h *handle) consumeDeltas(ctx context.Context, loop *agentloop.AgentLoop) {
 	defer h.runWG.Done()
 	for {
@@ -54,7 +45,6 @@ func (h *handle) consumeDeltas(ctx context.Context, loop *agentloop.AgentLoop) {
 		h.consumeMessage(ctx, loop, msg, true)
 	}
 }
-
 func (h *handle) consumeCapabilityEvents(ctx context.Context, loop *agentloop.AgentLoop, events <-chan session.LiveCapabilityEvent) {
 	defer h.runWG.Done()
 	for {
@@ -74,14 +64,22 @@ func (h *handle) consumeCapabilityEvents(ctx context.Context, loop *agentloop.Ag
 		}
 	}
 }
-
 func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, allowOpening bool) bool {
-	h.observeOutput(msg)
+	if eventcodec.OutputMessage(msg) {
+		h.mu.Lock()
+		h.outputObserved = true
+		h.mu.Unlock()
+	}
 	h.observeTerminalValue(msg)
 	h.observeResponseTerminal(msg)
 	h.observeProviderLiveness(ctx, msg)
 	if allowOpening {
-		h.observeOpeningPolicies(ctx, loop, msg)
+		h.observeSessionLifecycle(ctx, msg)
+		if msg.Type == messages.StreamTypeSessionUpdated {
+			h.replayReadyOnce.Do(func() { close(h.replayReady) })
+		}
+		h.observeFirstTurn(ctx, msg)
+		h.observeRateLimit(loop, msg)
 	}
 	continuationErr, toolContinuationComplete := h.observeToolLifecycle(msg)
 	h.publishMessage(msg) //nolint:contextcheck // recording owns the invocation evidence context.
@@ -94,11 +92,13 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 		h.sendOpeningMessage(ctx, loop)
 	}
 	if responseComplete || (msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool) {
-		h.signalResponseWake()
+		h.mu.Lock()
+		close(h.replayResponseWake)
+		h.replayResponseWake = make(chan struct{})
+		h.mu.Unlock()
 	}
 	return responseComplete
 }
-
 func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {
 	if h == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool || (msg.Role != "" && msg.Role != messages.RoleAssistant) {
 		return
@@ -128,32 +128,11 @@ func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {
 	}
 	close(wake)
 }
-
-func (h *handle) signalResponseWake() {
-	if h == nil {
-		return
-	}
-	h.mu.Lock()
-	close(h.replayResponseWake)
-	h.replayResponseWake = make(chan struct{})
-	h.mu.Unlock()
-}
-
-func (h *handle) observeOpeningPolicies(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage) {
-	h.observeSessionLifecycle(ctx, msg)
-	if msg.Type == messages.StreamTypeSessionUpdated {
-		h.replayReadyOnce.Do(func() { close(h.replayReady) })
-	}
-	h.observeFirstTurn(ctx, msg)
-	h.observeRateLimit(loop, msg)
-}
-
 func (h *handle) publishMessage(msg messages.StreamMessage) {
 	event := eventcodec.FromMessage(h.request.SessionID, msg)
 	h.recordMessage(session.LiveRecord{Direction: session.LiveRecordAgent, Timestamp: event.Timestamp, Message: msg})
 	h.publish(event, false)
 }
-
 func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLoop) {
 	prompt, parts, responseMode, ok := h.claimOpeningMessage()
 	if !ok {
@@ -184,8 +163,6 @@ func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLo
 	}
 }
 
-const deferredImageOpeningPrompt = "Use the attached image to answer the user's next spoken question."
-
 func (h *handle) claimOpeningMessage() (string, []messages.ContentPart, session.LiveOpeningMessageResponse, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -201,17 +178,14 @@ func (h *handle) claimOpeningMessage() (string, []messages.ContentPart, session.
 	}
 	return prompt, parts, h.request.OpeningMessageResponse, true
 }
-
 func hasImageContentPart(parts []messages.ContentPart) bool {
 	for _, part := range parts {
-		switch part.(type) {
-		case messages.ImagePart:
+		if _, ok := part.(messages.ImagePart); ok {
 			return true
 		}
 	}
 	return false
 }
-
 func (h *handle) failOpeningMessage(err error) {
 	if err == nil {
 		return
@@ -222,11 +196,7 @@ func (h *handle) failOpeningMessage(err error) {
 	h.mu.Unlock()
 	h.Cancel(err)
 }
-
 func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
-	if h == nil {
-		return
-	}
 	value := eventcodec.TerminalValue(msg)
 	if value == nil {
 		return
@@ -243,7 +213,6 @@ func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
 	h.mu.Unlock()
 	h.terminalOnce.Do(func() { close(h.terminalObserved) })
 }
-
 func (h *handle) markCaptureComplete() {
 	if h == nil {
 		return
@@ -261,7 +230,6 @@ func (h *handle) markCaptureComplete() {
 		h.stopGracefully()
 	}
 }
-
 func (h *handle) waitForResponseStart(ctx context.Context) error {
 	if h == nil {
 		return context.Canceled
@@ -284,18 +252,11 @@ func (h *handle) waitForResponseStart(ctx context.Context) error {
 		}
 	}
 }
-
-// responseIsActive snapshots provider ownership; cancellation uses ordered control.
 func (h *handle) responseIsActive() bool {
-	if h == nil {
-		return false
-	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return (h.responseActive || h.responsePending) && !h.cancelRequested && !h.closed
 }
-
-// observeSessionLifecycle admits the scheduler-backed watchdog at SESSION.OPEN; pre-OPEN UPDATE state suppresses the timer.
 func (h *handle) observeSessionLifecycle(ctx context.Context, msg messages.StreamMessage) {
 	if msg.Type == messages.StreamTypeSessionUpdated {
 		h.policyMu.Lock()
@@ -314,7 +275,6 @@ func (h *handle) observeSessionLifecycle(ctx context.Context, msg messages.Strea
 	}
 	h.sessionUpdatedTimerScheduled = true
 	h.policyMu.Unlock()
-
 	timeout := h.request.SessionUpdatedTimeout
 	if timeout == 0 {
 		timeout = defaultSessionUpdatedTimeout
@@ -330,16 +290,6 @@ func (h *handle) observeSessionLifecycle(ctx context.Context, msg messages.Strea
 		timer.Stop()
 	}
 }
-
-func (h *handle) observeOutput(msg messages.StreamMessage) {
-	if h == nil || !eventcodec.OutputMessage(msg) {
-		return
-	}
-	h.mu.Lock()
-	h.outputObserved = true
-	h.mu.Unlock()
-}
-
 func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...bool) bool {
 	if h == nil || !h.request.FinishAfterResponse {
 		return false
@@ -347,7 +297,7 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...b
 	h.mu.Lock()
 	deferredResponseComplete := len(complete) > 0 && complete[0]
 	if h.isToolResponseEnd(msg) {
-		h.pendingToolCalls = 0
+		h.retireCompletedToolCallsLocked()
 		if deferredResponseComplete {
 			h.replayResponses++
 		}
@@ -358,8 +308,11 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...b
 		}
 		return finish
 	}
-	// A completed continuation retires the prior tool result; the following assistant boundary may contain another provider tool call, so keep pending calls intact.
-	h.observeFiniteResponseMessage(msg)
+	if err := h.observeFiniteResponseMessage(msg); err != nil {
+		h.mu.Unlock()
+		h.Cancel(err)
+		return false
+	}
 	if deferredResponseComplete && h.activeScheduledAudio && h.scheduledAudioCount > 0 && h.interruptedScheduledResponses > h.scheduledContinuationTerminals {
 		h.scheduledContinuationTerminals++
 	}
@@ -370,31 +323,78 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...b
 	}
 	return msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool
 }
-
-func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
-	if msg.Type == messages.StreamTypeMessageStart {
+func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) error {
+	switch msg.Type {
+	case messages.StreamTypeMessageStart:
 		if msg.Role != messages.RoleTool {
-			h.responseStarted, h.responseActive = true, true
-			h.responseObserved++
-			close(h.responseStartWake)
-			h.responseStartWake = make(chan struct{})
-		}
-		return
-	}
-	if msg.Type == messages.StreamTypeToolCallEnd {
-		h.pendingToolCalls++
-		return
-	}
-	if msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool {
-		responseWasOpen := h.responseActive || h.responsePending
-		h.responseActive, h.responsePending = false, false
-		interrupted := h.finiteResponseWasInterrupted(msg)
-		if h.pendingToolCalls > 0 || interrupted {
-			if interrupted && responseWasOpen && h.activeScheduledAudio && h.scheduledAudioCount > 0 {
-				h.interruptedScheduledResponses++
+			if h.observeResponseStartLocked(msg.ResponseID) {
+				h.responseStarted = true
+				h.responseObserved++
+				close(h.responseStartWake)
+				h.responseStartWake = make(chan struct{})
 			}
-			return
 		}
-		h.replayResponses++
+	case messages.StreamTypeToolCallEnd:
+		return h.notePendingToolCallLocked(msg)
+	case messages.StreamTypeMessageEnd:
+		if msg.Role != messages.RoleTool {
+			h.observeFiniteResponseEnd(msg)
+		}
+	case messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
 	}
+	return nil
+}
+func (h *handle) observeFiniteResponseEnd(msg messages.StreamMessage) {
+	responseWasOpen := h.retireResponseLocked(msg.ResponseID)
+	responseWasOpen = responseWasOpen || h.responseActive || h.responsePending
+	h.responsePending = false
+	interrupted := h.finiteResponseWasInterrupted(msg)
+	if h.pendingToolCalls > 0 || interrupted {
+		if h.pendingToolCalls > 0 && !h.pendingToolCallsForResponse(msg.ResponseID) {
+			h.replayResponses++
+		}
+		if interrupted && responseWasOpen && h.activeScheduledAudio && h.scheduledAudioCount > 0 {
+			h.interruptedScheduledResponses++
+		}
+		return
+	}
+	h.replayResponses++
+}
+func (h *handle) observeResponseStartLocked(responseID string) bool {
+	responseID = strings.TrimSpace(responseID)
+	if responseID == "" {
+		if h.anonymousResponses > 0 { // Anonymous starts share one lifecycle owner.
+			return false
+		}
+		h.anonymousResponses++
+	} else {
+		if h.activeResponseIDs == nil {
+			h.activeResponseIDs = make(map[string]struct{})
+		}
+		if _, exists := h.activeResponseIDs[responseID]; exists {
+			return false
+		}
+		h.activeResponseIDs[responseID] = struct{}{}
+	}
+	h.responsePending, h.responseActive = false, true
+	return true
+}
+func (h *handle) retireResponseLocked(responseID string) bool {
+	responseID = strings.TrimSpace(responseID)
+	switch {
+	case responseID != "":
+		if _, exists := h.activeResponseIDs[responseID]; !exists {
+			return false
+		}
+		delete(h.activeResponseIDs, responseID)
+	case h.anonymousResponses > 0:
+		h.anonymousResponses--
+	case len(h.activeResponseIDs) == 1:
+		h.activeResponseIDs = nil
+	default:
+		h.responseActive = len(h.activeResponseIDs) > 0 || h.anonymousResponses > 0
+		return false
+	}
+	h.responseActive = len(h.activeResponseIDs) > 0 || h.anonymousResponses > 0
+	return true
 }
