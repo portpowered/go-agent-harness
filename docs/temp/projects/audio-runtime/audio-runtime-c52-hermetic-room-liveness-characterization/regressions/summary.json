@@ -32,8 +32,8 @@
           "./services/session/internal/live"
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go-agent-runtime",
-        "duration_seconds": 14.668224333319813,
-        "ended_at": "2026-09-11T11:10:15.957503+00:00",
+        "duration_seconds": 15.55164545821026,
+        "ended_at": "2026-09-11T11:51:18.810523+00:00",
         "exit_code": 0,
         "first_failure": {
           "line": 1,
@@ -42,14 +42,14 @@
         },
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T11:10:01.288986+00:00",
+        "started_at": "2026-09-11T11:51:03.258623+00:00",
         "stderr_bytes": 309,
-        "stderr_sha256": "6ecd61fc501584ef2f4ea3231faf2785d153537e5478c293c81d1dd815c3727a",
+        "stderr_sha256": "e73e3399d64fa65c5e3a68dcba276ddb5856d2885bbae28828001c00227e4694",
         "stdout_bytes": 203,
-        "stdout_sha256": "b524769d3a9572fb524839941c53a541ac1f26aa57df2bca339389ac74d1e8ea",
+        "stdout_sha256": "c44a56282f5885d28277e5ffb54f0dbd30acbb4473f31ae03ac75bbf4e6895fc",
         "timed_out": false
       },
-      "source_revision": "1ae02396f1162c0b9c1f444609617f28b4c21f46"
+      "source_revision": "3af52f8bb74850bbc3d7102ea4302b6b2b9a3401"
     },
     "race": {
       "command": [
@@ -83,20 +83,20 @@
           "./services/rooms/internal/lifecycle"
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go-agent-runtime",
-        "duration_seconds": 8.076919917017221,
-        "ended_at": "2026-09-11T11:10:24.049770+00:00",
+        "duration_seconds": 7.859593333210796,
+        "ended_at": "2026-09-11T11:51:26.686600+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T11:10:15.972789+00:00",
+        "started_at": "2026-09-11T11:51:18.826956+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "stdout_bytes": 103,
-        "stdout_sha256": "42354de0c0f2478a89291b82eb19fe49a1cc75d49c36359449efa9ea499d86ee",
+        "stdout_sha256": "ed41daf99d8a286f1ddb30300adea2743acbf91138bfe4ce8c238622547e9829",
         "timed_out": false
       },
-      "source_revision": "1ae02396f1162c0b9c1f444609617f28b4c21f46"
+      "source_revision": "3af52f8bb74850bbc3d7102ea4302b6b2b9a3401"
     }
   },
   "passes": true,
@@ -104,11 +104,11 @@
   "storage": {
     "binary_output_bytes": 0,
     "cleanup_verified": true,
-    "fixture_report_bytes": 9965,
-    "free_space_after_cleanup_bytes": 120834527232,
-    "free_space_before_cleanup_bytes": 120197943296,
-    "free_space_before_run_bytes": 120835309568,
-    "reproducible_scratch_bytes_before_cleanup": 582483979,
+    "fixture_report_bytes": 9964,
+    "free_space_after_cleanup_bytes": 116051714048,
+    "free_space_before_cleanup_bytes": 115413737472,
+    "free_space_before_run_bytes": 116052811776,
+    "reproducible_scratch_bytes_before_cleanup": 582628372,
     "reproducible_scratch_bytes_retained_after_cleanup": 0,
     "source_staging_bytes": 0
   }

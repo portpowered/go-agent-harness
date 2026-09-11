@@ -13,6 +13,10 @@
       "rejected": true
     },
     {
+      "name": "cross_run_trace_substitution",
+      "rejected": true
+    },
+    {
       "name": "tampered_ci_metadata_hash",
       "rejected": true
     },

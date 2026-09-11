@@ -558,11 +558,11 @@ def record_trace(record: dict[str, object], run_root: Path) -> list[dict[str, ob
     relative = record.get("trace_path")
     if not isinstance(relative, str) or not relative:
         raise VerificationError(f"cell {record.get('cell_id')} has no trace path")
-    path = EVIDENCE / relative
+    path = (EVIDENCE / relative).resolve()
     try:
-        path.resolve().relative_to(EVIDENCE.resolve())
+        path.relative_to(run_root.resolve())
     except ValueError as exc:
-        raise VerificationError("trace path escapes owned evidence") from exc
+        raise VerificationError("trace path escapes the canonical matrix run root") from exc
     if record.get("trace_sha256") and digest(path) != record.get("trace_sha256"):
         raise VerificationError(f"trace hash mismatch: {relative}")
     events = trace_events(path)
@@ -570,6 +570,29 @@ def record_trace(record: dict[str, object], run_root: Path) -> list[dict[str, ob
         if event.get("revision") != record.get("revision") or event.get("matrix_cell") != record.get("cell", {}).get("id"):
             raise VerificationError(f"trace provenance mismatch in {relative}")
     return events
+
+
+def prior_same_cell_trace(run_root: Path, record: dict[str, object]) -> Path:
+    label = str(record.get("revision_label"))
+    cell = record.get("cell")
+    cell_id = str(cell.get("id")) if isinstance(cell, dict) else ""
+    revision = str(record.get("revision"))
+    if not label or not cell_id or not revision:
+        raise VerificationError("cannot find a prior trace for an incomplete matrix record")
+    runs_root = EVIDENCE / "runs"
+    for candidate_root in sorted((path for path in runs_root.iterdir() if path.is_dir()), reverse=True):
+        if candidate_root.resolve() == run_root.resolve():
+            continue
+        candidate = candidate_root / "cells" / label / cell_id / "trace.jsonl"
+        if not candidate.is_file():
+            continue
+        try:
+            events = trace_events(candidate)
+        except VerificationError:
+            continue
+        if events and all(event.get("revision") == revision and event.get("matrix_cell") == cell_id for event in events):
+            return candidate
+    raise VerificationError(f"no retained prior trace exists for {label}/{cell_id}")
 
 
 def event_fields(event: dict[str, object]) -> dict[str, str]:
@@ -977,12 +1000,18 @@ def verify_local_regressions() -> dict[str, object]:
     summary = load(EVIDENCE / "regressions/summary.json")
     if not isinstance(summary, dict) or summary.get("schema") != "audio-runtime-c52-local-regressions-v1" or summary.get("passes") is not True:
         raise VerificationError("accumulated local regression summary is not passing")
+    provenance = load(EVIDENCE / "provenance.json")
+    tested_source = provenance.get("candidate_source_revision") if isinstance(provenance, dict) else None
+    if not isinstance(tested_source, str) or not re.fullmatch(r"[0-9a-f]{40}", tested_source):
+        raise VerificationError("local regression source cannot be bound to a tested provenance revision")
     checks = summary.get("checks")
     if not isinstance(checks, dict) or set(checks) != {"normal", "race"}:
         raise VerificationError("normal and race regression records are incomplete")
     for name, check in checks.items():
         if not isinstance(check, dict) or check.get("passes") is not True:
             raise VerificationError(f"local regression check did not pass: {name}")
+        if check.get("source_revision") != tested_source:
+            raise VerificationError(f"local regression source revision does not match provenance: {name}")
         process = check.get("process")
         if not process_cleanup_valid(process) or not isinstance(process, dict) or process.get("exit_code") != 0:
             raise VerificationError(f"local regression cleanup/proc record is incomplete: {name}")
@@ -1039,6 +1068,11 @@ def verify_integrity_controls() -> dict[str, object]:
     liveness = next(event for event in transformed if event.get("kind") == "live_event_received" and event_fields(event).get("event_kind") == "liveness_fault")
     liveness.setdefault("fields", {})["liveness_classification"] = "silent_provider_empty_response"
     controls.append(expect_rejection("transformed_typed_liveness_checkpoint", lambda: validate_case_trace(transformed, record)))
+
+    prior_trace = prior_same_cell_trace(run_root, record)
+    cross_run_record = copy.deepcopy(record)
+    cross_run_record["trace_path"] = prior_trace.relative_to(EVIDENCE).as_posix()
+    controls.append(expect_rejection("cross_run_trace_substitution", lambda: record_trace(cross_run_record, run_root)))
 
     provenance = load(EVIDENCE / "provenance.json")
     if not isinstance(provenance, dict) or not isinstance(provenance.get("ci_observation"), dict):
