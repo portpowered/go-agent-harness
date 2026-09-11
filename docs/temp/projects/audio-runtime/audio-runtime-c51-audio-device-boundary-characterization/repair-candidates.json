@@ -1,0 +1,21 @@
+{
+  "schema": "audio-runtime-c51.repair-candidates.v1",
+  "sourceRevision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+  "policy": "Only demonstrated gaps are listed. C51 has no authorization to edit production or another owner's path.",
+  "candidates": [
+    {
+      "id": "C51-R0",
+      "status": "none",
+      "paths": ["docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization"],
+      "owner": "C51",
+      "evidence": "The pinned import graph and public consumer found no duplicate packet parser, format resolver, clock owner, DSP owner, or core-loop device import requiring a repair in this slice."
+    },
+    {
+      "id": "C51-R1",
+      "status": "out_of_scope",
+      "paths": ["factory/projects/audio-runtime/amendments/user-windows-hardware-scope-20260910.json"],
+      "owner": "primary / contract amendment path",
+      "evidence": "Native Windows endpoint and physical acoustic consumption are explicitly OUT_OF_SCOPE in the admitted amendment; the characterization retains software and hermetic evidence and does not propose a production workaround."
+    }
+  ]
+}
