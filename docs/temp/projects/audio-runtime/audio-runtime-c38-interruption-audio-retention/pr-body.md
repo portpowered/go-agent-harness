@@ -119,3 +119,23 @@ the C38 owned paths. Do not mutate or retry that unchanged out-of-lease
 finding; route it to its owner for a reviewed repair or disposition. This PR
 update claims no CI success, independent review, guarded merge, vertical
 acceptance, physical/acoustic proof, or project completion.
+
+## Full coverage-log reconciliation and bounded revalidation — 2026-09-11T00:10Z
+
+The complete coverage job log was read rather than relying on the board summary.
+It contains the out-of-lease room handshake failure above and the C38-leased
+`TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
+failure at `session_tool_audio_remote_e2e_test.go:183`. That run recorded
+`rendered_pcm=471360` versus `expected_pcm=174391`, no device drops/overflows,
+all 9 provider responses and 7 tool results, and a child still running while
+the callback clock underflowed before the final marker.
+
+The C38 failure is not reproduced by bounded exact controls: the provider-burst
+case passed five times in 69.079s, and the concurrent test45/test46 provider-
+burst pair passed three times in 45.901s. The owned session-output suite passes
+normal/race 20/20, remote oracle controls pass normal/race 29/29, and the exact
+current-head causal runner and negative controls pass. Existing deadlines,
+fixtures, assertions, and source are unchanged; no C38 source repair is
+justified by this scheduling-only observation. The room failure remains outside
+the C38 lease and requires primary routing to its owner. No CI-green, review,
+merge, vertical-acceptance, physical, or project-complete claim is made.

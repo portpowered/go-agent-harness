@@ -3767,3 +3767,40 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   update and update PR `#430`; retain C38 ownership with `CONTINUE` until the
   out-of-lease finding has an owner disposition, then submit the genuinely
   changed same-task head to script CI once without polling.
+
+# C38 full coverage-log reconciliation and bounded revalidation 2026-09-11T00:10Z
+
+- Re-read the canonical `~default` board, admitted manifest, `prd.json`,
+  complete implementation handoff, all concluded C38 review rows, and the full
+  latest CI coverage log for run `34541949856` / job `103086327724` at rejected
+  head `bea84fd9`. The raw 379-line job log is preserved for this run at
+  `/tmp/audio-runtime-c38-latest-ci-coverage.log`; no credentials were copied.
+- The full log contains two coverage-package failures, not just the board
+  summary: the out-of-lease room handshake assertion at
+  `s2s_room_input_transcription_test.go:141`, and the C38-leased
+  `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
+  assertion at `session_tool_audio_remote_e2e_test.go:183`. The C38 failure
+  recorded `rendered_pcm=471360`, `expected_pcm=174391`, no device drops or
+  overflows, `responsesSent=9`, `toolResults=7`, and a child still running at
+  the unchanged scenario deadline; the external callback clock had advanced
+  into underflow while the final marker was absent.
+- The C38 case is not reproducibly failing: the exact provider-burst case
+  passed `-count=5` in `69.079s`, and the concurrent `test45/provider_burst` +
+  `test46/provider_burst` control passed `-count=3` in `45.901s`, preserving
+  the existing 30s scenario deadline and assertions. Owned session-output
+  regressions pass normal/race `20/20`; remote oracle controls pass normal/race
+  `29/29`. No timeout, assertion, fixture, or source change was made.
+- Exact current-head runner evidence is green at source `c169dfe1`:
+  `causal-20260911T000747Z-6619` is `CAUSAL_PROOF`, with the cancellation
+  barrier resolving in `session_audio_output_session.forward`; the same run
+  exits cleanly. `negative-controls-20260911T000747Z-6618` passes the 21-case
+  consumer and exit-1 control, rejects a real same-length PCM/hash mutation,
+  and rejects a bundle missing `timeline.jsonl`.
+- The candidate remains clean and pushed at `c169dfe1`; exact repaired/package
+  provenance, frozen PCM/strict replay, focused causal checks, and current-main
+  ancestry remain as recorded above. No CI success, independent review,
+  guarded merge, vertical acceptance, physical/acoustic proof, or project
+  completion is claimed. Next action: primary routes the room handshake
+  failure to its owning task for a reviewed repair or disposition; C38 retains
+  the same task, does not retry the unchanged external failure, and inspects a
+  new exact CI log only if the script gate returns a new rejection.
