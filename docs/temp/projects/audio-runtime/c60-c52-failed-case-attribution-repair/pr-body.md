@@ -20,6 +20,10 @@ cross-run identity, and changed peer boundaries fail closed.
 - Admission: `audio-runtime-c60-c52-failed-case-attribution-repair`, branch `codex/audio-runtime-c60-c52-failed-case-attribution-repair`.
 - Fresh matrix: `c60-final-20260911T145200Z`, 22/22 PASS in 69.298678 seconds, unchanged 900-second runner cap, six negative controls rejected.
 - Accumulated lifecycle normal/race regressions: PASS.
+- Exact-head evidence refresh commit `121984d47e32` reran normal/race in
+  16.55s/8.47s, refreshed owned provenance/storage/index records, and
+  `verify.py --mode all` passed before this evidence checkpoint; no matrix cell
+  was rerun.
 - Focused C60 attribution controls: one valid case accepted; ten invalid controls rejected.
 - Classification: `NON_REPRODUCED` within the exact 22-cell matrix; the immutable source report remains FAILED and is not relabelled.
 - Replay: immutable artifact-0/C16 software-file positive parity and real mutated-fixture rejection PASS in fresh run `replay-20260911T174336Z-20695` in 0.182598 seconds; positive exit 0, mutated-fixture exit 1, exact 4800-byte PCM and clean process groups; no credentials/live Realtime/native or acoustic claim.
@@ -42,4 +46,5 @@ architecture baseline drift (`agent-cli/internal/transport/cli`: baseline 147,
 current 148); all other static steps passed. No C60-owned path overlaps that
 transport baseline. Do not resubmit this same candidate until C47/C55's repair
 lands on accepted main, then resubmit this task to script CI. CI is not claimed
-green and independent review remains separate.
+green and independent review remains separate. The current exact pushed head is
+`121984d4`; its script-owned checks are not claimed green or polled here.
