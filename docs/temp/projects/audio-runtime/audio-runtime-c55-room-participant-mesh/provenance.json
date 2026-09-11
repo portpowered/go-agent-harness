@@ -2,14 +2,14 @@
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "branch": "codex/audio-runtime-c55-room-participant-mesh",
   "build_inputs": {
-    "content_sha256": "8fc22e853a4ee9ccd730d3192004527c745b555132340e3e1e1dc64968ca4282",
+    "content_sha256": "c3f671554a112fa99631b44492d364ccc8fd89623d737d03d710bdaf0c847a9c",
     "file_count": 2191,
     "path": "reports/build-input-manifest.json",
-    "sha256": "f993a4648b87911cad6789b1832832dc625675a13c07c8d4a66a0b17db6f8b6d"
+    "sha256": "c5cfbe54226c514e1e776c90d72459205cb69e40673897c93c805f5373ebabd7"
   },
   "builds": {
     "consumer": {
-      "sha256": "ddbf562e736420d56d647e53fc827c77141051d56f54d6cbfe2df52188256d68"
+      "sha256": "2f3e80ae2fb7f338f426cf418f3db9f6a267b89c7838415945b68785c04cd90d"
     },
     "fixtures": {
       "audio-tool": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
@@ -30,10 +30,10 @@
         ],
         "artifact": {
           "build_input_count": 2191,
-          "build_input_manifest_sha256": "8fc22e853a4ee9ccd730d3192004527c745b555132340e3e1e1dc64968ca4282",
+          "build_input_manifest_sha256": "c3f671554a112fa99631b44492d364ccc8fd89623d737d03d710bdaf0c847a9c",
           "bytes": 50970882,
           "path": "artifacts/yui",
-          "sha256": "6174b54df0ea9d6f2a4ccdf0e6cc1b0f648867b5167408cae86e415ac3715761"
+          "sha256": "050247fc3d6d3ef4f36ac8f5456db2053d1128da45dd6ece78833bd18ca42a08"
         },
         "cleanup": {
           "group_alive_after": false,
@@ -45,27 +45,27 @@
         "cwd": "agent-cli",
         "disk_bounded": true,
         "disk_bytes": 0,
-        "elapsed_ms": 228,
+        "elapsed_ms": 250,
         "label": "build-yui",
         "output_bounded": true,
         "returncode": 0,
         "stderr": "",
         "stderr_bytes": 0,
-        "stderr_path": "runs/20260911T153909Z-19799/build-yui.stderr.log",
+        "stderr_path": "runs/20260911T174436Z-21495/build-yui.stderr.log",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "stderr_truncated": false,
         "stdout": "",
         "stdout_bytes": 0,
-        "stdout_path": "runs/20260911T153909Z-19799/build-yui.stdout.log",
+        "stdout_path": "runs/20260911T174436Z-21495/build-yui.stdout.log",
         "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "stdout_truncated": false,
         "timed_out": false
       },
       "path": "artifacts/yui",
-      "sha256": "6174b54df0ea9d6f2a4ccdf0e6cc1b0f648867b5167408cae86e415ac3715761"
+      "sha256": "050247fc3d6d3ef4f36ac8f5456db2053d1128da45dd6ece78833bd18ca42a08"
     }
   },
-  "candidate_revision": "571ad7455295545197dda828c34f46b4924cb134",
+  "candidate_revision": "bd3510f4089b65c639e0a48e474acef32f5666ae",
   "contract_revision": "audio-runtime-v1",
   "credential_environment": "API keys, secrets, passwords, and tokens removed from child environments",
   "fetched_main_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
@@ -85,8 +85,11 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/consumer/main.go": "e7bf12ac6ddf0fec09770a2b2cbf823019bba3771a41b16900879273b5ec69a7",
     "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/go.mod": "0f02eca7c0ee05fbb55e5b91b6b0323bd9d63ee901789457b4d0a09659e44007",
     "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/go.sum": "f3ce007522e789ffb699ea5fe3fba64402a26e31c99958f0b744bd32ba01a926",
-    "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/run.py": "87260731fdf10ea881dc37c03c8ccf697d9a6e35c41f63d7e1ad58f74a9513a8",
-    "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/verify.py": "306b7f2ff427eefa59c14ed34964d5e3144ddd557f3dd5bc830e8e7a66b6e1e3",
+    "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/run.py": "4b7f3ad6349f579eb27bbad31b39d3a3d35fda069d2cf91631fe4071ae9093d7",
+    "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/verify.py": "b8fd6c2eb6d3ed947953ea5c3049b071decd62f638cb7098f999d8c0e9dbe28d",
+    "go-agent-runtime/services/rooms/internal/lifecycle/browser_parity_test.go": "7f794346c68c72225471dd61656c8aab442ad6ac0dbed613ca60b78c52877d42",
+    "go-agent-runtime/services/rooms/internal/lifecycle/events.go": "f91a71d42687cc0f4347d16a1062c9b7f0c02b26a6dfcbe29c097f24dd5557d3",
+    "go-agent-runtime/services/rooms/internal/lifecycle/state.go": "2e61161d44f76e425b7b10324699aa47cca5bca07a9f9109c61e26959bdcac78",
     "go-agent-runtime/services/rooms/internal/mesh/mesh.go": "36e8bbc66a06b7f3f75df3ebff9dcedeb150791de4957088b0fca8b3c84eb2ff",
     "go-agent-runtime/services/rooms/mesh.go": "b2852f53b07d26903e52c3e6d510ba1e387dc702c681ed4d088160d72e7e6bea",
     "go-agent-runtime/services/rooms/wire/mesh.go": "ccd5a3900fbf99d84e4e52930a3eaad0467ea58b66802f8836d955cceb54ae80"
@@ -96,16 +99,16 @@
     "after": {
       "binary_output_bytes": 54973972,
       "compilation_reserve_bytes": 2147483648,
-      "free_space_bytes": 95959064576,
-      "report_fixture_bytes": 862941,
-      "scratch_bytes": 146657,
+      "free_space_bytes": 84538589184,
+      "report_fixture_bytes": 862942,
+      "scratch_bytes": 146661,
       "staging_bytes": 10345
     },
     "before": {
       "binary_output_bytes": 54973972,
       "compilation_reserve_bytes": 2147483648,
-      "free_space_bytes": 95959248896,
-      "report_fixture_bytes": 862930,
+      "free_space_bytes": 84536238080,
+      "report_fixture_bytes": 862942,
       "scratch_bytes": 0,
       "staging_bytes": 10345
     }

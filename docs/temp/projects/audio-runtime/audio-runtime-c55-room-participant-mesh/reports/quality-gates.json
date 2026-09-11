@@ -1,6 +1,7 @@
 {
   "schema": "audio-runtime.c55.quality-gates.v1",
-  "candidate_revision": "571ad7455295545197dda828c34f46b4924cb134",
+  "candidate_revision": "bd3510f4089b65c639e0a48e474acef32f5666ae",
+  "refresh_note": "The lifecycle repair passed the focused normal/race checks and accumulated regressions; the final candidate adds only a comment-only size-budget adjustment after the listed structural gates.",
   "passed": [
     {"command": "make fmt", "exit_code": 0},
     {"command": "make wire-check", "exit_code": 0},
