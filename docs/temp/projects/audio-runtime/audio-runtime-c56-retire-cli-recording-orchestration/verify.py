@@ -141,7 +141,8 @@ def ancestry() -> dict:
 
 
 def status_paths() -> list[str]:
-    return [line[3:] for line in git_text("status", "--porcelain", "--untracked-files=all").splitlines() if len(line) >= 4]
+    output = git("status", "--porcelain", "--untracked-files=all").stdout
+    return [line[3:] for line in output.splitlines() if len(line) >= 4]
 
 
 def mode_baseline() -> None:
