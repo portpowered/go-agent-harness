@@ -255,7 +255,7 @@
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out_test.go",
-          "line": 19
+          "line": 9
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_output_device_test.go",
@@ -1815,7 +1815,7 @@
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out_test.go",
-          "line": 20
+          "line": 10
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_output_device_test.go",
@@ -2435,7 +2435,7 @@
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out_test.go",
-          "line": 21
+          "line": 11
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_output_device_test.go",
@@ -3167,7 +3167,7 @@
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out_test.go",
-          "line": 22
+          "line": 12
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_roundtrip_proof_test.go",
@@ -8856,7 +8856,7 @@
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-          "line": 16
+          "line": 15
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_fixture_options.go",
@@ -10060,7 +10060,7 @@
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-          "line": 17
+          "line": 16
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
@@ -10304,7 +10304,7 @@
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-          "line": 18
+          "line": 17
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
@@ -10360,7 +10360,7 @@
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-          "line": 19
+          "line": 18
         }
       ],
       "from": "agent-cli",
@@ -10460,7 +10460,7 @@
       "citations": [
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-          "line": 20
+          "line": 19
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
@@ -12818,7 +12818,7 @@
     }
   ],
   "schema": "audio-runtime-c51.import-graph.v1",
-  "sourceRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+  "sourceRevision": "bb29005d0bb545db5e08ffda0205929b021d4fc1",
   "transitiveProductionClosure": {
     "agent-cli": [
       "go-agent-loop",

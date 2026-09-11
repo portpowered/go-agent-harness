@@ -898,7 +898,7 @@
       "module": "agent-cli",
       "path": "agent-cli/internal/services/internal/agentruntime/s2s_room_input_transcription_test.go",
       "role": "test",
-      "sha256": "76b8a80ebdd227065c3398bae6c9fedeff0417a65961ebaa7368c69876fd209f"
+      "sha256": "447a67484da81a71d2a59e9bd45a3f01b5ae60bf40ca9f06def28ecf5e6bfab9"
     },
     {
       "module": "agent-cli",
@@ -1024,13 +1024,13 @@
       "module": "agent-cli",
       "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
       "role": "production",
-      "sha256": "5274819c9270ab195ca4aef6215410d63cbe65205f27ca18d33b57c98a6f4b69"
+      "sha256": "a06b79abeb3d0a87ca7b4cd80a4f64e6495c3568334c87c33b57e9204663e41d"
     },
     {
       "module": "agent-cli",
       "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out_test.go",
       "role": "test",
-      "sha256": "5b444fc3386340a46fbe0078af8617db6fb61312f195dc587f16cbe808e20ef3"
+      "sha256": "53474297f9114f00ef866d03b20e44b9f7b3c0dbebb5d71b1528b8471e7542e7"
     },
     {
       "module": "agent-cli",
@@ -5266,7 +5266,7 @@
       "module": "agent-cli",
       "path": "agent-cli/test/integration/session_tool_audio_remote_oracle_test.go",
       "role": "test",
-      "sha256": "28430c06fb2b401e05556b660959d55fe00be287ef5b8b27aa59a93685bc3ad8"
+      "sha256": "40a39563affb915e8c393549eaa268c354ce5217c5f023b836095992f78d875e"
     },
     {
       "module": "agent-cli",
@@ -11066,5 +11066,5 @@
     }
   ],
   "schema": "audio-runtime-c51.analysis-inputs.v1",
-  "sourceRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
+  "sourceRevision": "bb29005d0bb545db5e08ffda0205929b021d4fc1"
 }
