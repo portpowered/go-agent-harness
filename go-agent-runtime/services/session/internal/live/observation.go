@@ -162,7 +162,6 @@ func (h *handle) sendOpeningMessage(ctx context.Context, loop *agentloop.AgentLo
 		h.markCaptureComplete()
 	}
 }
-
 func (h *handle) claimOpeningMessage() (string, []messages.ContentPart, session.LiveOpeningMessageResponse, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -207,11 +206,11 @@ func (h *handle) observeTerminalValue(msg messages.StreamMessage) {
 			h.terminalValue = value
 		}
 		h.providerCloseObserved = true
+		h.terminalOnce.Do(func() { close(h.terminalObserved) })
 	} else if !h.providerCloseObserved {
 		h.terminalValue = value
 	}
 	h.mu.Unlock()
-	h.terminalOnce.Do(func() { close(h.terminalObserved) })
 }
 func (h *handle) markCaptureComplete() {
 	if h == nil {
