@@ -4,7 +4,9 @@
   "observed_at": "2026-09-11T10:21:55-07:00",
   "candidate": {
     "task": "audio-runtime-c60-c52-failed-case-attribution-repair",
-    "head": "79754c85b85673a23a9145655d7e3ddd04f1494f",
+    "tested_source_revision": "79754c85b85673a23a9145655d7e3ddd04f1494f",
+    "evidence_commit": "84698062cb646f8aa7e6f13d8e504a99593a5430",
+    "evidence_commit_kind": "documentation-only; executable test inputs are unchanged",
     "origin_main": "904e1f4c3be6c1e629138632573bd2fb55d50938",
     "owned_scope": [
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/**",
