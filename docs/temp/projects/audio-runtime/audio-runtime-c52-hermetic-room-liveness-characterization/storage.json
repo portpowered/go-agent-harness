@@ -1,0 +1,86 @@
+{
+  "binary_output_bytes": 0,
+  "cleanup": {
+    "known_generated_cache_and_scratch_removed": true,
+    "retained": [
+      "run.json",
+      "cell logs",
+      "traces",
+      "overlay manifests",
+      "negative controls",
+      "source archives",
+      "CI log/metadata"
+    ]
+  },
+  "fixture_report_bytes": 25288171,
+  "free_space_after_capture_bytes": 136980553728,
+  "free_space_before_cleanup_bytes": null,
+  "free_space_limitation": "pre-cleanup free space was not captured by the preflight runner; current free space and exact retained bytes are recorded",
+  "observed_at": "2026-09-11T07:20:52.865491+00:00",
+  "reproducible_scratch_bytes_retained_after_cleanup": 0,
+  "runs": [
+    {
+      "cache_present": false,
+      "cleanup_verified": true,
+      "retained_bytes": 217486,
+      "run_id": "20260911T065500Z-dev1",
+      "scratch_content_present": false
+    },
+    {
+      "cache_present": false,
+      "cleanup_verified": true,
+      "retained_bytes": 241794,
+      "run_id": "20260911T070000Z-go1267",
+      "scratch_content_present": false
+    },
+    {
+      "cache_present": false,
+      "cleanup_verified": true,
+      "retained_bytes": 257775,
+      "run_id": "20260911T071000Z-go-auto",
+      "scratch_content_present": false
+    },
+    {
+      "cache_present": false,
+      "cleanup_verified": true,
+      "retained_bytes": 340019,
+      "run_id": "20260911T072000Z-module-root",
+      "scratch_content_present": false
+    },
+    {
+      "cache_present": false,
+      "cleanup_verified": true,
+      "retained_bytes": 7831119,
+      "run_id": "20260911T073000Z-overlay-type",
+      "scratch_content_present": false
+    },
+    {
+      "cache_present": false,
+      "cleanup_verified": true,
+      "retained_bytes": 8184181,
+      "run_id": "20260911T074500Z-checkpoint-event",
+      "scratch_content_present": false
+    },
+    {
+      "cache_present": false,
+      "cleanup_verified": true,
+      "retained_bytes": 8215797,
+      "run_id": "20260911T081500Z-compressed-archives",
+      "scratch_content_present": false
+    }
+  ],
+  "schema": "audio-runtime-c52-storage-v1",
+  "source_archives": {
+    "planning_main": {
+      "bytes": 51513216,
+      "path": "inputs/source-archives/planning-main-7f73c8b3b4eb.tar.gz",
+      "sha256": "e86aa559d029cfe9a13dbd550e5f9f41d57ed468f4e79990948c179f28ede640"
+    },
+    "pr438": {
+      "bytes": 51540519,
+      "path": "inputs/source-archives/pr438-823bd350fe5d.tar.gz",
+      "sha256": "f8f2f86cc68a8844316363d8cb33832debeac3cb3a476c0ce40057a1c36ba720"
+    }
+  },
+  "source_staging_bytes": 103053735
+}

@@ -1,0 +1,39 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-tags=nomicrophone",
+    "-count=1",
+    "-timeout=120s",
+    "./services/rooms/internal/lifecycle",
+    "./services/session/internal/live"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go-agent-runtime",
+  "passes": true,
+  "process": {
+    "cleanup": {},
+    "command": [
+      "go",
+      "test",
+      "-tags=nomicrophone",
+      "-count=1",
+      "-timeout=120s",
+      "./services/rooms/internal/lifecycle",
+      "./services/session/internal/live"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go-agent-runtime",
+    "duration_seconds": 1.2761547910049558,
+    "ended_at": "2026-09-11T07:02:19.562045+00:00",
+    "exit_code": 0,
+    "first_failure": null,
+    "output_overflow": false,
+    "reader_survivor": false,
+    "started_at": "2026-09-11T07:02:18.285717+00:00",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_bytes": 203,
+    "stdout_sha256": "842134fec9b6263116fc73141f6d46e83b46c9de24147c667ad56d3893ebd29c",
+    "timed_out": false
+  },
+  "source_revision": "bb29005d0bb545db5e08ffda0205929b021d4fc1"
+}

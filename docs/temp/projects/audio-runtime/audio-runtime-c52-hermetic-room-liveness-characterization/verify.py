@@ -1,0 +1,614 @@
+#!/usr/bin/env python3
+"""Fail-closed verification for the C52 evidence bundle."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+EVIDENCE = Path(__file__).resolve().parent
+MATRIX = EVIDENCE / "matrix.json"
+EXPECTED = EVIDENCE / "expected-checkpoints.json"
+PR438 = "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd"
+PLANNING_MAIN = "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
+STARTUP_INTEGRATION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
+BASELINE = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
+TASK = "audio-runtime-c52-hermetic-room-liveness-characterization"
+OWNED_PREFIX = "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/"
+
+
+class VerificationError(Exception):
+    pass
+
+
+def load(path: Path) -> object:
+    if not path.is_file():
+        raise VerificationError(f"missing evidence file: {path.relative_to(EVIDENCE)}")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise VerificationError(f"invalid JSON: {path}: {exc}") from exc
+
+
+def write(path: Path, value: object) -> None:
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def digest(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def run_git(*args: str) -> tuple[int, str, str]:
+    result = subprocess.run(["git", *args], cwd=EVIDENCE, capture_output=True, text=True, check=False)
+    return result.returncode, result.stdout.rstrip("\n"), result.stderr.strip()
+
+
+def run_root() -> Path:
+    code, output, error = run_git("rev-parse", "--show-toplevel")
+    if code != 0:
+        raise VerificationError(f"cannot find repository root: {error}")
+    return Path(output)
+
+
+def latest_run() -> tuple[dict[str, object], Path]:
+    value = load(EVIDENCE / "matrix-results.json")
+    if not isinstance(value, dict):
+        raise VerificationError("matrix-results.json must be an object")
+    run_id = value.get("run_id")
+    if not isinstance(run_id, str) or not run_id:
+        raise VerificationError("matrix result has no run_id")
+    run_file = EVIDENCE / "runs" / run_id / "run.json"
+    run = load(run_file)
+    if not isinstance(run, dict):
+        raise VerificationError("run.json must be an object")
+    return run, EVIDENCE / "runs" / run_id
+
+
+def records(run: dict[str, object]) -> list[dict[str, object]]:
+    values = run.get("cells")
+    if not isinstance(values, list):
+        raise VerificationError("matrix run has no cells")
+    return [value for value in values if isinstance(value, dict)]
+
+
+def process_failure(record: dict[str, object]) -> bool:
+    process = record.get("process")
+    if not isinstance(process, dict):
+        return True
+    cleanup = process.get("cleanup")
+    return bool(process.get("timed_out") or process.get("output_overflow") or process.get("reader_survivor") or (isinstance(cleanup, dict) and cleanup.get("group_survivor")))
+
+
+def selection(record: dict[str, object]) -> dict[str, object]:
+    value = record.get("selection")
+    if not isinstance(value, dict):
+        raise VerificationError(f"cell {record.get('cell_id')} has no selection record")
+    return value
+
+
+def required_run_counts(record: dict[str, object]) -> dict[str, int]:
+    value = selection(record).get("required_test_run_counts")
+    if not isinstance(value, dict):
+        raise VerificationError("missing required test run counts")
+    return {str(key): int(value) for key, value in value.items()}
+
+
+def verify_provenance() -> dict[str, object]:
+    value = load(EVIDENCE / "provenance.json")
+    if not isinstance(value, dict):
+        raise VerificationError("provenance.json must be an object")
+    required = [
+        "schema", "project", "task", "contract_revision", "factory", "branch", "worktree",
+        "candidate_source_revision", "evidence_candidate_revision", "startup_integration_revision", "planning_main_revision",
+        "pr438_head_revision", "refreshed_origin_main_revision", "ancestry", "toolchain",
+        "environment_allowlist", "workspace_inputs", "source_archives", "ci_observation",
+        "primary_observation", "runner_inputs", "no_source_mutation",
+    ]
+    missing = [key for key in required if key not in value]
+    if missing:
+        raise VerificationError(f"provenance missing fields: {missing}")
+    if value.get("project") != "audio-runtime" or value.get("task") != TASK:
+        raise VerificationError("provenance project/task identity mismatch")
+    branch = value.get("branch")
+    worktree = value.get("worktree")
+    if not isinstance(branch, dict) or branch.get("matches") is not True or branch.get("actual") != branch.get("expected"):
+        raise VerificationError("provenance branch does not match the admitted task")
+    if not isinstance(worktree, dict) or worktree.get("isolated") is not True or worktree.get("prd_branch_name") != branch.get("expected"):
+        raise VerificationError("provenance worktree/PRD branch confirmation is incomplete")
+    if value.get("startup_integration_revision") != STARTUP_INTEGRATION or value.get("planning_main_revision") != PLANNING_MAIN or value.get("pr438_head_revision") != PR438:
+        raise VerificationError("declared comparison ancestry/revision identity changed")
+    for key in ("candidate_source_revision", "evidence_candidate_revision"):
+        if not re.fullmatch(r"[0-9a-f]{40}", str(value.get(key, ""))):
+            raise VerificationError(f"provenance candidate revision is incomplete: {key}")
+    ancestry = value.get("ancestry")
+    if not isinstance(ancestry, dict):
+        raise VerificationError("ancestry must be an object")
+    for key in ("baseline", "startup_integration", "planning_main", "refreshed_origin_main"):
+        if ancestry.get(key) is not True:
+            raise VerificationError(f"required ancestry is not proven: {key}")
+    environment_allowlist = value.get("environment_allowlist")
+    if not isinstance(environment_allowlist, dict):
+        raise VerificationError("environment allowlist is incomplete")
+    environment_base = environment_allowlist.get("base", environment_allowlist)
+    if not isinstance(environment_base, dict) or not environment_base.get("CGO_ENABLED"):
+        raise VerificationError("environment allowlist is incomplete")
+    workspace = value.get("workspace_inputs")
+    if not isinstance(workspace, list) or not workspace:
+        raise VerificationError("workspace/module hashes are missing")
+    for item in workspace:
+        if not isinstance(item, dict) or not item.get("path") or not re.fullmatch(r"[0-9a-f]{64}", str(item.get("sha256", ""))):
+            raise VerificationError("workspace input hash is incomplete")
+    archives = value.get("source_archives")
+    if not isinstance(archives, dict) or set(archives) != {"pr438", "planning_main"}:
+        raise VerificationError("both source archives are required")
+    for item in archives.values():
+        if not isinstance(item, dict) or not re.fullmatch(r"[0-9a-f]{64}", str(item.get("sha256", ""))):
+            raise VerificationError("source archive hash is incomplete")
+        path = EVIDENCE / str(item.get("path", ""))
+        if not path.is_file() or digest(path) != item["sha256"]:
+            raise VerificationError(f"source archive hash mismatch: {path}")
+    ci = value.get("ci_observation")
+    if not isinstance(ci, dict) or ci.get("run_id") != "34562579355" or ci.get("job_id") != "103148160889" or ci.get("head_sha") != PR438:
+        raise VerificationError("prior CI observation identity is incomplete")
+    log_path = EVIDENCE / str(ci.get("log_path", ""))
+    metadata_path = EVIDENCE / str(ci.get("metadata_path", ""))
+    if not log_path.is_file() or not metadata_path.is_file() or digest(log_path) != ci.get("log_sha256"):
+        raise VerificationError("complete prior CI log/metadata is missing or changed")
+    primary = value.get("primary_observation")
+    if not isinstance(primary, dict) or primary.get("status") != "REPORTED_UNDER_PAYLOAD" or primary.get("independently_verified") is not False:
+        raise VerificationError("primary rerun must remain explicitly reported, not fabricated")
+    runner = value.get("runner_inputs")
+    if not isinstance(runner, dict):
+        raise VerificationError("runner/overlay provenance is missing")
+    for key in ("matrix_sha256", "run_sha256", "overlay_sha256", "verify_sha256"):
+        if not re.fullmatch(r"[0-9a-f]{64}", str(runner.get(key, ""))):
+            raise VerificationError(f"runner hash missing: {key}")
+    if value.get("no_source_mutation") is not True:
+        raise VerificationError("provenance does not prove source mutation isolation")
+    return {"mode": "provenance", "passes": True, "candidate_source_revision": value.get("candidate_source_revision"), "ci_log_sha256": ci.get("log_sha256")}
+
+
+def trace_events(path: Path) -> list[dict[str, object]]:
+    if not path.is_file():
+        raise VerificationError(f"missing trace: {path}")
+    result: list[dict[str, object]] = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise VerificationError(f"invalid trace JSON at {path}:{line_number}: {exc}") from exc
+        if not isinstance(value, dict) or value.get("schema") != "audio-runtime-c52-trace-v1":
+            raise VerificationError(f"invalid trace record at {path}:{line_number}")
+        result.append(value)
+    if not result:
+        raise VerificationError(f"empty trace: {path}")
+    return result
+
+
+def record_trace(record: dict[str, object], run_root: Path) -> list[dict[str, object]]:
+    relative = record.get("trace_path")
+    if not isinstance(relative, str) or not relative:
+        raise VerificationError(f"cell {record.get('cell_id')} has no trace path")
+    path = EVIDENCE / relative
+    try:
+        path.resolve().relative_to(EVIDENCE.resolve())
+    except ValueError as exc:
+        raise VerificationError("trace path escapes owned evidence") from exc
+    if record.get("trace_sha256") and digest(path) != record.get("trace_sha256"):
+        raise VerificationError(f"trace hash mismatch: {relative}")
+    events = trace_events(path)
+    for event in events:
+        if event.get("revision") != record.get("revision") or event.get("matrix_cell") != record.get("cell", {}).get("id"):
+            raise VerificationError(f"trace provenance mismatch in {relative}")
+    return events
+
+
+def event_fields(event: dict[str, object]) -> dict[str, str]:
+    value = event.get("fields")
+    return {str(key): str(item) for key, item in value.items()} if isinstance(value, dict) else {}
+
+
+def verify_matrix() -> dict[str, object]:
+    matrix = load(MATRIX)
+    if not isinstance(matrix, dict) or matrix.get("schema") != "audio-runtime-c52-matrix-v1" or matrix.get("frozen") is not True:
+        raise VerificationError("matrix is not the frozen C52 matrix")
+    run, run_root = latest_run()
+    if run.get("matrix_sha256") != digest(MATRIX):
+        raise VerificationError("matrix changed after execution")
+    values = records(run)
+    expected_count = len(matrix.get("cells", [])) * 2 if isinstance(matrix.get("cells"), list) else 0
+    if len(values) != expected_count or expected_count != 22:
+        raise VerificationError(f"matrix cell count {len(values)} != frozen 22")
+    if float(run.get("aggregate_timeout_seconds", 0)) > 900 or run.get("aggregate_deadline_met") is not True:
+        raise VerificationError("aggregate deadline was not met or exceeds 900 seconds")
+    seen: set[tuple[str, str]] = set()
+    behavioral_failures: list[dict[str, object]] = []
+    for record in values:
+        label = str(record.get("revision_label"))
+        revision = str(record.get("revision"))
+        cell = record.get("cell")
+        if label not in {"pr438", "planning-main"} or revision not in {PR438, PLANNING_MAIN} or not isinstance(cell, dict):
+            raise VerificationError("matrix record revision/cell identity is invalid")
+        key = (label, str(cell.get("id")))
+        if key in seen:
+            raise VerificationError(f"duplicate matrix result: {key}")
+        seen.add(key)
+        if record.get("status") == "NOT_RUN_AGGREGATE_DEADLINE" or process_failure(record):
+            raise VerificationError(f"runner control failed for {key}")
+        counts = required_run_counts(record)
+        if not counts or any(value <= 0 for value in counts.values()):
+            raise VerificationError(f"zero required test selection for {key}: {counts}")
+        parsed = selection(record)
+        if int(parsed.get("invalid_json_lines", 0)) != 0 or parsed.get("cached_marker") is True:
+            raise VerificationError(f"invalid/cached go test JSON for {key}")
+        if record.get("process", {}).get("exit_code") != 0:
+            behavioral_failures.append({"revision_label": label, "cell_id": cell.get("id"), "exit_code": record.get("process", {}).get("exit_code"), "first_failure": record.get("process", {}).get("first_failure")})
+    negative = run.get("negative_controls")
+    if not isinstance(negative, dict) or negative.get("all_rejected") is not True:
+        raise VerificationError("selection/process negative controls did not all reject")
+    return {"mode": "matrix", "passes": True, "cell_count": len(values), "behavioral_failures": behavioral_failures, "run_id": run.get("run_id")}
+
+
+def case_groups(events: list[dict[str, object]]) -> list[list[dict[str, object]]]:
+    starts = [index for index, event in enumerate(events) if event.get("kind") == "case_started"]
+    groups: list[list[dict[str, object]]] = []
+    for index, start in enumerate(starts):
+        end = starts[index + 1] if index + 1 < len(starts) else len(events)
+        groups.append(events[start:end])
+    return groups
+
+
+def verify_overlay_integrity() -> dict[str, object]:
+    allowed = {
+        "go-agent-runtime/services/rooms/internal/lifecycle/c52_overlay.go",
+        "go-agent-runtime/services/rooms/internal/lifecycle/events.go",
+        "go-agent-runtime/services/rooms/internal/lifecycle/participant.go",
+        "go-agent-runtime/services/rooms/internal/lifecycle/state.go",
+        "go-agent-runtime/services/rooms/internal/lifecycle/runner.go",
+        "go-agent-runtime/services/rooms/internal/lifecycle/browser_parity_test.go",
+        "go-agent-runtime/services/rooms/internal/lifecycle/runner_test.go",
+    }
+    run, run_root = latest_run()
+    manifests = []
+    for label in ("pr438", "planning-main"):
+        manifest = load(run_root / f"overlay-{label}/overlay-manifest.json")
+        if not isinstance(manifest, dict):
+            raise VerificationError("overlay manifest must be an object")
+        files = manifest.get("files")
+        if not isinstance(files, list) or not files:
+            raise VerificationError(f"overlay files missing for {label}")
+        for item in files:
+            if not isinstance(item, dict) or str(item.get("path")) not in allowed:
+                raise VerificationError(f"overlay touched an undeclared scratch path: {item}")
+        manifests.append({"label": label, "source_sha256": manifest.get("source_sha256"), "file_count": len(files)})
+    code, output, _ = run_git("status", "--porcelain", "--untracked-files=all")
+    if code != 0:
+        raise VerificationError("cannot inspect source mutation")
+    outside = [line[3:] for line in output.splitlines() if len(line) >= 4 and not line[3:].startswith(OWNED_PREFIX)]
+    if outside:
+        raise VerificationError(f"tracked/source files changed outside C52 ownership: {outside}")
+    return {"mode": "overlay-integrity", "passes": True, "manifests": manifests, "outside_owned_changes": []}
+
+
+REQUIRED_TRACE_KINDS = [
+    "case_started", "live_open", "event_drain_created", "handle_start", "live_event_received",
+    "terminal_observed", "terminal_metadata_latched", "liveness_cancel_requested", "handle_cancel",
+    "sink_publish_before", "sink_publish", "sink_publish_returned", "diagnostic_published",
+    "peer_cancel_snapshot", "room_context_cancel_requested", "participant_wait_returned",
+    "participant_handle_closed", "participant_result_recorded", "room_result_snapshot", "room_run_return",
+]
+
+
+def verify_checkpoints() -> dict[str, object]:
+    run, run_root = latest_run()
+    outcomes: list[dict[str, object]] = []
+    for record in records(run):
+        events = record_trace(record, run_root)
+        kinds = [str(event.get("kind")) for event in events]
+        missing = [kind for kind in REQUIRED_TRACE_KINDS if kind not in kinds]
+        peer_counts = [event_fields(event).get("count") for event in events if event.get("kind") == "peer_cancel_snapshot"]
+        if missing:
+            raise VerificationError(f"missing checkpoints for {record.get('revision_label')}/{record.get('cell', {}).get('id')}: {missing}")
+        if not peer_counts or any(count != "0" for count in peer_counts):
+            raise VerificationError("peer cancellation was not zero before external cancellation")
+        for event in events:
+            if event.get("kind") == "live_event_received" and event_fields(event).get("event_kind") == "liveness_fault" and event_fields(event).get("liveness_classification") not in {"silent_provider_timeout", "silent_provider_empty_response"}:
+                raise VerificationError("liveness event lacks typed classification")
+        outcomes.append({"revision_label": record.get("revision_label"), "cell_id": record.get("cell", {}).get("id"), "event_count": len(events), "kinds": sorted(set(kinds)), "peer_cancel_counts": peer_counts})
+    return {"mode": "checkpoints", "passes": True, "cells": outcomes}
+
+
+def first_divergence() -> dict[str, object]:
+    expected = load(EXPECTED)
+    if not isinstance(expected, dict):
+        raise VerificationError("expected checkpoints must be an object")
+    order = expected.get("per_case_order")
+    if not isinstance(order, list) or not order:
+        raise VerificationError("expected checkpoint order is missing")
+    run, run_root = latest_run()
+    cases: list[dict[str, object]] = []
+    for record in records(run):
+        events = record_trace(record, run_root)
+        for group_index, group in enumerate(case_groups(events), start=1):
+            by_kind: dict[str, list[dict[str, object]]] = {}
+            for event in group:
+                by_kind.setdefault(str(event.get("kind")), []).append(event)
+            missing = [str(kind) for kind in order if str(kind) not in by_kind]
+            positions = {kind: int(by_kind[kind][0].get("seq", 0)) for kind in by_kind}
+            order_violations: list[dict[str, object]] = []
+            last = -1
+            for kind in order:
+                kind = str(kind)
+                if kind not in positions:
+                    continue
+                if positions[kind] < last:
+                    order_violations.append({"checkpoint": kind, "seq": positions[kind], "previous_seq": last})
+                last = max(last, positions[kind])
+            signature = [str(event.get("kind")) for event in group]
+            finding = "none"
+            if missing:
+                finding = f"missing:{missing[0]}"
+            elif order_violations:
+                finding = f"reordered:{order_violations[0]['checkpoint']}"
+            fields = event_fields(next((event for event in reversed(group) if event.get("kind") == "test_outcome"), {}))
+            cases.append({
+                "revision_label": record.get("revision_label"),
+                "revision": record.get("revision"),
+                "cell_id": record.get("cell", {}).get("id"),
+                "case_index": group_index,
+                "classification": next((event_fields(event).get("classification") for event in group if event.get("kind") == "case_started"), ""),
+                "first_divergence": finding,
+                "missing_checkpoints": missing,
+                "order_violations": order_violations,
+                "observed_signature": signature,
+                "later_consequences": {
+                    "room_run_error": fields.get("run_error", ""),
+                    "room_termination_reason": fields.get("termination_reason", ""),
+                    "participant_result_count": sum(1 for event in group if event.get("kind") == "participant_result_recorded"),
+                    "cleanup_events": [kind for kind in ("participant_wait_returned", "participant_handle_closed", "participant_event_drain_waited", "participant_wait_completed") if kind in signature],
+                },
+            })
+    if not cases:
+        raise VerificationError("no case traces available for first-divergence analysis")
+    result = {
+        "schema": "audio-runtime-c52-first-divergence-v1",
+        "comparison": {"pr438": PR438, "planning_main": PLANNING_MAIN},
+        "expected_state_machine": order,
+        "cases": cases,
+        "overall": "NO_DIVERGENCE_OBSERVED" if all(item["first_divergence"] == "none" for item in cases) else "OBSERVED_CHECKPOINT_VARIANCE",
+        "interpretation": "The line-220 CI assertion remains a downstream observation; this file names only the first missing/reordered checkpoint in the owned trace and preserves later result/cleanup consequences separately.",
+    }
+    write(EVIDENCE / "first-divergence.json", result)
+    return {"mode": "first-divergence", "passes": True, "overall": result["overall"], "case_count": len(cases)}
+
+
+def verify_cleanup() -> dict[str, object]:
+    run, run_root = latest_run()
+    survivors: list[object] = []
+    cells = []
+    for record in records(run):
+        process = record.get("process", {})
+        cleanup = process.get("cleanup", {}) if isinstance(process, dict) else {}
+        if isinstance(cleanup, dict) and cleanup.get("group_survivor"):
+            survivors.append({"revision_label": record.get("revision_label"), "cell_id": record.get("cell", {}).get("id")})
+        events = record_trace(record, run_root)
+        for participant in ("silent", "peer"):
+            if not any(event.get("kind") == "participant_result_recorded" and event.get("participant") == participant for event in events):
+                raise VerificationError(f"missing participant result cleanup for {participant}")
+        cells.append({"revision_label": record.get("revision_label"), "cell_id": record.get("cell", {}).get("id"), "process_group_survivor": bool(cleanup.get("group_survivor")) if isinstance(cleanup, dict) else True})
+    negative = run.get("negative_controls", {}).get("controls", {}) if isinstance(run.get("negative_controls"), dict) else {}
+    survivor = negative.get("survivor_process", {}) if isinstance(negative, dict) else {}
+    if not isinstance(survivor, dict) or survivor.get("rejected") is not True:
+        raise VerificationError("survivor-process negative control did not prove group cleanup")
+    if survivors:
+        raise VerificationError(f"owned process survivors remain: {survivors}")
+    return {"mode": "cleanup", "passes": True, "cells": cells, "negative_survivor_control": "rejected_with_no_survivor"}
+
+
+def verify_no_retry_and_selection() -> dict[str, object]:
+    matrix = load(MATRIX)
+    run, _ = latest_run()
+    ids = [str(record.get("cell", {}).get("id")) for record in records(run)]
+    expected_ids = {str(cell.get("id")) for cell in matrix.get("cells", []) if isinstance(cell, dict)} if isinstance(matrix, dict) else set()
+    counts = {cell_id: ids.count(cell_id) for cell_id in set(ids)}
+    if set(counts) != expected_ids or any(count != 2 for count in counts.values()):
+        raise VerificationError("matrix cell identity is not exactly one attempt per revision")
+    if any(record.get("attempt") != 1 for record in records(run)):
+        raise VerificationError("matrix contains a retry or missing attempt marker")
+    if not isinstance(matrix, dict) or len(matrix.get("cells", [])) != 11:
+        raise VerificationError("frozen matrix does not contain 11 cells")
+    negative = run.get("negative_controls", {}).get("controls", {}) if isinstance(run.get("negative_controls"), dict) else {}
+    for name in ("zero_test_selection", "wrong_test_selection"):
+        value = negative.get(name, {}) if isinstance(negative, dict) else {}
+        if not isinstance(value, dict) or value.get("rejected") is not True:
+            raise VerificationError(f"{name} was not fail-closed")
+        selected = value.get("selection", {}).get("required_test_run_counts", {}) if isinstance(value.get("selection"), dict) else {}
+        if any(int(count) != 0 for count in selected.values()):
+            raise VerificationError(f"{name} unexpectedly selected a required test")
+    return {"mode": "no-retry-and-selection", "passes": True, "attempts": "one per frozen cell", "negative_controls": ["zero_test_selection", "wrong_test_selection"]}
+
+
+def classification() -> dict[str, object]:
+    matrix_report = verify_matrix()
+    run, run_root = latest_run()
+    first = load(EVIDENCE / "first-divergence.json") if (EVIDENCE / "first-divergence.json").is_file() else first_divergence_fileless(run, run_root)
+    outcomes: list[dict[str, object]] = []
+    for record in records(run):
+        process = record.get("process", {})
+        events = record_trace(record, run_root)
+        failures = [item for item in first.get("cases", []) if item.get("revision_label") == record.get("revision_label") and item.get("cell_id") == record.get("cell", {}).get("id") and item.get("first_divergence") != "none"]
+        first_assertion = record.get("selection", {}).get("first_assertion", "") if isinstance(record.get("selection"), dict) else ""
+        outcomes.append({
+            "revision_label": record.get("revision_label"),
+            "revision": record.get("revision"),
+            "cell_id": record.get("cell", {}).get("id"),
+            "kind": record.get("cell", {}).get("kind"),
+            "behavior_exit_code": process.get("exit_code") if isinstance(process, dict) else None,
+            "behavior_passed": isinstance(process, dict) and process.get("exit_code") == 0,
+            "first_assertion": first_assertion,
+            "first_divergence_signatures": [item.get("first_divergence") for item in failures] or ["none"],
+            "trace_sha256": record.get("trace_sha256"),
+            "selected": record.get("selection", {}).get("required_test_run_counts", {}) if isinstance(record.get("selection"), dict) else {},
+            "runner_controls_valid": not process_failure(record),
+        })
+    behavior_failures = [item for item in outcomes if item["behavior_passed"] is False]
+    runner_valid = all(item["runner_controls_valid"] for item in outcomes)
+    labels: list[str] = []
+    if not runner_valid:
+        label = "INCONCLUSIVE"
+    elif not behavior_failures:
+        label = "NON_REPRODUCED"
+    else:
+        signatures = [tuple(item["first_divergence_signatures"]) for item in behavior_failures]
+        if len(behavior_failures) >= 2 and len(set(signatures)) == 1 and len({item["revision_label"] for item in behavior_failures}) == 1:
+            label = "DETERMINISTIC"
+        else:
+            def failed_kind(kind: str) -> list[dict[str, object]]:
+                return [item for item in outcomes if item.get("kind") == kind and not item["behavior_passed"]]
+            order_fail = failed_kind("explicit-order")
+            package_fail = failed_kind("package-concurrency")
+            if order_fail and not [item for item in outcomes if item.get("kind") == "explicit-order" and item not in order_fail and item["behavior_passed"] is False]:
+                label = "ORDER_SENSITIVE"
+            elif package_fail and len(package_fail) < len([item for item in outcomes if item.get("kind") == "package-concurrency"]):
+                label = "PACKAGE_CONCURRENCY_SENSITIVE"
+            elif {item["revision_label"] for item in outcomes if not item["behavior_passed"]} != {"pr438", "planning-main"}:
+                label = "REVISION_SPECIFIC"
+            else:
+                label = "INCONCLUSIVE"
+    labels.append(label)
+    result = {
+        "schema": "audio-runtime-c52-classification-v1",
+        "classification": label,
+        "passes": False,
+        "within_declared_matrix": True,
+        "behavioral_failure_count": len(behavior_failures),
+        "trial_numerator_denominator": {
+            "all_cells": {"numerator": sum(1 for item in outcomes if item["behavior_passed"]), "denominator": len(outcomes)},
+            "pr438": {"numerator": sum(1 for item in outcomes if item["revision_label"] == "pr438" and item["behavior_passed"]), "denominator": sum(1 for item in outcomes if item["revision_label"] == "pr438")},
+            "planning_main": {"numerator": sum(1 for item in outcomes if item["revision_label"] == "planning-main" and item["behavior_passed"]), "denominator": sum(1 for item in outcomes if item["revision_label"] == "planning-main")},
+        },
+        "outcomes": outcomes,
+        "alternative_labels_rejected": {
+            "DETERMINISTIC": "requires repeated same-revision failures with one first divergence",
+            "ORDER_SENSITIVE": "requires order-confined failures and repeated opposite-order negative controls",
+            "PACKAGE_CONCURRENCY_SENSITIVE": "requires concurrent-only failures with serialized controls",
+            "REVISION_SPECIFIC": "requires an outcome difference under identical controls",
+            "INCONCLUSIVE": "reserved for invalid controls or ambiguous mixed outcomes",
+        },
+        "confidence_limits": [
+            "The matrix is bounded to the two clean archives, fixed counts, fixed scheduling variants, and the available Darwin toolchain.",
+            "A clean matrix supports NON_REPRODUCED within bounds, not proof that the hosted CI observation was flaky or absent.",
+            "The primary 10/10 report remains separately reported because its raw command and environment are unavailable.",
+        ],
+        "source_observation": "PR438 run 34562579355/job 103148160889 selected provider_timeout and reported a non-nil silent_provider_timeout room error at browser_parity_test.go:220; this is not inferred as causal.",
+        "matrix_report": matrix_report,
+    }
+    write(EVIDENCE / "classification.json", result)
+    return {"mode": "classification", "passes": True, "classification": label, "behavioral_failure_count": len(behavior_failures)}
+
+
+def first_divergence_fileless(run: dict[str, object], run_root: Path) -> dict[str, object]:
+    # This path is only used when a caller asks for classification directly.
+    first_divergence()
+    value = load(EVIDENCE / "first-divergence.json")
+    if not isinstance(value, dict):
+        raise VerificationError("generated first-divergence report is invalid")
+    return value
+
+
+def causal_map() -> dict[str, object]:
+    classification_value = load(EVIDENCE / "classification.json")
+    first = load(EVIDENCE / "first-divergence.json")
+    if not isinstance(classification_value, dict) or not isinstance(first, dict):
+        raise VerificationError("classification/first-divergence evidence is missing")
+    label = classification_value.get("classification")
+    if label == "NON_REPRODUCED":
+        result = {
+            "schema": "audio-runtime-c52-causal-finding-map-v1",
+            "status": "NON_REPRODUCED",
+            "repair": None,
+            "first_divergence": first.get("overall"),
+            "active_owner_intersections": [],
+            "next_observable_trigger": {
+                "condition": "The next exact hermetic lifecycle-package failure for TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout under captured runner image/environment/package scheduling.",
+                "action": "Invoke the retained C52 overlay and checkpoint schema before any source repair; preserve the complete child log, selected-test JSON actions, typed liveness event, peer-cancel boundary, result/error, and group-cleanup evidence.",
+                "owner": "Primary/meta-planner routes the newly observed exact source/API divergence after checkpoint capture; C52 makes no production ownership claim.",
+            },
+            "limitations": [
+                "No defect absence is claimed outside the declared bounded matrix.",
+                "No CI flakiness or hosted scheduling cause is claimed from the local result.",
+                "No production or tracked test file was changed by this slice.",
+            ],
+        }
+    else:
+        reproduced = [item for item in first.get("cases", []) if item.get("first_divergence") != "none"]
+        result = {
+            "schema": "audio-runtime-c52-causal-finding-map-v1",
+            "status": "REPRODUCED_BUT_REPAIR_UNIMPLEMENTED",
+            "first_divergence": reproduced,
+            "source_anchors": {
+                "pr438": ["go-agent-runtime/services/rooms/internal/lifecycle/events.go:eventObserver", "go-agent-runtime/services/rooms/internal/lifecycle/state.go:noteTerminal/failParticipant/waitParticipant", "go-agent-runtime/services/rooms/internal/lifecycle/runner.go:finishRun/finalizeRun"],
+                "planning_main": ["go-agent-runtime/services/rooms/internal/lifecycle/events.go:eventObserver", "go-agent-runtime/services/rooms/internal/lifecycle/state.go:noteTerminal/failParticipant/waitParticipant", "go-agent-runtime/services/rooms/internal/lifecycle/runner.go:finishRun/finalizeRun"],
+            },
+            "api_owner": "Not assigned by C52; primary must reconcile the exact first divergence against active leases before authorizing a repair.",
+            "proposed_exclusive_owned_paths": [],
+            "active_owner_intersections": ["Deferred until the primary confirms the exact source/API boundary; no directory-wide lease is proposed."],
+            "positive_reproduction": reproduced,
+            "causal_negative_control": "The opposite explicit order, serialized package setting, and identical comparison revision controls remain required before assigning sensitivity.",
+            "expected_repaired_checkpoint": "The first divergent checkpoint identified above must change while later result and cleanup controls remain asserted.",
+            "repair_implemented": False,
+        }
+    write(EVIDENCE / "causal-finding-map.json", result)
+    return {"mode": "causal-finding-map", "passes": True, "status": result["status"]}
+
+
+def all_modes() -> list[dict[str, object]]:
+    reports = [verify_provenance(), verify_matrix(), verify_overlay_integrity(), verify_checkpoints(), first_divergence(), verify_cleanup(), verify_no_retry_and_selection(), classification(), causal_map()]
+    return reports
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=["provenance", "matrix", "overlay-integrity", "checkpoints", "first-divergence", "cleanup", "no-retry-and-selection", "classification", "causal-finding-map", "all"], required=True)
+    args = parser.parse_args()
+    try:
+        if args.mode == "provenance":
+            report = verify_provenance()
+        elif args.mode == "matrix":
+            report = verify_matrix()
+        elif args.mode == "overlay-integrity":
+            report = verify_overlay_integrity()
+        elif args.mode == "checkpoints":
+            report = verify_checkpoints()
+        elif args.mode == "first-divergence":
+            report = first_divergence()
+        elif args.mode == "cleanup":
+            report = verify_cleanup()
+        elif args.mode == "no-retry-and-selection":
+            report = verify_no_retry_and_selection()
+        elif args.mode == "classification":
+            report = classification()
+        elif args.mode == "causal-finding-map":
+            report = causal_map()
+        else:
+            report = all_modes()
+        print(json.dumps({"status": "PASS", "report": report}, sort_keys=True))
+        return 0
+    except (VerificationError, KeyError, TypeError, ValueError) as exc:
+        print(json.dumps({"status": "FAIL", "error": str(exc)}, sort_keys=True))
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,435 @@
+{
+  "alternative_labels_rejected": {
+    "DETERMINISTIC": "requires repeated same-revision failures with one first divergence",
+    "INCONCLUSIVE": "reserved for invalid controls or ambiguous mixed outcomes",
+    "ORDER_SENSITIVE": "requires order-confined failures and repeated opposite-order negative controls",
+    "PACKAGE_CONCURRENCY_SENSITIVE": "requires concurrent-only failures with serialized controls",
+    "REVISION_SPECIFIC": "requires an outcome difference under identical controls"
+  },
+  "behavioral_failure_count": 0,
+  "classification": "NON_REPRODUCED",
+  "confidence_limits": [
+    "The matrix is bounded to the two clean archives, fixed counts, fixed scheduling variants, and the available Darwin toolchain.",
+    "A clean matrix supports NON_REPRODUCED within bounds, not proof that the hosted CI observation was flaky or absent.",
+    "The primary 10/10 report remains separately reported because its raw command and environment are unavailable."
+  ],
+  "matrix_report": {
+    "behavioral_failures": [],
+    "cell_count": 22,
+    "mode": "matrix",
+    "passes": true,
+    "run_id": "20260911T081500Z-compressed-archives"
+  },
+  "outcomes": [
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "provider-timeout-count10",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "focused-count",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+      },
+      "trace_sha256": "15d86ce9d29cc8007724c2b7b4a3fe11dbbe3f33e1c8a325a2496a387f4f6f3d"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "empty-response-count10",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "focused-count",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10
+      },
+      "trace_sha256": "1d80aee314347a1436f2ec243eda2ffddc0147caf5533519526ceb40e7b99cf0"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "order-timeout-first",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "reordered:sink_publish_before"
+      ],
+      "kind": "explicit-order",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+      },
+      "trace_sha256": "0ec88cad6d22045debe33fbfbb8521ef5e2cf6216f4e6f2f7d146b484e93cdfe"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "order-empty-first",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "reordered:sink_publish_before"
+      ],
+      "kind": "explicit-order",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+      },
+      "trace_sha256": "51e4325469bfbe952182aff44dc5161c6b1f12c6d08b48b245e7942341ae5a38"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "shuffle-seed-17",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "fixed-shuffle",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
+      },
+      "trace_sha256": "6bf1a00827076583b648d1dd6a0388b55f0d90012d3092990542e0f198eddee4"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "shuffle-seed-28",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "fixed-shuffle",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
+      },
+      "trace_sha256": "dee07b9ba4d3979be4a8b5cc8495abf1cf6b0bd6ae000367fd437000e1db98ab"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "package-serialized",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "package-concurrency",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
+      },
+      "trace_sha256": "3ca901ab56724c7dbb56bc1ae04a160cc13af9a726d1dc06e0a3c8b245328e21"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "package-concurrent",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "package-concurrency",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
+      },
+      "trace_sha256": "b1ffa281a814bff4a4feae5a367f7f1a0a34b88a16bb81870a2efb034eb69c02"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "gomaxprocs-1",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "gomaxprocs",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+      },
+      "trace_sha256": "46bb62f1723cd7af832fc857fdd50622022b7f2ca2c4e30bb35c2a844845e48b"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "gomaxprocs-4",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "gomaxprocs",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+      },
+      "trace_sha256": "e8d4e7d502e3b7ffb74bca7a7f8b6c9222b2a1403f722cdb36bf0bc041668062"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "focused-race",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "race",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 1,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 1
+      },
+      "trace_sha256": "92689c4896af74b732bcc328d7fb0411536bd57a39709dde21ba4047f1f76f13"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "provider-timeout-count10",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "focused-count",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+      },
+      "trace_sha256": "a70b84723b463f80cf6112bce31e749b595571b668b1f06e3f7856c82b8341d8"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "empty-response-count10",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "reordered:sink_publish_before"
+      ],
+      "kind": "focused-count",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10
+      },
+      "trace_sha256": "26c24cfb2ea194e239403c3bbf4c9b64c079bc4bed6c60a9feb867ade7f208eb"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "order-timeout-first",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "explicit-order",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+      },
+      "trace_sha256": "8d2b5f5a347c99aed22f994845cca85b986fec28bd2e4127b9b96510788419c7"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "order-empty-first",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "reordered:sink_publish_before"
+      ],
+      "kind": "explicit-order",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+      },
+      "trace_sha256": "00c25130c8157a787f3a6416b3c094355bb88faa30ffa9c2eaef3ac9db1e1756"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "shuffle-seed-17",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "fixed-shuffle",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
+      },
+      "trace_sha256": "29afa12946bf6d89209cd9b99a84c4d25f83fdee5a5445d5792a1e46f9afadb9"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "shuffle-seed-28",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "fixed-shuffle",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
+      },
+      "trace_sha256": "9dc1deeed35ef2d2a46ad89ce946501b4233f92bf75481ca7f18356dbf0af215"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "package-serialized",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "package-concurrency",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
+      },
+      "trace_sha256": "4cfd5cedda3fe870ad977406b56c8c4eb80fc82011417018a48da9c9e6c9c89c"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "package-concurrent",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "package-concurrency",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
+      },
+      "trace_sha256": "8be8cfed61b3a0be5d9312ba2a7ee3e31e77e4fd7b86caae28fbb14022504c7e"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "gomaxprocs-1",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "gomaxprocs",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+      },
+      "trace_sha256": "6ee4adb4159be7d129adf57f0f1373502bc3a7b6ceb8a5de103eb4b27f34bd91"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "gomaxprocs-4",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "gomaxprocs",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+      },
+      "trace_sha256": "7d4eb5ff1af6a1c79bf38794bc0ccee1b9659041afbe475feb892c04d3a3fba8"
+    },
+    {
+      "behavior_exit_code": 0,
+      "behavior_passed": true,
+      "cell_id": "focused-race",
+      "first_assertion": "",
+      "first_divergence_signatures": [
+        "none"
+      ],
+      "kind": "race",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "runner_controls_valid": true,
+      "selected": {
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 1,
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 1
+      },
+      "trace_sha256": "f48d824516ba28cfa40d71323bdacd0d86f026a17c8d749c491602adbb9915dd"
+    }
+  ],
+  "passes": false,
+  "schema": "audio-runtime-c52-classification-v1",
+  "source_observation": "PR438 run 34562579355/job 103148160889 selected provider_timeout and reported a non-nil silent_provider_timeout room error at browser_parity_test.go:220; this is not inferred as causal.",
+  "trial_numerator_denominator": {
+    "all_cells": {
+      "denominator": 22,
+      "numerator": 22
+    },
+    "planning_main": {
+      "denominator": 11,
+      "numerator": 11
+    },
+    "pr438": {
+      "denominator": 11,
+      "numerator": 11
+    }
+  },
+  "within_declared_matrix": true
+}
