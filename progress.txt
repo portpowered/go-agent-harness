@@ -3858,3 +3858,51 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   final evidence, then return `ACCEPTED` once the changed same-task head is
   handed to script-owned current-head CI without polling. Retain C38 ownership
   for any exact rejection or actionable repair.
+
+# C38 pinned-lint repair and exact-head handoff 2026-09-11T01:39Z
+
+- Admission was reverified for the sole `audio-runtime` project and the exact
+  isolated branch still matches `prd.branchName`. The latest canonical CI
+  rejection was read from run `34550421782`, job `103111974625`, at head
+  `31f8ede4`: `CI (static)` failed only because the newly leased room test used
+  literal `session.update` and `input_audio_buffer.append` values where the
+  package constants already existed (`goconst` at lines 248 and 260). All
+  other static steps passed. No prior review finding was reopened.
+- Repair commit `6113661d536158be9cebe751344913eee1f2c8fd` replaces every
+  matching room-test literal with `sessionUpdateEventType` or
+  `inputAudioBufferAppendEventType`. It changes no wire behavior, fixture,
+  oracle, timeout, baseline limit or production ownership. This resolves the
+  exact CI finding within the current C38 room-test lease.
+- Post-repair focused evidence is green: room handshake/order controls pass
+  normal and race (`35/35` each); accumulated session-output controls pass
+  normal and race (`240/240` each); owned remote provider-burst/slow-device
+  controls pass normal and race (`15/15` each). `make lint` passes all 15
+  modules with 0 issues; fmt, targeted vet, Wire, architecture-size
+  (`184` packages, `1,888` files, `27,819` functions), and `git diff --check`
+  pass.
+- Exact current-source runner records are `causal-20260911T013757Z-58519`
+  (`CAUSAL_PROOF`), `focused-checks-20260911T013810Z-58584`
+  (`FOCUSED_CHECKS_PASS`), `negative-controls-20260911T013851Z-59057`
+  (`NEGATIVE_CONTROLS_PASS`, 21 literal C30 cases plus exit-1, real
+  same-length PCM/hash mutation and missing-timeline rejection), and
+  `cleanup-control-20260911T013856Z-59088` (`CLEANUP_CONTROL_PASS`, capped
+  output, TERM/KILL, reap and no survivors).
+- Fresh exact-source replay `repaired-20260911T013717Z-58407` is
+  `REPAIRED_ORACLE_PASS` from `6113661d`; the rebuilt yui is `50,912,034`
+  bytes with SHA-256
+  `8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`.
+  Tool/interruption PCM remains the frozen `4,800/3,200` and `3,840/3,360`
+  oracle, including the exact `2,400`-byte healthy tail. `PACKAGE_READY`
+  passes for the clean source with 2,185 inputs and build-input SHA-256
+  `54fc81f532dc47cb3505b48b77e25e9646f767d067c9a6e706397395cf86fb41`;
+  rebuilt-build manifest SHA-256 is
+  `59db711c9ba4f9dee01ce5be0c54157e7a4f313c8d121669f81a81389d99db1e` and
+  package manifest SHA-256 is
+  `79fa116ea45667f352c246640cbb9eb8dce6a4123397d741c625065bcbb25261`.
+- These are executor handoff results only: no current-head CI success,
+  independent review, guarded merge, post-delivery vertical acceptance,
+  physical/acoustic proof or project completion is claimed. Exact next action:
+  push `6113661d` to the same branch, update PR `#430` with the static repair
+  and exact provenance, then return `ACCEPTED` to the script-owned current-head
+  CI gate without polling. Retain C38 ownership through `CONTINUE` for any
+  exact CI rejection or actionable repair.

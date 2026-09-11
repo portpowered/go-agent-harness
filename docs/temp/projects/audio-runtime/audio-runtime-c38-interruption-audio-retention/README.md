@@ -229,3 +229,33 @@ timeline, terminal, same-length PCM mutation, and missing-timeline controls
 all pass. These remain executor handoff results only; script current-head CI,
 independent review, guarded merge, and fresh post-delivery vertical validation
 are still external gates.
+
+## Pinned static finding repair and exact-head handoff
+
+CI run `34550421782`, job `103111974625`, failed at prior head `31f8ede4` only
+on two `goconst` findings in the newly leased room test. Commit
+`6113661d536158be9cebe751344913eee1f2c8fd` reuses the existing canonical
+`sessionUpdateEventType` and `inputAudioBufferAppendEventType` constants; wire
+behavior and all assertions are unchanged.
+
+Post-repair room controls pass normal/race 35/35 each; accumulated session
+output passes 240/240 each; and the owned remote controls pass 15/15 each.
+Pinned `make lint` reports 0 issues in all 15 modules. Focused causal,
+architecture/size (184/1,888/27,819), Wire, vet, negative-control, and cleanup
+checks pass in exact-head runner records
+`causal-20260911T013757Z-58519`, `focused-checks-20260911T013810Z-58584`,
+`negative-controls-20260911T013851Z-59057`, and
+`cleanup-control-20260911T013856Z-59088`.
+
+Fresh exact-source `repaired-20260911T013717Z-58407` is
+`REPAIRED_ORACLE_PASS`; its rebuilt yui is 50,912,034 bytes with SHA-256
+`8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`, and
+`PACKAGE_READY` passes for the clean 2,185-input source with build-input SHA
+`54fc81f532dc47cb3505b48b77e25e9646f767d067c9a6e706397395cf86fb41`.
+Frozen PCM, healthy-tail, strict replay, real same-length mutation rejection,
+missing-timeline rejection, and bounded TERM/KILL cleanup remain proven.
+
+This is executor handoff evidence only. The next action is to update PR #430
+with this changed head and return `ACCEPTED` to script-owned current-head CI
+without polling; CI, independent review, guarded merge, and post-delivery
+vertical validation remain external gates.

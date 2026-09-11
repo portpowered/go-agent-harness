@@ -187,3 +187,35 @@ vertical acceptance, physical/acoustic proof, or project completion. The next
 action is to evaluate this genuinely changed same-task head in script-owned
 current-head CI without polling; retain C38 ownership for any exact rejection
 or actionable repair.
+
+## Pinned static finding repair and current-head handoff
+
+The exact latest rejection was run `34550421782` / job `103111974625` at prior
+head `31f8ede4`; only pinned `golangci-lint` failed, reporting `goconst` for
+the two room-test literals at lines 248 and 260. Commit
+`6113661d536158be9cebe751344913eee1f2c8fd` replaces those literals and the
+remaining matching test values with the existing canonical event constants.
+No wire behavior, fixture, oracle, timeout, baseline limit, or production
+ownership changed.
+
+Exact-head evidence:
+
+- room handshake/order normal and race: 35/35 each;
+- accumulated session-output normal and race: 240/240 each;
+- owned remote provider-burst/slow-device normal and race: 15/15 each;
+- `make lint`: all 15 modules, 0 issues;
+- causal/focused/negative/cleanup runner records:
+  `causal-20260911T013757Z-58519`, `focused-checks-20260911T013810Z-58584`,
+  `negative-controls-20260911T013851Z-59057`, and
+  `cleanup-control-20260911T013856Z-59088`;
+- fresh `REPAIRED_ORACLE_PASS`: `repaired-20260911T013717Z-58407`, yui
+  SHA-256 `8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`;
+- `PACKAGE_READY`: 2,185-input build manifest SHA-256
+  `54fc81f532dc47cb3505b48b77e25e9646f767d067c9a6e706397395cf86fb41`.
+
+Frozen PCM/healthy-tail, strict replay, real same-length PCM mutation,
+missing-timeline, and bounded cleanup controls pass. This remains executor
+handoff evidence, not CI-green, review, merge, vertical, physical/acoustic, or
+project acceptance. The next action is to push this same task and return
+`ACCEPTED` to script-owned current-head CI without polling; retain C38 through
+`CONTINUE` for any exact rejection or actionable repair.
