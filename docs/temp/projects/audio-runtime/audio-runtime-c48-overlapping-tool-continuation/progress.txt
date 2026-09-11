@@ -58,3 +58,36 @@ C48 static rejection repair and exact-source evidence checkpoint — 2026-09-11
   commit this checkpoint, push PR #440 and return `ACCEPTED` to the
   script-owned current-head gate without polling; retain the same task for any
   exact rejection or actionable repair.
+
+C48 overlap review-repair and handoff checkpoint — 2026-09-11
+
+- Repair commit `c82d1cecf5066f59e98952230d6a44f931031b40` maps all four prior
+  review findings: unknown explicit late response IDs are rejected without
+  sibling fallback; tool-acknowledgement deltas cannot create model turns;
+  response ownership is tracked per active ID across sibling completion; and
+  pending tool-call responses have a 128-entry admission bound plus cancel,
+  close and final-shutdown cleanup. New coordinator/live regressions cover
+  late routing, ack overlap, sibling liveness, overflow, and cleanup.
+- Post-repair causal gates pass: coordinator and live package normal and race
+  tests, targeted `go vet`, `make architecture-check` (`184` packages,
+  `1888` files, `27813` functions), and the accumulated
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` normal and
+  race commands (3 subtests each). `git diff --check` is clean.
+- The clean-head bounded public driver passed at source `c82d1ce`, with fixture
+  SHA256 `e13d8322a39c37f2d216fad97df9541b497aafe9d7c28c5c19a97ce7f7833461`,
+  consumer SHA256 `4701d32ba3085fa03a73a9e8c726c33b7cf377e3f8d5b6b65e7b5e05d65ef50c`,
+  and `143045246976` free bytes. Positive report
+  `artifacts/runs/20260911T053940Z-978254000/positive/report.json` proves both
+  response IDs were active before the first result, four exact calls/results
+  were correlated exactly once, reverse completion was preserved, and the
+  provider terminal/shutdown were clean. Missing, duplicate and swapped
+  controls each exited 1 with their intended causal correlation error. The
+  generated provenance remains intentionally ignored by the task `.gitignore`.
+- Admission and branch/ancestry evidence remain valid: the sole admitted task
+  is `work-task-12`, `prd.json.branchName` matches
+  `codex/audio-runtime-c48-overlapping-tool-continuation`, and current main is
+  an ancestor. No CI-green, review, merge, hardware, acoustic, vertical or
+  project-acceptance claim is made. Next action: commit this checkpoint, push
+  the same branch, update PR #440 with this evidence, and return `ACCEPTED` to
+  the script-owned current-head gate without polling; retain ownership for any
+  exact rejection or actionable repair.
