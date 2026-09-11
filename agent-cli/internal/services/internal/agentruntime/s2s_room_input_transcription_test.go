@@ -245,19 +245,19 @@ func validateRoomInputTranscriptionWire(writes []string) error {
 	if len(writes) == 0 {
 		return fmt.Errorf("missing initial session.update")
 	}
-	if writes[0] != "session.update" {
+	if writes[0] != sessionUpdateEventType {
 		return fmt.Errorf("first outbound event is %q, want session.update", writes[0])
 	}
 	updates := 0
 	appends := 0
 	for index, writeType := range writes {
 		switch writeType {
-		case "session.update":
+		case sessionUpdateEventType:
 			updates++
 			if index != 0 {
 				return fmt.Errorf("duplicate or out-of-order session.update at wire index %d", index)
 			}
-		case "input_audio_buffer.append":
+		case inputAudioBufferAppendEventType:
 			appends++
 		default:
 			return fmt.Errorf("unexpected outbound event %q at wire index %d", writeType, index)
@@ -277,11 +277,11 @@ func TestRoomInputTranscriptionWireContractRejectsDuplicateOrOutOfOrderHandshake
 		name   string
 		writes []string
 	}{
-		{name: "missing handshake", writes: []string{"input_audio_buffer.append"}},
-		{name: "duplicate handshake", writes: []string{"session.update", "session.update", "input_audio_buffer.append"}},
-		{name: "out of order handshake", writes: []string{"input_audio_buffer.append", "session.update"}},
-		{name: "unexpected control", writes: []string{"session.update", "response.create"}},
-		{name: "missing media", writes: []string{"session.update"}},
+		{name: "missing handshake", writes: []string{inputAudioBufferAppendEventType}},
+		{name: "duplicate handshake", writes: []string{sessionUpdateEventType, sessionUpdateEventType, inputAudioBufferAppendEventType}},
+		{name: "out of order handshake", writes: []string{inputAudioBufferAppendEventType, sessionUpdateEventType}},
+		{name: "unexpected control", writes: []string{sessionUpdateEventType, "response.create"}},
+		{name: "missing media", writes: []string{sessionUpdateEventType}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -290,7 +290,7 @@ func TestRoomInputTranscriptionWireContractRejectsDuplicateOrOutOfOrderHandshake
 			}
 		})
 	}
-	if err := validateRoomInputTranscriptionWire([]string{"session.update", "input_audio_buffer.append", "input_audio_buffer.append"}); err != nil {
+	if err := validateRoomInputTranscriptionWire([]string{sessionUpdateEventType, inputAudioBufferAppendEventType, inputAudioBufferAppendEventType}); err != nil {
 		t.Fatalf("valid post-handshake media sequence rejected: %v", err)
 	}
 }
@@ -313,7 +313,7 @@ func assertRoomInputTranscriptionHandshake(t *testing.T, participantID string, p
 	if err := json.Unmarshal(payload, &envelope); err != nil {
 		t.Fatalf("participant %q decode session.update: %v", participantID, err)
 	}
-	if envelope.Type != "session.update" || envelope.Session.Model != model {
+	if envelope.Type != sessionUpdateEventType || envelope.Session.Model != model {
 		t.Fatalf("participant %q handshake identity = type:%q model:%q, want session.update/%q", participantID, envelope.Type, envelope.Session.Model, model)
 	}
 	if envelope.Session.Audio.Input.Transcription == nil {
@@ -426,11 +426,11 @@ func (c *roomInputTranscriptionConn) WriteMessage(_ int, payload []byte) error {
 	}
 	c.server.mu.Lock()
 	c.server.writes = append(c.server.writes, envelope.Type)
-	if envelope.Type == "session.update" {
+	if envelope.Type == sessionUpdateEventType {
 		c.server.sessionUpdates = append(c.server.sessionUpdates, append([]byte(nil), payload...))
 	}
 	c.server.mu.Unlock()
-	if envelope.Type == "input_audio_buffer.append" {
+	if envelope.Type == inputAudioBufferAppendEventType {
 		c.server.appendOnce.Do(func() { close(c.server.appendSeen) })
 		c.server.responseOnce.Do(func() {
 			c.server.enqueue(`{"type":"response.created","response":{"id":"response-room"}}`)
@@ -440,7 +440,7 @@ func (c *roomInputTranscriptionConn) WriteMessage(_ int, payload []byte) error {
 		})
 		return nil
 	}
-	if envelope.Type != "session.update" {
+	if envelope.Type != sessionUpdateEventType {
 		return nil
 	}
 
