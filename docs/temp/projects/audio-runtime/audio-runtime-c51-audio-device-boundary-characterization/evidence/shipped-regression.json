@@ -1,8 +1,16 @@
 {
   "binary": {
-    "path": "/private/tmp/audio-runtime-c51-yui-615d9d7e",
+    "bytes": 52753506,
+    "path": "/private/tmp/audio-runtime-c51-yui-fc70f5b",
     "sha256": "9fb61c65e9242947ccaffe178c7c069eec7497c64dd35215e60e9672b596822d"
   },
+  "buildManifest": {
+    "inputTreeSha256": "c40c63dd7ce167d9cf7793ec4a197487129671c17172bc54403c3ef5c602e66d",
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/evidence/shipped-build.json",
+    "sha256": "79fa0ee5832ed710e24a374145c3041b4041ee1e06d49a2e4118e957a49c6d57"
+  },
+  "candidateHeadAtVerification": "fc70f5b81cff03369e2bb1e7f6e236992a2419fe",
+  "classification": "SOFTWARE_REPLAY_PROCESS_ONLY",
   "healthyReplay": {
     "expectedWav": {
       "channels": 1,
@@ -21,17 +29,21 @@
     ],
     "result": {
       "argv": [
-        "/private/tmp/audio-runtime-c51-yui-615d9d7e",
+        "/private/tmp/audio-runtime-c51-yui-fc70f5b",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vm9hub2w/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
         "--audio-out",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vm9hub2w/healthy.wav"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/healthy.wav"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
-      "durationSeconds": 0.548884,
+      "diskBytesAfter": 2385,
+      "diskBytesBefore": 0,
+      "diskBytesDelta": 2385,
+      "diskLimitBytes": 33554432,
+      "durationSeconds": 0.556166,
       "processGroupAlive": false,
       "returnCode": 0,
       "stderr": "",
@@ -51,28 +63,46 @@
       "wavSHA256": "3e9bdf4cffd0b09b1ce550cf199542cd54fdaf69bf4f53d2e1b8be88c02f5aa3"
     }
   },
+  "limits": {
+    "aggregateDeadlineEnforced": true,
+    "aggregateTimeoutSeconds": 600.0,
+    "childTimeoutSeconds": 60.0,
+    "outputBytesPerStream": 65536,
+    "ownedTemporaryGrowthBytes": 33554432,
+    "wavBytes": 8388608
+  },
   "sourceRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
   "status": "verified",
+  "temporaryOutput": {
+    "bytesAfter": 4766,
+    "bytesBefore": 0,
+    "bytesDelta": 4766
+  },
+  "testedSourceRevision": "fc70f5b81cff03369e2bb1e7f6e236992a2419fe",
   "toolLifecycleNegativeControl": {
     "audioOutputWritten": true,
     "expectedMarker": "tool results were not delivered for 1 unresolved call(s): call_weather_001",
     "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
     "result": {
       "argv": [
-        "/private/tmp/audio-runtime-c51-yui-615d9d7e",
+        "/private/tmp/audio-runtime-c51-yui-fc70f5b",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vm9hub2w/tool-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/tool-config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
         "--audio-out",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vm9hub2w/tool.wav"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/tool.wav"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
-      "durationSeconds": 0.046299,
+      "diskBytesAfter": 4766,
+      "diskBytesBefore": 2385,
+      "diskBytesDelta": 2381,
+      "diskLimitBytes": 33554432,
+      "durationSeconds": 0.042633,
       "processGroupAlive": false,
       "returnCode": 1,
-      "stderr": "Error: tool results were not delivered for 1 unresolved call(s): call_weather_001\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vm9hub2w/tool.wav\" (wav): empty WAV samples\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-vm9hub2w/tool.wav\" (wav): empty WAV samples\ntool results were not delivered for 1 unresolved call(s): call_weather_001\n",
+      "stderr": "Error: tool results were not delivered for 1 unresolved call(s): call_weather_001\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/tool.wav\" (wav): empty WAV samples\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/tool.wav\" (wav): empty WAV samples\ntool results were not delivered for 1 unresolved call(s): call_weather_001\n",
       "stderrTruncated": false,
       "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: It is sunny in Paris.\n\n[session closed: fixture_complete]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\nlive session terminated: tool results were not delivered for 1 unresolved call(s): call_weather_001\n",
       "stdoutTruncated": false,
