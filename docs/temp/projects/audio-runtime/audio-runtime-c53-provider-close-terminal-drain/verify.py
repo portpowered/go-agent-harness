@@ -81,10 +81,12 @@ def execution_ok(execution: dict, label: str) -> None:
 def positive_report(path: Path) -> dict:
     payload = load(path)
     report = payload.get("report", payload)
+    provenance = load(PROVENANCE)
     execution = payload.get("execution")
     if execution is not None:
         execution_ok(execution, path.name)
     require(report.get("schema") == "audio-runtime.c53.v1", f"unexpected public report schema: {path}")
+    require(report.get("candidate_revision") == provenance.get("candidate_revision"), "public evidence is not bound to the candidate revision")
     require(report.get("consumer_surface") == "public-live-service", "public evidence did not use LiveHandle.Events")
     trace = report.get("trace", [])
     require([item.get("kind") for item in trace] == EXPECTED_TRACE, "public terminal trace order is not the causal fixture order")
@@ -151,17 +153,19 @@ def verify_provenance(final_scope: bool = False) -> dict:
 
 def verify_baseline() -> None:
     verify_preserved()
+    provenance = load(PROVENANCE)
     baseline = load(ARTIFACT_ROOT / "provider-close-overtake/baseline-first-failure.json")
     execution = baseline.get("execution", {})
     require(execution.get("returncode") != 0 and not execution.get("timed_out") and execution.get("output_bounded") and execution.get("disk_bounded"), "base control did not fail within its bounded child run")
     require(execution.get("cleanup", {}).get("parent_reaped") and execution.get("cleanup", {}).get("reader_threads_joined") and execution.get("cleanup", {}).get("group_alive_after") is False, "base control cleanup did not reap its process group")
-    require(baseline.get("expected_outcome") == "base-failure" and baseline.get("source_revision") == BASE_REVISION, "base failure provenance is not current-main")
+    require(baseline.get("expected_outcome") == "base-failure" and baseline.get("source_revision") == BASE_REVISION and baseline.get("candidate_revision") == provenance.get("candidate_revision"), "base failure provenance is not current-main/candidate-bound")
     report = baseline.get("report", {})
     require(report.get("error") and len(report.get("trace", [])) > 2 and report.get("interruption", {}).get("healthy_response_id") == "" and report.get("terminal", {}).get("provenance") == "loop" and report.get("terminal", {}).get("output_state") == "partial", "base control did not preserve the demonstrated public terminal loss")
 
 
 def verify_negative() -> None:
     controls = load(REPORT_ROOT / "negative-controls.json")
+    provenance = load(PROVENANCE)
     require(controls.get("passed") is True, "negative-controls aggregate is not passed")
     entries = controls.get("controls", [])
     require({entry.get("mutation") for entry in entries} == {"missing-message-end", "duplicate-message-end", "reordered-session-close", "admitted-cancelled-audio", "mutated-healthy-pcm"}, "negative control matrix is incomplete")
@@ -169,6 +173,7 @@ def verify_negative() -> None:
         execution = entry.get("execution", {})
         require(execution.get("returncode") != 0, f"negative control unexpectedly passed: {entry.get('mutation')}")
         require(execution.get("cleanup", {}).get("parent_reaped") and execution.get("cleanup", {}).get("group_alive_after") is False, f"negative control cleanup failed: {entry.get('mutation')}")
+        require(entry.get("report", {}).get("candidate_revision") == provenance.get("candidate_revision"), f"negative control is not bound to the candidate revision: {entry.get('mutation')}")
         require(entry.get("report", {}).get("error") and len(entry.get("report", {}).get("trace", [])) > 1, f"negative control failed outside its public oracle: {entry.get('mutation')}")
 
 
@@ -184,7 +189,7 @@ def verify_shipped() -> None:
     require(inputs.get("source_audio_sha256") == "6bb5a07350bbe1a874b4a28fcc79f7575f272a38a6338aa223c6fa9a99e6b5c6", "shipped source audio hash changed")
     require(result.get("classification", {}).get("physical_device") == "not_attempted" and result.get("classification", {}).get("acoustic") == "not_attempted", "shipped replay overclaimed physical/acoustic evidence")
     provenance = load(PROVENANCE)
-    require(result.get("source_revision") == provenance.get("source_revision") and result.get("binary", {}).get("sha256") == provenance.get("builds", {}).get("yui", {}).get("sha256"), "shipped artifact is not bound to candidate provenance")
+    require(result.get("source_revision") == provenance.get("source_revision") and result.get("candidate_revision") == provenance.get("candidate_revision") and result.get("binary", {}).get("sha256") == provenance.get("builds", {}).get("yui", {}).get("sha256"), "shipped artifact is not bound to candidate provenance")
 
 
 def verify_resources() -> None:

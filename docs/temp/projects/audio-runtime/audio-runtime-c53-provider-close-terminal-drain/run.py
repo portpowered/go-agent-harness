@@ -314,7 +314,7 @@ def prepare_provenance(source_revision: str, candidate_revision: str, consumer: 
         "preserved": preserved,
         "source_plan_sha256": sha256_file(source_plan) if source_plan.is_file() else None,
         "source_tree_status": git_value("status", "--porcelain", "--untracked-files=all"),
-        "build": {"toolchain": subprocess.run(["go", "version"], check=True, capture_output=True, text=True).stdout.strip(), "flags": ["-trimpath", "-mod=readonly"], "environment_allowlist": ["PATH", "HOME", "TMPDIR", "GOCACHE", "GOMODCACHE", "GOWORK", "LANG", "LC_ALL", "C53_SOURCE_REVISION"]},
+        "build": {"toolchain": subprocess.run(["go", "version"], check=True, capture_output=True, text=True).stdout.strip(), "flags": ["-trimpath", "-mod=readonly"], "environment_allowlist": ["PATH", "HOME", "TMPDIR", "GOCACHE", "GOMODCACHE", "GOWORK", "LANG", "LC_ALL", "C53_SOURCE_REVISION", "C53_CANDIDATE_REVISION"]},
         "builds": {"consumer": {"sha256": consumer_sha, "result": consumer} if consumer else {}, "yui": {"sha256": yui_sha, "result": yui} if yui else {}},
         "build_inputs": inputs,
         "bounds": {"child_timeout_seconds": MAX_CHILD_SECONDS, "aggregate_timeout_seconds": 600, "max_child_output_bytes": MAX_CHILD_OUTPUT_BYTES, "max_retained_disk_bytes": MAX_RETAINED_DISK_BYTES},
@@ -333,13 +333,13 @@ def ensure_candidate(source_revision: str, cache: dict) -> tuple[Path, dict]:
     return output, result
 
 
-def run_public(source_revision: str, cache: dict, label: str, mutation: str = "") -> tuple[dict, dict]:
+def run_public(source_revision: str, candidate_revision: str, cache: dict, label: str, mutation: str = "") -> tuple[dict, dict]:
     binary, _ = ensure_candidate(source_revision, cache)
     output = ARTIFACT_ROOT / label / "consumer-report.json"
     command = [str(binary), "--fixture", str(FIXTURE), "--output", str(output)]
     if mutation:
         command.extend(["--mutation", mutation])
-    execution = run_child(command, label, OWNED_ROOT, ARTIFACT_ROOT / label / "process", source_revision, gowork="off")
+    execution = run_child(command, label, OWNED_ROOT, ARTIFACT_ROOT / label / "process", source_revision, gowork="off", extras={"C53_CANDIDATE_REVISION": candidate_revision})
     report = load_json(output)
     return execution, report
 
@@ -371,23 +371,23 @@ def case_provider_close(source_revision: str, candidate_revision: str, cache: di
         require(base_run["returncode"] != 0, "unmodified current-main base unexpectedly passed the causal provider-close control")
         require(len(base_report.get("trace", [])) > 2 and base_report.get("error"), "base failure did not reach the public terminal oracle")
         write_json(root / "baseline-first-failure.json", {"schema": "audio-runtime.c53.baseline-first-failure.v1", "expected_outcome": "base-failure", "source_revision": BASE_REVISION, "candidate_revision": candidate_revision, "base_binary_sha256": sha256_file(base_binary), "build": base_build, "execution": base_run, "report": base_report, "causal_boundary": "healthy MESSAGE.END is absent or public loop teardown is error/partial before provider-scoped SESSION.CLOSE can retire the response"})
-    candidate_run, candidate_report = run_public(source_revision, cache, "provider-close-overtake/candidate")
+    candidate_run, candidate_report = run_public(source_revision, candidate_revision, cache, "provider-close-overtake/candidate")
     require(candidate_run["returncode"] == 0, f"candidate provider-close control failed: {candidate_report}")
     write_json(root / "candidate.json", {"schema": "audio-runtime.c53.provider-close.v1", "expected_outcome": "repaired-pass", "execution": candidate_run, "report": candidate_report})
     require(expect in ("base-failure", "repaired", ""), f"unsupported provider-close expectation: {expect}")
 
 
-def case_public(source_revision: str, cache: dict) -> None:
-    execution, report = run_public(source_revision, cache, "public-interruption-provider-close")
+def case_public(source_revision: str, candidate_revision: str, cache: dict) -> None:
+    execution, report = run_public(source_revision, candidate_revision, cache, "public-interruption-provider-close")
     require(execution["returncode"] == 0, f"public interruption consumer failed: {report}")
     write_json(REPORT_ROOT / "public-interruption-provider-close.json", {"execution": execution, "report": report})
 
 
-def case_negative(source_revision: str, cache: dict) -> None:
+def case_negative(source_revision: str, candidate_revision: str, cache: dict) -> None:
     mutations = ["missing-message-end", "duplicate-message-end", "reordered-session-close", "admitted-cancelled-audio", "mutated-healthy-pcm"]
     results = []
     for mutation in mutations:
-        execution, report = run_public(source_revision, cache, f"negative-{mutation}", mutation)
+        execution, report = run_public(source_revision, candidate_revision, cache, f"negative-{mutation}", mutation)
         require(execution["returncode"] != 0, f"negative control unexpectedly passed: {mutation}")
         require(execution["cleanup"]["parent_reaped"] and execution["cleanup"]["group_alive_after"] is False, f"negative control cleanup failed: {mutation}")
         require(len(report.get("trace", [])) > 1 and report.get("error"), f"negative control failed before its public oracle: {mutation}")
@@ -406,7 +406,7 @@ def case_focused(source_revision: str, race: bool) -> None:
     write_json(REPORT_ROOT / f"{label}.json", {"schema": "audio-runtime.c53.focused-test.v1", "passed": True, "execution": result})
 
 
-def case_shipped(source_revision: str, cache: dict) -> None:
+def case_shipped(source_revision: str, candidate_revision: str, cache: dict) -> None:
     root = ARTIFACT_ROOT / "shipped-yui-audio-tool-interruption-replay"
     yui = BIN_ROOT / "yui"
     build = run_child(["go", "build", "-trimpath", "-o", str(yui), "./agent-cli/cmd/yui"], "build-candidate-yui", REPO_ROOT, root / "build", source_revision, gowork=str(REPO_ROOT / "go.work"))
@@ -428,7 +428,7 @@ def case_shipped(source_revision: str, cache: dict) -> None:
     output_sha = sha256_file(output)
     output_bytes = output.stat().st_size
     require(output_bytes == SHIPPED_EXPECTED_BYTES and output_sha == SHIPPED_EXPECTED_SHA, "shipped YUI PCM length/order/SHA changed")
-    result = {"schema": "audio-runtime.c53.shipped-replay.v1", "passed": True, "source_revision": source_revision, "binary": {"path": relative_owned(yui), "sha256": yui_sha, "build": build}, "inputs": {"capture_sha256": sha256_file(capture), "config_sha256": sha256_tree(config), "fixture_sha256": sha256_file(input_fixture), "source_audio_sha256": sha256_file(source_audio), "frozen_manifest_sha256": sha256_file(shipped_manifest), "expected_manifest": frozen.get("audio_output", {})}, "execution": execution, "capture": {"record_count": len(capture_value.get("records", [])), "ordered_types": types, "sequence_contiguous": [record.get("sequence") for record in capture_value.get("records", [])] == list(range(1, len(types) + 1)), "interrupted_response_id": "resp-test6-interrupted", "healthy_response_id": "resp-test6-new-assistant"}, "audio_output": {"path": relative_owned(output), "bytes": output_bytes, "sha256": output_sha, "expected_bytes": SHIPPED_EXPECTED_BYTES, "expected_sha256": SHIPPED_EXPECTED_SHA}, "classification": {"provider_edge": "credential-free shipped replay", "audio_tool_interruption_order": "proved", "physical_device": "not_attempted", "acoustic": "not_attempted", "quiet_host": "not_claimed"}}
+    result = {"schema": "audio-runtime.c53.shipped-replay.v1", "passed": True, "source_revision": source_revision, "candidate_revision": candidate_revision, "binary": {"path": relative_owned(yui), "sha256": yui_sha, "build": build}, "inputs": {"capture_sha256": sha256_file(capture), "config_sha256": sha256_tree(config), "fixture_sha256": sha256_file(input_fixture), "source_audio_sha256": sha256_file(source_audio), "frozen_manifest_sha256": sha256_file(shipped_manifest), "expected_manifest": frozen.get("audio_output", {})}, "execution": execution, "capture": {"record_count": len(capture_value.get("records", [])), "ordered_types": types, "sequence_contiguous": [record.get("sequence") for record in capture_value.get("records", [])] == list(range(1, len(types) + 1)), "interrupted_response_id": "resp-test6-interrupted", "healthy_response_id": "resp-test6-new-assistant"}, "audio_output": {"path": relative_owned(output), "bytes": output_bytes, "sha256": output_sha, "expected_bytes": SHIPPED_EXPECTED_BYTES, "expected_sha256": SHIPPED_EXPECTED_SHA}, "classification": {"provider_edge": "credential-free shipped replay", "audio_tool_interruption_order": "proved", "physical_device": "not_attempted", "acoustic": "not_attempted", "quiet_host": "not_claimed"}}
     write_json(REPORT_ROOT / "shipped-yui-audio-tool-interruption-replay.json", result)
     cache.update({"yui_build": build, "yui_sha": yui_sha})
 
@@ -463,15 +463,15 @@ def main() -> int:
     if args.case == "provider-close-overtake":
         case_provider_close(source_revision, candidate_revision, cache, args.expect)
     elif args.case == "public-interruption-provider-close":
-        case_public(source_revision, cache)
+        case_public(source_revision, candidate_revision, cache)
     elif args.case == "public-negative-controls":
-        case_negative(source_revision, cache)
+        case_negative(source_revision, candidate_revision, cache)
     elif args.case == "focused-live-normal":
         case_focused(source_revision, False)
     elif args.case == "focused-live-race":
         case_focused(source_revision, True)
     elif args.case == "shipped-yui-audio-tool-interruption-replay":
-        case_shipped(source_revision, cache)
+        case_shipped(source_revision, candidate_revision, cache)
     require(time.monotonic() - started < args.aggregate_timeout, "aggregate evidence timeout exceeded")
     provenance = prepare_provenance(source_revision, candidate_revision, consumer_result, consumer_sha, cache.get("yui_build"), cache.get("yui_sha"))
     write_json(REPORT_ROOT / f"{args.case}.summary.json", {"schema": "audio-runtime.c53.run-summary.v1", "case": args.case, "passed": True, "elapsed_ms": int((time.monotonic() - started) * 1000), "candidate_revision": candidate_revision, "provenance": relative_owned(PROVENANCE), "bounds": provenance["bounds"]})

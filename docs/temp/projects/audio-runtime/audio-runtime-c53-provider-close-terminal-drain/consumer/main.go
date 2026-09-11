@@ -113,22 +113,23 @@ type lifecycleRecord struct {
 }
 
 type report struct {
-	Schema          string             `json:"schema"`
-	Scenario        string             `json:"scenario"`
-	Mutation        string             `json:"mutation,omitempty"`
-	SourceRevision  string             `json:"source_revision"`
-	FixtureSHA256   string             `json:"fixture_sha256"`
-	ConsumerSurface string             `json:"consumer_surface"`
-	Trace           []traceRecord      `json:"trace"`
-	PublicPCM       audioRecord        `json:"public_pcm"`
-	HealthyPCM      audioRecord        `json:"healthy_pcm"`
-	Terminal        terminalRecord     `json:"terminal"`
-	Interruption    interruptionRecord `json:"interruption"`
-	Provider        providerRecord     `json:"provider"`
-	Lifecycle       lifecycleRecord    `json:"lifecycle"`
-	CleanShutdown   bool               `json:"clean_shutdown"`
-	TraceComplete   bool               `json:"trace_complete"`
-	Error           string             `json:"error,omitempty"`
+	Schema            string             `json:"schema"`
+	Scenario          string             `json:"scenario"`
+	Mutation          string             `json:"mutation,omitempty"`
+	SourceRevision    string             `json:"source_revision"`
+	CandidateRevision string             `json:"candidate_revision"`
+	FixtureSHA256     string             `json:"fixture_sha256"`
+	ConsumerSurface   string             `json:"consumer_surface"`
+	Trace             []traceRecord      `json:"trace"`
+	PublicPCM         audioRecord        `json:"public_pcm"`
+	HealthyPCM        audioRecord        `json:"healthy_pcm"`
+	Terminal          terminalRecord     `json:"terminal"`
+	Interruption      interruptionRecord `json:"interruption"`
+	Provider          providerRecord     `json:"provider"`
+	Lifecycle         lifecycleRecord    `json:"lifecycle"`
+	CleanShutdown     bool               `json:"clean_shutdown"`
+	TraceComplete     bool               `json:"trace_complete"`
+	Error             string             `json:"error,omitempty"`
 }
 
 type eventCollector struct {
@@ -327,7 +328,7 @@ func (s *fixtureSession) snapshot() providerRecord {
 	return providerRecord{Controls: controls, Trace: trace, DelayedAudioObserved: len(s.delayed) == 4, DelayedAudioBytes: len(s.delayed), Closed: closed}
 }
 
-func run(fixturePath, mutation, sourceRevision string) (*report, error) {
+func run(fixturePath, mutation, sourceRevision, candidateRevision string) (*report, error) {
 	raw, err := os.ReadFile(fixturePath)
 	if err != nil {
 		return nil, fmt.Errorf("read fixture: %w", err)
@@ -342,7 +343,7 @@ func run(fixturePath, mutation, sourceRevision string) (*report, error) {
 		provider.queue(messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue(request.SessionID, "audio_inference")})
 		return fixtureInferencer{provider: provider}, nil
 	}, EventCapacity: 128, Clock: base.Now, Scheduler: clock.Real{}})
-	r := &report{Schema: "audio-runtime.c53.v1", Scenario: "provider-close-overtake", Mutation: mutation, SourceRevision: sourceRevision, FixtureSHA256: sha256Hex(raw), ConsumerSurface: "public-live-service", TraceComplete: true}
+	r := &report{Schema: "audio-runtime.c53.v1", Scenario: "provider-close-overtake", Mutation: mutation, SourceRevision: sourceRevision, CandidateRevision: candidateRevision, FixtureSHA256: sha256Hex(raw), ConsumerSurface: "public-live-service", TraceComplete: true}
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "c53-provider-close", ParticipantID: "fixture", Provider: "deterministic", Model: "c53-fixture", OpeningPrompt: "start interrupt fixture", OpeningPromptPresent: true, OutputAudioSampleRate: fixture.Audio.SampleRate, OutputAudioContinuous: true})
 	if err != nil {
 		return r, err
@@ -467,6 +468,9 @@ func hasPublicAudio(collector *eventCollector, delayed []byte) bool {
 }
 
 func validatePositive(r *report, fixture fixtureDocument, collector *eventCollector) error {
+	if r.CandidateRevision == "" {
+		return fmt.Errorf("candidate revision is missing")
+	}
 	wantKinds := []string{"started", "SESSION.OPEN", "MESSAGE.START", "TEXT.DELTA", "AUDIO.START", "AUDIO.DELTA", "MESSAGE.END", "MESSAGE.START", "AUDIO.START", "AUDIO.DELTA", "AUDIO.END", "TEXT.DELTA", "MESSAGE.END", "SESSION.CLOSE", "terminal"}
 	if len(r.Trace) != len(wantKinds) {
 		return fmt.Errorf("public trace length = %d, want %d", len(r.Trace), len(wantKinds))
@@ -522,14 +526,15 @@ func main() {
 	outputPath := flag.String("output", "", "report JSON path")
 	mutation := flag.String("mutation", "", "negative control mutation")
 	sourceRevision := flag.String("source-revision", os.Getenv("C53_SOURCE_REVISION"), "candidate source revision")
+	candidateRevision := os.Getenv("C53_CANDIDATE_REVISION")
 	flag.Parse()
 	if *fixturePath == "" || *outputPath == "" {
 		fmt.Fprintln(os.Stderr, "fixture and output are required")
 		os.Exit(2)
 	}
-	r, err := run(*fixturePath, *mutation, *sourceRevision)
+	r, err := run(*fixturePath, *mutation, *sourceRevision, candidateRevision)
 	if r == nil {
-		r = &report{Schema: "audio-runtime.c53.v1", Scenario: "provider-close-overtake", Mutation: *mutation, SourceRevision: *sourceRevision, ConsumerSurface: "public-live-service"}
+		r = &report{Schema: "audio-runtime.c53.v1", Scenario: "provider-close-overtake", Mutation: *mutation, SourceRevision: *sourceRevision, CandidateRevision: candidateRevision, ConsumerSurface: "public-live-service"}
 	}
 	if err != nil && r.Error == "" {
 		r.Error = err.Error()
