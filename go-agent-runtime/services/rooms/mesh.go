@@ -11,6 +11,8 @@ type meshSentinel string
 
 func (e meshSentinel) Error() string { return string(e) }
 
+const meshNilErrorText = "<nil>"
+
 const (
 	ErrMeshClosed                 meshSentinel = "room participant mesh is closed"
 	ErrMeshEmptyParticipantID     meshSentinel = "room participant ID must not be empty"
@@ -54,7 +56,7 @@ type MeshError struct {
 
 func (e *MeshError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return meshNilErrorText
 	}
 	message := "room mesh"
 	if e.Operation != "" {
