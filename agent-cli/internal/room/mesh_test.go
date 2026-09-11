@@ -138,6 +138,37 @@ func TestMeshRejectsDuplicateAndUnknownMembershipOperations(t *testing.T) {
 	}
 }
 
+func TestMeshClosesFactoryResourceReturnedWithError(t *testing.T) {
+	factoryErr := errors.New("factory returned a partial resource")
+	resource := &countingPair{spec: PairSpec{FirstID: "alpha", SecondID: "bravo"}}
+	mesh := NewMesh(MeshConfig{PairFactory: func(_ context.Context, _ PairSpec) (PairResource, error) {
+		return resource, factoryErr
+	}})
+	defer func() { _ = mesh.Close() }()
+	if err := mesh.Join(context.Background(), "alpha"); err != nil {
+		t.Fatalf("first Join: %v", err)
+	}
+	err := mesh.Join(context.Background(), "bravo")
+	if err == nil || !errors.Is(err, factoryErr) {
+		t.Fatalf("factory failure = %v, want %v", err, factoryErr)
+	}
+	if got := resource.closeCount.Load(); got != 1 {
+		t.Fatalf("factory-returned resource close count = %d, want 1", got)
+	}
+	if got := mesh.PairCount(); got != 0 {
+		t.Fatalf("pair count after factory failure = %d, want 0", got)
+	}
+	if got := mesh.Participants(); !equalStrings(got, []string{"alpha"}) {
+		t.Fatalf("membership after factory failure = %#v, want [alpha]", got)
+	}
+	if err := mesh.Close(); err != nil {
+		t.Fatalf("Close after factory failure: %v", err)
+	}
+	if got := resource.closeCount.Load(); got != 1 {
+		t.Fatalf("factory-returned resource close count after mesh Close = %d, want 1", got)
+	}
+}
+
 func TestMeshRemovalClosesOnlyRemovedPairAndLeavesSurvivors(t *testing.T) {
 	resources := make(map[PairSpec]*countingPair)
 	var resourcesMu sync.Mutex

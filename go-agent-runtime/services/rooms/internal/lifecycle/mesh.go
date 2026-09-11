@@ -122,7 +122,7 @@ func (m *mesh) connectPair(ctx context.Context, participantID, remoteID string, 
 	}
 	resource, err := m.factory(ctx, spec)
 	if err != nil {
-		return nil, m.joinFailure(participantID, "create pair", meshError("create pair", participantID, remoteID, err), created)
+		return nil, m.joinFailure(participantID, "create pair", meshError("create pair", participantID, remoteID, err), append(created, &meshPair{resource: resource}))
 	}
 	if nilPairResource(resource) {
 		return nil, m.joinFailure(participantID, "create pair", meshError("create pair", participantID, remoteID, rooms.ErrMeshNilPairResource), created)
@@ -362,7 +362,7 @@ func closeMeshPairs(pairs []*meshPair) (closeErr error) {
 	seen := make(map[*meshPair]struct{}, len(pairs))
 	for index := len(pairs) - 1; index >= 0; index-- {
 		pair := pairs[index]
-		if pair == nil {
+		if pair == nil || nilPairResource(pair.resource) {
 			continue
 		}
 		if _, exists := seen[pair]; exists {
