@@ -44,7 +44,7 @@
   "free_space_before_cleanup_bytes": 73822879744,
   "free_space_before_run_bytes": 74753818624,
   "free_space_limitation": "free space was measured immediately before and after cleanup; background filesystem activity is not controlled",
-  "observed_at": "2026-09-11T21:30:22.326818+00:00",
+  "observed_at": "2026-09-11T22:14:59.266147+00:00",
   "reproducible_scratch_bytes_before_cleanup": 266984251,
   "reproducible_scratch_bytes_retained_after_cleanup": 0,
   "reuse_identity": {

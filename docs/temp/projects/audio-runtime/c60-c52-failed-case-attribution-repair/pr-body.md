@@ -27,8 +27,8 @@ cross-run identity, and changed peer boundaries fail closed.
 - Focused C60 attribution controls: one valid case accepted; ten invalid controls rejected.
 - Classification: `NON_REPRODUCED` within the exact 22-cell matrix; the immutable source report remains FAILED and is not relabelled.
 - Replay: immutable artifact-0/C16 software-file positive parity and real
-  mutated-fixture rejection PASS in fresh run `replay-20260911T213009Z-85020`
-  in 0.178985 seconds; positive exit 0, mutated-fixture exit 1, exact
+  mutated-fixture rejection PASS in fresh run `replay-20260911T221113Z-11096`
+  in 0.229305 seconds; positive exit 0, mutated-fixture exit 1, exact
   4800-byte PCM (`0e769b4a...`) and clean process groups; no credentials/live
   Realtime/native or acoustic claim.
 
@@ -48,6 +48,20 @@ The same bounded normal/coverage control was refreshed on evidence checkpoint
 normal package time and 0.426s coverage package time at 27.7%; the three
 transport/events source-file hashes are unchanged from the preserved control.
 
+## Latest script-CI rejection
+
+The prior PR447 Script CI run `34649901968` tested head `a94026635d8fc4dec087555cb13c70a2924509a0`
+against accepted `origin/main` `d5d6f843` (merge ref `63c61b5`). Every check
+passed except `CI (integration)`, whose production-binary replay step failed
+the C47-owned `TestAgentBinaryTest45HighRateToolAudioRegression/trial_12`:
+`171191/177591` compared samples, `6400` lost, with playback
+`DroppedSamples=0`, `OverflowEvents=0`, and `DiscardedSamples=0`.
+The exact job is
+`https://github.com/portpowered/go-agent-harness/actions/runs/34649901968/job/103429367606`.
+This is retained as an external C47 production-boundary observation; C60 makes
+no production or C47-path change. The new checkpoint below changes only owned
+C60/C52 evidence and is resubmitted to the same PR; CI is not claimed green.
+
 The final local evidence gate is `verify.py --mode all`. The prior script-CI
 static job `34613973921` tested head `efde4d49` and rejected the C47-owned
 architecture baseline drift (`agent-cli/internal/transport/cli`: baseline 147,
@@ -55,7 +69,9 @@ current 148); all other static steps passed. No C60-owned path overlaps that
 transport baseline. C47/C55's accepted integration is now present in
 `origin/main` at `d5d6f843` and in this branch's merge checkpoint
 `b53144eb`. This changed head is ready for script CI. CI is not claimed green
-and independent review remains separate. The current exact PR head and its
-evidence binding are recorded in `provenance.json`; the script-owned checks are
-not claimed green or polled here. No review, merge, or live/native probe
-acceptance is claimed.
+and independent review remains separate. The tested source/evidence revision
+recorded in `provenance.json` is `a94026635d8fc4dec087555cb13c70a2924509a0`;
+this delivery checkpoint adds only refreshed owned evidence and handoff
+metadata on top of that candidate. The script-owned checks are not claimed
+green or polled here. No review, merge, or live/native probe acceptance is
+claimed.
