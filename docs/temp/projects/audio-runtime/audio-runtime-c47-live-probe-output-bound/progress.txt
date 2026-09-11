@@ -34,4 +34,4 @@ Committed-head final evidence
 - Final focused regression set after the checkpoint commit: C47 capture/staging/all controls PASS, private unchanged C45 controls PASS, syntax compilation PASS, and git diff --check PASS.
 
 Next action
-- Push 0d6de1e plus the final evidence checkpoint, update/open the PR, and hand off to the script CI gate without polling it.
+- PR #439 is open from the pushed candidate branch. The implementation and committed-head probe evidence are handed to the script CI gate; no CI result is claimed and no CI polling is performed.
