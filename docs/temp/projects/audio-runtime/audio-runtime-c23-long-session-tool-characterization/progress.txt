@@ -452,3 +452,53 @@ C23 current-main integration and preserved recording failure — 2026-09-11T22:5
   regressions, and only then push/update PR #415 and return `ACCEPTED` to
   script-owned CI without polling. CI, review, merge, vertical, device,
   acoustic and project-completion claims remain open.
+
+C23 fresh-head characterization and preserved first failure — 2026-09-11T23:00Z
+
+- Reverified the admitted task before this run; the isolated branch remains
+  `codex/audio-runtime-c23-long-session-tool-characterization` and the worktree
+  remains the PRD worktree. `origin/main` is still
+  `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`; candidate HEAD is
+  `9fe51b1bc4a10da50825384f9b1847daa578c72d`, with clean status and exactly
+  the seven admitted C23 paths in the branch diff. The earlier non-reset main
+  integration and all predecessor checkpoints remain preserved.
+- Fresh `prepare --source-revision
+  d5d6f84363d8569d5dc1a59985f8d45cf50e1d06 --child-timeout-seconds 60`
+  passed. It rebound the candidate, source, branch, ancestry and fixture
+  provenance with 931 build inputs, build-input SHA-256
+  `f53078d102a3ede38d726b1a449709d17adb4f0ad91a7c278fb2a7dc83cc6952`,
+  consumer SHA-256
+  `754cedfeb025349abeaf422f6e006995c9575bb4e824e0cd4945de2aa1c21b4e`,
+  same-source YUI SHA-256
+  `ab769e04aa8029ede164a4f7b88e3363b02316c3d165fa13051a333a1a81280c`,
+  and fixture SHA-256
+  `7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e`.
+  `verify-provenance --negative-control tampered-fixture` rejected the altered
+  fixture digest as expected; Python compilation and `git diff --check` passed.
+- Fresh bounded `controls --child-timeout-seconds 60 --total-timeout-seconds
+  600` stopped at its first recording-on 16-turn case after approximately
+  `2921ms`. The immutable first-failure record is
+  `artifacts/first-failures/9fe51b1bc4a10da50825384f9b1847daa578c72d-controls.json`;
+  its child report is
+  `artifacts/runs/20260911T230039Z-controls-on-16/consumer-report.json`.
+  The child completed with 355 events, 32 tool calls/results, 2,048 public PCM
+  bytes, provider-authored completion and clean shutdown, but recording usage
+  reports `accepted_audio=0`, `audio_bytes=0` and no `audio/out-000.pcm`; the
+  actual manifest contains only provider/client/agent/session transcript files.
+  The v2 failure record preserves current-head/source/fixture/build-input and
+  binary hashes, expected-versus-actual values, exit status, and bounded trace
+  links. This reproduces the known C53/C56 production recording boundary; no
+  C23 oracle was weakened and no unchanged retry was run.
+- Accumulated C21
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` passed
+  normal `-count=5` in `13.091s` and race `-count=1` in `12.725s` from
+  `agent-cli/test/integration`; no shared or C21 file changed. Matrix,
+  shipped-regression, self-check and report were intentionally not claimed
+  after the first recording failure.
+- Disposition remains `CONTINUE`, not `ACCEPTED`. The exact next action is for
+  the reviewed recording/media repair to reach `origin/main` (or for primary to
+  issue an explicit ownership decision). Then fetch that exact main, rebuild and
+  rebind provenance, rerun the complete bounded C23 sequence plus C21, commit
+  and push the same task branch, update PR #415, and return `ACCEPTED` to
+  script-owned CI without polling. CI, review, merge, vertical, device,
+  acoustic and project-completion claims remain open.
