@@ -87,3 +87,9 @@ This remains executor evidence only; CI, independent review, guarded merge, vert
 Evidence-only checkpoint `c86fb9a6687dfcb38e35447b42242ca64d6742db` is pushed to `codex/audio-runtime-c47-live-probe-output-bound` and contains the repair ledger, focused reports and exact raw staged run. No executable Python source, Go source, immutable artifact, fixture or peer path changed after tested source `7b03664b9c355709c592998026b093ab547f6290`.
 
 PR #439 is open at this head against `main` and is ready for the script-owned CI gate. No CI result, independent review, guarded merge, vertical acceptance or project acceptance is claimed here.
+
+## Latest script-CI rejection and next dependency
+
+The latest exact rejection is run `34584105269`, job `103214186726`, at head `5efc6a1e0f5e7d1c65debf562b53758b8b931125`. Every other required check passed. The only failure is the separate C53-owned production-binary remote-device control `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst` (`session_tool_audio_remote_e2e_test.go:183`): `41.88s`, `rendered_pcm=463200`, `expected_pcm=174391`, `final_marker=false`, seven tool calls/results, no queue/drop/overflow/discard loss, and the child still running. The full log is preserved at `/tmp/audio-runtime-c47-ci-integration-34584105269.log`.
+
+C47 has no authorized source path in this failure; its Python/evidence candidate remains locally verified. The active C53 runtime repair must reach reviewed main first. After that merge, C47 will integrate the new main, rerun the immutable staged probe and focused controls, and submit the same PR through script CI. No CI green, review, merge, vertical acceptance or project acceptance is claimed.
