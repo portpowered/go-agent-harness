@@ -61,7 +61,11 @@ func TestNewWAVSourcePreservesUnsupportedFormatCause(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("close WAV fixture: %v", err)
+		}
+	}()
 	_, err = NewWAVSource(path, file)
 	if !errors.Is(err, ErrFormat) || !errors.Is(err, audio.ErrUnsupportedFormat) {
 		t.Fatalf("NewWAVSource error = %v, want runtime and audio format identities", err)

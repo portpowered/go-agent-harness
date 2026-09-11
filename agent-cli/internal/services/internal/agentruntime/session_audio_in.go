@@ -25,14 +25,19 @@ import (
 func PrepareSessionAudioInputs(paths []string) ([]ScheduledAudioInput, error) {
 	return prepareScheduledAudioInputs(paths)
 }
+
+func sessionAudioParentContext(parent context.Context) context.Context {
+	if parent != nil {
+		return parent
+	}
+	return context.Background()
+}
+
 func StartSessionAudioInterruptionsOnBrowserInvocation(parent context.Context, events <-chan webmcp.BrokerEvent, inputs []ScheduledAudioInput) (<-chan ScheduledAudioInput, func()) {
 	return StartSessionAudioInterruptionsOnBrowserTool(parent, events, "", inputs)
 }
 func StartSessionAudioInterruptionsOnBrowserTool(parent context.Context, events <-chan webmcp.BrokerEvent, toolName string, inputs []ScheduledAudioInput) (<-chan ScheduledAudioInput, func()) {
-	if parent == nil {
-		parent = context.Background()
-	}
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancel(sessionAudioParentContext(parent))
 	mapped := make(chan audioinput.InvocationEvent, 1)
 	go func() {
 		defer close(mapped)
@@ -75,7 +80,7 @@ func RunSessionWithAudioInput(ctx context.Context, out io.Writer, opts SessionRu
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
+	defer func() { runErr = errors.Join(runErr, claim.release()) }()
 	opts.ClientOwnsAudioTurnBoundaries = true
 	return runSessionWithAudioInputPlan(ctx, out, input, "", SessionTextSeed{}, func() (sessionRuntimePlan, error) {
 		return planSessionRuntime(opts)
@@ -98,10 +103,17 @@ func RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration(c
 	if err != nil {
 		return err
 	}
-	defer func() { _ = claim.release() }()
+	defer func() { runErr = errors.Join(runErr, claim.release()) }()
 	opts.ClientOwnsAudioTurnBoundaries = true
 	return runSessionWithAudioInputPlan(ctx, out, input, audioOutPath, seed, func() (sessionRuntimePlan, error) {
-		return planSessionForAudioInput(opts, systemPrompt)
+		if opts.ReplayPath != "" && (opts.SessionInferencer == nil || strings.TrimSpace(systemPrompt) == "") {
+			return planSessionRuntime(opts)
+		}
+		instructions, err := resolveSessionInstructions(opts, systemPrompt)
+		if err != nil {
+			return sessionRuntimePlan{}, err
+		}
+		return planSessionWithResolvedInstructions(opts, instructions)
 	})
 }
 
@@ -121,17 +133,6 @@ func prepareInstructionAudioSession(opts *SessionRunOptions, audioOutPath string
 	}
 	claim, err := ensureSessionRecordingClaim(opts)
 	return input, claim, err
-}
-
-func planSessionForAudioInput(opts SessionRunOptions, systemPrompt string) (sessionRuntimePlan, error) {
-	if opts.ReplayPath != "" && (opts.SessionInferencer == nil || strings.TrimSpace(systemPrompt) == "") {
-		return planSessionRuntime(opts)
-	}
-	instructions, err := resolveSessionInstructions(opts, systemPrompt)
-	if err != nil {
-		return sessionRuntimePlan{}, err
-	}
-	return planSessionWithResolvedInstructions(opts, instructions)
 }
 
 func runSessionWithAudioInputPlan(ctx context.Context, out io.Writer, input SessionAudioInput, audioOutPath string, seed SessionTextSeed, planFactory func() (sessionRuntimePlan, error)) (runErr error) {
@@ -286,8 +287,11 @@ func openSessionWAVSource(path string) (audio.AudioSource, error) {
 	}
 	source, err := audio.NewWAVSource(path, reader)
 	if err != nil {
-		_ = reader.Close()
-		return nil, service.ClassifyOpenError(path, errors.Join(audioinput.ErrFormat, audio.ErrUnsupportedFormat, err))
+		formatErr := service.ClassifyOpenError(path, errors.Join(audioinput.ErrFormat, audio.ErrUnsupportedFormat, err))
+		if closeErr := reader.Close(); closeErr != nil {
+			formatErr = errors.Join(formatErr, &audioinput.Error{Kind: audioinput.KindClose, Path: path, Err: closeErr})
+		}
+		return nil, formatErr
 	}
 	return source, err
 }

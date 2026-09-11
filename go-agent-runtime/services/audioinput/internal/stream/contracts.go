@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 func (s *Service) ValidateSpec(input InputSpec, conflict error) error {
@@ -50,8 +51,13 @@ func (s *Service) AdaptError(err error, path string, interruptibleKind ErrorKind
 func (s *Service) ClassifyOpenError(path string, err error) error {
 	kind := KindUnreadable
 	switch {
-	case errors.Is(err, audio.ErrUnsupportedFormat) || errors.Is(err, ErrFormat):
+	case errors.Is(err, audio.ErrUnsupportedFormat) || errors.Is(err, ErrFormat) ||
+		errors.Is(err, wavio.ErrMalformed) || errors.Is(err, wavio.ErrTruncated) ||
+		errors.Is(err, wavio.ErrUnsupported) || errors.Is(err, wavio.ErrEmpty):
 		kind = KindFormat
+		if !errors.Is(err, audio.ErrUnsupportedFormat) {
+			err = errors.Join(audio.ErrUnsupportedFormat, err)
+		}
 	case errors.Is(err, fs.ErrNotExist):
 		kind = KindMissing
 	case errors.Is(err, audio.ErrNilStream):

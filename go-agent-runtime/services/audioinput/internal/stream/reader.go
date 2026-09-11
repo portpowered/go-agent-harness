@@ -42,20 +42,14 @@ func (r *ReaderSource) Read(destination []byte) (int, error) {
 		return 0, io.EOF
 	}
 	r.mu.RLock()
-	ctx := r.ctx
+	bound := r.ctx
 	r.mu.RUnlock()
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return readOnceContext(ctx, r.reader, r, destination)
+	return readOnceContext(contextOrBackground(bound), r.reader, r, destination)
 }
 
 func (r *ReaderSource) ReadFrame(ctx context.Context, destination []int16) error {
 	if len(destination) != audio.FrameSize {
 		return &audio.FrameSizeError{Operation: "read", Got: len(destination), Want: audio.FrameSize}
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	r.mu.RLock()
 	bound := r.ctx
@@ -64,11 +58,9 @@ func (r *ReaderSource) ReadFrame(ctx context.Context, destination []int16) error
 	if closed {
 		return &Error{Kind: KindRead, Err: errors.New("reader is closed")}
 	}
-	if bound != nil {
-		ctx = bound
-	}
+	readCtx := readerContext(ctx, bound)
 	encoded := make([]byte, readerFrameBytes)
-	count, err := readFullContext(ctx, r.reader, r, encoded)
+	count, err := readFullContext(readCtx, r.reader, r, encoded)
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 		return err
 	}
@@ -91,23 +83,18 @@ func (r *ReaderSource) ReadSamples(ctx context.Context, destination []int16) (in
 	if r == nil {
 		return 0, io.EOF
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	r.mu.RLock()
 	bound, closed := r.ctx, r.closed
 	r.mu.RUnlock()
 	if closed {
 		return 0, &Error{Kind: KindRead, Err: errors.New("reader is closed")}
 	}
-	if bound != nil {
-		ctx = bound
-	}
+	readCtx := readerContext(ctx, bound)
 	if len(destination) == 0 {
 		return 0, nil
 	}
 	encoded := make([]byte, len(destination)*2)
-	count, err := readFullContext(ctx, r.reader, r, encoded)
+	count, err := readFullContext(readCtx, r.reader, r, encoded)
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 		return 0, err
 	}
@@ -173,9 +160,9 @@ func readFullContext(ctx context.Context, reader io.Reader, owner *ReaderSource,
 			case got := <-result:
 				return got.n, got.err
 			case <-ctx.Done():
-				_ = closer.Close()
+				closeErr := closer.Close()
 				got := <-result
-				return got.n, ctx.Err()
+				return got.n, contextCancellationError(ctx, closeErr)
 			}
 		}
 	}
@@ -204,9 +191,9 @@ func readOnceContext(ctx context.Context, reader io.Reader, owner *ReaderSource,
 			case got := <-result:
 				return got.n, got.err
 			case <-ctx.Done():
-				_ = closer.Close()
+				closeErr := closer.Close()
 				<-result
-				return 0, ctx.Err()
+				return 0, contextCancellationError(ctx, closeErr)
 			}
 		}
 	}
@@ -255,8 +242,7 @@ func readFullWithDeadline(ctx context.Context, deadliner deadlineReader, reader 
 		if err != nil && isTimeout(err) && count == 0 {
 			continue
 		}
-		_ = deadliner.SetReadDeadline(time.Time{})
-		return count, err
+		return count, errors.Join(err, clearReadDeadline(deadliner))
 	}
 }
 
@@ -279,8 +265,7 @@ func readWithDeadline(ctx context.Context, deadliner deadlineReader, reader io.R
 		if err != nil && isTimeout(err) && n == 0 {
 			continue
 		}
-		_ = deadliner.SetReadDeadline(time.Time{})
-		return n, err
+		return n, errors.Join(err, clearReadDeadline(deadliner))
 	}
 }
 
@@ -295,9 +280,9 @@ func readFullWithClose(ctx context.Context, reader io.Reader, destination []byte
 	case got := <-result:
 		return got.n, got.err
 	case <-ctx.Done():
-		_ = closer.Close()
+		closeErr := closer.Close()
 		got := <-result
-		return got.n, ctx.Err()
+		return got.n, contextCancellationError(ctx, closeErr)
 	}
 }
 
@@ -312,10 +297,31 @@ func readOnceWithClose(ctx context.Context, reader io.Reader, destination []byte
 	case got := <-result:
 		return got.n, got.err
 	case <-ctx.Done():
-		_ = closer.Close()
+		closeErr := closer.Close()
 		got := <-result
-		return got.n, ctx.Err()
+		return got.n, contextCancellationError(ctx, closeErr)
 	}
+}
+
+func contextCancellationError(ctx context.Context, closeErr error) error {
+	if closeErr == nil {
+		return ctx.Err()
+	}
+	return errors.Join(ctx.Err(), closeErr)
+}
+
+func readerContext(ctx, bound context.Context) context.Context {
+	if bound != nil {
+		return bound
+	}
+	return contextOrBackground(ctx)
+}
+
+func clearReadDeadline(deadliner deadlineReader) error {
+	if err := deadliner.SetReadDeadline(time.Time{}); err != nil {
+		return fmt.Errorf("clear reader deadline: %w", err)
+	}
+	return nil
 }
 
 func isTimeout(err error) bool {

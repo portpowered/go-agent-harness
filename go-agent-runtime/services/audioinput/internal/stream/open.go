@@ -69,7 +69,7 @@ func OpenWAVFile[T ReadSeekCloser](path string, open func(string) (T, error)) (a
 	}
 	source, err := NewWAVSource(path, reader)
 	if err != nil {
-		_ = reader.Close()
+		err = errors.Join(err, reader.Close())
 	}
 	return source, err
 }
@@ -134,13 +134,11 @@ func openStdin(input InputSpec, opener Opener, rate int) (*ManagedSource, error)
 		return nil, err
 	}
 	if opener.OpenFile == nil {
-		_ = reader.Close()
-		return nil, ErrUnavailable
+		return nil, errors.Join(ErrUnavailable, reader.Close())
 	}
 	source, err := opener.OpenFile(input.Path, reader)
 	if err != nil {
-		_ = reader.Close()
-		return nil, classifyOpen(opener, input.Path, err)
+		return nil, errors.Join(classifyOpen(opener, input.Path, err), reader.Close())
 	}
 	managed := managedSource(input, source, rate, false)
 	managed.Reader, managed.CloseOnCancel, managed.OwnedInput = reader, input.CloseStdinOnCancel, reader
@@ -167,12 +165,13 @@ func checkFilePath(path string, source audio.AudioSource, opener Opener) error {
 	}
 	info, err := opener.CheckPath(path)
 	if err != nil {
-		_ = source.Close()
-		return classifyOpen(opener, path, err)
+		return errors.Join(classifyOpen(opener, path, err), source.Close())
 	}
 	if info != nil && info.IsDir() {
-		_ = source.Close()
-		return &Error{Kind: KindUnreadable, Path: path, Err: fmt.Errorf("path is a directory; provide a .wav, .pcm, or .raw file")}
+		return errors.Join(
+			&Error{Kind: KindUnreadable, Path: path, Err: fmt.Errorf("path is a directory; provide a .wav, .pcm, or .raw file")},
+			source.Close(),
+		)
 	}
 	return nil
 }

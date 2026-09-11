@@ -20,8 +20,7 @@ func (s *Service) ShouldStop(message messages.StreamMessage, policy TurnStopPoli
 	if policy.WaitForClose {
 		return callMessage(policy.Terminal, message) || message.Type == messages.StreamTypeSessionClose
 	}
-	switch message.Type {
-	case messages.StreamTypeMessageEnd:
+	if message.Type == messages.StreamTypeMessageEnd {
 		if policy.MessageEndAdmitted != nil && !policy.MessageEndAdmitted() {
 			return false
 		}
@@ -29,11 +28,11 @@ func (s *Service) ShouldStop(message messages.StreamMessage, policy TurnStopPoli
 			return false
 		}
 		return true
-	case messages.StreamTypeSessionClose:
-		return true
-	default:
-		return callMessage(policy.Terminal, message)
 	}
+	if message.Type == messages.StreamTypeSessionClose {
+		return true
+	}
+	return callMessage(policy.Terminal, message)
 }
 
 func call(f func() bool) bool { return f != nil && f() }

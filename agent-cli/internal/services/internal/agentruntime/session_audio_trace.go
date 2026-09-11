@@ -2,8 +2,14 @@ package agentruntime
 
 import (
 	"bytes"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
+)
+
+const (
+	traceProviderWireSend    = "provider_wire_send"
+	traceProviderWireReceive = "provider_wire_receive"
 )
 
 type TraceRuntimeObserver struct {
@@ -12,7 +18,7 @@ type TraceRuntimeObserver struct {
 }
 
 func (o TraceRuntimeObserver) ObserveSessionRuntime(event SessionRuntimeObservation) {
-	redact := event.Kind == "tool_call" || event.Kind == "tool_result" || event.Kind == "provider_wire_send" || event.Kind == "provider_wire_receive"
+	redact := event.Kind == sessionToolEventTypeCall || event.Kind == sessionToolEventTypeResult || event.Kind == traceProviderWireSend || event.Kind == traceProviderWireReceive
 	if len(o.Redactions) > 0 {
 		if redact {
 			event.Payload = append([]byte(nil), event.Payload...)

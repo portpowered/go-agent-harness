@@ -139,7 +139,7 @@ func convertPCM(pcm []byte, sourceRate, providerRate int) ([]byte, error) {
 		return nil, fmt.Errorf("convert session input from %d Hz to provider rate %d Hz: %w", sourceRate, providerRate, err)
 	}
 	if sourceRate == providerRate {
-		return append([]byte(nil), pcm...), nil
+		return pcm, nil
 	}
 	samples, err := codec.DecodePCM16WithLimit(pcm, len(pcm))
 	if err != nil {

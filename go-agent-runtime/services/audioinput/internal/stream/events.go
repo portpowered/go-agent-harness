@@ -5,11 +5,15 @@ import "context"
 // ReleaseOnEvent turns a validated host event into one finite input release.
 // The runtime owns cancellation, cloning and channel closure; event decoding
 // remains in the host adapter.
-func releaseOnEvent[E, V any](parent context.Context, events <-chan E, inputs []V, match func(E) bool, clone func(V) V) (<-chan V, func()) {
-	if parent == nil {
-		parent = context.Background()
+func contextOrBackground(ctx context.Context) context.Context {
+	if ctx != nil {
+		return ctx
 	}
-	ctx, cancel := context.WithCancel(parent)
+	return context.Background()
+}
+
+func releaseOnEvent[E, V any](parent context.Context, events <-chan E, inputs []V, match func(E) bool, clone func(V) V) (<-chan V, func()) {
+	ctx, cancel := context.WithCancel(contextOrBackground(parent))
 	out := make(chan V, len(inputs))
 	go func() {
 		defer close(out)

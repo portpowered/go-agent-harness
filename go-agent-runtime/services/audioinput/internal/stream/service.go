@@ -32,7 +32,7 @@ func (s *Service) Validate(input audioinput.Input) error {
 	return validateRates(input.Path, input.SourceSampleRate, input.ProviderSampleRate)
 }
 
-func (s *Service) Read(ctx context.Context, input audioinput.Input) ([]byte, int, error) {
+func (s *Service) Read(ctx context.Context, input audioinput.Input) (pcm []byte, rate int, runErr error) {
 	if err := s.Validate(input); err != nil {
 		return nil, 0, err
 	}
@@ -41,13 +41,13 @@ func (s *Service) Read(ctx context.Context, input audioinput.Input) ([]byte, int
 		return nil, 0, withPath(input.Path, err, audioinput.KindFormat)
 	}
 	if owned {
-		defer func() { _ = source.Close() }()
+		defer func() { runErr = errors.Join(runErr, closeStreamSource(input.Path, source)) }()
 	}
-	rate := input.SourceSampleRate
+	rate = input.SourceSampleRate
 	if rate <= 0 {
 		rate = sourceRate(source, audio.SampleRate)
 	}
-	pcm, rate, err := ReadPCM(ctx, source, rate)
+	pcm, rate, err = ReadPCM(ctx, source, rate)
 	if err != nil {
 		return nil, 0, withPath(input.Path, err, audioinput.KindRead)
 	}
@@ -69,9 +69,7 @@ type streamState struct {
 }
 
 func (s *Service) Stream(ctx context.Context, input audioinput.Input, loop audioinput.SessionLoop) (runErr error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	streamCtx := contextOrBackground(ctx)
 	if err := s.Validate(input); err != nil {
 		return err
 	}
@@ -83,13 +81,13 @@ func (s *Service) Stream(ctx context.Context, input audioinput.Input, loop audio
 		defer func() { runErr = errors.Join(runErr, closeStreamSource(input.Path, source)) }()
 	}
 	if bound, ok := source.(interface{ BindContext(context.Context) }); ok {
-		bound.BindContext(ctx)
+		bound.BindContext(streamCtx)
 	}
-	state, err := s.newStreamState(ctx, input, source)
+	state, err := s.newStreamState(streamCtx, input, source)
 	if err != nil {
 		return err
 	}
-	return s.runStream(ctx, input, loop, source, state)
+	return s.runStream(streamCtx, input, loop, source, state)
 }
 
 func closeStreamSource(path string, source audio.AudioSource) error {
