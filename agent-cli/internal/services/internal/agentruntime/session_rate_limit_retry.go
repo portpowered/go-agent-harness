@@ -1,7 +1,6 @@
 package agentruntime
 
 import (
-	"regexp"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -16,19 +15,10 @@ const (
 	maxLegacyStatusDetailBytes = runtimeProviders.MaxLegacyStatusDetailBytes
 )
 
-// rateLimitRetryDelayPattern remains the pre-existing architecture-baseline
-// symbol until the owning package retires that shared ledger entry. Parsing is
-// provider-owned; this compatibility symbol is intentionally not consulted by
-// the CLI runtime.
-var rateLimitRetryDelayPattern = regexp.MustCompile(`(?i)\bplease\s+try\s+again\s+in\s+((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+))s\b`) //nolint:gochecknoglobals // retained pre-existing baseline symbol
-
 // terminalPolicy constructs the pure provider policy at the service boundary.
 // The CLI retains these names for compatibility while scheduling and response
 // lifecycle decisions remain owned by the session runtime.
 func terminalPolicy() runtimeProviders.TerminalPolicy {
-	// Keep the pre-existing baseline symbol live without reintroducing parsing
-	// or a second eligibility/normalization branch in the CLI.
-	_ = rateLimitRetryDelayPattern
 	return runtimeProvidersWire.NewTerminalPolicy()
 }
 
