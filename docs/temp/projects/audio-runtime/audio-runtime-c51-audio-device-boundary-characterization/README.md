@@ -2,7 +2,7 @@
 
 This is an evidence-only characterization for the admitted task
 `audio-runtime-c51-audio-device-boundary-characterization`. The production
-source is pinned to the fetched integrated main `bb29005d0bb545db5e08ffda0205929b021d4fc1`; the startup
+source is pinned to the refreshed integrated main `cdf416a8060251a6b4bbf3680241f1ee79953cff`; the startup
 integration `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main
 `7f73c8b3b4ebc99b55b8bb5e802beff024385407`, and baseline ancestry are recorded
 in `provenance.json`. No production, shared
