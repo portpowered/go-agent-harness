@@ -67,6 +67,11 @@
       "sha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa"
     }
   ],
+  "boundaryMap": {
+    "boundaryCount": 9,
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/boundary-map.json",
+    "sha256": "54ff7dbfbc0cd51104441817f7d624629d97095629958c1e788b07bd2277d50e"
+  },
   "contractRevision": "audio-runtime-v1",
   "project": "audio-runtime",
   "schema": "audio-runtime-c51.provenance.v2",
@@ -81,31 +86,36 @@
   "scripts": [
     {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/verify.py",
-      "sha256": "edb7795e28a9354a65256313d4dbfe42dc91c017a1f8dcd5b21a0c00026a5f27"
+      "sha256": "fee3c5110383a9c8056dfac338cdda2b7de3e592ed4c0c06884e0743a990048f"
     }
   ],
   "shippedBuildManifest": {
+    "inputCount": 2181,
+    "inputTreeSha256": "d500094eeb96dd3b2241d56962490cf3874f45bbdd2a99c3ae72d9a2cb31f8fe",
+    "nonGoInputCount": 329,
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/evidence/shipped-build.json",
-    "sha256": "880abad60785f43d24a7bff558d11789d3f655f5ca230519753ac95d93ced9aa"
+    "sha256": "2c73940d55dd954b6b3a9543f14894787d7887202269ca0d1f5221edde2df4a0",
+    "sourceRevision": "bb29005d0bb545db5e08ffda0205929b021d4fc1",
+    "testedRevision": "878d5293ac3191d74bc726e95758cf2fce854491"
   },
   "source": {
     "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
     "branch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
     "candidateStatusAtCapture": "",
     "candidateWasCleanAtCapture": true,
-    "cleanCandidateSHA": "7afa3816b68199db8f9ba50c29b90ccfe2828c8d",
-    "currentMainRevision": "bb29005d0bb545db5e08ffda0205929b021d4fc1",
+    "cleanCandidateSHA": "8ca247467b3a159591be7dc73dd38d64a9dd6f4d",
+    "currentMainRevision": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
     "expectedBranch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
     "fetchedMain": {
       "identityVerified": true,
       "ref": "origin/main",
-      "revision": "bb29005d0bb545db5e08ffda0205929b021d4fc1"
+      "revision": "cdf416a8060251a6b4bbf3680241f1ee79953cff"
     },
     "planningMainRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
     "requiredAncestry": {
       "fetchedMain": {
-        "isAncestor": true,
-        "revision": "bb29005d0bb545db5e08ffda0205929b021d4fc1"
+        "isAncestor": false,
+        "revision": "cdf416a8060251a6b4bbf3680241f1ee79953cff"
       },
       "planningMain": {
         "isAncestor": true,
@@ -126,7 +136,7 @@
     "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
   },
   "storage": {
-    "freeBytesAtGeneration": 140048277504,
+    "freeBytesAtGeneration": 132774363136,
     "requiredCompileReserveBytes": 2147483648
   },
   "task": "audio-runtime-c51-audio-device-boundary-characterization",
