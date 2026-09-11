@@ -1,0 +1,29 @@
+{
+  "cleanup": {
+    "group_survivor": false,
+    "kill_error": "PermissionError: [Errno 1] Operation not permitted",
+    "kill_sent": false,
+    "parent_exit_code": -15,
+    "reason": "child_timeout",
+    "term_error": null,
+    "term_sent": true
+  },
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "-c",
+    "import os,time; child=os.fork(); time.sleep(30) if child==0 else time.sleep(30)"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/scratch/planning-main/go-agent-runtime",
+  "duration_seconds": 1.582853834144771,
+  "ended_at": "2026-09-11T14:52:22.410677+00:00",
+  "exit_code": -15,
+  "first_failure": null,
+  "output_overflow": false,
+  "reader_survivor": false,
+  "started_at": "2026-09-11T14:52:20.827862+00:00",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 0,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "timed_out": true
+}

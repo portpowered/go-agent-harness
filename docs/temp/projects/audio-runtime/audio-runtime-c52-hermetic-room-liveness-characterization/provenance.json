@@ -21,15 +21,15 @@
     },
     "replay": {
       "path": "replay-report.json",
-      "sha256": "f05ab04d682c3973984e5c8cb201758cf1e4568ccdc91d05416f1b11abafb683"
+      "sha256": "8673a39d3b8b3abbfa676ec72215e9a3e7a72ecfec931c4f8f9f4fa3d288f960"
     },
     "replay_wrapper": {
       "path": "verify_replay.py",
       "sha256": "f59e11c0329828487b05aba828a10fa7597d9a0936d640e3067f376864fa08c1"
     }
   },
-  "candidate_evidence_parent_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
-  "candidate_source_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+  "candidate_evidence_parent_revision": "efde4d49962ff7a96d5fd0d8622cfcb9c71aa667",
+  "candidate_source_revision": "efde4d49962ff7a96d5fd0d8622cfcb9c71aa667",
   "ci_observation": {
     "attempt": 1,
     "captured_at": "2026-09-11T06:43:19.163889+00:00",
@@ -117,11 +117,11 @@
       "GONOSUMDB": "",
       "GOPRIVATE": "",
       "GOPROXY": "https://proxy.golang.org,direct",
-      "HOME": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-dkq9y2j_/home",
+      "HOME": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-2pmwzxvg/home",
       "LANG": "C",
       "LC_ALL": "C",
       "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-      "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-dkq9y2j_/gotmp",
+      "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-2pmwzxvg/gotmp",
       "TZ": "UTC"
     },
     "removed_secret_keys": [
@@ -143,7 +143,7 @@
       "GOWORK"
     ]
   },
-  "evidence_candidate_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+  "evidence_candidate_revision": "efde4d49962ff7a96d5fd0d8622cfcb9c71aa667",
   "factory": {
     "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
     "server": "http://127.0.0.1:7439",
@@ -184,7 +184,7 @@
   },
   "local_regressions": {
     "path": "regressions/summary.json",
-    "sha256": "c79a3f864c4b9402bdab5304b8b1dc53d3c760806f30c1db0f2de9b09ff1526e",
+    "sha256": "b50bb04866a05332b4965e160e59bc42153205cd7d55ed1e61185b5f97ed82f1",
     "summary": {
       "checks": {
         "normal": {
@@ -219,8 +219,8 @@
               "./services/session/internal/live"
             ],
             "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go-agent-runtime",
-            "duration_seconds": 15.373505709227175,
-            "ended_at": "2026-09-11T14:53:12.159281+00:00",
+            "duration_seconds": 16.690798500087112,
+            "ended_at": "2026-09-11T15:51:15.135238+00:00",
             "exit_code": 0,
             "first_failure": {
               "line": 1,
@@ -229,14 +229,14 @@
             },
             "output_overflow": false,
             "reader_survivor": false,
-            "started_at": "2026-09-11T14:52:56.785548+00:00",
+            "started_at": "2026-09-11T15:50:58.444132+00:00",
             "stderr_bytes": 309,
             "stderr_sha256": "b72b0be0ce5f6be94d18712f76c4ebbc2061f398cdf8f8d6668515346518b6f1",
             "stdout_bytes": 203,
-            "stdout_sha256": "13fee55e0e66ed8a0e83d4a918ed5ffc90122b37a7d37e662bec4f52fd0e688e",
+            "stdout_sha256": "7dc5dab6a6ded376f4772352057c944d7c4ab059d81ba87ed9bec20fb69f32eb",
             "timed_out": false
           },
-          "source_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938"
+          "source_revision": "efde4d49962ff7a96d5fd0d8622cfcb9c71aa667"
         },
         "race": {
           "command": [
@@ -270,20 +270,20 @@
               "./services/rooms/internal/lifecycle"
             ],
             "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go-agent-runtime",
-            "duration_seconds": 7.8623442077077925,
-            "ended_at": "2026-09-11T14:53:20.037435+00:00",
+            "duration_seconds": 8.477605083025992,
+            "ended_at": "2026-09-11T15:51:23.629880+00:00",
             "exit_code": 0,
             "first_failure": null,
             "output_overflow": false,
             "reader_survivor": false,
-            "started_at": "2026-09-11T14:53:12.175047+00:00",
+            "started_at": "2026-09-11T15:51:15.152196+00:00",
             "stderr_bytes": 0,
             "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "stdout_bytes": 103,
-            "stdout_sha256": "20636505b995e79da7fec0aa60142aa543d1f43285fb60eadefcfe9668a9b0b2",
+            "stdout_sha256": "ad28be49b9dfdc37f3c80f96b24784a7fd938a80213bfea6fb57e0c468b7d7e6",
             "timed_out": false
           },
-          "source_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938"
+          "source_revision": "efde4d49962ff7a96d5fd0d8622cfcb9c71aa667"
         }
       },
       "passes": true,
@@ -291,11 +291,11 @@
       "storage": {
         "binary_output_bytes": 0,
         "cleanup_verified": true,
-        "fixture_report_bytes": 9937,
-        "free_space_after_cleanup_bytes": 99154477056,
-        "free_space_before_cleanup_bytes": 98516561920,
-        "free_space_before_run_bytes": 99162021888,
-        "reproducible_scratch_bytes_before_cleanup": 582615261,
+        "fixture_report_bytes": 9911,
+        "free_space_after_cleanup_bytes": 93913202688,
+        "free_space_before_cleanup_bytes": 93275619328,
+        "free_space_before_run_bytes": 93828571136,
+        "reproducible_scratch_bytes_before_cleanup": 582614365,
         "reproducible_scratch_bytes_retained_after_cleanup": 0,
         "source_staging_bytes": 0
       }
@@ -615,7 +615,7 @@
     "overlay_sha256": "434704414ff5a3c1dd65fac12a5dbf6657fe1fa07f9f6a70b63fda4dcfb7c6b1",
     "provenance_script_sha256": "71d555c20e5c5e66480b1dee2ee8427638e55ca13fb03f4f08c8d2616c15f462",
     "regressions_script_sha256": "8b2ea7ae29fa18a56e5882365713fa4214bd38fe83dbff0a00e7140cbf0b3870",
-    "replay_sha256": "f05ab04d682c3973984e5c8cb201758cf1e4568ccdc91d05416f1b11abafb683",
+    "replay_sha256": "8673a39d3b8b3abbfa676ec72215e9a3e7a72ecfec931c4f8f9f4fa3d288f960",
     "replay_wrapper_sha256": "f59e11c0329828487b05aba828a10fa7597d9a0936d640e3067f376864fa08c1",
     "run_sha256": "66b4ab0e866fbf40382cf248479a3a1012357003494718a030184a716ccbc3fe",
     "runner_sha256": "e17ee6a464e25e096b37a155e048a03d234a91eb4a0162c40e22c7707136511b",
@@ -654,89 +654,17 @@
   },
   "source_mutation_audit": {
     "dirty_paths": [
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/README.md",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/classification.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/evidence-index.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/first-divergence.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/matrix-results.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/overlay/c52_overlay.go",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/pr-body.md",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/provenance.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/record_provenance.py",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/normal.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/normal/process.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/normal/stderr.log",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/normal/stdout.log",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/race.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/race/process.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/race/stdout.log",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/summary.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/run.py",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/storage.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/verify.py",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/README.md",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/attribution-controls.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/failed-case-attribution-fixture.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/pr-body.md",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/replay-report.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145006Z-67273/help-root/process.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145006Z-67273/help-root/stderr.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145006Z-67273/help-root/stdout.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145006Z-67273/help-session-process/process.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145006Z-67273/help-session-process/stderr.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145006Z-67273/help-session-process/stdout.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145006Z-67273/help-session/config/config.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145006Z-67273/help-session/config/models.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/help-root/process.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/help-root/stderr.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/help-root/stdout.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/help-session-process/process.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/help-session-process/stderr.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/help-session-process/stdout.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/help-session/config/config.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/help-session/config/models.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/.session-audio-trace-1378409387/timeline.jsonl",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/audio.wav",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/config/config.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/config/models.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/process/process.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/process/stderr.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/process/stdout.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/tool-record/agent.transcript.jsonl",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/tool-record/client.transcript.jsonl",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/tool-record/manifest.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/tool-record/provider.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/tool-record/session-log.jsonl",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/help-root/process.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/help-root/stderr.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/help-root/stdout.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/help-session-process/process.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/help-session-process/stderr.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/help-session-process/stdout.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/help-session/config/config.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/help-session/config/models.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/config/config.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/config/models.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/mutated.session.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/process/process.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/process/stderr.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/negative/process/stdout.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/audio.wav",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/config/config.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/config/models.yaml",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/evidence/runs/exec-invocations-v4.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/process/process.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/process/stderr.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/process/stdout.log",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record/agent.transcript.jsonl",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record/audio-trace/speaker-enqueued.wav",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record/audio-trace/timeline.jsonl",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record/audio/out-000.pcm",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record/client.transcript.jsonl",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record/manifest.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record/provider.json",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145050Z-67358/positive/tool-record/session-log.jsonl",
-      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/verify_replay.py"
+      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/replay-report.json"
     ],
     "outside_owned_paths": [],
     "owned_prefixes": [
@@ -748,7 +676,7 @@
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "storage": {
     "path": "storage.json",
-    "sha256": "24b6778a2afec889b5664b660d8f2e9d7c3d15f1c11838ef0b7aae10dcb72031",
+    "sha256": "19cc434c4f119432fd8bcf7fd2c9cb3fe5be748d62f9c343a28ace0a734fc9b7",
     "summary": {
       "archive_reuse": {
         "planning-main": {
@@ -795,7 +723,7 @@
       "free_space_before_cleanup_bytes": 98149814272,
       "free_space_before_run_bytes": 99191791616,
       "free_space_limitation": "free space was measured immediately before and after cleanup; background filesystem activity is not controlled",
-      "observed_at": "2026-09-11T15:01:26.625507+00:00",
+      "observed_at": "2026-09-11T15:52:07.288794+00:00",
       "reproducible_scratch_bytes_before_cleanup": 266984251,
       "reproducible_scratch_bytes_retained_after_cleanup": 0,
       "reuse_identity": {
@@ -961,13 +889,13 @@
     "go_env": {
       "CGO_ENABLED": "0",
       "GOARCH": "arm64",
-      "GOCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-dkq9y2j_/gocache",
+      "GOCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-2pmwzxvg/gocache",
       "GOENV": "",
-      "GOMODCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-dkq9y2j_/gomodcache",
+      "GOMODCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-2pmwzxvg/gomodcache",
       "GOOS": "darwin",
       "GOPROXY": "https://proxy.golang.org,direct",
       "GOSUMDB": "sum.golang.org",
-      "GOTMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-dkq9y2j_/gotmp",
+      "GOTMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-2pmwzxvg/gotmp",
       "GOTOOLCHAIN": "auto",
       "GOVERSION": "go1.26.7",
       "GOWORK": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go.work"
@@ -992,7 +920,7 @@
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair",
       "exit_code": 0,
       "stderr": "",
-      "stdout": "go1.26.7\ndarwin\narm64\n0\nauto\n/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go.work\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-dkq9y2j_/gomodcache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-dkq9y2j_/gocache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-dkq9y2j_/gotmp\n\nhttps://proxy.golang.org,direct\nsum.golang.org\n"
+      "stdout": "go1.26.7\ndarwin\narm64\n0\nauto\n/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go.work\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-2pmwzxvg/gomodcache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-2pmwzxvg/gocache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-2pmwzxvg/gotmp\n\nhttps://proxy.golang.org,direct\nsum.golang.org\n"
     },
     "go_version_command": {
       "command": [
