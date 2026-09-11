@@ -248,3 +248,11 @@ Evidence checkpoint `e2b41309` is committed and pushed to the same branch, and P
 - Accumulated C47 resource bounds returned top-level `decision=ACCEPTED` while preserving the deterministic reserve-shortfall `BLOCKED` control; pinned C45 regressions returned `decision=ACCEPTED`; and `check_python_sources.py` returned `decision=ACCEPTED`. `git diff --check` passed. The current source/evidence changes are limited to the runtime repair, its regression, and refreshed C47 reports; predecessor checkpoints and unrelated changes remain preserved.
 
 Next action: inspect the final diff, commit and push the same PR #439 head, update the PR body with the runtime-repair evidence, and return `ACCEPTED` to the script-owned CI gate without polling. Any exact CI rejection remains actionable on this same task.
+
+## Committed runtime repair checkpoint — 2026-09-11
+
+- The bounded no-render playback-stats repair, its regression, refreshed handoff, and prior C47 ledger are committed as `8fc39ce9bc5d2f04c7fa32605066adc6f7ced113` (`fix(c47): bound remote playback stats polling`). The branch remains the admitted `codex/audio-runtime-c47-live-probe-output-bound` worktree, with `origin/main` ancestry preserved and no unrelated or predecessor changes touched.
+- The pinned C45 regression wrapper was rerun on the committed source with `--original-revision 5f14c45313cfdc71e000fda209e3408fcf863faf --child-timeout 60 --total-timeout 300`; top-level `audio-runtime-c47-c45-focused-controls/v1` returned `ACCEPTED` in `1.617676s`, and its positive staged control records `tested_source_revision=8fc39ce9bc5d2f04c7fa32605066adc6f7ced113`. The intentional aggregate-output, deadline and wrong-oracle controls remain bounded negative evidence with cleanup complete.
+- `check_python_sources.py` returned `ACCEPTED` for all seven sources on the same committed worktree. The runtime, agent-runtime, Test45/Test46, full audio-device-server integration, C47 resource, Wire, architecture, lint, staticcheck, normal/race and diff checks recorded above remain green for this unchanged committed source.
+
+Next action: commit the refreshed current-source reports, push the same PR #439 branch, update the existing PR body, and return `ACCEPTED` to script CI without polling. Any exact CI rejection remains actionable on this same task.

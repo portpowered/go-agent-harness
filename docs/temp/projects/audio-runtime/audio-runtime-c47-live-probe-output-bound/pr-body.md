@@ -204,3 +204,7 @@ The latest implementation handoff resumes C47 as the exclusive owner of the comb
 Focused evidence on the changed candidate is green: runtime and agent-runtime audio/device tests pass normally and under race; Test46 `5 x 20` and Test45 `5 x 20` fresh-process strict-oracle trials pass; `make test-audio-device-server-integration` passes in `101.131s`; `make architecture-size-check` passes at `186` packages/`1,896` files/`27,976` functions; `make wire-check`, `make lint`, and `make staticcheck` pass; and accumulated C47 resource bounds, pinned C45 regressions, and seven-source Python compilation return `ACCEPTED`. The intentional resource reserve-shortfall negative remains truthfully `BLOCKED` before launch. CI green, independent review, guarded merge, post-merge vertical acceptance and project acceptance are not claimed or polled.
 
 This changed candidate is ready for the script-owned CI gate. Any exact rejection remains actionable on this same task.
+
+## Committed repair checkpoint
+
+The runtime repair and no-render polling regression are committed at `8fc39ce9bc5d2f04c7fa32605066adc6f7ced113`. The pinned C45 regression wrapper was rerun on that exact source and returned top-level `ACCEPTED`, with its positive staged control recording the same tested source revision; all intentional negative oracle, aggregate-output and deadline controls remained bounded and fail-closed. The existing PR #439 remains the handoff target; CI is not claimed or polled.
