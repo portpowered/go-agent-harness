@@ -1,5 +1,11 @@
 {
-  "cleanup": {},
+  "cleanup": {
+    "group_survivor": false,
+    "kill_sent": false,
+    "parent_exit_code": 0,
+    "reason": "parent_exit",
+    "term_sent": false
+  },
   "command": [
     "go",
     "test",
@@ -10,16 +16,20 @@
     "./services/session/internal/live"
   ],
   "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go-agent-runtime",
-  "duration_seconds": 1.2761547910049558,
-  "ended_at": "2026-09-11T07:02:19.562045+00:00",
+  "duration_seconds": 17.20876691583544,
+  "ended_at": "2026-09-11T08:11:05.573521+00:00",
   "exit_code": 0,
-  "first_failure": null,
+  "first_failure": {
+    "line": 1,
+    "stream": "stderr",
+    "text": "go: downloading go1.26.7 (darwin/arm64)"
+  },
   "output_overflow": false,
   "reader_survivor": false,
-  "started_at": "2026-09-11T07:02:18.285717+00:00",
-  "stderr_bytes": 0,
-  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "started_at": "2026-09-11T08:10:48.364323+00:00",
+  "stderr_bytes": 309,
+  "stderr_sha256": "e73e3399d64fa65c5e3a68dcba276ddb5856d2885bbae28828001c00227e4694",
   "stdout_bytes": 203,
-  "stdout_sha256": "842134fec9b6263116fc73141f6d46e83b46c9de24147c667ad56d3893ebd29c",
+  "stdout_sha256": "ddadd3299872511e3c01371c70c8a602f6d79138893cef0b07c1f16e7c2bb207",
   "timed_out": false
 }

@@ -559,6 +559,7 @@ def classification() -> dict[str, object]:
     runner_valid = all(item["runner_controls_valid"] for item in outcomes)
     label = classify_outcomes(outcomes, runner_valid)
     controls = classification_controls()
+    behavior_failures = [item for item in outcomes if item["behavior_passed"] is False]
     result = {
         "schema": "audio-runtime-c52-classification-v1",
         "classification": label,

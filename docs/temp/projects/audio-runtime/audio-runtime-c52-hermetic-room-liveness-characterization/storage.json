@@ -12,11 +12,11 @@
       "CI log/metadata"
     ]
   },
-  "fixture_report_bytes": 25288171,
-  "free_space_after_capture_bytes": 136980553728,
+  "fixture_report_bytes": 25172852,
+  "free_space_after_capture_bytes": 131087470592,
   "free_space_before_cleanup_bytes": null,
   "free_space_limitation": "pre-cleanup free space was not captured by the preflight runner; current free space and exact retained bytes are recorded",
-  "observed_at": "2026-09-11T07:20:52.865491+00:00",
+  "observed_at": "2026-09-11T08:15:15.344513+00:00",
   "reproducible_scratch_bytes_retained_after_cleanup": 0,
   "runs": [
     {
@@ -64,8 +64,8 @@
     {
       "cache_present": false,
       "cleanup_verified": true,
-      "retained_bytes": 8215797,
-      "run_id": "20260911T081500Z-compressed-archives",
+      "retained_bytes": 8100478,
+      "run_id": "20260911T-6b4f32b5-hermetic",
       "scratch_content_present": false
     }
   ],

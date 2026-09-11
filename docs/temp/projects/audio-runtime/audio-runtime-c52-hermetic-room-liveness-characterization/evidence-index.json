@@ -11,24 +11,24 @@
     "cell_count": 22,
     "matrix_results_path": "matrix-results.json",
     "negative_controls_rejected": true,
-    "run_id": "20260911T081500Z-compressed-archives",
-    "run_path": "runs/20260911T081500Z-compressed-archives/run.json"
+    "run_id": "20260911T-6b4f32b5-hermetic",
+    "run_path": "runs/20260911T-6b4f32b5-hermetic/run.json"
   },
   "indexed_files": [
     {
-      "bytes": 2252,
+      "bytes": 2676,
       "path": "README.md",
-      "sha256": "b67137d6f085acf589f40c5d9d31f942118b6b0cc5e240b97956835bb51d94cb"
+      "sha256": "e341269413936a79c939d61145a99dec003736546909a05f8ff3ffd249500132"
     },
     {
-      "bytes": 32836,
+      "bytes": 38592,
       "path": "provenance.json",
-      "sha256": "b7e03e8471e760eedb1511cc21816519b208f814b02332840a77a1d0f32e8087"
+      "sha256": "fae8ffc9656645cc9deb80a6988ba9e03a75c4f7b05469d7e30d47ad8cfc5f29"
     },
     {
-      "bytes": 2569,
+      "bytes": 2560,
       "path": "storage.json",
-      "sha256": "94d0b9bf727446cb7fef46ba9492388a975f2950ef5534e6a5f88db64b2dac8a"
+      "sha256": "e11bf44ee2e8fc2890fdd0fb53b6309b7ad1c87ee955b053cf89efd3950ad079"
     },
     {
       "bytes": 3933,
@@ -36,9 +36,9 @@
       "sha256": "16003084e9c6415dcbdb9cd90bfcc5d255c55b3d38824776a803533041bdc45c"
     },
     {
-      "bytes": 140018,
+      "bytes": 171247,
       "path": "matrix-results.json",
-      "sha256": "74e2fcd6fb2412e34d412f000fcff769867a3620b13052d25e016676d031c0ec"
+      "sha256": "519c0cc4013e9ae0179b0fa3360d34e11d94520d4d2f400c29b8e29da33c3a25"
     },
     {
       "bytes": 1257,
@@ -46,14 +46,14 @@
       "sha256": "4107e8692145f50f73fa6d4b49085d082741e382859cec098156420e176a01df"
     },
     {
-      "bytes": 715853,
+      "bytes": 706904,
       "path": "first-divergence.json",
-      "sha256": "b90036edeb228454cdc3eaa414bff7938b1a09d7f38d402db3ebe0f79b0cde4a"
+      "sha256": "62f5f9f37a1ba8a72291d2b03fd75788d90d12492d3128eca5c89d1acf6bdb59"
     },
     {
-      "bytes": 15854,
+      "bytes": 16132,
       "path": "classification.json",
-      "sha256": "b1f978e70a6f0317a0243c76639974ef444479275b642590c1bbd906c988f518"
+      "sha256": "e6353ecfd3ab5f01b56e4cc774f83f627699be47fd99414247aec588f72ec7b2"
     },
     {
       "bytes": 1084,
@@ -66,19 +66,19 @@
       "sha256": "bd2e467947859ef3d2bed2bb9b686e5158bc690b2e3c4260310dde8acf2d6d81"
     },
     {
-      "bytes": 3069,
+      "bytes": 3527,
       "path": "regressions/summary.json",
-      "sha256": "9796bfb3794b06f35155ba02ca6b9949539ffbba78308794f8bb79a23ab07505"
+      "sha256": "f045d5737c1efbd8c0ccd71eea316d7f289a5c2a452f172cff93966499959ca0"
     },
     {
-      "bytes": 1349,
+      "bytes": 1599,
       "path": "regressions/normal.json",
-      "sha256": "19b5f1f5786bb37eb44d44b67738bca8d588e050f4eca1b3669ae169765fe271"
+      "sha256": "ff7328311d4bf63900b581164f72011ccd2b48e5fc3797fa572fd8d3e164dbb0"
     },
     {
-      "bytes": 1295,
+      "bytes": 1439,
       "path": "regressions/race.json",
-      "sha256": "3cf17208aec4c6ac2dcc55faec33c6f4c26a47e4a47b3215ce018cf3af6f922e"
+      "sha256": "d00b42f1a79df7aa4b89148f50c9fdd557adb2ea36b368a9ba81418a292c81c8"
     },
     {
       "bytes": 33120,
