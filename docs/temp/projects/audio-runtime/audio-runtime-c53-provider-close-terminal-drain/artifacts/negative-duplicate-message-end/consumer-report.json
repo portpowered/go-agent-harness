@@ -3,7 +3,7 @@
   "scenario": "provider-close-overtake",
   "mutation": "duplicate-message-end",
   "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
-  "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+  "candidate_revision": "5e4a9e5933eceb27961aebe1ac3a63e18092ea78",
   "fixture_sha256": "d58674074f07a41dff79759104ad2a85c708cc4a4d623536db726ea857a2ee63",
   "consumer_surface": "public-live-service",
   "trace": [
@@ -71,6 +71,26 @@
     },
     {
       "sequence": 10,
+      "kind": "AUDIO.END",
+      "response_id": "healthy-resp-2",
+      "role": "assistant"
+    },
+    {
+      "sequence": 11,
+      "kind": "TEXT.DELTA",
+      "response_id": "healthy-resp-2",
+      "role": "assistant",
+      "text": "healthy-after-cancel"
+    },
+    {
+      "sequence": 12,
+      "kind": "MESSAGE.END",
+      "response_id": "healthy-resp-2",
+      "role": "assistant",
+      "terminal_source": "provider"
+    },
+    {
+      "sequence": 13,
       "kind": "terminal"
     }
   ],
@@ -91,9 +111,9 @@
   "terminal": {
     "kind": "terminal",
     "reason": "",
-    "classification": "",
-    "provenance": "loop",
-    "output_state": "partial"
+    "classification": "terminal_failure",
+    "provenance": "session",
+    "output_state": "none"
   },
   "interruption": {
     "cancel_sent": true,
@@ -104,7 +124,7 @@
     "delayed_audio_bytes": 4,
     "delayed_audio_publicly_emitted": false,
     "cancelled_output_rejected": true,
-    "healthy_response_id": "",
+    "healthy_response_id": "healthy-resp-2",
     "healthy_tail_bytes": 8,
     "healthy_tail_sha256": "79761b4bfaef74f2e183877f56ec7ccc0adb8b0e21a9dbb4020748ae8eb5ac6b",
     "healthy_tail_nonempty": true
@@ -206,5 +226,5 @@
   },
   "clean_shutdown": false,
   "trace_complete": true,
-  "error": "public trace length = 11, want 15"
+  "error": "public trace length = 14, want 15"
 }

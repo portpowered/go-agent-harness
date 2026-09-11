@@ -19,7 +19,7 @@
     "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain",
     "disk_bounded": true,
     "disk_bytes": 0,
-    "elapsed_ms": 153,
+    "elapsed_ms": 148,
     "label": "public-interruption-provider-close",
     "output_bounded": true,
     "returncode": 0,
@@ -30,7 +30,7 @@
     "timed_out": false
   },
   "report": {
-    "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+    "candidate_revision": "5e4a9e5933eceb27961aebe1ac3a63e18092ea78",
     "clean_shutdown": true,
     "consumer_surface": "public-live-service",
     "fixture_sha256": "d58674074f07a41dff79759104ad2a85c708cc4a4d623536db726ea857a2ee63",

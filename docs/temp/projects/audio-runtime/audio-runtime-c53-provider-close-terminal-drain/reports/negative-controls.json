@@ -23,7 +23,7 @@
         "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain",
         "disk_bounded": true,
         "disk_bytes": 34,
-        "elapsed_ms": 155,
+        "elapsed_ms": 145,
         "label": "negative-missing-message-end",
         "output_bounded": true,
         "returncode": 1,
@@ -35,7 +35,7 @@
       },
       "mutation": "missing-message-end",
       "report": {
-        "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+        "candidate_revision": "5e4a9e5933eceb27961aebe1ac3a63e18092ea78",
         "clean_shutdown": true,
         "consumer_surface": "public-live-service",
         "error": "public trace length = 14, want 15",
@@ -274,7 +274,7 @@
         "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain",
         "disk_bounded": true,
         "disk_bytes": 34,
-        "elapsed_ms": 27,
+        "elapsed_ms": 26,
         "label": "negative-duplicate-message-end",
         "output_bounded": true,
         "returncode": 1,
@@ -286,10 +286,10 @@
       },
       "mutation": "duplicate-message-end",
       "report": {
-        "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+        "candidate_revision": "5e4a9e5933eceb27961aebe1ac3a63e18092ea78",
         "clean_shutdown": false,
         "consumer_surface": "public-live-service",
-        "error": "public trace length = 11, want 15",
+        "error": "public trace length = 14, want 15",
         "fixture_sha256": "d58674074f07a41dff79759104ad2a85c708cc4a4d623536db726ea857a2ee63",
         "healthy_pcm": {
           "bytes": 8,
@@ -307,7 +307,7 @@
           "delayed_audio_bytes": 4,
           "delayed_audio_observed": true,
           "delayed_audio_publicly_emitted": false,
-          "healthy_response_id": "",
+          "healthy_response_id": "healthy-resp-2",
           "healthy_tail_bytes": 8,
           "healthy_tail_nonempty": true,
           "healthy_tail_sha256": "79761b4bfaef74f2e183877f56ec7ccc0adb8b0e21a9dbb4020748ae8eb5ac6b"
@@ -419,10 +419,10 @@
         "schema": "audio-runtime.c53.v1",
         "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
         "terminal": {
-          "classification": "",
+          "classification": "terminal_failure",
           "kind": "terminal",
-          "output_state": "partial",
-          "provenance": "loop",
+          "output_state": "none",
+          "provenance": "session",
           "reason": ""
         },
         "trace": [
@@ -489,8 +489,28 @@
             "sequence": 9
           },
           {
-            "kind": "terminal",
+            "kind": "AUDIO.END",
+            "response_id": "healthy-resp-2",
+            "role": "assistant",
             "sequence": 10
+          },
+          {
+            "kind": "TEXT.DELTA",
+            "response_id": "healthy-resp-2",
+            "role": "assistant",
+            "sequence": 11,
+            "text": "healthy-after-cancel"
+          },
+          {
+            "kind": "MESSAGE.END",
+            "response_id": "healthy-resp-2",
+            "role": "assistant",
+            "sequence": 12,
+            "terminal_source": "provider"
+          },
+          {
+            "kind": "terminal",
+            "sequence": 13
           }
         ],
         "trace_complete": true
@@ -519,7 +539,7 @@
         "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain",
         "disk_bounded": true,
         "disk_bytes": 51,
-        "elapsed_ms": 25,
+        "elapsed_ms": 27,
         "label": "negative-reordered-session-close",
         "output_bounded": true,
         "returncode": 1,
@@ -531,7 +551,7 @@
       },
       "mutation": "reordered-session-close",
       "report": {
-        "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+        "candidate_revision": "5e4a9e5933eceb27961aebe1ac3a63e18092ea78",
         "clean_shutdown": true,
         "consumer_surface": "public-live-service",
         "error": "public trace[12] = SESSION.CLOSE, want MESSAGE.END",
@@ -782,7 +802,7 @@
         "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain",
         "disk_bounded": true,
         "disk_bytes": 63,
-        "elapsed_ms": 25,
+        "elapsed_ms": 26,
         "label": "negative-admitted-cancelled-audio",
         "output_bounded": true,
         "returncode": 1,
@@ -794,7 +814,7 @@
       },
       "mutation": "admitted-cancelled-audio",
       "report": {
-        "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+        "candidate_revision": "5e4a9e5933eceb27961aebe1ac3a63e18092ea78",
         "clean_shutdown": true,
         "consumer_surface": "public-live-service",
         "error": "cancelled provider audio was not observed-and-rejected exactly",
@@ -1045,7 +1065,7 @@
         "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain",
         "disk_bounded": true,
         "disk_bytes": 150,
-        "elapsed_ms": 146,
+        "elapsed_ms": 27,
         "label": "negative-mutated-healthy-pcm",
         "output_bounded": true,
         "returncode": 1,
@@ -1057,7 +1077,7 @@
       },
       "mutation": "mutated-healthy-pcm",
       "report": {
-        "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+        "candidate_revision": "5e4a9e5933eceb27961aebe1ac3a63e18092ea78",
         "clean_shutdown": true,
         "consumer_surface": "public-live-service",
         "error": "healthy PCM = 1195fbdaa7c93fbc157c04ac15811ca6d2da7b33fa2994008951504abe7ff652, want 79761b4bfaef74f2e183877f56ec7ccc0adb8b0e21a9dbb4020748ae8eb5ac6b",

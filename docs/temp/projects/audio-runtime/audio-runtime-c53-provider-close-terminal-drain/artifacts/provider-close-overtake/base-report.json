@@ -50,6 +50,26 @@
     },
     {
       "sequence": 7,
+      "kind": "MESSAGE.START",
+      "response_id": "healthy-resp-2",
+      "role": "assistant"
+    },
+    {
+      "sequence": 8,
+      "kind": "AUDIO.START",
+      "response_id": "healthy-resp-2",
+      "role": "assistant"
+    },
+    {
+      "sequence": 9,
+      "kind": "AUDIO.DELTA",
+      "response_id": "healthy-resp-2",
+      "role": "assistant",
+      "pcm_bytes": 8,
+      "pcm_sha256": "79761b4bfaef74f2e183877f56ec7ccc0adb8b0e21a9dbb4020748ae8eb5ac6b"
+    },
+    {
+      "sequence": 10,
       "kind": "terminal"
     }
   ],
@@ -57,15 +77,15 @@
     "format": "pcm16-le",
     "sample_rate": 16000,
     "channels": 1,
-    "bytes": 4,
-    "sha256": "9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a"
+    "bytes": 12,
+    "sha256": "f7d851c0baf9d6b6c1b90ee96082c1454b96e071e77376dd3819eab6706b01c0"
   },
   "healthy_pcm": {
     "format": "pcm16-le",
     "sample_rate": 16000,
     "channels": 1,
-    "bytes": 0,
-    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    "bytes": 8,
+    "sha256": "79761b4bfaef74f2e183877f56ec7ccc0adb8b0e21a9dbb4020748ae8eb5ac6b"
   },
   "terminal": {
     "kind": "terminal",
@@ -84,9 +104,9 @@
     "delayed_audio_publicly_emitted": false,
     "cancelled_output_rejected": true,
     "healthy_response_id": "",
-    "healthy_tail_bytes": 0,
-    "healthy_tail_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "healthy_tail_nonempty": false
+    "healthy_tail_bytes": 8,
+    "healthy_tail_sha256": "79761b4bfaef74f2e183877f56ec7ccc0adb8b0e21a9dbb4020748ae8eb5ac6b",
+    "healthy_tail_nonempty": true
   },
   "provider": {
     "controls": [

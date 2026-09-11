@@ -83,19 +83,19 @@
       "sha256": "18bea7cc896099a2beec4fc0b3ffe69c0df6a640c8a8bcd9bc43a7962ca2726b"
     },
     {
-      "bytes": 16240,
+      "bytes": 16268,
       "path": "go-agent-runtime/services/session/internal/live/service.go",
-      "sha256": "12286aebc2947475e7403b2acba268942dad3f7d38681d31f3f6e7a58145b0d7"
+      "sha256": "2bcf28fbc8c99606bbd3faf6509d566dec33c6a446366a63a0748364c2e2fef9"
     },
     {
-      "bytes": 12396,
+      "bytes": 12457,
       "path": "go-agent-runtime/services/session/internal/live/start_support.go",
-      "sha256": "9fa2836d1982dbc2dcbd29ea96b3cea324022a7751e912707dcd191071824056"
+      "sha256": "49349b795b2654a9b299c747f5a21803c6c943fe5264c11c21b3e5d3fc2f4a7e"
     },
     {
-      "bytes": 23669,
+      "bytes": 23691,
       "path": "go-agent-runtime/services/session/internal/live/policies_test.go",
-      "sha256": "8c07566b6e8ad5eded977c1b83258e9df5dd4e9a9582062ac3845b5203294e02"
+      "sha256": "011a9af4c6583a801e6e4796a8e508820b78eabdeee4a9d4686419a1cbd5fd27"
     },
     {
       "bytes": 1098,
@@ -152,7 +152,7 @@
         "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain",
         "disk_bounded": true,
         "disk_bytes": 0,
-        "elapsed_ms": 136,
+        "elapsed_ms": 143,
         "label": "build-candidate-consumer",
         "output_bounded": true,
         "returncode": 0,
@@ -162,7 +162,7 @@
         "stdout_bytes": 0,
         "timed_out": false
       },
-      "sha256": "62ae4705bda644fd9f158b785abba23f691d72c3a05fd2933c1e6c9673bdf66d"
+      "sha256": "4063e8a6376ce908c3f24b8023ff7691a384b3ab63d6eb80deba95fd8512c848"
     },
     "yui": {
       "result": {
@@ -186,7 +186,7 @@
         "cwd": ".",
         "disk_bounded": true,
         "disk_bytes": 0,
-        "elapsed_ms": 296,
+        "elapsed_ms": 5203,
         "label": "build-candidate-yui",
         "output_bounded": true,
         "returncode": 0,
@@ -196,11 +196,11 @@
         "stdout_bytes": 0,
         "timed_out": false
       },
-      "sha256": "443ddd3ebf89deaff33a63ab8c0dd9c1e853c0612631340f2a71a01955dde701"
+      "sha256": "37e88f782ba8cbe44f73ce599b927bc147edc24d77d617b4cc77290f676ca588"
     }
   },
   "c23_failure_source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
-  "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+  "candidate_revision": "5e4a9e5933eceb27961aebe1ac3a63e18092ea78",
   "contract_revision": "audio-runtime-v1",
   "current_main_fetched": true,
   "integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
@@ -232,6 +232,6 @@
   "schema": "audio-runtime.c53.provenance.v1",
   "source_plan_sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
   "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
-  "source_tree_status": "",
+  "source_tree_status": ""
   "task": "audio-runtime-c53-provider-close-terminal-drain"
 }

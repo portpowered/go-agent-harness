@@ -28,7 +28,7 @@
       "cwd": ".",
       "disk_bounded": true,
       "disk_bytes": 0,
-      "elapsed_ms": 296,
+      "elapsed_ms": 5203,
       "label": "build-candidate-yui",
       "output_bounded": true,
       "returncode": 0,
@@ -39,9 +39,9 @@
       "timed_out": false
     },
     "path": "bin/yui",
-    "sha256": "443ddd3ebf89deaff33a63ab8c0dd9c1e853c0612631340f2a71a01955dde701"
+    "sha256": "37e88f782ba8cbe44f73ce599b927bc147edc24d77d617b4cc77290f676ca588"
   },
-  "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+  "candidate_revision": "5e4a9e5933eceb27961aebe1ac3a63e18092ea78",
   "capture": {
     "healthy_response_id": "resp-test6-new-assistant",
     "interrupted_response_id": "resp-test6-interrupted",
@@ -100,7 +100,7 @@
     "cwd": ".",
     "disk_bounded": true,
     "disk_bytes": 618,
-    "elapsed_ms": 559,
+    "elapsed_ms": 665,
     "label": "shipped-yui-test6",
     "output_bounded": true,
     "returncode": 0,

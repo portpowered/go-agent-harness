@@ -20,7 +20,7 @@
     "cwd": "go-agent-runtime",
     "disk_bounded": true,
     "disk_bytes": 100,
-    "elapsed_ms": 767,
+    "elapsed_ms": 1417,
     "label": "focused-live-normal",
     "output_bounded": true,
     "returncode": 0,

@@ -5,9 +5,9 @@
     "max_child_output_bytes": 65536,
     "max_retained_disk_bytes": 8388608
   },
-  "candidate_revision": "f5a7a7c7b4bc864fcc06732d6eddb105b3206eee",
+  "candidate_revision": "5e4a9e5933eceb27961aebe1ac3a63e18092ea78",
   "case": "focused-live-normal",
-  "elapsed_ms": 955,
+  "elapsed_ms": 1611,
   "passed": true,
   "provenance": "provenance.json",
   "schema": "audio-runtime.c53.run-summary.v1"
