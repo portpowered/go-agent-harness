@@ -23,6 +23,7 @@ OWNED_CODE = {
     "agent-cli/internal/room/mesh.go",
     "agent-cli/internal/room/mesh_test.go",
     "go-agent-runtime/services/rooms/mesh.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/mesh.go",
     "go-agent-runtime/services/rooms/internal/mesh/mesh.go",
     "go-agent-runtime/services/rooms/wire/mesh.go",
     "coverage-manifest/go-agent-runtime/services/rooms/internal/mesh/package.json",
