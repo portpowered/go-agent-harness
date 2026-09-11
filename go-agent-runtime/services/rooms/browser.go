@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 )
+
 const (
 	BrowserToolsBackendWebMCP        = "webmcp"
 	BrowserAutoSelectOff             = "off"
@@ -24,19 +25,24 @@ const (
 	defaultBrowserInputBytes        = 262144
 	defaultBrowserResultBytes       = 262144
 )
-// UnsupportedBrowserToolsBackendError is a comparable, immutable browser
-// backend error value suitable for errors.Is without package state.
+
+// UnsupportedBrowserToolsBackendError is a comparable, immutable browser backend error value suitable for errors.Is without package state.
 type UnsupportedBrowserToolsBackendError string
+
 func (e UnsupportedBrowserToolsBackendError) Error() string { return string(e) }
-// ErrUnsupportedBrowserToolsBackend identifies a backend other than the
-// WebMCP backend frozen by the room contract.
+
+// ErrUnsupportedBrowserToolsBackend identifies a backend other than the WebMCP backend frozen by the room contract.
 const ErrUnsupportedBrowserToolsBackend UnsupportedBrowserToolsBackendError = "unsupported room browser tools backend"
+
 // InvalidBrowserToolsOptionError is the stable CLI compatibility error value.
 type InvalidBrowserToolsOptionError string
+
 func (e InvalidBrowserToolsOptionError) Error() string { return string(e) }
+
 // ErrInvalidBrowserToolsOption identifies an invalid browser option while
 // preserving the older CLI-facing sentinel alongside ErrInvalidBrowserOption.
 const ErrInvalidBrowserToolsOption InvalidBrowserToolsOptionError = "invalid room browser tools option"
+
 // BrowserToolsConfig is the normalized optional browser capability policy.
 // It contains no browser connection or process handle; composition owns those.
 type BrowserToolsConfig struct {
@@ -86,9 +92,11 @@ type BrowserReplayConfig struct {
 	Path   string `json:"path" yaml:"path"`
 	Strict bool   `json:"strict" yaml:"strict"`
 }
+
 // BrowserToolsDefaults provides the complete browser option set used when a
 // participant includes an empty browserTools object.
 type BrowserToolsDefaults struct{}
+
 // Config returns a fresh default value with initialized option lists.
 func (BrowserToolsDefaults) Config() BrowserToolsConfig {
 	return BrowserToolsConfig{
@@ -118,8 +126,10 @@ func (BrowserToolsDefaults) Config() BrowserToolsConfig {
 		Replay: BrowserReplayConfig{Strict: true},
 	}
 }
+
 // Validate validates a normalized browser capability at its public root.
 func (b BrowserToolsConfig) Validate() error { return b.ValidateAt("browserTools") }
+
 // ValidateAt validates a normalized browser capability while preserving the
 // participant-qualified field root used by document admission.
 func (b BrowserToolsConfig) ValidateAt(field string) error {
@@ -206,6 +216,7 @@ func oneOf(value string, allowed ...string) bool {
 	}
 	return false
 }
+
 type browserToolsJSON struct {
 	Backend    string                 `json:"backend"`
 	Connection browserConnectionJSON  `json:"connection"`
@@ -228,6 +239,7 @@ type browserLimitsJSON struct {
 	MaxResultBytes     int    `json:"max_result_bytes"`
 	SerializePerTarget bool   `json:"serialize_per_target"`
 }
+
 func (b BrowserToolsConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(browserToolsJSON{
 		Backend: b.Backend,
@@ -250,6 +262,7 @@ func (b BrowserToolsConfig) MarshalJSON() ([]byte, error) {
 		Replay:    b.Replay,
 	})
 }
+
 type browserToolsYAML struct {
 	Backend    string                 `yaml:"backend"`
 	Connection browserConnectionYAML  `yaml:"connection"`
@@ -272,6 +285,7 @@ type browserLimitsYAML struct {
 	MaxResultBytes     int    `yaml:"max_result_bytes"`
 	SerializePerTarget bool   `yaml:"serialize_per_target"`
 }
+
 func (b BrowserToolsConfig) MarshalYAML() (any, error) {
 	return browserToolsYAML{
 		Backend: b.Backend,
@@ -308,6 +322,7 @@ func redactBrowserEndpoint(raw string, websocket bool) string {
 	}
 	return parts.scheme + "://" + parts.authority + parts.path
 }
+
 type browserEndpoint struct {
 	scheme         string
 	authority      string
@@ -315,6 +330,7 @@ type browserEndpoint struct {
 	path           string
 	hasCredentials bool
 }
+
 func browserEndpointParts(raw string) (browserEndpoint, bool) {
 	separator := strings.Index(raw, "://")
 	if separator <= 0 || separator+3 >= len(raw) {

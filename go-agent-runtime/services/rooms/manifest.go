@@ -6,21 +6,22 @@ import (
 	"strings"
 	"time"
 )
+
 const SchemaVersion = 1
 
 // ParticipantKind identifies who owns a room participant's conversation and
-// media lifecycle. Customer is accepted as a compatibility spelling for
-// human at the document boundary.
+// media lifecycle. Customer is accepted as a compatibility spelling for human at the document boundary.
 type ParticipantKind string
+
 const (
 	ParticipantKindAgent    ParticipantKind = "agent"
 	ParticipantKindHuman    ParticipantKind = "human"
 	ParticipantKindCustomer ParticipantKind = "customer"
 )
 
-// ParticipantKindNormalizer applies schema-version-1 compatibility spellings
-// before a participant enters a runtime room contract.
+// ParticipantKindNormalizer applies schema-version-1 compatibility spellings before a participant enters a runtime room contract.
 type ParticipantKindNormalizer struct{}
+
 func (ParticipantKindNormalizer) Normalize(kind ParticipantKind) ParticipantKind {
 	switch normalized := ParticipantKind(strings.ToLower(strings.TrimSpace(string(kind)))); normalized {
 	case "", ParticipantKindAgent:
@@ -34,44 +35,45 @@ func (ParticipantKindNormalizer) Normalize(kind ParticipantKind) ParticipantKind
 func normalizeParticipantKind(kind ParticipantKind) ParticipantKind {
 	return ParticipantKindNormalizer{}.Normalize(kind)
 }
-// Manifest is the normalized, credential-free room configuration. API keys
-// never enter this value; APIKeyEnv is only an environment variable name.
+
+// Manifest is the normalized, credential-free room configuration. API keys never enter this value; APIKeyEnv is only an environment variable name.
 type Manifest struct {
 	SchemaVersion int           `json:"schema_version" yaml:"schema_version"`
 	Room          Room          `json:"room" yaml:"room"`
 	Participants  []Participant `json:"participants" yaml:"participants"`
 }
-// Room contains optional positive bounds. An interactive room may omit both
-// bounds and remains alive until cancellation or terminal failure.
+
+// Room contains optional positive bounds. An interactive room may omit both bounds and remains alive until cancellation or terminal failure.
 type Room struct {
 	MaxTurns    int                  `json:"max_turns,omitempty" yaml:"max_turns,omitempty"`
 	MaxDuration time.Duration        `json:"-" yaml:"-"`
 	Interactive bool                 `json:"interactive,omitempty" yaml:"interactive,omitempty"`
 	Recording   *RoomRecordingConfig `json:"recording,omitempty" yaml:"recording,omitempty"`
 }
+
 // RoomRecordingConfig controls the room evidence bundle. Directory is an
-// explicit destination from the authoritative room document; the loader
-// trims surrounding whitespace.
+// explicit destination from the authoritative room document; the loader trims surrounding whitespace.
 type RoomRecordingConfig struct {
 	Enabled   *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	Directory string `json:"directory,omitempty" yaml:"directory,omitempty"`
 }
-// RecordingConfig is a descriptive alias for callers using shorter
-// configuration terminology.
+
+// RecordingConfig is a descriptive alias for callers using shorter configuration terminology.
 type RecordingConfig = RoomRecordingConfig
-// RecordingEnabled reports whether the manifest requests room evidence. An
-// omitted policy and an omitted enabled field preserve recording-on behavior.
+
+// RecordingEnabled reports whether the manifest requests room evidence. An omitted policy and an omitted enabled field preserve recording-on behavior.
 func (r Room) RecordingEnabled() bool {
 	return r.Recording == nil || r.Recording.Enabled == nil || *r.Recording.Enabled
 }
-// RecordingDirectory returns the configured evidence destination, or an
-// empty string when the host should choose one.
+
+// RecordingDirectory returns the configured evidence destination, or an empty string when the host should choose one.
 func (r Room) RecordingDirectory() string {
 	if r.Recording == nil {
 		return ""
 	}
 	return strings.TrimSpace(r.Recording.Directory)
 }
+
 // MarshalJSON keeps normalized output human-readable while retaining the
 // time.Duration representation used by the runner internally.
 func (r Room) MarshalJSON() ([]byte, error) {
@@ -87,6 +89,7 @@ func (r Room) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(output)
 }
+
 // MarshalYAML keeps normalized output human-readable while retaining the
 // time.Duration representation used by the runner internally.
 func (r Room) MarshalYAML() (any, error) {
@@ -102,6 +105,7 @@ func (r Room) MarshalYAML() (any, error) {
 	}
 	return output, nil
 }
+
 // Participant is one independently configured room member. APIKeyEnv is only
 // an environment variable name, never the resolved credential value.
 type Participant struct {
@@ -118,6 +122,7 @@ type Participant struct {
 	InputDevice   string              `json:"input_device,omitempty" yaml:"input_device,omitempty"`
 	OutputDevice  string              `json:"output_device,omitempty" yaml:"output_device,omitempty"`
 }
+
 // ValidationOptions supplies the registries available at the composition
 // root. A nil LookupCredential intentionally means that this validation only
 // checks the credential name; host environment access is never implicit in
@@ -130,6 +135,7 @@ type ValidationOptions struct {
 	LookupVoice        func(provider, model, voice string) bool
 	AllowMissingOpener bool
 }
+
 // ValidationRegistry is a finite registry adapter for deterministic hosts.
 // A nil map means that registry is unavailable and is not checked; a non-nil
 // empty map means that no value is registered.
@@ -139,6 +145,7 @@ type ValidationRegistry struct {
 	Tools     map[string]struct{}
 	Voices    map[string]map[string]struct{}
 }
+
 // Options converts registry sets into validation callbacks. Registry keys are
 // expected in their canonical spelling; provider and tool keys are normalized
 // by document parsing before lookup.
@@ -178,6 +185,7 @@ func (r ValidationRegistry) Options() ValidationOptions {
 	}
 	return options
 }
+
 // Validate validates an already normalized manifest without reading host
 // configuration. Parse and Read in the manifest provider should be preferred
 // for untrusted on-disk input because they also reject omitted required
