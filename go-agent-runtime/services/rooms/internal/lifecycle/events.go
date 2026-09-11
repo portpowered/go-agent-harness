@@ -35,14 +35,21 @@ func newEventDrain(ctx context.Context, events <-chan session.LiveEvent, partici
 
 func eventObserver(ctx context.Context, participantID string, diagnosticCallback func(string, rooms.RoomDiagnosticRecord), sink rooms.EventSink, onTurn func(), now func() time.Time, onTerminal func(session.LiveEvent), onError func(error)) func(session.LiveEvent) {
 	return func(event session.LiveEvent) {
-		// Record the terminal cause before invoking the host sink. Sinks may
-		// synchronously tear down a peer; that teardown can race this
-		// participant's media-close notification. Latching the participant's
-		// typed liveness cause first keeps transport cleanup from replacing it.
-		if onTerminal != nil && isTerminalEvent(event) {
+		livenessTerminal := terminalLivenessFailure(event) != nil
+		if onTerminal != nil && isTerminalEvent(event) && !livenessTerminal {
+			// Record ordinary terminal causes before invoking the host sink. Sinks
+			// may synchronously tear down a peer; that teardown can race this
+			// participant's media-close notification.
 			onTerminal(event)
 		}
 		publishEvent(ctx, participantID, event, sink, onError)
+		if onTerminal != nil && isTerminalEvent(event) && livenessTerminal {
+			// A liveness event is itself the observable fault boundary. Defer its
+			// participant cancellation until after the sink sees the fault;
+			// otherwise a fast handle teardown can stop the event drain while the
+			// host is still waiting for the liveness projection.
+			onTerminal(event)
+		}
 		notifyTurnComplete(event, onTurn)
 		if diagnosticCallback == nil {
 			return

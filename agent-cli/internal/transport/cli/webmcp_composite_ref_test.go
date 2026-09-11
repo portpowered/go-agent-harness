@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,7 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 )
 
 func TestSplitCompositeTargetRef(t *testing.T) {
@@ -38,14 +41,36 @@ func TestSplitCompositeTargetRef(t *testing.T) {
 	}
 }
 
+func TestExactSelectionDoesNotProbeUnrelatedRestoredTab(t *testing.T) {
+	cases := []struct {
+		name        string
+		selectedTab string
+		browserID   string
+	}{
+		{name: "bare selection", selectedTab: "target-selected", browserID: "browser-selected"},
+		{name: "composite selection", selectedTab: "browser-selected/target-selected", browserID: "browser-selected"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var browser config.BrowserConfig
+			browser.Selection.Tab = testCase.selectedTab
+			probe := productionTargetProbe{owner: &productionWebMCPComposition{browser: browser}}
+			// No runtime is installed: calling the renderer would panic. Listing an
+			// unrelated tab must leave its capability unknown without touching it.
+			capability, err := probe.Probe(context.Background(), discovery.BrowserCandidate{ID: testCase.browserID},
+				discovery.Target{ID: "target-suspended"})
+			if err != nil || capability.DomainKnown || capability.PageToolsKnown || capability.ToolCount != -1 {
+				t.Fatalf("unrelated capability should remain unknown: %+v, %v", capability, err)
+			}
+		})
+	}
+}
+
 // TestProductionWebMCPCLISelectAcceptsListedCompositeReference locks the
 // tabs->select contract for the exact "browserID/targetID" token that the
 // human-readable tabs listing prints: handing that token back verbatim to
 // `select --tab` must succeed in a fresh process, and a composite reference
 // naming a different browser than an explicit --browser must fail closed.
-// Reproduced live 2026-08-29 against pinned headless Chrome 152.0.7977.64:
-// the composite form failed stale_selection/target_not_found while the bare
-// target ID succeeded.
 func TestProductionWebMCPCLISelectAcceptsListedCompositeReference(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -104,13 +129,18 @@ browser:
 	listed := tabsData.Tabs[0]
 	composite := listed.BrowserID + "/" + listed.TargetID
 
-	selected := executeShippedWebMCPCommand(t, configDir, newFactory(), "select", "--tab", composite, "--json")
-	selectionEnvelope := requireDirectSuccess(t, selected)
-	var selectedData WebMCPDirectContext
-	decodeDirectData(t, selectionEnvelope.Data, &selectedData)
-	if selectedData.BrowserID != listed.BrowserID || selectedData.TargetID != listed.TargetID || !selectedData.Connected || !selectedData.Ready {
-		t.Fatalf("composite selection = %+v, listed=%+v", selectedData, listed)
+	assertSelected := func(name, targetRef string) {
+		t.Helper()
+		selected := executeShippedWebMCPCommand(t, configDir, newFactory(), "select", "--tab", targetRef, "--json")
+		selectionEnvelope := requireDirectSuccess(t, selected)
+		var selectedData WebMCPDirectContext
+		decodeDirectData(t, selectionEnvelope.Data, &selectedData)
+		if selectedData.BrowserID != listed.BrowserID || selectedData.TargetID != listed.TargetID || !selectedData.Connected || !selectedData.Ready {
+			t.Fatalf("%s selection = %+v, listed=%+v", name, selectedData, listed)
+		}
 	}
+	assertSelected("bare", listed.TargetID)
+	assertSelected("composite", composite)
 
 	mismatched := executeShippedWebMCPCommand(t, configDir, newFactory(), "select", "--browser", "browser-does-not-match", "--tab", composite, "--json")
 	if mismatched.err == nil {

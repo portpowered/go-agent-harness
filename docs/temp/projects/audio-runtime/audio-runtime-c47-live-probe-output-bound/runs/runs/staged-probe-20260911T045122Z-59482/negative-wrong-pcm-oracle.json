@@ -1,0 +1,51 @@
+{
+  "label": "negative-wrong-pcm-oracle",
+  "argv": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "-c",
+    "\nimport pathlib\nimport runpy\nimport sys\n\nmodule = runpy.run_path(sys.argv[1])\nmodule[\"FIXTURE_EXPECTATIONS\"][\"audio-tool\"][\"pcm_sha256\"] = \"0\" * 64\ntry:\n    module[\"validate_replay\"](\"audio-tool\", pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]))\nexcept module[\"EvidenceFailure\"] as exc:\n    if not str(exc).startswith(\"audio-tool exact PCM changed:\"):\n        print(f\"wrong PCM oracle control failed with unexpected EvidenceFailure: {exc}\", file=sys.stderr, flush=True)\n        raise SystemExit(2)\n    print(f'{module[\"WRONG_PCM_ORACLE_DIAGNOSTIC\"]}: {exc}', flush=True)\n    raise SystemExit(1)\nexcept Exception as exc:\n    print(f\"wrong PCM oracle control failed with unexpected {type(exc).__name__}: {exc}\", file=sys.stderr, flush=True)\n    raise SystemExit(2)\nraise SystemExit(\"wrong PCM oracle unexpectedly passed\")\n",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/verify.py",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T045122Z-59482/staged-source/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T045122Z-59482/replay-audio-tool"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T045122Z-59482",
+  "environment": {
+    "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0jTgaXM:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+    "GOWORK": "",
+    "GOFLAGS": "",
+    "GOTOOLCHAIN": "",
+    "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+    "FACTORY_SERVER_URL": "http://127.0.0.1:7439"
+  },
+  "deadline_seconds": 60.0,
+  "elapsed_seconds": 0.103712,
+  "exit_code": 1,
+  "timed_out": false,
+  "term_sent": false,
+  "kill_sent": false,
+  "parent_reaped": true,
+  "surviving_process_group_pids": [],
+  "survivors_before_final_kill": [],
+  "process_group_inspection_available": true,
+  "process_group_inspection_error": null,
+  "stdout_bytes": 135,
+  "stdout_sha256": "3046f51bd584b52061c89c01e6c58499cb152d3adc2dcbfe8a6f3d9a1bf0d960",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T045122Z-59482/negative-wrong-pcm-oracle.stdout",
+  "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T045122Z-59482/negative-wrong-pcm-oracle.stderr",
+  "output_overflow": false,
+  "capture_failure": null,
+  "primary_failure": {
+    "kind": "exit_code",
+    "message": "negative-wrong-pcm-oracle exited with nonzero status 1",
+    "exit_code": 1
+  },
+  "cleanup_failures": [],
+  "capture_read_chunk_bytes": 65536,
+  "capture_buffer_high_water_bytes": 135,
+  "retained_output_bytes": 135,
+  "output_budget_limit_bytes": 67108864,
+  "output_budget_used_bytes": 4668,
+  "output_budget_remaining_bytes": 67104196
+}
