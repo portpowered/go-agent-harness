@@ -45,6 +45,9 @@ func TestEvidenceFactoryWritersEnforceFiniteBudgets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if wav.Path() != filepath.Join(destination, "audio.wav") || wav.DataBytes() != 0 {
+		t.Fatalf("WAV metadata = path:%q bytes:%d", wav.Path(), wav.DataBytes())
+	}
 	if err := wav.Write(context.Background(), []byte{1, 2, 3, 4}); !errors.Is(err, selfplay.ErrEvidenceQuota) {
 		t.Fatalf("WAV quota error = %v", err)
 	}
@@ -53,6 +56,40 @@ func TestEvidenceFactoryWritersEnforceFiniteBudgets(t *testing.T) {
 	}
 	if closeErr := wav.Close(); closeErr != nil && !errors.Is(closeErr, selfplay.ErrEvidenceQuota) {
 		t.Fatalf("WAV close: %v", closeErr)
+	}
+	clean, err := factory.NewWAVWriter(filepath.Join(destination, "closed-audio.wav"), selfplay.EvidenceSampleRate, selfplay.EvidenceLimits{WAVBytes: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := clean.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := clean.Write(context.Background(), []byte{1, 2}); !errors.Is(err, selfplay.ErrEvidenceClosed) {
+		t.Fatalf("closed WAV write error = %v", err)
+	}
+}
+
+func TestEvidenceFactoryWrapJSONLWriterUsesProvidedWriterAndCloses(t *testing.T) {
+	factory := NewEvidenceFactory()
+	var output bytes.Buffer
+	writer, err := factory.WrapJSONLWriter("memory.jsonl", &output, selfplay.EvidenceLimits{JSONLBytes: 64, JSONLItems: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Write(map[string]string{"event": "ready"}); err != nil {
+		t.Fatal(err)
+	}
+	if output.Len() == 0 {
+		t.Fatal("wrapped writer did not receive JSONL output")
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.WriteRaw([]byte(`{"event":"late"}`)); !errors.Is(err, selfplay.ErrEvidenceClosed) {
+		t.Fatalf("closed wrapped writer error = %v", err)
+	}
+	if _, err := factory.WrapJSONLWriter("memory.jsonl", nil, selfplay.EvidenceLimits{}); err == nil {
+		t.Fatal("nil wrapped writer was accepted")
 	}
 }
 
