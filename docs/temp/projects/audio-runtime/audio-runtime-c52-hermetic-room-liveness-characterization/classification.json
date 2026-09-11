@@ -29,7 +29,7 @@
     "cell_count": 22,
     "mode": "matrix",
     "passes": true,
-    "run_id": "20260911T-6b4f32b5-hermetic"
+    "run_id": "20260911T091919Z"
   },
   "outcomes": [
     {
@@ -47,7 +47,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "691ea91551434908213557bec79fb5f0395cd1a1df770cf61479483f4a7dbf74"
+      "trace_sha256": "be39008149955aae31b4315587cc285d4ef5bbfa08899fa2fb827f3bf0ceeb51"
     },
     {
       "behavior_exit_code": 0,
@@ -64,7 +64,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10
       },
-      "trace_sha256": "6e64464e91b4d62d27e0eb191d8ba71ca6723e46a4d5124f6f7f07655ce54138"
+      "trace_sha256": "4630f2384cd8f1def85b91adda5f9cb92618163e2956b16f2d04b43a4567840a"
     },
     {
       "behavior_exit_code": 0,
@@ -82,7 +82,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "6ee171cff6ceed4cafc67f391ad70ce608f3647ba8aecf013ec6d04274708b95"
+      "trace_sha256": "3072829e031f752da4e716f86d725f3b4f4ff60c02273e4684b01276189e585c"
     },
     {
       "behavior_exit_code": 0,
@@ -100,7 +100,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "5e6191fb48fed2d590b0644850d04391056bc713dc8df2783ffe068e916ade7c"
+      "trace_sha256": "6f81e66f6d292ea35b115d7a581e795c29c7bd5d0c89fcf8c7673c3230562949"
     },
     {
       "behavior_exit_code": 0,
@@ -108,7 +108,7 @@
       "cell_id": "shuffle-seed-17",
       "first_assertion": "",
       "first_divergence_signatures": [
-        "reordered:sink_publish_before"
+        "none"
       ],
       "kind": "fixed-shuffle",
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -118,7 +118,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "6a26bf5dcbfe2cd3c737c481f478bcad111498e6ef769accf6f3838b8ecd5be5"
+      "trace_sha256": "739371bc1524f0f5b0d42a218c7ca52e51eba47ca087cea0521ce11996a632d3"
     },
     {
       "behavior_exit_code": 0,
@@ -126,7 +126,7 @@
       "cell_id": "shuffle-seed-28",
       "first_assertion": "",
       "first_divergence_signatures": [
-        "reordered:sink_publish_before"
+        "none"
       ],
       "kind": "fixed-shuffle",
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -136,7 +136,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "b65bf189eaa81cc28c630d4f03e5ba2045d4c32b4f46167af8a65051dda470e9"
+      "trace_sha256": "c5a0f786e7ae30100f3b6772ac7759d025a26210a26aab41339c5f9affc19a94"
     },
     {
       "behavior_exit_code": 0,
@@ -154,7 +154,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "469f0306351d55a365a721d0270ea5d8424d2ba79cbcd991a7f87197921f6c7c"
+      "trace_sha256": "54c1954fb1743f8478dfbfde1114809d7bb462bd7dc6dfbc7d54a29f16d9630c"
     },
     {
       "behavior_exit_code": 0,
@@ -172,7 +172,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "ea86c90cde9c870d5b19f03bebb2ec84b8ca715741824fc077198b367c15076f"
+      "trace_sha256": "1e9e98b7130b944f5b9797571cfbeda3d3eab286b7c7ab443309ea556f7c8940"
     },
     {
       "behavior_exit_code": 0,
@@ -190,7 +190,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "b7ed5a8d0101b031556b3aae827a81b8cefe68d873e3544016980782f4aaba41"
+      "trace_sha256": "b889f64df64b665ddd31c53556dc57fc3d47b741c76a37e7d3151cf36047c9af"
     },
     {
       "behavior_exit_code": 0,
@@ -208,7 +208,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "ee53bcc9c3c5b0c25db18b9bd7246b30fbd0e0e5970c4b5b42041295151ca511"
+      "trace_sha256": "eb31b481d44864e2732782badb4e299cea8c2219cb7a46d86bdc7117acb3680c"
     },
     {
       "behavior_exit_code": 0,
@@ -226,7 +226,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 1,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 1
       },
-      "trace_sha256": "95eb32fe51e7b74f3a5abe470afcca327873dc99df882a5dff17b3f3af171d81"
+      "trace_sha256": "d663282a0792fc8369a36f71e92d4f1cf44975c112c12165e083805948522d8c"
     },
     {
       "behavior_exit_code": 0,
@@ -243,7 +243,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "6ba367866c51b5a4b3f21324d74aa4dc2fb0c2dd2a716539830868521e7a9f7f"
+      "trace_sha256": "518a5add955b06d85120bca549bf265b6a76ddd9d5a27ec9a20c846c5ece65ec"
     },
     {
       "behavior_exit_code": 0,
@@ -260,7 +260,7 @@
       "selected": {
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10
       },
-      "trace_sha256": "c155c713310f6f0a4d3b97ae484067797ca07a591925aad8edf180afa36a577a"
+      "trace_sha256": "07fd4e3a4ceff4c7cf1c0728ba674377fa3e0a8acd1759bbaf4a26d54f2d277c"
     },
     {
       "behavior_exit_code": 0,
@@ -278,7 +278,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "6ed7e777af7ef6ad3f784c4f4755e28a5fc300c3918970f06c77e0e27345de90"
+      "trace_sha256": "dbf2e2bd104086fb8fc48d67afb29ed2c270d0bae656f78ab16cc880f6d026c6"
     },
     {
       "behavior_exit_code": 0,
@@ -296,7 +296,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "6d39e2aee45a7b38cd7f5f9607132e7e94b34cdbe5171bc5226f0ba5bb60ba4e"
+      "trace_sha256": "d06425db8873a220c7543915b62c7ed3c64c0871c7d586904494c19139b08bf9"
     },
     {
       "behavior_exit_code": 0,
@@ -314,7 +314,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "9aad98e0502439d0e72e518d513998b54a7ebdbbc29b4ddc9ad9f040c94aaa90"
+      "trace_sha256": "1f00c4f334ce6b85184ca43b552123987419b5051cea525df35e8c1b2b6e5df7"
     },
     {
       "behavior_exit_code": 0,
@@ -332,7 +332,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
       },
-      "trace_sha256": "36ed4134f1befe1922819c86acf41a71c7bc397798e0ef441ca98e04f69e2a3e"
+      "trace_sha256": "1955ec512e63f5396b5f0dcb721930b81fb5617ea8ef9f57f78720c9103f81ea"
     },
     {
       "behavior_exit_code": 0,
@@ -350,7 +350,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "997d7bcda7ecd1285b1ff499387213da7d33bf33aa12d62f737f48fc5e23b136"
+      "trace_sha256": "32f11b58d94ee8b3251c08b00cd17105f030a1f44382913b48d082f9a98ab6a3"
     },
     {
       "behavior_exit_code": 0,
@@ -368,7 +368,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 3,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 3
       },
-      "trace_sha256": "8bc8aac75e176388d81b6b847837d6ceaa31f0b9d2be7e98440dd7f80f21d36e"
+      "trace_sha256": "571987c6906946747f713f705594214e1ca5a34d7c95b34c7eb848b0c083beb5"
     },
     {
       "behavior_exit_code": 0,
@@ -386,7 +386,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "1b28f023cf3f84c98658a960d35371d39b72f11efd04b25f3ef7953dc44457db"
+      "trace_sha256": "d9f8afe5041329149f21f9ef18e772a38d465e06ae4f7a9aac32fe51d06a1c16"
     },
     {
       "behavior_exit_code": 0,
@@ -404,7 +404,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 10,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
       },
-      "trace_sha256": "7d707921374f013246ab65490543a5ed6eb97f593b7ce9be9ff6da68b1b0c6e3"
+      "trace_sha256": "22a116eafcd4c91413db659dd9ea3b36ccf1ca6acea95751314676333ad2dcc1"
     },
     {
       "behavior_exit_code": 0,
@@ -422,7 +422,7 @@
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 1,
         "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 1
       },
-      "trace_sha256": "724b97ab001c72f8ba1ac42cf981180e3c457585aa301a1b9c4cd1d6dcaf3155"
+      "trace_sha256": "629acbfc4702ff15b14784ab62a2a6751cda69139d227a6a58806d516bdcc927"
     }
   ],
   "passes": false,

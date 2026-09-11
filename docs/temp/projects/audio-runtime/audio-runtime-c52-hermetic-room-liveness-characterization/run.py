@@ -125,6 +125,36 @@ def git_output(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def archive_content_sha256(path: Path) -> str:
+    entries: list[dict[str, object]] = []
+    with tarfile.open(path, "r:*") as stream:
+        for member in stream.getmembers():
+            entry: dict[str, object] = {
+                "name": member.name,
+                "mode": member.mode,
+                "size": member.size,
+            }
+            if member.isdir():
+                entry["type"] = "directory"
+            elif member.isfile():
+                entry["type"] = "file"
+                source = stream.extractfile(member)
+                if source is None:
+                    raise RuntimeError(f"archive member has no file content: {path}:{member.name}")
+                digest = hashlib.sha256()
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    digest.update(chunk)
+                entry["sha256"] = digest.hexdigest()
+            elif member.issym() or member.islnk():
+                entry["type"] = "symlink" if member.issym() else "hardlink"
+                entry["linkname"] = member.linkname
+            else:
+                raise RuntimeError(f"unsupported archive member type: {path}:{member.name}")
+            entries.append(entry)
+    encoded = json.dumps(sorted(entries, key=lambda item: str(item["name"])), sort_keys=True, separators=(",", ":")).encode()
+    return sha256_bytes(encoded)
+
+
 def archive_revision(repo: Path, revision: str, destination: Path) -> dict[str, object]:
     destination.parent.mkdir(parents=True, exist_ok=True)
     resolved = git_output(repo, "rev-parse", revision)
@@ -141,12 +171,14 @@ def archive_revision(repo: Path, revision: str, destination: Path) -> dict[str, 
         if result.returncode != 0:
             raise RuntimeError(f"git archive {revision} failed: {result.stderr.decode(errors='replace')}")
         generated_sha256 = sha256_file(partial)
+        generated_content_sha256 = archive_content_sha256(partial)
         if destination.exists():
             existing_sha256 = sha256_file(destination)
-            if existing_sha256 != generated_sha256:
+            existing_content_sha256 = archive_content_sha256(destination)
+            if existing_content_sha256 != generated_content_sha256:
                 raise RuntimeError(
-                    f"pre-existing source archive does not match fixed revision {revision}: "
-                    f"{destination} has {existing_sha256}, generated {generated_sha256}"
+                    f"pre-existing source archive contents do not match fixed revision {revision}: "
+                    f"{destination} has content {existing_content_sha256}, generated {generated_content_sha256}"
                 )
         else:
             partial.replace(destination)
@@ -158,6 +190,7 @@ def archive_revision(repo: Path, revision: str, destination: Path) -> dict[str, 
         "path": str(destination.relative_to(EVIDENCE)),
         "bytes": destination.stat().st_size,
         "sha256": sha256_file(destination),
+        "content_sha256": archive_content_sha256(destination),
     }
 
 
@@ -469,11 +502,11 @@ def overlay_replacements() -> list[tuple[str, list[tuple[str, str]]]]:
                 ),
                 (
                     "\tresultCh := startTypedLivenessRun(ctx, &runner, sink, faultSeen, &faultOnce)\n\twaitForTypedLivenessFault(t, faultSeen)\n\tif got := peer.cancelCallsSnapshot(); got != 0 {",
-                    "\tresultCh := startTypedLivenessRun(ctx, &runner, sink, faultSeen, &faultOnce)\n\twaitForTypedLivenessFault(t, faultSeen)\n\tc52Trace(\"fault_observed\", typedLivenessSilentID, map[string]string{\"classification\": classification})\n\tpeerCancelCalls := peer.cancelCallsSnapshot()\n\tc52Trace(\"peer_cancel_snapshot\", \"peer\", map[string]string{\"count\": c52Int(peerCancelCalls), \"before\": \"external_room_cancel\"})\n\tif got := peerCancelCalls; got != 0 {",
+                    "\tresultCh := startTypedLivenessRun(ctx, &runner, sink, faultSeen, &faultOnce)\n\troomResultObserved := false\n\tdefer func() {\n\t\tif roomResultObserved {\n\t\t\treturn\n\t\t}\n\t\tc52Trace(\"room_context_cancel_requested\", \"room\", map[string]string{\"reason\": \"test_deferred_cleanup_after_assertion\"})\n\t\tcancel()\n\t\tselect {\n\t\tcase deferredOutcome := <-resultCh:\n\t\t\tc52TraceRoomResult(\"test_deferred_outcome\", deferredOutcome.result, deferredOutcome.err)\n\t\tcase <-time.After(2 * time.Second):\n\t\t\tc52Trace(\"test_deferred_outcome_timeout\", \"room\", map[string]string{\"reason\": \"bounded_deferred_cleanup\"})\n\t\t}\n\t}()\n\twaitForTypedLivenessFault(t, faultSeen)\n\tc52Trace(\"fault_observed\", typedLivenessSilentID, map[string]string{\"classification\": classification})\n\tpeerCancelCalls := peer.cancelCallsSnapshot()\n\tc52Trace(\"peer_cancel_snapshot\", \"peer\", map[string]string{\"count\": c52Int(peerCancelCalls), \"before\": \"external_room_cancel\"})\n\tif got := peerCancelCalls; got != 0 {",
                 ),
                 (
                     "\tcancel()\n\toutcome := waitForRoomResult(t, resultCh)\n\tassertTypedLivenessResult(t, outcome, classification)",
-                    "\tc52Trace(\"room_context_cancel_requested\", \"room\", map[string]string{\"reason\": \"test_external_cancel\"})\n\tcancel()\n\toutcome := waitForRoomResult(t, resultCh)\n\tc52TraceRoomResult(\"test_outcome\", outcome.result, outcome.err)\n\tassertTypedLivenessResult(t, outcome, classification)",
+                    "\tc52Trace(\"room_context_cancel_requested\", \"room\", map[string]string{\"reason\": \"test_external_cancel\"})\n\tcancel()\n\toutcome := waitForRoomResult(t, resultCh)\n\troomResultObserved = true\n\tc52TraceRoomResult(\"test_outcome\", outcome.result, outcome.err)\n\tassertTypedLivenessResult(t, outcome, classification)",
                 ),
                 (
                     "\tgo func() {\n\t\tresult, err := runner.Run(ctx, nil, rooms.RoomRunOptions{",

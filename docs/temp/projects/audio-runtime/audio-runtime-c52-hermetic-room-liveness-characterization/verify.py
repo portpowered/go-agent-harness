@@ -459,7 +459,7 @@ REQUIRED_TRACE_KINDS = [
 ]
 
 
-def validate_case_trace(group: list[dict[str, object]], record: dict[str, object]) -> None:
+def validate_case_trace(group: list[dict[str, object]], record: dict[str, object], observed_failure: bool = False) -> None:
     if not group or group[0].get("kind") != "case_started":
         raise VerificationError(f"case trace does not start with case_started for {record.get('revision_label')}/{record.get('cell', {}).get('id')}")
     counts = Counter(str(event.get("kind")) for event in group)
@@ -485,9 +485,16 @@ def validate_case_trace(group: list[dict[str, object]], record: dict[str, object
     latched = [event_fields(event) for event in group if event.get("kind") == "terminal_metadata_latched"]
     if terminal[0].get("liveness_classification") != classification or latched[0].get("classification") != classification:
         raise VerificationError("terminal metadata does not preserve typed liveness classification")
-    if any(event_fields(event).get("count") != "0" or event_fields(event).get("before") != "external_room_cancel" for event in group if event.get("kind") == "peer_cancel_snapshot"):
+    peer_snapshots = [event_fields(event) for event in group if event.get("kind") == "peer_cancel_snapshot"]
+    if observed_failure:
+        if len(peer_snapshots) != 1 or peer_snapshots[0].get("before") != "external_room_cancel" or peer_snapshots[0].get("count") == "0":
+            raise VerificationError("failed case lacks the observed non-zero peer cancellation boundary")
+    elif any(fields.get("count") != "0" or fields.get("before") != "external_room_cancel" for fields in peer_snapshots):
         raise VerificationError("peer cancellation was not zero before external room cancellation")
-    if any(event_fields(event).get("reason") != "test_external_cancel" for event in group if event.get("kind") == "room_context_cancel_requested"):
+    allowed_cancel_reasons = {"test_external_cancel"}
+    if observed_failure:
+        allowed_cancel_reasons.add("test_deferred_cleanup_after_assertion")
+    if any(event_fields(event).get("reason") not in allowed_cancel_reasons for event in group if event.get("kind") == "room_context_cancel_requested"):
         raise VerificationError("room cancellation checkpoint has an unexpected reason")
     for kind in ("participant_wait_returned", "participant_handle_closed", "participant_result_recorded"):
         participants = sorted(str(event.get("participant")) for event in group if event.get("kind") == kind)
@@ -512,8 +519,15 @@ def verify_checkpoints() -> dict[str, object]:
         expected_cases = int(count_values[0].split("=", 1)[1]) * len(required_tests_for_cell(record["cell"])) if len(count_values) == 1 and isinstance(record.get("cell"), dict) else -1
         if len(count_values) != 1 or len(groups) != expected_cases:
             raise VerificationError(f"trace case count does not match frozen test count for {record.get('revision_label')}/{record.get('cell', {}).get('id')}")
+        process = record.get("process")
+        process_failed = isinstance(process, dict) and process.get("exit_code") != 0
+        failed_groups = [group for group in groups if not any(event.get("kind") == "test_outcome" for event in group)]
+        if failed_groups and not process_failed:
+            raise VerificationError(f"trace has an unattributed failed case despite a passing process for {record.get('revision_label')}/{record.get('cell', {}).get('id')}")
+        if process_failed and len(failed_groups) != 1:
+            raise VerificationError(f"failed process does not have exactly one attributable failed case for {record.get('revision_label')}/{record.get('cell', {}).get('id')}")
         for group in groups:
-            validate_case_trace(group, record)
+            validate_case_trace(group, record, observed_failure=group in failed_groups)
         kinds = [str(event.get("kind")) for event in events]
         missing = [kind for kind in REQUIRED_TRACE_KINDS if kind not in kinds]
         peer_counts = [event_fields(event).get("count") for event in events if event.get("kind") == "peer_cancel_snapshot"]
@@ -540,7 +554,8 @@ def first_divergence() -> dict[str, object]:
     for record in records(run):
         events = record_trace(record, run_root)
         for group_index, group in enumerate(case_groups(events), start=1):
-            validate_case_trace(group, record)
+            observed_failure = not any(event.get("kind") == "test_outcome" for event in group)
+            validate_case_trace(group, record, observed_failure=observed_failure)
             by_kind: dict[str, list[dict[str, object]]] = {}
             for event in group:
                 by_kind.setdefault(str(event.get("kind")), []).append(event)
@@ -557,11 +572,14 @@ def first_divergence() -> dict[str, object]:
                 last = max(last, positions[kind])
             signature = [str(event.get("kind")) for event in group]
             finding = "none"
-            if missing:
+            peer_snapshots = [event_fields(event) for event in group if event.get("kind") == "peer_cancel_snapshot"]
+            if any(fields.get("before") == "external_room_cancel" and fields.get("count") != "0" for fields in peer_snapshots):
+                finding = "transformed:peer_cancel_snapshot"
+            elif missing:
                 finding = f"missing:{missing[0]}"
             elif order_violations:
                 finding = f"reordered:{order_violations[0]['checkpoint']}"
-            fields = event_fields(next((event for event in reversed(group) if event.get("kind") == "test_outcome"), {}))
+            fields = event_fields(next((event for event in reversed(group) if event.get("kind") in {"test_outcome", "test_deferred_outcome"}), {}))
             cases.append({
                 "revision_label": record.get("revision_label"),
                 "revision": record.get("revision"),

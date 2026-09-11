@@ -1,6 +1,6 @@
 {
   "active_owner_intersections": [],
-  "first_divergence": "OBSERVED_CHECKPOINT_VARIANCE",
+  "first_divergence": "NO_DIVERGENCE_OBSERVED",
   "limitations": [
     "No defect absence is claimed outside the declared bounded matrix.",
     "No CI flakiness or hosted scheduling cause is claimed from the local result.",

@@ -4,6 +4,7 @@
   "archives": {
     "planning-main": {
       "bytes": 51513216,
+      "content_sha256": "a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb97eae",
       "path": "inputs/source-archives/planning-main-7f73c8b3b4eb.tar.gz",
       "resolved_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -11,6 +12,7 @@
     },
     "pr438": {
       "bytes": 51540519,
+      "content_sha256": "78a4ba0d3f787be0902c954ae58a84dc09f472e644045f0b06bb0db0269b1b84",
       "path": "inputs/source-archives/pr438-823bd350fe5d.tar.gz",
       "resolved_revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -47,26 +49,26 @@
         "C52_MATRIX_CELL": "provider-timeout-count10",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/pr438/provider-timeout-count10/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/pr438/provider-timeout-count10/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -87,9 +89,9 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
-        "duration_seconds": 14.858917249832302,
-        "ended_at": "2026-09-11T08:11:48.032107+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/pr438/go-agent-runtime",
+        "duration_seconds": 15.092428290750831,
+        "ended_at": "2026-09-11T09:19:50.022687+00:00",
         "exit_code": 0,
         "first_failure": {
           "line": 1,
@@ -98,11 +100,11 @@
         },
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:11:33.172969+00:00",
+        "started_at": "2026-09-11T09:19:34.930222+00:00",
         "stderr_bytes": 154,
         "stderr_sha256": "09f42649424cbd6e8d93d51dc177a52cdb25a87d935d7a8a22355762476334cd",
-        "stdout_bytes": 22655,
-        "stdout_sha256": "1816880d083a812d60eef5a73a88dc7b9ee4f6c53c62353881351e2f3c3f67c8",
+        "stdout_bytes": 22662,
+        "stdout_sha256": "a2797388cc8ae84fc0c9e98fae5de3bd1dbfdc89183af8099444c9f7f7cfd704",
         "timed_out": false
       },
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -119,25 +121,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:47.748464Z"
+            "Time": "2026-09-11T09:19:49.724571Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:47.930151Z"
+            "Time": "2026-09-11T09:19:49.908453Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.182s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.184s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:47.930565Z"
+            "Time": "2026-09-11T09:19:49.908884Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.182,
+            "Elapsed": 0.184,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:47.930588Z"
+            "Time": "2026-09-11T09:19:49.908895Z"
           }
         ],
         "relevant_test_names": [
@@ -163,8 +165,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/pr438/provider-timeout-count10/trace.jsonl",
-      "trace_sha256": "691ea91551434908213557bec79fb5f0395cd1a1df770cf61479483f4a7dbf74"
+      "trace_path": "runs/20260911T091919Z/cells/pr438/provider-timeout-count10/trace.jsonl",
+      "trace_sha256": "be39008149955aae31b4315587cc285d4ef5bbfa08899fa2fb827f3bf0ceeb51"
     },
     {
       "attempt": 1,
@@ -194,26 +196,26 @@
         "C52_MATRIX_CELL": "empty-response-count10",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/pr438/empty-response-count10/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/pr438/empty-response-count10/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -234,18 +236,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/empty_response$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
-        "duration_seconds": 0.5504909171722829,
-        "ended_at": "2026-09-11T08:11:48.584637+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/pr438/go-agent-runtime",
+        "duration_seconds": 0.544105791952461,
+        "ended_at": "2026-09-11T09:19:50.568493+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:11:48.034146+00:00",
+        "started_at": "2026-09-11T09:19:50.024400+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 22544,
-        "stdout_sha256": "9eca81cf8e4548db8193b755e6a012b4ce3c6531c972144b1e91837aafbdc47e",
+        "stdout_bytes": 22550,
+        "stdout_sha256": "6a4fcf596921ecb688b11808428c0083bf0540075271fc82cd6027e212231ae0",
         "timed_out": false
       },
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -262,25 +264,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:48.344392Z"
+            "Time": "2026-09-11T09:19:50.317688Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:48.545807Z"
+            "Time": "2026-09-11T09:19:50.547681Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.202s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.230s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:48.546155Z"
+            "Time": "2026-09-11T09:19:50.548107Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.202,
+            "Elapsed": 0.23,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:48.546162Z"
+            "Time": "2026-09-11T09:19:50.548113Z"
           }
         ],
         "relevant_test_names": [
@@ -306,8 +308,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/pr438/empty-response-count10/trace.jsonl",
-      "trace_sha256": "6e64464e91b4d62d27e0eb191d8ba71ca6723e46a4d5124f6f7f07655ce54138"
+      "trace_path": "runs/20260911T091919Z/cells/pr438/empty-response-count10/trace.jsonl",
+      "trace_sha256": "4630f2384cd8f1def85b91adda5f9cb92618163e2956b16f2d04b43a4567840a"
     },
     {
       "attempt": 1,
@@ -341,26 +343,26 @@
         "C52_MATRIX_CELL": "order-timeout-first",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/pr438/order-timeout-first/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/pr438/order-timeout-first/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -381,18 +383,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
-        "duration_seconds": 0.4693260840140283,
-        "ended_at": "2026-09-11T08:11:49.055971+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/pr438/go-agent-runtime",
+        "duration_seconds": 0.4626748748123646,
+        "ended_at": "2026-09-11T09:19:51.033711+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:11:48.586647+00:00",
+        "started_at": "2026-09-11T09:19:50.571046+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 34003,
-        "stdout_sha256": "bf3e77f353427d184e25639f66dd06eca95bd40b29f33ea296cba255f9db3b26",
+        "stdout_bytes": 33985,
+        "stdout_sha256": "972e1e98e237f3afe6c4cdaf517e9ed0850b055d91a291750db8fbef8353f68c",
         "timed_out": false
       },
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -409,25 +411,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:48.820458Z"
+            "Time": "2026-09-11T09:19:50.796692Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:49.041053Z"
+            "Time": "2026-09-11T09:19:51.01363Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.221s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.217s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:49.041445Z"
+            "Time": "2026-09-11T09:19:51.014027Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.221,
+            "Elapsed": 0.217,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:49.041459Z"
+            "Time": "2026-09-11T09:19:51.01404Z"
           }
         ],
         "relevant_test_names": [
@@ -461,8 +463,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/pr438/order-timeout-first/trace.jsonl",
-      "trace_sha256": "6ee171cff6ceed4cafc67f391ad70ce608f3647ba8aecf013ec6d04274708b95"
+      "trace_path": "runs/20260911T091919Z/cells/pr438/order-timeout-first/trace.jsonl",
+      "trace_sha256": "3072829e031f752da4e716f86d725f3b4f4ff60c02273e4684b01276189e585c"
     },
     {
       "attempt": 1,
@@ -496,26 +498,26 @@
         "C52_MATRIX_CELL": "order-empty-first",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/pr438/order-empty-first/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/pr438/order-empty-first/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -536,18 +538,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
-        "duration_seconds": 0.48336095781996846,
-        "ended_at": "2026-09-11T08:11:49.541659+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/pr438/go-agent-runtime",
+        "duration_seconds": 0.4816165827214718,
+        "ended_at": "2026-09-11T09:19:51.517800+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:11:49.058304+00:00",
+        "started_at": "2026-09-11T09:19:51.036192+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 33988,
-        "stdout_sha256": "70a8780710f3f39b658f5bb30b9b610bc89390b56d5984d7eee0919e03ff16c5",
+        "stdout_bytes": 34005,
+        "stdout_sha256": "dc73a6c4f4f611277b9bd4fef4d36b0b5ec017d8523052e0a84bfa6a8493c028",
         "timed_out": false
       },
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -564,25 +566,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:49.296661Z"
+            "Time": "2026-09-11T09:19:51.264379Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:49.516436Z"
+            "Time": "2026-09-11T09:19:51.500306Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.220s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.236s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:49.516814Z"
+            "Time": "2026-09-11T09:19:51.500696Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.22,
+            "Elapsed": 0.236,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:49.51683Z"
+            "Time": "2026-09-11T09:19:51.500705Z"
           }
         ],
         "relevant_test_names": [
@@ -616,8 +618,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/pr438/order-empty-first/trace.jsonl",
-      "trace_sha256": "5e6191fb48fed2d590b0644850d04391056bc713dc8df2783ffe068e916ade7c"
+      "trace_path": "runs/20260911T091919Z/cells/pr438/order-empty-first/trace.jsonl",
+      "trace_sha256": "6f81e66f6d292ea35b115d7a581e795c29c7bd5d0c89fcf8c7673c3230562949"
     },
     {
       "attempt": 1,
@@ -651,26 +653,26 @@
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
         "C52_SHUFFLE_SEED": "17",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/pr438/shuffle-seed-17/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/pr438/shuffle-seed-17/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -691,18 +693,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
-        "duration_seconds": 0.4655496249906719,
-        "ended_at": "2026-09-11T08:11:50.009548+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/pr438/go-agent-runtime",
+        "duration_seconds": 0.47110120905563235,
+        "ended_at": "2026-09-11T09:19:51.991174+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:11:49.543997+00:00",
+        "started_at": "2026-09-11T09:19:51.520081+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 17398,
-        "stdout_sha256": "99ab11725d4589691ff0480394a0db7168c5cc6c4285db72119a3cc2a18f0e5c",
+        "stdout_bytes": 17399,
+        "stdout_sha256": "5a625247eb711c008c201fade11b5f193395a0331c25efab49d51ed61a6e75de",
         "timed_out": false
       },
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -719,25 +721,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:49.778986Z"
+            "Time": "2026-09-11T09:19:51.748134Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:49.981407Z"
+            "Time": "2026-09-11T09:19:51.959768Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.203s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.212s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:49.981745Z"
+            "Time": "2026-09-11T09:19:51.960111Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.203,
+            "Elapsed": 0.212,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:49.981764Z"
+            "Time": "2026-09-11T09:19:51.96012Z"
           }
         ],
         "relevant_test_names": [
@@ -771,8 +773,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/pr438/shuffle-seed-17/trace.jsonl",
-      "trace_sha256": "6a26bf5dcbfe2cd3c737c481f478bcad111498e6ef769accf6f3838b8ecd5be5"
+      "trace_path": "runs/20260911T091919Z/cells/pr438/shuffle-seed-17/trace.jsonl",
+      "trace_sha256": "739371bc1524f0f5b0d42a218c7ca52e51eba47ca087cea0521ce11996a632d3"
     },
     {
       "attempt": 1,
@@ -806,26 +808,26 @@
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
         "C52_SHUFFLE_SEED": "28",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/pr438/shuffle-seed-28/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/pr438/shuffle-seed-28/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -846,18 +848,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
-        "duration_seconds": 0.481738209258765,
-        "ended_at": "2026-09-11T08:11:50.493062+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/pr438/go-agent-runtime",
+        "duration_seconds": 0.47869012504816055,
+        "ended_at": "2026-09-11T09:19:52.471771+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:11:50.011326+00:00",
+        "started_at": "2026-09-11T09:19:51.993092+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 17395,
-        "stdout_sha256": "6fbaf61cade021c7e94c3bab07481466b8cc35bea9b1fa2a006066372706c49e",
+        "stdout_bytes": 17403,
+        "stdout_sha256": "d5a871d96d3d254b5641fd11b54e4c2a1b32995abbc685bc535762da8ba0cfcb",
         "timed_out": false
       },
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -874,25 +876,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:50.256873Z"
+            "Time": "2026-09-11T09:19:52.223781Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:50.458114Z"
+            "Time": "2026-09-11T09:19:52.431674Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.201s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.208s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:50.458485Z"
+            "Time": "2026-09-11T09:19:52.43204Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.202,
+            "Elapsed": 0.208,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:50.458496Z"
+            "Time": "2026-09-11T09:19:52.432049Z"
           }
         ],
         "relevant_test_names": [
@@ -926,8 +928,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/pr438/shuffle-seed-28/trace.jsonl",
-      "trace_sha256": "b65bf189eaa81cc28c630d4f03e5ba2045d4c32b4f46167af8a65051dda470e9"
+      "trace_path": "runs/20260911T091919Z/cells/pr438/shuffle-seed-28/trace.jsonl",
+      "trace_sha256": "c5a0f786e7ae30100f3b6772ac7759d025a26210a26aab41339c5f9affc19a94"
     },
     {
       "attempt": 1,
@@ -964,27 +966,27 @@
         "C52_MATRIX_CELL": "package-serialized",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/pr438/package-serialized/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/pr438/package-serialized/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
         "GOMAXPROCS": "2",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -1007,9 +1009,9 @@
           "./services/rooms/internal/lifecycle",
           "./services/session/internal/live"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
-        "duration_seconds": 8.409656082745641,
-        "ended_at": "2026-09-11T08:11:58.904819+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/pr438/go-agent-runtime",
+        "duration_seconds": 7.9859756249934435,
+        "ended_at": "2026-09-11T09:20:00.459878+00:00",
         "exit_code": 0,
         "first_failure": {
           "line": 1,
@@ -1018,11 +1020,11 @@
         },
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:11:50.495040+00:00",
+        "started_at": "2026-09-11T09:19:52.473895+00:00",
         "stderr_bytes": 155,
         "stderr_sha256": "032503ddfd5c9f98a53378d1e6396929b5f94abe29f26689d467bb6fd7c8da4b",
-        "stdout_bytes": 11744,
-        "stdout_sha256": "57851fc2e9f90e4eb250f8c896eb05c9ea682f00d9beb1321df72b9181c112d4",
+        "stdout_bytes": 11751,
+        "stdout_sha256": "c0e694e693d260c92c88eea12a141746cf2e4325b9d2e3f261960afbe0761392",
         "timed_out": false
       },
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -1039,25 +1041,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:51.24604Z"
+            "Time": "2026-09-11T09:19:53.200758Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:51.43496Z"
+            "Time": "2026-09-11T09:19:53.398299Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.189s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.198s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:51.435251Z"
+            "Time": "2026-09-11T09:19:53.398609Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.189,
+            "Elapsed": 0.198,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:51.435268Z"
+            "Time": "2026-09-11T09:19:53.398636Z"
           }
         ],
         "relevant_test_names": [
@@ -1091,8 +1093,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/pr438/package-serialized/trace.jsonl",
-      "trace_sha256": "469f0306351d55a365a721d0270ea5d8424d2ba79cbcd991a7f87197921f6c7c"
+      "trace_path": "runs/20260911T091919Z/cells/pr438/package-serialized/trace.jsonl",
+      "trace_sha256": "54c1954fb1743f8478dfbfde1114809d7bb462bd7dc6dfbc7d54a29f16d9630c"
     },
     {
       "attempt": 1,
@@ -1129,27 +1131,27 @@
         "C52_MATRIX_CELL": "package-concurrent",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/pr438/package-concurrent/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/pr438/package-concurrent/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
         "GOMAXPROCS": "2",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -1172,18 +1174,18 @@
           "./services/rooms/internal/lifecycle",
           "./services/session/internal/live"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
-        "duration_seconds": 0.64782137516886,
-        "ended_at": "2026-09-11T08:11:59.554364+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/pr438/go-agent-runtime",
+        "duration_seconds": 0.6175503749400377,
+        "ended_at": "2026-09-11T09:20:01.078982+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:11:58.906538+00:00",
+        "started_at": "2026-09-11T09:20:00.461442+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 11750,
-        "stdout_sha256": "35217ff29b5acecfa6a872cc739d41fef11bf9220cc40cd48196146d064558ea",
+        "stdout_bytes": 11747,
+        "stdout_sha256": "43c9ea57b54f7a31621c2dac1da11eada21a8342893ce6db2fd5158282e12183",
         "timed_out": false
       },
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -1200,25 +1202,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:59.167449Z"
+            "Time": "2026-09-11T09:20:00.711997Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:59.3565Z"
+            "Time": "2026-09-11T09:20:00.895453Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.189s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.184s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:59.356805Z"
+            "Time": "2026-09-11T09:20:00.895795Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.189,
+            "Elapsed": 0.184,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:59.356837Z"
+            "Time": "2026-09-11T09:20:00.895818Z"
           }
         ],
         "relevant_test_names": [
@@ -1252,8 +1254,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/pr438/package-concurrent/trace.jsonl",
-      "trace_sha256": "ea86c90cde9c870d5b19f03bebb2ec84b8ca715741824fc077198b367c15076f"
+      "trace_path": "runs/20260911T091919Z/cells/pr438/package-concurrent/trace.jsonl",
+      "trace_sha256": "1e9e98b7130b944f5b9797571cfbeda3d3eab286b7c7ab443309ea556f7c8940"
     },
     {
       "attempt": 1,
@@ -1286,27 +1288,27 @@
         "C52_MATRIX_CELL": "gomaxprocs-1",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/pr438/gomaxprocs-1/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/pr438/gomaxprocs-1/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
         "GOMAXPROCS": "1",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -1327,18 +1329,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
-        "duration_seconds": 0.5960510419681668,
-        "ended_at": "2026-09-11T08:12:00.151917+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/pr438/go-agent-runtime",
+        "duration_seconds": 0.5555098750628531,
+        "ended_at": "2026-09-11T09:20:01.636393+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:11:59.555866+00:00",
+        "started_at": "2026-09-11T09:20:01.080884+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "stdout_bytes": 34007,
-        "stdout_sha256": "2dfc2bcbd43eb001285a9aa49c0df15d136cbb8863a60a4af82f88da5154a3d0",
+        "stdout_sha256": "66fb6af974157290517c24b7768dfe25464e660548193d11b314dd2aac22879e",
         "timed_out": false
       },
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -1355,25 +1357,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:11:59.902356Z"
+            "Time": "2026-09-11T09:20:01.392522Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:00.127957Z"
+            "Time": "2026-09-11T09:20:01.619658Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.226s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.227s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:00.128255Z"
+            "Time": "2026-09-11T09:20:01.620013Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.226,
+            "Elapsed": 0.228,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:00.128265Z"
+            "Time": "2026-09-11T09:20:01.62002Z"
           }
         ],
         "relevant_test_names": [
@@ -1407,8 +1409,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/pr438/gomaxprocs-1/trace.jsonl",
-      "trace_sha256": "b7ed5a8d0101b031556b3aae827a81b8cefe68d873e3544016980782f4aaba41"
+      "trace_path": "runs/20260911T091919Z/cells/pr438/gomaxprocs-1/trace.jsonl",
+      "trace_sha256": "b889f64df64b665ddd31c53556dc57fc3d47b741c76a37e7d3151cf36047c9af"
     },
     {
       "attempt": 1,
@@ -1441,27 +1443,27 @@
         "C52_MATRIX_CELL": "gomaxprocs-4",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/pr438/gomaxprocs-4/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/pr438/gomaxprocs-4/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
         "GOMAXPROCS": "4",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -1482,18 +1484,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
-        "duration_seconds": 0.4880382912233472,
-        "ended_at": "2026-09-11T08:12:00.642339+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/pr438/go-agent-runtime",
+        "duration_seconds": 0.45079933293163776,
+        "ended_at": "2026-09-11T09:20:02.089755+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:00.154308+00:00",
+        "started_at": "2026-09-11T09:20:01.638966+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 34002,
-        "stdout_sha256": "851c10e7610922b486c48017d7d1c1adb70470d7b48681fedc039c9bc8db61df",
+        "stdout_bytes": 33989,
+        "stdout_sha256": "6ad2f141c1315f12ac7dc97595dfca907c021cfe7bb11a0d205ba2e7b4ee207b",
         "timed_out": false
       },
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -1510,25 +1512,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:00.383945Z"
+            "Time": "2026-09-11T09:20:01.848975Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:00.607204Z"
+            "Time": "2026-09-11T09:20:02.070928Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.223s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.222s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:00.607592Z"
+            "Time": "2026-09-11T09:20:02.0713Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.224,
+            "Elapsed": 0.222,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:00.607604Z"
+            "Time": "2026-09-11T09:20:02.071309Z"
           }
         ],
         "relevant_test_names": [
@@ -1562,8 +1564,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/pr438/gomaxprocs-4/trace.jsonl",
-      "trace_sha256": "ee53bcc9c3c5b0c25db18b9bd7246b30fbd0e0e5970c4b5b42041295151ca511"
+      "trace_path": "runs/20260911T091919Z/cells/pr438/gomaxprocs-4/trace.jsonl",
+      "trace_sha256": "eb31b481d44864e2732782badb4e299cea8c2219cb7a46d86bdc7117acb3680c"
     },
     {
       "attempt": 1,
@@ -1599,27 +1601,27 @@
         "C52_MATRIX_CELL": "focused-race",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/pr438/focused-race/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/pr438/focused-race/trace.jsonl",
         "CGO_ENABLED": "1",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
         "GOMAXPROCS": "4",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -1641,18 +1643,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
-        "duration_seconds": 8.1165884998627,
-        "ended_at": "2026-09-11T08:12:08.761179+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/pr438/go-agent-runtime",
+        "duration_seconds": 7.822777249850333,
+        "ended_at": "2026-09-11T09:20:09.914823+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:00.644476+00:00",
+        "started_at": "2026-09-11T09:20:02.092039+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 4114,
-        "stdout_sha256": "960f6b906debe25f007f40d90e22b92f62f678d7ffb29eb60ce9e8843d4b1693",
+        "stdout_bytes": 4116,
+        "stdout_sha256": "c68a17a8b3bfdd4f4797108ee6d6804b374caaa405cc29fdd67bd08ece20e86b",
         "timed_out": false
       },
       "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
@@ -1669,25 +1671,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:07.476515Z"
+            "Time": "2026-09-11T09:20:08.590525Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:07.668549Z"
+            "Time": "2026-09-11T09:20:08.790244Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t1.203s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t1.214s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:08.679346Z"
+            "Time": "2026-09-11T09:20:09.804684Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 1.203,
+            "Elapsed": 1.214,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:08.679366Z"
+            "Time": "2026-09-11T09:20:09.804781Z"
           }
         ],
         "relevant_test_names": [
@@ -1721,8 +1723,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/pr438/focused-race/trace.jsonl",
-      "trace_sha256": "95eb32fe51e7b74f3a5abe470afcca327873dc99df882a5dff17b3f3af171d81"
+      "trace_path": "runs/20260911T091919Z/cells/pr438/focused-race/trace.jsonl",
+      "trace_sha256": "d663282a0792fc8369a36f71e92d4f1cf44975c112c12165e083805948522d8c"
     },
     {
       "attempt": 1,
@@ -1752,26 +1754,26 @@
         "C52_MATRIX_CELL": "provider-timeout-count10",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/planning-main/provider-timeout-count10/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/planning-main/provider-timeout-count10/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -1792,18 +1794,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-        "duration_seconds": 1.3600085843354464,
-        "ended_at": "2026-09-11T08:12:10.122908+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 1.3451853338629007,
+        "ended_at": "2026-09-11T09:20:11.261504+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:08.762887+00:00",
+        "started_at": "2026-09-11T09:20:09.916325+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 22662,
-        "stdout_sha256": "215a12b8dc5175125484cc4e72e07f45bd2da7d47bac854880045ef46c49b0f8",
+        "stdout_bytes": 22664,
+        "stdout_sha256": "a791d4a6e22d5ea1ec77b6d403e0060f6e2856d85ea261fef49ed5a3d36a0cce",
         "timed_out": false
       },
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -1820,25 +1822,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:09.901102Z"
+            "Time": "2026-09-11T09:20:11.01353Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:10.093269Z"
+            "Time": "2026-09-11T09:20:11.226741Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.192s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.213s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:10.093706Z"
+            "Time": "2026-09-11T09:20:11.227152Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.193,
+            "Elapsed": 0.214,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:10.09373Z"
+            "Time": "2026-09-11T09:20:11.227172Z"
           }
         ],
         "relevant_test_names": [
@@ -1864,8 +1866,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/planning-main/provider-timeout-count10/trace.jsonl",
-      "trace_sha256": "6ba367866c51b5a4b3f21324d74aa4dc2fb0c2dd2a716539830868521e7a9f7f"
+      "trace_path": "runs/20260911T091919Z/cells/planning-main/provider-timeout-count10/trace.jsonl",
+      "trace_sha256": "518a5add955b06d85120bca549bf265b6a76ddd9d5a27ec9a20c846c5ece65ec"
     },
     {
       "attempt": 1,
@@ -1895,26 +1897,26 @@
         "C52_MATRIX_CELL": "empty-response-count10",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/planning-main/empty-response-count10/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/planning-main/empty-response-count10/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -1935,18 +1937,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/empty_response$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-        "duration_seconds": 0.44307266687974334,
-        "ended_at": "2026-09-11T08:12:10.567720+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 0.4670718749985099,
+        "ended_at": "2026-09-11T09:20:11.730845+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:10.124652+00:00",
+        "started_at": "2026-09-11T09:20:11.263778+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 22541,
-        "stdout_sha256": "2a7047648a2ffa0b1fbfd7c9ff17bf37b415f86cb8a5846ea2c898f78ae1e1d4",
+        "stdout_bytes": 22545,
+        "stdout_sha256": "f55ee131e0659c9b99db07632edf78a000661c2503e33b54ab82ea01a4b71844",
         "timed_out": false
       },
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -1963,25 +1965,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:10.358242Z"
+            "Time": "2026-09-11T09:20:11.489069Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:10.550654Z"
+            "Time": "2026-09-11T09:20:11.693984Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.193s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.205s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:10.551039Z"
+            "Time": "2026-09-11T09:20:11.694392Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.193,
+            "Elapsed": 0.205,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:10.551047Z"
+            "Time": "2026-09-11T09:20:11.694402Z"
           }
         ],
         "relevant_test_names": [
@@ -2007,8 +2009,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/planning-main/empty-response-count10/trace.jsonl",
-      "trace_sha256": "c155c713310f6f0a4d3b97ae484067797ca07a591925aad8edf180afa36a577a"
+      "trace_path": "runs/20260911T091919Z/cells/planning-main/empty-response-count10/trace.jsonl",
+      "trace_sha256": "07fd4e3a4ceff4c7cf1c0728ba674377fa3e0a8acd1759bbaf4a26d54f2d277c"
     },
     {
       "attempt": 1,
@@ -2042,26 +2044,26 @@
         "C52_MATRIX_CELL": "order-timeout-first",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/planning-main/order-timeout-first/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/planning-main/order-timeout-first/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -2082,18 +2084,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-        "duration_seconds": 0.47092458326369524,
-        "ended_at": "2026-09-11T08:12:11.040608+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 0.49203941598534584,
+        "ended_at": "2026-09-11T09:20:12.224930+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:10.569688+00:00",
+        "started_at": "2026-09-11T09:20:11.732903+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 33985,
-        "stdout_sha256": "bc180775f154617e769e82a725ee5dba8a756c5502701660ee04a5be979abb5b",
+        "stdout_bytes": 33996,
+        "stdout_sha256": "0bf631940ceb51cf6d0d0d12ef71a69b536843995a51ac671ea364ed6b8acd40",
         "timed_out": false
       },
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -2110,25 +2112,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:10.810324Z"
+            "Time": "2026-09-11T09:20:11.96948Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:11.023793Z"
+            "Time": "2026-09-11T09:20:12.210437Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.214s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.241s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:11.024163Z"
+            "Time": "2026-09-11T09:20:12.210823Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.214,
+            "Elapsed": 0.241,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:11.024173Z"
+            "Time": "2026-09-11T09:20:12.21084Z"
           }
         ],
         "relevant_test_names": [
@@ -2162,8 +2164,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/planning-main/order-timeout-first/trace.jsonl",
-      "trace_sha256": "6ed7e777af7ef6ad3f784c4f4755e28a5fc300c3918970f06c77e0e27345de90"
+      "trace_path": "runs/20260911T091919Z/cells/planning-main/order-timeout-first/trace.jsonl",
+      "trace_sha256": "dbf2e2bd104086fb8fc48d67afb29ed2c270d0bae656f78ab16cc880f6d026c6"
     },
     {
       "attempt": 1,
@@ -2197,26 +2199,26 @@
         "C52_MATRIX_CELL": "order-empty-first",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/planning-main/order-empty-first/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/planning-main/order-empty-first/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -2237,18 +2239,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-        "duration_seconds": 0.503116125240922,
-        "ended_at": "2026-09-11T08:12:11.546202+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 0.517154207918793,
+        "ended_at": "2026-09-11T09:20:12.744632+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:11.043090+00:00",
+        "started_at": "2026-09-11T09:20:12.227489+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 33988,
-        "stdout_sha256": "e396c70a4585482e33006014a66b88696993fc17e2f027373dcad535d1f47793",
+        "stdout_bytes": 33996,
+        "stdout_sha256": "b7db8a0eba27c14eb91da7a0f6f5da6bcbb0c4c8e4710af04b09e9ec3bd469c3",
         "timed_out": false
       },
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -2265,25 +2267,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:11.303923Z"
+            "Time": "2026-09-11T09:20:12.487627Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:11.5247Z"
+            "Time": "2026-09-11T09:20:12.716658Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.221s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.229s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:11.525091Z"
+            "Time": "2026-09-11T09:20:12.717117Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.221,
+            "Elapsed": 0.23,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:11.525129Z"
+            "Time": "2026-09-11T09:20:12.717124Z"
           }
         ],
         "relevant_test_names": [
@@ -2317,8 +2319,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/planning-main/order-empty-first/trace.jsonl",
-      "trace_sha256": "6d39e2aee45a7b38cd7f5f9607132e7e94b34cdbe5171bc5226f0ba5bb60ba4e"
+      "trace_path": "runs/20260911T091919Z/cells/planning-main/order-empty-first/trace.jsonl",
+      "trace_sha256": "d06425db8873a220c7543915b62c7ed3c64c0871c7d586904494c19139b08bf9"
     },
     {
       "attempt": 1,
@@ -2352,26 +2354,26 @@
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
         "C52_SHUFFLE_SEED": "17",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/planning-main/shuffle-seed-17/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/planning-main/shuffle-seed-17/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -2392,18 +2394,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-        "duration_seconds": 0.4543153326958418,
-        "ended_at": "2026-09-11T08:12:12.002876+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 0.4644090002402663,
+        "ended_at": "2026-09-11T09:20:13.211325+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:11.548566+00:00",
+        "started_at": "2026-09-11T09:20:12.746928+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 17389,
-        "stdout_sha256": "855073ce58a7f106285a47035a10fd0dde08d9c1e8c5176d0cd5a9c0a5e5c091",
+        "stdout_bytes": 17399,
+        "stdout_sha256": "c5ebfa940f506a6f3b65df7a456c5b73667c450b6f476bb32813cbe08fbdf2ca",
         "timed_out": false
       },
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -2420,25 +2422,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:11.782703Z"
+            "Time": "2026-09-11T09:20:12.980513Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:11.975943Z"
+            "Time": "2026-09-11T09:20:13.192379Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.193s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.212s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:11.976317Z"
+            "Time": "2026-09-11T09:20:13.192711Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.194,
+            "Elapsed": 0.212,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:11.976343Z"
+            "Time": "2026-09-11T09:20:13.19273Z"
           }
         ],
         "relevant_test_names": [
@@ -2472,8 +2474,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/planning-main/shuffle-seed-17/trace.jsonl",
-      "trace_sha256": "9aad98e0502439d0e72e518d513998b54a7ebdbbc29b4ddc9ad9f040c94aaa90"
+      "trace_path": "runs/20260911T091919Z/cells/planning-main/shuffle-seed-17/trace.jsonl",
+      "trace_sha256": "1f00c4f334ce6b85184ca43b552123987419b5051cea525df35e8c1b2b6e5df7"
     },
     {
       "attempt": 1,
@@ -2507,26 +2509,26 @@
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
         "C52_SHUFFLE_SEED": "28",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/planning-main/shuffle-seed-28/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/planning-main/shuffle-seed-28/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -2547,18 +2549,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-        "duration_seconds": 0.46672500018030405,
-        "ended_at": "2026-09-11T08:12:12.471309+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 0.472077916841954,
+        "ended_at": "2026-09-11T09:20:13.685633+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:12.004590+00:00",
+        "started_at": "2026-09-11T09:20:13.213567+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 17405,
-        "stdout_sha256": "efc0be5ffb694974482c1d8c74c5f97d97829634ff17c88444bea7633665f6b1",
+        "stdout_bytes": 17401,
+        "stdout_sha256": "50c45e2e36a7538e0c0006006fae0f8d5ad080eeb9c40c237aa9dc065723ece1",
         "timed_out": false
       },
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -2575,25 +2577,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:12.236761Z"
+            "Time": "2026-09-11T09:20:13.442019Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:12.453419Z"
+            "Time": "2026-09-11T09:20:13.648983Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.217s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.207s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:12.453838Z"
+            "Time": "2026-09-11T09:20:13.649354Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.217,
+            "Elapsed": 0.207,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:12.453851Z"
+            "Time": "2026-09-11T09:20:13.649361Z"
           }
         ],
         "relevant_test_names": [
@@ -2627,8 +2629,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/planning-main/shuffle-seed-28/trace.jsonl",
-      "trace_sha256": "36ed4134f1befe1922819c86acf41a71c7bc397798e0ef441ca98e04f69e2a3e"
+      "trace_path": "runs/20260911T091919Z/cells/planning-main/shuffle-seed-28/trace.jsonl",
+      "trace_sha256": "1955ec512e63f5396b5f0dcb721930b81fb5617ea8ef9f57f78720c9103f81ea"
     },
     {
       "attempt": 1,
@@ -2665,27 +2667,27 @@
         "C52_MATRIX_CELL": "package-serialized",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/planning-main/package-serialized/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/planning-main/package-serialized/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
         "GOMAXPROCS": "2",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -2708,18 +2710,18 @@
           "./services/rooms/internal/lifecycle",
           "./services/session/internal/live"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-        "duration_seconds": 1.9591934578493237,
-        "ended_at": "2026-09-11T08:12:14.435012+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 1.8491676673293114,
+        "ended_at": "2026-09-11T09:20:15.536785+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:12.475797+00:00",
+        "started_at": "2026-09-11T09:20:13.687624+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 11748,
-        "stdout_sha256": "2869a6bcf55bcf9ac231adb8532dc2a0abcf54302dbdb5e1cc7df14ef7cc78b3",
+        "stdout_bytes": 11750,
+        "stdout_sha256": "68c07e0c9bcc71c10b1f89b4183d4aa00573219e1a4917d283f9c0089910aa03",
         "timed_out": false
       },
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -2736,25 +2738,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:12.808043Z"
+            "Time": "2026-09-11T09:20:13.981353Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:12.995758Z"
+            "Time": "2026-09-11T09:20:14.181269Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.188s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.200s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:12.99604Z"
+            "Time": "2026-09-11T09:20:14.181642Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.188,
+            "Elapsed": 0.2,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:12.996048Z"
+            "Time": "2026-09-11T09:20:14.181655Z"
           }
         ],
         "relevant_test_names": [
@@ -2788,8 +2790,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/planning-main/package-serialized/trace.jsonl",
-      "trace_sha256": "997d7bcda7ecd1285b1ff499387213da7d33bf33aa12d62f737f48fc5e23b136"
+      "trace_path": "runs/20260911T091919Z/cells/planning-main/package-serialized/trace.jsonl",
+      "trace_sha256": "32f11b58d94ee8b3251c08b00cd17105f030a1f44382913b48d082f9a98ab6a3"
     },
     {
       "attempt": 1,
@@ -2826,27 +2828,27 @@
         "C52_MATRIX_CELL": "package-concurrent",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/planning-main/package-concurrent/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/planning-main/package-concurrent/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
         "GOMAXPROCS": "2",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -2869,18 +2871,18 @@
           "./services/rooms/internal/lifecycle",
           "./services/session/internal/live"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-        "duration_seconds": 0.6361131248995662,
-        "ended_at": "2026-09-11T08:12:15.072704+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 0.6196147501468658,
+        "ended_at": "2026-09-11T09:20:16.158003+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:14.436594+00:00",
+        "started_at": "2026-09-11T09:20:15.538401+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 11746,
-        "stdout_sha256": "bb079b2a959efdef34bad0cf325e7e21e050bdf84ff7becf3bd7fd8420ffa985",
+        "stdout_bytes": 11750,
+        "stdout_sha256": "3957e610ef73a024b34af6e9615aa150b3c9273e0bd2dbdaf07a6fc4c73bc7e1",
         "timed_out": false
       },
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -2897,25 +2899,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:14.701766Z"
+            "Time": "2026-09-11T09:20:15.787468Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:14.886133Z"
+            "Time": "2026-09-11T09:20:15.970699Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.184s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.183s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:14.886437Z"
+            "Time": "2026-09-11T09:20:15.971027Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.185,
+            "Elapsed": 0.184,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:14.886461Z"
+            "Time": "2026-09-11T09:20:15.971034Z"
           }
         ],
         "relevant_test_names": [
@@ -2949,8 +2951,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/planning-main/package-concurrent/trace.jsonl",
-      "trace_sha256": "8bc8aac75e176388d81b6b847837d6ceaa31f0b9d2be7e98440dd7f80f21d36e"
+      "trace_path": "runs/20260911T091919Z/cells/planning-main/package-concurrent/trace.jsonl",
+      "trace_sha256": "571987c6906946747f713f705594214e1ca5a34d7c95b34c7eb848b0c083beb5"
     },
     {
       "attempt": 1,
@@ -2983,27 +2985,27 @@
         "C52_MATRIX_CELL": "gomaxprocs-1",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/planning-main/gomaxprocs-1/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/planning-main/gomaxprocs-1/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
         "GOMAXPROCS": "1",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -3024,18 +3026,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-        "duration_seconds": 0.5887898751534522,
-        "ended_at": "2026-09-11T08:12:15.663058+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 0.5560550419613719,
+        "ended_at": "2026-09-11T09:20:16.716052+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:15.074272+00:00",
+        "started_at": "2026-09-11T09:20:16.160004+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 33987,
-        "stdout_sha256": "1ffcab0d6d7eef0aa24b7403d6d2521b8f044fca0ef317c465234e8305599b32",
+        "stdout_bytes": 34004,
+        "stdout_sha256": "cebbc72e79836fb966447dea3cc7b62be7d8df319e64466ae0dfea867631f261",
         "timed_out": false
       },
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -3052,25 +3054,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:15.412591Z"
+            "Time": "2026-09-11T09:20:16.471052Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:15.624Z"
+            "Time": "2026-09-11T09:20:16.697533Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.212s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.227s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:15.62433Z"
+            "Time": "2026-09-11T09:20:16.69841Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.212,
+            "Elapsed": 0.227,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:15.624344Z"
+            "Time": "2026-09-11T09:20:16.698427Z"
           }
         ],
         "relevant_test_names": [
@@ -3104,8 +3106,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/planning-main/gomaxprocs-1/trace.jsonl",
-      "trace_sha256": "1b28f023cf3f84c98658a960d35371d39b72f11efd04b25f3ef7953dc44457db"
+      "trace_path": "runs/20260911T091919Z/cells/planning-main/gomaxprocs-1/trace.jsonl",
+      "trace_sha256": "d9f8afe5041329149f21f9ef18e772a38d465e06ae4f7a9aac32fe51d06a1c16"
     },
     {
       "attempt": 1,
@@ -3138,27 +3140,27 @@
         "C52_MATRIX_CELL": "gomaxprocs-4",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/planning-main/gomaxprocs-4/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/planning-main/gomaxprocs-4/trace.jsonl",
         "CGO_ENABLED": "0",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
         "GOMAXPROCS": "4",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -3179,18 +3181,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-        "duration_seconds": 0.46641933312639594,
-        "ended_at": "2026-09-11T08:12:16.131633+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 0.4672918329015374,
+        "ended_at": "2026-09-11T09:20:17.185787+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:15.665221+00:00",
+        "started_at": "2026-09-11T09:20:16.718503+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 33988,
-        "stdout_sha256": "bfc5927dee4388194994b8403c0ef69ab4ed039dffb73c8b8efb34b0aba5f8fb",
+        "stdout_bytes": 34004,
+        "stdout_sha256": "000913f50a5d1a1207b3a79fd0cbfa337dafedc4febefd9c1f70ea101e546838",
         "timed_out": false
       },
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -3207,25 +3209,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:15.890217Z"
+            "Time": "2026-09-11T09:20:16.927416Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:16.105732Z"
+            "Time": "2026-09-11T09:20:17.166189Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.216s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.239s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:16.106106Z"
+            "Time": "2026-09-11T09:20:17.166546Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 0.216,
+            "Elapsed": 0.239,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:16.106122Z"
+            "Time": "2026-09-11T09:20:17.166555Z"
           }
         ],
         "relevant_test_names": [
@@ -3259,8 +3261,8 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/planning-main/gomaxprocs-4/trace.jsonl",
-      "trace_sha256": "7d707921374f013246ab65490543a5ed6eb97f593b7ce9be9ff6da68b1b0c6e3"
+      "trace_path": "runs/20260911T091919Z/cells/planning-main/gomaxprocs-4/trace.jsonl",
+      "trace_sha256": "22a116eafcd4c91413db659dd9ea3b36ccf1ca6acea95751314676333ad2dcc1"
     },
     {
       "attempt": 1,
@@ -3296,27 +3298,27 @@
         "C52_MATRIX_CELL": "focused-race",
         "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
         "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cells/planning-main/focused-race/trace.jsonl",
+        "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cells/planning-main/focused-race/trace.jsonl",
         "CGO_ENABLED": "1",
-        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gocache",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gocache",
         "GOENV": "off",
         "GOFLAGS": "",
         "GOMAXPROCS": "4",
-        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gomodcache",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gomodcache",
         "GONOPROXY": "",
         "GONOSUMDB": "",
         "GOPRIVATE": "",
         "GOPROXY": "https://proxy.golang.org,direct",
         "GOSUMDB": "sum.golang.org",
-        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "GOTOOLCHAIN": "auto",
         "GOTRACEBACK": "all",
         "GOWORK": "",
-        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/home",
+        "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/home",
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/cache/gotmp",
+        "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/cache/gotmp",
         "TZ": "UTC"
       },
       "process": {
@@ -3338,18 +3340,18 @@
           "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
           "./services/rooms/internal/lifecycle"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-        "duration_seconds": 3.258882625028491,
-        "ended_at": "2026-09-11T08:12:19.392912+00:00",
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 3.320041249971837,
+        "ended_at": "2026-09-11T09:20:20.508353+00:00",
         "exit_code": 0,
         "first_failure": null,
         "output_overflow": false,
         "reader_survivor": false,
-        "started_at": "2026-09-11T08:12:16.133986+00:00",
+        "started_at": "2026-09-11T09:20:17.188318+00:00",
         "stderr_bytes": 0,
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_bytes": 4109,
-        "stdout_sha256": "5b4c6c6f31909594760a9b445b4a5e1f1c108256887b94a1c18e783669255299",
+        "stdout_bytes": 4114,
+        "stdout_sha256": "d82ee64a0db71c341d8c44dd8d174b919e238ec65b8b06a822ee2c7f384f6684",
         "timed_out": false
       },
       "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -3366,25 +3368,25 @@
           {
             "Action": "start",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:18.135963Z"
+            "Time": "2026-09-11T09:20:19.228021Z"
           },
           {
             "Action": "output",
             "Output": "PASS\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:18.33285Z"
+            "Time": "2026-09-11T09:20:19.418306Z"
           },
           {
             "Action": "output",
-            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t1.206s\n",
+            "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t1.205s\n",
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:19.341959Z"
+            "Time": "2026-09-11T09:20:20.433156Z"
           },
           {
             "Action": "pass",
-            "Elapsed": 1.206,
+            "Elapsed": 1.205,
             "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-            "Time": "2026-09-11T08:12:19.341994Z"
+            "Time": "2026-09-11T09:20:20.433249Z"
           }
         ],
         "relevant_test_names": [
@@ -3418,12 +3420,12 @@
         }
       },
       "status": "PASS",
-      "trace_path": "runs/20260911T-6b4f32b5-hermetic/cells/planning-main/focused-race/trace.jsonl",
-      "trace_sha256": "724b97ab001c72f8ba1ac42cf981180e3c457585aa301a1b9c4cd1d6dcaf3155"
+      "trace_path": "runs/20260911T091919Z/cells/planning-main/focused-race/trace.jsonl",
+      "trace_sha256": "629acbfc4702ff15b14784ab62a2a6751cda69139d227a6a58806d516bdcc927"
     }
   ],
-  "duration_seconds": 63.67525158310309,
-  "ended_at": "2026-09-11T08:12:23.776411+00:00",
+  "duration_seconds": 65.36319608287886,
+  "ended_at": "2026-09-11T09:20:24.592424+00:00",
   "matrix_sha256": "16003084e9c6415dcbdb9cd90bfcc5d255c55b3d38824776a803533041bdc45c",
   "negative_controls": {
     "all_rejected": true,
@@ -3448,14 +3450,14 @@
             "-c",
             "import os,time; child=os.fork(); (os.close(1), os.close(2), time.sleep(30)) if child==0 else os._exit(0)"
           ],
-          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-          "duration_seconds": 0.05461912462487817,
-          "ended_at": "2026-09-11T08:12:22.162969+00:00",
+          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+          "duration_seconds": 0.09235904086381197,
+          "ended_at": "2026-09-11T09:20:23.162686+00:00",
           "exit_code": 0,
           "first_failure": null,
           "output_overflow": false,
           "reader_survivor": false,
-          "started_at": "2026-09-11T08:12:22.108365+00:00",
+          "started_at": "2026-09-11T09:20:23.070323+00:00",
           "stderr_bytes": 0,
           "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "stdout_bytes": 0,
@@ -3478,14 +3480,14 @@
             "-c",
             "import os,time; child=os.fork(); time.sleep(30) if child==0 else time.sleep(30)"
           ],
-          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-          "duration_seconds": 1.5708482079207897,
-          "ended_at": "2026-09-11T08:12:22.107942+00:00",
+          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+          "duration_seconds": 1.569761165883392,
+          "ended_at": "2026-09-11T09:20:23.067814+00:00",
           "exit_code": -15,
           "first_failure": null,
           "output_overflow": false,
           "reader_survivor": false,
-          "started_at": "2026-09-11T08:12:20.537083+00:00",
+          "started_at": "2026-09-11T09:20:21.498124+00:00",
           "stderr_bytes": 0,
           "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "stdout_bytes": 0,
@@ -3513,18 +3515,18 @@
             "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
             "./services/session/internal/live"
           ],
-          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-          "duration_seconds": 0.5720121250487864,
-          "ended_at": "2026-09-11T08:12:20.536496+00:00",
+          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+          "duration_seconds": 0.5435323333367705,
+          "ended_at": "2026-09-11T09:20:21.497560+00:00",
           "exit_code": 0,
           "first_failure": null,
           "output_overflow": false,
           "reader_survivor": false,
-          "started_at": "2026-09-11T08:12:19.964488+00:00",
+          "started_at": "2026-09-11T09:20:20.954038+00:00",
           "stderr_bytes": 0,
           "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "stdout_bytes": 995,
-          "stdout_sha256": "c7e7e4caeac73996eff8bc76cf497c5f5ed1ac2b4669d27134cd63dc78f4aab7",
+          "stdout_sha256": "1b561cbfc8a9465648aaa6045bc5a52a9a38461e4eead39f5a6155d513664896",
           "timed_out": false
         },
         "rejected": true,
@@ -3563,18 +3565,18 @@
             "^C52NoSuchTest$",
             "./services/rooms/internal/lifecycle"
           ],
-          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
-          "duration_seconds": 0.5692783338017762,
-          "ended_at": "2026-09-11T08:12:19.963881+00:00",
+          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T091919Z/scratch/planning-main/go-agent-runtime",
+          "duration_seconds": 0.44263712503015995,
+          "ended_at": "2026-09-11T09:20:20.953345+00:00",
           "exit_code": 0,
           "first_failure": null,
           "output_overflow": false,
           "reader_survivor": false,
-          "started_at": "2026-09-11T08:12:19.394605+00:00",
+          "started_at": "2026-09-11T09:20:20.510723+00:00",
           "stderr_bytes": 0,
           "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "stdout_bytes": 1014,
-          "stdout_sha256": "892f6e20cd3b89d99a24de3c90b5dab3c72bc6cbcd614cfb8fe449ef51571489",
+          "stdout_bytes": 1013,
+          "stdout_sha256": "9f9cf85d413a73b617342bc52eee79628e2262a5b7581fc7b0bc3e6699206b56",
           "timed_out": false
         },
         "rejected": true,
@@ -3590,31 +3592,31 @@
             {
               "Action": "start",
               "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-              "Time": "2026-09-11T08:12:19.628095Z"
+              "Time": "2026-09-11T09:20:20.744001Z"
             },
             {
               "Action": "output",
               "Output": "testing: warning: no tests to run\n",
               "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-              "Time": "2026-09-11T08:12:19.948871Z"
+              "Time": "2026-09-11T09:20:20.917189Z"
             },
             {
               "Action": "output",
               "Output": "PASS\n",
               "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-              "Time": "2026-09-11T08:12:19.948937Z"
+              "Time": "2026-09-11T09:20:20.91725Z"
             },
             {
               "Action": "output",
-              "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.321s [no tests to run]\n",
+              "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.173s [no tests to run]\n",
               "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-              "Time": "2026-09-11T08:12:19.949089Z"
+              "Time": "2026-09-11T09:20:20.917383Z"
             },
             {
               "Action": "pass",
-              "Elapsed": 0.321,
+              "Elapsed": 0.173,
               "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-              "Time": "2026-09-11T08:12:19.949112Z"
+              "Time": "2026-09-11T09:20:20.917399Z"
             }
           ],
           "relevant_test_names": [],
@@ -3628,7 +3630,7 @@
     "schema": "audio-runtime-c52-negative-controls-v2"
   },
   "overlay_sha256": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
-  "run_id": "20260911T-6b4f32b5-hermetic",
+  "run_id": "20260911T091919Z",
   "schema": "audio-runtime-c52-matrix-run-v1",
-  "started_at": "2026-09-11T08:11:20.101160+00:00"
+  "started_at": "2026-09-11T09:19:19.229229+00:00"
 }
