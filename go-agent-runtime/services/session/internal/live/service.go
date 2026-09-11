@@ -71,9 +71,7 @@ func New(deps Dependencies) *Service {
 	}
 }
 
-// OpenLive validates only the service edge and allocates bounded local ports.
-// It does not call the provider factory, open a socket, read a replay path, or
-// create device resources.
+// OpenLive validates only the service edge and allocates bounded local ports; it does not call the provider factory, open a socket, read a replay path, or create device resources.
 func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (session.LiveHandle, error) {
 	if s == nil || s.inferencerFactory == nil {
 		return nil, errors.New("live inferencer factory is required")
@@ -160,7 +158,6 @@ type handle struct {
 	interruptedScheduledResponses  int
 	scheduledContinuationTerminals int
 	pendingToolCalls               int
-	pendingToolCallIDs             map[string]struct{}
 	pendingToolCallResponses       map[string]string
 	terminalValue                  *messages.SessionCloseValue
 	providerCloseObserved          bool
@@ -339,7 +336,6 @@ func newHandle(request session.LiveRequest, factory session.LiveInferencerFactor
 		terminalObserved:         make(chan struct{}),
 		livenessWake:             make(chan struct{}, 1),
 		toolContinuations:        make(map[string]*liveToolContinuation),
-		pendingToolCallIDs:       make(map[string]struct{}),
 		pendingToolCallResponses: make(map[string]string),
 	}
 	h.media = mediagate.New(h.mediaFailure)

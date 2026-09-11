@@ -2,6 +2,7 @@ package subsystems
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -376,5 +377,91 @@ func TestCoordinatorDelta_TickGroup(t *testing.T) {
 	if TickGroupCoordinator >= TickGroupCoordinatorDelta {
 		t.Errorf("Coordinator (%d) must run before CoordinatorDelta (%d)",
 			TickGroupCoordinator, TickGroupCoordinatorDelta)
+	}
+}
+func TestCoordinator_DuplexSessionKeepsOverlappingToolBatchesInOneGeneration(t *testing.T) {
+	c := NewCoordinator(nil)
+	ls := newCoordinatorTestState()
+	ls.Mode, ls.ToolExecutionAvailable = state.DuplexSession, true
+	for _, callID := range []string{"call-000-alpha", "call-001-alpha"} {
+		ls.Inputs.ModelOutputMessage = []messages.Message{{Role: messages.RoleAssistant, ToolCalls: []messages.ToolCall{{ID: callID, Name: "lookup_alpha", Arguments: `{}`}}}}
+		if err := c.Execute(context.Background(), ls); err != nil {
+			t.Fatalf("Execute %s: %v", callID, err)
+		}
+		batch, ok := ls.Outputs.ToolInbox.Read()
+		if !ok {
+			t.Fatalf("expected tool batch for %s", callID)
+		}
+		if batch.LoopPassID != 1 || ls.History.CurrentPassID != 1 {
+			t.Fatalf("generation for %s = batch:%d history:%d, want 1:1", callID, batch.LoopPassID, ls.History.CurrentPassID)
+		}
+	}
+}
+
+func TestCoordinator_DuplexSessionToolContinuationDoesNotRetireSiblingBatch(t *testing.T) {
+	c := NewCoordinator(nil)
+	ls := newCoordinatorTestState()
+	ls.Mode, ls.History.CurrentPassID = state.DuplexSession, 4
+	ls.Inputs.ToolOutputMessage = []messages.Message{{Role: messages.RoleTool, ToolCallID: "call-000-alpha", ContentParts: []messages.ContentPart{messages.NewTextPart("result")}}}
+	if err := c.Execute(context.Background(), ls); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	req, ok := ls.Outputs.ModelInbox.Read()
+	if !ok {
+		t.Fatal("expected continuation inference request")
+	}
+	if req.LoopPassID != 4 || ls.History.CurrentPassID != 4 {
+		t.Fatalf("continuation generation = request:%d history:%d, want 4:4", req.LoopPassID, ls.History.CurrentPassID)
+	}
+}
+
+func TestCoordinator_OverlappingModelResponsesReconstructIndependently(t *testing.T) {
+	c := NewCoordinator(nil)
+	deltas := []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-zero", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, ResponseID: "response-zero", ToolCallId: "call-zero", Value: messages.NewToolCallStartValue("call-zero", "lookup_zero")},
+		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ResponseID: "response-zero", ToolCallId: "call-zero", Value: messages.NewToolCallEndValue("call-zero", "lookup_zero", `{}`)},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-one", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, ResponseID: "response-one", ToolCallId: "call-one", Value: messages.NewToolCallStartValue("call-one", "lookup_one")},
+		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ResponseID: "response-one", ToolCallId: "call-one", Value: messages.NewToolCallEndValue("call-one", "lookup_one", `{}`)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-zero", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-one", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	}
+	completed, err := c.observeModelResponses(deltas)
+	if err != nil {
+		t.Fatalf("observeModelResponses: %v", err)
+	}
+	if !c.modelResponsesOverlap || len(completed) != 2 || len(completed[0].ToolCalls) != 1 || completed[0].ToolCalls[0].ID != "call-zero" || len(completed[1].ToolCalls) != 1 || completed[1].ToolCalls[0].ID != "call-one" {
+		t.Fatalf("overlap reconstruction = overlap:%t completed:%#v", c.modelResponsesOverlap, completed)
+	}
+}
+
+func TestCoordinator_UnscopedToolEventsJoinResponsesOnFinalBoundary(t *testing.T) {
+	c := NewCoordinator(nil)
+	deltas := []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-zero", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ToolCallId: "call-zero", Value: messages.NewToolCallEndValue("call-zero", "lookup_zero", `{}`)},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-one", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ToolCallId: "call-one", Value: messages.NewToolCallEndValue("call-one", "lookup_one", `{}`)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-one", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	}
+	completed, err := c.observeModelResponses(deltas)
+	if err != nil {
+		t.Fatalf("observeModelResponses: %v", err)
+	}
+	if len(completed) != 1 || len(completed[0].ToolCalls) != 2 || completed[0].ToolCalls[0].ID != "call-zero" || completed[0].ToolCalls[1].ID != "call-one" {
+		t.Fatalf("unscoped reconstruction = %#v, want both calls in order", completed)
+	}
+}
+
+func TestCoordinator_ModelResponseAssemblyIsBounded(t *testing.T) {
+	c := NewCoordinator(nil)
+	for index := 0; index < maxTrackedModelResponses; index++ {
+		if _, err := c.observeModelResponses([]messages.StreamMessage{{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: fmt.Sprintf("response-%d", index), Value: messages.NewMessageStartValue()}}); err != nil {
+			t.Fatalf("response %d unexpectedly exceeded assembly bound: %v", index, err)
+		}
+	}
+	if _, err := c.observeModelResponses([]messages.StreamMessage{{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-over-limit", Value: messages.NewMessageStartValue()}}); err == nil {
+		t.Fatalf("response assembly accepted more than %d active responses", maxTrackedModelResponses)
 	}
 }
