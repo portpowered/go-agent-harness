@@ -420,8 +420,6 @@ def trace_events(path: Path) -> list[dict[str, object]]:
         raise VerificationError(f"missing trace: {path}")
     result: list[dict[str, object]] = []
     sequences: set[int] = set()
-    previous_sequence = 0
-    previous_monotonic = -1
     for line_number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
         try:
             value = json.loads(line)
@@ -430,18 +428,24 @@ def trace_events(path: Path) -> list[dict[str, object]]:
         if not isinstance(value, dict) or value.get("schema") != "audio-runtime-c52-trace-v1":
             raise VerificationError(f"invalid trace record at {path}:{line_number}")
         sequence = value.get("seq")
-        if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence in sequences or sequence <= previous_sequence:
+        if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence in sequences:
             raise VerificationError(f"invalid or duplicate trace sequence at {path}:{line_number}")
         sequences.add(sequence)
-        monotonic = value.get("monotonic_ns")
-        if isinstance(monotonic, bool) or not isinstance(monotonic, int) or monotonic < previous_monotonic:
-            raise VerificationError(f"trace monotonic order is invalid at {path}:{line_number}")
-        previous_sequence = sequence
-        previous_monotonic = monotonic
         result.append(value)
     if not result:
         raise VerificationError(f"empty trace: {path}")
-    return result
+    # Trace writes can be appended by concurrent callbacks in a different
+    # order from the atomic sequence assignment.  Sequence is the canonical
+    # event order; validate monotonic time after ordering rather than trusting
+    # the physical JSONL append order.
+    ordered = sorted(result, key=lambda event: int(event["seq"]))
+    previous_monotonic = -1
+    for event in ordered:
+        monotonic = event.get("monotonic_ns")
+        if isinstance(monotonic, bool) or not isinstance(monotonic, int) or monotonic < previous_monotonic:
+            raise VerificationError(f"trace monotonic order is invalid at {path}")
+        previous_monotonic = monotonic
+    return ordered
 
 
 def record_trace(record: dict[str, object], run_root: Path) -> list[dict[str, object]]:
