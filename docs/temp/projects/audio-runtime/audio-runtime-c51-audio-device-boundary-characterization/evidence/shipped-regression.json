@@ -9,8 +9,15 @@
     "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/evidence/shipped-build.json",
     "sha256": "79fa0ee5832ed710e24a374145c3041b4041ee1e06d49a2e4118e957a49c6d57"
   },
-  "candidateHeadAtVerification": "fc70f5b81cff03369e2bb1e7f6e236992a2419fe",
+  "candidateHeadAtVerification": "6de93c5a8d6d9196fa36f719f029b77400ce7203",
   "classification": "SOFTWARE_REPLAY_PROCESS_ONLY",
+  "executableInputEquivalence": {
+    "basis": "build-input manifest compared every tracked Go/module input at the tested revision and candidate head; only owned evidence descendants differ",
+    "candidateRevision": "6de93c5a8d6d9196fa36f719f029b77400ce7203",
+    "identical": true,
+    "inputTreeSha256": "c40c63dd7ce167d9cf7793ec4a197487129671c17172bc54403c3ef5c602e66d",
+    "testedRevision": "fc70f5b81cff03369e2bb1e7f6e236992a2419fe"
+  },
   "healthyReplay": {
     "expectedWav": {
       "channels": 1,
@@ -31,19 +38,19 @@
       "argv": [
         "/private/tmp/audio-runtime-c51-yui-fc70f5b",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
         "--audio-out",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/healthy.wav"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/healthy.wav"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
       "diskBytesAfter": 2385,
       "diskBytesBefore": 0,
       "diskBytesDelta": 2385,
       "diskLimitBytes": 33554432,
-      "durationSeconds": 0.556166,
+      "durationSeconds": 0.047525,
       "processGroupAlive": false,
       "returnCode": 0,
       "stderr": "",
@@ -87,22 +94,22 @@
       "argv": [
         "/private/tmp/audio-runtime-c51-yui-fc70f5b",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/tool-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/tool-config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
         "--audio-out",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/tool.wav"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/tool.wav"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
       "diskBytesAfter": 4766,
       "diskBytesBefore": 2385,
       "diskBytesDelta": 2381,
       "diskLimitBytes": 33554432,
-      "durationSeconds": 0.042633,
+      "durationSeconds": 0.048191,
       "processGroupAlive": false,
       "returnCode": 1,
-      "stderr": "Error: tool results were not delivered for 1 unresolved call(s): call_weather_001\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/tool.wav\" (wav): empty WAV samples\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-9b_zyrm1/tool.wav\" (wav): empty WAV samples\ntool results were not delivered for 1 unresolved call(s): call_weather_001\n",
+      "stderr": "Error: tool results were not delivered for 1 unresolved call(s): call_weather_001\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/tool.wav\" (wav): empty WAV samples\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/tool.wav\" (wav): empty WAV samples\ntool results were not delivered for 1 unresolved call(s): call_weather_001\n",
       "stderrTruncated": false,
       "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: It is sunny in Paris.\n\n[session closed: fixture_complete]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\nlive session terminated: tool results were not delivered for 1 unresolved call(s): call_weather_001\n",
       "stdoutTruncated": false,

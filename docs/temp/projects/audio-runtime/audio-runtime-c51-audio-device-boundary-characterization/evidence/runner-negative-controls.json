@@ -17,7 +17,7 @@
     "diskBytesBefore": 0,
     "diskBytesDelta": 0,
     "diskLimitBytes": 33554432,
-    "durationSeconds": 0.022867,
+    "durationSeconds": 0.023237,
     "processGroupAlive": false,
     "returnCode": 0,
     "stderr": "",
@@ -33,7 +33,7 @@
   },
   "readerStartFailureGroupCleanup": {
     "descendantAliveAfterCleanup": false,
-    "descendantPID": 12290,
+    "descendantPID": 26744,
     "error": "injected output-reader start failure",
     "status": "caught"
   },
@@ -49,7 +49,7 @@
     "diskBytesBefore": 0,
     "diskBytesDelta": 0,
     "diskLimitBytes": 33554432,
-    "durationSeconds": 0.254303,
+    "durationSeconds": 0.254715,
     "processGroupAlive": false,
     "returnCode": -15,
     "stderr": "",
