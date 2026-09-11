@@ -112,13 +112,7 @@ type ScheduledAudioInput = audioinput.ScheduledInput
 type SessionAudioInput = audioinput.InputSpec
 type SessionAudioInputErrorKind = audioinput.ErrorKind
 type SessionAudioInputError = audioinput.Error
-
-func sessionAudioParentContext(parent context.Context) context.Context {
-	if parent != nil {
-		return parent
-	}
-	return context.Background()
-}
+type rec = sessionRuntimeObservationRecorder
 
 const SessionAudioInputEmpty SessionAudioInputErrorKind = audioinput.KindEmpty
 const SessionAudioInputMissing SessionAudioInputErrorKind = audioinput.KindMissing

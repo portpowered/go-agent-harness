@@ -13,7 +13,7 @@ import (
 	audioinput "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioinput"
 	audioinputwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioinput/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegateway "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"io"
@@ -29,7 +29,11 @@ func StartSessionAudioInterruptionsOnBrowserInvocation(parent context.Context, e
 	return StartSessionAudioInterruptionsOnBrowserTool(parent, events, "", inputs)
 }
 func StartSessionAudioInterruptionsOnBrowserTool(parent context.Context, events <-chan webmcp.BrokerEvent, toolName string, inputs []ScheduledAudioInput) (<-chan ScheduledAudioInput, func()) {
-	ctx, cancel := context.WithCancel(sessionAudioParentContext(parent))
+	ctxParent := parent //nolint:contextcheck // normalize the legacy nil-parent API before deriving the cancellable child context.
+	if ctxParent == nil {
+		ctxParent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(ctxParent)
 	mapped := make(chan audioinput.InvocationEvent, 1)
 	go func() {
 		defer close(mapped)
@@ -234,10 +238,8 @@ type sessionAudioSource struct {
 func newSessionAudioSource(managed *audioinput.ManagedSource) *sessionAudioSource {
 	return &sessionAudioSource{ManagedSource: managed, reader: &struct{ closeOnCancel bool }{closeOnCancel: managed.Reader == nil || managed.CloseOnCancel}, send: managed.SendAudioInput}
 }
-func (s *sessionAudioSource) bindContext(ctx context.Context) { s.ManagedSource.BindContext(ctx) }
-func (s *sessionAudioSource) bindRuntime(runtime *sessionRuntimeObservationRecorder, source platformclock.Source) {
-	s.BindObserver(source, func(pcm []byte) { runtime.audioInput(pcm) })
-}
+func (s *sessionAudioSource) bindContext(ctx context.Context)    { s.ManagedSource.BindContext(ctx) }
+func (s *sessionAudioSource) bindRuntime(r *rec, c clock.Source) { s.BindObserver(c, r.audioInput) }
 func streamSessionAudioInput(ctx context.Context, loop *agentloop.AgentLoop, source *sessionAudioSource) (runErr error) {
 	return adaptSessionAudioError(errors.Join(audioinputwire.NewService(source.ClockSource()).Stream(ctx, source.Input(source.ClockSource()), loop), source.Close()), source.Path)
 }
