@@ -99,6 +99,7 @@ type adversarialCapacityHandle struct {
 	current atomic.Int32
 	maximum atomic.Int32
 	writes  atomic.Int32
+	stats   atomic.Int32
 	closed  atomic.Bool
 	once    sync.Once
 }
@@ -128,6 +129,11 @@ func (h *adversarialCapacityHandle) WaitForPlaybackCapacity(ctx context.Context,
 func (h *adversarialCapacityHandle) WriteFrame(context.Context, []int16) error {
 	h.writes.Add(1)
 	return nil
+}
+
+func (h *adversarialCapacityHandle) PlaybackStats() audio.PlaybackQueueStats {
+	h.stats.Add(1)
+	return audio.EmptyPlaybackQueueStats(h.DeviceFormat())
 }
 
 func (h *adversarialCapacityHandle) Close() error {

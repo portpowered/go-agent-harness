@@ -47,17 +47,14 @@ type RTCDevicePlaybackSamplesObserver func(context.Context, int, []int16) error
 // edge. Implementations must copy samples they retain and return promptly.
 type RTCDeviceCaptureSamplesObserver func(sampleRate int, samples []int16)
 
-// RTCDeviceRenderedSamplesObserver observes full PCM, including underflow silence, rendered by the
-// selected device callback, after enqueue pacing and cancellation.
+// RTCDeviceRenderedSamplesObserver observes full PCM, including underflow silence, rendered after enqueue pacing and cancellation.
 type RTCDeviceRenderedSamplesObserver func(sampleRate int, samples []int16)
 
 // RTCDeviceCaptureObserver receives the corresponding input queue snapshot at
 // source teardown, outside the native callback.
 type RTCDeviceCaptureObserver func(devicegw.DeviceID, audio.CaptureQueueStats)
 
-// RTCDevicePlaybackReceiptObserver receives the applied result of a queued
-// playback control command. It runs on the playback worker after the command
-// has mutated (or rejected) the sink state and should return promptly.
+// RTCDevicePlaybackReceiptObserver receives each queued control receipt after the playback worker applies or rejects it.
 type RTCDevicePlaybackReceiptObserver func(audio.PlaybackReceipt)
 
 func (e *RTCDeviceSinkError) Error() string {
@@ -538,38 +535,41 @@ func (s *RTCDeviceSink) playbackWriteAllowedLocked(generation uint64, blocked bo
 
 func (s *RTCDeviceSink) writeAdmittedPlaybackLocked(ctx context.Context, samples []int16, generation uint64, modelAudio bool, frameResponse audio.PlaybackResponse, kind RTCDevicePlaybackObservationKind) error {
 	response := playbackResponseForFrame(s.playbackResponse, frameResponse, modelAudio)
-	statsBefore := s.PlaybackStats()
+	trackPlaybackStats := s.renderBoundarySupported.Load()
+	var statsBefore audio.PlaybackQueueStats
+	start := uint64(0)
+	if trackPlaybackStats {
+		statsBefore = s.PlaybackStats()
+		start = consumedPlaybackSamples(statsBefore) + uint64(statsBefore.QueuedSamples)
+	} else if modelAudio && response.hasItem() {
+		if n := len(s.playbackSpans); n > 0 && !s.playbackSpans[n-1].complete && s.playbackSpans[n-1].response.equal(response) {
+			start = s.playbackSpans[n-1].end
+		} else {
+			statsBefore = s.PlaybackStats()
+			start = consumedPlaybackSamples(statsBefore) + uint64(statsBefore.QueuedSamples)
+		}
+	}
 	reservation := s.playbackObservations.reserve(kind, response, generation, len(samples))
 	if err := s.writeDeviceSamples(ctx, samples); err != nil {
 		s.playbackObservations.cancel(reservation)
 		return err
 	}
 	if modelAudio && response.hasItem() {
-		s.recordPlaybackSpanLocked(response, consumedPlaybackSamples(statsBefore)+uint64(statsBefore.QueuedSamples), len(samples))
+		consumed := start
+		if trackPlaybackStats {
+			consumed = consumedPlaybackSamples(statsBefore)
+		}
+		s.recordPlaybackSpanAtLocked(response, start, len(samples), consumed)
 	}
-	statsAfter := s.PlaybackStats()
-	s.reconcilePlaybackObservationDrops(statsBefore, statsAfter)
+	if trackPlaybackStats {
+		statsAfter := s.PlaybackStats()
+		s.reconcilePlaybackObservationDrops(statsBefore, statsAfter)
+	}
 	s.playbackObservations.commit(reservation, samples, s.id, s.deviceRate)
 	if s.playbackSamplesObserver == nil {
 		return nil
 	}
 	return s.playbackSamplesObserver(ctx, s.deviceRate, samples)
-}
-
-func (s *RTCDeviceSink) recordPlaybackSpanLocked(response rtcDevicePlaybackIdentity, start uint64, samples int) {
-	if !response.hasItem() || samples <= 0 {
-		return
-	}
-	s.prunePlaybackSpansLocked(consumedPlaybackSamples(s.PlaybackStats()))
-	end := start + uint64(samples)
-	if count := len(s.playbackSpans); count > 0 {
-		last := &s.playbackSpans[count-1]
-		if last.response.equal(response) && last.end == start {
-			last.end = end
-			return
-		}
-	}
-	s.playbackSpans = append(s.playbackSpans, rtcDevicePlaybackSpan{response: response, start: start, end: end})
 }
 
 func (s *RTCDeviceSink) prunePlaybackSpansLocked(consumed uint64) {

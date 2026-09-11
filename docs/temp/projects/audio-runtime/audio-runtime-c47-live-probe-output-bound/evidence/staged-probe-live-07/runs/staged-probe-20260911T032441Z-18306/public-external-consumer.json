@@ -1,0 +1,42 @@
+{
+  "label": "public-external-consumer",
+  "argv": [
+    "rtk",
+    "proxy",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/evidence/staged-probe-live-07/runs/staged-probe-20260911T032441Z-18306/staged-binaries/artifact-1"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/consumer",
+  "environment": {
+    "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0sL3O0d:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+    "GOWORK": "",
+    "GOFLAGS": "",
+    "GOTOOLCHAIN": "",
+    "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+    "FACTORY_SERVER_URL": "http://127.0.0.1:7439"
+  },
+  "deadline_seconds": 60.0,
+  "elapsed_seconds": 0.433377,
+  "exit_code": 0,
+  "timed_out": false,
+  "term_sent": false,
+  "kill_sent": false,
+  "parent_reaped": true,
+  "surviving_process_group_pids": [],
+  "survivors_before_final_kill": [],
+  "stdout_bytes": 1364,
+  "stdout_sha256": "7e61c5d9d77782b97e9a6b9df3b1f5e613038a04b02efb80137430d5793e1a57",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/evidence/staged-probe-live-07/runs/staged-probe-20260911T032441Z-18306/public-external-consumer.stdout",
+  "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/evidence/staged-probe-live-07/runs/staged-probe-20260911T032441Z-18306/public-external-consumer.stderr",
+  "output_overflow": false,
+  "capture_failure": null,
+  "primary_failure": null,
+  "cleanup_failures": [],
+  "capture_read_chunk_bytes": 65536,
+  "capture_buffer_high_water_bytes": 1364,
+  "retained_output_bytes": 1364,
+  "output_budget_limit_bytes": 67108864,
+  "output_budget_used_bytes": 1364,
+  "output_budget_remaining_bytes": 67107500
+}

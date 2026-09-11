@@ -1,0 +1,31 @@
+{
+  "terminal": {
+    "reason": "fixture_complete",
+    "classification": "provider_close",
+    "terminal_reason": "provider_close",
+    "terminal_provenance": "provider",
+    "output_state": "not_applicable"
+  },
+  "artifacts": [
+    {
+      "path": "client.transcript.jsonl",
+      "sha256": "4fc8475b20267a801d70b666ad1d09ba93f726e04f6d784ae2a1cb6d34956728"
+    },
+    {
+      "path": "agent.transcript.jsonl",
+      "sha256": "4fc8475b20267a801d70b666ad1d09ba93f726e04f6d784ae2a1cb6d34956728"
+    },
+    {
+      "path": "session-log.jsonl",
+      "sha256": "32743bea85ce6ef6ded45cc692bde3d4fc9d2110082ea06c8f21b50281ebb634"
+    },
+    {
+      "path": "audio/out-000.pcm",
+      "sha256": "b0b9a760a8f862be7d190c64c011121daa1b445c2a27716ea3be89c231a7c67e"
+    },
+    {
+      "path": "provider.json",
+      "sha256": "1c53f40bce9276a401d4aeb14a14cbdc668db0ebbe13906a47071e3b9015a33b"
+    }
+  ]
+}

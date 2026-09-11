@@ -180,7 +180,9 @@ func (r Runner) openOneParticipant(ctx context.Context, state *runState, partici
 			}
 		})
 	}
-	state.add(active)
+	if roommanifest.NormalizeParticipantKind(participant.Kind) != rooms.ParticipantKindAgent {
+		state.add(active)
+	}
 	if recorder != nil {
 		recorder.RecordTimeline("participant_joined", participant.ID, map[string]string{"kind": string(roommanifest.NormalizeParticipantKind(participant.Kind))})
 	}
