@@ -13,3 +13,9 @@ C48 implementation checkpoint — 2026-09-10
 - Architecture repair is complete without changing the baseline: `make architecture-size-check` passes with 184 packages, 1888 files, and 27810 functions; live observation is 400 lines, service is 399, and replay readiness is 599.
 - Focused normal and race checks both pass with 187 tests across live and coordinator packages. The exact prior WebMCP timeout regression passes (1 test), and the accumulated duplex CLI integration regression passes normal and race (3 tests each). `make wire-check` passes.
 - The bounded public driver was attempted before commit and correctly refused the dirty source tree during evidence binding; this is a clean-tree prerequisite, not a causal test failure. After committing this checkpoint, run the driver on the clean candidate, commit its provenance artifact, then push/update the same PR for script CI handoff.
+
+C48 public evidence checkpoint — source revision `fadf73a53f755e6eeeac945acb4045af94d2f9f8`
+
+- The clean-tree bounded driver passed at the bound revision. Positive report: `docs/temp/projects/audio-runtime/audio-runtime-c48-overlapping-tool-continuation/artifacts/runs/20260911T040601Z-732360000/positive/report.json`. It proved both response IDs overlapped before the first result, all four exact calls/results were correlated once, reverse completion was preserved, and the provider-authored terminal completed.
+- Missing, duplicate, and swapped controls all exited nonzero with causal fixture errors; provenance was refreshed locally with the run stamp, fixture hash, binary hash, storage bound, and report/control paths. The provenance and run artifacts are intentionally ignored evidence outputs.
+- Next action: commit this task-local checkpoint, push the same branch, update PR #440 with the exact evidence, and return ACCEPTED for script CI handoff. CI-green, review, merge, hardware, acoustic, and project-wide acceptance remain unclaimed.
