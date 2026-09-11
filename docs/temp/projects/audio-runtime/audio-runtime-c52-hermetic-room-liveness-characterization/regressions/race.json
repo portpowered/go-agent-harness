@@ -28,18 +28,18 @@
       "./services/rooms/internal/lifecycle"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go-agent-runtime",
-    "duration_seconds": 8.093034333083779,
-    "ended_at": "2026-09-11T09:21:34.253596+00:00",
+    "duration_seconds": 7.725164916832,
+    "ended_at": "2026-09-11T09:23:05.857845+00:00",
     "exit_code": 0,
     "first_failure": null,
     "output_overflow": false,
     "reader_survivor": false,
-    "started_at": "2026-09-11T09:21:26.160541+00:00",
+    "started_at": "2026-09-11T09:22:58.132664+00:00",
     "stderr_bytes": 0,
     "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "stdout_bytes": 103,
-    "stdout_sha256": "871c47fade846066e28f28660016345bb18f373836859a325482ced5136a092c",
+    "stdout_sha256": "8a827c11e1cd2650248f895cb6cd754d319b808923ef5a3bc6a29cd19e3e9d25",
     "timed_out": false
   },
-  "source_revision": "542de1fe74713a8bda0c9eaae95dff98d2408d4b"
+  "source_revision": "40ba6f40db277df506cd53da6bb95dd618716d34"
 }

@@ -11,24 +11,24 @@
     "cell_count": 22,
     "matrix_results_path": "matrix-results.json",
     "negative_controls_rejected": true,
-    "run_id": "20260911T-6b4f32b5-hermetic",
-    "run_path": "runs/20260911T-6b4f32b5-hermetic/run.json"
+    "run_id": "20260911T091919Z",
+    "run_path": "runs/20260911T091919Z/run.json"
   },
   "indexed_files": [
     {
-      "bytes": 2676,
+      "bytes": 3336,
       "path": "README.md",
-      "sha256": "e341269413936a79c939d61145a99dec003736546909a05f8ff3ffd249500132"
+      "sha256": "635ace396b4aad95d239fffac3734959c05da77cf5b2aa8c17c80e35033e631a"
     },
     {
-      "bytes": 38592,
+      "bytes": 37781,
       "path": "provenance.json",
-      "sha256": "fae8ffc9656645cc9deb80a6988ba9e03a75c4f7b05469d7e30d47ad8cfc5f29"
+      "sha256": "2668f5c8052c95e21f03dc5b7b5eaad5d9379ce351ab4bb61ea4e43846ef6c81"
     },
     {
-      "bytes": 2560,
+      "bytes": 2553,
       "path": "storage.json",
-      "sha256": "e11bf44ee2e8fc2890fdd0fb53b6309b7ad1c87ee955b053cf89efd3950ad079"
+      "sha256": "5c68772d43a93b6af21f2c0065dcbba537577130830f3acfdd258de56cd8aec2"
     },
     {
       "bytes": 3933,
@@ -36,9 +36,9 @@
       "sha256": "16003084e9c6415dcbdb9cd90bfcc5d255c55b3d38824776a803533041bdc45c"
     },
     {
-      "bytes": 171247,
+      "bytes": 169441,
       "path": "matrix-results.json",
-      "sha256": "519c0cc4013e9ae0179b0fa3360d34e11d94520d4d2f400c29b8e29da33c3a25"
+      "sha256": "47366f83ad6b4992746e5cd0609384950574192fa3d0ccf6a34dca45d4d20bb8"
     },
     {
       "bytes": 1257,
@@ -46,19 +46,19 @@
       "sha256": "4107e8692145f50f73fa6d4b49085d082741e382859cec098156420e176a01df"
     },
     {
-      "bytes": 706904,
+      "bytes": 711931,
       "path": "first-divergence.json",
-      "sha256": "62f5f9f37a1ba8a72291d2b03fd75788d90d12492d3128eca5c89d1acf6bdb59"
+      "sha256": "fa60983a6ae268c9fcb88a9361d5d084a091dc36754197de00e9866438deb530"
     },
     {
-      "bytes": 16132,
+      "bytes": 16071,
       "path": "classification.json",
-      "sha256": "e6353ecfd3ab5f01b56e4cc774f83f627699be47fd99414247aec588f72ec7b2"
+      "sha256": "1572250c9713f72b56aadc49815e9db9b8a875372bc560a7d4ceebd0a5d34dd9"
     },
     {
-      "bytes": 1084,
+      "bytes": 1078,
       "path": "causal-finding-map.json",
-      "sha256": "f412404c5354cc979a6e79f5f407ef84b9d6492b24285b8ea7a5e8afafd018d8"
+      "sha256": "bce3801064f4ef21133e2095d6a56723ddbb6ab6606b81182546009f0a1d3726"
     },
     {
       "bytes": 722,
@@ -66,19 +66,19 @@
       "sha256": "bd2e467947859ef3d2bed2bb9b686e5158bc690b2e3c4260310dde8acf2d6d81"
     },
     {
-      "bytes": 3527,
+      "bytes": 3526,
       "path": "regressions/summary.json",
-      "sha256": "f045d5737c1efbd8c0ccd71eea316d7f289a5c2a452f172cff93966499959ca0"
+      "sha256": "793082256cd9366e77287635efdf118b655c169896ecd34dd65a8160663e2f94"
     },
     {
       "bytes": 1599,
       "path": "regressions/normal.json",
-      "sha256": "ff7328311d4bf63900b581164f72011ccd2b48e5fc3797fa572fd8d3e164dbb0"
+      "sha256": "3dc07064b78848b8cc05c2ba8d74fc09d78a7fed23d1d62d333275e036bd6d1c"
     },
     {
-      "bytes": 1439,
+      "bytes": 1438,
       "path": "regressions/race.json",
-      "sha256": "d00b42f1a79df7aa4b89148f50c9fdd557adb2ea36b368a9ba81418a292c81c8"
+      "sha256": "b9fa28e926f87d846caa0be5cbab5b2378e0fdefa0548949cceaa1df570b30fe"
     },
     {
       "bytes": 33120,

@@ -4,17 +4,17 @@
 
 This is an evidence-only characterization of the rejected PR438 hermetic room-liveness result. It contains no production, test, architecture, or CI changes.
 
-- Candidate source: `d58e48cc3589703aa62fa120d53407aecd134c7d`, including refreshed `origin/main=6b4f32b5940d43192774e86f05e3c7c9293c71e3`.
+- Candidate source tested: `40ba6f40db277df506cd53da6bb95dd618716d34`, including refreshed `origin/main=2456a5d1594e73faf85e1132d6050735bc3e4710`.
 - Comparison sources: planning main `7f73c8b3b4ebc99b55b8bb5e802beff024385407` and PR438 `823bd350fe5d11782c38bda87d7b7bfd7d89d7cd`.
 - Preserved prior CI evidence: run `34562579355`, job `103148160889`, whose failure reported `silent_provider_timeout` at `browser_parity_test.go:220`.
-- Canonical integrated-head matrix: run `20260911T-6b4f32b5-hermetic`, 11 cells per revision, 22/22 passing within the declared bounds.
+- Canonical matrix: run `20260911T091919Z`, 11 cells per revision, 22/22 passing in 65.363 seconds within the 900-second aggregate bound.
 - Negative controls rejected ambient environment forwarding, incorrect cell selection, wrong-package execution, timeout survivors, and normal-exit descendants.
-- Accumulated normal and focused race lifecycle regressions pass.
-- The runner repairs are checkpointed in `eaa4f7e` and `b142641`; all five controls and the classification predicate were rerun after the integrated-main merge.
+- Accumulated normal and focused race lifecycle regressions pass from the candidate source.
+- The runner now validates reused archive contents and uses bounded deferred cleanup only to preserve room outcome evidence after an assertion abort; production and test sources remain untouched.
 
 ## Finding
 
-The bounded clean matrix classifies the prior result as `NON_REPRODUCED`; it does not claim that hosted CI is flaky or absent. The retained trace comparison records only non-causal concurrent trace scheduling variance, with all behavioral checkpoints passing. The separately retained primary rerun report remains `REPORTED_UNDER_PAYLOAD` because it lacks raw command output and environment/source provenance. The evidence does not claim production repair, CI success, review, merge, vertical acceptance, or project completion.
+The bounded clean matrix classifies the prior result as `NON_REPRODUCED`; it does not claim that hosted CI is flaky or absent. A pre-final local diagnostic attempt observed one planning-main `gomaxprocs-4` peer-cancel assertion at `browser_parity_test.go:224`; the fresh canonical matrix after the repairs did not reproduce it, so no causal attribution is made. The separately retained primary rerun report remains `REPORTED_UNDER_PAYLOAD` because it lacks raw command output and environment/source provenance. The evidence does not claim production repair, CI success, review, merge, vertical acceptance, or project completion.
 
 Run the repository verification command before review:
 
