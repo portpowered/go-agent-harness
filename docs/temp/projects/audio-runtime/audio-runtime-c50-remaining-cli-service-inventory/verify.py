@@ -1204,10 +1204,16 @@ def diff_and_architecture_checks() -> dict[str, Any]:
     outside = git_status_outside_task()
     if outside:
         raise EvidenceFailure(f"gates found unrelated dirty paths outside the C50 evidence directory: {outside}")
+    # The C50 source contract is the exact planning snapshot.  A later
+    # origin/main may carry an unrelated baseline ratchet, so using the
+    # mutable remote ref here would turn a clean C50 candidate into an
+    # inherited-mainline failure.  Provenance still records that refreshed
+    # ref and its ancestry separately.
+    architecture_base = f"ARCHITECTURE_BASE={PLANNING_MAIN}"
     commands = [
         ("diff-check", ["git", "diff", "--check"]),
-        ("architecture-check", ["make", "architecture-check"]),
-        ("size-check", ["make", "size-check"]),
+        ("architecture-check", ["make", "architecture-check", architecture_base]),
+        ("size-check", ["make", "size-check", architecture_base]),
         ("wire-check", ["make", "wire-check"]),
     ]
     results = []
@@ -1221,7 +1227,7 @@ def diff_and_architecture_checks() -> dict[str, Any]:
         baseline_diffs[path] = check.returncode == 0
         if check.returncode != 0:
             raise EvidenceFailure(f"architecture baseline changed: {path}")
-    report = {"schema_version": "c50-gates-v1", "source_revision": PLANNING_MAIN, "commands": results, "architecture_baseline_sha256": baseline_hashes, "architecture_baseline_unchanged": baseline_diffs, "production_source_changed": target_source_differs(PLANNING_MAIN), "unrelated_dirty_paths": outside, "write_scope_enforced": True}
+    report = {"schema_version": "c50-gates-v1", "source_revision": PLANNING_MAIN, "architecture_base": PLANNING_MAIN, "refreshed_origin_main_is_recorded_in_provenance": True, "commands": results, "architecture_baseline_sha256": baseline_hashes, "architecture_baseline_unchanged": baseline_diffs, "production_source_changed": target_source_differs(PLANNING_MAIN), "unrelated_dirty_paths": outside, "write_scope_enforced": True}
     if report["production_source_changed"]:
         raise EvidenceFailure("gates found a production source change against the admitted planning revision")
     write_json(run_dir / "report.json", report)

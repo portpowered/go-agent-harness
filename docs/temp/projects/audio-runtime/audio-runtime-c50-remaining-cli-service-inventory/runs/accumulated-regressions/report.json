@@ -1,0 +1,21 @@
+{
+  "schema_version": "c50-accumulated-regressions-v1",
+  "source_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+  "candidate_revision": "29668dd7b59d8f93ab245a99abbcd728c24bccbd",
+  "command": "COUNT=3 scripts/test-session-ci-regressions.sh all",
+  "exit_code": 0,
+  "modes": [
+    "normal",
+    "coverage",
+    "race"
+  ],
+  "packages": [
+    "agent-cli/internal/transport/cli",
+    "agent-cli/test/integration",
+    "go-device-gateway/pkg/devices",
+    "go-llm-gateway/pkg/providers/openai"
+  ],
+  "negative_controls": "Expected replay mismatch and later-turn PCM/transcript rejection diagnostics remained asserted; all selected tests passed.",
+  "credentials": "not used",
+  "ci_polling": "not performed"
+}

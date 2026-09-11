@@ -21,37 +21,36 @@
       "workTypeName": "project"
     },
     {
-      "chainingTraceDepth": 6,
+      "chainingTraceDepth": 8,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c38-interruption-audio-retention-vertical-probe",
+      "name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
       "relations": [
         {
-          "sourceWorkName": "audio-runtime-c38-interruption-audio-retention-vertical-probe",
-          "targetWorkId": "work-thoughts-31",
-          "targetWorkName": "audio-runtime-c38-interruption-audio-retention",
+          "sourceWorkName": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+          "targetWorkId": "work-thoughts-36",
+          "targetWorkName": "audio-runtime-c38-interruption-audio-retention-vertical-probe",
           "type": "PARENT_CHILD"
         }
       ],
-      "requestId": "audio-runtime-c38-interruption-audio-retention-vertical-probe-20260911",
+      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
       "state": {
-        "name": "ready",
+        "name": "to-complete",
         "type": "PROCESSING"
       },
       "tags": {
-        "_last_output": "{\"status\": \"ready\", \"project\": \"audio-runtime\", \"directory\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c38-interruption-audio-retention-vertical-probe\", \"build\": {\"identity\": \"c38-yui-reviewed-a70c462a-merged-bb29005d\", \"path\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c38-interruption-audio-retention-vertical-probe/artifact-0\", \"sha256\": \"79eb1eb02e813a9b427164a4938199f03c18c430b51b99c791ed2a8af20ec831\"}, \"buildIdentity\": \"c38-yui-reviewed-a70c462a-merged-bb29005d\", \"validationWorkName\": \"audio-runtime-c38-interruption-audio-retention-vertical-probe\", \"missionSha256\": \"e090a195fcc365aad85b21021c3f5443ec702332ec45bb0a537bdd3c7ac49ddd\"}",
-        "_parent_request_id": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
-        "_parent_work_id": "work-thoughts-31",
-        "_source_dispatch_id": "b4a7c0ff-a718-4070-a8ec-c8c8ae4665bf",
+        "_parent_request_id": "audio-runtime-c38-interruption-audio-retention-vertical-probe-20260911",
+        "_parent_work_id": "work-thoughts-36",
+        "_source_dispatch_id": "1d606f20-f7d5-4c78-bc2a-7a5b201700b9",
         "_source_transition_id": "ideafy",
-        "_work_name": "audio-runtime-c38-interruption-audio-retention-vertical-probe",
-        "_work_type": "validation"
+        "_work_name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+        "_work_type": "idea"
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "batch-audio-runtime-c38-interruption-audio-retention-vertical-probe-20260911-audio-runtime-c38-interruption-audio-retention-vertical-probe",
-      "workTypeName": "validation"
+      "workId": "batch-audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z-audio-runtime-c40-retire-cli-interactive-tool-policy",
+      "workTypeName": "idea"
     },
     {
       "chainingTraceDepth": 7,
@@ -246,47 +245,9 @@
       "workTypeName": "idea"
     },
     {
-      "chainingTraceDepth": 2,
+      "chainingTraceDepth": 5,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c48-overlapping-tool-continuation",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "relations": [
-        {
-          "sourceWorkName": "audio-runtime-c48-overlapping-tool-continuation",
-          "targetWorkId": "batch-admit-audio-runtime-audio-runtime-v1-meta-bootstrap",
-          "targetWorkName": "meta-bootstrap",
-          "type": "PARENT_CHILD"
-        }
-      ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
-      "state": {
-        "name": "to-complete",
-        "type": "PROCESSING"
-      },
-      "tags": {
-        "_parent_request_id": "admit-audio-runtime-audio-runtime-v1",
-        "_parent_work_id": "batch-admit-audio-runtime-audio-runtime-v1-meta-bootstrap",
-        "_source_dispatch_id": "adbaf94a-4ebf-4e8a-8f7c-74c7763cbb10",
-        "_source_transition_id": "ideafy",
-        "_work_name": "audio-runtime-c48-overlapping-tool-continuation",
-        "_work_type": "idea"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "batch-audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z-audio-runtime-c48-overlapping-tool-continuation",
-      "workTypeName": "idea"
-    },
-    {
-      "chainingTraceDepth": 4,
-      "content": [
-        {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c48-overlapping-tool-continuation\", \"branch\": \"codex/audio-runtime-c48-overlapping-tool-continuation\", \"baseRevision\": \"98d369683457495083308ead14ac87bf2201a110\", \"reused\": true}",
-          "type": "text"
-        }
-      ],
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c48-overlapping-tool-continuation",
+      "name": "audio-runtime-c47-live-probe-output-bound",
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
@@ -295,12 +256,34 @@
         "name": "init",
         "type": "PROCESSING"
       },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-42",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 4,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c47-live-probe-output-bound",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
+      "state": {
+        "name": "in-review",
+        "type": "PROCESSING"
+      },
       "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c48-overlapping-tool-continuation\", \"branch\": \"codex/audio-runtime-c48-overlapping-tool-continuation\", \"baseRevision\": \"98d369683457495083308ead14ac87bf2201a110\", \"reused\": true}",
-        "_rejection_feedback": "CI checks failed for PR #440 at head 72a638b7dba22b6ed2cd912a15ae2a115993c71f: required checks failed on current head 72a638b7dba22b6ed2cd912a15ae2a115993c71f: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34569402086/job/103168088465). Return this task to the executor with the listed failures."
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
+        "_rejection_feedback": "CI checks failed for PR #439 at head c5aeb8103de499a32c4eca78fde308329fa4e65e: required checks failed on current head c5aeb8103de499a32c4eca78fde308329fa4e65e: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34563957146/job/103152135348). Return this task to the executor with the listed failures."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-task-12",
+      "workId": "work-task-11",
       "workTypeName": "task"
     },
     {
@@ -323,7 +306,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization\", \"branch\": \"codex/audio-runtime-c51-audio-device-boundary-characterization\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
-        "_rejection_feedback": "PR #441 head a3595af3877cc3e6f6c0769a9e174207cab2c335 has all required CI checks green. Independent consumer normal/race tests, wrong-oracle failure, fresh yui build, WAV oracle, and tool negative control passed. Reject for actionable evidence defects: boundary-map.json:19,56-57 cite unrelated lines (e.g. device_simulated.go:298 is `}`, processor.go:23 is a comment, :42 a field), while verify.py:564-575 checks only line ranges; the map also omits explicit production callers, timing domains, and evidence strength. provenance.json lacks project-control output, toolchain/GOOS/GOARCH, clean candidate SHA, fetched-main identity, and required startup/planning ancestry; verify.py:421-525 does not enforce these. shipped-regression.json records only an external binary path/hash, omits build-input provenance and SOFTWARE_REPLAY_PROCESS_ONLY classification, and verify.py:655-705 accepts any supplied binary. Runner controls lack owned disk/WAV bounds, strict aggregate enforcement, bounded archive execution, and descendant cleanup before the reader-survival failure path (verify.py:122-203,220-246,655-719). Executor must correct citations/schema/verifier fail-closed checks, fetch and pin main, record complete provenance, build and retain an exact-head yui with build-input manifest, harden runner quotas/group cleanup, regenerate all dependent evidence, then commit/push and resubmit the changed head to SCRIPT CI. Do not merge this head."
+        "_rejection_feedback": "PR #441 head 097f87c3 has all required checks green, and independent consumer, wrong-oracle, provenance, boundary, and shipped PCM/WAV replay checks passed. Residual blockers: verify.py:136-137 skips process-group termination once the parent exits; a reproduced parent-exits-with-descendant case raised the reader-survival error while leaving the descendant alive. Disk/WAV limits are also post-hoc only (verify.py:284-285, 1034-1071); a 40 MiB child write completed before rejection against the 32 MiB limit. Harden group cleanup and enforce bounds during execution, with deterministic negative controls. boundary-map.json still labels non-call sites as production callers (lines 97, 114, 133, 152, 170-171); verify.py:897 only rejects comment lines, contrary to its schema claim. Replace these with exact reachable callers and make invalid field/declaration citations fail closed. The build manifest filters only Go/module files (verify.py:461-482) but yui transitively embeds local JS/JSON inputs, including siteadapter extensions and go-agent-loop/pkg/probe/testdata/goal_catalog.json; include those hashes and regenerate shipped-build, regression, and provenance evidence. Fix the same PR, rerun focused controls and direct shipped replay, commit/push the changed head, then resubmit to SCRIPT CI. Do not merge 097f87c3."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-22",
@@ -349,7 +332,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory\", \"branch\": \"codex/audio-runtime-c50-remaining-cli-service-inventory\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
-        "_rejection_feedback": "PR #442 head f6fbaa97fb7bc85166b256878e1b39ec01394ae7 has all nine required checks SUCCESS. Independent fresh yui build/replay, focused tests, and deterministic analyzer reruns passed. Rejecting for actionable evidence defects: provenance omits the required source-archive and build-input hashes and records 7f73c8b3 as candidate_revision instead of reviewed head f6fbaa97; verification-summary records checksum-manifest hash ea026565... while current SHA256SUMS hashes to 75bcc52f...; analyzer method-call resolution misses mesh.Join/Remove/Close, classifications contradict the committed inventory, Peers has no production caller, cited callers are type/wrapper declarations rather than exact calls, and all 96 public call paths are target-local because the prefix validation is too broad; verifier accepts no-test runs by matching only ok, rejects its documented timeout/binary flags, lacks a shared aggregate deadline and owned-output quota, and does not assert required help literals. Exact executor action: repair analyzer, call-path/classification evidence, provenance, and verifier bounds/assertions while retaining the origin/main source scope; regenerate the complete evidence bundle with candidate head f6fbaa97, make checksum records self-consistent, rerun the full verification and required checks through the CI script, push the replacement head, and request fresh review. Do not merge this head."
+        "_rejection_feedback": "PR #442 head 7a8ca37a712ede40d85f0ad0116ab08e41f81703 has green required checks, but provenance.json, verification-summary.json, and public/report.json remain bound to 3acf11ab0aab6d8972d51ad3d03b07a85b2004aa. Refresh final-head evidence and hashes with verify.py --mode all --child-timeout 60 --total-timeout 600, commit/push it, rerun SCRIPT CI on the new head, then request fresh review. Independent analyzer and yui replay probes passed; no source defect found."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-24",
@@ -370,7 +353,7 @@
       ],
       "requestId": "audio-runtime-c52-hermetic-room-liveness-characterization-20260911T0611Z",
       "state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "tags": {
@@ -379,6 +362,47 @@
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-33",
       "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 10,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"branch\": \"codex/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"baseRevision\": \"14986030512e4a175c489ab9e82e37e9211eeb61\", \"reused\": true}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"branch\": \"codex/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"baseRevision\": \"14986030512e4a175c489ab9e82e37e9211eeb61\", \"reused\": true}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-40",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 5,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c48-overlapping-tool-continuation",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-41",
+      "workTypeName": "thoughts"
     },
     {
       "chainingTraceDepth": 5,
@@ -496,6 +520,44 @@
       "workTypeName": "review"
     },
     {
+      "chainingTraceDepth": 14,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c50-remaining-cli-service-inventory",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #442 head 7a8ca37a712ede40d85f0ad0116ab08e41f81703 has green required checks, but provenance.json, verification-summary.json, and public/report.json remain bound to 3acf11ab0aab6d8972d51ad3d03b07a85b2004aa. Refresh final-head evidence and hashes with verify.py --mode all --child-timeout 60 --total-timeout 600, commit/push it, rerun SCRIPT CI on the new head, then request fresh review. Independent analyzer and yui replay probes passed; no source defect found."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-34",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 14,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c51-audio-device-boundary-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c50-c51-characterization-20260911T0438Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #441 head 097f87c3 has all required checks green, and independent consumer, wrong-oracle, provenance, boundary, and shipped PCM/WAV replay checks passed. Residual blockers: verify.py:136-137 skips process-group termination once the parent exits; a reproduced parent-exits-with-descendant case raised the reader-survival error while leaving the descendant alive. Disk/WAV limits are also post-hoc only (verify.py:284-285, 1034-1071); a 40 MiB child write completed before rejection against the 32 MiB limit. Harden group cleanup and enforce bounds during execution, with deterministic negative controls. boundary-map.json still labels non-call sites as production callers (lines 97, 114, 133, 152, 170-171); verify.py:897 only rejects comment lines, contrary to its schema claim. Replace these with exact reachable callers and make invalid field/declaration citations fail closed. The build manifest filters only Go/module files (verify.py:461-482) but yui transitively embeds local JS/JSON inputs, including siteadapter extensions and go-agent-loop/pkg/probe/testdata/goal_catalog.json; include those hashes and regenerate shipped-build, regression, and provenance evidence. Fix the same PR, rerun focused controls and direct shipped replay, commit/push the changed head, then resubmit to SCRIPT CI. Do not merge 097f87c3."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-35",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 4,
       "content": [
         {
@@ -523,36 +585,6 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-10",
-      "workTypeName": "task"
-    },
-    {
-      "chainingTraceDepth": 4,
-      "content": [
-        {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
-          "type": "text"
-        }
-      ],
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "failureDetail": {
-        "message": "runner returned failed outcome",
-        "reason": "unknown"
-      },
-      "name": "audio-runtime-c47-live-probe-output-bound",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
-      "state": {
-        "name": "failed",
-        "type": "FAILED"
-      },
-      "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
-        "_rejection_feedback": "CI checks failed for PR #439 at head c5aeb8103de499a32c4eca78fde308329fa4e65e: required checks failed on current head c5aeb8103de499a32c4eca78fde308329fa4e65e: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34563957146/job/103152135348). Return this task to the executor with the listed failures."
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-task-11",
       "workTypeName": "task"
     },
     {
@@ -609,6 +641,39 @@
       "workTypeName": "thoughts"
     },
     {
+      "chainingTraceDepth": 6,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c38-interruption-audio-retention-vertical-probe",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c38-interruption-audio-retention-vertical-probe",
+          "targetWorkId": "work-thoughts-31",
+          "targetWorkName": "audio-runtime-c38-interruption-audio-retention",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c38-interruption-audio-retention-vertical-probe-20260911",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"project\": \"audio-runtime\", \"directory\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c38-interruption-audio-retention-vertical-probe\", \"build\": {\"identity\": \"c38-yui-reviewed-a70c462a-merged-bb29005d\", \"path\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c38-interruption-audio-retention-vertical-probe/artifact-0\", \"sha256\": \"79eb1eb02e813a9b427164a4938199f03c18c430b51b99c791ed2a8af20ec831\"}, \"buildIdentity\": \"c38-yui-reviewed-a70c462a-merged-bb29005d\", \"validationWorkName\": \"audio-runtime-c38-interruption-audio-retention-vertical-probe\", \"missionSha256\": \"e090a195fcc365aad85b21021c3f5443ec702332ec45bb0a537bdd3c7ac49ddd\"}",
+        "_parent_request_id": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
+        "_parent_work_id": "work-thoughts-31",
+        "_source_dispatch_id": "b4a7c0ff-a718-4070-a8ec-c8c8ae4665bf",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c38-interruption-audio-retention-vertical-probe",
+        "_work_type": "validation"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c38-interruption-audio-retention-vertical-probe-20260911-audio-runtime-c38-interruption-audio-retention-vertical-probe",
+      "workTypeName": "validation"
+    },
+    {
       "chainingTraceDepth": 2,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "name": "audio-runtime-c38-interruption-audio-retention",
@@ -638,6 +703,38 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "batch-audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z-audio-runtime-c38-interruption-audio-retention",
+      "workTypeName": "idea"
+    },
+    {
+      "chainingTraceDepth": 2,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c48-overlapping-tool-continuation",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c48-overlapping-tool-continuation",
+          "targetWorkId": "batch-admit-audio-runtime-audio-runtime-v1-meta-bootstrap",
+          "targetWorkName": "meta-bootstrap",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_parent_request_id": "admit-audio-runtime-audio-runtime-v1",
+        "_parent_work_id": "batch-admit-audio-runtime-audio-runtime-v1-meta-bootstrap",
+        "_source_dispatch_id": "adbaf94a-4ebf-4e8a-8f7c-74c7763cbb10",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c48-overlapping-tool-continuation",
+        "_work_type": "idea"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z-audio-runtime-c48-overlapping-tool-continuation",
       "workTypeName": "idea"
     },
     {
@@ -791,6 +888,31 @@
       "workTypeName": "plan"
     },
     {
+      "chainingTraceDepth": 9,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"branch\": \"codex/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"baseRevision\": \"14986030512e4a175c489ab9e82e37e9211eeb61\", \"reused\": true}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"branch\": \"codex/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"baseRevision\": \"14986030512e4a175c489ab9e82e37e9211eeb61\", \"reused\": true}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-plan-38",
+      "workTypeName": "plan"
+    },
+    {
       "chainingTraceDepth": 3,
       "content": [
         {
@@ -855,6 +977,48 @@
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-review-29",
       "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 5,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c48-overlapping-tool-continuation",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-37",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 4,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c48-overlapping-tool-continuation\", \"branch\": \"codex/audio-runtime-c48-overlapping-tool-continuation\", \"baseRevision\": \"98d369683457495083308ead14ac87bf2201a110\", \"reused\": true}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c48-overlapping-tool-continuation",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c48-overlapping-tool-continuation\", \"branch\": \"codex/audio-runtime-c48-overlapping-tool-continuation\", \"baseRevision\": \"98d369683457495083308ead14ac87bf2201a110\", \"reused\": true}",
+        "_rejection_feedback": "CI checks failed for PR #440 at head 72a638b7dba22b6ed2cd912a15ae2a115993c71f: required checks failed on current head 72a638b7dba22b6ed2cd912a15ae2a115993c71f: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34569402086/job/103168088465). Return this task to the executor with the listed failures."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-12",
+      "workTypeName": "task"
     },
     {
       "chainingTraceDepth": 4,
@@ -1055,6 +1219,56 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-thoughts-31",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 7,
+      "content": [
+        {
+          "text": "{\"request\":{\"requestId\":\"audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c40-retire-cli-interactive-tool-policy\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Resume reviewed CLI interactive-tool policy retirement\",\"requestedOutcome\":\"Adopt and resume the preserved C40 isolated worktree, branch codex/audio-runtime-c40-retire-cli-interactive-tool-policy, PR435 and clean checkpoint 14986030512e4a175c489ab9e82e37e9211eeb61; do not create a replacement implementation or discard prior evidence. The blocking C38 interruption-retention dependency is now independently accepted at merged source bb29005d0bb545db5e08ffda0205929b021d4fc1 with exact staged YUI SHA256 79eb1eb02e813a9b427164a4938199f03c18c430b51b99c791ed2a8af20ec831 and canonical validation complete. Fetch and integrate reviewed main containing bb29005d, resolve only actual conflicts within the C40 lease, preserve the existing runtime tools thin contract/private internal policy/per-service Wire extraction and CLI delegation, and refresh changed-source provenance and bounded controls. Re-run focused normal/race policy and compatibility tests, the standalone no-CLI consumer with deliberate wrong-oracle rejection, architecture/import/Wire checks without baseline growth, and the public credential-free tool-enabled workflow plus existing strict audio/tool/interruption regression with observable effects and clean bounded shutdown. Preserve exact defaults, class/name/catalog/clone/timeout/validation behavior, negative controls, deadlines and residual limitations; no Realtime use or hardware/acoustic PASS claims. Commit and push the changed same PR435 head, submit once to script-owned current-head CI, retain actionable repairs through CONTINUE, and require fresh independent review/guarded merge. Delivery is not vertical acceptance: after merge the primary must stage the exact immutable executable and send a fresh Luna engineering scope=vertical public-workflow/effects/clean-shutdown/regression probe before accepting C40.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go\",\"agent-cli/internal/services/internal/agentruntime/session_interactive_policy_test.go\",\"agent-cli/internal/services/internal/agentruntime/session_interactive_browser_policy_test.go\",\"go-agent-runtime/services/tools/interactive_policy.go\",\"go-agent-runtime/services/tools/internal/policy/\",\"go-agent-runtime/services/tools/wire/wire.go\",\"go-agent-runtime/services/tools/wire/wire_gen.go\",\"coverage-manifest/go-agent-runtime/services/tools/internal/policy/package.json\",\"docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-interactive-tool-policy/\"],\"verification\":[\"Verify the preserved managed worktree/branch/PR435 and clean checkpoint 14986030512e4a175c489ab9e82e37e9211eeb61 before mutation; integrate origin/main containing accepted C38 merge bb29005d without resetting or replacing retained work.\",\"Run bounded focused normal/race policy and CLI compatibility tests for immutable clones, unknown/dynamic/browser names, defaults, invalid bounds, exact error ordering and timeout resolution; retain every existing assertion and negative control.\",\"Run the separate evidence-folder Go consumer through public tools Wire with no CLI imports, credentials, devices, terminal state or hidden globals; require literal expected decisions and a deliberate wrong-oracle failure.\",\"Run architecture, size, import-boundary and generated-Wire consistency checks without increasing baselines, then build and launch the shipped CLI through a credential-free policy-reaching tool workflow and existing strict audio/tool/interruption replay regression with exact effects, bounded process-group cleanup and no survivors.\",\"Record exact base/candidate/tested-source/build/fixture hashes, before/after production lines and retired/delegated symbols; submit changed PR435 head to script CI and fresh independent review before merge.\"],\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c38-interruption-audio-retention-vertical-probe",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c38-interruption-audio-retention-vertical-probe-20260911",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"request\":{\"requestId\":\"audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c40-retire-cli-interactive-tool-policy\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Resume reviewed CLI interactive-tool policy retirement\",\"requestedOutcome\":\"Adopt and resume the preserved C40 isolated worktree, branch codex/audio-runtime-c40-retire-cli-interactive-tool-policy, PR435 and clean checkpoint 14986030512e4a175c489ab9e82e37e9211eeb61; do not create a replacement implementation or discard prior evidence. The blocking C38 interruption-retention dependency is now independently accepted at merged source bb29005d0bb545db5e08ffda0205929b021d4fc1 with exact staged YUI SHA256 79eb1eb02e813a9b427164a4938199f03c18c430b51b99c791ed2a8af20ec831 and canonical validation complete. Fetch and integrate reviewed main containing bb29005d, resolve only actual conflicts within the C40 lease, preserve the existing runtime tools thin contract/private internal policy/per-service Wire extraction and CLI delegation, and refresh changed-source provenance and bounded controls. Re-run focused normal/race policy and compatibility tests, the standalone no-CLI consumer with deliberate wrong-oracle rejection, architecture/import/Wire checks without baseline growth, and the public credential-free tool-enabled workflow plus existing strict audio/tool/interruption regression with observable effects and clean bounded shutdown. Preserve exact defaults, class/name/catalog/clone/timeout/validation behavior, negative controls, deadlines and residual limitations; no Realtime use or hardware/acoustic PASS claims. Commit and push the changed same PR435 head, submit once to script-owned current-head CI, retain actionable repairs through CONTINUE, and require fresh independent review/guarded merge. Delivery is not vertical acceptance: after merge the primary must stage the exact immutable executable and send a fresh Luna engineering scope=vertical public-workflow/effects/clean-shutdown/regression probe before accepting C40.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go\",\"agent-cli/internal/services/internal/agentruntime/session_interactive_policy_test.go\",\"agent-cli/internal/services/internal/agentruntime/session_interactive_browser_policy_test.go\",\"go-agent-runtime/services/tools/interactive_policy.go\",\"go-agent-runtime/services/tools/internal/policy/\",\"go-agent-runtime/services/tools/wire/wire.go\",\"go-agent-runtime/services/tools/wire/wire_gen.go\",\"coverage-manifest/go-agent-runtime/services/tools/internal/policy/package.json\",\"docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-interactive-tool-policy/\"],\"verification\":[\"Verify the preserved managed worktree/branch/PR435 and clean checkpoint 14986030512e4a175c489ab9e82e37e9211eeb61 before mutation; integrate origin/main containing accepted C38 merge bb29005d without resetting or replacing retained work.\",\"Run bounded focused normal/race policy and CLI compatibility tests for immutable clones, unknown/dynamic/browser names, defaults, invalid bounds, exact error ordering and timeout resolution; retain every existing assertion and negative control.\",\"Run the separate evidence-folder Go consumer through public tools Wire with no CLI imports, credentials, devices, terminal state or hidden globals; require literal expected decisions and a deliberate wrong-oracle failure.\",\"Run architecture, size, import-boundary and generated-Wire consistency checks without increasing baselines, then build and launch the shipped CLI through a credential-free policy-reaching tool workflow and existing strict audio/tool/interruption replay regression with exact effects, bounded process-group cleanup and no survivors.\",\"Record exact base/candidate/tested-source/build/fixture hashes, before/after production lines and retired/delegated symbols; submit changed PR435 head to script CI and fresh independent review before merge.\"],\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-36",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 10,
+      "content": [
+        {
+          "text": "No new Work dispatched.\n\n- Four Luna slots are occupied by C47 execution, C50/C51 reviews, and C52 characterization.\n- C40 setup completed; `work-task-40` is ready on preserved PR435/checkpoint `14986030`.\n- C48 PR440 has nine green checks; independent review is queued.\n- C47 PR439 advanced to `cc0841b4`; current-head CI is running.\n- C46 remains blocked on C52\u2019s bounded diagnosis. C23 remains gated by C48 acceptance.\n- All nine project criteria remain open.\n\nReconciliation and the exact next decision are recorded in [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md).",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "No new Work dispatched.\n\n- Four Luna slots are occupied by C47 execution, C50/C51 reviews, and C52 characterization.\n- C40 setup completed; `work-task-40` is ready on preserved PR435/checkpoint `14986030`.\n- C48 PR440 has nine green checks; independent review is queued.\n- C47 PR439 advanced to `cc0841b4`; current-head CI is running.\n- C46 remains blocked on C52\u2019s bounded diagnosis. C23 remains gated by C48 acceptance.\n- All nine project criteria remain open.\n\nReconciliation and the exact next decision are recorded in [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md)."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-39",
       "workTypeName": "thoughts"
     },
     {
