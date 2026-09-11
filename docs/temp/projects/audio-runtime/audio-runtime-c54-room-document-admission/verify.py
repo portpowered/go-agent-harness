@@ -138,7 +138,8 @@ def check_inputs(provenance: dict[str, Any]) -> None:
 
 
 def check_consumer(cases: dict[str, Any], source: str, candidate: str) -> None:
-    check_execution(cases["consumer"]["execution"], "public-external-consumer", success=True)
+    check_execution(cases["consumer"]["execution"], "build-external-consumer", success=True)
+    check_execution(cases["consumer_positive"]["execution"], "public-external-consumer", success=True)
     report = cases["consumer_positive"]["report"]
     require(report["schema"] == "audio-runtime.c54.public-admission/v1", "consumer schema changed")
     require(report["candidate_revision"] == candidate and report["source_revision"] == source, "consumer provenance changed")
