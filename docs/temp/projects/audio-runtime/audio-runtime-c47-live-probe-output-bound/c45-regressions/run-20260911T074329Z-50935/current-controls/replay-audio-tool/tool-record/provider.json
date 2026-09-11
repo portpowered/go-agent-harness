@@ -1,0 +1,58 @@
+{
+  "records": [
+    {
+      "type": "session.update"
+    },
+    {
+      "type": "session.created"
+    },
+    {
+      "type": "conversation.item.create"
+    },
+    {
+      "type": "response.create"
+    },
+    {
+      "type": "response.created"
+    },
+    {
+      "type": "response.output_item.added"
+    },
+    {
+      "type": "response.function_call_arguments.done"
+    },
+    {
+      "type": "response.done"
+    },
+    {
+      "type": "conversation.item.create"
+    },
+    {
+      "type": "response.create"
+    },
+    {
+      "type": "response.created"
+    },
+    {
+      "type": "response.output_audio.delta"
+    },
+    {
+      "type": "response.output_audio.delta"
+    },
+    {
+      "type": "response.output_audio.done"
+    },
+    {
+      "type": "response.output_text.delta"
+    },
+    {
+      "type": "response.output_text.done"
+    },
+    {
+      "type": "response.done"
+    },
+    {
+      "type": "session.closed"
+    }
+  ]
+}

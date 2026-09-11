@@ -1,0 +1,20 @@
+{
+  "schema": "audio-runtime.c55.branch-diff.v1",
+  "branch": "codex/audio-runtime-c55-room-participant-mesh",
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh",
+  "diff_base": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+  "merge_head": "fddc0224b0e5258a47b827ed601e7c07c8876ae7",
+  "committed_diff_from_origin_main": [
+    {"status": "M", "path": "agent-cli/internal/room/mesh.go"},
+    {"status": "A", "path": "go-agent-runtime/services/rooms/internal/lifecycle/mesh.go"},
+    {"status": "A", "path": "go-agent-runtime/services/rooms/mesh.go"},
+    {"status": "A", "path": "go-agent-runtime/services/rooms/wire/mesh.go"}
+  ],
+  "pending_owned_repairs_at_capture": [
+    "agent-cli/internal/room/mesh_test.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/mesh.go"
+  ],
+  "scope_rule": "all candidate changes must be owned C55 code or docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/",
+  "host_checkout_modified": false,
+  "peer_worktrees_modified": false
+}

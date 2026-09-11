@@ -9,9 +9,7 @@ import (
 )
 
 const maxRTCDevicePlaybackIdentityBytes = 256
-
 const rtcDevicePlaybackIdentityOverflowReason = "playback response identity exceeded bounded diagnostic storage"
-
 const maxRTCDevicePlaybackPendingDiscards = maxRTCDevicePlaybackObservationSegments
 
 // rtcDevicePlaybackIdentity is the bounded representation retained by the
@@ -79,6 +77,19 @@ func playbackResponseForFrame(current rtcDevicePlaybackIdentity, frame audio.Pla
 		return current
 	}
 	return newRTCDevicePlaybackIdentity(frame)
+}
+
+func (s *RTCDeviceSink) recordPlaybackSpanAtLocked(response rtcDevicePlaybackIdentity, start uint64, samples int, consumed uint64) {
+	if !response.hasItem() || samples <= 0 {
+		return
+	}
+	s.prunePlaybackSpansLocked(consumed)
+	end := start + uint64(samples)
+	if n := len(s.playbackSpans); n > 0 && s.playbackSpans[n-1].response.equal(response) && s.playbackSpans[n-1].end == start {
+		s.playbackSpans[n-1].end = end
+		return
+	}
+	s.playbackSpans = append(s.playbackSpans, rtcDevicePlaybackSpan{response: response, start: start, end: end})
 }
 
 func playbackStatsHaveRenderClock(stats audio.PlaybackQueueStats) bool {

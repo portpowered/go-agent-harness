@@ -238,6 +238,69 @@ func TestRunnerRetainsTypedSilentTerminalAndIsolatesPeer(t *testing.T) {
 	}
 }
 
+func TestRunnerRegistersParticipantBeforeSynchronousTerminalEvent(t *testing.T) {
+	handle := newFakeLiveHandle()
+	handle.startEvents = []session.LiveEvent{{
+		Kind: string(session.LiveEventTerminal),
+		Terminal: &messages.SessionCloseValue{
+			Classification:     silentProviderEmptyResponse,
+			TerminalReason:     messages.TerminalReasonPartialOutput,
+			TerminalProvenance: messages.TerminalProvenanceProvider,
+			OutputState:        messages.TerminalOutputNone,
+		},
+	}}
+	handle.startEventReady = make(chan struct{})
+	handle.startEventRelease = make(chan struct{})
+	service := &fakeLiveService{handles: map[string]*fakeLiveHandle{"silent": handle, "peer": newFakeLiveHandle()}}
+	runner := New(Dependencies{Live: service, Clock: platformclock.Real{}})
+	manifest := rooms.Manifest{
+		SchemaVersion: rooms.SchemaVersion,
+		Room:          rooms.Room{MaxTurns: 1, Interactive: true},
+		Participants: []rooms.Participant{
+			{ID: "silent", SystemPrompt: "silent", OpeningPrompt: "start", Provider: "p", Model: "m", APIKeyEnv: "SILENT", Tools: []string{}},
+			{ID: "peer", SystemPrompt: "peer", OpeningPrompt: "start", Provider: "p", Model: "m", APIKeyEnv: "PEER", Tools: []string{}},
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var releaseOnce sync.Once
+	releaseStart := func() { releaseOnce.Do(func() { close(handle.startEventRelease) }) }
+	defer releaseStart()
+	diagnosticSeen := make(chan struct{})
+	var diagnosticOnce sync.Once
+	resultCh := make(chan error, 1)
+	go func() {
+		_, err := runner.Run(ctx, nil, rooms.RoomRunOptions{
+			Manifest: manifest,
+			OnDiagnostic: func(participantID string, record rooms.RoomDiagnosticRecord) {
+				if participantID == "silent" && record.Event == "live_terminal" {
+					diagnosticOnce.Do(func() { close(diagnosticSeen) })
+				}
+			},
+		})
+		resultCh <- err
+	}()
+	select {
+	case <-handle.startEventReady:
+	case <-ctx.Done():
+		t.Fatalf("provider Start did not emit its terminal event: %v", ctx.Err())
+	}
+	select {
+	case <-diagnosticSeen:
+		releaseStart()
+	case <-ctx.Done():
+		t.Fatalf("synchronous terminal event was not observed: %v", ctx.Err())
+	}
+	select {
+	case err := <-resultCh:
+		if err != nil {
+			t.Fatalf("room run error = %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("room did not join participant cleanup: %v", ctx.Err())
+	}
+}
+
 func TestMediaBridgePreservesPCMAndUsesBoundedFrames(t *testing.T) {
 	input := &capturePump{frame: []int16{1, 2, 3}}
 	output := &playbackPump{}
@@ -318,18 +381,20 @@ func (s *fakeLiveService) OpenLive(_ context.Context, request session.LiveReques
 }
 
 type fakeLiveHandle struct {
-	mu          sync.Mutex
-	media       audio.MediaEndpoints
-	events      chan session.LiveEvent
-	done        chan struct{}
-	closeEvents sync.Once
-	startCount  int
-	cancelCount int
-	closeCount  int
-	cancelErr   error
-	controls    []session.LiveControl
-	startEvents []session.LiveEvent
-	capturePath string
+	mu                sync.Mutex
+	media             audio.MediaEndpoints
+	events            chan session.LiveEvent
+	done              chan struct{}
+	closeEvents       sync.Once
+	startCount        int
+	cancelCount       int
+	closeCount        int
+	cancelErr         error
+	controls          []session.LiveControl
+	startEvents       []session.LiveEvent
+	startEventReady   chan struct{}
+	startEventRelease chan struct{}
+	capturePath       string
 }
 
 func newFakeLiveHandle() *fakeLiveHandle {
@@ -364,6 +429,10 @@ func (h *fakeLiveHandle) Start(context.Context) error {
 	h.mu.Unlock()
 	for _, event := range startEvents {
 		h.events <- event
+	}
+	if h.startEventReady != nil {
+		close(h.startEventReady)
+		<-h.startEventRelease
 	}
 	h.events <- session.LiveEvent{Kind: "turn_completed"}
 	return nil
