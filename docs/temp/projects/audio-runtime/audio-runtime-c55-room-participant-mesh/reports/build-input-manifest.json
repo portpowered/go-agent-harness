@@ -1,5 +1,5 @@
 {
-  "candidate_revision": "b7b776ec90dca570213c442d9e55a391827b882c",
+  "candidate_revision": "de7e905b506a7d77589c6b69bbb5b1a5d719488d",
   "entries": [
     {
       "bytes": 18,
@@ -7757,9 +7757,9 @@
       "sha256": "5e3bbe07b1691e429484c5018abc2eba6e226dd23c58e36b4059dd875151d521"
     },
     {
-      "bytes": 3638,
+      "bytes": 3681,
       "path": "go-agent-runtime/services/rooms/mesh.go",
-      "sha256": "9367382df786a4381a978f18bd073f0d32fb718c615f56e1f24d9226566734d4"
+      "sha256": "b2852f53b07d26903e52c3e6d510ba1e387dc702c681ed4d088160d72e7e6bea"
     },
     {
       "bytes": 5926,
@@ -10958,5 +10958,5 @@
     }
   ],
   "schema": "audio-runtime.c55.build-inputs.v1",
-  "sha256": "a5bcad1042e1be48dc791f6560178317c33fd1d2b4d08baaa7939b85ace9847e"
+  "sha256": "0a70bcefd8e9717e6120f590b41ef0bddc153d2fb4dc1ca89f9826e796d8f0e0"
 }

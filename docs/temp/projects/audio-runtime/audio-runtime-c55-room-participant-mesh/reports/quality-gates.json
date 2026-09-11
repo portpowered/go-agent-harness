@@ -1,6 +1,6 @@
 {
   "schema": "audio-runtime.c55.quality-gates.v1",
-  "candidate_revision": "b7b776ec90dca570213c442d9e55a391827b882c",
+  "candidate_revision": "de7e905b506a7d77589c6b69bbb5b1a5d719488d",
   "passed": [
     {"command": "make fmt", "exit_code": 0},
     {"command": "make wire-check", "exit_code": 0},
