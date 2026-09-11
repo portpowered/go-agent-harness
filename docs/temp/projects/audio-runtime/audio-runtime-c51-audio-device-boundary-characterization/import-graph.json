@@ -3994,6 +3994,10 @@
           "line": 17
         },
         {
+          "file": "go-agent-runtime/services/tools/internal/policy/policy_test.go",
+          "line": 9
+        },
+        {
           "file": "go-agent-runtime/services/tools/internal/registry/registry_contract_test.go",
           "line": 12
         },
@@ -5078,6 +5082,10 @@
           "line": 6
         },
         {
+          "file": "go-agent-runtime/services/tools/interactive_policy.go",
+          "line": 6
+        },
+        {
           "file": "go-agent-runtime/services/tools/internal/base.go",
           "line": 6
         },
@@ -5128,6 +5136,10 @@
         {
           "file": "go-agent-runtime/services/tools/internal/mouse/tool_mouse.go",
           "line": 7
+        },
+        {
+          "file": "go-agent-runtime/services/tools/internal/policy/policy.go",
+          "line": 8
         },
         {
           "file": "go-agent-runtime/services/tools/internal/registry/adapter.go",
@@ -7723,6 +7735,7 @@
           "display_contracts.go",
           "image.go",
           "image_staging.go",
+          "interactive_policy.go",
           "read_image_contract.go",
           "service.go",
           "skills.go"
@@ -7863,6 +7876,18 @@
           "test_helpers_test.go",
           "tool_screen_mouse_darwin_test.go",
           "tool_screen_mouse_test.go"
+        ],
+        "xtestGoFiles": []
+      },
+      {
+        "cgoFiles": [],
+        "dir": "go-agent-runtime/services/tools/internal/policy",
+        "goFiles": [
+          "policy.go"
+        ],
+        "importPath": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/policy",
+        "testGoFiles": [
+          "policy_test.go"
         ],
         "xtestGoFiles": []
       },
@@ -8948,7 +8973,7 @@
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
-          "line": 10
+          "line": 8
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_live.go",
@@ -9855,6 +9880,10 @@
           "line": 13
         },
         {
+          "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+          "line": 9
+        },
+        {
           "file": "agent-cli/internal/services/internal/agentruntime/session_room_browser_capabilities.go",
           "line": 11
         },
@@ -9933,6 +9962,10 @@
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_image_staging.go",
           "line": 14
+        },
+        {
+          "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+          "line": 10
         },
         {
           "file": "agent-cli/internal/services/internal/agentruntime/session_room_browser_capabilities.go",
@@ -12818,7 +12851,7 @@
     }
   ],
   "schema": "audio-runtime-c51.import-graph.v1",
-  "sourceRevision": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
+  "sourceRevision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
   "transitiveProductionClosure": {
     "agent-cli": [
       "go-agent-loop",
