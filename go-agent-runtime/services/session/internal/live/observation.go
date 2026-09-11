@@ -347,7 +347,7 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...b
 	h.mu.Lock()
 	deferredResponseComplete := len(complete) > 0 && complete[0]
 	if h.isToolResponseEnd(msg) {
-		h.pendingToolCalls = 0
+		h.retireCompletedToolCallsLocked()
 		if deferredResponseComplete {
 			h.replayResponses++
 		}
@@ -382,7 +382,7 @@ func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 		return
 	}
 	if msg.Type == messages.StreamTypeToolCallEnd {
-		h.pendingToolCalls++
+		h.notePendingToolCallLocked(msg)
 		return
 	}
 	if msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool {
@@ -390,6 +390,9 @@ func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 		h.responseActive, h.responsePending = false, false
 		interrupted := h.finiteResponseWasInterrupted(msg)
 		if h.pendingToolCalls > 0 || interrupted {
+			if h.pendingToolCalls > 0 && !h.pendingToolCallsForResponse(msg.ResponseID) {
+				h.replayResponses++
+			}
 			if interrupted && responseWasOpen && h.activeScheduledAudio && h.scheduledAudioCount > 0 {
 				h.interruptedScheduledResponses++
 			}
@@ -397,4 +400,100 @@ func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 		}
 		h.replayResponses++
 	}
+}
+
+// notePendingToolCall records a provider call by identity when available. A
+// single aggregate counter cannot represent two active provider responses: a
+// RoleTool boundary for the first batch must not retire the second batch.
+func (h *handle) notePendingToolCall(msg messages.StreamMessage) {
+	if h == nil {
+		return
+	}
+	callID, _ := providerToolCallIdentity(msg)
+	responseID := strings.TrimSpace(msg.ResponseID)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.notePendingToolCallLockedWithID(callID, responseID)
+}
+
+// notePendingToolCallLocked is used while observeFiniteResponse already owns
+// the lifecycle mutex. Keep the lock-free state transition separate so a
+// TOOLCALL.END cannot deadlock the delta consumer by reacquiring h.mu.
+func (h *handle) notePendingToolCallLocked(msg messages.StreamMessage) {
+	callID, _ := providerToolCallIdentity(msg)
+	h.notePendingToolCallLockedWithID(callID, strings.TrimSpace(msg.ResponseID))
+}
+
+func (h *handle) notePendingToolCallLockedWithID(callID, responseID string) {
+	if h.pendingToolCallIDs == nil {
+		// Keep manually-constructed test handles and legacy callers on the
+		// historical aggregate path; production handles initialize the map.
+		h.pendingToolCalls++
+		return
+	}
+	if callID != "" {
+		h.pendingToolCallIDs[callID] = struct{}{}
+		if responseID != "" {
+			if h.pendingToolCallResponses == nil {
+				h.pendingToolCallResponses = make(map[string]string)
+			}
+			h.pendingToolCallResponses[callID] = responseID
+		}
+	}
+	h.pendingToolCalls = len(h.pendingToolCallIDs)
+}
+
+// pendingToolCallsForResponse keeps one provider response's terminal from
+// being blocked by calls belonging to a different active response. Providers
+// that omit response IDs retain the aggregate behavior as a conservative
+// compatibility fallback.
+func (h *handle) pendingToolCallsForResponse(responseID string) bool {
+	responseID = strings.TrimSpace(responseID)
+	if responseID == "" || h.pendingToolCallIDs == nil || h.pendingToolCallResponses == nil {
+		return h.pendingToolCalls > 0
+	}
+	for callID := range h.pendingToolCallIDs {
+		callResponseID, known := h.pendingToolCallResponses[callID]
+		if !known || callResponseID == "" || callResponseID == responseID {
+			return true
+		}
+	}
+	return false
+}
+
+// retireCompletedToolCalls removes only calls whose local tool result batch has
+// reached MESSAGE.END. Calls from another still-active provider response remain
+// pending and continue to block finite-session shutdown.
+func (h *handle) retireCompletedToolCalls() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.retireCompletedToolCallsLocked()
+}
+
+// retireCompletedToolCallsLocked is used while observeFiniteResponse already
+// owns the lifecycle mutex. The tool-state snapshot is protected separately
+// because provider observation and local tool execution run on different
+// workers.
+func (h *handle) retireCompletedToolCallsLocked() {
+	h.toolMu.Lock()
+	completed := make([]string, 0)
+	for callID, state := range h.toolContinuations {
+		if state != nil && state.toolResponseComplete && strings.TrimSpace(callID) != "" {
+			completed = append(completed, callID)
+		}
+	}
+	h.toolMu.Unlock()
+
+	if h.pendingToolCallIDs == nil {
+		h.pendingToolCalls = 0
+		return
+	}
+	for _, callID := range completed {
+		delete(h.pendingToolCallIDs, callID)
+		delete(h.pendingToolCallResponses, callID)
+	}
+	h.pendingToolCalls = len(h.pendingToolCallIDs)
 }

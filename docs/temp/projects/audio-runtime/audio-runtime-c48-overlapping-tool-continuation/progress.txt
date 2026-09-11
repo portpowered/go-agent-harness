@@ -1,0 +1,7 @@
+C48 implementation checkpoint
+
+- Admission was verified for the sole audio-runtime task with project-control.py; the isolated branch matches the admitted branch and the candidate preserves the fetched origin/main ancestry. No host checkout, predecessor worktree, shared progress, or unrelated owner path was changed.
+- The causal repair is limited to the admitted live/subsystem paths: duplex tool batches retain one session generation, model assembly keeps bounded response-ID windows across overlap, and finite completion retires only tool calls whose local result boundary completed while allowing a finished sibling response to count.
+- Focused coordinator and live lifecycle regressions pass, including independent response reconstruction, the 16-response assembly bound, overlapping finite response accounting, sibling continuation accounting, and existing interruption/cancellation checks.
+- The source-file-built public C48 consumer and bounded driver reproduce two active provider response IDs, four exact calls/results, reverse tool completion, exact-once forwarding, the public terminal, and missing/duplicate/swapped controls without Realtime credentials or sleeps.
+- Next action: run the final clean-tree package/race checks and bounded C48 driver, commit and push the same task branch, update/open its PR for the script CI gate, and return ACCEPTED only as that handoff. CI-green, review, merge, device, acoustic, and project-wide acceptance remain unclaimed.

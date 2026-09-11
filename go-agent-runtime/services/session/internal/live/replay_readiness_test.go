@@ -423,6 +423,99 @@ func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.
 		t.Fatalf("pending tool calls = %d, want 1 for the next provider call", h.pendingToolCalls)
 	}
 }
+
+func TestOverlappingFiniteResponsesCountOnlyTheirOwnPendingTools(t *testing.T) {
+	const (
+		responseZero = "response-zero"
+		responseOne  = "response-one"
+	)
+	firstCalls := []string{"call-zero-alpha", "call-zero-beta"}
+	secondCalls := []string{"call-one-alpha", "call-one-beta"}
+	h := &handle{
+		request:                  session.LiveRequest{FinishAfterResponse: true, ExpectedResponses: 2},
+		captureComplete:          true,
+		toolContinuations:        make(map[string]*liveToolContinuation),
+		pendingToolCallIDs:       make(map[string]struct{}),
+		pendingToolCallResponses: make(map[string]string),
+		responseStartWake:        make(chan struct{}),
+	}
+
+	observeToolResponse := func(responseID string, callIDs []string) {
+		h.observeFiniteResponse(messages.StreamMessage{
+			Type:       messages.StreamTypeMessageStart,
+			Role:       messages.RoleAssistant,
+			ResponseID: responseID,
+			Value:      messages.NewMessageStartValue(),
+		})
+		for _, callID := range callIDs {
+			callEnd := messages.StreamMessage{
+				Type:       messages.StreamTypeToolCallEnd,
+				Role:       messages.RoleAssistant,
+				ResponseID: responseID,
+				ToolCallId: callID,
+				Value:      messages.NewToolCallEndValue(callID, "lookup", `{}`),
+			}
+			h.observeProviderToolCall(callEnd)
+			h.observeFiniteResponse(callEnd)
+		}
+		h.observeFiniteResponse(messages.StreamMessage{
+			Type:       messages.StreamTypeMessageEnd,
+			Role:       messages.RoleAssistant,
+			ResponseID: responseID,
+			Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+		})
+	}
+
+	observeToolResponse(responseZero, firstCalls)
+	observeToolResponse(responseOne, secondCalls)
+	if h.replayResponses != 0 || h.pendingToolCalls != 4 {
+		t.Fatalf("overlapping provider responses = replay:%d pending:%d, want 0:4", h.replayResponses, h.pendingToolCalls)
+	}
+
+	completeToolBatch := func(callIDs []string) {
+		for _, callID := range callIDs {
+			h.observeToolResult(callID, "lookup", true)
+			h.observeToolResponseOutput(callID)
+		}
+		toolEnd := messages.StreamMessage{
+			Type:  messages.StreamTypeMessageEnd,
+			Role:  messages.RoleTool,
+			Value: messages.NewMessageEndValue(messages.TokenUsage{}),
+		}
+		if continuationErr, complete := h.observeToolLifecycle(toolEnd); continuationErr != nil || complete {
+			t.Fatalf("tool batch lifecycle = error:%v complete:%t", continuationErr, complete)
+		}
+		h.observeFiniteResponse(toolEnd)
+	}
+
+	completeToolBatch(firstCalls)
+	firstFinal := messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "final-zero",
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	h.observeFiniteResponse(firstFinal)
+	if h.gracefulStop {
+		t.Fatal("first final response stopped while the sibling tool batch was pending")
+	}
+	if h.replayResponses != 1 || h.pendingToolCalls != 2 {
+		t.Fatalf("first final response state = replay:%d pending:%d, want 1:2", h.replayResponses, h.pendingToolCalls)
+	}
+
+	completeToolBatch(secondCalls)
+	secondFinal := messages.StreamMessage{
+		Type:       messages.StreamTypeMessageEnd,
+		Role:       messages.RoleAssistant,
+		ResponseID: "final-one",
+		Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
+	}
+	h.observeFiniteResponse(secondFinal)
+	if h.replayResponses != 2 || h.pendingToolCalls != 0 || !h.gracefulStop {
+		t.Fatalf("last final response state = replay:%d pending:%d graceful:%t, want 2:0:true", h.replayResponses, h.pendingToolCalls, h.gracefulStop)
+	}
+}
+
 func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 	h := newHandle(session.LiveRequest{OpeningContentParts: []messages.ContentPart{messages.ImagePart{Bytes: []byte{1, 2, 3}}}}, nil, nil, nil, nil, defaultEventCapacity, nil, nil)
 	result := make(chan error, 1)

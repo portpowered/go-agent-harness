@@ -2,6 +2,8 @@ package subsystems
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -15,12 +17,27 @@ import (
 
 type Coordinator struct {
 	logger logging.Logger
+
+	// The engine's historical reconstruction window is intentionally single
+	// response. Keep a bounded per-response copy here so a duplex provider can
+	// leave one response active while another response produces a continuation.
+	modelResponses        map[string]*modelResponseAssembly
+	anonymousModelStream  *modelResponseAssembly
+	modelResponsesOverlap bool
 }
+
+type modelResponseAssembly struct {
+	key    string
+	deltas []messages.StreamMessage
+}
+
+const maxTrackedModelResponses = 16
 
 func NewCoordinator(
 	logger logging.Logger) *Coordinator {
 	return &Coordinator{
-		logger: logger,
+		logger:         logger,
+		modelResponses: make(map[string]*modelResponseAssembly),
 	}
 }
 
@@ -50,6 +67,14 @@ func (c *Coordinator) sendInferenceResult(ctx context.Context, state *state.Loop
 // tool output -> triggers agent
 // agent -(if has no tool call)-> user (close current loop on current turn end)
 func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error {
+	completedModelResponses, err := c.observeModelResponses(curr.Inputs.ModelInputDelta)
+	if err != nil {
+		return err
+	}
+	if c.modelResponsesOverlap {
+		c.replaceEngineModelOutputs(curr, completedModelResponses)
+	}
+
 	if len(curr.Inputs.ToolOutputMessage) > 0 {
 		c.logInfo("Coordinator: tool text output message", logging.Field{Key: "curr.Inputs.ToolOutputMessage", Value: curr.Inputs.ToolOutputMessage})
 		// Dispatch tool messages to kernel via unified delta inbox.
@@ -59,7 +84,7 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 		// if the input receives a message from the tool gateway, then trigger a new assistant message from that call.
 		curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
 		curr.History.CurrentModelDeltaCount = 0
-		curr.History.CurrentPassID++
+		passID := c.nextToolContinuationPass(curr)
 		// The kernel records full messages asynchronously through the shared
 		// delta inbox. Include this completed tool batch in the request snapshot
 		// as well, so a session model runner can deliver rich results to the
@@ -69,7 +94,7 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 			conversation = append(conversation, curr.Inputs.ToolOutputMessage...)
 		}
 		curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
-			conversation, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults,
+			conversation, curr.Tools, passID, curr.InferenceDefaults,
 		))
 		return nil
 	}
@@ -101,10 +126,10 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 				hasFinalResponse = true
 			case len(message.ToolCalls) > 0:
 				c.logInfo("Coordinator: model tool call output message", logging.Field{Key: "message", Value: message})
-				curr.History.CurrentPassID++
+				passID := c.nextToolBatchPass(curr)
 				curr.Outputs.ToolInbox.Write(ctx, messages.ToolBatchRequest{
 					Calls:      message.ToolCalls,
-					LoopPassID: curr.History.CurrentPassID,
+					LoopPassID: passID,
 				})
 			case !message.HasOnlyReasoning():
 				c.logInfo("Coordinator: model output message", logging.Field{Key: "message", Value: message})
@@ -165,6 +190,171 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 		))
 	}
 	return nil
+}
+
+// nextToolBatchPass returns the generation used to tag a tool batch. Turn-based
+// loops advance the generation for every dispatched batch, which lets the
+// ordering layer discard work left behind by an interrupt. A duplex provider,
+// however, may publish more than one response before any tool result returns.
+// Those batches are concurrent work in the same session generation; advancing
+// the shared pass for each one makes the first completed batch retire every
+// sibling batch as "stale" before its results can be reconstructed.
+func (c *Coordinator) nextToolBatchPass(curr *state.LoopState) int {
+	if curr.Mode == state.DuplexSession {
+		return c.ensureSessionPass(curr)
+	}
+	curr.History.CurrentPassID++
+	return curr.History.CurrentPassID
+}
+
+// nextToolContinuationPass follows the same generation rule as tool batches.
+// In a duplex session, a result-driven inference request is part of the same
+// provider generation and must not invalidate another already-running tool
+// batch. A user interrupt still advances CurrentPassID in InterruptHandler,
+// so late work from the cancelled generation remains discardable.
+func (c *Coordinator) nextToolContinuationPass(curr *state.LoopState) int {
+	if curr.Mode == state.DuplexSession {
+		return c.ensureSessionPass(curr)
+	}
+	curr.History.CurrentPassID++
+	return curr.History.CurrentPassID
+}
+
+func (c *Coordinator) ensureSessionPass(curr *state.LoopState) int {
+	if curr.History.CurrentPassID == 0 {
+		curr.History.CurrentPassID = 1
+	}
+	return curr.History.CurrentPassID
+}
+
+// observeModelResponses keeps an independent bounded assembly window for each
+// provider response. The engine's ordering layer exposes one current model
+// window, which is sufficient for serial responses but loses tool calls when a
+// second response remains active while a grounded continuation completes.
+func (c *Coordinator) observeModelResponses(deltas []messages.StreamMessage) ([]messages.Message, error) {
+	if len(deltas) == 0 {
+		return nil, nil
+	}
+	if c.modelResponses == nil {
+		c.modelResponses = make(map[string]*modelResponseAssembly)
+	}
+	completed := make([]messages.Message, 0, 1)
+	for _, delta := range deltas {
+		if delta.Type == messages.StreamTypeMessageStart {
+			key := strings.TrimSpace(delta.ResponseID)
+			if key == "" {
+				if c.anonymousModelStream != nil {
+					key = c.anonymousModelStream.key
+				} else {
+					key = "anonymous"
+				}
+			}
+			if c.hasActiveModelResponse(key) {
+				c.modelResponsesOverlap = true
+			}
+			if strings.TrimSpace(delta.ResponseID) != "" && c.modelResponses[key] == nil && len(c.modelResponses) >= maxTrackedModelResponses {
+				return completed, fmt.Errorf("model response assembly limit %d exceeded", maxTrackedModelResponses)
+			}
+			assembly := &modelResponseAssembly{key: key}
+			if strings.TrimSpace(delta.ResponseID) == "" {
+				c.anonymousModelStream = assembly
+			} else {
+				c.modelResponses[key] = assembly
+			}
+		}
+
+		assembly := c.modelResponseForDelta(delta)
+		if assembly == nil {
+			continue
+		}
+		assembly.deltas = append(assembly.deltas, delta)
+		if delta.Type != messages.StreamTypeMessageEnd {
+			continue
+		}
+		completed = append(completed, messages.ReconstructModelMessageFromDeltas(assembly.deltas))
+		c.removeModelResponse(assembly)
+	}
+	return completed, nil
+}
+
+func (c *Coordinator) hasActiveModelResponse(excluding string) bool {
+	for key := range c.modelResponses {
+		if key != excluding {
+			return true
+		}
+	}
+	return c.anonymousModelStream != nil && c.anonymousModelStream.key != excluding
+}
+
+func (c *Coordinator) modelResponseForDelta(delta messages.StreamMessage) *modelResponseAssembly {
+	if responseID := strings.TrimSpace(delta.ResponseID); responseID != "" {
+		if assembly := c.modelResponses[responseID]; assembly != nil {
+			return assembly
+		}
+		// A provider may omit ResponseID on later deltas after including it on
+		// MESSAGE.START. When exactly one response is active, retain that link.
+		if len(c.modelResponses) == 1 && c.anonymousModelStream == nil {
+			for _, assembly := range c.modelResponses {
+				return assembly
+			}
+		}
+		return nil
+	}
+	if c.anonymousModelStream != nil {
+		return c.anonymousModelStream
+	}
+	if len(c.modelResponses) == 1 {
+		for _, assembly := range c.modelResponses {
+			return assembly
+		}
+	}
+	return nil
+}
+
+func (c *Coordinator) removeModelResponse(assembly *modelResponseAssembly) {
+	if assembly == nil {
+		return
+	}
+	if c.anonymousModelStream == assembly {
+		c.anonymousModelStream = nil
+	}
+	if current := c.modelResponses[assembly.key]; current == assembly {
+		delete(c.modelResponses, assembly.key)
+	}
+}
+
+// replaceEngineModelOutputs removes the single-window messages already copied
+// into history by UpdateWorldHistory, then installs the response-scoped
+// assemblies. Ordering metadata from the engine boundary is retained so the
+// replacement remains part of the same global trace.
+func (c *Coordinator) replaceEngineModelOutputs(curr *state.LoopState, completed []messages.Message) {
+	engineOutputs := curr.Inputs.ModelOutputMessage
+	if len(engineOutputs) > 0 && len(curr.History.ConversationBuffer) >= len(engineOutputs) {
+		start := len(curr.History.ConversationBuffer) - len(engineOutputs)
+		matches := true
+		for index, message := range engineOutputs {
+			historyMessage := curr.History.ConversationBuffer[start+index]
+			if historyMessage.GlobalIndex != message.GlobalIndex || historyMessage.ActorID != message.ActorID {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			curr.History.ConversationBuffer = curr.History.ConversationBuffer[:start]
+		}
+	}
+	curr.Inputs.ModelOutputMessage = curr.Inputs.ModelOutputMessage[:0]
+	for index, message := range completed {
+		if index < len(engineOutputs) {
+			message.GlobalIndex = engineOutputs[index].GlobalIndex
+			message.ActorProvidedID = engineOutputs[index].ActorProvidedID
+			message.ActorProvidedIndex = engineOutputs[index].ActorProvidedIndex
+			message.ActorStreamID = engineOutputs[index].ActorStreamID
+			message.ActorID = engineOutputs[index].ActorID
+		}
+		curr.Inputs.ModelOutputMessage = append(curr.Inputs.ModelOutputMessage, message)
+		curr.History.ConversationBuffer = append(curr.History.ConversationBuffer, message)
+	}
 }
 
 // toolResultsAtHistoryTail handles the race between the coordinator's

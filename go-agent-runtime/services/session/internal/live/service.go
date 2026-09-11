@@ -160,6 +160,8 @@ type handle struct {
 	interruptedScheduledResponses  int
 	scheduledContinuationTerminals int
 	pendingToolCalls               int
+	pendingToolCallIDs             map[string]struct{}
+	pendingToolCallResponses       map[string]string
 	terminalValue                  *messages.SessionCloseValue
 	providerCloseObserved          bool
 	localCloseObserved             bool
@@ -337,6 +339,8 @@ func newHandle(request session.LiveRequest, factory session.LiveInferencerFactor
 		terminalObserved:         make(chan struct{}),
 		livenessWake:             make(chan struct{}, 1),
 		toolContinuations:        make(map[string]*liveToolContinuation),
+		pendingToolCallIDs:       make(map[string]struct{}),
+		pendingToolCallResponses: make(map[string]string),
 	}
 	h.media = mediagate.New(h.mediaFailure)
 	return h
