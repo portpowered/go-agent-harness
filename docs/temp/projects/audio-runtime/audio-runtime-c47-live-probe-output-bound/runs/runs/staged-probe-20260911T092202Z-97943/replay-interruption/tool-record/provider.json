@@ -1,0 +1,256 @@
+{
+  "version": 2,
+  "provider": {
+    "name": "openai",
+    "model": "gpt-realtime-2.1-mini"
+  },
+  "session": {
+    "id": "sess-c07-interruption",
+    "fixture_provenance": "synthetic"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "direction": "client_to_server",
+      "timestamp_ms": 10,
+      "type": "session.update",
+      "payload_type": "websocket_message",
+      "payload": {
+        "session": {
+          "audio": {
+            "input": {
+              "format": {
+                "rate": 24000,
+                "type": "audio/pcm"
+              }
+            },
+            "output": {
+              "format": {
+                "rate": 24000,
+                "type": "audio/pcm"
+              }
+            }
+          },
+          "model": "gpt-realtime-2.1-mini",
+          "type": "realtime"
+        },
+        "type": "session.update"
+      }
+    },
+    {
+      "sequence": 2,
+      "direction": "server_to_client",
+      "timestamp_ms": 20,
+      "type": "session.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "session": {
+          "audio": {
+            "output": {
+              "format": {
+                "rate": 24000,
+                "type": "audio/pcm"
+              }
+            }
+          },
+          "id": "sess-c07-interruption",
+          "model": "gpt-realtime-2.1-mini",
+          "type": "realtime"
+        },
+        "type": "session.created"
+      }
+    },
+    {
+      "sequence": 3,
+      "direction": "client_to_server",
+      "timestamp_ms": 30,
+      "type": "conversation.item.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "item": {
+          "content": [
+            {
+              "text": "c07 interruption",
+              "type": "input_text"
+            }
+          ],
+          "role": "user",
+          "type": "message"
+        },
+        "type": "conversation.item.create"
+      }
+    },
+    {
+      "sequence": 4,
+      "direction": "client_to_server",
+      "timestamp_ms": 40,
+      "type": "response.create",
+      "payload_type": "websocket_message",
+      "payload": {
+        "type": "response.create"
+      }
+    },
+    {
+      "sequence": 5,
+      "direction": "server_to_client",
+      "timestamp_ms": 50,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "response": {
+          "id": "resp-c07-interrupted",
+          "status": "in_progress"
+        },
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 6,
+      "direction": "server_to_client",
+      "timestamp_ms": 60,
+      "type": "response.output_audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "content_index": 0,
+        "delta": "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",
+        "format": "pcm16",
+        "item_id": "item-c07-interrupted",
+        "output_index": 0,
+        "response_id": "resp-c07-interrupted",
+        "type": "response.output_audio.delta"
+      }
+    },
+    {
+      "sequence": 7,
+      "direction": "server_to_client",
+      "timestamp_ms": 70,
+      "type": "input_audio_buffer.speech_started",
+      "payload_type": "websocket_message",
+      "payload": {
+        "audio_start_ms": 7156,
+        "item_id": "item-c07-customer",
+        "type": "input_audio_buffer.speech_started"
+      }
+    },
+    {
+      "sequence": 8,
+      "direction": "client_to_server",
+      "timestamp_ms": 80,
+      "type": "conversation.item.truncate",
+      "payload_type": "websocket_message",
+      "payload": {
+        "audio_end_ms": 0,
+        "content_index": 0,
+        "item_id": "item-c07-interrupted",
+        "type": "conversation.item.truncate"
+      }
+    },
+    {
+      "sequence": 9,
+      "direction": "server_to_client",
+      "timestamp_ms": 90,
+      "type": "conversation.item.truncated",
+      "payload_type": "websocket_message",
+      "payload": {
+        "audio_end_ms": 0,
+        "content_index": 0,
+        "item_id": "item-c07-interrupted",
+        "type": "conversation.item.truncated"
+      }
+    },
+    {
+      "sequence": 10,
+      "direction": "server_to_client",
+      "timestamp_ms": 100,
+      "type": "response.output_audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "content_index": 0,
+        "item_id": "item-c07-interrupted",
+        "output_index": 0,
+        "response_id": "resp-c07-interrupted",
+        "type": "response.output_audio.done"
+      }
+    },
+    {
+      "sequence": 11,
+      "direction": "server_to_client",
+      "timestamp_ms": 110,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "response": {
+          "id": "resp-c07-interrupted",
+          "status": "cancelled",
+          "status_details": {
+            "type": "cancelled"
+          }
+        },
+        "type": "response.done"
+      }
+    },
+    {
+      "sequence": 12,
+      "direction": "server_to_client",
+      "timestamp_ms": 120,
+      "type": "response.created",
+      "payload_type": "websocket_message",
+      "payload": {
+        "response": {
+          "id": "resp-c07-healthy",
+          "status": "in_progress"
+        },
+        "type": "response.created"
+      }
+    },
+    {
+      "sequence": 13,
+      "direction": "server_to_client",
+      "timestamp_ms": 130,
+      "type": "response.output_audio.delta",
+      "payload_type": "websocket_message",
+      "payload": {
+        "content_index": 0,
+        "delta": "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",
+        "format": "pcm16",
+        "item_id": "item-c07-healthy",
+        "output_index": 0,
+        "response_id": "resp-c07-healthy",
+        "type": "response.output_audio.delta"
+      }
+    },
+    {
+      "sequence": 14,
+      "direction": "server_to_client",
+      "timestamp_ms": 140,
+      "type": "response.output_audio.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "content_index": 0,
+        "item_id": "item-c07-healthy",
+        "output_index": 0,
+        "response_id": "resp-c07-healthy",
+        "type": "response.output_audio.done"
+      }
+    },
+    {
+      "sequence": 15,
+      "direction": "server_to_client",
+      "timestamp_ms": 150,
+      "type": "response.done",
+      "payload_type": "websocket_message",
+      "payload": {
+        "response": {
+          "id": "resp-c07-healthy",
+          "status": "completed"
+        },
+        "type": "response.done"
+      }
+    }
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "96586710b2bf5f50537e21af6bbca9d5919d070873df4394806790bb3993b6d5"
+  }
+}

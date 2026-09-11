@@ -1,0 +1,20 @@
+schema_version: 1
+room:
+  max_turns: 1
+participants:
+  - id: alpha
+    system_prompt: "Start the room"
+    opening_prompt: "Start the room"
+    provider: openai
+    model: gpt-realtime
+    api_key_env: C54_UNUSED_KEY
+    tools: []
+    browserTools:
+      connection:
+        unknown: true
+  - id: beta
+    system_prompt: "Answer the room"
+    provider: openai
+    model: gpt-realtime
+    api_key_env: C54_UNUSED_KEY_2
+    tools: []
