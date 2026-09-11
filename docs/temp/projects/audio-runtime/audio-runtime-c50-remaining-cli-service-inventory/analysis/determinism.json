@@ -1,0 +1,79 @@
+{
+  "call_paths": {
+    "entry_prefixes": [
+      "agent-cli/cmd/",
+      "agent-cli/internal/cli/",
+      "agent-cli/internal/transport/cli/",
+      "agent-cli/internal/wire/"
+    ],
+    "public_entry_call_sites": 96,
+    "target_call_edges": 3183
+  },
+  "classification": {
+    "class_counts": {
+      "BUSINESS_POLICY": 115,
+      "COMPOSITION_WIRING": 6,
+      "DEAD_OR_UNCERTAIN": 1942,
+      "REUSABLE_RUNTIME_BEHAVIOR": 726,
+      "THIN_TRANSPORT_DELEGATION": 80
+    },
+    "rules": [
+      "Every inventoried symbol has exactly one primary class.",
+      "Production callers are AST CallExpr citations; tests and lexical matches are not callers.",
+      "Unresolved dynamic/interface/reflection reachability is DEAD_OR_UNCERTAIN, never confirmed reachability.",
+      "The class is a reviewable structural classification; its evidence cites package/file role, imports, declaration form and resolved callers."
+    ],
+    "symbol_count": 2869
+  },
+  "counts": {
+    "agent-cli/internal/room": [
+      4,
+      3357,
+      257
+    ],
+    "agent-cli/internal/services/internal/agentruntime": [
+      107,
+      41149,
+      2474
+    ],
+    "agent-cli/internal/transport/cli/internal/livehost": [
+      9,
+      2077,
+      138
+    ]
+  },
+  "determinism": {
+    "call-paths.json": {
+      "equal": true,
+      "first_sha256": "e818a324ef3a56c0d9438e62d1d18c629eeea61dcf6a8626525cbbb9bd1247c1",
+      "second_sha256": "e818a324ef3a56c0d9438e62d1d18c629eeea61dcf6a8626525cbbb9bd1247c1"
+    },
+    "classifications.json": {
+      "equal": true,
+      "first_sha256": "d0ddeba5aa4fe2f72e4ed0de25a0b8a41ea80bc24e5ab2b9cb16c11b99b3f527",
+      "second_sha256": "d0ddeba5aa4fe2f72e4ed0de25a0b8a41ea80bc24e5ab2b9cb16c11b99b3f527"
+    },
+    "inventory.json": {
+      "equal": true,
+      "first_sha256": "29d5f75c10a9c041d0655ddf1ec724d2da205a43ca0033d211a1e9e53d8cdf44",
+      "second_sha256": "29d5f75c10a9c041d0655ddf1ec724d2da205a43ca0033d211a1e9e53d8cdf44"
+    },
+    "inventory.md": {
+      "equal": true,
+      "first_sha256": "9b00fd3961daf8bccf1ca4ba7026b67b4f1717af62ae630c7abf7616cef960f8",
+      "second_sha256": "9b00fd3961daf8bccf1ca4ba7026b67b4f1717af62ae630c7abf7616cef960f8"
+    }
+  },
+  "historical_observation": {
+    "comparison": "inventory-only; no migration percentage",
+    "physical_lines": 41305,
+    "production_files": 107
+  },
+  "schema_version": "c50-inventory-validation-v1",
+  "source_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+  "totals": {
+    "physical_lines": 46583,
+    "production_files": 120,
+    "top_level_symbols": 2869
+  }
+}

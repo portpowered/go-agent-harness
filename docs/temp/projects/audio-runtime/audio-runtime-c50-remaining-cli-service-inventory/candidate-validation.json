@@ -1,0 +1,12 @@
+{
+  "active_owner_paths_excluded": true,
+  "candidate_count": 2,
+  "candidate_ids": [
+    "room-document-admission",
+    "room-participant-mesh"
+  ],
+  "pairwise_destination_disjoint": true,
+  "pairwise_source_disjoint": true,
+  "schema_version": "c50-candidate-validation-v1",
+  "source_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
+}
