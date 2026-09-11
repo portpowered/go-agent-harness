@@ -1,0 +1,5 @@
+{"Time":"2026-09-11T10:09:55.657934Z","Action":"start","Package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"}
+{"Time":"2026-09-11T10:09:55.833427Z","Action":"output","Package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle","Output":"testing: warning: no tests to run\n"}
+{"Time":"2026-09-11T10:09:55.833488Z","Action":"output","Package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle","Output":"PASS\n"}
+{"Time":"2026-09-11T10:09:55.83363Z","Action":"output","Package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle","Output":"ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.175s [no tests to run]\n"}
+{"Time":"2026-09-11T10:09:55.833658Z","Action":"pass","Package":"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle","Elapsed":0.176}

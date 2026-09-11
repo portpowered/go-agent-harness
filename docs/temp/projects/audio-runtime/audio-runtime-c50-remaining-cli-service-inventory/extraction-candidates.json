@@ -1,0 +1,156 @@
+{
+  "schema_version": "c50-extraction-candidates-v1",
+  "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+  "selection_rule": "Exactly the smallest two demonstrated slices whose current writer paths, proposed runtime writer paths, and observable regressions are pairwise disjoint. This is an evidence-only handoff; no production source is changed here.",
+  "excluded_active_owners": {
+    "audio-runtime-c38-interruption-audio-retention": [
+      "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+      "agent-cli/internal/transport/cli/internal/livehost/audio_out.go",
+      "agent-cli/internal/transport/cli/internal/livehost/trace.go"
+    ],
+    "audio-runtime-c46-retire-cli-terminal-policy": [
+      "agent-cli/internal/services/internal/agentruntime/session_terminal_policy.go",
+      "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go",
+      "agent-cli/internal/transport/cli/internal/livehost/request.go"
+    ],
+    "audio-runtime-c47-live-probe-output-bound": [
+      "agent-cli/internal/probe/",
+      "factory/scripts/",
+      "docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/"
+    ],
+    "audio-runtime-c48-overlapping-tool-continuation": [
+      "agent-cli/internal/services/internal/agentruntime/runtime_live.go",
+      "agent-cli/internal/services/internal/agentruntime/session_live.go",
+      "agent-cli/internal/services/internal/agentruntime/coordinator.go"
+    ]
+  },
+  "candidates": [
+    {
+      "id": "room-document-admission",
+      "rank": 1,
+      "decision": "smallest demonstrated cohesive boundary",
+      "summary": "Move untrusted room-document decoding, normalization, browser policy validation, credential-free admission and redacted endpoint handling behind the runtime rooms service. The manifest and browser documents share one external document and validation boundary, so splitting them would leave two competing readers and duplicate the same negative contract.",
+      "current_writer_paths": [
+        "agent-cli/internal/room/manifest.go",
+        "agent-cli/internal/room/browser_tools.go"
+      ],
+      "current_declarations": [
+        {"source": "agent-cli/internal/room/manifest.go:343", "symbol": "Manifest.Validate", "class": "BUSINESS_POLICY"},
+        {"source": "agent-cli/internal/room/manifest.go:519", "symbol": "ParseManifest", "class": "BUSINESS_POLICY"},
+        {"source": "agent-cli/internal/room/manifest.go:547", "symbol": "ReadManifest", "class": "BUSINESS_POLICY"},
+        {"source": "agent-cli/internal/room/manifest.go:588", "symbol": "normalizeManifest", "class": "BUSINESS_POLICY"},
+        {"source": "agent-cli/internal/room/browser_tools.go:112", "symbol": "DefaultBrowserToolsConfig", "class": "BUSINESS_POLICY"},
+        {"source": "agent-cli/internal/room/browser_tools.go:514", "symbol": "validateManifestBrowserToolsShape", "class": "BUSINESS_POLICY"},
+        {"source": "agent-cli/internal/room/browser_tools.go:622", "symbol": "normalizeManifestBrowserTools", "class": "BUSINESS_POLICY"}
+      ],
+      "production_callers": [
+        {"source": "agent-cli/internal/services/rooms/internal/launch/planner.go:55", "expression": "room.ReadManifest", "role": "configured room launch admission"}
+      ],
+      "test_only_callers": [
+        {"source": "agent-cli/internal/transport/cli/room_test.go:201", "expression": "room.ParseManifest", "role": "CLI example contract regression; not a production caller"},
+        {"source": "agent-cli/internal/services/internal/agentruntime/session_room_tools_test.go:55", "expression": "room.ReadManifest", "role": "room tool fixture regression; not a production caller"}
+      ],
+      "proposed_destination_writer_paths": [
+        "go-agent-runtime/services/rooms/manifest.go",
+        "go-agent-runtime/services/rooms/browser.go",
+        "go-agent-runtime/services/rooms/internal/manifest/decoder.go",
+        "go-agent-runtime/services/rooms/internal/manifest/browser.go",
+        "go-agent-runtime/services/rooms/wire/manifest.go"
+      ],
+      "contract_boundary": {
+        "public": "go-agent-runtime/services/rooms/manifest.go and browser.go expose normalized values, validation options and browser policy constants without filesystem, YAML decoder or credential values.",
+        "internal": "go-agent-runtime/services/rooms/internal/manifest owns JSON/YAML decoding, strict fields, normalization, browser endpoint policy and error attribution.",
+        "wire": "go-agent-runtime/services/rooms/wire/manifest.go is the future generated composition adapter; existing wire_gen.go and providers.go remain shared read-only dependencies during the extraction."
+      },
+      "dependencies_and_order": [
+        "Preserve the public normalized rooms contract already present on main.",
+        "Move the CLI document reader first and make launch.Planner consume the runtime decoder without changing device selection or credential lookup ownership.",
+        "Delete the CLI-only duplicate types only after all launch and CLI example paths use the runtime contract.",
+        "Keep provider, device and room-run orchestration composition in their existing owners; this slice does not open providers or devices."
+      ],
+      "positive_regressions": [
+        "agent-cli/internal/room: TestParseManifest_NormalizesValidJSONAndYAMLWithoutCredentials",
+        "agent-cli/internal/room: TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints",
+        "agent-cli/internal/room: TestReadManifest_ReadsAndValidatesFile",
+        "agent-cli/internal/transport/cli: room example remains accepted by the runtime parser"
+      ],
+      "negative_regressions": [
+        "missing credential references remain rejected without echoing a secret",
+        "unknown nested browser fields, invalid browser endpoint schemes and invalid room bounds remain rejected with attributed errors",
+        "multiple YAML/JSON documents and all-agent rooms with no opener remain rejected"
+      ],
+      "observability": "The same normalized Manifest, ValidationError identities, redacted browser endpoint output and planner error attribution must remain observable. No credential value may enter the public contract."
+    },
+    {
+      "id": "room-participant-mesh",
+      "rank": 2,
+      "decision": "smallest reusable runtime behavior after admission",
+      "summary": "Move participant membership, pair creation, pair ownership, removal and convergent close/cancellation behavior into the runtime rooms service. This is independent of document admission and intentionally excludes the audio mixer and the active live/coordinator work.",
+      "current_writer_paths": [
+        "agent-cli/internal/room/mesh.go"
+      ],
+      "current_declarations": [
+        {"source": "agent-cli/internal/room/mesh.go:198", "symbol": "NewMesh", "class": "REUSABLE_RUNTIME_BEHAVIOR"},
+        {"source": "agent-cli/internal/room/mesh.go:226", "symbol": "NewParticipantMesh", "class": "COMPOSITION_WIRING"},
+        {"source": "agent-cli/internal/room/mesh.go:259", "symbol": "Mesh.Join", "class": "REUSABLE_RUNTIME_BEHAVIOR"},
+        {"source": "agent-cli/internal/room/mesh.go:387", "symbol": "Mesh.Remove", "class": "REUSABLE_RUNTIME_BEHAVIOR"},
+        {"source": "agent-cli/internal/room/mesh.go:458", "symbol": "Mesh.Peers", "class": "REUSABLE_RUNTIME_BEHAVIOR"},
+        {"source": "agent-cli/internal/room/mesh.go:549", "symbol": "Mesh.Close", "class": "REUSABLE_RUNTIME_BEHAVIOR"},
+        {"source": "agent-cli/internal/room/mesh.go:771", "symbol": "NewLoopbackPairFactory", "class": "REUSABLE_RUNTIME_BEHAVIOR"}
+      ],
+      "production_callers": [
+        {"source": "agent-cli/internal/room/mesh.go:210", "expression": "NewLoopbackPairFactory", "role": "mesh constructor selects the default loopback pair factory"},
+        {"source": "agent-cli/internal/room/mesh.go:220", "expression": "mesh.Close", "role": "parent cancellation closes the mesh"},
+        {"source": "agent-cli/internal/room/mesh.go:227", "expression": "NewMesh", "role": "participant constructor delegates to the configurable mesh"},
+        {"source": "agent-cli/internal/room/mesh.go:233", "expression": "NewParticipantMesh", "role": "participant constructor delegates to the configurable mesh"},
+        {"source": "agent-cli/internal/room/mesh.go:233", "expression": "NewLoopbackPairFactory", "role": "participant constructor supplies the default factory through NewMesh"},
+        {"source": "agent-cli/internal/room/mesh.go:382", "expression": "m.Join", "role": "mesh alias preserves join behavior"},
+        {"source": "agent-cli/internal/room/mesh.go:428", "expression": "m.Remove", "role": "mesh alias preserves removal behavior"},
+        {"source": "agent-cli/internal/room/mesh.go:433", "expression": "m.Remove", "role": "mesh alias preserves removal behavior"},
+        {"source": "agent-cli/internal/room/mesh.go:492", "expression": "m.Peers", "role": "mesh alias exposes peer snapshots"},
+        {"source": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go:762", "expression": "mesh.Remove", "role": "room coordinator removes a terminated participant"},
+        {"source": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go:105", "expression": "room.NewParticipantMesh", "role": "room composition creates the participant mesh"},
+        {"source": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go:109", "expression": "mesh.Close", "role": "room orchestration closes the mesh on early exit"},
+        {"source": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go:123", "expression": "mesh.Join", "role": "room orchestration joins each admitted participant"}
+      ],
+      "proposed_destination_writer_paths": [
+        "go-agent-runtime/services/rooms/mesh.go",
+        "go-agent-runtime/services/rooms/internal/lifecycle/mesh.go",
+        "go-agent-runtime/services/rooms/wire/mesh.go"
+      ],
+      "contract_boundary": {
+        "public": "go-agent-runtime/services/rooms/mesh.go exposes PairSpec, PairResource/PairFactory, membership snapshots and lifecycle methods with no CLI imports.",
+        "internal": "go-agent-runtime/services/rooms/internal/lifecycle/mesh.go owns pair bookkeeping, pending/closing sets, cancellation and idempotent shutdown.",
+        "wire": "go-agent-runtime/services/rooms/wire/mesh.go is the future generated composition adapter for the injected PairFactory; it must not own RTC/media implementation."
+      },
+      "dependencies_and_order": [
+        "Move the pair-neutral contract and lifecycle tests first, retaining PairFactory injection.",
+        "Update session room composition and cleanup to import the runtime rooms contract.",
+        "Keep LoopbackPeerPair's RTC implementation behind the existing pair factory boundary until a separate device/RTC task owns it.",
+        "Do not combine this slice with agent-cli/internal/room/mixer.go or audio-out, terminal policy, Python probe, or runtime-live/coordinator files."
+      ],
+      "positive_regressions": [
+        "agent-cli/internal/room: TestMeshJoinCreatesOnePairPerUnorderedParticipantPair",
+        "agent-cli/internal/room: TestMeshRemovalClosesOnlyRemovedPairAndLeavesSurvivors",
+        "agent-cli/internal/room: TestMeshContextCancellationClosesAllPairsAndRepeatedCloseIsSafe",
+        "agent-cli/internal/room: TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair"
+      ],
+      "negative_regressions": [
+        "duplicate and unknown membership operations remain rejected",
+        "a pair-factory failure closes already-created pairs and leaves no half-joined membership",
+        "pending joins, explicit Close and parent cancellation all terminate within the cleanup bound"
+      ],
+      "observability": "Pair creation order, pair count, participant snapshots, close error identity and bounded cleanup timing remain observable to the room coordinator."
+    }
+  ],
+  "pairwise_disjointness": {
+    "source_writer_paths": true,
+    "proposed_destination_writer_paths": true,
+    "active_owner_exclusions": true,
+    "shared_read_only_dependencies": [
+      "go-agent-runtime/services/rooms/contract.go",
+      "go-agent-runtime/services/rooms/errors.go",
+      "go-agent-runtime/services/rooms/wire/wire_gen.go"
+    ]
+  }
+}

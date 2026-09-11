@@ -1,0 +1,170 @@
+{
+  "architecture_base": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+  "architecture_baseline_sha256": {
+    "docs/architecture/architecture-policy.json": "da6a5d12c69d2a0556cc9ec232897448439b5a789108f67d23fe893fa016be73",
+    "docs/architecture/architecture-size-baseline.json": "c1e2cf8b97753b13aeca9200e45d5f77205eb511d428c6b225ba3ea36287853d"
+  },
+  "architecture_baseline_unchanged": {
+    "docs/architecture/architecture-policy.json": true,
+    "docs/architecture/architecture-size-baseline.json": true
+  },
+  "commands": [
+    {
+      "aggregate_deadline_hit": false,
+      "aggregate_deadline_seconds": 600,
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
+      "deadline_seconds": 60,
+      "elapsed_seconds": 0.041495,
+      "environment": {
+        "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+        "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+        "GOFLAGS": "",
+        "GOWORK": "",
+        "HOME": "/Users/abdifamily",
+        "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0JMfGZK:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+        "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
+      },
+      "exit_code": 0,
+      "label": "diff-check",
+      "output_cap_bytes_per_stream": 2097152,
+      "output_limited": false,
+      "owned_output_bytes_after": 27376555,
+      "owned_output_bytes_before": 27376555,
+      "owned_output_limited": false,
+      "owned_output_quota_bytes": 134217728,
+      "process_group_gone": true,
+      "process_group_id": 97975,
+      "residual_group_detected": false,
+      "stderr_bytes": 0,
+      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/diff-check.stderr",
+      "stdout_bytes": 0,
+      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/diff-check.stdout",
+      "termination": null,
+      "timed_out": false
+    },
+    {
+      "aggregate_deadline_hit": false,
+      "aggregate_deadline_seconds": 600,
+      "argv": [
+        "make",
+        "architecture-check",
+        "ARCHITECTURE_BASE=2456a5d1594e73faf85e1132d6050735bc3e4710"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
+      "deadline_seconds": 60,
+      "elapsed_seconds": 12.159888,
+      "environment": {
+        "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+        "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+        "GOFLAGS": "",
+        "GOWORK": "",
+        "HOME": "/Users/abdifamily",
+        "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0JMfGZK:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+        "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
+      },
+      "exit_code": 0,
+      "label": "architecture-check",
+      "output_cap_bytes_per_stream": 2097152,
+      "output_limited": false,
+      "owned_output_bytes_after": 27376555,
+      "owned_output_bytes_before": 27376555,
+      "owned_output_limited": false,
+      "owned_output_quota_bytes": 134217728,
+      "process_group_gone": true,
+      "process_group_id": 97976,
+      "residual_group_detected": false,
+      "stderr_bytes": 0,
+      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/architecture-check.stderr",
+      "stdout_bytes": 82,
+      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/architecture-check.stdout",
+      "termination": null,
+      "timed_out": false
+    },
+    {
+      "aggregate_deadline_hit": false,
+      "aggregate_deadline_seconds": 600,
+      "argv": [
+        "make",
+        "size-check",
+        "ARCHITECTURE_BASE=2456a5d1594e73faf85e1132d6050735bc3e4710"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
+      "deadline_seconds": 60,
+      "elapsed_seconds": 2.539496,
+      "environment": {
+        "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+        "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+        "GOFLAGS": "",
+        "GOWORK": "",
+        "HOME": "/Users/abdifamily",
+        "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0JMfGZK:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+        "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
+      },
+      "exit_code": 0,
+      "label": "size-check",
+      "output_cap_bytes_per_stream": 2097152,
+      "output_limited": false,
+      "owned_output_bytes_after": 27376555,
+      "owned_output_bytes_before": 27376555,
+      "owned_output_limited": false,
+      "owned_output_quota_bytes": 134217728,
+      "process_group_gone": true,
+      "process_group_id": 98158,
+      "residual_group_detected": false,
+      "stderr_bytes": 0,
+      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/size-check.stderr",
+      "stdout_bytes": 82,
+      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/size-check.stdout",
+      "termination": null,
+      "timed_out": false
+    },
+    {
+      "aggregate_deadline_hit": false,
+      "aggregate_deadline_seconds": 600,
+      "argv": [
+        "make",
+        "wire-check"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory",
+      "deadline_seconds": 60,
+      "elapsed_seconds": 5.446503,
+      "environment": {
+        "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+        "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+        "GOFLAGS": "",
+        "GOWORK": "",
+        "HOME": "/Users/abdifamily",
+        "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0JMfGZK:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+        "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
+      },
+      "exit_code": 0,
+      "label": "wire-check",
+      "output_cap_bytes_per_stream": 2097152,
+      "output_limited": false,
+      "owned_output_bytes_after": 27376555,
+      "owned_output_bytes_before": 27376555,
+      "owned_output_limited": false,
+      "owned_output_quota_bytes": 134217728,
+      "process_group_gone": true,
+      "process_group_id": 98261,
+      "residual_group_detected": false,
+      "stderr_bytes": 2112,
+      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/wire-check.stderr",
+      "stdout_bytes": 368,
+      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/gates/wire-check.stdout",
+      "termination": null,
+      "timed_out": false
+    }
+  ],
+  "production_source_changed": false,
+  "refreshed_origin_main_is_recorded_in_provenance": true,
+  "schema_version": "c50-gates-v1",
+  "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
+  "unrelated_dirty_paths": [],
+  "write_scope_enforced": true
+}

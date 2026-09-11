@@ -1,0 +1,96 @@
+{
+  "schema": "audio-runtime-c52-matrix-v1",
+  "frozen": true,
+  "comparison_revisions": {
+    "pr438": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+    "planning_main": "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
+  },
+  "package": "./services/rooms/internal/lifecycle",
+  "accumulated_packages": [
+    "./services/rooms/internal/lifecycle",
+    "./services/session/internal/live"
+  ],
+  "test_parent": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer",
+  "test_cases": [
+    "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout",
+    "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response"
+  ],
+  "aggregate_timeout_seconds": 900,
+  "child_timeout_seconds": 90,
+  "race_child_timeout_seconds": 180,
+  "output_cap_bytes": 524288,
+  "base_environment": {
+    "CGO_ENABLED": "0",
+    "GOFLAGS": "",
+    "GOTRACEBACK": "all",
+    "GOTOOLCHAIN": "auto",
+    "GOSUMDB": "sum.golang.org",
+    "C52_TAGS": "nomicrophone"
+  },
+  "cells": [
+    {
+      "id": "provider-timeout-count10",
+      "kind": "focused-count",
+      "args": ["test", "-json", "-count=10", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$", "./services/rooms/internal/lifecycle"]
+    },
+    {
+      "id": "empty-response-count10",
+      "kind": "focused-count",
+      "args": ["test", "-json", "-count=10", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/empty_response$", "./services/rooms/internal/lifecycle"]
+    },
+    {
+      "id": "order-timeout-first",
+      "kind": "explicit-order",
+      "env": {"C52_CASE_ORDER": "timeout-first"},
+      "args": ["test", "-json", "-count=10", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$", "./services/rooms/internal/lifecycle"]
+    },
+    {
+      "id": "order-empty-first",
+      "kind": "explicit-order",
+      "env": {"C52_CASE_ORDER": "empty-first"},
+      "args": ["test", "-json", "-count=10", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$", "./services/rooms/internal/lifecycle"]
+    },
+    {
+      "id": "shuffle-seed-17",
+      "kind": "fixed-shuffle",
+      "env": {"C52_SHUFFLE_SEED": "17"},
+      "args": ["test", "-json", "-count=5", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$", "./services/rooms/internal/lifecycle"]
+    },
+    {
+      "id": "shuffle-seed-28",
+      "kind": "fixed-shuffle",
+      "env": {"C52_SHUFFLE_SEED": "28"},
+      "args": ["test", "-json", "-count=5", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$", "./services/rooms/internal/lifecycle"]
+    },
+    {
+      "id": "package-serialized",
+      "kind": "package-concurrency",
+      "env": {"GOMAXPROCS": "2"},
+      "args": ["test", "-json", "-count=3", "-p=1", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$", "./services/rooms/internal/lifecycle", "./services/session/internal/live"]
+    },
+    {
+      "id": "package-concurrent",
+      "kind": "package-concurrency",
+      "env": {"GOMAXPROCS": "2"},
+      "args": ["test", "-json", "-count=3", "-p=2", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$", "./services/rooms/internal/lifecycle", "./services/session/internal/live"]
+    },
+    {
+      "id": "gomaxprocs-1",
+      "kind": "gomaxprocs",
+      "env": {"GOMAXPROCS": "1"},
+      "args": ["test", "-json", "-count=10", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$", "./services/rooms/internal/lifecycle"]
+    },
+    {
+      "id": "gomaxprocs-4",
+      "kind": "gomaxprocs",
+      "env": {"GOMAXPROCS": "4"},
+      "args": ["test", "-json", "-count=10", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$", "./services/rooms/internal/lifecycle"]
+    },
+    {
+      "id": "focused-race",
+      "kind": "race",
+      "env": {"CGO_ENABLED": "1", "GOMAXPROCS": "4"},
+      "args": ["test", "-json", "-race", "-count=1", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$", "./services/rooms/internal/lifecycle"]
+    }
+  ]
+}

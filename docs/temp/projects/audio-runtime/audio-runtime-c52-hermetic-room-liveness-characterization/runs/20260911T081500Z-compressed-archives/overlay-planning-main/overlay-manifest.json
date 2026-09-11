@@ -1,0 +1,60 @@
+{
+  "files": [
+    {
+      "after_sha256": "555a5002887952181e45bb8ff93567c431b84b616a6c29cb1621083ea4aa28bb",
+      "before_sha256": null,
+      "kind": "generated_overlay",
+      "path": "go-agent-runtime/services/rooms/internal/lifecycle/c52_overlay.go"
+    },
+    {
+      "after_sha256": "c745ec1985a4917eecdab0c9bf954b4126ec2547cb1a7fec2110ee4225464d11",
+      "before_sha256": "3faed7e3795bc3a64df52dbac392e4327acf20b4ec0e01f8aeccc97353fdbc50",
+      "kind": "scratch_rewrite",
+      "path": "go-agent-runtime/services/rooms/internal/lifecycle/events.go"
+    },
+    {
+      "after_sha256": "915c65ac57d04f79707abae37c8f22d778d235a13c7aa7591c13f0c1ae21de26",
+      "before_sha256": "5242e946f5697b01b794a16a105f8371e2b3493a7a986e1dbcc80ddf87a45910",
+      "kind": "scratch_rewrite",
+      "path": "go-agent-runtime/services/rooms/internal/lifecycle/participant.go"
+    },
+    {
+      "after_sha256": "38dd63f5f38c6710cfbc8627d8a6d6ea05536604bd730804ec66b01e01a665cb",
+      "before_sha256": "b9aa0912f1b677f0ee1ea573612fb4f7698eff4ea6145acea2b6ad2a69518962",
+      "kind": "scratch_rewrite",
+      "path": "go-agent-runtime/services/rooms/internal/lifecycle/state.go"
+    },
+    {
+      "after_sha256": "67f122794a0fa529d7c7b505399d1b5f16b08c00aeb0285acde1443be0009139",
+      "before_sha256": "80c65d03858c657a859f3dbff0f3aec53276b95e040bd6477744ec781ed3d4a4",
+      "kind": "scratch_rewrite",
+      "path": "go-agent-runtime/services/rooms/internal/lifecycle/runner.go"
+    },
+    {
+      "after_sha256": "d0cbc8a115cebe514940e5b397fa90aaaf1916ad6a076667cc79c425a8c08d57",
+      "before_sha256": "63ef205c11ce4d7f64ba13527dbb32045e9a253dbd3888b4a0de232001bd5de5",
+      "kind": "scratch_rewrite",
+      "path": "go-agent-runtime/services/rooms/internal/lifecycle/browser_parity_test.go"
+    },
+    {
+      "after_sha256": "aad4322a6058a85aad01c281a375f6f4b1bc1b7997fd798bafb97c18268ed80e",
+      "before_sha256": "6adbbe14ac35bc15684a57199a474c22dbc72ad79e636caddc11def3981b01c9",
+      "kind": "scratch_rewrite",
+      "path": "go-agent-runtime/services/rooms/internal/lifecycle/runner_test.go"
+    }
+  ],
+  "generated_at": "2026-09-11T07:11:37.762698+00:00",
+  "gofmt_command": [
+    "gofmt",
+    "-w",
+    "go-agent-runtime/services/rooms/internal/lifecycle/c52_overlay.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/events.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/participant.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/state.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/runner.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/browser_parity_test.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/runner_test.go"
+  ],
+  "schema": "audio-runtime-c52-overlay-v1",
+  "source_sha256": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a"
+}

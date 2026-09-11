@@ -1,0 +1,40 @@
+{
+  "attempt": 1,
+  "capture": {
+    "capturedAt": "2026-09-11T06:43:19.163889+00:00",
+    "logBytes": 33120,
+    "logCommand": [
+      "gh",
+      "run",
+      "view",
+      "34562579355",
+      "--job",
+      "103148160889",
+      "--log-failed"
+    ],
+    "logExitCode": 0,
+    "logLines": 212,
+    "logSha256": "b904c5a7164e7a8589926af2a2edc2a0d3ca6db97efcd73727104df3cefba756",
+    "metadataCommand": [
+      "gh",
+      "run",
+      "view",
+      "34562579355",
+      "--job",
+      "103148160889",
+      "--json",
+      "databaseId,headSha,status,conclusion,startedAt,createdAt,updatedAt,url,name,workflowName,attempt"
+    ],
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "conclusion": "failure",
+  "createdAt": "2026-09-11T04:32:27Z",
+  "databaseId": 34562579355,
+  "headSha": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+  "name": "CI",
+  "startedAt": "2026-09-11T04:32:27Z",
+  "status": "completed",
+  "updatedAt": "2026-09-11T04:43:49Z",
+  "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34562579355",
+  "workflowName": "CI"
+}

@@ -1,0 +1,212 @@
+CI (hermetic)	Run hermetic test pipeline	﻿2026-09-11T04:33:16.9318821Z ##[group]Run make test-hermetic
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:16.9319251Z [36;1mmake test-hermetic[0m
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:16.9349542Z shell: /usr/bin/bash -e {0}
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:16.9349841Z ##[endgroup]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:16.9475869Z ==> test-hermetic agent-cli (CGO_ENABLED=0, tags=nomicrophone, target-wide timeout for ./test/integration: 480s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:48.9348403Z ?   	github.com/portpowered/go-agent-harness/agent-cli/cmd/agent	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:48.9366591Z ?   	github.com/portpowered/go-agent-harness/agent-cli/cmd/audio-device-server	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:49.7849835Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/room-latency-report	0.007s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:49.7932867Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/session-timing-report	0.009s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:49.8493684Z ok  	github.com/portpowered/go-agent-harness/agent-cli/cmd/testtimeout	0.055s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:49.8495210Z ?   	github.com/portpowered/go-agent-harness/agent-cli/cmd/testtiming	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:49.8496938Z ?   	github.com/portpowered/go-agent-harness/agent-cli/cmd/yui	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:50.5573447Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/acceptance	0.052s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:50.5744875Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/config	0.058s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:50.5751153Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/execctx	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:50.5752005Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/flags	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:50.5753103Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/input	0.009s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:50.5808731Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/logger	0.027s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:50.5810023Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/output	0.006s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:55.4464875Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe	3.018s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:55.4484534Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fault	0.006s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:55.4518675Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet	0.006s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:56.0135270Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/room	3.594s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:56.0160097Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services	0.042s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:56.0188547Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:56.0248889Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:56.0308152Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:33:56.0309191Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6585131Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	61.988s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6585906Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentsession	0.004s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6586635Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices	0.744s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6587627Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/tools	0.006s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6588514Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6589273Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6591364Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/internal/launch	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6592010Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6592608Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/selfplay	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6593484Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6594069Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6594666Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/internal/runtimeadapter	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6595302Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6595887Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6596419Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/sessiontiming	0.004s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6596924Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/sight	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6597612Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/skills	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6598250Z ?   	github.com/portpowered/go-agent-harness/agent-cli/internal/sysinfo	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6598769Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/testtimeout	8.516s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6599265Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/testtiming	0.008s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6599751Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/tools	0.010s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6600244Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli	14.858s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6600899Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events	10.051s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6601517Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost	0.031s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6602047Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp	2.946s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6602629Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome	4.167s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6603261Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery	0.009s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6603852Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6604415Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit	0.018s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6604997Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools	2.215s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6605578Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/wire	0.139s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6606062Z ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/workspace	0.005s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6606617Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/functional	0.002s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:35:10.6607445Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/functional/parity	0.017s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:00.6198790Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration	275.572s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:00.6199597Z ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration/testcmd/mock-tool-agent	0.024s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:00.7144146Z ==> test-hermetic go-agent-loop (CGO_ENABLED=0, tags=nomicrophone, general package timeout: 300s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:00.9778589Z ?   	github.com/portpowered/go-agent-harness/go-agent-loop/cmd/ttscorpus	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:02.5180826Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop	0.822s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:02.5240731Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentprofile	0.007s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:02.5249201Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/audiofixture	0.009s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:02.5288259Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine	0.213s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:02.5318161Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging	0.007s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:02.5324631Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages	0.069s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:02.5346478Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics	0.032s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:02.5378265Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/parity	0.031s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:03.0619015Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants	0.125s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:04.6955704Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe	0.093s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:04.6956727Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:05.3346663Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems	0.711s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:05.3398913Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio	0.002s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:05.3448169Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript	0.060s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:39:05.3498340Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/pkg/ttscorpus	0.525s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2872478Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/test/functional	145.591s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2873411Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/duplex	25.117s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2874333Z ?   	github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/internal/quarantinefixture	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2875339Z ?   	github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/internal/sessionmock	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2876300Z ?   	github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/internal/support	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2877158Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/media	0.008s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2878198Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/orchestration	30.167s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2879022Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/sessions	23.702s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2879884Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/timeharness	1.008s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2880711Z ok  	github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/tools	0.004s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2881490Z ?   	github.com/portpowered/go-agent-harness/go-agent-loop/test/test_logging	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.2999817Z ==> test-hermetic go-llm-gateway (CGO_ENABLED=0, tags=nomicrophone, general package timeout: 300s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.3226863Z go: downloading github.com/anthropics/anthropic-sdk-go v1.26.0
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.3227680Z go: downloading google.golang.org/genai v1.48.0
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.6360272Z go: downloading github.com/tidwall/gjson v1.18.0
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.6360870Z go: downloading golang.org/x/sync v0.19.0
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.6361334Z go: downloading github.com/tidwall/sjson v1.2.5
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.6369163Z go: downloading cloud.google.com/go/auth v0.9.3
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.6650733Z go: downloading cloud.google.com/go v0.116.0
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.7185111Z go: downloading github.com/google/go-cmp v0.6.0
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.7219590Z go: downloading github.com/tidwall/match v1.1.1
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.7220225Z go: downloading github.com/tidwall/pretty v1.2.1
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.7221037Z go: downloading go.opencensus.io v0.24.0
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.7545879Z go: downloading cloud.google.com/go/compute/metadata v0.5.0
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.7801635Z go: downloading github.com/google/s2a-go v0.1.8
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.7802224Z go: downloading google.golang.org/grpc v1.66.2
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.7802816Z go: downloading github.com/googleapis/enterprise-certificate-proxy v0.3.4
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.8191624Z go: downloading github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:30.8454162Z go: downloading google.golang.org/protobuf v1.34.2
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:31.0935013Z go: downloading google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:31.1193161Z go: downloading google.golang.org/genproto v0.0.0-20240903143218-8af14fe29dc1
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:32.1219354Z ?   	github.com/portpowered/go-agent-harness/go-llm-gateway/cmd/session-fixture-validator	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:32.7669071Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/internal/sessionfixturevalidator	0.112s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:32.7714102Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/capabilities	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:32.7714964Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway	0.006s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:32.7808094Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference	0.004s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:32.7898404Z ?   	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:32.7958154Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models	0.004s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:46.5315402Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers	2.511s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:47.1928338Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/anthropic	2.871s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:47.1929338Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/fal	0.349s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:47.1929917Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/gemini	0.006s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:47.1930468Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok	0.006s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:47.1931009Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/localai	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:47.1931554Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai	0.388s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:47.1932089Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing	0.442s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:47.1932583Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing/localai	0.759s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:47.1933036Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport	0.002s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:51.3592622Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc	4.932s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:51.3593617Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/transporttest	0.002s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:51.3594422Z ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/test/functional	0.059s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:51.3977817Z ==> test-hermetic go-audio (CGO_ENABLED=0, tags=nomicrophone, general package timeout: 300s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:51.8964350Z ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room	0.112s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:52.5236493Z ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing	0.726s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:52.5241534Z ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:53.6623789Z ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/audio	0.860s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:53.6624552Z ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/clock	0.007s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:53.6625120Z ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/codec	0.034s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:53.6625750Z ?   	github.com/portpowered/go-agent-harness/go-audio/pkg/contract	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:53.7270199Z ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/mixer	0.880s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:53.7271251Z ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/observability	0.007s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:53.7272613Z ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/recording	0.112s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:53.7273440Z ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/wavio	0.340s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:53.7324251Z ==> test-hermetic go-device-gateway (CGO_ENABLED=0, tags=nomicrophone, general package timeout: 300s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:55.0629311Z ok  	github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices	0.294s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:55.6214553Z ok  	github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime	0.856s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:55.6271767Z ==> test-hermetic go-agent-runtime (CGO_ENABLED=0, tags=nomicrophone, general package timeout: 300s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:55.7692716Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.1236375Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/composite	0.009s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.1378607Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file	0.009s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.3925650Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/media	0.004s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.6005928Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/probe	0.007s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.6028655Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.6029723Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.6058483Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/admission	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.6060016Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/catalog	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.7595137Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/service	0.028s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.7618925Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/terminalpolicy	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.7648456Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:56.7678353Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4328907Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/evidence	1.863s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4330263Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/service	0.015s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4331572Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4332558Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay	0.007s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4333545Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/plan	0.031s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4334432Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/strict	0.026s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4335280Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4336053Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4336891Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence	0.028s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4338065Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence/latency	0.050s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4338945Z --- FAIL: TestRunnerRoutesTypedLivenessFaultAndPreservesPeer (0.00s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4339877Z     --- FAIL: TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout (0.00s)
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4341440Z         browser_parity_test.go:220: room run error = silent_provider_timeout: provider response produced no observable output
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4342646Z             silent_provider_timeout: provider response produced no observable output
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4343582Z FAIL
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4344446Z FAIL	github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle	0.102s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4345629Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/manifest	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4346720Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/media	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4347897Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4349143Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/service	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4350663Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4351715Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4352927Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution	0.017s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4353816Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input	0.004s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.4354995Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/instructions	0.002s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.9418017Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live	0.123s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.9419750Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/eventcodec	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.9466610Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate	0.107s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.9467783Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/observations	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.9468813Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence	0.018s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.9469703Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/service	0.013s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.9470556Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.9471479Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:41:59.9472307Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:00.1108363Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/browser	0.004s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:00.1248412Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/composition	0.014s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.0572067Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display	0.530s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.1416311Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/filesystem	0.410s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.1419082Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/imagestaging	0.013s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.1420187Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/misc	0.116s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.6164927Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/mouse	0.832s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.6165593Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/registry	0.009s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.6166156Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/service	0.031s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.6166760Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/shell	0.026s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.6167616Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/sight	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.6168196Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/skills	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.6168732Z ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/web	0.003s
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.6169262Z ?   	github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire	[no test files]
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.6169629Z FAIL
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.6309938Z make: *** [Makefile:456: test-hermetic] Error 1
+CI (hermetic)	Run hermetic test pipeline	2026-09-11T04:42:01.6327961Z ##[error]Process completed with exit code 2.
