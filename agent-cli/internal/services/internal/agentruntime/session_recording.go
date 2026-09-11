@@ -174,6 +174,10 @@ func runSessionWithImagesAndRecordingDirectory(ctx context.Context, out io.Write
 		plan.loop.CloseAfterOpen, plan.loop.AudioIn, plan.loop.MaxDuration = false, audioSource, opts.MaxDuration
 		plan.loop.RequireAssistantResponse, plan.loop.RequireTerminalAssistantResponse = true, true
 	}
+	return runSessionImageRecording(ctx, out, plan, opts, wirePrompt, directory)
+}
+
+func runSessionImageRecording(ctx context.Context, out io.Writer, plan sessionRuntimePlan, opts SessionImageRunOptions, wirePrompt, directory string) (runErr error) {
 	recording := newSessionDirectoryRecording(directory, plan, opts.SessionRunOptions)
 	if recording.openErr != nil {
 		return finalizeSessionDirectoryRecording(runErr, recording)
