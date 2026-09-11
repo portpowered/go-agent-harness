@@ -1,7 +1,7 @@
 {
   "schema_version": "c50-accumulated-regressions-v1",
-  "source_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-  "candidate_revision": "0ad171de0f553ec5eef3b879381b05c7205ff6c0",
+  "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+  "candidate_revision": "fa3eacc0e8d317fabff5c1feb85ad7435b2abd6c",
   "command": "COUNT=3 scripts/test-session-ci-regressions.sh all",
   "exit_code": 0,
   "modes": [
@@ -17,5 +17,10 @@
   ],
   "negative_controls": "Expected replay mismatch and later-turn PCM/transcript rejection diagnostics remained asserted; all selected tests passed.",
   "credentials": "not used",
-  "ci_polling": "not performed"
+  "ci_polling": "not performed",
+  "observed_at": "2026-09-11T08:20:05Z",
+  "stdout_bytes": 133049,
+  "stdout_sha256": "82d1a98236b3fd063612348c0b2b68cd39c531227c13b506c94332345361c29a",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 }
