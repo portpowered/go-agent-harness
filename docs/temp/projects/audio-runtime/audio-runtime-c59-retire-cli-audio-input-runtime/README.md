@@ -37,3 +37,20 @@ engine error when cancellation races the completed hot loop and synchronizes
 the regression test on provider close rather than a scheduler-dependent sleep.
 The focused test passed 100 normal iterations and 20 race iterations; the full
 `agentloop` package and accumulated session regression harness also passed.
+
+## Repaired CI static rejection
+
+The next script run, `34656026487`, rejected head
+`0ea1fcf69480d40bfc137fb770345e21f03dc065` in job `103448507264` at the
+architecture-size step. The exact findings were three C59-repair-induced
+drifts in `go-agent-loop/pkg/agentloop/agent_loop.go`: file lines `629 > 622`,
+`AgentLoop.Run` cognitive complexity `23 > 19`, and `AgentLoop.Run` function
+lines `96 > 89`. No limit or baseline was raised.
+
+Repair commit `0d39c5d2153db8aeb9e4db07d8ea2d0f534ce034` keeps the structured
+provider error decision in the existing `execute_result.go` helper and leaves
+`Run` at the established file/function counts. Architecture-size-check passes
+at `189` packages, `1,907` files, and `28,165` functions; the full agentloop
+normal/race package tests and the accumulated normal/coverage/race session
+regression matrix pass. The subsequent script CI jobs were still running at
+handoff, so no CI-green claim is made here.
