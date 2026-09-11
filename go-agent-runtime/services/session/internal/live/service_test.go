@@ -14,21 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type testInferencer struct {
-	session *testSession
-}
+type testInferencer struct{ session *testSession }
 
 func (i *testInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	return i.session, nil
-}
-
-type testSession struct {
-	receive             *messages.TypedBuffer[messages.StreamMessage]
-	done                chan struct{}
-	close               sync.Once
-	closeDoneOnDoneCall bool
-	mu                  sync.Mutex
-	sent                []messages.StreamMessage
 }
 
 func requireLiveHandle(t *testing.T, opened session.LiveHandle) *handle {
@@ -40,13 +29,19 @@ func requireLiveHandle(t *testing.T, opened session.LiveHandle) *handle {
 	return h
 }
 
+type testSession struct {
+	receive             *messages.TypedBuffer[messages.StreamMessage]
+	done                chan struct{}
+	close               sync.Once
+	closeDoneOnDoneCall bool
+	mu                  sync.Mutex
+	sent                []messages.StreamMessage
+}
+
 type failingLiveRecorder struct {
-	messageErr  error
-	finalized   chan struct{}
-	recorded    chan struct{}
-	recordOnce  sync.Once
-	contextErr  error
-	finalizeErr error
+	messageErr, contextErr, finalizeErr error
+	finalized, recorded                 chan struct{}
+	recordOnce                          sync.Once
 }
 
 func (r *failingLiveRecorder) RecordMessage(ctx context.Context, _ session.LiveRecord) error {
@@ -70,9 +65,8 @@ func (r *failingLiveRecorder) Finalize(context.Context, error) error {
 }
 
 type testLiveCapabilityHandle struct {
-	initialized chan struct{}
-	closed      chan struct{}
-	events      chan session.LiveCapabilityEvent
+	initialized, closed chan struct{}
+	events              chan session.LiveCapabilityEvent
 }
 
 func (h *testLiveCapabilityHandle) Initialize(context.Context) error {
@@ -513,6 +507,13 @@ func TestCaptureCompletionWaitsForResponseAfterContinuousEOF(t *testing.T) {
 		t.Fatal("post-EOF response did not complete the finite capture")
 	}
 }
+func TestAnonymousFiniteResponseTreatsRepeatedStartsAsOneLifecycleOwner(t *testing.T) {
+	h := &handle{request: session.LiveRequest{FinishAfterResponse: true}, captureComplete: true, responseStartWake: make(chan struct{})}
+	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant})
+	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant})
+	require.True(t, h.anonymousResponses == 1 && h.responseActive && h.responseObserved == 1)
+	require.True(t, h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})}) && h.gracefulStop && !h.responseActive && h.replayResponses == 1)
+}
 func TestFailedToolContinuationWinsAcrossToolResultObservationOrder(t *testing.T) {
 	cases := []failedContinuationOrder{
 		{name: "provider_failure_first", failureBeforeToolEnd: true},
@@ -525,9 +526,8 @@ func TestFailedToolContinuationWinsAcrossToolResultObservationOrder(t *testing.T
 }
 
 type failedContinuationOrder struct {
-	name                  string
-	outputBeforeAdmission bool
-	failureBeforeToolEnd  bool
+	name                                        string
+	outputBeforeAdmission, failureBeforeToolEnd bool
 }
 
 func assertFailedContinuationOrder(t *testing.T, order failedContinuationOrder) {

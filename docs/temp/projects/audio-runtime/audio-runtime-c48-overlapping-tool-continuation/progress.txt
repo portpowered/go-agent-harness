@@ -1,0 +1,205 @@
+C48 implementation checkpoint
+
+- Admission was verified for the sole audio-runtime task with project-control.py; the isolated branch matches the admitted branch and the candidate preserves the fetched origin/main ancestry. No host checkout, predecessor worktree, shared progress, or unrelated owner path was changed.
+- The causal repair is limited to the admitted live/subsystem paths: duplex tool batches retain one session generation, model assembly keeps bounded response-ID windows across overlap, and finite completion retires only tool calls whose local result boundary completed while allowing a finished sibling response to count.
+- Focused coordinator and live lifecycle regressions pass, including independent response reconstruction, the 16-response assembly bound, overlapping finite response accounting, sibling continuation accounting, and existing interruption/cancellation checks.
+- The source-file-built public C48 consumer and bounded driver reproduce two active provider response IDs, four exact calls/results, reverse tool completion, exact-once forwarding, the public terminal, and missing/duplicate/swapped controls without Realtime credentials or sleeps.
+- Candidate commit d69b5ce4f4d1f426f1a2d1b553970258f9a43324 passed the clean-tree bounded C48 driver: the positive report proves both response IDs were active before the first result, all four exact calls/results were correlated once, reverse executor completion was preserved, and the public terminal completed; missing, duplicate, and swapped controls failed with causal fixture errors. Focused package, race, coordinator, live, engine, participant, and C21 integration regressions also pass.
+- Next action: push this same task branch and update/open its PR for the script CI gate, then return ACCEPTED as the handoff. CI-green, review, merge, device, acoustic, and project-wide acceptance remain unclaimed.
+
+C48 implementation checkpoint — 2026-09-10
+
+- Reproduced the prior CI timeout causally: the realtime WebMCP provider emits continuation tool events without response IDs, so overlapping response assembly discarded those events when more than one explicit response was active. The loop now routes the latest unscoped continuation stream and merges only unscoped tool events at the final boundary; explicit response-ID assemblies remain isolated.
+- Architecture repair is complete without changing the baseline: `make architecture-size-check` passes with 184 packages, 1888 files, and 27810 functions; live observation is 400 lines, service is 399, and replay readiness is 599.
+- Focused normal and race checks both pass with 187 tests across live and coordinator packages. The exact prior WebMCP timeout regression passes (1 test), and the accumulated duplex CLI integration regression passes normal and race (3 tests each). `make wire-check` passes.
+- The bounded public driver was attempted before commit and correctly refused the dirty source tree during evidence binding; this is a clean-tree prerequisite, not a causal test failure. After committing this checkpoint, run the driver on the clean candidate, commit its provenance artifact, then push/update the same PR for script CI handoff.
+
+C48 public evidence checkpoint — source revision `fadf73a53f755e6eeeac945acb4045af94d2f9f8`
+
+- The clean-tree bounded driver passed at the bound revision. Positive report: `docs/temp/projects/audio-runtime/audio-runtime-c48-overlapping-tool-continuation/artifacts/runs/20260911T040601Z-732360000/positive/report.json`. It proved both response IDs overlapped before the first result, all four exact calls/results were correlated once, reverse completion was preserved, and the provider-authored terminal completed.
+- Missing, duplicate, and swapped controls all exited nonzero with causal fixture errors; provenance was refreshed locally with the run stamp, fixture hash, binary hash, storage bound, and report/control paths. The provenance and run artifacts are intentionally ignored evidence outputs.
+- Next action: commit this task-local checkpoint, push the same branch, update PR #440 with the exact evidence, and return ACCEPTED for script CI handoff. CI-green, review, merge, hardware, acoustic, and project-wide acceptance remain unclaimed.
+
+C48 static rejection repair and exact-source evidence checkpoint — 2026-09-11
+
+- The canonical `~default` inbox returned `work-task-12` for PR #440 at
+  `95298e23ff13c6a1b2465cb14f99c0de2bb7b9b9`; the complete static job log
+  identified four unreachable duplicate coordinator methods in
+  `go-agent-loop/pkg/subsystems/coordinator_delta.go` (`executeToolOutput`,
+  `executeModelOutput`, `dispatchModelMessage`, and `executeUserOutput`). The
+  same log showed the remaining static gate had not reached the live package.
+- Repair commit `91d5fbf80eaf64745c4358e2c9cb18b44ec73ba6` removes only those
+  dead methods. The pinned analyzer rerun then exposed and repaired the live
+  observer's exhaustive stream-type switch and restored its exact 400-line
+  architecture budget without changing finite-response behavior. No baseline,
+  manifest, shared progress, C23 path, peer path or host checkout changed.
+- Final focused evidence on `91d5fbf`: `make lint` and `make staticcheck` pass
+  all modules; architecture-size passes at `184` packages/`1888` files/`27806`
+  functions; Wire and targeted vet pass; coordinator and live packages pass
+  normal and race; and the accumulated
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` passes
+  normal and race.
+- The bounded public driver passed at exact source `91d5fbf`, with fixture
+  SHA256 `e13d8322a39c37f2d216fad97df9541b497aafe9d7c28c5c19a97ce7f7833461`,
+  consumer SHA256 `7f54118a68a53569f12f0d1c522893e936f734b967c058f5aaeacc4fe780f35a`,
+  and free storage `148541923328` bytes. Positive run
+  `artifacts/runs/20260911T042701Z-604215000/positive/report.json` proves both
+  response IDs were active before the first result, four exact calls/results
+  were correlated once in reverse executor completion order, grounded
+  continuations completed, provider terminal/shutdown were clean, and no trace
+  overflow occurred. Missing, duplicate and swapped controls all exited 1
+  with their intended fixture correlation errors. The generated provenance
+  records a 10-second child bound, 64 KiB output cap and 2 GiB reserve.
+- `origin/main` remains `7f73c8b3b4ebc99b55b8bb5e802beff024385407`; startup
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and current main are ancestors.
+  No current-head CI success, independent review, guarded merge, primary
+  vertical probe, C23 resumption or project acceptance is claimed. Next action:
+  commit this checkpoint, push PR #440 and return `ACCEPTED` to the
+  script-owned current-head gate without polling; retain the same task for any
+  exact rejection or actionable repair.
+
+C48 overlap review-repair and handoff checkpoint — 2026-09-11
+
+- Repair commit `c82d1cecf5066f59e98952230d6a44f931031b40` maps all four prior
+  review findings: unknown explicit late response IDs are rejected without
+  sibling fallback; tool-acknowledgement deltas cannot create model turns;
+  response ownership is tracked per active ID across sibling completion; and
+  pending tool-call responses have a 128-entry admission bound plus cancel,
+  close and final-shutdown cleanup. New coordinator/live regressions cover
+  late routing, ack overlap, sibling liveness, overflow, and cleanup.
+- Post-repair causal gates pass: coordinator and live package normal and race
+  tests, targeted `go vet`, `make architecture-check` (`184` packages,
+  `1888` files, `27813` functions), and the accumulated
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` normal and
+  race commands (3 subtests each). `git diff --check` is clean.
+- The clean-head bounded public driver passed at source `c82d1ce`, with fixture
+  SHA256 `e13d8322a39c37f2d216fad97df9541b497aafe9d7c28c5c19a97ce7f7833461`,
+  consumer SHA256 `4701d32ba3085fa03a73a9e8c726c33b7cf377e3f8d5b6b65e7b5e05d65ef50c`,
+  and `143045246976` free bytes. Positive report
+  `artifacts/runs/20260911T053940Z-978254000/positive/report.json` proves both
+  response IDs were active before the first result, four exact calls/results
+  were correlated exactly once, reverse completion was preserved, and the
+  provider terminal/shutdown were clean. Missing, duplicate and swapped
+  controls each exited 1 with their intended causal correlation error. The
+  generated provenance remains intentionally ignored by the task `.gitignore`.
+- Admission and branch/ancestry evidence remain valid: the sole admitted task
+  is `work-task-12`, `prd.json.branchName` matches
+  `codex/audio-runtime-c48-overlapping-tool-continuation`, and current main is
+  an ancestor. No CI-green, review, merge, hardware, acoustic, vertical or
+  project-acceptance claim is made. Next action: commit this checkpoint, push
+  the same branch, update PR #440 with this evidence, and return `ACCEPTED` to
+  the script-owned current-head gate without polling; retain ownership for any
+  exact rejection or actionable repair.
+
+C48 CI rejection repair checkpoint — 2026-09-11
+
+- The latest PR #440 run `34567223532` at head `5cb266ff` was read in full. The
+  hermetic and coverage jobs both included the same actionable failure from
+  `TestSessionCommand_OverlappingToolResultsWaitIndependently`: after both
+  provider tool results were accepted, the test timed out waiting for client
+  close. The integration job reproduced the same failure; other reported
+  replay/error text was expected negative-control output.
+- The focused reproduction showed that the provider-shaped fixture emits two
+  anonymous `MESSAGE.START` events for one tool-bearing response. The live
+  response counter treated each start as a separate owner, so its one terminal
+  left `responseActive` true and prevented the final graceful close.
+- The owned repair keeps anonymous response ownership at one when a repeated
+  start has no response ID, while explicit response IDs retain independent
+  ownership. Added `TestAnonymousFiniteResponseTreatsRepeatedStartsAsOneLifecycleOwner`
+  to preserve the regression and prove the terminal clears active state and
+  finishes the finite session.
+- Normal and race live/subsystem packages pass, and the exact failing CLI
+  integration test passes in normal and race modes. The first post-edit public
+  driver invocation correctly refused the dirty source tree before evidence
+  binding; no public artifact was relabeled. The next action is to commit this
+  repair, rerun the clean bounded C48 driver, then run the focused accumulated
+  C21 regression and final scope/provenance checks before pushing the same PR.
+
+C48 architecture-budget repair checkpoint — 2026-09-11
+
+- The first repair commit `ee8aa2b5` passed the causal tests and public driver,
+  but the scoped `architecture-size-check` reported `observation.go` at 407/400
+  lines and `replay_readiness_test.go` at 628/600. The lifecycle method and its
+  regression were moved into new files under the admitted live package, leaving
+  the over-budget files at 384 and 600 lines without changing the ownership
+  boundary or architecture baselines.
+- After the refactor, normal and race live/subsystem packages pass, and
+  `TestSessionCommand_OverlappingToolResultsWaitIndependently` passes in normal
+  and race modes. The next action is to checkpoint this budget repair, rerun
+  the bounded driver on the final clean revision, then rerun C21 and the
+  architecture/wire gates before pushing the same PR.
+
+C48 final package-budget checkpoint — 2026-09-11
+
+- The maintained-file limit disallowed the temporary split (17 files versus a
+  15-file package budget), so the lifecycle method and regression were folded
+  back into existing admitted files. The final package remains at 15 files;
+  `observation.go`, `replay_readiness_test.go`, and `service_test.go` are at
+  400, 600, and 600 lines respectively.
+- On this final layout, normal and race live/subsystem packages pass, and the
+  rejected `TestSessionCommand_OverlappingToolResultsWaitIndependently` passes
+  in normal and race modes. `make architecture-size-check wire-check` passes
+  with 184 packages, 1888 files, and 27814 functions. The next action is to
+  checkpoint this layout, bind the public driver to that clean revision, rerun
+  C21, then push and update PR #440.
+
+C48 current-head CI repair checkpoint — 2026-09-10
+
+- Current-head CI run `34569402086` failed static gofmt checks in
+  `observation.go` and `service_test.go`, and hermetic, coverage, and
+  integration all failed `TestReadImageSpokenFailedContinuationIsActionable`
+  because the failed continuation was classified as a clean replay completion.
+- The causal focused run showed the failed `response.done` carries explicit
+  `resp_read_image_reply` metadata although its preceding `response.created`
+  is anonymous. The coordinator now admits that terminal-only provider error
+  only to the sole active anonymous assembly; unknown non-terminal explicit
+  deltas and ambiguous siblings remain rejected. The live continuation path
+  then returns the typed image continuation failure. Added a focused
+  coordinator regression for this exact boundary and preserved the late-ID,
+  acknowledgement, overlap, and anonymous-lifecycle regressions.
+- Gofmt is clean. Normal and race live/subsystem packages, normal and race C21
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls`, and normal
+  and race spoken read-image success/failure composition all pass. The next
+  action is to commit this repair, fetch and merge current `origin/main`, rerun
+  clean evidence and final scope gates, then push the same PR for script CI.
+
+C48 post-merge formatting and architecture checkpoint — 2026-09-10
+
+- Fetched `origin/main` at `bb29005d0bb545db5e08ffda0205929b021d4fc1` and
+  merged it into the isolated branch at `514013a6143c2056744a5daddf6184d47fd2c5f1`.
+  The required baseline, startup revision, and current-main ancestry checks
+  all pass; the C48 diff remains limited to the admitted paths.
+- Post-merge gofmt correctly added declaration spacing that initially put
+  `observation.go` and `service_test.go` over their physical budgets. The
+  prompt constant now lives in the existing service const block, and only
+  compact test declarations were used to retain the cross-file helper and
+  nearby regressions within budget. Final counts are observation 400, service
+  397, and service_test 600 lines.
+- `make architecture-size-check wire-check` passes with 184 packages, 1888
+  files, and 27853 functions. Normal and race live/subsystem packages and the
+  focused failed-continuation integration test pass after the merge. Next:
+  checkpoint this budget repair, rerun clean C48 public evidence plus C21 and
+  final ancestry/scope checks, then push the same PR for script CI.
+
+C48 final pre-handoff evidence checkpoint — 2026-09-10
+
+- The clean bounded public driver passed on source `fa9689dcd8a29716ad89fd5a88438ad2e15d9679`.
+  Positive report run `20260911T064840Z-100944000` proves both response IDs
+  preceded the first result, all four exact calls/results were correlated once
+  without cross-routing, provider-authored completion was clean, and trace
+  shutdown completed. Fixture SHA256 is
+  `e13d8322a39c37f2d216fad97df9541b497aafe9d7c28c5c19a97ce7f7833461`, the
+  rebuilt consumer binary SHA256 is
+  `5440f74cc212692ed6f95d83673dd27691db7aaf12fa8db6f471fa52f44887f5`, free
+  storage was 138663878656 bytes, and the 10-second/64-KiB/2-GiB limits held.
+  Missing, duplicate, and swapped controls each exited 1 with their intended
+  causal correlation errors.
+- The required C21 `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls`
+  passes in normal and race modes. Architecture-size-check and wire-check
+  remain green, and `git diff --check` is clean. No CI-green, review, merge,
+  primary probe, or project acceptance is claimed.
+- Next action: commit this task-local checkpoint, rerun the bounded driver on
+  that exact final head, push `codex/audio-runtime-c48-overlapping-tool-continuation`,
+  update PR #440 with the exact revision/evidence, and return `ACCEPTED` to the
+  script CI gate without polling it.
