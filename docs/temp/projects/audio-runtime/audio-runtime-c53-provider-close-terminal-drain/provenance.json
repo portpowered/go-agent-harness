@@ -232,6 +232,6 @@
   "schema": "audio-runtime.c53.provenance.v1",
   "source_plan_sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
   "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
-  "source_tree_status": ""
+  "source_tree_status": "",
   "task": "audio-runtime-c53-provider-close-terminal-drain"
 }
