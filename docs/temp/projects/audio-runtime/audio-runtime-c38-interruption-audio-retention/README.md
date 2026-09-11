@@ -189,3 +189,43 @@ controls. The latest CI rejection is run `34541949856` / job `103086327724` at
 owned paths; it must be routed to its owner rather than changed in this task.
 No CI-green, review, merge, vertical-acceptance, physical, or project-complete
 claim is made.
+
+## Room handshake-order repair and final candidate
+
+The current implementation handoff supersedes the older out-of-lease note
+above: C38 now owns the exact room test for this bounded repair. Current
+`origin/main=7f73c8b3b4ebc99b55b8bb5e802beff024385407` is integrated through
+merge `c30a6c47bd63d83ddd0f289f6086b8a0cb955dbd`; startup, baseline, and C30
+planning ancestry remain present.
+
+The repair is in
+`agent-cli/internal/services/internal/agentruntime/s2s_room_input_transcription_test.go`.
+The fake provider withholds response completion until media arrives, and a
+manual mixer cadence advances only after both actual `SESSION.OPEN`
+observations. This deterministically proves the legitimate post-handshake wire
+sequence `[session.update, input_audio_buffer.append]` without sleep/retry or a
+production ordering change. The strict validator permits exactly one initial
+`session.update` and only subsequent `input_audio_buffer.append` media;
+duplicate/out-of-order handshakes, unexpected controls, and missing media are
+negative controls. The stale exception for this now-compliant test was removed
+without lowering any architecture gate threshold.
+
+At source `0629bc5c033d57d578bc5187f33f2c35f985e552`, room ordering normal/race
+both pass 7 tests. The accumulated C38 session-output suite passes normal/race
+19 tests each; the two owned remote integration cases pass 14 tests; causal,
+focused, negative-control, and cleanup runner modes pass. Focused checks cover
+vet, architecture/size (`184` packages, `1,888` files, `27,819` functions), and
+Wire.
+
+Fresh exact replay at
+`runs/repaired-20260911T011513Z-49294` is `REPAIRED_ORACLE_PASS`; the rebuilt
+artifact is 50,912,034 bytes with SHA-256
+`8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`.
+`package-manifest.json` is `PACKAGE_READY`; the clean 2,185-input manifest is
+SHA-256
+`155a2d6d1258a30a6596d91bab06e52059bbdc2d3a1c922e8cd06f7665775950`.
+Frozen tool/interruption PCM and healthy-tail hashes, strict replay, transcript,
+timeline, terminal, same-length PCM mutation, and missing-timeline controls
+all pass. These remain executor handoff results only; script current-head CI,
+independent review, guarded merge, and fresh post-delivery vertical validation
+are still external gates.

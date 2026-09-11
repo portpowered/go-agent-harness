@@ -139,3 +139,51 @@ fixtures, assertions, and source are unchanged; no C38 source repair is
 justified by this scheduling-only observation. The room failure remains outside
 the C38 lease and requires primary routing to its owner. No CI-green, review,
 merge, vertical-acceptance, physical, or project-complete claim is made.
+
+## Same-task room ordering repair and final executor handoff
+
+The current implementation handoff supersedes the older out-of-lease note:
+C38 now owns the exact room test for this bounded repair. Current
+`origin/main=7f73c8b3b4ebc99b55b8bb5e802beff024385407` is integrated through
+merge `c30a6c47bd63d83ddd0f289f6086b8a0cb955dbd`, preserving the required
+startup, baseline, and C30 planning ancestors.
+
+The repair is in
+`agent-cli/internal/services/internal/agentruntime/s2s_room_input_transcription_test.go`.
+The fake provider withholds response completion until it receives media. A
+manual mixer cadence advances every participant only after both actual
+`SESSION.OPEN` observations, deterministically proving the CI-observed
+post-handshake sequence `[session.update, input_audio_buffer.append]` without
+sleep/retry or a production ordering change. The validator requires exactly one
+initial `session.update`, allows only subsequent `input_audio_buffer.append`
+media, and rejects duplicate/out-of-order handshakes, unexpected controls, and
+missing media. The stale architecture exception for the now-compliant test was
+removed; no gate threshold was lowered.
+
+Evidence at source `0629bc5c033d57d578bc5187f33f2c35f985e552`:
+
+- room ordering normal/race: 7 tests each;
+- accumulated session-output normal/race: 19 tests each;
+- owned remote integration cases: 14 tests;
+- causal: `CAUSAL_PROOF` at `causal-20260911T010855Z-43952`;
+- focused: `FOCUSED_CHECKS_PASS` at `focused-checks-20260911T011346Z-48409`,
+  including vet, architecture/size (184 packages, 1,888 files, 27,819
+  functions), and Wire;
+- negative and cleanup controls pass at
+  `negative-controls-20260911T011605Z-50072` and
+  `cleanup-control-20260911T011610Z-50122`;
+- repaired replay: `REPAIRED_ORACLE_PASS` at
+  `repaired-20260911T011513Z-49294`; package manifest: `PACKAGE_READY`;
+- rebuilt yui: 50,912,034 bytes,
+  SHA-256 `8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`;
+- clean 2,185-input build manifest SHA-256
+  `155a2d6d1258a30a6596d91bab06e52059bbdc2d3a1c922e8cd06f7665775950`.
+
+Frozen tool/interruption PCM and healthy-tail hashes, strict replay,
+transcript/timeline/terminal evidence, same-length PCM mutation rejection, and
+missing-timeline rejection all pass. This is executor handoff only: it does not
+claim script CI success, independent review, guarded merge, post-delivery
+vertical acceptance, physical/acoustic proof, or project completion. The next
+action is to evaluate this genuinely changed same-task head in script-owned
+current-head CI without polling; retain C38 ownership for any exact rejection
+or actionable repair.

@@ -3805,3 +3805,56 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   failure to its owning task for a reviewed repair or disposition; C38 retains
   the same task, does not retry the unchanged external failure, and inspects a
   new exact CI log only if the script gate returns a new rejection.
+
+# C38 room handshake-order repair and final candidate checkpoint 2026-09-11T01:16Z
+
+- Reverified the admitted sole `audio-runtime` task and branch before repair;
+  `project-control.py verify-work --type task --name
+  audio-runtime-c38-interruption-audio-retention` remains `admitted`, and
+  `prd.branchName` remains exactly
+  `codex/audio-runtime-c38-interruption-audio-retention`. Fetched current
+  `origin/main=7f73c8b3b4ebc99b55b8bb5e802beff024385407` and preserved it as an
+  ancestor through merge `c30a6c47bd63d83ddd0f289f6086b8a0cb955dbd`; startup,
+  baseline, and C30 planning ancestry remain intact. No host checkout was
+  reset or merged.
+- The implementation-handoff ownership extension resolves the prior CI room
+  finding in the exact file
+  `agent-cli/internal/services/internal/agentruntime/s2s_room_input_transcription_test.go`.
+  Checkpoint `f5734326` adds a bounded manual mixer cadence and a fake provider
+  that withholds response completion until media arrives. The test observes
+  both real `SESSION.OPEN` callbacks before advancing the cadence, forcing the
+  legitimate post-handshake wire sequence `[session.update,
+  input_audio_buffer.append]` without sleep/retry or a production seam. The
+  validator permits exactly one initial `session.update` and only subsequent
+  `input_audio_buffer.append` media; negative controls reject missing,
+  duplicate, out-of-order, unexpected-control, and no-media sequences.
+- Checkpoint `0629bc5c` bounds the test helpers and removes only its now-stale
+  architecture baseline exception. No threshold was lowered. The room repair
+  passes normal and race focused execution (`7` tests each), preserving
+  payload/model/transcription configuration, credential and participant
+  isolation, transcript role/content, max-turn termination, and shutdown.
+- C38 accumulated controls pass: owned session-output regressions pass normal
+  and race (`19/19` each); the two owned remote integration cases pass (`14`
+  tests); `causal-20260911T010855Z-43952` is `CAUSAL_PROOF`;
+  `focused-checks-20260911T011346Z-48409` is `FOCUSED_CHECKS_PASS` with normal,
+  race, vet, architecture/size (`184` packages, `1,888` files, `27,819`
+  functions), and Wire checks passing; and the negative/cleanup controls pass
+  at `negative-controls-20260911T011605Z-50072` and
+  `cleanup-control-20260911T011610Z-50122`.
+- Fresh exact replay/package evidence at source `0629bc5c` is recorded in
+  `repaired-20260911T011513Z-49294` and `package-manifest.json`:
+  `REPAIRED_ORACLE_PASS` and `PACKAGE_READY`. The rebuilt artifact is
+  `50,912,034` bytes with SHA-256
+  `8e5eb0d77a65e5467d4ccfb84146205aa9c91fa8c62d706c4df2683cb4618c42`;
+  frozen tool/interruption PCM, healthy-tail hashes, wire counts, transcript,
+  timeline, terminal, strict replay, same-length PCM mutation rejection, and
+  missing-timeline rejection all pass. The clean 2,185-input build manifest
+  SHA-256 is
+  `155a2d6d1258a30a6596d91bab06e52059bbdc2d3a1c922e8cd06f7665775950`.
+- This is executor evidence only: no current-head script-CI success,
+  independent review, guarded merge, post-delivery vertical acceptance,
+  physical/acoustic proof, or project completion is claimed. Exact next action
+  is to push this same admitted task, update PR `#430` with the room repair and
+  final evidence, then return `ACCEPTED` once the changed same-task head is
+  handed to script-owned current-head CI without polling. Retain C38 ownership
+  for any exact rejection or actionable repair.
