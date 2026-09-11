@@ -75,7 +75,7 @@
       }
     ]
   },
-  "board_sha256": "14b3dbfd56fd51378f5a34c9b25fed2d153b28431573646cc9ea2157361e9e3b",
+  "board_sha256": "d6b2376d9de8020cceef24fd27566e6ac50ba847afffefa0d2042fe3d3652708",
   "previous_review_findings_are_accounted_for": true,
   "prior_c50_reviews": [
     {

@@ -53,6 +53,39 @@
       "workTypeName": "idea"
     },
     {
+      "chainingTraceDepth": 6,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
+          "targetWorkId": "work-thoughts-41",
+          "targetWorkName": "audio-runtime-c48-overlapping-tool-continuation",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911",
+      "state": {
+        "name": "ready",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"project\": \"audio-runtime\", \"directory\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c48-overlapping-tool-continuation-vertical-probe\", \"build\": {\"identity\": \"c48-consumer-merged-cdf416a8\", \"path\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c48-overlapping-tool-continuation-vertical-probe/artifact-0\", \"sha256\": \"5440f74cc212692ed6f95d83673dd27691db7aaf12fa8db6f471fa52f44887f5\"}, \"buildIdentity\": \"c48-consumer-merged-cdf416a8\", \"validationWorkName\": \"audio-runtime-c48-overlapping-tool-continuation-vertical-probe\", \"missionSha256\": \"7e15d976e3c3935dff41e90888f0cbc3f5df146d0e2e1f629c92247c4a5e4ba1\"}",
+        "_parent_request_id": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
+        "_parent_work_id": "work-thoughts-41",
+        "_source_dispatch_id": "118ebaef-59e7-43cc-8b2c-37d2dd84a359",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
+        "_work_type": "validation"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911-audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
+      "workTypeName": "validation"
+    },
+    {
       "chainingTraceDepth": 7,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "name": "audio-runtime-c49-c46-wire-generation-repair",
@@ -387,22 +420,6 @@
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-40",
       "workTypeName": "task"
-    },
-    {
-      "chainingTraceDepth": 5,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c48-overlapping-tool-continuation",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-thoughts-41",
-      "workTypeName": "thoughts"
     },
     {
       "chainingTraceDepth": 5,
@@ -1294,6 +1311,31 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-thoughts-4",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 5,
+      "content": [
+        {
+          "text": "{\"request\":{\"requestId\":\"audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c48-overlapping-tool-continuation-vertical-probe\",\"workTypeName\":\"validation\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"scope\":\"vertical\",\"vertical\":\"audio-runtime-c48-overlapping-tool-continuation\",\"sourceRevision\":\"cdf416a8060251a6b4bbf3680241f1ee79953cff\",\"role\":\"engineering\",\"criteria\":[{\"id\":\"SERVICE\",\"rubric\":\"Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction; CLI transport delegates business behavior.\"},{\"id\":\"TRACE\",\"rubric\":\"Correlated device capture/playback, provider send/receive, tool lifecycle, cancellation, queues/drops and terminal evidence use explicit timing domains and bounded recording resources.\"},{\"id\":\"REPLAY\",\"rubric\":\"Credential-free replay preserves recorded audio packets, ordering, tool events, interruption and termination; hardware and external nondeterminism limits are explicit.\"},{\"id\":\"FAILURES\",\"rubric\":\"Truncated/no playback, barge-in failure, long-conversation slowdown and tool-continuation collisions have reproducible characterization, fixes where demonstrated, and exact residual limitations without false completion claims.\"},{\"id\":\"QUALITY\",\"rubric\":\"Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions.\"},{\"id\":\"PARITY\",\"rubric\":\"Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits.\"}],\"budget\":{\"timeSeconds\":1800,\"realtimeSessions\":0,\"realtimeSeconds\":0},\"mission\":\"Independent Luna max engineering vertical probe of C48 PR440, reviewed head 03f42d45431f094cdd2586d6f313da5b63c3393d, guarded merge cdf416a8060251a6b4bbf3680241f1ee79953cff, and all nine successful current-head CI checks in run 34571668891. Verify every staged hash before and after. Primary verified the reviewed-head and merge trees are byte-identical and built the staged consumer and YUI from a fresh archive of the merge; independently confirm tree/source identity from the supplied archive and executable behavior. Do not mutate product source, use credentials, spend Realtime budget, or treat executor/CI evidence as runtime PASS.\\nMandatory changed public workflow: extract the exact source archive privately, obtain fixtures.json, and launch the staged c48-consumer with bounded process-group supervision and a fresh output/artifact directory. Require both response IDs before the first result, four exact distinguishable tool calls, beta-before-alpha executor completion, four correctly correlated results forwarded exactly once in call order, independent final outputs answer-000 and answer-001, complete bounded public trace, provider-authored terminal evidence, exit zero, clean shutdown, reaping and no surviving descendants. Inspect actual JSON/output rather than trusting the archived verifier. Repeat deliberate missing, duplicate and swapped-result fixture controls and require each to fail for its intended unresolved/correlation reason. Add an independent malformed late-explicit-ID or acknowledgement-output control if it can be exercised through the public contract; otherwise mark that portion as source-test-only rather than public proof.\\nMandatory existing public regression: launch the staged exact-merge YUI with --help and then public `session replay` of the supplied credential-free audio/tool fixture using private config/work/allow/output/record directories, trace audio and bounded process-group supervision. Require 18 wire events, one actual exec marker PROBE_TOOL_MARKER_9182, strict tool continuation, provider PCM exactly 4800 bytes SHA256 0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502, rendered PCM exactly 3200 bytes SHA256 7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805, complete trace/timeline/terminal effects, bounded clean exit, reaping and no descendants. Demonstrate a same-length rendered-PCM byte mutation or missing-timeline negative control fails closed. This is process smoke plus software/file audio replay, not physical-device consumption or acoustic proof.\\nSupplement runtime proof with exact-archive source inspection and bounded focused normal/race tests for overlapping response ownership, sibling continuation isolation, late explicit event rejection, acknowledgement filtering, anonymous response lifecycle, pending-tool admission bounds and cancel/shutdown cleanup. Specifically inspect coordinator.go/coordinator_delta.go and tests plus services/session/internal/live continuation, control, observation, lifecycle, service and replay-readiness tests. Tests cannot substitute for the two launched public workflows. Preserve the first divergence and report FAILED with causal evidence; do not retry until green or weaken IDs, counts, ordering, hashes, assertions, deadlines, architecture limits or cleanup requirements. Each child <=90 seconds, public child <=60 seconds, aggregate <=1800 seconds. Native Windows hardware/endpoints and physical acoustics are OUT OF SCOPE under the recorded amendment, never PASS. Record canonical validationWorkId, commands, observable effects/output, hashes, shutdown, per-criterion scoped judgments and residual limitations. This probe may accept only the C48 contribution and cannot complete any broad project criterion or release final project acceptance.\",\"reportPath\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c48-overlapping-tool-continuation-vertical-probe.json\",\"build\":{\"identity\":\"c48-consumer-merged-cdf416a8\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c48-delivery-reconciliation-20260911/c48-consumer\",\"sha256\":\"5440f74cc212692ed6f95d83673dd27691db7aaf12fa8db6f471fa52f44887f5\"},\"fixtures\":[{\"identity\":\"c48-yui-merged-cdf416a8\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c48-delivery-reconciliation-20260911/yui\",\"sha256\":\"76139002a7c80fc79ac2f2b1c3f49e073cfa44308aec189d0ff0adeac162459d\"},{\"identity\":\"source-cdf416a8060251a6b4bbf3680241f1ee79953cff\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c48-delivery-reconciliation-20260911/source-cdf416a8.tar.gz\",\"sha256\":\"66641503409a9b5e262c4c07704e06e960a740be297d4dc3e899c951ee0ec56a\"},{\"identity\":\"c07-audio-tool-traced.session.json\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-2.json\",\"sha256\":\"38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169\"}]}}],\"relations\":[]}}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c48-overlapping-tool-continuation",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"request\":{\"requestId\":\"audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c48-overlapping-tool-continuation-vertical-probe\",\"workTypeName\":\"validation\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"scope\":\"vertical\",\"vertical\":\"audio-runtime-c48-overlapping-tool-continuation\",\"sourceRevision\":\"cdf416a8060251a6b4bbf3680241f1ee79953cff\",\"role\":\"engineering\",\"criteria\":[{\"id\":\"SERVICE\",\"rubric\":\"Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction; CLI transport delegates business behavior.\"},{\"id\":\"TRACE\",\"rubric\":\"Correlated device capture/playback, provider send/receive, tool lifecycle, cancellation, queues/drops and terminal evidence use explicit timing domains and bounded recording resources.\"},{\"id\":\"REPLAY\",\"rubric\":\"Credential-free replay preserves recorded audio packets, ordering, tool events, interruption and termination; hardware and external nondeterminism limits are explicit.\"},{\"id\":\"FAILURES\",\"rubric\":\"Truncated/no playback, barge-in failure, long-conversation slowdown and tool-continuation collisions have reproducible characterization, fixes where demonstrated, and exact residual limitations without false completion claims.\"},{\"id\":\"QUALITY\",\"rubric\":\"Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions.\"},{\"id\":\"PARITY\",\"rubric\":\"Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits.\"}],\"budget\":{\"timeSeconds\":1800,\"realtimeSessions\":0,\"realtimeSeconds\":0},\"mission\":\"Independent Luna max engineering vertical probe of C48 PR440, reviewed head 03f42d45431f094cdd2586d6f313da5b63c3393d, guarded merge cdf416a8060251a6b4bbf3680241f1ee79953cff, and all nine successful current-head CI checks in run 34571668891. Verify every staged hash before and after. Primary verified the reviewed-head and merge trees are byte-identical and built the staged consumer and YUI from a fresh archive of the merge; independently confirm tree/source identity from the supplied archive and executable behavior. Do not mutate product source, use credentials, spend Realtime budget, or treat executor/CI evidence as runtime PASS.\\nMandatory changed public workflow: extract the exact source archive privately, obtain fixtures.json, and launch the staged c48-consumer with bounded process-group supervision and a fresh output/artifact directory. Require both response IDs before the first result, four exact distinguishable tool calls, beta-before-alpha executor completion, four correctly correlated results forwarded exactly once in call order, independent final outputs answer-000 and answer-001, complete bounded public trace, provider-authored terminal evidence, exit zero, clean shutdown, reaping and no surviving descendants. Inspect actual JSON/output rather than trusting the archived verifier. Repeat deliberate missing, duplicate and swapped-result fixture controls and require each to fail for its intended unresolved/correlation reason. Add an independent malformed late-explicit-ID or acknowledgement-output control if it can be exercised through the public contract; otherwise mark that portion as source-test-only rather than public proof.\\nMandatory existing public regression: launch the staged exact-merge YUI with --help and then public `session replay` of the supplied credential-free audio/tool fixture using private config/work/allow/output/record directories, trace audio and bounded process-group supervision. Require 18 wire events, one actual exec marker PROBE_TOOL_MARKER_9182, strict tool continuation, provider PCM exactly 4800 bytes SHA256 0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502, rendered PCM exactly 3200 bytes SHA256 7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805, complete trace/timeline/terminal effects, bounded clean exit, reaping and no descendants. Demonstrate a same-length rendered-PCM byte mutation or missing-timeline negative control fails closed. This is process smoke plus software/file audio replay, not physical-device consumption or acoustic proof.\\nSupplement runtime proof with exact-archive source inspection and bounded focused normal/race tests for overlapping response ownership, sibling continuation isolation, late explicit event rejection, acknowledgement filtering, anonymous response lifecycle, pending-tool admission bounds and cancel/shutdown cleanup. Specifically inspect coordinator.go/coordinator_delta.go and tests plus services/session/internal/live continuation, control, observation, lifecycle, service and replay-readiness tests. Tests cannot substitute for the two launched public workflows. Preserve the first divergence and report FAILED with causal evidence; do not retry until green or weaken IDs, counts, ordering, hashes, assertions, deadlines, architecture limits or cleanup requirements. Each child <=90 seconds, public child <=60 seconds, aggregate <=1800 seconds. Native Windows hardware/endpoints and physical acoustics are OUT OF SCOPE under the recorded amendment, never PASS. Record canonical validationWorkId, commands, observable effects/output, hashes, shutdown, per-criterion scoped judgments and residual limitations. This probe may accept only the C48 contribution and cannot complete any broad project criterion or release final project acceptance.\",\"reportPath\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c48-overlapping-tool-continuation-vertical-probe.json\",\"build\":{\"identity\":\"c48-consumer-merged-cdf416a8\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c48-delivery-reconciliation-20260911/c48-consumer\",\"sha256\":\"5440f74cc212692ed6f95d83673dd27691db7aaf12fa8db6f471fa52f44887f5\"},\"fixtures\":[{\"identity\":\"c48-yui-merged-cdf416a8\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c48-delivery-reconciliation-20260911/yui\",\"sha256\":\"76139002a7c80fc79ac2f2b1c3f49e073cfa44308aec189d0ff0adeac162459d\"},{\"identity\":\"source-cdf416a8060251a6b4bbf3680241f1ee79953cff\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c48-delivery-reconciliation-20260911/source-cdf416a8.tar.gz\",\"sha256\":\"66641503409a9b5e262c4c07704e06e960a740be297d4dc3e899c951ee0ec56a\"},{\"identity\":\"c07-audio-tool-traced.session.json\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-2.json\",\"sha256\":\"38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169\"}]}}],\"relations\":[]}}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-41",
       "workTypeName": "thoughts"
     },
     {

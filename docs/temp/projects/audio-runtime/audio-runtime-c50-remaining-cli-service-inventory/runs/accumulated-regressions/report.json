@@ -1,7 +1,7 @@
 {
   "schema_version": "c50-accumulated-regressions-v1",
   "source_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-  "candidate_revision": "29668dd7b59d8f93ab245a99abbcd728c24bccbd",
+  "candidate_revision": "0ad171de0f553ec5eef3b879381b05c7205ff6c0",
   "command": "COUNT=3 scripts/test-session-ci-regressions.sh all",
   "exit_code": 0,
   "modes": [
