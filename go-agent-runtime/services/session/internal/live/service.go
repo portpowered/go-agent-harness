@@ -1,13 +1,8 @@
-// Package live owns the continuous duplex session implementation. The package is deliberately private to the session service; hosts see only the narrow
-// LiveService/LiveHandle contracts in services/session.
 package live
 
 import (
 	"context"
 	"errors"
-	"sync"
-	"time"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -16,6 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/observations"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"sync"
+	"time"
 )
 
 const (
@@ -24,13 +21,10 @@ const (
 	maxPendingToolCallResponses = 128 // bounded by the admitted event window
 	deferredImageOpeningPrompt  = "Use the attached image to answer the user's next spoken question."
 )
-
 const defaultSessionUpdatedTimeout = 30 * time.Second
-
 const defaultPlaybackDrainTimeout = 5 * time.Second
 
 type mediaRequirements struct{ inbound, outbound bool }
-
 type replayVirtualPlaybackController struct{}
 
 func (replayVirtualPlaybackController) StartPlayback(sharedaudio.PlaybackResponse) {}
@@ -41,7 +35,6 @@ func (replayVirtualPlaybackController) InterruptPlayback(sharedaudio.PlaybackRes
 var _ session.LiveService = (*Service)(nil)
 var _ session.LiveRunner = (*Service)(nil)
 
-// Dependencies are the explicit provider and tool edges for one live service.
 type Dependencies struct {
 	InferencerFactory session.LiveInferencerFactory
 	CapabilityFactory session.LiveCapabilityFactory
@@ -51,7 +44,6 @@ type Dependencies struct {
 	Clock             session.LiveClock
 	Scheduler         platformclock.Scheduler
 }
-
 type Service struct {
 	inferencerFactory session.LiveInferencerFactory
 	capabilityFactory session.LiveCapabilityFactory
@@ -77,7 +69,6 @@ func New(deps Dependencies) *Service {
 		scheduler:         deps.Scheduler,
 	}
 }
-
 func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (session.LiveHandle, error) {
 	if s == nil || s.inferencerFactory == nil {
 		return nil, errors.New("live inferencer factory is required")
@@ -95,139 +86,107 @@ func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (se
 }
 
 type handle struct {
-	request           session.LiveRequest
-	factory           session.LiveInferencerFactory
-	capabilityFactory session.LiveCapabilityFactory
-	toolExecutor      messages.ToolExecutor
-	toolDefinitions   []messages.ToolDefinition
-	capabilityClose   func() error
-	capabilityRefresh func(context.Context) ([]messages.ToolDefinition, error)
-	capabilityWatch   func(context.Context) <-chan session.LiveCapabilityEvent
-	captureFlush      func() error
-	observer          *observations.Observer
-	capabilityMu      sync.Mutex
-	eventCapacity     int
-	clock             session.LiveClock
-	scheduler         platformclock.Scheduler
-	media             *mediagate.Gate
-	events            chan session.LiveEvent
-	done              chan struct{}
-	startDone         chan struct{}
-
-	mu                    sync.Mutex
-	started               bool
-	closed                bool
-	startErr              error
-	terminalErr           error
-	runErr                error
-	providerErr           error
-	providerTerminalError func() error
-	pumpErr               error
-	cancel                context.CancelCauseFunc
-	parentCtx             context.Context
-	cancelRequested       bool
-	cancelCause           error
-	gracefulStop          bool
-	loop                  *agentloop.AgentLoop
-	captureComplete       bool
-	responseStarted       bool
-	responseActive        bool
-	activeResponseIDs     map[string]struct{}
-	anonymousResponses    int
-	// responsePending reserves an admitted provider boundary until its first
-	// inbound lifecycle event.
-	responsePending       bool
-	responseObserved      uint64
-	responseStartWake     chan struct{}
-	replayResponses       int
-	captureResponseTarget int
-	replayResponseWake    chan struct{}
-	responseTerminalWake  chan struct{}
-	// Scheduled counters keep terminal and Wait outcomes aligned.
-	scheduledAudioCount  int
-	dispatchedAudioCount int
-	// captureTurnWake gates the next finite input on ordered provider ingress.
-	captureTurnWake                chan struct{}
-	activeScheduledAudio           bool
-	scheduledResponseBase          int
-	observedResponseTerminals      int
-	observedResponseIDs            map[string]struct{}
-	interruptedScheduledResponses  int
-	scheduledContinuationTerminals int
-	pendingToolCalls               int
-	pendingToolCallResponses       map[string]string
-	terminalValue                  *messages.SessionCloseValue
-	providerCloseObserved          bool
-	localCloseObserved             bool
-	// userCancelled is set only when the host supplied the explicit user
-	// cancellation cause and no independent provider/loop failure won the
-	// terminal race. It keeps cancellation classification separate from the
-	// generic context cancellation path.
-	userCancelled bool
-	// outputObserved is the invocation-wide visible output ledger used to
-	// classify an operator cancellation as partial versus no output.
-	outputObserved bool
-
-	runWG       sync.WaitGroup
-	finishOnce  sync.Once
-	startFinish sync.Once
-
-	eventMu             sync.Mutex
-	eventsClosed        bool
-	sequence            uint64
-	dropped             uint64
-	openingSent         bool
-	openingReady        chan struct{}
-	openingReadyOnce    sync.Once
-	openingAdmissionErr error
-	captureSourceActive bool
-	mediaRequirements   mediaRequirements
-	replayReady         chan struct{}
-	replayReadyOnce     sync.Once
-	// providerDone is raised by the provider-session adapter after its
-	// transport closes. terminalObserved is raised when the model runner has
-	// forwarded the corresponding SessionClose boundary. Keeping these as
-	// separate signals prevents a transport close from cancelling the loop
-	// before its final provider metadata is visible to the runtime.
-	providerDoneSignal chan struct{}
-	providerDoneOnce   sync.Once
-	terminalObserved   chan struct{}
-	terminalOnce       sync.Once
-
-	// Timing policy state is kept separate from the general lifecycle mutex so
-	// SESSION.OPEN handling never waits on a scheduler or provider operation.
-	policyMu                     sync.Mutex
-	sessionUpdatedOnce           sync.Once
-	sessionUpdatedSignal         chan struct{}
-	sessionUpdatedTimerReady     chan platformclock.Timer
-	sessionUpdatedTimerScheduled bool
-	sessionUpdatedSeen           bool
-	firstTurnOnce                sync.Once
-	firstTurnSignal              chan struct{}
-	firstTurnTimerReady          chan platformclock.Timer
-	firstTurnTimerScheduled      bool
-	firstTurnSeen                bool
-	retryRequests                chan retryRequest
-	retryMu                      sync.Mutex
-	retriesUsed                  int
-	livenessMu                   sync.Mutex
-	livenessTimer                platformclock.Timer
-	livenessGeneration           uint64
-	livenessArmed                bool
-	livenessStopped              bool
-	livenessWake                 chan struct{}
-	livenessFailure              *session.LiveLivenessFailure
-	livenessErr                  error
-	responseOutputSeen           bool
-	responseToolObligation       bool
-	// Tool continuation state is updated by both provider observation and the
-	// model runner's provider-admission callbacks. It has its own lock because
-	// those paths run on different workers; holding the lifecycle mutex while
-	// waiting for provider I/O would make a failed continuation impossible to
-	// report during teardown.
-	toolMu            sync.Mutex
-	toolContinuations map[string]*liveToolContinuation
-	continuationErr   error
+	request                                          session.LiveRequest
+	factory                                          session.LiveInferencerFactory
+	capabilityFactory                                session.LiveCapabilityFactory
+	toolExecutor                                     messages.ToolExecutor
+	toolDefinitions                                  []messages.ToolDefinition
+	capabilityClose                                  func() error
+	capabilityRefresh                                func(context.Context) ([]messages.ToolDefinition, error)
+	capabilityWatch                                  func(context.Context) <-chan session.LiveCapabilityEvent
+	captureFlush                                     func() error
+	observer                                         *observations.Observer
+	capabilityMu                                     sync.Mutex
+	eventCapacity                                    int
+	clock                                            session.LiveClock
+	scheduler                                        platformclock.Scheduler
+	media                                            *mediagate.Gate
+	events                                           chan session.LiveEvent
+	done                                             chan struct{}
+	startDone                                        chan struct{}
+	mu                                               sync.Mutex
+	started, closed                                  bool
+	startErr, terminalErr                            error
+	runErr, providerErr                              error
+	providerTerminalError                            func() error
+	pumpErr                                          error
+	cancel                                           context.CancelCauseFunc
+	parentCtx                                        context.Context
+	cancelRequested, gracefulStop                    bool
+	cancelCause                                      error
+	loop                                             *agentloop.AgentLoop
+	captureComplete, responseStarted, responseActive bool
+	activeResponseIDs                                map[string]struct{}
+	anonymousResponses                               int
+	responsePending                                  bool
+	responseObserved                                 uint64
+	responseStartWake                                chan struct{}
+	replayResponses                                  int
+	captureResponseTarget                            int
+	replayResponseWake                               chan struct{}
+	responseTerminalWake                             chan struct{}
+	scheduledAudioCount                              int
+	dispatchedAudioCount                             int
+	captureTurnWake                                  chan struct{}
+	activeScheduledAudio                             bool
+	scheduledResponseBase                            int
+	observedResponseTerminals                        int
+	observedResponseIDs                              map[string]struct{}
+	interruptedScheduledResponses                    int
+	scheduledContinuationTerminals                   int
+	pendingToolCalls                                 int
+	pendingToolCallResponses                         map[string]string
+	terminalValue                                    *messages.SessionCloseValue
+	providerCloseObserved                            bool
+	localCloseObserved                               bool
+	userCancelled                                    bool
+	outputObserved                                   bool
+	runWG                                            sync.WaitGroup
+	finishOnce                                       sync.Once
+	startFinish                                      sync.Once
+	eventMu                                          sync.Mutex
+	eventsClosed                                     bool
+	sequence                                         uint64
+	dropped                                          uint64
+	openingSent                                      bool
+	openingReady                                     chan struct{}
+	openingReadyOnce                                 sync.Once
+	openingAdmissionErr                              error
+	captureSourceActive                              bool
+	mediaRequirements                                mediaRequirements
+	replayReady                                      chan struct{}
+	replayReadyOnce                                  sync.Once
+	providerDoneSignal                               chan struct{}
+	providerDoneOnce                                 sync.Once
+	terminalObserved                                 chan struct{}
+	terminalOnce                                     sync.Once
+	policyMu                                         sync.Mutex
+	sessionUpdatedOnce                               sync.Once
+	sessionUpdatedSignal                             chan struct{}
+	sessionUpdatedTimerReady                         chan platformclock.Timer
+	sessionUpdatedTimerScheduled                     bool
+	sessionUpdatedSeen                               bool
+	firstTurnOnce                                    sync.Once
+	firstTurnSignal                                  chan struct{}
+	firstTurnTimerReady                              chan platformclock.Timer
+	firstTurnTimerScheduled                          bool
+	firstTurnSeen                                    bool
+	retryRequests                                    chan retryRequest
+	retryMu                                          sync.Mutex
+	retriesUsed                                      int
+	livenessMu                                       sync.Mutex
+	livenessTimer                                    platformclock.Timer
+	livenessGeneration                               uint64
+	livenessArmed                                    bool
+	livenessStopped                                  bool
+	livenessWake                                     chan struct{}
+	livenessFailure                                  *session.LiveLivenessFailure
+	livenessErr                                      error
+	responseOutputSeen                               bool
+	responseToolObligation                           bool
+	toolMu                                           sync.Mutex
+	toolContinuations                                map[string]*liveToolContinuation
+	continuationErr                                  error
 }
 
 func (h *handle) mediaFailure(err error) {
@@ -235,7 +194,6 @@ func (h *handle) mediaFailure(err error) {
 		return
 	}
 	h.mu.Lock()
-	// Intentional teardown must not replace the caller's cancellation cause.
 	if h.cancelRequested && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 		h.mu.Unlock()
 		return
@@ -246,12 +204,10 @@ func (h *handle) mediaFailure(err error) {
 	providerInbound := errors.Is(err, mediagate.ErrProviderInboundMedia)
 	h.mu.Unlock()
 	if providerInbound {
-		// Retain the media error without discarding independently queued transcript.
 		return
 	}
 	h.Cancel(err)
 }
-
 func (h *handle) setRecorder(recorder session.LiveRecorder) {
 	if h == nil {
 		return
@@ -269,7 +225,6 @@ func (h *handle) setRecorder(recorder session.LiveRecorder) {
 		})
 	}
 }
-
 func (h *handle) observationPort() *observations.Observer {
 	if h == nil {
 		return nil
@@ -278,19 +233,12 @@ func (h *handle) observationPort() *observations.Observer {
 	defer h.mu.Unlock()
 	return h.observer
 }
-
 func (h *handle) now() time.Time {
 	if h == nil || h.clock == nil {
 		return time.Time{}
 	}
 	return h.clock()
 }
-
-// evidenceContext retains invocation values while deliberately removing the
-// caller's cancellation. Recording is a lifecycle join: terminal and late
-// media observations must still reach the bounded recorder after the provider
-// cancellation path has fired. Finalize receives the same policy from the
-// invocation owner.
 func (h *handle) evidenceContext() context.Context {
 	if h == nil {
 		return nil
@@ -300,15 +248,13 @@ func (h *handle) evidenceContext() context.Context {
 	h.mu.Unlock()
 	return context.WithoutCancel(parent)
 }
-
 func (h *handle) recorderError() error                    { return h.observationPort().Error() }
 func (h *handle) recordMessage(record session.LiveRecord) { h.observationPort().Message(record) }
 func (h *handle) recordEvent(event session.LiveEvent)     { h.observationPort().Event(event) }
-
 func newHandle(request session.LiveRequest, factory session.LiveInferencerFactory, capabilityFactory session.LiveCapabilityFactory, executor messages.ToolExecutor, definitions []messages.ToolDefinition, eventCapacity int, clock session.LiveClock, scheduler platformclock.Scheduler) *handle {
 	h := &handle{
 		request:                  request,
-		factory:                  factory,
+		factory:                  terminalDrainFactory(factory),
 		capabilityFactory:        capabilityFactory,
 		toolExecutor:             executor,
 		toolDefinitions:          input.CloneToolDefinitions(definitions),
@@ -339,21 +285,18 @@ func newHandle(request session.LiveRequest, factory session.LiveInferencerFactor
 	h.media = mediagate.New(h.mediaFailure)
 	return h
 }
-
 func (h *handle) Media() sharedaudio.MediaEndpoints {
 	if h == nil {
 		return sharedaudio.MediaEndpoints{}
 	}
 	return h.media.Endpoints()
 }
-
 func (h *handle) Events() <-chan session.LiveEvent {
 	if h == nil {
 		return nil
 	}
 	return h.events
 }
-
 func (h *handle) Start(ctx context.Context) error {
 	if h == nil {
 		return session.ErrLiveClosed
@@ -381,7 +324,6 @@ func (h *handle) Start(ctx context.Context) error {
 	h.mu.Unlock()
 	return h.start(runCtx)
 }
-
 func (h *handle) configureScheduledAudio(scheduled, responseBase int) {
 	if h == nil || scheduled <= 0 {
 		return
@@ -393,5 +335,65 @@ func (h *handle) configureScheduledAudio(scheduled, responseBase int) {
 	}
 	h.mu.Unlock()
 }
+func terminalDrainFactory(factory session.LiveInferencerFactory) session.LiveInferencerFactory {
+	return func(ctx context.Context, request session.LiveRequest) (messages.SessionInferencer, error) {
+		inner, err := factory(ctx, request)
+		if err != nil || inner == nil {
+			return inner, err
+		}
+		return terminalDrainInferencer{inner: inner}, nil
+	}
+}
 
-// waitForResponseBoundary includes partial assistant terminals produced by barge-in cancellation.
+type terminalDrainInferencer struct{ inner messages.SessionInferencer }
+
+func (i terminalDrainInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	s, err := i.inner.ConnectSession(ctx)
+	if err != nil || s == nil {
+		return s, err
+	}
+	source := s.Receive()
+	capacity := defaultEventCapacity
+	if source != nil && source.Cap() > 0 {
+		capacity = source.Cap()
+	}
+	d := &terminalDrainSession{inner: s, receive: messages.NewTypedBuffer[messages.StreamMessage](capacity), done: make(chan struct{}), stop: make(chan struct{})}
+	go d.forward(source, s.Done())
+	return d, nil
+}
+func (i terminalDrainInferencer) FlushCapture() error {
+	if flusher, ok := i.inner.(interface{ FlushCapture() error }); ok {
+		return flusher.FlushCapture()
+	}
+	return nil
+}
+func (s *terminalDrainSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	if requester, ok := s.inner.(messages.SessionResponseRequester); ok {
+		return requester.RequestResponse(ctx)
+	}
+	return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
+}
+func (s *terminalDrainSession) SupportsResponseRequests() bool {
+	if capability, ok := s.inner.(messages.SessionResponseCapability); ok {
+		return capability.SupportsResponseRequests()
+	}
+	_, ok := s.inner.(messages.SessionResponseRequester)
+	return ok
+}
+func (s *terminalDrainSession) FlushOutbound(ctx context.Context) error {
+	if flusher, ok := s.inner.(messages.SessionOutboundFlusher); ok {
+		return flusher.FlushOutbound(ctx)
+	}
+	return nil
+}
+func (s *terminalDrainSession) InitialSessionConfigSent() bool {
+	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
+	return ok && marker.InitialSessionConfigSent()
+}
+func (s *terminalDrainSession) TerminalError() error {
+	provider, ok := s.inner.(interface{ TerminalError() error })
+	if !ok {
+		return nil
+	}
+	return provider.TerminalError()
+}

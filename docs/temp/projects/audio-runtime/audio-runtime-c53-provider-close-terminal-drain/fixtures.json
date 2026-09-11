@@ -1,0 +1,21 @@
+{
+  "schema": "audio-runtime.c53.provider-close.fixture.v1",
+  "audio": {
+    "format": "pcm16-le",
+    "sample_rate": 16000,
+    "channels": 1
+  },
+  "interruption": {
+    "cancelled_audio": [9, 9, 9, 9],
+    "interrupted_audio": [1, 2, 3, 4],
+    "healthy_tail": [21, 34, 55, 89, 144, 233, 13, 8],
+    "healthy_text": "healthy-after-cancel"
+  },
+  "terminal": {
+    "reason": "fixture_complete",
+    "classification": "fixture",
+    "terminal_reason": "provider_authored_completion",
+    "provenance": "provider",
+    "output_state": "complete"
+  }
+}

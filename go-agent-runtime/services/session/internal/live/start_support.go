@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"strings"
+	"sync"
 )
 
 func (h *handle) validateTimingPolicy() error {
@@ -40,11 +40,9 @@ func (h *handle) validateTimingPolicy() error {
 	}
 	return nil
 }
-
 func (h *handle) requiresScheduler() bool {
 	return h.request.MaxDuration > 0 || h.request.RequireSessionUpdated || h.firstTurnPolicyEnabled() || h.rateLimitRetryEnabled() || h.request.ToolExecutionTimeout > 0 || h.providerLivenessEnabled()
 }
-
 func cloneLiveTerminalValue(value *messages.SessionCloseValue) *messages.SessionCloseValue {
 	if value == nil {
 		return nil
@@ -52,7 +50,6 @@ func cloneLiveTerminalValue(value *messages.SessionCloseValue) *messages.Session
 	copy := *value
 	return &copy
 }
-
 func terminalForLiveness(sessionID string, value *messages.SessionCloseValue, liveness *session.LiveLivenessFailure) *messages.SessionCloseValue {
 	if value == nil {
 		return messages.NewSessionCloseValueWithTerminal(
@@ -74,7 +71,6 @@ func terminalForLiveness(sessionID string, value *messages.SessionCloseValue, li
 	}
 	return &copy
 }
-
 func successfulLiveTerminal(request session.LiveRequest, value *messages.SessionCloseValue) *messages.SessionCloseValue {
 	if value != nil && value.TerminalReason != "" && value.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion {
 		return value
@@ -101,7 +97,6 @@ func successfulLiveTerminal(request session.LiveRequest, value *messages.Session
 		messages.TerminalOutputComplete,
 	)
 }
-
 func (h *handle) configureCaptureSource(active bool) {
 	if h == nil {
 		return
@@ -110,7 +105,6 @@ func (h *handle) configureCaptureSource(active bool) {
 	h.captureSourceActive = active
 	h.mu.Unlock()
 }
-
 func (h *handle) captureSourceIsActive() bool {
 	if h == nil {
 		return false
@@ -119,10 +113,6 @@ func (h *handle) captureSourceIsActive() bool {
 	defer h.mu.Unlock()
 	return h.captureSourceActive
 }
-
-// A recorder can fail on the terminal observation itself. That failure must
-// affect Wait and the delivered terminal even though the failed recorder
-// cannot be asked recursively to record its own error.
 func (h *handle) includeTerminalRecordingError(event *session.LiveEvent) {
 	recordErr := h.recorderError()
 	if recordErr == nil {
@@ -136,7 +126,6 @@ func (h *handle) includeTerminalRecordingError(event *session.LiveEvent) {
 	h.terminalErr = event.Error
 	h.mu.Unlock()
 }
-
 func (h *handle) watchDuration(ctx context.Context, timer platformclock.Timer) {
 	defer h.runWG.Done()
 	if timer == nil {
@@ -149,7 +138,6 @@ func (h *handle) watchDuration(ctx context.Context, timer platformclock.Timer) {
 	case <-ctx.Done():
 	}
 }
-
 func (h *handle) watchSessionUpdated(ctx context.Context) {
 	defer h.runWG.Done()
 	var timer platformclock.Timer
@@ -169,11 +157,6 @@ func (h *handle) watchSessionUpdated(ctx context.Context) {
 	case <-ctx.Done():
 	}
 }
-
-// admitCapabilities resolves participant-scoped tools exactly once, before
-// the provider session is constructed. A factory result with
-// InheritDefaults=false is authoritative even when its executor and
-// definitions are empty, which lets rooms disable tools for one participant.
 func (h *handle) admitCapabilities(ctx context.Context) (messages.ToolExecutor, []messages.ToolDefinition, error) {
 	executor := h.toolExecutor
 	definitions := append([]messages.ToolDefinition(nil), h.toolDefinitions...)
@@ -206,7 +189,6 @@ func (h *handle) admitCapabilities(ctx context.Context) (messages.ToolExecutor, 
 	}
 	return executor, definitions, nil
 }
-
 func (h *handle) resolveCapabilityBinding(ctx context.Context) (*session.LiveCapabilities, error) {
 	if h.request.Capabilities != nil {
 		binding := *h.request.Capabilities
@@ -221,9 +203,6 @@ func (h *handle) resolveCapabilityBinding(ctx context.Context) (*session.LiveCap
 	}
 	return &binding, nil
 }
-
-// A promoted handle owns all lifecycle callbacks. Legacy callbacks cannot
-// initialize or close the same capability a second time.
 func normalizeCapabilityLifecycle(binding *session.LiveCapabilities) {
 	if binding.Handle == nil {
 		return
@@ -236,14 +215,12 @@ func normalizeCapabilityLifecycle(binding *session.LiveCapabilities) {
 		binding.BrowserWatch = watcher.BrowserWatch
 	}
 }
-
 func closeFailedCapability(binding *session.LiveCapabilities, cause error) error {
 	if binding.Close == nil {
 		return cause
 	}
 	return errors.Join(cause, binding.Close())
 }
-
 func (h *handle) retainCapability(binding *session.LiveCapabilities, executor messages.ToolExecutor, definitions []messages.ToolDefinition) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -259,7 +236,6 @@ func (h *handle) retainCapability(binding *session.LiveCapabilities, executor me
 	h.request.Capabilities = binding
 	return nil
 }
-
 func (h *handle) failStart(ctx context.Context, err error) error {
 	err = errors.Join(err, h.media.Close())
 	h.mu.Lock()
@@ -270,16 +246,12 @@ func (h *handle) failStart(ctx context.Context, err error) error {
 	h.finish(err)                                                                                                                         //nolint:contextcheck // finish owns the invocation evidence context.
 	return err
 }
-
 func (h *handle) runLoop(ctx context.Context, loop *agentloop.AgentLoop) {
 	defer h.runWG.Done()
 	err := loop.Run(ctx)
 	h.mu.Lock()
 	h.runErr = err
 	h.mu.Unlock()
-	// Stop the delta consumer once Run has joined all participant workers.
-	// A caller supplied cancel cause remains authoritative and cannot be
-	// overwritten by this internal cleanup cancellation.
 	h.mu.Lock()
 	cancel := h.cancel
 	h.mu.Unlock()
@@ -287,12 +259,6 @@ func (h *handle) runLoop(ctx context.Context, loop *agentloop.AgentLoop) {
 		cancel(nil)
 	}
 }
-
-// providerDone is called by the provider-session adapter when its transport
-// closes. ModelRunner emits the transport SessionClose value from its Done
-// branch; waiting for that value before cancelling AgentLoop preserves the
-// final provider classification and avoids leaving AgentLoop's hot loop alive
-// after its model participant has returned.
 func (h *handle) providerDone(terminalErr error) {
 	if h == nil {
 		return
@@ -313,11 +279,6 @@ func (h *handle) providerDone(terminalErr error) {
 	case <-h.done:
 	}
 }
-
-// handleCapabilityEvent publishes every watcher observation and coalesces
-// catalog changes that arrive while the ordered provider update is in flight.
-// The browser stream stays bounded, while the latest refresh observes the
-// complete catalog after a burst of page changes.
 func (h *handle) handleCapabilityEvent(
 	ctx context.Context,
 	loop *agentloop.AgentLoop,
@@ -338,11 +299,9 @@ func (h *handle) handleCapabilityEvent(
 		}
 	}
 }
-
 func (h *handle) publishCapabilityEvent(event session.LiveCapabilityEvent) {
 	h.publish(capabilityEvent(h.request.SessionID, h.request.ParticipantID, event), false)
 }
-
 func (h *handle) nextCapabilityRefresh(ctx context.Context, events <-chan session.LiveCapabilityEvent) (session.LiveCapabilityEvent, bool, error) {
 	var latest session.LiveCapabilityEvent
 	refreshAgain := false
@@ -363,13 +322,11 @@ func (h *handle) nextCapabilityRefresh(ctx context.Context, events <-chan sessio
 		}
 	}
 }
-
 func capabilityEventRequiresRefresh(event session.LiveCapabilityEvent) bool {
 	kind := strings.ToLower(strings.TrimSpace(event.Type))
 	return event.CatalogReady || strings.Contains(kind, "catalog") || strings.Contains(kind, "generation") ||
 		kind == "tools_added" || kind == "tools_removed" || kind == "page_navigated" || kind == "frame_navigated"
 }
-
 func waitForOpeningContent(value any, ctx context.Context) error {
 	ready, ok := value.(interface{ waitOpeningReady(context.Context) error })
 	if !ok {
@@ -377,7 +334,6 @@ func waitForOpeningContent(value any, ctx context.Context) error {
 	}
 	return ready.waitOpeningReady(ctx)
 }
-
 func captureMediaEndpoints(session messages.Session, providerMedia sharedaudio.MediaSession, continuous bool) sharedaudio.MediaEndpoints {
 	if !continuous {
 		return providerMedia.RTCMedia()
@@ -387,8 +343,6 @@ func captureMediaEndpoints(session messages.Session, providerMedia sharedaudio.M
 	}
 	return providerMedia.RTCMedia()
 }
-
-// deferProviderClose lets scheduled feeds drain response terminals queued before SESSION.CLOSE.
 func (h *handle) deferProviderClose() bool {
 	if h == nil {
 		return false
@@ -396,4 +350,46 @@ func (h *handle) deferProviderClose() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.scheduledAudioCount > 0 && h.dispatchedAudioCount < h.scheduledAudioCount
+}
+
+type terminalDrainSession struct {
+	inner      messages.Session
+	receive    *messages.TypedBuffer[messages.StreamMessage]
+	done, stop chan struct{}
+	close      sync.Once
+	closeErr   error
+}
+
+func (s *terminalDrainSession) forward(source *messages.TypedBuffer[messages.StreamMessage], sourceDone <-chan struct{}) {
+	defer close(s.done)
+	if source == nil {
+		return
+	}
+	for {
+		select {
+		case msg, ok := <-source.Chan():
+			if !ok || !s.forwardMessage(msg) {
+				return
+			}
+		case <-sourceDone:
+			s.drain(source)
+			return
+		case <-s.stop:
+			return
+		}
+	}
+}
+func (s *terminalDrainSession) drain(source *messages.TypedBuffer[messages.StreamMessage]) {
+	for {
+		msg, ok := source.Read()
+		if !ok || !s.forwardMessage(msg) {
+			return
+		}
+	}
+}
+func (s *terminalDrainSession) forwardMessage(msg messages.StreamMessage) bool {
+	if msg.Type == messages.StreamTypeSessionClose {
+		msg.ResponseID = ""
+	}
+	return s.receive.WriteWaitContextOrDone(context.Background(), s.stop, msg).OK()
 }

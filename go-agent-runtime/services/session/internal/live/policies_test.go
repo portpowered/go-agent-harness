@@ -540,14 +540,15 @@ func TestFiniteAudioResponseErrorRetainsUnfinishedOrdinaryAudio(t *testing.T) {
 }
 func TestMediaPumpProviderCloseIsAnExpectedStop(t *testing.T) {
 	err := errors.Join(errors.New("device write"), session.ErrLiveClosed)
-	if !isExpectedMediaPumpError(err) {
-		t.Fatal("provider close error was not classified as an expected pump stop")
+	if !isExpectedMediaPumpError(err) || shouldCancelMediaPump(err, context.Background()) || isExpectedMediaPumpError(errors.New("device write failed")) {
+		t.Fatal("provider close classification changed")
 	}
-	if shouldCancelMediaPump(err, context.Background()) {
-		t.Fatal("provider close error requested a second session cancellation")
-	}
-	if isExpectedMediaPumpError(errors.New("device write failed")) {
-		t.Fatal("unrelated device failure was classified as an expected stop")
+
+	d := &terminalDrainSession{receive: messages.NewTypedBuffer[messages.StreamMessage](1), stop: make(chan struct{})}
+	value := messages.NewSessionCloseValueWithTerminal("provider", "fixture_complete", "fixture", messages.TerminalReasonProviderAuthoredCompletion, messages.TerminalProvenanceProvider, messages.TerminalOutputComplete)
+	d.forwardMessage(messages.StreamMessage{Type: messages.StreamTypeSessionClose, ResponseID: "response", Value: value})
+	if msg, ok := d.receive.Read(); !ok || msg.ResponseID != "" || msg.Value != value {
+		t.Fatalf("forwarded close = %+v, want uncorrelated close with original metadata", msg)
 	}
 }
 func TestMediaPumpDeviceTeardownErrorsAreExpectedStops(t *testing.T) {
@@ -572,7 +573,6 @@ func TestMediaPumpDeviceTeardownErrorsAreExpectedStops(t *testing.T) {
 		})
 	}
 }
-
 func TestMissingMediaCauseSurvivesImmediateProviderTerminal(t *testing.T) {
 	for _, providerDoneBeforeCheck := range []bool{true, false} {
 		provider := newTestSession()
