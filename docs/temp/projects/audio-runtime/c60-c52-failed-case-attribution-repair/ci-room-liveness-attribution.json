@@ -97,6 +97,32 @@
       "test_elapsed_seconds": 0.06,
       "package_elapsed_seconds": 0.344,
       "coverage_percent": 26.1
+    },
+    "current_candidate_refresh": {
+      "source_revision": "c4d17b1eac0b0d4f805d16220193ca2c33578e67",
+      "observed_at": "2026-09-11T11:36:15-07:00",
+      "source_files": {
+        "agent-cli/internal/transport/cli/internal/events/room_live_liveness_test.go": "4855bf9d1dc338d0681121138ba6d29ea2849a07101c9a43e817d3d63da81238",
+        "agent-cli/internal/transport/cli/internal/events/room_live_liveness_fixture_test.go": "3714452f7e409eb4ee69d46efb359cc4a1e7a194bc5740a7a950de65c9c055eb",
+        "agent-cli/internal/transport/cli/internal/events/live_sink.go": "390b09133c660933a11a1e1148fba62f6a3cb706a896c015d743ff21d78174fc"
+      },
+      "normal": {
+        "command": "CGO_ENABLED=0 go test -json -count=1 -timeout=15s -tags=nomicrophone -run ^TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence$ ./agent-cli/internal/transport/cli/internal/events",
+        "selected_test_action": "pass",
+        "package_action": "pass",
+        "exit_code": 0,
+        "test_elapsed_seconds": 0.08,
+        "package_elapsed_seconds": 0.284
+      },
+      "coverage": {
+        "command": "CGO_ENABLED=0 go test -json -count=1 -timeout=15s -tags=nomicrophone -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/... -run ^TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence$ ./agent-cli/internal/transport/cli/internal/events",
+        "selected_test_action": "pass",
+        "package_action": "pass",
+        "exit_code": 0,
+        "test_elapsed_seconds": 0.06,
+        "package_elapsed_seconds": 0.426,
+        "coverage_percent": 27.7
+      }
     }
   },
   "finding": {

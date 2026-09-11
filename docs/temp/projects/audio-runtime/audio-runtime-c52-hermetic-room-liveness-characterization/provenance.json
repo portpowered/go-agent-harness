@@ -21,15 +21,15 @@
     },
     "replay": {
       "path": "replay-report.json",
-      "sha256": "3ae75d1bc293047e30f23830e3dc458a89f66ed8707ac172e334b6c5d48073c1"
+      "sha256": "987382f2731fb5a147ee30d02eb6a15f74dc10e577422018ef0915872534e4d8"
     },
     "replay_wrapper": {
       "path": "verify_replay.py",
       "sha256": "f59e11c0329828487b05aba828a10fa7597d9a0936d640e3067f376864fa08c1"
     }
   },
-  "candidate_evidence_parent_revision": "7d2da05abc371f11390d6807af0b0df79d74b065",
-  "candidate_source_revision": "7d2da05abc371f11390d6807af0b0df79d74b065",
+  "candidate_evidence_parent_revision": "c4d17b1eac0b0d4f805d16220193ca2c33578e67",
+  "candidate_source_revision": "c4d17b1eac0b0d4f805d16220193ca2c33578e67",
   "ci_observation": {
     "attempt": 1,
     "captured_at": "2026-09-11T06:43:19.163889+00:00",
@@ -117,11 +117,11 @@
       "GONOSUMDB": "",
       "GOPRIVATE": "",
       "GOPROXY": "https://proxy.golang.org,direct",
-      "HOME": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-m90yb4vi/home",
+      "HOME": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-uqy3utaz/home",
       "LANG": "C",
       "LC_ALL": "C",
       "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-      "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-m90yb4vi/gotmp",
+      "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-uqy3utaz/gotmp",
       "TZ": "UTC"
     },
     "removed_secret_keys": [
@@ -143,7 +143,7 @@
       "GOWORK"
     ]
   },
-  "evidence_candidate_revision": "7d2da05abc371f11390d6807af0b0df79d74b065",
+  "evidence_candidate_revision": "c4d17b1eac0b0d4f805d16220193ca2c33578e67",
   "factory": {
     "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
     "server": "http://127.0.0.1:7439",
@@ -184,7 +184,7 @@
   },
   "local_regressions": {
     "path": "regressions/summary.json",
-    "sha256": "5d07f8402d3997f7b13f62f9cf298018b0a907c9df05f1589d60be3a8698b117",
+    "sha256": "c0663e9d06ba0fbbaa2c1ca6db06358c46a89739bec9d0a5f3f41ca69b2bc00c",
     "summary": {
       "checks": {
         "normal": {
@@ -219,8 +219,8 @@
               "./services/session/internal/live"
             ],
             "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go-agent-runtime",
-            "duration_seconds": 17.220986291766167,
-            "ended_at": "2026-09-11T18:21:42.697722+00:00",
+            "duration_seconds": 14.760364292189479,
+            "ended_at": "2026-09-11T18:36:48.619246+00:00",
             "exit_code": 0,
             "first_failure": {
               "line": 1,
@@ -229,14 +229,14 @@
             },
             "output_overflow": false,
             "reader_survivor": false,
-            "started_at": "2026-09-11T18:21:25.476477+00:00",
+            "started_at": "2026-09-11T18:36:33.858646+00:00",
             "stderr_bytes": 309,
-            "stderr_sha256": "88fcc7d38587ca6195c34a8b068f7c644cfc999107ef68e7e015085d97956690",
+            "stderr_sha256": "b72b0be0ce5f6be94d18712f76c4ebbc2061f398cdf8f8d6668515346518b6f1",
             "stdout_bytes": 203,
-            "stdout_sha256": "491590745749b279388535486a2ca931539d54fbe36af4c1e894af752bb867f4",
+            "stdout_sha256": "f2bd27cb5ff07cc33ead9ab44997fa869d68ae6afcdd79fa36320a6920b43c07",
             "timed_out": false
           },
-          "source_revision": "7d2da05abc371f11390d6807af0b0df79d74b065"
+          "source_revision": "c4d17b1eac0b0d4f805d16220193ca2c33578e67"
         },
         "race": {
           "command": [
@@ -270,20 +270,20 @@
               "./services/rooms/internal/lifecycle"
             ],
             "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go-agent-runtime",
-            "duration_seconds": 8.328505541663617,
-            "ended_at": "2026-09-11T18:21:51.043675+00:00",
+            "duration_seconds": 8.059876666869968,
+            "ended_at": "2026-09-11T18:36:56.694818+00:00",
             "exit_code": 0,
             "first_failure": null,
             "output_overflow": false,
             "reader_survivor": false,
-            "started_at": "2026-09-11T18:21:42.715124+00:00",
+            "started_at": "2026-09-11T18:36:48.634898+00:00",
             "stderr_bytes": 0,
             "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "stdout_bytes": 103,
-            "stdout_sha256": "9daf15e7ad4aa75946c81dc263b25998a4cd055752fa131af0443ff4d23fbe4c",
+            "stdout_sha256": "3a1176b0965e30fc57e6470c731c49374c96ae56c1972361b684f50d03c158e8",
             "timed_out": false
           },
-          "source_revision": "7d2da05abc371f11390d6807af0b0df79d74b065"
+          "source_revision": "c4d17b1eac0b0d4f805d16220193ca2c33578e67"
         }
       },
       "passes": true,
@@ -291,11 +291,11 @@
       "storage": {
         "binary_output_bytes": 0,
         "cleanup_verified": true,
-        "fixture_report_bytes": 9914,
-        "free_space_after_cleanup_bytes": 79228887040,
-        "free_space_before_cleanup_bytes": 78742642688,
-        "free_space_before_run_bytes": 79406661632,
-        "reproducible_scratch_bytes_before_cleanup": 582707873,
+        "fixture_report_bytes": 9913,
+        "free_space_after_cleanup_bytes": 78381600768,
+        "free_space_before_cleanup_bytes": 77745090560,
+        "free_space_before_run_bytes": 78382563328,
+        "reproducible_scratch_bytes_before_cleanup": 582609064,
         "reproducible_scratch_bytes_retained_after_cleanup": 0,
         "source_staging_bytes": 0
       }
@@ -615,7 +615,7 @@
     "overlay_sha256": "434704414ff5a3c1dd65fac12a5dbf6657fe1fa07f9f6a70b63fda4dcfb7c6b1",
     "provenance_script_sha256": "71d555c20e5c5e66480b1dee2ee8427638e55ca13fb03f4f08c8d2616c15f462",
     "regressions_script_sha256": "8b2ea7ae29fa18a56e5882365713fa4214bd38fe83dbff0a00e7140cbf0b3870",
-    "replay_sha256": "3ae75d1bc293047e30f23830e3dc458a89f66ed8707ac172e334b6c5d48073c1",
+    "replay_sha256": "987382f2731fb5a147ee30d02eb6a15f74dc10e577422018ef0915872534e4d8",
     "replay_wrapper_sha256": "f59e11c0329828487b05aba828a10fa7597d9a0936d640e3067f376864fa08c1",
     "run_sha256": "66b4ab0e866fbf40382cf248479a3a1012357003494718a030184a716ccbc3fe",
     "runner_sha256": "e17ee6a464e25e096b37a155e048a03d234a91eb4a0162c40e22c7707136511b",
@@ -665,6 +665,8 @@
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/race/stdout.log",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/summary.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/storage.json",
+      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/ci-room-liveness-attribution.json",
+      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/pr-body.md",
       "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/replay-report.json"
     ],
     "outside_owned_paths": [],
@@ -677,7 +679,7 @@
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "storage": {
     "path": "storage.json",
-    "sha256": "0fac99cdb8c6452ce8347b374044f7c3e08d540ece7d9572a2643b52288c967d",
+    "sha256": "702a2ba92e93cea49cb5d9d320f27d3ddf46a98a70a084c37a7bcfae850f5f82",
     "summary": {
       "archive_reuse": {
         "planning-main": {
@@ -724,7 +726,7 @@
       "free_space_before_cleanup_bytes": 98149814272,
       "free_space_before_run_bytes": 99191791616,
       "free_space_limitation": "free space was measured immediately before and after cleanup; background filesystem activity is not controlled",
-      "observed_at": "2026-09-11T18:26:26.523023+00:00",
+      "observed_at": "2026-09-11T18:39:38.712589+00:00",
       "reproducible_scratch_bytes_before_cleanup": 266984251,
       "reproducible_scratch_bytes_retained_after_cleanup": 0,
       "reuse_identity": {
@@ -890,13 +892,13 @@
     "go_env": {
       "CGO_ENABLED": "0",
       "GOARCH": "arm64",
-      "GOCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-m90yb4vi/gocache",
+      "GOCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-uqy3utaz/gocache",
       "GOENV": "",
-      "GOMODCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-m90yb4vi/gomodcache",
+      "GOMODCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-uqy3utaz/gomodcache",
       "GOOS": "darwin",
       "GOPROXY": "https://proxy.golang.org,direct",
       "GOSUMDB": "sum.golang.org",
-      "GOTMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-m90yb4vi/gotmp",
+      "GOTMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-uqy3utaz/gotmp",
       "GOTOOLCHAIN": "auto",
       "GOVERSION": "go1.26.7",
       "GOWORK": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go.work"
@@ -921,7 +923,7 @@
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair",
       "exit_code": 0,
       "stderr": "",
-      "stdout": "go1.26.7\ndarwin\narm64\n0\nauto\n/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go.work\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-m90yb4vi/gomodcache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-m90yb4vi/gocache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-m90yb4vi/gotmp\n\nhttps://proxy.golang.org,direct\nsum.golang.org\n"
+      "stdout": "go1.26.7\ndarwin\narm64\n0\nauto\n/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go.work\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-uqy3utaz/gomodcache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-uqy3utaz/gocache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-uqy3utaz/gotmp\n\nhttps://proxy.golang.org,direct\nsum.golang.org\n"
     },
     "go_version_command": {
       "command": [

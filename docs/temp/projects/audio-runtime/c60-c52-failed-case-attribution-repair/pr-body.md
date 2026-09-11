@@ -43,6 +43,10 @@ guard. The complete job-log SHA-256 is recorded in
 head `79754c85`; the hosted log has no C52 action/trace identity. This remains
 `FAIL_CLOSED_UNRESOLVED`, not a C52 recurrence, report relabel, production
 repair, or acceptance waiver; C47/C55 own the transport fixture follow-up.
+The same bounded normal/coverage control was refreshed on evidence checkpoint
+`c4d17b1e`: both selected-test and package actions were `pass`, with 0.284s
+normal package time and 0.426s coverage package time at 27.7%; the three
+transport/events source-file hashes are unchanged from the preserved control.
 
 The final local evidence gate is `verify.py --mode all`. The prior script-CI
 static job `34613973921` tested head `efde4d49` and rejected the C47-owned
