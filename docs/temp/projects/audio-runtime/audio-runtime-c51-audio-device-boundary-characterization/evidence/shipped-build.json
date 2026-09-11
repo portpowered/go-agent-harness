@@ -1,8 +1,8 @@
 {
   "binary": {
-    "bytes": 52789298,
-    "path": "/private/tmp/audio-runtime-c51-yui-bd8cabc",
-    "sha256": "f78af697b22c99eacd248a0c5897e5e3dfce8d78270c79ad2fbe160489a4da0c"
+    "bytes": 52790658,
+    "path": "/private/tmp/audio-runtime-c51-yui-f5dfc65",
+    "sha256": "1b9d9a0998470f4134bfe19be4d2f1e236ce4fd99f803a01ca42394fa6409049"
   },
   "branch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
   "build": {
@@ -35,7 +35,7 @@
       "go.work.sum"
     ]
   },
-  "inputTreeSha256": "28c856003c288fe2db83bed651d3b4084bf1658ffe9d0ffc3f03f382e6ad3ad9",
+  "inputTreeSha256": "2008b41710cf25bf9258471474950f7d180f74af13364a4ddba5c1ebf512a026",
   "inputs": [
     {
       "bytes": 18,
@@ -1408,14 +1408,14 @@
       "sha256": "88d56fd658eb16a4fa231ef44c337c34105f92ee1370a80bdebc0f0c54e0ca03"
     },
     {
-      "bytes": 7100,
+      "bytes": 6336,
       "path": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
-      "sha256": "0d00612dce284f189f7dcf6665a745cf993436a5546eb8c2ae8d4605071e4d14"
+      "sha256": "0d8017170faf798222443163dc478904a87cce3c1f174344bc64dc5d79a4194a"
     },
     {
-      "bytes": 8188,
+      "bytes": 9242,
       "path": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy_test.go",
-      "sha256": "5cabbb2df79bc8bf290f64f4c18edca5011a57d63c59b8196ca2c9be25763bcd"
+      "sha256": "17e785f9631959725ab5d132904d8d2243dae38bde283a1e208cf842703c3184"
     },
     {
       "bytes": 42839,
@@ -8208,6 +8208,11 @@
       "sha256": "40eb29fbfd80bee8c1a02c405b26c8eb8ab021e7173c1b28bb8de5ee822f7620"
     },
     {
+      "bytes": 3421,
+      "path": "go-agent-runtime/services/tools/interactive_policy.go",
+      "sha256": "6fe69e2899182be23368efbc3c9e60c38c571d48d0bd1b841c23eaa498992423"
+    },
+    {
       "bytes": 3402,
       "path": "go-agent-runtime/services/tools/internal/base.go",
       "sha256": "6f110b4e131c625bd0c27614088978d37f4627654e30040e06c3655ec418b56d"
@@ -8528,6 +8533,16 @@
       "sha256": "d937a966768f24117788b475e67d93fbf1a8e27e08b84c08f1446b50c2839ee8"
     },
     {
+      "bytes": 5803,
+      "path": "go-agent-runtime/services/tools/internal/policy/policy.go",
+      "sha256": "9554a0f575c4926edbfd1526ecf62523196dbc4cd0853038d876d41d647f073c"
+    },
+    {
+      "bytes": 9502,
+      "path": "go-agent-runtime/services/tools/internal/policy/policy_test.go",
+      "sha256": "a9b8ac879defb0659406cadf6712aa2a3030590e91b90a3bccc4c215affcd7a7"
+    },
+    {
       "bytes": 7038,
       "path": "go-agent-runtime/services/tools/internal/registry/adapter.go",
       "sha256": "1de10b876ccb93e92d2cb51cc1ebfc4d7bca673ace676faaf2622cf2fed29663"
@@ -8688,14 +8703,14 @@
       "sha256": "e064b9af2c7c619e6bae0bba0905579cb01768a6ba897c6224674b070cbc3ae7"
     },
     {
-      "bytes": 807,
+      "bytes": 1157,
       "path": "go-agent-runtime/services/tools/wire/wire.go",
-      "sha256": "4f243f878491f88fa8f13c4a793aeac2a930f2e5748cb766f78ab30ff8f45fba"
+      "sha256": "4cf2c3ce164744890671dd72b30940bf01a90bcd2788979ec57ab88f12e752f5"
     },
     {
-      "bytes": 615,
+      "bytes": 896,
       "path": "go-agent-runtime/services/tools/wire/wire_gen.go",
-      "sha256": "0f56a497cfec6a50002e2f9e41962daf8caaf2be73cfc34051f25e249005f976"
+      "sha256": "50bba6e2d376674c9f000cc2fbd94546904deec1314fa69b3a0a02c3be86f1b1"
     },
     {
       "bytes": 1904,
@@ -12604,8 +12619,8 @@
   ],
   "retention": "External exact-head executable retained at the recorded path; evidence-only descendants must prove identical Go build inputs.",
   "schema": "audio-runtime-c51.shipped-build.v2",
-  "sourceRevision": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
-  "testedRevision": "bd8cabcd6fdc8a6b6aba760ff065bb93aabe986e",
+  "sourceRevision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
+  "testedRevision": "f5dfc65d2ccd45fca812294b5f71fa4586165498",
   "toolchain": {
     "env": {
       "GOARCH": "arm64",
