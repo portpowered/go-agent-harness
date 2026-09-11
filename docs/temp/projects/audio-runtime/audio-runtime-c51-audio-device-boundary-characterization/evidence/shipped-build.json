@@ -1,8 +1,8 @@
 {
   "binary": {
-    "bytes": 52753506,
-    "path": "/private/tmp/audio-runtime-c51-yui-fc70f5b",
-    "sha256": "9fb61c65e9242947ccaffe178c7c069eec7497c64dd35215e60e9672b596822d"
+    "bytes": 52771138,
+    "path": "/private/tmp/audio-runtime-c51-yui-2b3f565",
+    "sha256": "88eebb71e0b84509101ff0c6a9b0a2077c06e78034e03ee65cea140004ce7e8d"
   },
   "branch": "codex/audio-runtime-c51-audio-device-boundary-characterization",
   "build": {
@@ -19,7 +19,7 @@
       "GOWORK": "off"
     }
   },
-  "inputTreeSha256": "c40c63dd7ce167d9cf7793ec4a197487129671c17172bc54403c3ef5c602e66d",
+  "inputTreeSha256": "c27dcf19b55d423fddfddeec35a5af99b5381491604dcdc82711f93892790007",
   "inputs": [
     {
       "path": "agent-cli/cmd/agent/main.go",
@@ -623,7 +623,7 @@
     },
     {
       "path": "agent-cli/internal/services/internal/agentruntime/s2s_room_input_transcription_test.go",
-      "sha256": "76b8a80ebdd227065c3398bae6c9fedeff0417a65961ebaa7368c69876fd209f"
+      "sha256": "447a67484da81a71d2a59e9bd45a3f01b5ae60bf40ca9f06def28ecf5e6bfab9"
     },
     {
       "path": "agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_cadence_test.go",
@@ -707,11 +707,11 @@
     },
     {
       "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-      "sha256": "5274819c9270ab195ca4aef6215410d63cbe65205f27ca18d33b57c98a6f4b69"
+      "sha256": "a06b79abeb3d0a87ca7b4cd80a4f64e6495c3568334c87c33b57e9204663e41d"
     },
     {
       "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out_test.go",
-      "sha256": "5b444fc3386340a46fbe0078af8617db6fb61312f195dc587f16cbe808e20ef3"
+      "sha256": "53474297f9114f00ef866d03b20e44b9f7b3c0dbebb5d71b1528b8471e7542e7"
     },
     {
       "path": "agent-cli/internal/services/internal/agentruntime/session_audio_output_device_test.go",
@@ -3535,7 +3535,7 @@
     },
     {
       "path": "agent-cli/test/integration/session_tool_audio_remote_oracle_test.go",
-      "sha256": "28430c06fb2b401e05556b660959d55fe00be287ef5b8b27aa59a93685bc3ad8"
+      "sha256": "40a39563affb915e8c393549eaa268c354ce5217c5f023b836095992f78d875e"
     },
     {
       "path": "agent-cli/test/integration/session_tool_parallel_calls_test.go",
@@ -7445,7 +7445,7 @@
   "retention": "External exact-head executable retained at the recorded path; evidence-only descendants must prove identical Go build inputs.",
   "schema": "audio-runtime-c51.shipped-build.v1",
   "sourceRevision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-  "testedRevision": "fc70f5b81cff03369e2bb1e7f6e236992a2419fe",
+  "testedRevision": "2b3f565b45c59f772429f06d564d06de78bb3310",
   "toolchain": {
     "env": {
       "GOARCH": "arm64",

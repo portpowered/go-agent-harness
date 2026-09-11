@@ -1,22 +1,22 @@
 {
   "binary": {
-    "bytes": 52753506,
-    "path": "/private/tmp/audio-runtime-c51-yui-fc70f5b",
-    "sha256": "9fb61c65e9242947ccaffe178c7c069eec7497c64dd35215e60e9672b596822d"
+    "bytes": 52771138,
+    "path": "/private/tmp/audio-runtime-c51-yui-2b3f565",
+    "sha256": "88eebb71e0b84509101ff0c6a9b0a2077c06e78034e03ee65cea140004ce7e8d"
   },
   "buildManifest": {
-    "inputTreeSha256": "c40c63dd7ce167d9cf7793ec4a197487129671c17172bc54403c3ef5c602e66d",
+    "inputTreeSha256": "c27dcf19b55d423fddfddeec35a5af99b5381491604dcdc82711f93892790007",
     "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/evidence/shipped-build.json",
-    "sha256": "79fa0ee5832ed710e24a374145c3041b4041ee1e06d49a2e4118e957a49c6d57"
+    "sha256": "bbd5514de73d7ef06f57158d58d98a494e8db18177c1e2941b1fd9651e6f5341"
   },
-  "candidateHeadAtVerification": "6de93c5a8d6d9196fa36f719f029b77400ce7203",
+  "candidateHeadAtVerification": "2b3f565b45c59f772429f06d564d06de78bb3310",
   "classification": "SOFTWARE_REPLAY_PROCESS_ONLY",
   "executableInputEquivalence": {
     "basis": "build-input manifest compared every tracked Go/module input at the tested revision and candidate head; only owned evidence descendants differ",
-    "candidateRevision": "6de93c5a8d6d9196fa36f719f029b77400ce7203",
+    "candidateRevision": "2b3f565b45c59f772429f06d564d06de78bb3310",
     "identical": true,
-    "inputTreeSha256": "c40c63dd7ce167d9cf7793ec4a197487129671c17172bc54403c3ef5c602e66d",
-    "testedRevision": "fc70f5b81cff03369e2bb1e7f6e236992a2419fe"
+    "inputTreeSha256": "c27dcf19b55d423fddfddeec35a5af99b5381491604dcdc82711f93892790007",
+    "testedRevision": "2b3f565b45c59f772429f06d564d06de78bb3310"
   },
   "healthyReplay": {
     "expectedWav": {
@@ -36,21 +36,21 @@
     ],
     "result": {
       "argv": [
-        "/private/tmp/audio-runtime-c51-yui-fc70f5b",
+        "/private/tmp/audio-runtime-c51-yui-2b3f565",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-g18z42dv/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
         "--audio-out",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/healthy.wav"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-g18z42dv/healthy.wav"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
       "diskBytesAfter": 2385,
       "diskBytesBefore": 0,
       "diskBytesDelta": 2385,
       "diskLimitBytes": 33554432,
-      "durationSeconds": 0.047525,
+      "durationSeconds": 0.592838,
       "processGroupAlive": false,
       "returnCode": 0,
       "stderr": "",
@@ -85,31 +85,31 @@
     "bytesBefore": 0,
     "bytesDelta": 4766
   },
-  "testedSourceRevision": "fc70f5b81cff03369e2bb1e7f6e236992a2419fe",
+  "testedSourceRevision": "2b3f565b45c59f772429f06d564d06de78bb3310",
   "toolLifecycleNegativeControl": {
     "audioOutputWritten": true,
     "expectedMarker": "tool results were not delivered for 1 unresolved call(s): call_weather_001",
     "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
     "result": {
       "argv": [
-        "/private/tmp/audio-runtime-c51-yui-fc70f5b",
+        "/private/tmp/audio-runtime-c51-yui-2b3f565",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/tool-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-g18z42dv/tool-config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization/go-llm-gateway/pkg/testing/testdata/session-fixtures/s2s-v7a-metrics-modality.session.json",
         "--audio-out",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/tool.wav"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-g18z42dv/tool.wav"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization",
       "diskBytesAfter": 4766,
       "diskBytesBefore": 2385,
       "diskBytesDelta": 2381,
       "diskLimitBytes": 33554432,
-      "durationSeconds": 0.048191,
+      "durationSeconds": 0.049087,
       "processGroupAlive": false,
       "returnCode": 1,
-      "stderr": "Error: tool results were not delivered for 1 unresolved call(s): call_weather_001\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/tool.wav\" (wav): empty WAV samples\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-0xn3vnyz/tool.wav\" (wav): empty WAV samples\ntool results were not delivered for 1 unresolved call(s): call_weather_001\n",
+      "stderr": "Error: tool results were not delivered for 1 unresolved call(s): call_weather_001\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-g18z42dv/tool.wav\" (wav): empty WAV samples\naudio write \"/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c51-g18z42dv/tool.wav\" (wav): empty WAV samples\ntool results were not delivered for 1 unresolved call(s): call_weather_001\n",
       "stderrTruncated": false,
       "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c51-audio-device-boundary-characterization; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: It is sunny in Paris.\n\n[session closed: fixture_complete]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\nlive session terminated: tool results were not delivered for 1 unresolved call(s): call_weather_001\n",
       "stdoutTruncated": false,
