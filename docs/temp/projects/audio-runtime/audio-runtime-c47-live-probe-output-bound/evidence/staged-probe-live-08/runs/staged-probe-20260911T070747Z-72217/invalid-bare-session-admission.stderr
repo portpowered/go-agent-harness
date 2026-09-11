@@ -1,0 +1,1 @@
+Error: OpenAI model "c44-unknown-model" is not realtime-capable for agent session; supported realtime models: gpt-realtime, gpt-realtime-2.1-mini, gpt-realtime-2.1

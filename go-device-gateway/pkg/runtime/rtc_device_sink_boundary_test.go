@@ -496,6 +496,34 @@ func TestC21ObservationUnsupportedBackendControl(t *testing.T) {
 	}
 }
 
+func TestRTCDeviceSinkBoundsStatsPollingWithoutRenderBoundary(t *testing.T) {
+	release := make(chan struct{})
+	close(release)
+	handle := &adversarialCapacityHandle{release: release}
+	registry := newAdversarialCapacityRegistry(t, handle)
+	sink, err := NewRTCDeviceSink(registry, "adversarial:output")
+	if err != nil {
+		t.Fatalf("open no-render sink: %v", err)
+	}
+	defer closeC21Sink(t, sink)
+
+	response := audio.PlaybackResponse{ResponseID: "stats-response", ItemID: "stats-item"}
+	sink.StartPlayback(response)
+	frame := make([]int16, audio.FrameSize)
+	for index := 0; index < 3; index++ {
+		if err := sink.WritePlayback(context.Background(), frame); err != nil {
+			t.Fatalf("write frame %d: %v", index, err)
+		}
+	}
+	if got := handle.stats.Load(); got != 1 {
+		t.Fatalf("per-response playback stats calls without render boundary = %d, want one", got)
+	}
+	_ = sink.PlaybackStats()
+	if got := handle.stats.Load(); got != 2 {
+		t.Fatalf("explicit playback stats calls = %d, want two total", got)
+	}
+}
+
 func closeC21Sink(t *testing.T, sink *RTCDeviceSink) {
 	t.Helper()
 	if err := sink.Close(); err != nil {

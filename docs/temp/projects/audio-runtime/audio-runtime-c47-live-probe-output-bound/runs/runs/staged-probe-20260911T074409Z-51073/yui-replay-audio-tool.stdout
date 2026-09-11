@@ -1,0 +1,9 @@
+Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T074409Z-51073/replay-audio-tool; additional_allowed_roots=none
+Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.
+Tools: exec
+Tool result: PROBE_TOOL_MARKER_9182
+
+Assistant: strict replay continuation
+
+[session closed: fixture_complete]
+[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]
