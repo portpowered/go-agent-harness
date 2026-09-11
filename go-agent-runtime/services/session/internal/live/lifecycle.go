@@ -18,6 +18,7 @@ func (h *handle) finish(err error) {
 func (h *handle) finishOnceBody(err error) {
 	h.stopProviderLiveness()
 	h.mu.Lock()
+	h.clearPendingToolCallsLocked()
 	if err == nil {
 		err = h.startErr
 	}

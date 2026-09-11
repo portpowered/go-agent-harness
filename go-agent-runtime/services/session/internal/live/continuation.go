@@ -2,11 +2,10 @@ package live
 
 import (
 	"errors"
-	"sort"
-	"strings"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"sort"
+	"strings"
 )
 
 const continuationStatusFailed = "failed"
@@ -29,7 +28,7 @@ func (h *handle) observeToolLifecycle(msg messages.StreamMessage) (error, bool) 
 	if h == nil {
 		return nil, false
 	}
-	if isProviderToolCallType(msg.Type) {
+	if msg.Type == messages.StreamTypeToolCallStart || msg.Type == messages.StreamTypeToolCallDelta || msg.Type == messages.StreamTypeToolCallEnd {
 		h.observeProviderToolCall(msg)
 		if msg.Type != messages.StreamTypeToolCallStart && msg.Type != messages.StreamTypeToolCallDelta {
 			h.markContinuationOutput()
@@ -53,11 +52,6 @@ func (h *handle) observeToolLifecycle(msg messages.StreamMessage) (error, bool) 
 	}
 	return nil, false
 }
-
-func isProviderToolCallType(kind messages.StreamMessageType) bool {
-	return kind == messages.StreamTypeToolCallStart || kind == messages.StreamTypeToolCallDelta || kind == messages.StreamTypeToolCallEnd
-}
-
 func isContinuationOutputType(kind messages.StreamMessageType) bool {
 	if kind == messages.StreamTypeRefusal {
 		return true
@@ -68,7 +62,6 @@ func isContinuationOutputType(kind messages.StreamMessageType) bool {
 	}
 	return kind != messages.StreamTypeMessageEnd && kind != messages.StreamTypeToolCallEnd && kind != messages.StreamTypeToolCallDelta
 }
-
 func (h *handle) observeProviderToolCall(msg messages.StreamMessage) {
 	callID, name := providerToolCallIdentity(msg)
 	if callID == "" {
@@ -85,7 +78,6 @@ func (h *handle) observeProviderToolCall(msg messages.StreamMessage) {
 	}
 	h.toolMu.Unlock()
 }
-
 func (h *handle) observeToolResponseOutput(callID string) {
 	callID = strings.TrimSpace(callID)
 	if h == nil || callID == "" {
@@ -100,7 +92,6 @@ func (h *handle) observeToolResponseOutput(callID string) {
 	state.toolOutputObserved = true
 	h.toolMu.Unlock()
 }
-
 func providerToolCallIdentity(msg messages.StreamMessage) (string, string) {
 	callID, name := msg.ToolCallId, ""
 	switch value := msg.Value.(type) {
@@ -121,12 +112,47 @@ func providerToolCallIdentity(msg messages.StreamMessage) (string, string) {
 	}
 	return strings.TrimSpace(callID), strings.TrimSpace(name)
 }
-
-// beginToolResultAdmission records the result before handing it to the provider.
-// A provider may publish its response synchronously from Send, so observing only
-// after Send returns loses the causal link between that response and this result.
-// The returned closure restores only the fields changed by this admission when
-// the provider rejects the send.
+func (h *handle) notePendingToolCallLocked(msg messages.StreamMessage) error {
+	callID, _ := providerToolCallIdentity(msg)
+	responseID := strings.TrimSpace(msg.ResponseID)
+	if h.pendingToolCallResponses == nil {
+		h.pendingToolCallResponses = make(map[string]string)
+	}
+	if callID != "" {
+		if _, exists := h.pendingToolCallResponses[callID]; !exists && len(h.pendingToolCallResponses) >= maxPendingToolCallResponses {
+			return errors.New("pending tool call response admission limit exceeded")
+		}
+		h.pendingToolCallResponses[callID] = responseID
+	}
+	h.pendingToolCalls = len(h.pendingToolCallResponses)
+	return nil
+}
+func (h *handle) pendingToolCallsForResponse(responseID string) bool {
+	responseID = strings.TrimSpace(responseID)
+	if responseID == "" || h.pendingToolCallResponses == nil {
+		return h.pendingToolCalls > 0
+	}
+	for _, callResponseID := range h.pendingToolCallResponses {
+		if callResponseID == "" || callResponseID == responseID {
+			return true
+		}
+	}
+	return false
+}
+func (h *handle) retireCompletedToolCallsLocked() {
+	h.toolMu.Lock()
+	completed := make([]string, 0, len(h.toolContinuations))
+	for callID, state := range h.toolContinuations {
+		if state != nil && state.toolResponseComplete && strings.TrimSpace(callID) != "" {
+			completed = append(completed, callID)
+		}
+	}
+	h.toolMu.Unlock()
+	for _, callID := range completed {
+		delete(h.pendingToolCallResponses, callID)
+	}
+	h.pendingToolCalls = len(h.pendingToolCallResponses)
+}
 func (h *handle) beginToolResultAdmission(callID, name string, requestsContinuation bool) func() {
 	callID = strings.TrimSpace(callID)
 	if h == nil || callID == "" {
@@ -165,7 +191,6 @@ func (h *handle) beginToolResultAdmission(callID, name string, requestsContinuat
 		h.toolMu.Unlock()
 	}
 }
-
 func (h *handle) unresolvedToolResultsError() error {
 	if h == nil {
 		return nil
@@ -187,10 +212,6 @@ func (h *handle) unresolvedToolResultsError() error {
 	sort.Strings(ids)
 	return &session.LiveUnresolvedToolResultsError{CallIDs: ids}
 }
-
-// beginContinuationAdmission marks only results that have not already requested
-// a continuation. Its rollback therefore cannot erase an earlier accepted
-// continuation when a later RequestResponse call is rejected.
 func (h *handle) beginContinuationAdmission() func() {
 	if h == nil {
 		return func() {}
@@ -212,7 +233,6 @@ func (h *handle) beginContinuationAdmission() func() {
 		h.toolMu.Unlock()
 	}
 }
-
 func (h *handle) markContinuationOutput() {
 	if h == nil {
 		return
@@ -225,7 +245,6 @@ func (h *handle) markContinuationOutput() {
 	}
 	h.toolMu.Unlock()
 }
-
 func (h *handle) markToolResponseComplete() {
 	if h == nil {
 		return
@@ -238,10 +257,6 @@ func (h *handle) markToolResponseComplete() {
 	}
 	h.toolMu.Unlock()
 }
-
-// finishToolContinuations closes the bookkeeping loop for an accepted tool
-// result. A provider MESSAGE.END without observable continuation output is a
-// failed continuation even when the transport itself closed cleanly.
 func (h *handle) finishToolContinuations(msg messages.StreamMessage) (error, bool) {
 	if h == nil {
 		return nil, false
@@ -276,7 +291,6 @@ func continuationStatus(msg messages.StreamMessage) (string, string, string) {
 	}
 	return strings.TrimSpace(value.Status), strings.TrimSpace(value.ProviderErrorCode), detail
 }
-
 func (h *handle) collectContinuationFailures(status, code, detail string, raw any) (continuationFailures, continuationFailures, bool) {
 	image := newContinuationFailures()
 	tools := newContinuationFailures()
@@ -289,12 +303,6 @@ func (h *handle) collectContinuationFailures(status, code, detail string, raw an
 		if !state.resultAccepted || !state.continuationRequested {
 			continue
 		}
-		// Provider and tool result events cross different participant queues. A
-		// failed continuation may therefore arrive before the local RoleTool
-		// MESSAGE.END even though its result was already accepted on the wire.
-		// Retain that terminal and classify it when the local result boundary
-		// catches up. Cancelled/incomplete terminals are not retained here: they
-		// can belong to the response that produced the tool call.
 		if !state.toolResponseComplete {
 			if providerContinuationFailed(value) {
 				state.pendingTerminal = true
@@ -316,7 +324,6 @@ func (h *handle) collectContinuationFailures(status, code, detail string, raw an
 	}
 	return image, tools, completed
 }
-
 func (h *handle) finishDeferredToolContinuations() (error, bool) {
 	image := newContinuationFailures()
 	tools := newContinuationFailures()
@@ -346,14 +353,12 @@ func (h *handle) finishDeferredToolContinuations() (error, bool) {
 	h.toolMu.Unlock()
 	return stored, completed
 }
-
 func newContinuationFailures() continuationFailures {
 	return continuationFailures{
 		ids: make([]string, 0), statuses: make(map[string]string),
 		codes: make(map[string]string), details: make(map[string]string),
 	}
 }
-
 func (f *continuationFailures) add(callID, status, code, detail string) {
 	if f == nil {
 		return
@@ -361,7 +366,6 @@ func (f *continuationFailures) add(callID, status, code, detail string) {
 	f.ids = append(f.ids, callID)
 	f.statuses[callID], f.codes[callID], f.details[callID] = status, code, detail
 }
-
 func continuationFailure(image, tools continuationFailures) error {
 	var failure error
 	if len(image.ids) > 0 {
@@ -384,14 +388,13 @@ func continuationFailure(image, tools continuationFailures) error {
 	}
 	return errors.Join(failure, toolFailure)
 }
-
 func continuationFailed(value *messages.MessageEndValue, outputObserved bool) bool {
 	if !outputObserved {
 		return true
 	}
-	if value == nil {
-		return false
+	status := ""
+	if value != nil {
+		status = strings.ToLower(strings.TrimSpace(value.Status))
 	}
-	status := strings.ToLower(strings.TrimSpace(value.Status))
 	return status == continuationStatusFailed || status == "cancelled" || status == "canceled" || status == "incomplete" || status == "error"
 }
