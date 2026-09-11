@@ -22,7 +22,7 @@ func (r *reporter) Publish(out io.Writer, runErr error) error {
 		return nil
 	}
 	if hasIndependentFailure(runErr) {
-		r.rememberFatalError(runErr)
+		r.markRunFailure()
 	}
 	candidate, replayDone := r.reconcileLocked(runErr)
 	r.mu.Unlock()

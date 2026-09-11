@@ -13,10 +13,13 @@ import (
 const (
 	maxTerminalFieldBytes = 256
 	maxFatalErrors        = 8
+	maxRetainedErrorBytes = 1024
 
 	maxDurationReason = messages.TerminalReason("max_duration")
 	replayComplete    = "replay_complete"
 )
+
+var errTerminalRunFailure = errors.New("independent terminal run failure")
 
 type completionState uint8
 
@@ -123,6 +126,7 @@ func (r *reporter) rememberFatalError(err error) {
 		return
 	}
 	r.outcome.fatalErrors++
+	err = retainFatalError(err)
 	if r.outcome.fatalError == nil {
 		r.outcome.fatalError = err
 		return
@@ -130,6 +134,29 @@ func (r *reporter) rememberFatalError(err error) {
 	if r.outcome.fatalErrors <= maxFatalErrors {
 		r.outcome.fatalError = errors.Join(r.outcome.fatalError, err)
 	}
+}
+
+func (r *reporter) markRunFailure() {
+	if r == nil {
+		return
+	}
+	r.outcome.fatalErrors++
+	if r.outcome.fatalError == nil {
+		r.outcome.fatalError = errTerminalRunFailure
+	}
+}
+
+func retainFatalError(err error) error {
+	leaves, bounded := errorLeaves(err)
+	if !bounded || len(err.Error()) > maxRetainedErrorBytes {
+		return errTerminalRunFailure
+	}
+	for _, leaf := range leaves {
+		if len(leaf.Error()) > maxRetainedErrorBytes {
+			return errTerminalRunFailure
+		}
+	}
+	return err
 }
 
 func boundTerminalText(value string) string {
