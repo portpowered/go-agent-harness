@@ -68,7 +68,7 @@ OWNED_OUTPUT_QUOTA_BYTES = 128 * 1024 * 1024
 REPLAY_OUTPUT_QUOTA_BYTES = 16 * 1024 * 1024
 REPLAY_FIXTURE = ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json"
 EXPECTED_COUNTS = {
-    "agent-cli/internal/services/internal/agentruntime": (107, 41149, 2474),
+    "agent-cli/internal/services/internal/agentruntime": (107, 41147, 2478),
     "agent-cli/internal/transport/cli/internal/livehost": (9, 2077, 138),
     "agent-cli/internal/room": (4, 3357, 257),
 }
@@ -366,6 +366,11 @@ def git_output(*args: str) -> str:
     return completed.stdout.strip()
 
 
+def inspected_source_revision() -> str:
+    """Return the clean integrated-main source pin used by this evidence run."""
+    return git_output("rev-parse", "origin/main")
+
+
 def git_status_outside_task() -> list[str]:
     prefix = str(HERE.relative_to(ROOT)) + "/"
     lines = subprocess.run(
@@ -403,7 +408,8 @@ def verify_ancestry(candidate_revision: str, origin_revision: str) -> dict[str, 
     checks = {}
     for label, ancestor in {
         "startup_integration": STARTUP_INTEGRATION,
-        "planning_main": origin_revision,
+        "planning_main": PLANNING_MAIN,
+        "integrated_main": origin_revision,
         "manifest_baseline": BASELINE,
     }.items():
         result = subprocess.run(
@@ -621,9 +627,10 @@ def verify_admission_and_provenance() -> dict[str, Any]:
     outside = git_status_outside_task()
     if outside:
         raise EvidenceFailure(f"unrelated dirty paths outside the C50 evidence directory: {outside}")
-    if target_source_differs(PLANNING_MAIN):
-        raise EvidenceFailure("target production source differs from the admitted planning snapshot")
-    ancestry = verify_ancestry(candidate_revision, PLANNING_MAIN)
+    source_revision = inspected_source_revision()
+    if target_source_differs(source_revision):
+        raise EvidenceFailure("target production source differs from the integrated origin/main snapshot")
+    ancestry = verify_ancestry(candidate_revision, origin_revision)
     control = run_checked(
         "verify-work",
         [
@@ -662,8 +669,8 @@ def verify_admission_and_provenance() -> dict[str, Any]:
         HERE / "extraction-candidates.json",
         BOARD,
     ]
-    source_archive = source_archive_record(PLANNING_MAIN)
-    build_inputs = build_inputs_record(PLANNING_MAIN)
+    source_archive = source_archive_record(source_revision)
+    build_inputs = build_inputs_record(source_revision)
     provenance = {
         "schema_version": "c50-provenance-v1",
         "project": "audio-runtime",
@@ -676,10 +683,11 @@ def verify_admission_and_provenance() -> dict[str, Any]:
         "evidence_base_revision": candidate_revision,
         "evidence_must_remain_descendant_of_reviewed_candidate": True,
         "origin_main_revision": origin_revision,
+        "integrated_source_revision": source_revision,
         "planning_main_revision": PLANNING_MAIN,
         "startup_integration_revision": STARTUP_INTEGRATION,
         "manifest_baseline_revision": BASELINE,
-        "source_revision": PLANNING_MAIN,
+        "source_revision": source_revision,
         "admission_command": control["argv"],
         "admission_stdout_sha256": sha256(pathlib.Path(control["stdout_path"])),
         "board_capture": board_capture,
@@ -687,7 +695,8 @@ def verify_admission_and_provenance() -> dict[str, Any]:
         "refreshed_main_lineage": refreshed_main,
         "refreshed_origin_main": fetch,
         "ancestry": ancestry,
-        "target_source_clean_against_planning_main": True,
+        "target_source_clean_against_integrated_main": True,
+        "target_source_changed_from_planning_main": target_source_differs(PLANNING_MAIN),
         "unrelated_dirty_paths": outside,
         "source_archive": source_archive,
         "build_inputs": build_inputs,
@@ -718,7 +727,8 @@ def verify_admission_and_provenance() -> dict[str, Any]:
 
 
 def run_analyzer() -> dict[str, Any]:
-    verify_planning_snapshot_is_available(git_output("rev-parse", "origin/main"))
+    source_revision = inspected_source_revision()
+    verify_planning_snapshot_is_available(source_revision)
     first = RUNS / "inventory" / "first"
     second = RUNS / "inventory" / "second"
     for path in (first, second):
@@ -734,7 +744,7 @@ def run_analyzer() -> dict[str, Any]:
         "--out",
         str(first),
         "--source-revision",
-        PLANNING_MAIN,
+        source_revision,
     ]
     first_run = run_process("analyzer-first", command, ROOT, RUNS / "inventory", env=env)
     require_ok(first_run)
@@ -756,7 +766,7 @@ def run_analyzer() -> dict[str, Any]:
         ANALYSIS.mkdir(parents=True, exist_ok=True)
         shutil.copy2(second_path, ANALYSIS / name)
     document = json.loads((ANALYSIS / "inventory.json").read_text(encoding="utf-8"))
-    if document.get("source_revision") != PLANNING_MAIN or document.get("target_roots") != TARGET_ROOTS:
+    if document.get("source_revision") != source_revision or document.get("target_roots") != TARGET_ROOTS:
         raise EvidenceFailure("inventory source revision or target root scope changed")
     if document.get("diagnostics"):
         raise EvidenceFailure(f"inventory parser diagnostics: {document['diagnostics']}")
@@ -766,15 +776,15 @@ def run_analyzer() -> dict[str, Any]:
         if actual is None or tuple(actual.get(key) for key in ("production_files", "production_lines", "production_symbols")) != expected:
             raise EvidenceFailure(f"inventory count changed for {root}: {actual!r}, expected {expected!r}")
     totals = document.get("totals", {})
-    if tuple(totals.get(key) for key in ("production_files", "production_lines", "production_symbols")) != (120, 46583, 2869):
+    if tuple(totals.get(key) for key in ("production_files", "production_lines", "production_symbols")) != (120, 46581, 2873):
         raise EvidenceFailure(f"inventory totals changed: {totals!r}")
     classifications = validate_classifications()
     paths = validate_call_paths()
     report = {
         "schema_version": "c50-inventory-validation-v1",
-        "source_revision": PLANNING_MAIN,
+        "source_revision": source_revision,
         "counts": {root: list(value) for root, value in EXPECTED_COUNTS.items()},
-        "totals": {"production_files": 120, "physical_lines": 46583, "top_level_symbols": 2869},
+        "totals": {"production_files": 120, "physical_lines": 46581, "top_level_symbols": 2873},
         "historical_observation": {"production_files": 107, "physical_lines": 41305, "comparison": "inventory-only; no migration percentage"},
         "determinism": comparisons,
         "classification": classifications,
@@ -790,9 +800,10 @@ def run_analyzer() -> dict[str, Any]:
 
 
 def validate_classifications() -> dict[str, Any]:
+    source_revision = inspected_source_revision()
     inventory = json.loads((ANALYSIS / "inventory.json").read_text(encoding="utf-8"))
     document = json.loads((ANALYSIS / "classifications.json").read_text(encoding="utf-8"))
-    if document.get("source_revision") != PLANNING_MAIN:
+    if document.get("source_revision") != source_revision:
         raise EvidenceFailure("classification source revision mismatch")
     inventory_ids = [symbol["id"] for symbol in inventory.get("symbols", [])]
     classified = document.get("symbols", [])
@@ -838,8 +849,9 @@ def validate_classifications() -> dict[str, Any]:
 
 
 def validate_call_paths() -> dict[str, Any]:
+    source_revision = inspected_source_revision()
     document = json.loads((ANALYSIS / "call-paths.json").read_text(encoding="utf-8"))
-    if document.get("source_revision") != PLANNING_MAIN:
+    if document.get("source_revision") != source_revision:
         raise EvidenceFailure("call-path source revision mismatch")
     roots = document.get("entry_source_roots")
     entry_files = document.get("entry_source_files")
@@ -883,14 +895,15 @@ def validate_call_paths() -> dict[str, Any]:
 
 
 def candidate_validation() -> dict[str, Any]:
+    source_revision = inspected_source_revision()
     path = HERE / "extraction-candidates.json"
     document = json.loads(path.read_text(encoding="utf-8"))
     candidates = document.get("candidates", [])
     if len(candidates) not in (2, 3):
         raise EvidenceFailure(f"candidate count must be two or three, got {len(candidates)}")
     inventory = json.loads((ANALYSIS / "inventory.json").read_text(encoding="utf-8"))
-    if inventory.get("source_revision") != PLANNING_MAIN or document.get("source_revision") != PLANNING_MAIN:
-        raise EvidenceFailure("candidate or inventory source revision is not the admitted planning revision")
+    if inventory.get("source_revision") != source_revision or document.get("source_revision") != source_revision:
+        raise EvidenceFailure("candidate or inventory source revision is not the integrated source revision")
     symbols = inventory.get("symbols", [])
     symbol_by_id = {symbol.get("id"): symbol for symbol in symbols}
     actual_callers_by_callee: dict[str, set[tuple[str, int, str]]] = {}
@@ -949,7 +962,7 @@ def candidate_validation() -> dict[str, Any]:
                 raise EvidenceFailure(f"candidate writer paths overlap: {candidates[index]['id']} / {candidates[other]['id']}")
     report = {
         "schema_version": "c50-candidate-validation-v1",
-        "source_revision": PLANNING_MAIN,
+        "source_revision": source_revision,
         "candidate_ids": [candidate["id"] for candidate in candidates],
         "candidate_count": len(candidates),
         "pairwise_source_disjoint": True,
@@ -961,6 +974,7 @@ def candidate_validation() -> dict[str, Any]:
 
 
 def public_smoke() -> dict[str, Any]:
+    source_revision = inspected_source_revision()
     if not REPLAY_FIXTURE.exists():
         raise EvidenceFailure(f"credential-free replay fixture missing: {REPLAY_FIXTURE}")
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
@@ -972,7 +986,7 @@ def public_smoke() -> dict[str, Any]:
         run_dir,
     )
     binary_hash = sha256(built_binary)
-    build_inputs = build_inputs_record(PLANNING_MAIN)
+    build_inputs = build_inputs_record(source_revision)
     binary_path = built_binary
     binary_argument = None
     if REQUESTED_BINARY is not None:
@@ -1061,7 +1075,7 @@ def public_smoke() -> dict[str, Any]:
         raise EvidenceFailure(f"credential-free replay terminal manifest changed: {terminal!r}")
     report = {
         "schema_version": "c50-public-smoke-v1",
-        "source_revision": PLANNING_MAIN,
+        "source_revision": source_revision,
         "candidate_revision": git_output("rev-parse", "HEAD"),
         "same_source_binary": str(binary_path.relative_to(ROOT)) if binary_path.is_relative_to(ROOT) else str(binary_path),
         "binary_argument": binary_argument,
@@ -1099,6 +1113,7 @@ def public_smoke() -> dict[str, Any]:
 
 
 def focused_regressions() -> dict[str, Any]:
+    source_revision = inspected_source_revision()
     run_dir = RUNS / "focused-regressions"
     commands = [
         (
@@ -1153,7 +1168,7 @@ def focused_regressions() -> dict[str, Any]:
         results.append(result)
     report = {
         "schema_version": "c50-focused-regressions-v1",
-        "source_revision": PLANNING_MAIN,
+        "source_revision": source_revision,
         "normal_and_race_commands": results,
         "full_ci_suite": "not run; executor handoff does not duplicate CI",
     }
@@ -1162,6 +1177,7 @@ def focused_regressions() -> dict[str, Any]:
 
 
 def negative_controls() -> dict[str, Any]:
+    source_revision = inspected_source_revision()
     run_dir = RUNS / "negative-controls"
     script = "import subprocess,sys,time; subprocess.Popen([sys.executable,'-c','import time; time.sleep(120)']); time.sleep(120)"
     timeout_result = run_process(
@@ -1185,7 +1201,7 @@ def negative_controls() -> dict[str, Any]:
         raise EvidenceFailure("output-cap negative control did not fail closed")
     report = {
         "schema_version": "c50-negative-controls-v1",
-        "source_revision": PLANNING_MAIN,
+        "source_revision": source_revision,
         "timeout_descendant_cleanup": timeout_result,
         "output_cap": overflow_result,
         "bounded_child_deadline_seconds": REQUESTED_CHILD_DEADLINE_SECONDS,
@@ -1204,12 +1220,8 @@ def diff_and_architecture_checks() -> dict[str, Any]:
     outside = git_status_outside_task()
     if outside:
         raise EvidenceFailure(f"gates found unrelated dirty paths outside the C50 evidence directory: {outside}")
-    # The C50 source contract is the exact planning snapshot.  A later
-    # origin/main may carry an unrelated baseline ratchet, so using the
-    # mutable remote ref here would turn a clean C50 candidate into an
-    # inherited-mainline failure.  Provenance still records that refreshed
-    # ref and its ancestry separately.
-    architecture_base = f"ARCHITECTURE_BASE={PLANNING_MAIN}"
+    source_revision = inspected_source_revision()
+    architecture_base = f"ARCHITECTURE_BASE={source_revision}"
     commands = [
         ("diff-check", ["git", "diff", "--check"]),
         ("architecture-check", ["make", "architecture-check", architecture_base]),
@@ -1227,9 +1239,9 @@ def diff_and_architecture_checks() -> dict[str, Any]:
         baseline_diffs[path] = check.returncode == 0
         if check.returncode != 0:
             raise EvidenceFailure(f"architecture baseline changed: {path}")
-    report = {"schema_version": "c50-gates-v1", "source_revision": PLANNING_MAIN, "architecture_base": PLANNING_MAIN, "refreshed_origin_main_is_recorded_in_provenance": True, "commands": results, "architecture_baseline_sha256": baseline_hashes, "architecture_baseline_unchanged": baseline_diffs, "production_source_changed": target_source_differs(PLANNING_MAIN), "unrelated_dirty_paths": outside, "write_scope_enforced": True}
+    report = {"schema_version": "c50-gates-v1", "source_revision": source_revision, "architecture_base": source_revision, "refreshed_origin_main_is_recorded_in_provenance": True, "commands": results, "architecture_baseline_sha256": baseline_hashes, "architecture_baseline_unchanged": baseline_diffs, "production_source_changed": target_source_differs(source_revision), "unrelated_dirty_paths": outside, "write_scope_enforced": True}
     if report["production_source_changed"]:
-        raise EvidenceFailure("gates found a production source change against the admitted planning revision")
+        raise EvidenceFailure("gates found a production source change against the integrated origin/main revision")
     write_json(run_dir / "report.json", report)
     return report
 

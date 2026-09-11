@@ -1,15 +1,15 @@
 # C50 remaining CLI service inventory
 
 This directory is evidence-only for `audio-runtime-c50-remaining-cli-service-inventory`.
-The inspected source is the admitted planning snapshot
-`7f73c8b3b4ebc99b55b8bb5e802beff024385407`; refreshed `origin/main` may be a
-descendant, but this task continues to inspect the admitted snapshot. The
-startup integration checkpoint is `8bdafc7f947a3a2c9856220abdc539437035bd21`.
+The inspected source is the clean integrated `origin/main` snapshot
+`cdf416a8060251a6b4bbf3680241f1ee79953cff`, which is a descendant of the
+planning snapshot `7f73c8b3b4ebc99b55b8bb5e802beff024385407`. The startup
+integration checkpoint is `8bdafc7f947a3a2c9856220abdc539437035bd21`.
 The branch is
 `codex/audio-runtime-c50-remaining-cli-service-inventory`.
 
 The task-local Go AST/import/call-site analyzer enumerates 120 production files,
-46,583 physical lines and 2,869 top-level symbols across the three admitted
+46,581 physical lines and 2,873 top-level symbols across the three admitted
 CLI roots. It records 143 excluded files, 55,242 excluded physical lines and
 3,852 direct production call edges. Receiver-typed method calls resolve to
 exact declarations, including `Mesh.Join`, `Mesh.Remove`, `Mesh.Peers`, and
