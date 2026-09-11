@@ -512,6 +512,139 @@
       "retained_failure_sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
     }
   },
+  "latest_post_c38_acceptance_validation": {
+    "tested_candidate_revision": "ab08f6d3a681464730041a3176b492c7f1f23f18",
+    "merge_commit": "ab08f6d3a681464730041a3176b492c7f1f23f18",
+    "origin_main": "cdf416a8060251a6b4bbf3680241f1ee79953cff",
+    "accepted_c38_revision": "bb29005d0bb545db5e08ffda0205929b021d4fc1",
+    "source_tree_clean": true,
+    "ancestry": {
+      "baseline_926ded7b_is_ancestor": true,
+      "startup_8bdafc7_is_ancestor": true,
+      "accepted_c38_is_ancestor": true,
+      "origin_main_is_ancestor": true
+    },
+    "run_ids": {
+      "inventory": "runs/run-inventory-20260911T072916Z-41561",
+      "consumer": "runs/run-consumer-20260911T072925Z-41706",
+      "wrong_oracle": "runs/run-wrong-oracle-20260911T072932Z-42370",
+      "public_policy": "runs/run-public-policy-20260911T072939Z-42431",
+      "cleanup_control": "runs/run-cleanup-control-20260911T072954Z-42638",
+      "replay_regression": "runs/run-replay-regression-20260911T073002Z-42688"
+    },
+    "inventory": {
+      "decision": "ACCEPTED",
+      "runtime_dependency_count": 247,
+      "forbidden_runtime_dependencies": [],
+      "cli_policy_lines": 155,
+      "runtime_contract_lines": 80,
+      "runtime_policy_lines": 159,
+      "wire_lines": 29,
+      "wire_generated_lines": 28,
+      "aggregate_cli_agentruntime_production_lines": 41129,
+      "line_method": "physical lines including comments and blanks",
+      "forbidden_import_scan": "passed"
+    },
+    "consumer": {
+      "decision": "ACCEPTED",
+      "gowork": "off",
+      "binary_bytes": 6249666,
+      "binary_sha256": "d465d99cb20ca04d0e532bec5a407ca43699538041a8662bbd88e85cf128c507",
+      "defaults": "5s fast/read, 20s long-running, 2s acknowledgement",
+      "overrides": "7s fast/read, 15s long-running, 1.2s acknowledgement",
+      "classes": "browser_select/catalog_page/dynamic_page/exec/sleep bounded-long-running; read_file fast/read",
+      "timeouts": "catalog_page/exec 20s; read_file 5s",
+      "snapshot_input_isolation": true,
+      "snapshot_clone_isolation": true,
+      "invalid_rejected_before_effects": true,
+      "provider_setup_calls": 0,
+      "correlated_continuation": "exec -> completed -> continuation"
+    },
+    "wrong_oracle": {
+      "decision": "ACCEPTED",
+      "child_exit_code": 1,
+      "proof": "literal class decision mismatch rejected"
+    },
+    "public_policy": {
+      "decision": "ACCEPTED",
+      "consumer_binary_sha256": "d465d99cb20ca04d0e532bec5a407ca43699538041a8662bbd88e85cf128c507",
+      "yui_binary_bytes": 50931362,
+      "yui_binary_sha256": "f6e480b75f3c84910857e01bb781e90c07b09313755a611465e5c27e4c8431a2",
+      "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "tool_marker": "PROBE_TOOL_MARKER_9182",
+      "continuation": "strict replay continuation",
+      "pcm_bytes": 4800,
+      "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+      "terminal_reason": "provider_close / fixture_complete",
+      "invalid_policy_before_provider_effects": true,
+      "replay_is_not_the_only_policy_proof": true,
+      "source_call_chain": [
+        "agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicyForSession",
+        "go-agent-runtime/services/tools/wire.NewInteractiveToolPolicy",
+        "go-agent-runtime/services/tools/internal/policy.Factory.Resolve",
+        "go-agent-runtime/services/tools.InteractiveToolPolicy.ClassForTool/TimeoutForTool",
+        "agent-cli/internal/services/internal/agentruntime.sessionToolExecutor"
+      ]
+    },
+    "cleanup_control": {
+      "decision": "ACCEPTED",
+      "native_exit_code": -15,
+      "harness_verdict": "timed_out",
+      "cleanup_timed_out": true,
+      "termination_signals": ["SIGTERM", "SIGKILL"],
+      "descendants_reaped": true,
+      "elapsed_seconds": 4.006601,
+      "note": "Deliberate SIGTERM-ignoring descendant control; timeout and cleanup are expected, with bounded group termination and reap proven."
+    },
+    "replay_regression": {
+      "decision": "ACCEPTED",
+      "yui_binary_bytes": 50931362,
+      "yui_binary_sha256": "f6e480b75f3c84910857e01bb781e90c07b09313755a611465e5c27e4c8431a2",
+      "audio_tool": {
+        "wire_events": 18,
+        "tool_calls": 1,
+        "pcm_bytes": 4800,
+        "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+        "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+      },
+      "interruption": {
+        "wire_events": 15,
+        "tool_calls": 0,
+        "pcm_bytes": 3840,
+        "pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
+        "healthy_tail_offset": 1440,
+        "healthy_tail_bytes": 2400,
+        "healthy_tail_sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf",
+        "fixture_sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206",
+        "terminal": "replay_complete / clean recording_closed"
+      },
+      "negative_controls": "missing PCM, truncated PCM, wrong marker/terminal, and tampered artifact sets all rejected"
+    },
+    "coverage_registration": {
+      "path": "coverage-manifest/go-agent-runtime/services/tools/internal/policy/package.json",
+      "minimum_percent": 80.0,
+      "measured_percent": 98.3,
+      "package_command": "rtk proxy go test ./go-agent-runtime/services/tools/internal/policy -count=1 -timeout 60s -cover",
+      "registration_command": "rtk make coverage-registration",
+      "result": "passed: 175 workspace packages checked across 6 modules"
+    },
+    "focused_validation": {
+      "tools_normal": "340 tests in 17 packages",
+      "tools_race": "340 tests in 17 packages",
+      "cli_policy_normal": "13 tests",
+      "cli_policy_race": "13 tests",
+      "replay_bundle": "19 tests",
+      "strict_allowlist": "2 tests",
+      "architecture_and_size": "185 packages, 1891 files, 27887 functions",
+      "wire": "passed; generated files unchanged",
+      "fmt_vet": "passed",
+      "pinned_lint": "passed with golangci-lint 2.9.0; 0 issues in 15 modules",
+      "pinned_staticcheck": "passed with staticcheck 2026.1",
+      "diff_check": "passed"
+    },
+    "ci_review_merge_status": "not claimed; current evidence is executor handoff only",
+    "remaining_external_gates": ["SCRIPT_CI", "independent_review", "guarded_merge", "primary_vertical_probe", "project_acceptance", "live_realtime", "physical_device_or_acoustic_pass"]
+  },
   "focused_commands": [
     "rtk go test ./go-agent-runtime/services/tools/... -count=1 -timeout 60s",
     "rtk go test -race ./go-agent-runtime/services/tools/... -count=1 -timeout 60s",

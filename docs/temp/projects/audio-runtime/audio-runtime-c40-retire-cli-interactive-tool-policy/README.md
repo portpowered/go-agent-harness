@@ -123,3 +123,49 @@ against the frozen 3,840-byte oracle /
 checkpoint does not claim script CI, independent review, merge, or project
 acceptance; after C38 is reviewed and accepted, rebuild and refresh the
 dependent replay/evidence before the same PR is submitted to SCRIPT CI.
+
+## Post-C38 acceptance current-head checkpoint
+
+Accepted C38 is now integrated through merge `ab08f6d3a681464730041a3176b492c7f1f23f18`,
+with fetched `origin/main=cdf416a8060251a6b4bbf3680241f1ee79953cff` and the
+required baseline/startup ancestry preserved. The exact run records are
+`runs/run-inventory-20260911T072916Z-41561`,
+`runs/run-consumer-20260911T072925Z-41706`,
+`runs/run-wrong-oracle-20260911T072932Z-42370`,
+`runs/run-public-policy-20260911T072939Z-42431`,
+`runs/run-cleanup-control-20260911T072954Z-42638`, and
+`runs/run-replay-regression-20260911T073002Z-42688`.
+
+Inventory accepts `247` runtime dependencies with no CLI/config/WebMCP imports;
+the CLI policy is `155` physical lines, runtime contract `80`, private policy
+`159`, Wire `29` plus generated `28`, and aggregate CLI agentruntime production
+is `41,129` physical lines. The standalone `GOWORK=off` consumer rebuilt at
+`6,249,666` bytes (`d465d99cb20ca04d0e532bec5a407ca43699538041a8662bbd88e85cf128c507`),
+proving the `5s/20s/2s` defaults, `7s/15s/1.2s` overrides, immutable snapshots,
+pre-effect invalid rejection and zero provider setup calls; its wrong-oracle
+child exits `1` at the literal class assertion.
+
+The shipped policy workflow rebuilt YUI at `50,931,362` bytes
+(`f6e480b75f3c84910857e01bb781e90c07b09313755a611465e5c27e4c8431a2`), reached
+the runtime policy call chain, emitted `PROBE_TOOL_MARKER_9182` and
+`strict replay continuation`, produced the exact `4,800`-byte tool PCM
+(`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`), and
+closed cleanly. The deliberate cleanup control recorded bounded SIGTERM/SIGKILL
+and descendant reaping.
+
+The now-unblocked interruption replay passes its frozen `3,840`-byte oracle
+(`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`) with the
+expected `2,400`-byte healthy tail at offset `1440`
+(`16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`),
+`15` wire events, zero tool calls, `replay_complete`, and clean
+`recording_closed`. Audio-tool replay remains exact at `18` wire events/one tool
+call; all missing/truncated/marker/terminal/tampered negative controls reject.
+
+Focused tools normal/race pass `340` tests in `17` packages each; CLI policy
+normal/race pass `13` each; replay-bundle passes `19`, strict allowlist `2`,
+policy coverage is `98.3%` against the authorized `80.0%` floor, coverage
+registration passes `175` packages across `6` modules, architecture-size passes
+at `185/1,891/27,887`, Wire is reproducible, pinned lint/staticcheck are green,
+and diff-check is clean. This is executor evidence only: SCRIPT CI, independent
+review, guarded merge, the primary's exact-artifact vertical probe, and project
+acceptance remain open.
