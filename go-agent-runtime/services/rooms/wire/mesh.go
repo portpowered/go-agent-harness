@@ -14,7 +14,7 @@ func NewMesh(config rooms.MeshConfig) rooms.Mesh { return lifecycle.NewMesh(conf
 // NewParticipantMesh is the concise composition-root constructor used by the
 // CLI adapter and standalone runtime consumers.
 func NewParticipantMesh(ctx context.Context, factory rooms.PairFactory) rooms.Mesh {
-	return NewMesh(rooms.MeshConfig{Context: ctx, PairFactory: factory})
+	return NewMesh(rooms.MeshConfig{Context: ctx, PairFactory: factory}) //nolint:contextcheck // MeshConfig carries the caller context as an explicit dependency.
 }
 
 // NewPairSpec normalizes and orders an unordered pair deterministically.

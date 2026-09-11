@@ -53,7 +53,7 @@ func NewMesh(config rooms.MeshConfig) rooms.Mesh {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	m := &mesh{participants: make(map[string]struct{}), pairs: make(map[rooms.PairSpec]*meshPair), done: make(chan struct{}), ctx: ctx, cancel: cancel, factory: factory}
-	m.stopParent = context.AfterFunc(parent, func() { _ = m.Close() })
+	m.stopParent = context.AfterFunc(parent, func() { _ = m.Close() }) //nolint:errcheck // Parent cancellation invokes the same idempotent Close path; its error is stored for explicit callers.
 	return m
 }
 func NewPairSpec(firstID, secondID string) (rooms.PairSpec, error) {
@@ -148,7 +148,7 @@ func (m *mesh) commitJoin(id string, existing []string, created []*meshPair) err
 	}
 	m.participants[id] = struct{}{}
 	for index, remoteID := range existing {
-		spec, _ := NewPairSpec(id, remoteID)
+		spec, _ := NewPairSpec(id, remoteID) //nolint:errcheck // IDs were normalized and checked distinct before this commit.
 		m.pairs[spec] = created[index]
 	}
 	m.pending = withoutPairs(m.pending, created)
@@ -158,8 +158,9 @@ func (m *mesh) commitJoin(id string, existing []string, created []*meshPair) err
 func (m *mesh) joinFailure(id, operation string, cause error, created []*meshPair) error {
 	cleanupErr := closeMeshPairs(created)
 	m.discard(created, false)
+	var meshErr *rooms.MeshError
 	if cleanupErr != nil {
-		if meshErr, ok := cause.(*rooms.MeshError); ok {
+		if errors.As(cause, &meshErr) {
 			copyOf := *meshErr
 			copyOf.Cause = errors.Join(meshErr.Cause, cleanupErr)
 			cause = &copyOf
@@ -167,7 +168,7 @@ func (m *mesh) joinFailure(id, operation string, cause error, created []*meshPai
 			cause = errors.Join(cause, cleanupErr)
 		}
 	}
-	if meshErr, ok := cause.(*rooms.MeshError); ok {
+	if errors.As(cause, &meshErr) {
 		return meshErr
 	}
 	return meshError(operation, id, "", cause)
@@ -378,8 +379,7 @@ func nilPairResource(resource rooms.PairResource) bool {
 		return true
 	}
 	value := reflect.ValueOf(resource)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+	if kind := value.Kind(); kind == reflect.Chan || kind == reflect.Func || kind == reflect.Interface || kind == reflect.Map || kind == reflect.Pointer || kind == reflect.Slice {
 		return value.IsNil()
 	}
 	return false
