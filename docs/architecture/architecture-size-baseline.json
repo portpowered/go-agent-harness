@@ -1326,59 +1326,9 @@
       "rule": "cognitive-complexity",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario.go",
-      "symbol": "BrowserConversationScenario.Validate",
-      "value": 39,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario.go",
-      "symbol": "validateCorrection",
-      "value": 23,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_correction.go",
-      "symbol": "browserConversationCorrectionFailures",
-      "value": 24,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_correction.go",
-      "symbol": "deriveBrowserConversationCorrections",
-      "value": 24,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_browser_scenario_correction_test.go",
       "symbol": "TestRunBrowserConversationProvesSpokenCorrectionWithIndependentEvidence",
       "value": 24,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
-      "symbol": "evaluateBrowserConversation",
-      "value": 55,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -1406,39 +1356,9 @@
       "rule": "cognitive-complexity",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
-      "symbol": "browserConversationRecoveryFailures",
-      "value": 22,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
-      "symbol": "deriveBrowserConversationRecovery",
-      "value": 51,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_browser_scenario_recovery_test.go",
       "symbol": "TestRunBrowserConversationRecoversStaleReferenceAfterCustomerNavigation",
       "value": 28,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_report.go",
-      "symbol": "validateBrowserConversationValidatorVerdict",
-      "value": 17,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -11326,49 +11246,9 @@
       "rule": "cyclomatic-complexity",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario.go",
-      "symbol": "BrowserConversationScenario.Validate",
-      "value": 25,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_correction.go",
-      "symbol": "browserConversationCorrectionEvidencePassed",
-      "value": 21,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_correction.go",
-      "symbol": "browserConversationCorrectionFailures",
-      "value": 18,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_browser_scenario_correction_test.go",
       "symbol": "TestRunBrowserConversationProvesSpokenCorrectionWithIndependentEvidence",
       "value": 32,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
-      "symbol": "evaluateBrowserConversation",
-      "value": 42,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -11386,39 +11266,9 @@
       "rule": "cyclomatic-complexity",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
-      "symbol": "browserConversationRecoveryFailures",
-      "value": 23,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
-      "symbol": "deriveBrowserConversationRecovery",
-      "value": 44,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_browser_scenario_recovery_test.go",
       "symbol": "TestRunBrowserConversationRecoversStaleReferenceAfterCustomerNavigation",
       "value": 34,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_report.go",
-      "symbol": "validateBrowserConversationValidatorVerdict",
-      "value": 17,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -17816,24 +17666,6 @@
       "rule": "file-lines",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario.go",
-      "value": 766,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "file-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_report.go",
-      "value": 504,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "file-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_browser_scenario_run.go",
       "value": 956,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
@@ -17844,7 +17676,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_browser_scenario_runner.go",
-      "value": 1280,
+      "value": 1211,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -20370,26 +20202,6 @@
       "file": "internal/services/internal/agentruntime/session_browser_recording.go",
       "symbol": "sessionBrowserEventInputs",
       "value": 147,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
-      "symbol": "evaluateBrowserConversation",
-      "value": 99,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
-      "symbol": "deriveBrowserConversationRecovery",
-      "value": 90,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -23750,36 +23562,6 @@
       "file": "internal/services/internal/agentruntime/session_browser_recording.go",
       "symbol": "sessionBrowserEventInputs",
       "value": 88,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario.go",
-      "symbol": "BrowserConversationScenario.Validate",
-      "value": 63,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
-      "symbol": "evaluateBrowserConversation",
-      "value": 67,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
-      "symbol": "deriveBrowserConversationRecovery",
-      "value": 69,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -28197,56 +27979,6 @@
       "rule": "mutable-global",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario.go",
-      "symbol": "ErrBrowserConversationDuplicateObservation",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario.go",
-      "symbol": "ErrBrowserConversationRunFinalized",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario.go",
-      "symbol": "ErrInvalidBrowserConversationResult",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario.go",
-      "symbol": "ErrInvalidBrowserConversationScenario",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_browser_scenario_report.go",
-      "symbol": "browserConversationValidatorRubric",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_browser_scenario_runner.go",
       "symbol": "ErrBrowserConversationCleanup",
       "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
@@ -29138,36 +28870,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest",
       "file": "internal/services/servicetest/runtime.go",
-      "symbol": "ComputeBrowserConversationInputJSONValidity",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest",
-      "file": "internal/services/servicetest/runtime.go",
-      "symbol": "DeriveBrowserConversationCorrections",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest",
-      "file": "internal/services/servicetest/runtime.go",
-      "symbol": "DeriveBrowserConversationRecovery",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest",
-      "file": "internal/services/servicetest/runtime.go",
       "symbol": "ErrInvalidOpenAIRealtimeVoice",
       "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0",
@@ -29288,26 +28990,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest",
       "file": "internal/services/servicetest/runtime.go",
-      "symbol": "EvaluateBrowserConversation",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest",
-      "file": "internal/services/servicetest/runtime.go",
-      "symbol": "NewBrowserConversationCommandValidator",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest",
-      "file": "internal/services/servicetest/runtime.go",
       "symbol": "NewGrokSessionInferencer",
       "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0",
@@ -29358,16 +29040,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest",
       "file": "internal/services/servicetest/runtime.go",
-      "symbol": "RenderBrowserConversationReport",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest",
-      "file": "internal/services/servicetest/runtime.go",
       "symbol": "RunSession",
       "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0",
@@ -29409,16 +29081,6 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest",
       "file": "internal/services/servicetest/runtime.go",
       "symbol": "ValidateSessionAudioDeviceConflicts",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest",
-      "file": "internal/services/servicetest/runtime.go",
-      "symbol": "WriteBrowserConversationReport",
       "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0",
       "message": "mutable package state must be owned by an injected service"
@@ -34865,7 +34527,7 @@
       "rule": "package-files",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "value": 237,
+      "value": 235,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
