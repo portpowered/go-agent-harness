@@ -96,6 +96,14 @@ This candidate is ready for the script-owned CI gate. No CI result, independent 
 
 Evidence-only checkpoint `40c011bc2f09d2f4fe128e50ebfb30ec2b3a0091` is pushed to `codex/audio-runtime-c47-live-probe-output-bound`; PR #439 is open at this head against `main`. The candidate is handed to the script-owned CI gate. No CI result, independent review, guarded merge, post-merge vertical acceptance or project acceptance is claimed.
 
+## Latest main refresh
+
+`origin/main=904e1f4c3be6c1e629138632573bd2fb55d50938` was fetched and merged cleanly as candidate merge commit `5e26dde970502d8b559e34f1a81075a297dcbcff`; the C53 accepted merge remains in its ancestry. The exact immutable staged mission then returned `decision=ACCEPTED` at raw run `runs/runs/staged-probe-20260911T123218Z-10131`, with original source `9f869d1db0a1724128f7c7d083a0054270def68`, integrated C44 source `5f14c45313cfdc71e000fda209e3408fcf863faf`, verifier SHA256 `7e79e235865826942b002fa50e10031892ec287e3ee6cb4bb14c5aff1871c6c3`, and staged-probe SHA256 `7170b42d3fb54f032565614d85e66c213df3ea79eb993cd08af80fa8e86f66db`.
+
+Artifact input equivalence is true, APFS clones were used, projected growth is `174966628` bytes, minimum observed free space is `109386801152`, binary output is `4718` bytes, `report_bytes=381458`, `latest_report_bytes=66860`, and scratch cleanup is `57472980 -> 0` with no errors, survivors or forbidden helpers. Post-merge resource bounds, pinned C45 regressions, seven-source compilation and `git diff --check` pass; the reserve-shortfall control remains intentionally blocked before launch.
+
+The latest-main evidence is ready for the script-owned CI gate. No CI result, independent review, guarded merge, post-merge vertical acceptance or project acceptance is claimed.
+
 ## Submitted head
 
 Evidence-only checkpoint `c86fb9a6687dfcb38e35447b42242ca64d6742db` is pushed to `codex/audio-runtime-c47-live-probe-output-bound` and contains the repair ledger, focused reports and exact raw staged run. No executable Python source, Go source, immutable artifact, fixture or peer path changed after tested source `7b03664b9c355709c592998026b093ab547f6290`.
