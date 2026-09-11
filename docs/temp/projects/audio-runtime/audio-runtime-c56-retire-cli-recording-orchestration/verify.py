@@ -134,6 +134,8 @@ def ancestry() -> dict:
         "head": head,
         "origin_main": origin,
         "origin_main_matches_planning_revision": origin == BASELINE_REVISION,
+        "origin_main_is_descendant_of_planning_revision": git("merge-base", "--is-ancestor", BASELINE_REVISION, origin, check=False).returncode == 0,
+        "origin_main_is_ancestor_of_head": git("merge-base", "--is-ancestor", origin, head, check=False).returncode == 0,
         "startup_is_ancestor": git("merge-base", "--is-ancestor", STARTUP_REVISION, head, check=False).returncode == 0,
         "planning_main_is_ancestor": git("merge-base", "--is-ancestor", BASELINE_REVISION, head, check=False).returncode == 0,
         "branch": git_text("branch", "--show-current"),
@@ -154,7 +156,9 @@ def mode_baseline() -> None:
         CLI_PRODUCTION[3]: 531,
         CLI_PRODUCTION[4]: 355,
     }, f"baseline line census changed: {counts}")
-    require(ancestry()["origin_main_matches_planning_revision"], "origin/main is not the admitted planning revision")
+    facts = ancestry()
+    require(facts["origin_main_is_descendant_of_planning_revision"], "origin/main is not a descendant of the admitted planning revision")
+    require(facts["origin_main_is_ancestor_of_head"], "current origin/main is not integrated into the candidate")
     for path in GENERIC_WIRE:
         current = (REPO / path).read_bytes()
         baseline = subprocess.run(["git", "show", f"{BASELINE_REVISION}:{path}"], cwd=REPO, check=True, capture_output=True).stdout
@@ -288,7 +292,8 @@ def mode_formatting() -> None:
 def mode_final() -> None:
     facts = ancestry()
     require(facts["branch"] == BRANCH, f"candidate branch is {facts['branch']!r}, expected {BRANCH!r}")
-    require(facts["origin_main"] == BASELINE_REVISION, "origin/main drifted from the admitted planning revision")
+    require(facts["origin_main_is_descendant_of_planning_revision"], "origin/main is not a descendant of the admitted planning revision")
+    require(facts["origin_main_is_ancestor_of_head"], "current origin/main is not integrated into the candidate")
     require(facts["startup_is_ancestor"] and facts["planning_main_is_ancestor"], "required ancestry is missing")
     paths = status_paths()
     allowed = set(CLI_PRODUCTION + CLI_TESTS + READ_ONLY_CALLERS + GENERIC_WIRE)

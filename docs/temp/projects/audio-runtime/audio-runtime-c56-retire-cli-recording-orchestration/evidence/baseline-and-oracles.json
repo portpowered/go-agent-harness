@@ -1,9 +1,11 @@
 {
   "ancestry": {
     "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
-    "head": "5f5881d6297b6d9d4c9170b680d2da0c51f6c49b",
-    "origin_main": "904e1f4c3be6c1e629138632573bd2fb55d50938",
-    "origin_main_matches_planning_revision": true,
+    "head": "d4a9839a119fc58e39daece60ed31f3f9fa0112e",
+    "origin_main": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "origin_main_is_ancestor_of_head": true,
+    "origin_main_is_descendant_of_planning_revision": true,
+    "origin_main_matches_planning_revision": false,
     "planning_main_is_ancestor": true,
     "startup_is_ancestor": true
   },
@@ -22,28 +24,15 @@
   "schema": "audio-runtime.c56.baseline-and-oracles.v1",
   "startup_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "status_paths": [
-    "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/README.md",
     "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/baseline-and-oracles.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/cli-retirement.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/embedding-public-provenance-cleanup.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/exact-artifacts-and-mutations.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/final-scope-provenance-budget.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/formatting-owned-go.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/lifecycle-projections-failures.json",
-    "go-agent-runtime/services/recording/internal/session/augment.go",
-    "go-agent-runtime/services/recording/internal/session/browser.go",
-    "go-agent-runtime/services/recording/internal/session/image.go",
-    "go-agent-runtime/services/recording/internal/session/projection.go",
-    "go-agent-runtime/services/recording/internal/session/service.go",
-    "go-agent-runtime/services/recording/internal/session/session_test.go",
-    "go-agent-runtime/services/recording/session.go",
-    "go-agent-runtime/services/recording/internal/session/augment_log.go",
-    "go-agent-runtime/services/recording/internal/session/browser_events.go",
-    "go-agent-runtime/services/recording/internal/session/browser_redaction.go",
-    "go-agent-runtime/services/recording/internal/session/recorded_session.go",
-    "go-agent-runtime/services/recording/internal/session/recorder_finalize.go",
-    "go-agent-runtime/services/recording/internal/session/recorder_observe.go",
-    "go-agent-runtime/services/recording/internal/session/session_helpers_test.go"
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/run.py",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/verify.py"
   ],
   "task": "audio-runtime-c56-retire-cli-recording-orchestration"
 }

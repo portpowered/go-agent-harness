@@ -28,6 +28,13 @@ REPLAY_SOURCE_SHA256 = "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384
 NON_RECORDING_FIXTURE = REPO / "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_text_reply.session.json"
 
 
+def source_revision() -> str:
+    return os.environ.get(
+        "C56_SOURCE_REVISION",
+        subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, check=True, capture_output=True, text=True).stdout.strip(),
+    )
+
+
 class RunnerError(RuntimeError):
     pass
 
@@ -76,7 +83,7 @@ def child_environment(run_root: Path) -> dict[str, str]:
         "GOWORK": "off",
         "LANG": "C",
         "LC_ALL": "C",
-        "C56_SOURCE_REVISION": BASELINE_REVISION,
+        "C56_SOURCE_REVISION": source_revision(),
     }
 
 
@@ -271,7 +278,8 @@ def case_record_finalize_replay(binary: Path, child_timeout: float) -> dict:
     result = {
         "schema": "audio-runtime.c56.record-finalize-replay.v1",
         "passed": True,
-        "source_revision": BASELINE_REVISION,
+        "source_revision": source_revision(),
+        "planning_revision": BASELINE_REVISION,
         "binary": {"path": str(binary), "sha256": sha256_file(binary)},
         "immutable_replay_source": {"path": str(REPLAY_SOURCE), "sha256": sha256_file(REPLAY_SOURCE), "expected_sha256": REPLAY_SOURCE_SHA256},
         "recording": {"path": relative(recording), "manifest": manifest, "session_log": session_log, "execution": recorded},
