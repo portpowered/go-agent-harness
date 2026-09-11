@@ -3796,7 +3796,8 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   exits cleanly. `negative-controls-20260911T000747Z-6618` passes the 21-case
   consumer and exit-1 control, rejects a real same-length PCM/hash mutation,
   and rejects a bundle missing `timeline.jsonl`.
-- The candidate remains clean and pushed at `c169dfe1`; exact repaired/package
+- The candidate remains clean and pushed at `973237a4`, a documentation-only
+  successor of tested source identity `c169dfe1`; exact repaired/package
   provenance, frozen PCM/strict replay, focused causal checks, and current-main
   ancestry remain as recorded above. No CI success, independent review,
   guarded merge, vertical acceptance, physical/acoustic proof, or project
