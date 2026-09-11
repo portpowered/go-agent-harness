@@ -272,3 +272,43 @@ C23 current-main C53 integration and recording regression checkpoint — 2026-09
   off/on 16/64/128/256 matrix, shipped replay, self-check, report, and the
   accumulated C21 regressions before pushing the same PR and returning
   `ACCEPTED` to script-owned CI without polling.
+
+C23 C53 blocker reconciliation and regression checkpoint — 2026-09-11T12:42Z
+
+- Admission was reverified against the authoritative board and
+  `project-control.py verify-work`; `work-task-51` remains the sole admitted
+  C23 owner. The isolated branch is
+  `codex/audio-runtime-c23-long-session-tool-characterization`, matching
+  `prd.json.branchName`; HEAD `6c56606e` is pushed to PR #415, the worktree is
+  clean, and `origin/main=904e1f4c3be6c1e629138632573bd2fb55d50938` remains an
+  ancestor. The candidate diff is exactly the seven admitted C23 evidence
+  paths; startup and project-baseline ancestry remain intact.
+- The exact current-main C53 regression remains preserved, not retried or
+  waived: the C23 recording-on 16-turn control at
+  `artifacts/runs/20260911T123004Z-controls-on-16/consumer-report.json` has
+  provider-authored complete terminal state, 355 events, clean shutdown and
+  zero live-event drops, but `accepted_audio=0`, `audio_bytes=0`, and no
+  `audio/out-000.pcm`. The pre-C53 same-fixture report at
+  `artifacts/runs/20260910T224914Z-controls-on-16/consumer-report.json` has
+  `accepted_audio=32`, `audio_bytes=2048`, and the expected PCM manifest.
+  The demonstrated boundary is C53's `terminalDrainSession` media capability
+  delegation in `go-agent-runtime/services/session/internal/live`; C23 owns
+  no production path and did not alter it.
+- Read-only candidate checks pass: `git diff --check`, required startup/main/
+  baseline ancestry, Python compilation, and the mandated `probe` command help.
+  Accumulated C21
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` passes
+  normal `-count=5` in `12.705s` and race `-count=1` in `11.957s`. No C21,
+  shared, production, manifest, or factory file changed.
+- Last generated C23 artifacts remain bound to source `904e1f4` and the
+  pre-progress merge candidate `bd849397`; current HEAD `6c56606e` adds only
+  this evidence ledger checkpoint. Because the required recording oracle is
+  red on current main, `report.json` is not treated as a current acceptance
+  artifact and the task is not ready for SCRIPT CI.
+- Disposition remains `CONTINUE`, not `ACCEPTED`: primary must admit or assign
+  an authorized runtime owner (the C56 idea is ready but not an active task) to
+  land a reviewed media/recording contract repair or an explicit ownership
+  decision. Next action is to fetch/integrate that reviewed main, rebind
+  provenance to the new exact head, rerun the complete bounded C23 sequence
+  and accumulated regressions, then commit/push the same PR and return
+  `ACCEPTED` to script-owned CI without polling.
