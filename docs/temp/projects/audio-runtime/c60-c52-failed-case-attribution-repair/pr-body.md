@@ -22,7 +22,7 @@ cross-run identity, and changed peer boundaries fail closed.
 - Accumulated lifecycle normal/race regressions: PASS.
 - Focused C60 attribution controls: one valid case accepted; ten invalid controls rejected.
 - Classification: `NON_REPRODUCED` within the exact 22-cell matrix; the immutable source report remains FAILED and is not relabelled.
-- Replay: immutable artifact-0/C16 software-file positive parity and real mutated-fixture rejection PASS in run `replay-20260911T155154Z-33813` in 0.203247 seconds; positive exit 0, mutated-fixture exit 1, exact 4800-byte PCM and clean process groups; no credentials/live Realtime/native or acoustic claim.
+- Replay: immutable artifact-0/C16 software-file positive parity and real mutated-fixture rejection PASS in fresh run `replay-20260911T174336Z-20695` in 0.182598 seconds; positive exit 0, mutated-fixture exit 1, exact 4800-byte PCM and clean process groups; no credentials/live Realtime/native or acoustic claim.
 
 ## Bounded PR439 occurrence attribution
 
@@ -37,9 +37,9 @@ head `79754c85`; the hosted log has no C52 action/trace identity. This remains
 repair, or acceptance waiver; C47/C55 own the transport fixture follow-up.
 
 The final local evidence gate is `verify.py --mode all`. The prior script-CI
-run `34613973921` tested head `efde4d49` and rejected only the static baseline
-drift plus the coverage/hermetic WebMCP composite-reference test. Those paths
-belong to the separate C47 task; no C60-owned path overlaps them. Do not
-resubmit this same candidate until C47's repair lands on main, then resubmit
-this task to script CI. CI is not claimed green and independent review remains
-separate.
+static job `34613973921` tested head `efde4d49` and rejected the C47-owned
+architecture baseline drift (`agent-cli/internal/transport/cli`: baseline 147,
+current 148); all other static steps passed. No C60-owned path overlaps that
+transport baseline. Do not resubmit this same candidate until C47/C55's repair
+lands on accepted main, then resubmit this task to script CI. CI is not claimed
+green and independent review remains separate.

@@ -28,7 +28,7 @@ relabel the immutable C52 source report or claim hosted CI is green.
 
 The task-local C60 fixture and focused controls are in the sibling
 `c60-c52-failed-case-attribution-repair/` directory. Its latest bounded replay
-is `replay-20260911T155154Z-33813` and uses
+is `replay-20260911T174336Z-20695` and uses
 the immutable staged artifact-0 and exact credential-free C16/config inputs;
 the positive replay preserves the marker, continuation, exact 4800-byte PCM,
 session-log hash, and clean process group, while a mutated fixture is rejected.
