@@ -204,6 +204,15 @@ def archive_revision(repo: Path, revision: str, destination: Path) -> dict[str, 
     }
 
 
+def remove_run_cache(cache_root: Path) -> None:
+    for _ in range(3):
+        shutil.rmtree(cache_root, ignore_errors=True)
+        if not cache_root.exists():
+            return
+        time.sleep(0.05)
+    raise RuntimeError(f"run-local cache was not removed after child cleanup: {cache_root}")
+
+
 def safe_extract(archive: Path, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     root = destination.resolve()
@@ -805,7 +814,7 @@ def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_t
         shutil.rmtree(scratch, ignore_errors=True)
     # All child processes have been reaped before this point; retain reports and
     # hashes but remove the run-local tool caches from the evidence bundle.
-    shutil.rmtree(cache_root, ignore_errors=True)
+    remove_run_cache(cache_root)
     result = {
         "schema": "audio-runtime-c52-matrix-run-v1",
         "run_id": run_dir.name,
@@ -823,6 +832,9 @@ def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_t
     }
     json_write(run_dir / "run.json", result)
     json_write(EVIDENCE / "matrix-results.json", result)
+    # Recheck after report writes so a late cache recreation cannot be
+    # mistaken for a clean retained evidence bundle.
+    remove_run_cache(cache_root)
     return result
 
 
