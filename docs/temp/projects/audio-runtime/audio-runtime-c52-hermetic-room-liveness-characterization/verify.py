@@ -235,8 +235,10 @@ def parse_raw_go_json(
             counts[action] += 1
     output = "\n".join(str(event.get("Output", "")) for event in events if event.get("Action") == "output")
     cached_marker = "(cached)" in output
-    no_tests_marker = "[no tests to run]" in output or any(
-        event.get("Action") == "output" and "no tests to run" in str(event.get("Output", ""))
+    no_tests_marker = any(
+        event.get("Package") == "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
+        and event.get("Action") == "output"
+        and "no tests to run" in str(event.get("Output", ""))
         for event in events
     )
     required_test_pass_counts = {test: test_events.get(test, {}).get("pass", 0) for test in required_tests}

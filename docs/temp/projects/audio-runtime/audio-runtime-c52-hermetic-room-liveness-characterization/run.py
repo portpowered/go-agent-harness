@@ -445,8 +445,10 @@ def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, ex
     selected = {test: test_events.get(test, {}).get("run", 0) for test in required_tests}
     package_events = [event for event in events if event.get("Package") == "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle" and not event.get("Test")]
     output = "\n".join(str(event.get("Output", "")) for event in events if event.get("Action") == "output")
-    no_tests_marker = "[no tests to run]" in output or any(
-        event.get("Action") == "output" and "no tests to run" in str(event.get("Output", ""))
+    no_tests_marker = any(
+        event.get("Package") == "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
+        and event.get("Action") == "output"
+        and "no tests to run" in str(event.get("Output", ""))
         for event in events
     )
     requested_count = expected_count
@@ -491,7 +493,7 @@ def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, ex
         "relevant_test_names": relevant_names,
         "package_events": package_events,
         "cached_marker": "(cached)" in output,
-        "no_tests_marker": "[no tests to run]" in output or any(event.get("Action") == "output" and "no tests to run" in str(event.get("Output", "")) for event in events),
+        "no_tests_marker": no_tests_marker,
         "first_assertion": next((line for line in output.splitlines() if "browser_parity_test.go:" in line), ""),
         "package": package,
     }
