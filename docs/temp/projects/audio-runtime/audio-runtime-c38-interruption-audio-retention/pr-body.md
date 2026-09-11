@@ -243,3 +243,40 @@ out-of-scope repair was made. This is executor handoff evidence, not CI-green,
 review, merge, vertical, physical/acoustic, or project acceptance. Next action:
 push `b13c7aa`, update PR `#430`, and return `ACCEPTED` to script-owned
 current-head CI without polling.
+
+## Pinned static rejection repair — 2026-09-11T04:33Z
+
+The canonical board rejection at head `23a9a168` was CI run
+`34559981128`, job `103140529372`, `CI (static)`. Its completed log had only
+five `errcheck` findings, all in the owned
+`session_audio_out_test.go` cancellation-barrier fixture: sink creation,
+inferencer connect, session close, the old type assertion, and provider close.
+
+Commit `aa1a3dc3e812df1be9ad5b311dc4bc5154334dd1` checks each result through a
+test-only helper, uses the already-typed output session channel, and uses the
+embedded provider's `Done` signal for the pre-drain close assertion. The
+fixture remains exactly 684 lines, and no production behavior, wire fixture,
+oracle, deadline, baseline, or ownership boundary changed.
+
+At `aa1a3dc`, pinned `make lint` reports 0 issues in all 15 modules;
+architecture-size, diff-check, focused normal/race (22/22 each), and vet pass.
+The accumulated `COUNT=3` session regression script passes normal, coverage,
+and race modes. The exact remote continuation matrix passes 13/13 normally;
+its race run passes the prior `test46/slow_device` target and only exposes the
+known concurrent `long_prior_input_61s` stress cases. Isolated `test46/slow_device`
+and the remote-marker oracle each pass in normal and race.
+
+Clean exact-source runner records are `causal-20260911T043350Z-50563`
+(`CAUSAL_PROOF`, 8.861s, source `aa1a3dc`) and
+`focused-checks-20260911T043350Z-50564` (`FOCUSED_CHECKS_PASS`, normal/race,
+vet, architecture/size at 184/1,888/27,817, and Wire). The bounded
+negative-control and cleanup records are
+`negative-controls-20260911T042725Z-46601` and
+`cleanup-control-20260911T042725Z-46602`.
+
+This remains executor handoff evidence only: no current-head script-CI
+success, independent review, guarded merge, post-delivery vertical
+validation, physical/acoustic proof, or project acceptance is claimed. The
+next action is fresh exact-source artifact replay/package provenance, then
+push/update PR `#430` and return `ACCEPTED` to script-owned current-head CI
+without polling; retain C38 ownership for any exact rejection.
