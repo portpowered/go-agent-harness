@@ -546,7 +546,7 @@ func TestMediaPumpProviderCloseIsAnExpectedStop(t *testing.T) {
 
 	d := &terminalDrainSession{receive: messages.NewTypedBuffer[messages.StreamMessage](1), stop: make(chan struct{})}
 	value := messages.NewSessionCloseValueWithTerminal("provider", "fixture_complete", "fixture", messages.TerminalReasonProviderAuthoredCompletion, messages.TerminalProvenanceProvider, messages.TerminalOutputComplete)
-	d.forwardMessage(messages.StreamMessage{Type: messages.StreamTypeSessionClose, ResponseID: "response", Value: value})
+	d.forwardMessage(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionClose, ResponseID: "response", Value: value})
 	if msg, ok := d.receive.Read(); !ok || msg.ResponseID != "" || msg.Value != value {
 		t.Fatalf("forwarded close = %+v, want uncorrelated close with original metadata", msg)
 	}

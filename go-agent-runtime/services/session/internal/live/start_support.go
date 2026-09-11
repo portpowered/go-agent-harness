@@ -360,7 +360,7 @@ type terminalDrainSession struct {
 	closeErr   error
 }
 
-func (s *terminalDrainSession) forward(source *messages.TypedBuffer[messages.StreamMessage], sourceDone <-chan struct{}) {
+func (s *terminalDrainSession) forward(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage], sourceDone <-chan struct{}) {
 	defer close(s.done)
 	if source == nil {
 		return
@@ -368,28 +368,28 @@ func (s *terminalDrainSession) forward(source *messages.TypedBuffer[messages.Str
 	for {
 		select {
 		case msg, ok := <-source.Chan():
-			if !ok || !s.forwardMessage(msg) {
+			if !ok || !s.forwardMessage(ctx, msg) {
 				return
 			}
 		case <-sourceDone:
-			s.drain(source)
+			s.drain(ctx, source)
 			return
 		case <-s.stop:
 			return
 		}
 	}
 }
-func (s *terminalDrainSession) drain(source *messages.TypedBuffer[messages.StreamMessage]) {
+func (s *terminalDrainSession) drain(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage]) {
 	for {
 		msg, ok := source.Read()
-		if !ok || !s.forwardMessage(msg) {
+		if !ok || !s.forwardMessage(ctx, msg) {
 			return
 		}
 	}
 }
-func (s *terminalDrainSession) forwardMessage(msg messages.StreamMessage) bool {
+func (s *terminalDrainSession) forwardMessage(ctx context.Context, msg messages.StreamMessage) bool {
 	if msg.Type == messages.StreamTypeSessionClose {
 		msg.ResponseID = ""
 	}
-	return s.receive.WriteWaitContextOrDone(context.Background(), s.stop, msg).OK()
+	return s.receive.WriteWaitContextOrDone(ctx, s.stop, msg).OK()
 }

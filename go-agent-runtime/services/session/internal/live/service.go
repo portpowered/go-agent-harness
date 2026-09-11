@@ -358,7 +358,7 @@ func (i terminalDrainInferencer) ConnectSession(ctx context.Context) (messages.S
 		capacity = source.Cap()
 	}
 	d := &terminalDrainSession{inner: s, receive: messages.NewTypedBuffer[messages.StreamMessage](capacity), done: make(chan struct{}), stop: make(chan struct{})}
-	go d.forward(source, s.Done())
+	go d.forward(context.WithoutCancel(ctx), source, s.Done())
 	return d, nil
 }
 func (i terminalDrainInferencer) FlushCapture() error {
