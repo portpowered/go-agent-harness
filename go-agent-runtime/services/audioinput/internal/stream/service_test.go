@@ -156,6 +156,94 @@ func TestConvertScheduledClonesEachTurn(t *testing.T) {
 	}
 }
 
+func TestOwnershipAdaptersJoinCleanupAndObservation(t *testing.T) {
+	runErr := errors.New("run failed")
+	closeErr := errors.New("close failed")
+	err := WithSource(
+		func() (*twoFrameSource, error) { return &twoFrameSource{}, nil },
+		func(*twoFrameSource) error { return runErr },
+		func(*twoFrameSource) error { return closeErr },
+	)
+	if !errors.Is(err, runErr) || !errors.Is(err, closeErr) {
+		t.Fatalf("WithSource error = %v, want run and cleanup causes", err)
+	}
+
+	service := New(nil)
+	cleanupCalls := 0
+	err = StreamWithCleanup(context.Background(), service, audioinput.Input{Buffer: pcm16Frame(1)}, &captureLoop{}, func() error {
+		cleanupCalls++
+		return closeErr
+	})
+	if !errors.Is(err, closeErr) || cleanupCalls != 1 {
+		t.Fatalf("StreamWithCleanup error=%v cleanupCalls=%d", err, cleanupCalls)
+	}
+
+	cleanupCalls = 0
+	pcm, rate, err := ReadWithCleanup(context.Background(), service, audioinput.Input{Buffer: pcm16Bytes(1, 2)}, func() error {
+		cleanupCalls++
+		return closeErr
+	})
+	if !errors.Is(err, closeErr) || len(pcm) != 4 || rate != audio.SampleRate || cleanupCalls != 1 {
+		t.Fatalf("ReadWithCleanup pcm=%d rate=%d error=%v cleanupCalls=%d", len(pcm), rate, err, cleanupCalls)
+	}
+
+	loop := &captureLoop{}
+	if err := StreamManaged(context.Background(), service, &audioinput.ManagedSource{
+		Source: audio.NewSliceSource([]int16{3, 4}), SourceSampleRate: audio.SampleRate,
+	}, loop); err != nil {
+		t.Fatalf("StreamManaged: %v", err)
+	}
+	managed := &audioinput.ManagedSource{Source: audio.NewSliceSource([]int16{5, 6}), SourceSampleRate: audio.SampleRate}
+	pcm, rate, err = ReadManaged(context.Background(), service, managed)
+	if err != nil || len(pcm) != 4 || rate != audio.SampleRate {
+		t.Fatalf("ReadManaged pcm=%d rate=%d error=%v", len(pcm), rate, err)
+	}
+
+	observed := false
+	if err := DispatchWithObservation(context.Background(), service, &captureLoop{}, audioinput.ScheduledInput{PCM: pcm16Bytes(7, 8)}, audioinput.DispatchOptions{}, func(observation audioinput.AudioObservation) {
+		observed = bytes.Equal(observation.PCM, pcm16Bytes(7, 8))
+	}); err != nil {
+		t.Fatalf("DispatchWithObservation: %v", err)
+	}
+	if !observed {
+		t.Fatal("DispatchWithObservation did not deliver the accepted PCM")
+	}
+}
+
+func TestReadAndDispatchFailurePorts(t *testing.T) {
+	service := New(nil)
+	readErr := errors.New("source failed")
+	_, _, err := service.Read(context.Background(), audioinput.Input{Source: audioSourceFunc(func(context.Context, []int16) error { return readErr })})
+	if !errors.Is(err, readErr) || !errors.Is(err, audioinput.ErrRead) {
+		t.Fatalf("Read error = %v, want source and read identities", err)
+	}
+
+	if err := service.Dispatch(context.Background(), &captureLoop{}, audioinput.ScheduledInput{}, audioinput.DispatchOptions{}); !errors.Is(err, audioinput.ErrEmpty) {
+		t.Fatalf("empty Dispatch error = %v, want ErrEmpty", err)
+	}
+	if err := service.Dispatch(context.Background(), nil, audioinput.ScheduledInput{PCM: pcm16Bytes(1)}, audioinput.DispatchOptions{}); !errors.Is(err, audioinput.ErrUnavailable) {
+		t.Fatalf("unavailable Dispatch error = %v, want ErrUnavailable", err)
+	}
+
+	sendErr := errors.New("send failed")
+	if err := service.Dispatch(context.Background(), &captureLoop{frameErr: sendErr}, audioinput.ScheduledInput{PCM: pcm16Bytes(1)}, audioinput.DispatchOptions{}); !errors.Is(err, sendErr) || !errors.Is(err, audioinput.ErrSend) {
+		t.Fatalf("frame send error = %v, want send identities", err)
+	}
+	if err := service.Dispatch(context.Background(), &captureLoop{eventErr: sendErr}, audioinput.ScheduledInput{PCM: pcm16Bytes(1), EndOfTurn: true}, audioinput.DispatchOptions{}); !errors.Is(err, sendErr) || !errors.Is(err, audioinput.ErrSend) {
+		t.Fatalf("event send error = %v, want send identities", err)
+	}
+	if err := service.Dispatch(context.Background(), &captureLoop{eventErr: context.Canceled}, audioinput.ScheduledInput{PCM: pcm16Bytes(1), EndOfTurn: true}, audioinput.DispatchOptions{}); !errors.Is(err, audioinput.ErrEndOfTurnLost) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled event error = %v, want end-of-turn and cancellation identities", err)
+	}
+
+	if _, err := service.ConvertPCM([]byte{1}, audio.SampleRate, audio.SampleRate); !errors.Is(err, audioinput.ErrPCM16Truncated) {
+		t.Fatalf("odd ConvertPCM error = %v, want truncation", err)
+	}
+	if _, err := service.ConvertPCM(pcm16Bytes(1), audio.SampleRate, 44100); err == nil {
+		t.Fatal("unsupported ConvertPCM rate unexpectedly succeeded")
+	}
+}
+
 func pcm16Frame(value int16) []byte {
 	samples := make([]int16, audio.FrameSize)
 	for index := range samples {
