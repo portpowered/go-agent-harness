@@ -98,7 +98,7 @@
   ],
   "reachability_rule": "A target symbol is a reachable anchor only when an exact production CallExpr from an immediate public CLI construction/transport file is cited; downstream target-to-target edges are retained separately.",
   "schema_version": "c50-call-paths-v1",
-  "source_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+  "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
   "target_call_edges": [
     {
       "caller": "agent-cli/internal/room/browser_tools.go:622:normalizeManifestBrowserTools",
@@ -3776,11 +3776,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/capability_alias.go:27:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.prepareSessionCapabilityCoordinator",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 45,
+        "line": 36,
         "column": 22,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -3791,11 +3791,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/capability_alias.go:27:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.prepareSessionCapabilityCoordinator",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 121,
+        "line": 107,
         "column": 22,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -4016,11 +4016,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/capability_alias.go:40:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.closeSessionCapabilityIfNeeded",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 47,
+        "line": 38,
         "column": 3,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -4031,11 +4031,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/capability_alias.go:40:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.closeSessionCapabilityIfNeeded",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 123,
+        "line": 109,
         "column": 3,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -4661,11 +4661,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:735:(sessionAudioOutputSession).rtcMedia",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:644:(sessionAudioOutputSession).rtcMedia",
       "callee": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go:103:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.rtcMediaFromSession",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 736,
+        "line": 645,
         "column": 9,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -5516,11 +5516,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/session.go:14:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.RunSession",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 54,
+        "line": 45,
         "column": 10,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -6852,7 +6852,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_instructions.go:65:RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
         "line": 76,
@@ -6867,7 +6867,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_recording.go:326:runSessionWithRecordingDirectory",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_recording.go",
         "line": 347,
@@ -6882,7 +6882,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go:327:runSessionWithAudioInputPlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:233:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:201:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
         "line": 352,
@@ -6896,11 +6896,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:233:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:201:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 75,
+        "line": 66,
         "column": 19,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -6911,11 +6911,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:233:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:201:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 149,
+        "line": 135,
         "column": 19,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -6927,7 +6927,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_image.go:302:runSessionImagePlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:233:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:201:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_image.go",
         "line": 304,
@@ -6942,7 +6942,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_instructions.go:65:RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:233:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:201:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
         "line": 162,
@@ -6957,7 +6957,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_recording.go:326:runSessionWithRecordingDirectory",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:233:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:201:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputForPlan",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_recording.go",
         "line": 421,
@@ -6971,11 +6971,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:233:newSessionAudioOutputForPlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:258:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).writeDeviceSamples",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:201:newSessionAudioOutputForPlan",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:225:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).writeDeviceSamples",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 247,
+        "line": 215,
         "column": 33,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -6986,11 +6986,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:233:newSessionAudioOutputForPlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:285:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioSinkAtRate",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:201:newSessionAudioOutputForPlan",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:249:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioSinkAtRate",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 251,
+        "line": 219,
         "column": 15,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7001,11 +7001,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:258:(sessionAudioOutput).writeDeviceSamples",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:285:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioSinkAtRate",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:225:(sessionAudioOutput).writeDeviceSamples",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:249:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioSinkAtRate",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 268,
+        "line": 235,
         "column": 16,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7016,116 +7016,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:363:(sessionAudioSink).WriteFrame",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:436:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:29:RunSessionWithAudioOut",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.RunSessionWithAudioOutAndTextSeed",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 374,
-        "column": 10,
-        "caller_package": "agentruntime",
-        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-        "caller_symbol": "(sessionAudioSink).WriteFrame",
-        "expression": "sessionAudioSinkError",
-        "resolution": "same-package AST CallExpr",
-        "confidence": "high"
-      }
-    },
-    {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:380:(sessionAudioSink).WriteSamples",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:436:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
-      "call": {
-        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 399,
-        "column": 10,
-        "caller_package": "agentruntime",
-        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-        "caller_symbol": "(sessionAudioSink).WriteSamples",
-        "expression": "sessionAudioSinkError",
-        "resolution": "same-package AST CallExpr",
-        "confidence": "high"
-      }
-    },
-    {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:380:(sessionAudioSink).WriteSamples",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:436:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
-      "call": {
-        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 402,
-        "column": 10,
-        "caller_package": "agentruntime",
-        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-        "caller_symbol": "(sessionAudioSink).WriteSamples",
-        "expression": "sessionAudioSinkError",
-        "resolution": "same-package AST CallExpr",
-        "confidence": "high"
-      }
-    },
-    {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:408:(sessionAudioSink).Close",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:436:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
-      "call": {
-        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 419,
-        "column": 36,
-        "caller_package": "agentruntime",
-        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-        "caller_symbol": "(sessionAudioSink).Close",
-        "expression": "sessionAudioSinkError",
-        "resolution": "same-package AST CallExpr",
-        "confidence": "high"
-      }
-    },
-    {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:408:(sessionAudioSink).Close",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:436:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
-      "call": {
-        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 422,
-        "column": 36,
-        "caller_package": "agentruntime",
-        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-        "caller_symbol": "(sessionAudioSink).Close",
-        "expression": "sessionAudioSinkError",
-        "resolution": "same-package AST CallExpr",
-        "confidence": "high"
-      }
-    },
-    {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:408:(sessionAudioSink).Close",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:436:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
-      "call": {
-        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 425,
-        "column": 36,
-        "caller_package": "agentruntime",
-        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-        "caller_symbol": "(sessionAudioSink).Close",
-        "expression": "sessionAudioSinkError",
-        "resolution": "same-package AST CallExpr",
-        "confidence": "high"
-      }
-    },
-    {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:408:(sessionAudioSink).Close",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:436:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
-      "call": {
-        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 428,
-        "column": 38,
-        "caller_package": "agentruntime",
-        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-        "caller_symbol": "(sessionAudioSink).Close",
-        "expression": "sessionAudioSinkError",
-        "resolution": "same-package AST CallExpr",
-        "confidence": "high"
-      }
-    },
-    {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:36:RunSessionWithAudioOut",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.RunSessionWithAudioOutAndTextSeed",
-      "call": {
-        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 37,
+        "line": 30,
         "column": 9,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7136,11 +7031,116 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:436:sessionAudioSinkError",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:451:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioFormat",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:309:(sessionAudioSink).WriteFrame",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:374:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 445,
+        "line": 319,
+        "column": 10,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioSink).WriteFrame",
+        "expression": "sessionAudioSinkError",
+        "resolution": "same-package AST CallExpr",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:324:(sessionAudioSink).WriteSamples",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:374:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 341,
+        "column": 10,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioSink).WriteSamples",
+        "expression": "sessionAudioSinkError",
+        "resolution": "same-package AST CallExpr",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:324:(sessionAudioSink).WriteSamples",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:374:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 344,
+        "column": 10,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioSink).WriteSamples",
+        "expression": "sessionAudioSinkError",
+        "resolution": "same-package AST CallExpr",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:349:(sessionAudioSink).Close",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:374:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 358,
+        "column": 36,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioSink).Close",
+        "expression": "sessionAudioSinkError",
+        "resolution": "same-package AST CallExpr",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:349:(sessionAudioSink).Close",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:374:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 361,
+        "column": 36,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioSink).Close",
+        "expression": "sessionAudioSinkError",
+        "resolution": "same-package AST CallExpr",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:349:(sessionAudioSink).Close",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:374:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 364,
+        "column": 36,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioSink).Close",
+        "expression": "sessionAudioSinkError",
+        "resolution": "same-package AST CallExpr",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:349:(sessionAudioSink).Close",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:374:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioSinkError",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 367,
+        "column": 38,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioSink).Close",
+        "expression": "sessionAudioSinkError",
+        "resolution": "same-package AST CallExpr",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:374:sessionAudioSinkError",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:388:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioFormat",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 383,
         "column": 20,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7151,11 +7151,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:436:sessionAudioSinkError",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:451:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioFormat",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:374:sessionAudioSinkError",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:388:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioFormat",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 448,
+        "line": 386,
         "column": 70,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7166,11 +7166,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:285:newSessionAudioSinkAtRate",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:458:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioSink).updateWAVHeaderLocked",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:249:newSessionAudioSinkAtRate",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:394:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioSink).updateWAVHeaderLocked",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 329,
+        "line": 286,
         "column": 13,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7181,11 +7181,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:363:(sessionAudioSink).WriteFrame",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:458:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioSink).updateWAVHeaderLocked",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:309:(sessionAudioSink).WriteFrame",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:394:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioSink).updateWAVHeaderLocked",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 377,
+        "line": 322,
         "column": 9,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7196,11 +7196,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:380:(sessionAudioSink).WriteSamples",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:458:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioSink).updateWAVHeaderLocked",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:324:(sessionAudioSink).WriteSamples",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:394:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioSink).updateWAVHeaderLocked",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 405,
+        "line": 347,
         "column": 9,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7211,11 +7211,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:408:(sessionAudioSink).Close",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:458:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioSink).updateWAVHeaderLocked",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:349:(sessionAudioSink).Close",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:394:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioSink).updateWAVHeaderLocked",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 422,
+        "line": 361,
         "column": 75,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7226,11 +7226,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:363:(sessionAudioSink).WriteFrame",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:479:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioWAVSizeFits",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:309:(sessionAudioSink).WriteFrame",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:414:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioWAVSizeFits",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 370,
+        "line": 315,
         "column": 15,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7241,11 +7241,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:380:(sessionAudioSink).WriteSamples",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:479:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioWAVSizeFits",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:324:(sessionAudioSink).WriteSamples",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:414:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioWAVSizeFits",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 394,
+        "line": 336,
         "column": 15,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7256,11 +7256,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:458:(sessionAudioSink).updateWAVHeaderLocked",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:479:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioWAVSizeFits",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:394:(sessionAudioSink).updateWAVHeaderLocked",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:414:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioWAVSizeFits",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 462,
+        "line": 398,
         "column": 6,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7271,11 +7271,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:380:(sessionAudioSink).WriteSamples",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:483:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioContextError",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:324:(sessionAudioSink).WriteSamples",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:417:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sessionAudioContextError",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 381,
+        "line": 325,
         "column": 12,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7286,11 +7286,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:380:(sessionAudioSink).WriteSamples",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:495:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.writeSessionAudioAll",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:324:(sessionAudioSink).WriteSamples",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:428:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.writeSessionAudioAll",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 401,
+        "line": 343,
         "column": 12,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7301,11 +7301,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:458:(sessionAudioSink).updateWAVHeaderLocked",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:495:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.writeSessionAudioAll",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:394:(sessionAudioSink).updateWAVHeaderLocked",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:428:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.writeSessionAudioAll",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 472,
+        "line": 408,
         "column": 12,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7316,11 +7316,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:512:(sessionAudioOutput).writeDelta",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:559:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.pcm16AudioDeltaError",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:444:(sessionAudioOutput).writeDelta",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:476:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.pcm16AudioDeltaError",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 525,
+        "line": 453,
         "column": 10,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7331,11 +7331,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:512:(sessionAudioOutput).writeDelta",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:559:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.pcm16AudioDeltaError",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:444:(sessionAudioOutput).writeDelta",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:476:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.pcm16AudioDeltaError",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 544,
+        "line": 465,
         "column": 10,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7347,7 +7347,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go:327:runSessionWithAudioInputPlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:566:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:482:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
         "line": 357,
@@ -7361,11 +7361,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:566:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:482:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 80,
+        "line": 71,
         "column": 18,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7376,11 +7376,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:566:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:482:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 154,
+        "line": 140,
         "column": 18,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7392,7 +7392,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_image.go:302:runSessionImagePlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:566:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:482:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_image.go",
         "line": 309,
@@ -7407,7 +7407,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_instructions.go:65:RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:566:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:482:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
         "line": 167,
@@ -7422,7 +7422,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_recording.go:326:runSessionWithRecordingDirectory",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:566:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:482:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_recording.go",
         "line": 466,
@@ -7437,7 +7437,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_recording.go:326:runSessionWithRecordingDirectory",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:566:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:482:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutput).close",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_recording.go",
         "line": 483,
@@ -7452,7 +7452,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go:327:runSessionWithAudioInputPlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:595:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:510:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
         "line": 361,
@@ -7466,11 +7466,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:595:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:510:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 91,
+        "line": 82,
         "column": 14,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7481,11 +7481,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:595:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:510:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 165,
+        "line": 151,
         "column": 14,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7497,7 +7497,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_image.go:302:runSessionImagePlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:595:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:510:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_image.go",
         "line": 313,
@@ -7512,7 +7512,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_instructions.go:65:RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:595:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:510:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
         "line": 181,
@@ -7527,7 +7527,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_recording.go:326:runSessionWithRecordingDirectory",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:595:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:510:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputInferencer",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_recording.go",
         "line": 431,
@@ -7542,7 +7542,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go:327:runSessionWithAudioInputPlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:616:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:531:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
         "line": 365,
@@ -7557,7 +7557,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go:327:runSessionWithAudioInputPlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:616:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:531:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
         "line": 380,
@@ -7571,11 +7571,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:616:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:531:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 101,
+        "line": 90,
         "column": 3,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7586,11 +7586,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:616:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:531:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 183,
+        "line": 167,
         "column": 3,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7602,7 +7602,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_image.go:302:runSessionImagePlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:616:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:531:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_image.go",
         "line": 323,
@@ -7617,7 +7617,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_instructions.go:65:RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:616:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:531:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
         "line": 192,
@@ -7632,7 +7632,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_recording.go:326:runSessionWithRecordingDirectory",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:616:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:531:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).wait",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_recording.go",
         "line": 477,
@@ -7646,8 +7646,23 @@
       }
     },
     {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:531:(sessionAudioOutputInferencer).wait",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:542:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).recordErr",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 537,
+        "column": 3,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputInferencer).wait",
+        "expression": "i.recordErr",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go:327:runSessionWithAudioInputPlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:636:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:551:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
         "line": 366,
@@ -7662,7 +7677,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go:327:runSessionWithAudioInputPlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:636:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:551:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
         "line": 381,
@@ -7676,11 +7691,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:636:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:551:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 102,
+        "line": 91,
         "column": 19,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7691,11 +7706,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:636:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:551:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 184,
+        "line": 168,
         "column": 19,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7707,7 +7722,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_image.go:302:runSessionImagePlan",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:636:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:551:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_image.go",
         "line": 324,
@@ -7722,7 +7737,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_instructions.go:65:RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:636:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:551:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
         "line": 193,
@@ -7737,7 +7752,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_recording.go:326:runSessionWithRecordingDirectory",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:636:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:551:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputInferencer).err",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_recording.go",
         "line": 478,
@@ -7751,11 +7766,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:604:(sessionAudioOutputInferencer).ConnectSession",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:657:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputSession",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:519:(sessionAudioOutputInferencer).ConnectSession",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:576:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newSessionAudioOutputSession",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 609,
+        "line": 524,
         "column": 13,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7766,11 +7781,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:672:(sessionAudioOutputSession).Send",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:709:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).replaceSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:593:(sessionAudioOutputSession).Send",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:621:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).replaceSeed",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 673,
+        "line": 594,
         "column": 5,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7781,11 +7796,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:657:newSessionAudioOutputSession",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:743:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).forward",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:576:newSessionAudioOutputSession",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:652:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).forward",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 668,
+        "line": 590,
         "column": 5,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -7796,60 +7811,270 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:743:(sessionAudioOutputSession).forward",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:761:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).drain",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:652:(sessionAudioOutputSession).forward",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:678:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).forwardNext",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 753,
-        "column": 4,
+        "line": 663,
+        "column": 6,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
         "caller_symbol": "(sessionAudioOutputSession).forward",
+        "expression": "s.forwardNext",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:678:(sessionAudioOutputSession).forwardNext",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:693:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).drain",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 686,
+        "column": 4,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).forwardNext",
         "expression": "s.drain",
         "resolution": "typed receiver method AST CallExpr; exact method declaration",
         "confidence": "high"
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:743:(sessionAudioOutputSession).forward",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:773:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).forwardMessage",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:652:(sessionAudioOutputSession).forward",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:704:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).drainAfterCancellation",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 749,
-        "column": 8,
+        "line": 660,
+        "column": 4,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
         "caller_symbol": "(sessionAudioOutputSession).forward",
-        "expression": "s.forwardMessage",
+        "expression": "s.drainAfterCancellation",
         "resolution": "typed receiver method AST CallExpr; exact method declaration",
         "confidence": "high"
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:761:(sessionAudioOutputSession).drain",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:773:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).forwardMessage",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:652:(sessionAudioOutputSession).forward",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:704:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).drainAfterCancellation",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 767,
+        "line": 667,
+        "column": 4,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).forward",
+        "expression": "s.drainAfterCancellation",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:652:(sessionAudioOutputSession).forward",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:704:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).drainAfterCancellation",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 671,
+        "column": 5,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).forward",
+        "expression": "s.drainAfterCancellation",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:704:(sessionAudioOutputSession).drainAfterCancellation",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:728:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).drainAfterInnerClose",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 718,
+        "column": 4,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).drainAfterCancellation",
+        "expression": "s.drainAfterInnerClose",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:704:(sessionAudioOutputSession).drainAfterCancellation",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:728:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).drainAfterInnerClose",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 722,
+        "column": 4,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).drainAfterCancellation",
+        "expression": "s.drainAfterInnerClose",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:652:(sessionAudioOutputSession).forward",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:748:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).closeInner",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 654,
+        "column": 3,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).forward",
+        "expression": "s.closeInner",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:704:(sessionAudioOutputSession).drainAfterCancellation",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:748:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).closeInner",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 717,
+        "column": 4,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).drainAfterCancellation",
+        "expression": "s.closeInner",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:704:(sessionAudioOutputSession).drainAfterCancellation",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:748:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).closeInner",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 721,
+        "column": 4,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).drainAfterCancellation",
+        "expression": "s.closeInner",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:766:(sessionAudioOutputSession).forwardMessageWithContext",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:748:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).closeInner",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 771,
+        "column": 4,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).forwardMessageWithContext",
+        "expression": "s.closeInner",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:766:(sessionAudioOutputSession).forwardMessageWithContext",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:748:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).closeInner",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 776,
+        "column": 4,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).forwardMessageWithContext",
+        "expression": "s.closeInner",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:748:(sessionAudioOutputSession).closeInner",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:752:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).finishInnerClose",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 749,
+        "column": 34,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).closeInner",
+        "expression": "s.finishInnerClose",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:678:(sessionAudioOutputSession).forwardNext",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:766:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).forwardMessageWithContext",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 683,
+        "column": 10,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).forwardNext",
+        "expression": "s.forwardMessageWithContext",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:693:(sessionAudioOutputSession).drain",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:766:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).forwardMessageWithContext",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 699,
         "column": 7,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
         "caller_symbol": "(sessionAudioOutputSession).drain",
-        "expression": "s.forwardMessage",
+        "expression": "s.forwardMessageWithContext",
         "resolution": "typed receiver method AST CallExpr; exact method declaration",
         "confidence": "high"
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:773:(sessionAudioOutputSession).forwardMessage",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:704:(sessionAudioOutputSession).drainAfterCancellation",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:766:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).forwardMessageWithContext",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 713,
+        "column": 8,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).drainAfterCancellation",
+        "expression": "s.forwardMessageWithContext",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:728:(sessionAudioOutputSession).drainAfterInnerClose",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:766:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionAudioOutputSession).forwardMessageWithContext",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+        "line": 737,
+        "column": 8,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(sessionAudioOutputSession).drainAfterInnerClose",
+        "expression": "s.forwardMessageWithContext",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:766:(sessionAudioOutputSession).forwardMessageWithContext",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:802:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.assistantAudioDelta",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 774,
+        "line": 767,
         "column": 50,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-        "caller_symbol": "(sessionAudioOutputSession).forwardMessage",
+        "caller_symbol": "(sessionAudioOutputSession).forwardMessageWithContext",
         "expression": "assistantAudioDelta",
         "resolution": "same-package AST CallExpr",
         "confidence": "high"
@@ -15986,11 +16211,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go:291:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionRecordingClaim).release",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 69,
+        "line": 60,
         "column": 21,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -16001,11 +16226,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go:291:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionRecordingClaim).release",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 143,
+        "line": 129,
         "column": 21,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -16241,11 +16466,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go:87:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.ensureSessionRecordingClaim",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 65,
+        "line": 56,
         "column": 16,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -16256,11 +16481,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go:87:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.ensureSessionRecordingClaim",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 139,
+        "line": 125,
         "column": 16,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -21101,11 +21326,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_duration.go:101:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.RunSessionWithTextSeedAndMaxDuration",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 127,
+        "line": 113,
         "column": 10,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -21116,11 +21341,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_duration.go:169:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.runSessionDurationPlan",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 181,
+        "line": 165,
         "column": 13,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -21131,11 +21356,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_duration.go:169:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.runSessionDurationPlan",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 201,
+        "line": 185,
         "column": 9,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -21956,11 +22181,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_duration_artifacts.go:161:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.prepareSessionDurationArtifacts",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 177,
+        "line": 161,
         "column": 32,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -21971,11 +22196,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_duration_artifacts.go:161:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.prepareSessionDurationArtifacts",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 197,
+        "line": 181,
         "column": 22,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -24416,11 +24641,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:699:(sessionAudioOutputSession).SupportsCompleteMessages",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:613:(sessionAudioOutputSession).SupportsCompleteMessages",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_image.go:99:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.completeMessageCapabilities",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 700,
+        "line": 614,
         "column": 17,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -24431,11 +24656,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:704:(sessionAudioOutputSession).SupportsCompleteMessagesWithoutResponse",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:617:(sessionAudioOutputSession).SupportsCompleteMessagesWithoutResponse",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_image.go:99:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.completeMessageCapabilities",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 705,
+        "line": 618,
         "column": 24,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -25001,56 +25226,56 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go:326:planSessionRuntimeWithFactory",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:113:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(InteractiveToolPolicy).Clone",
-      "call": {
-        "file": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
-        "line": 424,
-        "column": 20,
-        "caller_package": "agentruntime",
-        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-        "caller_symbol": "planSessionRuntimeWithFactory",
-        "expression": "interactivePolicy.Clone",
-        "resolution": "typed receiver method AST CallExpr; exact method declaration",
-        "confidence": "high"
-      }
-    },
-    {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:138:(InteractiveToolPolicy).TimeoutForTool",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:127:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(InteractiveToolPolicy).ClassForTool",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:48:NewInteractiveToolPolicyForSession",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:123:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.interactiveToolPolicySettings",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
-        "line": 139,
-        "column": 5,
-        "caller_package": "agentruntime",
-        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-        "caller_symbol": "(InteractiveToolPolicy).TimeoutForTool",
-        "expression": "p.ClassForTool",
-        "resolution": "typed receiver method AST CallExpr; exact method declaration",
-        "confidence": "high"
-      }
-    },
-    {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:54:NewInteractiveToolPolicyForSession",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:162:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.interactiveToolClassForName",
-      "call": {
-        "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
-        "line": 79,
-        "column": 12,
+        "line": 56,
+        "column": 29,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
         "caller_symbol": "NewInteractiveToolPolicyForSession",
-        "expression": "interactiveToolClassForName",
+        "expression": "interactiveToolPolicySettings",
         "resolution": "same-package AST CallExpr",
         "confidence": "high"
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:100:ResolveInteractiveToolPolicy",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:42:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicy",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:48:NewInteractiveToolPolicyForSession",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:131:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newInteractiveToolPolicyCompatibilityValue",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
-        "line": 102,
+        "line": 65,
+        "column": 9,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "NewInteractiveToolPolicyForSession",
+        "expression": "newInteractiveToolPolicyCompatibilityValue",
+        "resolution": "same-package AST CallExpr",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:48:NewInteractiveToolPolicyForSession",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:143:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.browserLongRunningToolNames",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+        "line": 59,
+        "column": 29,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "NewInteractiveToolPolicyForSession",
+        "expression": "browserLongRunningToolNames",
+        "resolution": "same-package AST CallExpr",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:70:ResolveInteractiveToolPolicy",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:36:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicy",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+        "line": 72,
         "column": 10,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -25061,11 +25286,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:100:ResolveInteractiveToolPolicy",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:42:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicy",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:70:ResolveInteractiveToolPolicy",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:36:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicy",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
-        "line": 108,
+        "line": 74,
         "column": 9,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -25077,7 +25302,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_tools.go:154:newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntentAndDiagnostics",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:42:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicy",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:36:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicy",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_tools.go",
         "line": 163,
@@ -25091,11 +25316,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:42:NewInteractiveToolPolicy",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:54:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicyForSession",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:36:NewInteractiveToolPolicy",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:48:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicyForSession",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
-        "line": 43,
+        "line": 37,
         "column": 9,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -25107,7 +25332,7 @@
     },
     {
       "caller": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go:521:resolveSessionInteractiveToolPolicy",
-      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:54:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicyForSession",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:48:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicyForSession",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
         "line": 559,
@@ -25117,6 +25342,36 @@
         "caller_symbol": "resolveSessionInteractiveToolPolicy",
         "expression": "NewInteractiveToolPolicyForSession",
         "resolution": "same-package AST CallExpr",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go:326:planSessionRuntimeWithFactory",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:79:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(InteractiveToolPolicy).Clone",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
+        "line": 424,
+        "column": 20,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "planSessionRuntimeWithFactory",
+        "expression": "interactivePolicy.Clone",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
+        "confidence": "high"
+      }
+    },
+    {
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:100:(InteractiveToolPolicy).TimeoutForTool",
+      "callee": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:92:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(InteractiveToolPolicy).ClassForTool",
+      "call": {
+        "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+        "line": 104,
+        "column": 5,
+        "caller_package": "agentruntime",
+        "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+        "caller_symbol": "(InteractiveToolPolicy).TimeoutForTool",
+        "expression": "p.ClassForTool",
+        "resolution": "typed receiver method AST CallExpr; exact method declaration",
         "confidence": "high"
       }
     },
@@ -25781,11 +26036,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:739:(sessionAudioOutputSession).TerminalError",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:648:(sessionAudioOutputSession).TerminalError",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_live_observation.go:180:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.terminalSessionError",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 740,
+        "line": 649,
         "column": 9,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -27356,11 +27611,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_options.go:400:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.validateSessionRunOptions",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 62,
+        "line": 53,
         "column": 12,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -27371,11 +27626,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_options.go:400:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.validateSessionRunOptions",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 136,
+        "line": 122,
         "column": 12,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -51236,11 +51491,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go:205:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionRuntimePlan).run",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 100,
+        "line": 89,
         "column": 12,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -51251,11 +51506,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go:205:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionRuntimePlan).run",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 112,
+        "line": 101,
         "column": 9,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -51266,11 +51521,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go:205:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionRuntimePlan).run",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 175,
+        "line": 159,
         "column": 13,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -51281,11 +51536,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go:205:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionRuntimePlan).run",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 195,
+        "line": 179,
         "column": 10,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -51626,11 +51881,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go:316:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.planSessionRuntime",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 70,
+        "line": 61,
         "column": 15,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -51641,11 +51896,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go:316:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.planSessionRuntime",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 144,
+        "line": 130,
         "column": 15,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -54866,11 +55121,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_text.go:24:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.RunSessionWithTextSeed",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 52,
+        "line": 43,
         "column": 11,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -54896,11 +55151,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_text.go:71:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.nextSessionTextWirePrompt",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 88,
+        "line": 79,
         "column": 17,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -54911,11 +55166,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_text.go:71:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.nextSessionTextWirePrompt",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 162,
+        "line": 148,
         "column": 17,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -56126,11 +56381,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:43:RunSessionWithAudioOutAndTextSeed",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:34:RunSessionWithAudioOutAndTextSeed",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_voices.go:11:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.VoiceLoudnessGainDB",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 75,
+        "line": 66,
         "column": 133,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
@@ -56141,11 +56396,11 @@
       }
     },
     {
-      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:119:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
+      "caller": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go:105:RunSessionWithAudioOutAndTextSeedAndMaxDuration",
       "callee": "agent-cli/internal/services/internal/agentruntime/session_voices.go:11:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.VoiceLoudnessGainDB",
       "call": {
         "file": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
-        "line": 149,
+        "line": 135,
         "column": 133,
         "caller_package": "agentruntime",
         "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",

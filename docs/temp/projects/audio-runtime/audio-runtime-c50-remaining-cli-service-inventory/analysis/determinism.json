@@ -44,15 +44,15 @@
       ]
     },
     "public_entry_call_sites": 5,
-    "target_call_edges": 3852,
+    "target_call_edges": 3869,
     "target_local_entry_call_sites": 0
   },
   "classification": {
     "class_counts": {
-      "BUSINESS_POLICY": 166,
+      "BUSINESS_POLICY": 168,
       "COMPOSITION_WIRING": 9,
-      "DEAD_OR_UNCERTAIN": 1519,
-      "REUSABLE_RUNTIME_BEHAVIOR": 1105,
+      "DEAD_OR_UNCERTAIN": 1517,
+      "REUSABLE_RUNTIME_BEHAVIOR": 1111,
       "THIN_TRANSPORT_DELEGATION": 70
     },
     "rules": [
@@ -61,7 +61,7 @@
       "Unresolved dynamic/interface/reflection reachability is DEAD_OR_UNCERTAIN, never confirmed reachability.",
       "The class is a reviewable structural classification; its evidence cites package/file role, imports, declaration form and resolved callers."
     ],
-    "symbol_count": 2869
+    "symbol_count": 2875
   },
   "counts": {
     "agent-cli/internal/room": [
@@ -71,8 +71,8 @@
     ],
     "agent-cli/internal/services/internal/agentruntime": [
       107,
-      41149,
-      2474
+      41129,
+      2480
     ],
     "agent-cli/internal/transport/cli/internal/livehost": [
       9,
@@ -83,23 +83,23 @@
   "determinism": {
     "call-paths.json": {
       "equal": true,
-      "first_sha256": "ffcf19c2bce3e9e7a702804734ced61005887d17bdf66bed9230c4ab050d82d8",
-      "second_sha256": "ffcf19c2bce3e9e7a702804734ced61005887d17bdf66bed9230c4ab050d82d8"
+      "first_sha256": "7194208f6c3a8faa16e4c374872b00e6441696ae25c14afaaaf2d7181edca839",
+      "second_sha256": "7194208f6c3a8faa16e4c374872b00e6441696ae25c14afaaaf2d7181edca839"
     },
     "classifications.json": {
       "equal": true,
-      "first_sha256": "fd4643ce10415f53bb081c8e11ebe7d7be8683129edc19c985a7021cfcee587c",
-      "second_sha256": "fd4643ce10415f53bb081c8e11ebe7d7be8683129edc19c985a7021cfcee587c"
+      "first_sha256": "019cb2e58832aa1dd616f71bb19f8f2291d92eed06493bb6f28a8a6882c3ad85",
+      "second_sha256": "019cb2e58832aa1dd616f71bb19f8f2291d92eed06493bb6f28a8a6882c3ad85"
     },
     "inventory.json": {
       "equal": true,
-      "first_sha256": "7aaf50810ed9ab4bb73cc1632b2ba3070ffa63b604faf08b8aa7dc936e1f202f",
-      "second_sha256": "7aaf50810ed9ab4bb73cc1632b2ba3070ffa63b604faf08b8aa7dc936e1f202f"
+      "first_sha256": "1764223c45a99168be123c509a981fa4132cafba1b28ccee5ce2ff5abcf8d4f9",
+      "second_sha256": "1764223c45a99168be123c509a981fa4132cafba1b28ccee5ce2ff5abcf8d4f9"
     },
     "inventory.md": {
       "equal": true,
-      "first_sha256": "433e4340196013ab458755dcc9923221dc015e916aff3e96bed5b77a287285b3",
-      "second_sha256": "433e4340196013ab458755dcc9923221dc015e916aff3e96bed5b77a287285b3"
+      "first_sha256": "e8cfdff3e712a3b7d6f454ee36f4127e78470e2f65032396990bffa914a3f1aa",
+      "second_sha256": "e8cfdff3e712a3b7d6f454ee36f4127e78470e2f65032396990bffa914a3f1aa"
     }
   },
   "historical_observation": {
@@ -108,10 +108,10 @@
     "production_files": 107
   },
   "schema_version": "c50-inventory-validation-v1",
-  "source_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+  "source_revision": "6b4f32b5940d43192774e86f05e3c7c9293c71e3",
   "totals": {
-    "physical_lines": 46583,
+    "physical_lines": 46563,
     "production_files": 120,
-    "top_level_symbols": 2869
+    "top_level_symbols": 2875
   }
 }

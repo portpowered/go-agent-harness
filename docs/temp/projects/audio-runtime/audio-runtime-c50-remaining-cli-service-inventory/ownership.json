@@ -38,11 +38,11 @@
       {
         "last_output": "\n",
         "state": "init",
-        "work_id": "work-review-42",
+        "work_id": "work-review-47",
         "work_type": "review"
       },
       {
-        "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}\nCI checks failed for PR #439 at head c5aeb8103de499a32c4eca78fde308329fa4e65e: required checks failed on current head c5aeb8103de499a32c4eca78fde308329fa4e65e: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34563957146/job/103152135348). Return this task to the executor with the listed failures.\n{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
+        "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}\nIndependent proof on head 94527e2 passed the C47 resource suite, private C45 regressions, 7-source compilation, and diff check. PR #439 checks are green, but only against base bb29005d. Remote main is cdf416a8 after C48/#440, and HEAD is not its ancestor. Executor must fetch and merge cdf416a8 into the preserved branch, resolve conflicts, rerun focused checks and the exact staged probe with unchanged immutable binaries, refresh current-head provenance/evidence, commit/push, and resubmit to script CI. Do not run ci-wait.py or poll. No merge was performed. The requested implementation-handoff.md is absent; available progress, PR body, and factory review records were used without fabricating evidence.\n{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
         "state": "in-review",
         "work_id": "work-task-11",
         "work_type": "task"
@@ -51,6 +51,12 @@
         "last_output": "\nIndependent current-head probes passed, but actionable defects remain. verify.py:462-474 handles unexpected post-Popen errors by killing/reaping only the parent; an injected reader-start failure left a forked descendant alive until external group cleanup, violating whole-group cleanup and no-survivor requirements. Add group termination, bounded inspection, fail-closed reporting, and a regression. run_staged_probe.py:366-397 preflights only stdout/stderr cap plus fixed report reserve, omitting replay outputs and actual report/metadata growth required by C47-02; include these in projected growth and negative-space coverage. The canonical live-07 report records tested_source_revision=98ec09a4 while PR head is d4c9c01d, and does not separately record required original revisions 9f869d1d and 5f14c453; regenerate evidence on the final head with explicit provenance. Required verification drivers run_c45_regressions.py and check_python_sources.py are absent despite prd.json:113-114. Finally, git diff --check fails at both live-04 and live-07 invalid-self-play-admission.stderr:21 due to a blank line at EOF; regenerate/normalize those artifacts and refresh dependent hashes, byte counts, and report_bytes. Executor must implement these repairs, rerun focused and exact staged evidence, achieve clean diff-check, and resubmit the resulting head to script CI; no CI polling or merge was performed.",
         "state": "fin",
         "work_id": "work-review-13",
+        "work_type": "review"
+      },
+      {
+        "last_output": "\nIndependent proof on head 94527e2 passed the C47 resource suite, private C45 regressions, 7-source compilation, and diff check. PR #439 checks are green, but only against base bb29005d. Remote main is cdf416a8 after C48/#440, and HEAD is not its ancestor. Executor must fetch and merge cdf416a8 into the preserved branch, resolve conflicts, rerun focused checks and the exact staged probe with unchanged immutable binaries, refresh current-head provenance/evidence, commit/push, and resubmit to script CI. Do not run ci-wait.py or poll. No merge was performed. The requested implementation-handoff.md is absent; available progress, PR body, and factory review records were used without fabricating evidence.",
+        "state": "fin",
+        "work_id": "work-review-42",
         "work_type": "review"
       }
     ],
@@ -75,7 +81,7 @@
       }
     ]
   },
-  "board_sha256": "d6b2376d9de8020cceef24fd27566e6ac50ba847afffefa0d2042fe3d3652708",
+  "board_sha256": "d9ec9fcdd963e1ca366c09d8d437b0fcafc8672aec57510f63e155766b546fc6",
   "previous_review_findings_are_accounted_for": true,
   "prior_c50_reviews": [
     {

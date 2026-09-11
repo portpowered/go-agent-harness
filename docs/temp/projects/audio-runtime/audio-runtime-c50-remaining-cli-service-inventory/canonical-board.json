@@ -21,68 +21,109 @@
       "workTypeName": "project"
     },
     {
+      "chainingTraceDepth": 10,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization\", \"branch\": \"codex/audio-runtime-c23-long-session-tool-characterization\", \"baseRevision\": \"f10cacf1cf260a8e06db3d742f4aee1d2dc86d21\", \"reused\": true}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c23-long-session-tool-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization\", \"branch\": \"codex/audio-runtime-c23-long-session-tool-characterization\", \"baseRevision\": \"f10cacf1cf260a8e06db3d742f4aee1d2dc86d21\", \"reused\": true}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-51",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 10,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c23-long-session-tool-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-50",
+      "workTypeName": "thoughts"
+    },
+    {
       "chainingTraceDepth": 8,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+      "name": "audio-runtime-c23-long-session-tool-characterization",
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
       "relations": [
         {
-          "sourceWorkName": "audio-runtime-c40-retire-cli-interactive-tool-policy",
-          "targetWorkId": "work-thoughts-36",
-          "targetWorkName": "audio-runtime-c38-interruption-audio-retention-vertical-probe",
+          "sourceWorkName": "audio-runtime-c23-long-session-tool-characterization",
+          "targetWorkId": "work-thoughts-45",
+          "targetWorkName": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
           "type": "PARENT_CHILD"
         }
       ],
-      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
+      "requestId": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
       "state": {
         "name": "to-complete",
         "type": "PROCESSING"
       },
       "tags": {
-        "_parent_request_id": "audio-runtime-c38-interruption-audio-retention-vertical-probe-20260911",
-        "_parent_work_id": "work-thoughts-36",
-        "_source_dispatch_id": "1d606f20-f7d5-4c78-bc2a-7a5b201700b9",
+        "_parent_request_id": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911",
+        "_parent_work_id": "work-thoughts-45",
+        "_source_dispatch_id": "50a9500b-0344-484a-ab8b-07eddb6abd24",
         "_source_transition_id": "ideafy",
-        "_work_name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+        "_work_name": "audio-runtime-c23-long-session-tool-characterization",
         "_work_type": "idea"
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "batch-audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z-audio-runtime-c40-retire-cli-interactive-tool-policy",
+      "workId": "batch-audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z-audio-runtime-c23-long-session-tool-characterization",
       "workTypeName": "idea"
     },
     {
-      "chainingTraceDepth": 6,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
+      "chainingTraceDepth": 3,
+      "currentChainingTraceId": "trace-request-time-475cb0c0365469c673240a1d7115c9ce",
+      "name": "audio-runtime-c40-interactive-policy-vertical-probe",
       "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
+        "trace-request-time-475cb0c0365469c673240a1d7115c9ce"
       ],
       "relations": [
         {
-          "sourceWorkName": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
-          "targetWorkId": "work-thoughts-41",
-          "targetWorkName": "audio-runtime-c48-overlapping-tool-continuation",
+          "sourceWorkName": "audio-runtime-c40-interactive-policy-vertical-probe",
+          "targetWorkId": "work-thoughts-46",
+          "targetWorkName": "cron:though-retrigger",
           "type": "PARENT_CHILD"
         }
       ],
-      "requestId": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911",
+      "requestId": "audio-runtime-c40-interactive-policy-vertical-probe-20260911",
       "state": {
         "name": "ready",
         "type": "PROCESSING"
       },
       "tags": {
-        "_last_output": "{\"status\": \"ready\", \"project\": \"audio-runtime\", \"directory\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c48-overlapping-tool-continuation-vertical-probe\", \"build\": {\"identity\": \"c48-consumer-merged-cdf416a8\", \"path\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c48-overlapping-tool-continuation-vertical-probe/artifact-0\", \"sha256\": \"5440f74cc212692ed6f95d83673dd27691db7aaf12fa8db6f471fa52f44887f5\"}, \"buildIdentity\": \"c48-consumer-merged-cdf416a8\", \"validationWorkName\": \"audio-runtime-c48-overlapping-tool-continuation-vertical-probe\", \"missionSha256\": \"7e15d976e3c3935dff41e90888f0cbc3f5df146d0e2e1f629c92247c4a5e4ba1\"}",
-        "_parent_request_id": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
-        "_parent_work_id": "work-thoughts-41",
-        "_source_dispatch_id": "118ebaef-59e7-43cc-8b2c-37d2dd84a359",
+        "_last_output": "{\"status\": \"ready\", \"project\": \"audio-runtime\", \"directory\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c40-interactive-policy-vertical-probe\", \"build\": {\"identity\": \"c40-policy-consumer-merged-6b4f32b\", \"path\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c40-interactive-policy-vertical-probe/artifact-0\", \"sha256\": \"d465d99cb20ca04d0e532bec5a407ca43699538041a8662bbd88e85cf128c507\"}, \"buildIdentity\": \"c40-policy-consumer-merged-6b4f32b\", \"validationWorkName\": \"audio-runtime-c40-interactive-policy-vertical-probe\", \"missionSha256\": \"f901e46758c14ecdd1cefbcc703252196e476ea11a45f9a0edea534afbb172a3\"}",
+        "_parent_request_id": "request-time-475cb0c0365469c673240a1d7115c9ce",
+        "_parent_work_id": "work-thoughts-46",
+        "_source_dispatch_id": "24bd4f07-75e2-48c9-9a88-ebba91678213",
         "_source_transition_id": "ideafy",
-        "_work_name": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
+        "_work_name": "audio-runtime-c40-interactive-policy-vertical-probe",
         "_work_type": "validation"
       },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "batch-audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911-audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
+      "traceId": "trace-request-time-475cb0c0365469c673240a1d7115c9ce",
+      "workId": "batch-audio-runtime-c40-interactive-policy-vertical-probe-20260911-audio-runtime-c40-interactive-policy-vertical-probe",
       "workTypeName": "validation"
     },
     {
@@ -290,7 +331,7 @@
         "type": "PROCESSING"
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-review-42",
+      "workId": "work-review-47",
       "workTypeName": "review"
     },
     {
@@ -313,7 +354,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
-        "_rejection_feedback": "CI checks failed for PR #439 at head c5aeb8103de499a32c4eca78fde308329fa4e65e: required checks failed on current head c5aeb8103de499a32c4eca78fde308329fa4e65e: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34563957146/job/103152135348). Return this task to the executor with the listed failures."
+        "_rejection_feedback": "Independent proof on head 94527e2 passed the C47 resource suite, private C45 regressions, 7-source compilation, and diff check. PR #439 checks are green, but only against base bb29005d. Remote main is cdf416a8 after C48/#440, and HEAD is not its ancestor. Executor must fetch and merge cdf416a8 into the preserved branch, resolve conflicts, rerun focused checks and the exact staged probe with unchanged immutable binaries, refresh current-head provenance/evidence, commit/push, and resubmit to script CI. Do not run ci-wait.py or poll. No merge was performed. The requested implementation-handoff.md is absent; available progress, PR body, and factory review records were used without fabricating evidence."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-11",
@@ -365,7 +406,8 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c50-remaining-cli-service-inventory\", \"branch\": \"codex/audio-runtime-c50-remaining-cli-service-inventory\", \"baseRevision\": \"7f73c8b3b4ebc99b55b8bb5e802beff024385407\", \"reused\": false}",
-        "_rejection_feedback": "PR #442 head 7a8ca37a712ede40d85f0ad0116ab08e41f81703 has green required checks, but provenance.json, verification-summary.json, and public/report.json remain bound to 3acf11ab0aab6d8972d51ad3d03b07a85b2004aa. Refresh final-head evidence and hashes with verify.py --mode all --child-timeout 60 --total-timeout 600, commit/push it, rerun SCRIPT CI on the new head, then request fresh review. Independent analyzer and yui replay probes passed; no source defect found."
+        "_rejection_feedback": "PR #442 head 7a8ca37a712ede40d85f0ad0116ab08e41f81703 has green required checks, but provenance.json, verification-summary.json, and public/report.json remain bound to 3acf11ab0aab6d8972d51ad3d03b07a85b2004aa. Refresh final-head evidence and hashes with verify.py --mode all --child-timeout 60 --total-timeout 600, commit/push it, rerun SCRIPT CI on the new head, then request fresh review. Independent analyzer and yui replay probes passed; no source defect found.",
+        "continue_feedback": "PR #442 is pushed at 8c0fdb5e; admission, bounded verification, checksums, focused tests, and COUNT=3 regressions pass. Final evidence is bound to 0ad171de, not submitted head 8c0fdb5e. Rebind evidence to the submitted head, push the same task, then return ACCEPTED to SCRIPT CI without polling."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-24",
@@ -390,20 +432,15 @@
         "type": "PROCESSING"
       },
       "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization\", \"branch\": \"codex/audio-runtime-c52-hermetic-room-liveness-characterization\", \"baseRevision\": \"bb29005d0bb545db5e08ffda0205929b021d4fc1\", \"reused\": false}"
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization\", \"branch\": \"codex/audio-runtime-c52-hermetic-room-liveness-characterization\", \"baseRevision\": \"bb29005d0bb545db5e08ffda0205929b021d4fc1\", \"reused\": false}",
+        "_rejection_feedback": "PR #443 head 833ee443 has green required checks and independent focused lifecycle/ race tests pass, but it is stale: origin/main is cdf416a8, 16 commits beyond candidate base bb29005d. Merge current main into the same branch, preserve both fixed comparison revisions, refresh provenance/evidence and hashes, rerun focused checks and bounded verification, then commit/push and resubmit to SCRIPT CI. Also fix run.py:506-526, which forwards ambient environment variables; fix verify.py:479-482, whose order-sensitive condition is tautological and accepts both failing orders; and fix run.py:230-238, where normal parent exit skips process-group cleanup (reproduced: exit 0, empty cleanup, no reader survivor, live descendant). Add deterministic controls for these cases, rerun the complete C52 evidence matrix, and request fresh review. Do not merge the current head."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-33",
       "workTypeName": "task"
     },
     {
-      "chainingTraceDepth": 10,
-      "content": [
-        {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"branch\": \"codex/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"baseRevision\": \"14986030512e4a175c489ab9e82e37e9211eeb61\", \"reused\": true}",
-          "type": "text"
-        }
-      ],
+      "chainingTraceDepth": 11,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
       "previousChainingTraceIds": [
@@ -414,12 +451,9 @@
         "name": "init",
         "type": "PROCESSING"
       },
-      "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"branch\": \"codex/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"baseRevision\": \"14986030512e4a175c489ab9e82e37e9211eeb61\", \"reused\": true}"
-      },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-task-40",
-      "workTypeName": "task"
+      "workId": "work-thoughts-48",
+      "workTypeName": "thoughts"
     },
     {
       "chainingTraceDepth": 5,
@@ -575,6 +609,44 @@
       "workTypeName": "review"
     },
     {
+      "chainingTraceDepth": 5,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c47-live-probe-output-bound",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "Independent proof on head 94527e2 passed the C47 resource suite, private C45 regressions, 7-source compilation, and diff check. PR #439 checks are green, but only against base bb29005d. Remote main is cdf416a8 after C48/#440, and HEAD is not its ancestor. Executor must fetch and merge cdf416a8 into the preserved branch, resolve conflicts, rerun focused checks and the exact staged probe with unchanged immutable binaries, refresh current-head provenance/evidence, commit/push, and resubmit to script CI. Do not run ci-wait.py or poll. No merge was performed. The requested implementation-handoff.md is absent; available progress, PR body, and factory review records were used without fabricating evidence."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-42",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 9,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c52-hermetic-room-liveness-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c52-hermetic-room-liveness-characterization-20260911T0611Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #443 head 833ee443 has green required checks and independent focused lifecycle/ race tests pass, but it is stale: origin/main is cdf416a8, 16 commits beyond candidate base bb29005d. Merge current main into the same branch, preserve both fixed comparison revisions, refresh provenance/evidence and hashes, rerun focused checks and bounded verification, then commit/push and resubmit to SCRIPT CI. Also fix run.py:506-526, which forwards ambient environment variables; fix verify.py:479-482, whose order-sensitive condition is tautological and accepts both failing orders; and fix run.py:230-238, where normal parent exit skips process-group cleanup (reproduced: exit 0, empty cleanup, no reader survivor, live descendant). Add deterministic controls for these cases, rerun the complete C52 evidence matrix, and request fresh review. Do not merge the current head."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-43",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 4,
       "content": [
         {
@@ -688,6 +760,71 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "batch-audio-runtime-c38-interruption-audio-retention-vertical-probe-20260911-audio-runtime-c38-interruption-audio-retention-vertical-probe",
+      "workTypeName": "validation"
+    },
+    {
+      "chainingTraceDepth": 8,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+          "targetWorkId": "work-thoughts-36",
+          "targetWorkName": "audio-runtime-c38-interruption-audio-retention-vertical-probe",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_parent_request_id": "audio-runtime-c38-interruption-audio-retention-vertical-probe-20260911",
+        "_parent_work_id": "work-thoughts-36",
+        "_source_dispatch_id": "1d606f20-f7d5-4c78-bc2a-7a5b201700b9",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+        "_work_type": "idea"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z-audio-runtime-c40-retire-cli-interactive-tool-policy",
+      "workTypeName": "idea"
+    },
+    {
+      "chainingTraceDepth": 6,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
+          "targetWorkId": "work-thoughts-41",
+          "targetWorkName": "audio-runtime-c48-overlapping-tool-continuation",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"project\": \"audio-runtime\", \"directory\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c48-overlapping-tool-continuation-vertical-probe\", \"build\": {\"identity\": \"c48-consumer-merged-cdf416a8\", \"path\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c48-overlapping-tool-continuation-vertical-probe/artifact-0\", \"sha256\": \"5440f74cc212692ed6f95d83673dd27691db7aaf12fa8db6f471fa52f44887f5\"}, \"buildIdentity\": \"c48-consumer-merged-cdf416a8\", \"validationWorkName\": \"audio-runtime-c48-overlapping-tool-continuation-vertical-probe\", \"missionSha256\": \"7e15d976e3c3935dff41e90888f0cbc3f5df146d0e2e1f629c92247c4a5e4ba1\"}",
+        "_parent_request_id": "audio-runtime-sol-medium-bootstrap-reconcile-20260911T0235Z",
+        "_parent_work_id": "work-thoughts-41",
+        "_source_dispatch_id": "118ebaef-59e7-43cc-8b2c-37d2dd84a359",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
+        "_work_type": "validation"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911-audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
       "workTypeName": "validation"
     },
     {
@@ -930,6 +1067,31 @@
       "workTypeName": "plan"
     },
     {
+      "chainingTraceDepth": 9,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization\", \"branch\": \"codex/audio-runtime-c23-long-session-tool-characterization\", \"baseRevision\": \"f10cacf1cf260a8e06db3d742f4aee1d2dc86d21\", \"reused\": true}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c23-long-session-tool-characterization",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization\", \"branch\": \"codex/audio-runtime-c23-long-session-tool-characterization\", \"baseRevision\": \"f10cacf1cf260a8e06db3d742f4aee1d2dc86d21\", \"reused\": true}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-plan-49",
+      "workTypeName": "plan"
+    },
+    {
       "chainingTraceDepth": 3,
       "content": [
         {
@@ -1012,6 +1174,22 @@
       "workTypeName": "review"
     },
     {
+      "chainingTraceDepth": 11,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-44",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 4,
       "content": [
         {
@@ -1035,6 +1213,31 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-12",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 10,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"branch\": \"codex/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"baseRevision\": \"14986030512e4a175c489ab9e82e37e9211eeb61\", \"reused\": true}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c40-retire-cli-interactive-tool-policy",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c40-resume-after-c38-acceptance-20260911T0705Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"branch\": \"codex/audio-runtime-c40-retire-cli-interactive-tool-policy\", \"baseRevision\": \"14986030512e4a175c489ab9e82e37e9211eeb61\", \"reused\": true}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-40",
       "workTypeName": "task"
     },
     {
@@ -1336,6 +1539,56 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-thoughts-41",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 7,
+      "content": [
+        {
+          "text": "{\"request\":{\"requestId\":\"audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c23-long-session-tool-characterization\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Resume finite long-session tool-continuation characterization\",\"requestedOutcome\":\"Adopt and resume the preserved C23 isolated worktree, branch codex/audio-runtime-c23-long-session-tool-characterization, PR415 and clean checkpoint f10cacf1cf260a8e06db3d742f4aee1d2dc86d21; do not create a replacement implementation, reset the worktree or discard historical first-failure evidence. The blocking response-scoped continuation repair C48 is now reviewed, merged at cdf416a8060251a6b4bbf3680241f1ee79953cff and independently accepted by canonical Luna engineering scope=vertical validation batch-audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911-audio-runtime-c48-overlapping-tool-continuation-vertical-probe. Fetch and integrate origin/main containing cdf416a8 into the preserved C23 branch, resolve only conflicts within the evidence-only lease, and rebind all source/build/fixture/evidence provenance; never relabel the old 7f73c8b3 artifact. Run the complete bounded public controls and recording-off/on 16/64/128/256-turn matrix using two overlapping response identities, four distinct calls and exact-once correlated results, plus missing/duplicate/swapped negative controls, interruption followed by healthy output, finite latency/state/resource measurements and clean process-group shutdown. Re-run the exact same-source shipped YUI credential-free audio/tool/interruption replay and the accumulated C21 duplex regression. Preserve original failing traces as historical causal evidence and compare the repaired result explicitly. Keep each child <=60 seconds and the aggregate <=600 seconds, sanitize child environment, enforce live output/disk/recording bounds and retain at least 2 GiB free space; if a prerequisite is unavailable, report BLOCKED rather than weaken assertions or repeat unchanged failures. Change only the admitted C23 evidence folder. Commit/push the changed same PR415 head, submit once to script-owned current-head CI, retain actionable owned repairs through CONTINUE, and require fresh independent review/guarded merge. Delivery is not acceptance: after merge the primary must stage the exact immutable executable and send a fresh Luna engineering scope=vertical public-workflow/effects/clean-shutdown/regression probe before accepting C23.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"docs/temp/projects/audio-runtime/audio-runtime-c23-long-session-tool-characterization/\"],\"verification\":[\"Verify the preserved managed worktree, clean branch, PR415 and checkpoint f10cacf1cf260a8e06db3d742f4aee1d2dc86d21 before mutation; fetch and merge reviewed origin/main containing accepted C48 source cdf416a8060251a6b4bbf3680241f1ee79953cff without reset, replacement or edits outside the C23 evidence folder.\",\"Build fresh exact-source public consumer and shipped YUI artifacts with complete build-input, source, fixture and toolchain hashes. Reject dirty, stale or mismatched provenance, and retain the historical pre-C48 two-of-four delivered-result failure without relabeling it.\",\"Run bounded public normal/overflow/deadline cleanup controls and the recording-off/on 16/64/128/256 matrix. Require two active response IDs, four distinguishable calls, four exactly-once correctly correlated results, grounded independent continuations, exact PCM/order/terminal effects, finite timing/resource measurements, zero unintended drops and clean child/process-group reaping. Missing, duplicate, swapped-ID and PCM-mutation controls must fail for their intended reasons.\",\"Re-run interruption with forbidden post-cancel output rejection and an exact healthy tail; recheck the same-source shipped YUI credential-free audio/tool/interruption replay and accumulated C21 normal/race duplex controls. Distinguish process smoke and software/file replay from actual-device/acoustic proof; use no Realtime credentials or sessions.\",\"Enforce <=60 seconds per child, <=600 seconds aggregate, bounded stdout/stderr/disk/recording growth, sanitized environments and >=2 GiB free reserve. Run final scope/diff/provenance self-checks, push the same PR415 and route it through script CI and fresh independent review before guarded merge.\"],\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"request\":{\"requestId\":\"audio-runtime-c23-resume-after-c48-acceptance-20260911T0800Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c23-long-session-tool-characterization\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Resume finite long-session tool-continuation characterization\",\"requestedOutcome\":\"Adopt and resume the preserved C23 isolated worktree, branch codex/audio-runtime-c23-long-session-tool-characterization, PR415 and clean checkpoint f10cacf1cf260a8e06db3d742f4aee1d2dc86d21; do not create a replacement implementation, reset the worktree or discard historical first-failure evidence. The blocking response-scoped continuation repair C48 is now reviewed, merged at cdf416a8060251a6b4bbf3680241f1ee79953cff and independently accepted by canonical Luna engineering scope=vertical validation batch-audio-runtime-c48-overlapping-tool-continuation-vertical-probe-20260911-audio-runtime-c48-overlapping-tool-continuation-vertical-probe. Fetch and integrate origin/main containing cdf416a8 into the preserved C23 branch, resolve only conflicts within the evidence-only lease, and rebind all source/build/fixture/evidence provenance; never relabel the old 7f73c8b3 artifact. Run the complete bounded public controls and recording-off/on 16/64/128/256-turn matrix using two overlapping response identities, four distinct calls and exact-once correlated results, plus missing/duplicate/swapped negative controls, interruption followed by healthy output, finite latency/state/resource measurements and clean process-group shutdown. Re-run the exact same-source shipped YUI credential-free audio/tool/interruption replay and the accumulated C21 duplex regression. Preserve original failing traces as historical causal evidence and compare the repaired result explicitly. Keep each child <=60 seconds and the aggregate <=600 seconds, sanitize child environment, enforce live output/disk/recording bounds and retain at least 2 GiB free space; if a prerequisite is unavailable, report BLOCKED rather than weaken assertions or repeat unchanged failures. Change only the admitted C23 evidence folder. Commit/push the changed same PR415 head, submit once to script-owned current-head CI, retain actionable owned repairs through CONTINUE, and require fresh independent review/guarded merge. Delivery is not acceptance: after merge the primary must stage the exact immutable executable and send a fresh Luna engineering scope=vertical public-workflow/effects/clean-shutdown/regression probe before accepting C23.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"docs/temp/projects/audio-runtime/audio-runtime-c23-long-session-tool-characterization/\"],\"verification\":[\"Verify the preserved managed worktree, clean branch, PR415 and checkpoint f10cacf1cf260a8e06db3d742f4aee1d2dc86d21 before mutation; fetch and merge reviewed origin/main containing accepted C48 source cdf416a8060251a6b4bbf3680241f1ee79953cff without reset, replacement or edits outside the C23 evidence folder.\",\"Build fresh exact-source public consumer and shipped YUI artifacts with complete build-input, source, fixture and toolchain hashes. Reject dirty, stale or mismatched provenance, and retain the historical pre-C48 two-of-four delivered-result failure without relabeling it.\",\"Run bounded public normal/overflow/deadline cleanup controls and the recording-off/on 16/64/128/256 matrix. Require two active response IDs, four distinguishable calls, four exactly-once correctly correlated results, grounded independent continuations, exact PCM/order/terminal effects, finite timing/resource measurements, zero unintended drops and clean child/process-group reaping. Missing, duplicate, swapped-ID and PCM-mutation controls must fail for their intended reasons.\",\"Re-run interruption with forbidden post-cancel output rejection and an exact healthy tail; recheck the same-source shipped YUI credential-free audio/tool/interruption replay and accumulated C21 normal/race duplex controls. Distinguish process smoke and software/file replay from actual-device/acoustic proof; use no Realtime credentials or sessions.\",\"Enforce <=60 seconds per child, <=600 seconds aggregate, bounded stdout/stderr/disk/recording growth, sanitized environments and >=2 GiB free reserve. Run final scope/diff/provenance self-checks, push the same PR415 and route it through script CI and fresh independent review before guarded merge.\"],\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-45",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 2,
+      "content": [
+        {
+          "text": "{\"request\":{\"requestId\":\"audio-runtime-c40-interactive-policy-vertical-probe-20260911\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c40-interactive-policy-vertical-probe\",\"workTypeName\":\"validation\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"scope\":\"vertical\",\"vertical\":\"audio-runtime-c40-retire-cli-interactive-tool-policy\",\"sourceRevision\":\"6b4f32b5940d43192774e86f05e3c7c9293c71e3\",\"role\":\"engineering\",\"criteria\":[{\"id\":\"EMBED\",\"rubric\":\"A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization.\"},{\"id\":\"SERVICE\",\"rubric\":\"Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction; CLI transport delegates business behavior.\"},{\"id\":\"FAILURES\",\"rubric\":\"Truncated/no playback, barge-in failure, long-conversation slowdown and tool-continuation collisions have reproducible characterization, fixes where demonstrated, and exact residual limitations without false completion claims.\"},{\"id\":\"QUALITY\",\"rubric\":\"Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions.\"},{\"id\":\"PARITY\",\"rubric\":\"Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits.\"}],\"budget\":{\"timeSeconds\":1800,\"realtimeSessions\":0,\"realtimeSeconds\":0},\"mission\":\"Independent Luna max engineering vertical probe of C40 PR435, reviewed head b6a31b08697a60fa7bc9d175daa2dec9e52d2f3d, guarded merge 6b4f32b5940d43192774e86f05e3c7c9293c71e3, and all nine successful current-head CI checks. Verify every staged digest before and after. The reviewed-head and merge trees are both 46a524d5b6c355f1b2475f965e9d5e926e45cdd6. The primary built the staged consumer and YUI from a detached exact-merge worktree and personally observed the consumer, wrong-oracle, public-policy, cleanup and credential-free replay controls; treat that as staging evidence, not independent PASS. Do not mutate product source, use credentials, spend Realtime budget, or infer project completion.\\nMandatory changed public workflow: launch the staged c40-policy-consumer under bounded process-group supervision from a private directory. Inspect its JSON and require literal default timeouts 5s/20s/2s, overrides 7s/15s/1.2s, fast/read versus bounded-long-running classification for read_file, exec, sleep, browser_select, catalog_page and dynamic_page, immutable input/clone snapshots, invalid-policy rejection before provider effects, zero provider setup calls and the public tools Wire/private-policy call chain. Launch the same immutable consumer with wrong-oracle and require nonzero rejection at the intended literal class assertion, clean reaping and no survivors. Extract the supplied source archive privately and inspect the separate consumer module plus runtime tools contract, tools/internal/policy and tools/wire composition and the thin CLI compatibility delegation. Confirm no CLI/config/WebMCP dependency is reachable from the runtime service and that the CLI-retired class map/name classification/dynamic fallback are not still independent business implementations.\\nMandatory shipped public workflow and existing regression: launch the staged exact-merge YUI with --help, then exercise public `session --replay` using the supplied audio/tool fixture with private config/work/allow/output/record directories and trace audio. Require the actual PROBE_TOOL_MARKER_9182 side effect, strict replay continuation, 18 ordered wire events, exactly one tool lifecycle, provider PCM exactly 4800 bytes SHA256 0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502, complete manifest/timeline/terminal effects and clean shutdown. Independently replay the supplied interruption fixture and require 15 ordered events, cancellation/truncation followed by a healthy response, total PCM 3840 bytes SHA256 6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22, healthy tail 2400 bytes at offset 1440 SHA256 16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf, replay_complete/recording_closed and no survivors. Demonstrate a missing/truncated PCM, wrong marker or wrong terminal mutation fails closed. This is process smoke and software/file audio replay, not actual device consumption or acoustic proof.\\nSupplement public execution with bounded exact-archive focused normal/race tests for tools policy and CLI delegation, reproducible tools Wire generation, architecture-size, coverage registration, vet/static/lint where available, and source inspection of all C40 production paths. Tests never substitute for launched workflows. Preserve the first divergence and report FAILED with causal evidence; do not rerun unchanged failures or weaken literal values, hashes, order, assertions, deadlines, cleanup or architecture limits. Each public child <=60 seconds, focused child <=90 seconds, aggregate <=1800 seconds. Native Windows hardware/endpoints and physical acoustics are OUT OF SCOPE under the recorded amendment, never PASS. Record canonical validationWorkId, commands, observed effects/output, hashes, shutdown and per-criterion scoped judgments with all broader residuals. This mission may accept only C40's contribution.\",\"reportPath\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c40-interactive-policy-vertical-probe.json\",\"build\":{\"identity\":\"c40-policy-consumer-merged-6b4f32b\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c40-delivery-reconciliation-20260911/c40-policy-consumer\",\"sha256\":\"d465d99cb20ca04d0e532bec5a407ca43699538041a8662bbd88e85cf128c507\"},\"fixtures\":[{\"identity\":\"c40-yui-merged-6b4f32b\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c40-delivery-reconciliation-20260911/yui\",\"sha256\":\"f6e480b75f3c84910857e01bb781e90c07b09313755a611465e5c27e4c8431a2\"},{\"identity\":\"source-6b4f32b5940d43192774e86f05e3c7c9293c71e3\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c40-delivery-reconciliation-20260911/source-6b4f32b.tar\",\"sha256\":\"b109887b282261ad80d52edf2ec2ab972e30d53861ea3161b95d31f53d644296\"},{\"identity\":\"c07-audio-tool-traced.session.json\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-2.json\",\"sha256\":\"38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169\"},{\"identity\":\"c07-interruption-no-close.session.json\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-3.json\",\"sha256\":\"154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206\"}]}}],\"relations\":[]}}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-request-time-475cb0c0365469c673240a1d7115c9ce",
+      "name": "cron:though-retrigger",
+      "previousChainingTraceIds": [
+        "trace-request-time-475cb0c0365469c673240a1d7115c9ce"
+      ],
+      "requestId": "request-time-475cb0c0365469c673240a1d7115c9ce",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"request\":{\"requestId\":\"audio-runtime-c40-interactive-policy-vertical-probe-20260911\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c40-interactive-policy-vertical-probe\",\"workTypeName\":\"validation\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"scope\":\"vertical\",\"vertical\":\"audio-runtime-c40-retire-cli-interactive-tool-policy\",\"sourceRevision\":\"6b4f32b5940d43192774e86f05e3c7c9293c71e3\",\"role\":\"engineering\",\"criteria\":[{\"id\":\"EMBED\",\"rubric\":\"A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization.\"},{\"id\":\"SERVICE\",\"rubric\":\"Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction; CLI transport delegates business behavior.\"},{\"id\":\"FAILURES\",\"rubric\":\"Truncated/no playback, barge-in failure, long-conversation slowdown and tool-continuation collisions have reproducible characterization, fixes where demonstrated, and exact residual limitations without false completion claims.\"},{\"id\":\"QUALITY\",\"rubric\":\"Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions.\"},{\"id\":\"PARITY\",\"rubric\":\"Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits.\"}],\"budget\":{\"timeSeconds\":1800,\"realtimeSessions\":0,\"realtimeSeconds\":0},\"mission\":\"Independent Luna max engineering vertical probe of C40 PR435, reviewed head b6a31b08697a60fa7bc9d175daa2dec9e52d2f3d, guarded merge 6b4f32b5940d43192774e86f05e3c7c9293c71e3, and all nine successful current-head CI checks. Verify every staged digest before and after. The reviewed-head and merge trees are both 46a524d5b6c355f1b2475f965e9d5e926e45cdd6. The primary built the staged consumer and YUI from a detached exact-merge worktree and personally observed the consumer, wrong-oracle, public-policy, cleanup and credential-free replay controls; treat that as staging evidence, not independent PASS. Do not mutate product source, use credentials, spend Realtime budget, or infer project completion.\\nMandatory changed public workflow: launch the staged c40-policy-consumer under bounded process-group supervision from a private directory. Inspect its JSON and require literal default timeouts 5s/20s/2s, overrides 7s/15s/1.2s, fast/read versus bounded-long-running classification for read_file, exec, sleep, browser_select, catalog_page and dynamic_page, immutable input/clone snapshots, invalid-policy rejection before provider effects, zero provider setup calls and the public tools Wire/private-policy call chain. Launch the same immutable consumer with wrong-oracle and require nonzero rejection at the intended literal class assertion, clean reaping and no survivors. Extract the supplied source archive privately and inspect the separate consumer module plus runtime tools contract, tools/internal/policy and tools/wire composition and the thin CLI compatibility delegation. Confirm no CLI/config/WebMCP dependency is reachable from the runtime service and that the CLI-retired class map/name classification/dynamic fallback are not still independent business implementations.\\nMandatory shipped public workflow and existing regression: launch the staged exact-merge YUI with --help, then exercise public `session --replay` using the supplied audio/tool fixture with private config/work/allow/output/record directories and trace audio. Require the actual PROBE_TOOL_MARKER_9182 side effect, strict replay continuation, 18 ordered wire events, exactly one tool lifecycle, provider PCM exactly 4800 bytes SHA256 0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502, complete manifest/timeline/terminal effects and clean shutdown. Independently replay the supplied interruption fixture and require 15 ordered events, cancellation/truncation followed by a healthy response, total PCM 3840 bytes SHA256 6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22, healthy tail 2400 bytes at offset 1440 SHA256 16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf, replay_complete/recording_closed and no survivors. Demonstrate a missing/truncated PCM, wrong marker or wrong terminal mutation fails closed. This is process smoke and software/file audio replay, not actual device consumption or acoustic proof.\\nSupplement public execution with bounded exact-archive focused normal/race tests for tools policy and CLI delegation, reproducible tools Wire generation, architecture-size, coverage registration, vet/static/lint where available, and source inspection of all C40 production paths. Tests never substitute for launched workflows. Preserve the first divergence and report FAILED with causal evidence; do not rerun unchanged failures or weaken literal values, hashes, order, assertions, deadlines, cleanup or architecture limits. Each public child <=60 seconds, focused child <=90 seconds, aggregate <=1800 seconds. Native Windows hardware/endpoints and physical acoustics are OUT OF SCOPE under the recorded amendment, never PASS. Record canonical validationWorkId, commands, observed effects/output, hashes, shutdown and per-criterion scoped judgments with all broader residuals. This mission may accept only C40's contribution.\",\"reportPath\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c40-interactive-policy-vertical-probe.json\",\"build\":{\"identity\":\"c40-policy-consumer-merged-6b4f32b\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c40-delivery-reconciliation-20260911/c40-policy-consumer\",\"sha256\":\"d465d99cb20ca04d0e532bec5a407ca43699538041a8662bbd88e85cf128c507\"},\"fixtures\":[{\"identity\":\"c40-yui-merged-6b4f32b\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c40-delivery-reconciliation-20260911/yui\",\"sha256\":\"f6e480b75f3c84910857e01bb781e90c07b09313755a611465e5c27e4c8431a2\"},{\"identity\":\"source-6b4f32b5940d43192774e86f05e3c7c9293c71e3\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c40-delivery-reconciliation-20260911/source-6b4f32b.tar\",\"sha256\":\"b109887b282261ad80d52edf2ec2ab972e30d53861ea3161b95d31f53d644296\"},{\"identity\":\"c07-audio-tool-traced.session.json\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-2.json\",\"sha256\":\"38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169\"},{\"identity\":\"c07-interruption-no-close.session.json\",\"path\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c11-hermetic-profile-vertical-probe-stage4/artifact-3.json\",\"sha256\":\"154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206\"}]}}],\"relations\":[]}}"
+      },
+      "traceId": "trace-request-time-475cb0c0365469c673240a1d7115c9ce",
+      "workId": "work-thoughts-46",
       "workTypeName": "thoughts"
     },
     {

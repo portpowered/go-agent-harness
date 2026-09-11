@@ -13,6 +13,6 @@
 === RUN   TestSessionReplayRejectsCorruptCaptureBeforeAudioSinkOrProviderSetup
 --- PASS: TestSessionReplayRejectsCorruptCaptureBeforeAudioSinkOrProviderSetup (0.00s)
 === RUN   TestSessionDirectoryRecordingWritesConversationSessionLog
---- PASS: TestSessionDirectoryRecordingWritesConversationSessionLog (0.01s)
+--- PASS: TestSessionDirectoryRecordingWritesConversationSessionLog (0.00s)
 PASS
-ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	(cached)
+ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	0.444s
