@@ -453,7 +453,14 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 			// the lifecycle signal that releases that worker; natural engine errors
 			// still drain it to preserve the publication barrier.
 			forwardCancel()
-			_ = finish(nil, false)
+			engineErr := finish(nil, false)
+			// Cancellation can race with an engine error that was already
+			// observed by the hot loop. Preserve that terminal error so callers
+			// do not lose the provider's structured failure classification; only
+			// ordinary context shutdown is replaced with the caller's error.
+			if engineErr != nil && !errors.Is(engineErr, context.Canceled) && !errors.Is(engineErr, context.DeadlineExceeded) {
+				return engineErr
+			}
 			return ctx.Err()
 
 		case err := <-errCh:
