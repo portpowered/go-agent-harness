@@ -14,6 +14,7 @@ import sys
 import tarfile
 import threading
 import time
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,6 +26,49 @@ PLANNING_MAIN = "7f73c8b3b4ebc99b55b8bb5e802beff024385407"
 STARTUP_INTEGRATION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 MAX_AGGREGATE_SECONDS = 900
 DEFAULT_OUTPUT_CAP = 524288
+MATRIX_ENV_KEYS = frozenset({
+    "CGO_ENABLED",
+    "GOFLAGS",
+    "GOMAXPROCS",
+    "GOTRACEBACK",
+    "GOTOOLCHAIN",
+    "GOSUMDB",
+    "C52_CASE_ORDER",
+    "C52_SHUFFLE_SEED",
+})
+MATRIX_BASE_ONLY_KEYS = frozenset({"C52_TAGS"})
+FIXED_ENV_KEYS = frozenset({
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "TZ",
+    "GOENV",
+    "GOPROXY",
+    "GOPRIVATE",
+    "GONOPROXY",
+    "GONOSUMDB",
+})
+RUNNER_ENV_KEYS = frozenset({
+    "C52_REVISION",
+    "C52_MATRIX_CELL",
+    "C52_TRACE_PATH",
+    "C52_OVERLAY_HASH",
+    "GOCACHE",
+    "GOMODCACHE",
+    "GOTMPDIR",
+    "GOWORK",
+})
+PATH_FALLBACKS = (
+    "/usr/local/go/bin",
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+)
 
 
 def utc_now() -> str:
@@ -175,9 +219,9 @@ def stop_group(process: subprocess.Popen[bytes], reason: str) -> dict[str, objec
     except ProcessLookupError:
         pass
     term_deadline = time.monotonic() + 0.75
-    while process.poll() is None and time.monotonic() < term_deadline:
+    while group_exists(pgid) and time.monotonic() < term_deadline:
         time.sleep(0.02)
-    if process.poll() is None:
+    if group_exists(pgid):
         try:
             os.killpg(pgid, signal.SIGKILL)
             kill_sent = True
@@ -232,6 +276,7 @@ def run_bounded(command: list[str], cwd: Path, env: dict[str, str], timeout: flo
         cleanup = stop_group(process, timeout_reason)
     else:
         process.wait()
+        cleanup = stop_group(process, "parent_exit")
     stdout_thread.join(timeout=2.0)
     stderr_thread.join(timeout=2.0)
     if not stdout.done.is_set() or not stderr.done.is_set():
@@ -502,18 +547,69 @@ def allowed_worktree_dirty(repo: Path) -> list[str]:
     return paths
 
 
-def environment_for(matrix: dict[str, object], cell: dict[str, object], revision: str, trace_path: Path, cache_root: Path, overlay_hash: str) -> dict[str, str]:
-    env = os.environ.copy()
+def hermetic_tool_path(host_environment: Mapping[str, str]) -> str:
+    """Resolve required tools without forwarding the host PATH or its values."""
+    ambient_path = host_environment.get("PATH", os.defpath)
+    directories: list[str] = []
+    for tool in ("go", "git", "clang", "gcc"):
+        resolved = shutil.which(tool, path=ambient_path)
+        if resolved:
+            directories.append(str(Path(resolved).resolve().parent))
+    directories.extend(PATH_FALLBACKS)
+    unique = list(dict.fromkeys(path for path in directories if Path(path).is_dir()))
+    if not unique:
+        raise RuntimeError("no hermetic tool path is available")
+    return os.pathsep.join(unique)
+
+
+def hermetic_base_environment(host_environment: Mapping[str, str], cache_root: Path) -> dict[str, str]:
+    home = cache_root / "home"
+    temp = cache_root / "gotmp"
+    home.mkdir(parents=True, exist_ok=True)
+    temp.mkdir(parents=True, exist_ok=True)
+    return {
+        "PATH": hermetic_tool_path(host_environment),
+        "HOME": str(home),
+        "TMPDIR": str(temp),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "GOENV": "off",
+        "GOPROXY": "https://proxy.golang.org,direct",
+        "GOPRIVATE": "",
+        "GONOPROXY": "",
+        "GONOSUMDB": "",
+    }
+
+
+def apply_declared_environment(env: dict[str, str], values: object, origin: str, *, allow_base_tags: bool = False) -> None:
+    if not isinstance(values, dict):
+        raise RuntimeError(f"{origin} must be an object")
+    allowed = MATRIX_ENV_KEYS | (MATRIX_BASE_ONLY_KEYS if allow_base_tags else frozenset())
+    unknown = set(str(key) for key in values) - allowed
+    if unknown:
+        raise RuntimeError(f"{origin} contains undeclared environment keys: {sorted(unknown)}")
+    for key, value in values.items():
+        key = str(key)
+        if key in MATRIX_BASE_ONLY_KEYS:
+            continue
+        env[key] = str(value)
+
+
+def environment_for(
+    matrix: dict[str, object],
+    cell: dict[str, object],
+    revision: str,
+    trace_path: Path,
+    cache_root: Path,
+    overlay_hash: str,
+    host_environment: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    host = os.environ if host_environment is None else host_environment
+    env = hermetic_base_environment(host, cache_root)
     base = matrix.get("base_environment", {})
-    if isinstance(base, dict):
-        for key, value in base.items():
-            if key == "C52_TAGS":
-                continue
-            env[str(key)] = str(value)
-    cell_env = cell.get("env", {})
-    if isinstance(cell_env, dict):
-        for key, value in cell_env.items():
-            env[str(key)] = str(value)
+    apply_declared_environment(env, base, "matrix.base_environment", allow_base_tags=True)
+    apply_declared_environment(env, cell.get("env", {}), f"matrix.cell[{cell.get('id')}].env")
     env["C52_REVISION"] = revision
     env["C52_MATRIX_CELL"] = str(cell["id"])
     env["C52_TRACE_PATH"] = str(trace_path)
@@ -522,8 +618,6 @@ def environment_for(matrix: dict[str, object], cell: dict[str, object], revision
     env["GOMODCACHE"] = str(cache_root / "gomodcache")
     env["GOTMPDIR"] = str(cache_root / "gotmp")
     env["GOWORK"] = ""
-    for key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"):
-        env.pop(key, None)
     return env
 
 
@@ -598,7 +692,7 @@ def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_t
                 "revision": revision,
                 "cell": cell,
                 "command": command,
-                "environment": {key: env.get(key, "") for key in sorted(env) if key in {"CGO_ENABLED", "GOFLAGS", "GOTRACEBACK", "GOTOOLCHAIN", "GOSUMDB", "GOMAXPROCS", "C52_REVISION", "C52_MATRIX_CELL", "C52_OVERLAY_HASH", "C52_CASE_ORDER", "C52_SHUFFLE_SEED", "GOWORK", "GOCACHE", "GOMODCACHE", "GOTMPDIR"}},
+                "environment": {key: env[key] for key in sorted(env)},
                 "process": process,
                 "selection": parsed,
                 "trace_path": str(trace_path.relative_to(EVIDENCE)) if trace_path.exists() else None,
@@ -641,6 +735,16 @@ def run_negative_controls(matrix: dict[str, object], scratch: Path, run_dir: Pat
     }
     env = environment_for(matrix, base_cell, PLANNING_MAIN, controls_dir / "unused-trace.jsonl", cache_root, overlay_hash)
     controls: dict[str, object] = {}
+    probe_host = dict(os.environ)
+    probe_host["C52_AMBIENT_SENTINEL"] = "must-not-forward"
+    probe_env = environment_for(matrix, base_cell, PLANNING_MAIN, controls_dir / "unused-trace.jsonl", cache_root, overlay_hash, probe_host)
+    allowed_keys = FIXED_ENV_KEYS | MATRIX_ENV_KEYS | RUNNER_ENV_KEYS
+    controls["environment_allowlist"] = {
+        "sentinel_key": "C52_AMBIENT_SENTINEL",
+        "sentinel_forwarded": "C52_AMBIENT_SENTINEL" in probe_env,
+        "unexpected_keys": sorted(set(probe_env) - allowed_keys),
+        "rejected": "C52_AMBIENT_SENTINEL" not in probe_env and not (set(probe_env) - allowed_keys),
+    }
     if time.monotonic() < deadline:
         zero_dir = controls_dir / "zero-test-selection"
         zero_command = ["go", "test", "-json", "-tags=nomicrophone", "-count=1", "-run", "^C52NoSuchTest$", "./services/rooms/internal/lifecycle"]
@@ -659,7 +763,27 @@ def run_negative_controls(matrix: dict[str, object], scratch: Path, run_dir: Pat
         survivor_command = [sys.executable, "-c", script]
         survivor = run_bounded(survivor_command, module_root, env, 0.4, 16384, survivor_dir)
         controls["survivor_process"] = {"process": survivor, "rejected": bool(survivor.get("timed_out")) and not bool(survivor.get("cleanup", {}).get("group_survivor", True))}
-    result = {"schema": "audio-runtime-c52-negative-controls-v1", "controls": controls, "all_rejected": all(bool(value.get("rejected")) for value in controls.values() if isinstance(value, dict)) and len(controls) == 3}
+    if time.monotonic() < deadline:
+        normal_dir = controls_dir / "normal-exit-survivor"
+        script = "import os,time; child=os.fork(); (os.close(1), os.close(2), time.sleep(30)) if child==0 else os._exit(0)"
+        normal_command = [sys.executable, "-c", script]
+        normal = run_bounded(normal_command, module_root, env, 5.0, 16384, normal_dir)
+        cleanup = normal.get("cleanup", {}) if isinstance(normal.get("cleanup"), dict) else {}
+        controls["normal_exit_survivor"] = {
+            "process": normal,
+            "rejected": (
+                normal.get("exit_code") == 0
+                and cleanup.get("reason") == "parent_exit"
+                and cleanup.get("term_sent") is True
+                and cleanup.get("group_survivor") is False
+                and normal.get("reader_survivor") is False
+            ),
+        }
+    result = {
+        "schema": "audio-runtime-c52-negative-controls-v2",
+        "controls": controls,
+        "all_rejected": all(bool(value.get("rejected")) for value in controls.values() if isinstance(value, dict)) and len(controls) == 5,
+    }
     json_write(controls_dir / "negative-controls.json", result)
     return result
 

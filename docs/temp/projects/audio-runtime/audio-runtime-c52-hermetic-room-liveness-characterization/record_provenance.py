@@ -10,8 +10,11 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+from run import apply_declared_environment, hermetic_base_environment
 
 
 EVIDENCE = Path(__file__).resolve().parent
@@ -247,21 +250,23 @@ def main() -> int:
     local_regressions_path = EVIDENCE / "regressions/summary.json"
     local_regressions = load(local_regressions_path) if local_regressions_path.is_file() else None
     existing_provenance = load(EVIDENCE / "provenance.json") if (EVIDENCE / "provenance.json").is_file() else {}
-    tested_source = str(existing_provenance.get("candidate_source_revision", "")) if isinstance(existing_provenance, dict) else ""
     candidate = git(repo, "rev-parse", "HEAD")
-    if not tested_source:
-        tested_source = candidate
+    previous_candidate = str(existing_provenance.get("candidate_evidence_parent_revision", "")) if isinstance(existing_provenance, dict) else ""
+    previous_source = str(existing_provenance.get("candidate_source_revision", "")) if isinstance(existing_provenance, dict) else ""
+    tested_source = previous_source if previous_candidate and previous_candidate == candidate else candidate
     refreshed_main = git(repo, "rev-parse", "refs/remotes/origin/main")
     status_paths = dirty_paths(repo)
     outside_owned = [path for path in status_paths if not path.startswith(OWNED_PREFIX)]
-    go_env = os.environ.copy()
     base = matrix.get("base_environment", {}) if isinstance(matrix.get("base_environment"), dict) else {}
-    for key, value in base.items():
-        if key != "C52_TAGS":
-            go_env[str(key)] = str(value)
-    go_version = command_result(["go", "version"], repo, go_env)
-    go_keys = ["GOVERSION", "GOOS", "GOARCH", "CGO_ENABLED", "GOTOOLCHAIN", "GOWORK", "GOMODCACHE", "GOCACHE", "GOTMPDIR"]
-    go_env_result = command_result(["go", "env", *go_keys], repo, go_env)
+    with tempfile.TemporaryDirectory(prefix="c52-provenance-") as temp_dir:
+        go_env = hermetic_base_environment(os.environ, Path(temp_dir))
+        apply_declared_environment(go_env, base, "matrix.base_environment", allow_base_tags=True)
+        go_env.update({"GOCACHE": str(Path(temp_dir) / "gocache"), "GOMODCACHE": str(Path(temp_dir) / "gomodcache"), "GOTMPDIR": str(Path(temp_dir) / "gotmp"), "GOWORK": ""})
+        for key in ("GOCACHE", "GOMODCACHE", "GOTMPDIR"):
+            Path(go_env[key]).mkdir(parents=True, exist_ok=True)
+        go_version = command_result(["go", "version"], repo, go_env)
+        go_keys = ["GOVERSION", "GOOS", "GOARCH", "CGO_ENABLED", "GOTOOLCHAIN", "GOWORK", "GOMODCACHE", "GOCACHE", "GOTMPDIR", "GOENV", "GOPROXY", "GOSUMDB"]
+        go_env_result = command_result(["go", "env", *go_keys], repo, go_env)
     ci = ci_record()
     primary_path = EVIDENCE / "primary-rerun.json"
     primary = load(primary_path)
@@ -308,8 +313,10 @@ def main() -> int:
         "environment_allowlist": {
             "base": base,
             "cell_overrides": {str(cell.get("id")): cell.get("env", {}) for cell in matrix.get("cells", []) if isinstance(cell, dict)},
-            "runner_injected": ["C52_REVISION", "C52_MATRIX_CELL", "C52_TRACE_PATH", "C52_OVERLAY_HASH", "GOCACHE", "GOMODCACHE", "GOTMPDIR"],
+            "fixed": {key: go_env[key] for key in ("PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TZ", "GOENV", "GOPROXY", "GOPRIVATE", "GONOPROXY", "GONOSUMDB")},
+            "runner_injected": ["C52_REVISION", "C52_MATRIX_CELL", "C52_TRACE_PATH", "C52_OVERLAY_HASH", "GOCACHE", "GOMODCACHE", "GOTMPDIR", "GOWORK"],
             "removed_secret_keys": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"],
+            "ambient_environment_forwarded": False,
             "cpu_count": os.cpu_count(),
         },
         "workspace_inputs": workspace_inputs(repo),

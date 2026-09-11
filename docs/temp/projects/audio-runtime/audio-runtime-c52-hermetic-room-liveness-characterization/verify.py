@@ -141,8 +141,15 @@ def verify_provenance() -> dict[str, object]:
     if not isinstance(environment_allowlist, dict):
         raise VerificationError("environment allowlist is incomplete")
     environment_base = environment_allowlist.get("base", environment_allowlist)
-    if not isinstance(environment_base, dict) or not environment_base.get("CGO_ENABLED"):
+    required_base = {"CGO_ENABLED", "GOFLAGS", "GOTRACEBACK", "GOTOOLCHAIN", "GOSUMDB"}
+    if not isinstance(environment_base, dict) or not required_base.issubset(environment_base):
         raise VerificationError("environment allowlist is incomplete")
+    fixed_environment = environment_allowlist.get("fixed")
+    if not isinstance(fixed_environment, dict) or not {"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TZ", "GOENV", "GOPROXY"}.issubset(fixed_environment):
+        raise VerificationError("fixed hermetic environment is incomplete")
+    runner_injected = environment_allowlist.get("runner_injected")
+    if not isinstance(runner_injected, list) or not {"C52_REVISION", "C52_MATRIX_CELL", "C52_TRACE_PATH", "C52_OVERLAY_HASH", "GOCACHE", "GOMODCACHE", "GOTMPDIR", "GOWORK"}.issubset(runner_injected):
+        raise VerificationError("runner environment allowlist is incomplete")
     workspace = value.get("workspace_inputs")
     if not isinstance(workspace, list) or not workspace:
         raise VerificationError("workspace/module hashes are missing")
@@ -246,6 +253,9 @@ def verify_matrix() -> dict[str, object]:
         seen.add(key)
         if record.get("status") == "NOT_RUN_AGGREGATE_DEADLINE" or process_failure(record):
             raise VerificationError(f"runner control failed for {key}")
+        cleanup = record.get("process", {}).get("cleanup") if isinstance(record.get("process"), dict) else None
+        if not isinstance(cleanup, dict) or cleanup.get("reason") != "parent_exit":
+            raise VerificationError(f"normal parent-exit group cleanup was not recorded for {key}")
         counts = required_run_counts(record)
         if not counts or any(value <= 0 for value in counts.values()):
             raise VerificationError(f"zero required test selection for {key}: {counts}")
@@ -400,7 +410,9 @@ def verify_cleanup() -> dict[str, object]:
     for record in records(run):
         process = record.get("process", {})
         cleanup = process.get("cleanup", {}) if isinstance(process, dict) else {}
-        if isinstance(cleanup, dict) and cleanup.get("group_survivor"):
+        if not isinstance(cleanup, dict) or cleanup.get("reason") != "parent_exit":
+            raise VerificationError(f"missing normal parent-exit cleanup for {record.get('revision_label')}/{record.get('cell', {}).get('id')}")
+        if cleanup.get("group_survivor"):
             survivors.append({"revision_label": record.get("revision_label"), "cell_id": record.get("cell", {}).get("id")})
         events = record_trace(record, run_root)
         for participant in ("silent", "peer"):
@@ -408,12 +420,13 @@ def verify_cleanup() -> dict[str, object]:
                 raise VerificationError(f"missing participant result cleanup for {participant}")
         cells.append({"revision_label": record.get("revision_label"), "cell_id": record.get("cell", {}).get("id"), "process_group_survivor": bool(cleanup.get("group_survivor")) if isinstance(cleanup, dict) else True})
     negative = run.get("negative_controls", {}).get("controls", {}) if isinstance(run.get("negative_controls"), dict) else {}
-    survivor = negative.get("survivor_process", {}) if isinstance(negative, dict) else {}
-    if not isinstance(survivor, dict) or survivor.get("rejected") is not True:
-        raise VerificationError("survivor-process negative control did not prove group cleanup")
+    for control_name in ("survivor_process", "normal_exit_survivor"):
+        control = negative.get(control_name, {}) if isinstance(negative, dict) else {}
+        if not isinstance(control, dict) or control.get("rejected") is not True:
+            raise VerificationError(f"{control_name} negative control did not prove group cleanup")
     if survivors:
         raise VerificationError(f"owned process survivors remain: {survivors}")
-    return {"mode": "cleanup", "passes": True, "cells": cells, "negative_survivor_control": "rejected_with_no_survivor"}
+    return {"mode": "cleanup", "passes": True, "cells": cells, "negative_survivor_controls": ["survivor_process", "normal_exit_survivor"]}
 
 
 def verify_no_retry_and_selection() -> dict[str, object]:
@@ -439,6 +452,79 @@ def verify_no_retry_and_selection() -> dict[str, object]:
     return {"mode": "no-retry-and-selection", "passes": True, "attempts": "one per frozen cell", "negative_controls": ["zero_test_selection", "wrong_test_selection"]}
 
 
+def classify_outcomes(outcomes: list[dict[str, object]], runner_valid: bool) -> str:
+    behavior_failures = [item for item in outcomes if item["behavior_passed"] is False]
+    if not runner_valid:
+        return "INCONCLUSIVE"
+    if not behavior_failures:
+        return "NON_REPRODUCED"
+    signatures = [tuple(item["first_divergence_signatures"]) for item in behavior_failures]
+    if len(behavior_failures) >= 2 and len(set(signatures)) == 1 and len({item["revision_label"] for item in behavior_failures}) == 1:
+        return "DETERMINISTIC"
+
+    order_failures = [item for item in behavior_failures if item.get("kind") == "explicit-order"]
+    order_controls = [item for item in outcomes if item.get("kind") == "explicit-order" and item["behavior_passed"] is True]
+    failed_order_ids = {str(item.get("cell_id")) for item in order_failures}
+    passed_order_ids = {str(item.get("cell_id")) for item in order_controls}
+    if (
+        order_failures
+        and len(order_failures) == len(behavior_failures)
+        and len(failed_order_ids) == 1
+        and len(order_controls) >= 2
+        and failed_order_ids.isdisjoint(passed_order_ids)
+    ):
+        return "ORDER_SENSITIVE"
+
+    package_failures = [item for item in behavior_failures if item.get("kind") == "package-concurrency"]
+    package_controls = [item for item in outcomes if item.get("kind") == "package-concurrency" and item["behavior_passed"] is True]
+    if (
+        package_failures
+        and len(package_failures) == len(behavior_failures)
+        and any(item.get("cell_id") == "package-concurrent" for item in package_failures)
+        and any(item.get("cell_id") == "package-serialized" for item in package_controls)
+    ):
+        return "PACKAGE_CONCURRENCY_SENSITIVE"
+
+    if {item["revision_label"] for item in behavior_failures} != {"pr438", "planning-main"}:
+        return "REVISION_SPECIFIC"
+    return "INCONCLUSIVE"
+
+
+def classification_controls() -> dict[str, object]:
+    def outcome(revision: str, cell_id: str, passed: bool, signature: str = "none") -> dict[str, object]:
+        return {
+            "revision_label": revision,
+            "cell_id": cell_id,
+            "kind": "explicit-order",
+            "behavior_passed": passed,
+            "first_divergence_signatures": [signature],
+        }
+
+    cases = {
+        "both_orders_fail": [
+            outcome("pr438", "order-timeout-first", False, "missing:a"),
+            outcome("pr438", "order-empty-first", False, "missing:b"),
+            outcome("planning-main", "order-timeout-first", False, "missing:c"),
+            outcome("planning-main", "order-empty-first", False, "missing:d"),
+        ],
+        "one_order_fails_with_repeated_opposite_controls": [
+            outcome("pr438", "order-timeout-first", False, "missing:a"),
+            outcome("pr438", "order-empty-first", True),
+            outcome("planning-main", "order-timeout-first", False, "missing:a"),
+            outcome("planning-main", "order-empty-first", True),
+        ],
+    }
+    expected = {
+        "both_orders_fail": "INCONCLUSIVE",
+        "one_order_fails_with_repeated_opposite_controls": "ORDER_SENSITIVE",
+    }
+    actual = {name: classify_outcomes(values, True) for name, values in cases.items()}
+    for name, label in expected.items():
+        if actual[name] != label:
+            raise VerificationError(f"classification control {name} returned {actual[name]}, expected {label}")
+    return {"passes": True, "expected": expected, "actual": actual}
+
+
 def classification() -> dict[str, object]:
     matrix_report = verify_matrix()
     run, run_root = latest_run()
@@ -462,31 +548,9 @@ def classification() -> dict[str, object]:
             "selected": record.get("selection", {}).get("required_test_run_counts", {}) if isinstance(record.get("selection"), dict) else {},
             "runner_controls_valid": not process_failure(record),
         })
-    behavior_failures = [item for item in outcomes if item["behavior_passed"] is False]
     runner_valid = all(item["runner_controls_valid"] for item in outcomes)
-    labels: list[str] = []
-    if not runner_valid:
-        label = "INCONCLUSIVE"
-    elif not behavior_failures:
-        label = "NON_REPRODUCED"
-    else:
-        signatures = [tuple(item["first_divergence_signatures"]) for item in behavior_failures]
-        if len(behavior_failures) >= 2 and len(set(signatures)) == 1 and len({item["revision_label"] for item in behavior_failures}) == 1:
-            label = "DETERMINISTIC"
-        else:
-            def failed_kind(kind: str) -> list[dict[str, object]]:
-                return [item for item in outcomes if item.get("kind") == kind and not item["behavior_passed"]]
-            order_fail = failed_kind("explicit-order")
-            package_fail = failed_kind("package-concurrency")
-            if order_fail and not [item for item in outcomes if item.get("kind") == "explicit-order" and item not in order_fail and item["behavior_passed"] is False]:
-                label = "ORDER_SENSITIVE"
-            elif package_fail and len(package_fail) < len([item for item in outcomes if item.get("kind") == "package-concurrency"]):
-                label = "PACKAGE_CONCURRENCY_SENSITIVE"
-            elif {item["revision_label"] for item in outcomes if not item["behavior_passed"]} != {"pr438", "planning-main"}:
-                label = "REVISION_SPECIFIC"
-            else:
-                label = "INCONCLUSIVE"
-    labels.append(label)
+    label = classify_outcomes(outcomes, runner_valid)
+    controls = classification_controls()
     result = {
         "schema": "audio-runtime-c52-classification-v1",
         "classification": label,
@@ -513,6 +577,7 @@ def classification() -> dict[str, object]:
         ],
         "source_observation": "PR438 run 34562579355/job 103148160889 selected provider_timeout and reported a non-nil silent_provider_timeout room error at browser_parity_test.go:220; this is not inferred as causal.",
         "matrix_report": matrix_report,
+        "classification_controls": controls,
     }
     write(EVIDENCE / "classification.json", result)
     return {"mode": "classification", "passes": True, "classification": label, "behavioral_failure_count": len(behavior_failures)}
