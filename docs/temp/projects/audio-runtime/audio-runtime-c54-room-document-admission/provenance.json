@@ -10,7 +10,7 @@
   "bounds": {
     "aggregate_timeout_seconds": 600.0,
     "child_timeout_seconds": 60.0,
-    "elapsed_ms": 60433,
+    "elapsed_ms": 39150,
     "max_child_output_bytes": 65536,
     "max_retained_disk_bytes": 8388608
   },
@@ -143,6 +143,11 @@
         "sha256": "f2e2cdcc7d7163bf5b952bc613b995a228d325c4782a48f05ba7614fca076676"
       },
       {
+        "bytes": 1908608,
+        "path": "docs/architecture/architecture-size-baseline.json",
+        "sha256": "069839c59f601bc021d77ab578557201cfb849f39d13b247ca02a399b0cb75f4"
+      },
+      {
         "bytes": 1236,
         "path": "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/consumer/go.mod",
         "sha256": "bf055db97a8de4cfc637a58807c57c874e9268bb788a5b13086732addba2ae43"
@@ -168,14 +173,14 @@
         "sha256": "b195f49a495ef5cb4ad49411bbdcde0df50a5a5771c336df50c2cf4d56bc360d"
       },
       {
-        "bytes": 39495,
+        "bytes": 39601,
         "path": "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/run.py",
-        "sha256": "617ec895f0037b700fb478a5ee2dd9f135327b217ad2ea9194dd03a8e87ea00b"
+        "sha256": "e2a112ee333dcfb3dab189ec76b163f806185ff4b304a0e96ca974ca055b0e5b"
       },
       {
-        "bytes": 15212,
+        "bytes": 15273,
         "path": "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/verify.py",
-        "sha256": "1713a8bd9dc23a88361f7b0d14b15e38acc5e536ddca04d5a3e96c08ce457b15"
+        "sha256": "e524d220348a6381965c7a1ae6726966bed0094288ac5b6226b3061eae3074df"
       },
       {
         "bytes": 7201,
@@ -195,7 +200,7 @@
       "sha256": "b84e6a82414cdd8497a1b9ba6ce0fc76b201cfb90036a8ccebf9f106428b084d"
     }
   },
-  "candidate_revision": "1985a97f782564f20fcfbf967b57ad6c82554545",
+  "candidate_revision": "ace074c49393cfc31eb6a9b1f9e0f1289367722a",
   "case_names": [
     "consumer",
     "yui"
@@ -232,6 +237,7 @@
       "go-agent-runtime/services/rooms/internal/manifest/decoder.go",
       "go-agent-runtime/services/rooms/internal/manifest/browser.go",
       "go-agent-runtime/services/rooms/wire/manifest.go",
+      "docs/architecture/architecture-size-baseline.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/"
     ],
     "wire_gen_baseline_sha256": "f2e2cdcc7d7163bf5b952bc613b995a228d325c4782a48f05ba7614fca076676",
