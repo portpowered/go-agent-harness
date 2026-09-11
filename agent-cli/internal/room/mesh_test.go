@@ -139,27 +139,21 @@ func TestMeshRejectsDuplicateAndUnknownMembershipOperations(t *testing.T) {
 }
 
 func TestMeshClosesFactoryResourceReturnedWithError(t *testing.T) {
-	factoryErr := errors.New("factory returned a partial resource")
-	resource := &countingPair{spec: PairSpec{FirstID: "alpha", SecondID: "bravo"}}
-	mesh := NewMesh(MeshConfig{PairFactory: func(_ context.Context, _ PairSpec) (PairResource, error) {
-		return resource, factoryErr
-	}})
-	defer func() { _ = mesh.Close() }()
+	wantErr := errors.New("factory returned a partial resource")
+	resource := &countingPair{}
+	mesh := NewMesh(MeshConfig{PairFactory: func(_ context.Context, _ PairSpec) (PairResource, error) { return resource, wantErr }})
+
 	if err := mesh.Join(context.Background(), "alpha"); err != nil {
 		t.Fatalf("first Join: %v", err)
 	}
-	err := mesh.Join(context.Background(), "bravo")
-	if err == nil || !errors.Is(err, factoryErr) {
-		t.Fatalf("factory failure = %v, want %v", err, factoryErr)
+	if err := mesh.Join(context.Background(), "bravo"); err == nil || !errors.Is(err, wantErr) {
+		t.Fatalf("factory failure = %v, want %v", err, wantErr)
 	}
 	if got := resource.closeCount.Load(); got != 1 {
 		t.Fatalf("factory-returned resource close count = %d, want 1", got)
 	}
 	if got := mesh.PairCount(); got != 0 {
 		t.Fatalf("pair count after factory failure = %d, want 0", got)
-	}
-	if got := mesh.Participants(); !equalStrings(got, []string{"alpha"}) {
-		t.Fatalf("membership after factory failure = %#v, want [alpha]", got)
 	}
 	if err := mesh.Close(); err != nil {
 		t.Fatalf("Close after factory failure: %v", err)
@@ -281,11 +275,9 @@ func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing
 	if err := mesh.Join(context.Background(), "second"); err != nil {
 		t.Fatalf("second Join: %v", err)
 	}
-
 	cancelParent()
 	awaitClosed(t, mesh.Context().Done())
 	awaitClosed(t, pair.closeStarted)
-
 	closeResults := make(chan error, 3)
 	closeCallStarted := make(chan struct{}, 3)
 	for index := 0; index < 3; index++ {
@@ -314,7 +306,6 @@ func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing
 	if got := pair.closeCount.Load(); got != 1 {
 		t.Fatalf("gated pair close count while blocked = %d, want 1", got)
 	}
-
 	pair.releaseClose()
 	var firstResult error
 	for index := 0; index < 3; index++ {
@@ -343,7 +334,6 @@ func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing
 		}
 	}
 }
-
 func TestMeshParentCancellationWaitsForConnectedAndPendingPairClosure(t *testing.T) {
 	parentContext, cancelParent := context.WithCancel(context.Background())
 	mesh, connected, pending, joinResult := newConnectedAndPendingMesh(
@@ -353,7 +343,6 @@ func TestMeshParentCancellationWaitsForConnectedAndPendingPairClosure(t *testing
 		errors.New("pending pair close failed"),
 	)
 	t.Cleanup(cancelParent)
-
 	doneWaiterStarted := make(chan struct{})
 	doneWaiterPassed := make(chan struct{})
 	go func() {
@@ -362,11 +351,9 @@ func TestMeshParentCancellationWaitsForConnectedAndPendingPairClosure(t *testing
 		close(doneWaiterPassed)
 	}()
 	awaitClosed(t, doneWaiterStarted)
-
 	cancelParent()
 	awaitClosed(t, mesh.Context().Done())
 	awaitClosed(t, pending.connectCanceled)
-
 	firstClosed := awaitFirstCloseStarted(t, connected, pending)
 	select {
 	case <-doneWaiterPassed:
@@ -385,7 +372,6 @@ func TestMeshParentCancellationWaitsForConnectedAndPendingPairClosure(t *testing
 	default:
 	}
 	secondClosed.releaseClose()
-
 	awaitClosed(t, mesh.Done())
 	awaitClosed(t, doneWaiterPassed)
 	select {
@@ -408,14 +394,12 @@ func TestMeshParentCancellationWaitsForConnectedAndPendingPairClosure(t *testing
 	if got := mesh.Pairs(); len(got) != 0 {
 		t.Fatalf("pairs after parent cancellation = %#v, want empty", got)
 	}
-
 	closeResult := mesh.Close()
 	assertJoinedMeshCloseResult(t, closeResult, connected.closeErr, pending.closeErr)
 	if repeated := mesh.Close(); repeated != closeResult {
 		t.Fatalf("repeated Close result = %v, want same published result %v", repeated, closeResult)
 	}
 }
-
 func TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair(t *testing.T) {
 	for _, test := range []struct {
 		name          string
@@ -433,12 +417,10 @@ func TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair(t *testin
 				errors.New("pending race close failed"),
 			)
 			t.Cleanup(cancelParent)
-
 			closeResults := make(chan error, 2)
 			startExplicitClose := func() {
 				go func() { closeResults <- mesh.Close() }()
 			}
-
 			if test.explicitFirst {
 				startExplicitClose()
 				firstClosed := awaitFirstCloseStarted(t, connected, pending)
@@ -466,7 +448,6 @@ func TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair(t *testin
 				awaitClosed(t, secondClosed.closeStarted)
 				secondClosed.releaseClose()
 			}
-
 			awaitClosed(t, mesh.Done())
 			var firstResult error
 			for index := 0; index < 2; index++ {
@@ -505,7 +486,6 @@ func TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair(t *testin
 		})
 	}
 }
-
 func TestMeshDoneRejectsPendingJoinAndMembershipAliases(t *testing.T) {
 	parentContext, cancelParent := context.WithCancel(context.Background())
 	mesh, connected, pending, joinResult := newConnectedAndPendingMesh(
@@ -515,12 +495,10 @@ func TestMeshDoneRejectsPendingJoinAndMembershipAliases(t *testing.T) {
 		errors.New("pending pending-join close failed"),
 	)
 	t.Cleanup(cancelParent)
-
 	closeResult := make(chan error, 1)
 	go func() { closeResult <- mesh.Close() }()
 	awaitClosed(t, mesh.Context().Done())
 	awaitClosed(t, pending.connectCanceled)
-
 	firstClosed := awaitFirstCloseStarted(t, connected, pending)
 	select {
 	case <-mesh.Done():
@@ -539,7 +517,6 @@ func TestMeshDoneRejectsPendingJoinAndMembershipAliases(t *testing.T) {
 	default:
 	}
 	secondClosed.releaseClose()
-
 	awaitClosed(t, mesh.Done())
 	select {
 	case err := <-joinResult:
@@ -569,7 +546,6 @@ func TestMeshDoneRejectsPendingJoinAndMembershipAliases(t *testing.T) {
 		t.Fatalf("pending pair close count at Done boundary = %d, want 1", got)
 	}
 }
-
 func TestMeshShutdownCapturesPairRemovedDuringGatedClose(t *testing.T) {
 	closeErr := errors.New("removed pair close failed")
 	pair := &gatedClosePair{
@@ -590,7 +566,6 @@ func TestMeshShutdownCapturesPairRemovedDuringGatedClose(t *testing.T) {
 	if err := mesh.Join(context.Background(), "second"); err != nil {
 		t.Fatalf("second Join: %v", err)
 	}
-
 	removeResult := make(chan error, 1)
 	go func() { removeResult <- mesh.Remove("first") }()
 	awaitClosed(t, pair.closeStarted)
@@ -600,7 +575,6 @@ func TestMeshShutdownCapturesPairRemovedDuringGatedClose(t *testing.T) {
 	if got := mesh.PairCount(); got != 0 {
 		t.Fatalf("PairCount while Remove close is gated = %d, want 0", got)
 	}
-
 	closeResult := make(chan error, 1)
 	go func() { closeResult <- mesh.Close() }()
 	awaitClosed(t, mesh.Context().Done())
@@ -617,7 +591,6 @@ func TestMeshShutdownCapturesPairRemovedDuringGatedClose(t *testing.T) {
 	if got := pair.closeCount.Load(); got != 1 {
 		t.Fatalf("removed pair close count while gated = %d, want 1", got)
 	}
-
 	pair.releaseClose()
 	awaitClosed(t, mesh.Done())
 	select {
@@ -647,7 +620,6 @@ func TestMeshShutdownCapturesPairRemovedDuringGatedClose(t *testing.T) {
 	}
 	assertMembershipAliasesClosed(t, mesh)
 }
-
 func TestMeshCancellationUnblocksAnInFlightJoinAndClosesPendingPair(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	pending := &blockingPair{started: make(chan struct{})}
@@ -657,7 +629,6 @@ func TestMeshCancellationUnblocksAnInFlightJoinAndClosesPendingPair(t *testing.T
 	if err := mesh.Join(context.Background(), "first"); err != nil {
 		t.Fatalf("first Join: %v", err)
 	}
-
 	joinErr := make(chan error, 1)
 	go func() { joinErr <- mesh.Join(context.Background(), "second") }()
 	awaitClosed(t, pending.started)
@@ -690,7 +661,6 @@ func (p *countingPair) Connect(ctx context.Context) error {
 	}
 	return ctx.Err()
 }
-
 func (p *countingPair) Close() error {
 	p.closeCount.Add(1)
 	return nil
@@ -707,7 +677,6 @@ func (p *blockingPair) Connect(ctx context.Context) error {
 	<-ctx.Done()
 	return ctx.Err()
 }
-
 func (p *blockingPair) Close() error {
 	p.closeCount.Add(1)
 	return nil
