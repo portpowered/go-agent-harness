@@ -1,0 +1,35 @@
+{
+  "execution": {
+    "cleanup": {
+      "group_alive_after": false,
+      "group_alive_before": true,
+      "kill_sent": false,
+      "parent_reaped": true,
+      "reader_threads_joined": true,
+      "setup_error": "",
+      "term_sent": false
+    },
+    "command": [
+      "go",
+      "test",
+      "-tags=nomicrophone",
+      "-count=1",
+      "-timeout=60s",
+      "./services/session/internal/live"
+    ],
+    "cwd": "go-agent-runtime",
+    "disk_bounded": true,
+    "disk_bytes": 100,
+    "elapsed_ms": 1417,
+    "label": "focused-live-normal",
+    "output_bounded": true,
+    "returncode": 0,
+    "stderr": "artifacts/focused-live-normal/process/stderr.log",
+    "stderr_bytes": 0,
+    "stdout": "artifacts/focused-live-normal/process/stdout.log",
+    "stdout_bytes": 100,
+    "timed_out": false
+  },
+  "passed": true,
+  "schema": "audio-runtime.c53.focused-test.v1"
+}

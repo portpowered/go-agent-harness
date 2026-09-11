@@ -4,17 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"time"
 )
 
 func (h *handle) finish(err error) {
 	h.finishOnce.Do(func() { h.finishOnceBody(err) })
 }
-
 func (h *handle) finishOnceBody(err error) {
 	h.stopProviderLiveness()
 	h.mu.Lock()
@@ -66,7 +65,6 @@ func (h *handle) finishOnceBody(err error) {
 	h.publish(session.LiveEvent{Kind: string(session.LiveEventTerminal), SessionID: h.request.SessionID, Error: err, Liveness: liveness, Terminal: terminalValue, Critical: true}, true)
 	close(h.done)
 }
-
 func (h *handle) markUserCancellation() {
 	if h == nil {
 		return
@@ -75,7 +73,6 @@ func (h *handle) markUserCancellation() {
 	h.userCancelled = true
 	h.mu.Unlock()
 }
-
 func userCancellationTerminalValue(sessionID string, outputObserved bool) *messages.SessionCloseValue {
 	outputState := messages.TerminalOutputNone
 	if outputObserved {
@@ -90,7 +87,6 @@ func userCancellationTerminalValue(sessionID string, outputObserved bool) *messa
 		outputState,
 	)
 }
-
 func finalizeLiveTerminalValue(request session.LiveRequest, err error, value *messages.SessionCloseValue, liveness *session.LiveLivenessFailure) *messages.SessionCloseValue {
 	if liveness != nil {
 		return terminalForLiveness(request.SessionID, value, liveness)
@@ -122,7 +118,6 @@ func finalizeLiveTerminalValue(request session.LiveRequest, err error, value *me
 		messages.TerminalProvenanceSession, messages.TerminalOutputNone,
 	)
 }
-
 func (h *handle) publish(event session.LiveEvent, terminal bool) {
 	if h == nil {
 		return
@@ -163,7 +158,6 @@ func (h *handle) publish(event session.LiveEvent, terminal bool) {
 		h.eventsClosed = true
 	}
 }
-
 func (h *handle) recordSequencedEventLocked(event *session.LiveEvent) {
 	h.sequence++
 	event.Sequence = h.sequence
@@ -172,7 +166,6 @@ func (h *handle) recordSequencedEventLocked(event *session.LiveEvent) {
 		h.includeTerminalRecordingError(event)
 	}
 }
-
 func (h *handle) reportDroppedEventsLocked(event session.LiveEvent) {
 	if h.dropped == 0 {
 		return
@@ -186,7 +179,6 @@ func (h *handle) reportDroppedEventsLocked(event session.LiveEvent) {
 	h.recordSequencedEventLocked(&overflow)
 	h.events <- overflow
 }
-
 func (h *handle) reserveCriticalEventLocked() {
 	needed := 1
 	if h.dropped > 0 || len(h.events) == cap(h.events) {
@@ -201,7 +193,6 @@ func (h *handle) reserveCriticalEventLocked() {
 		}
 	}
 }
-
 func (h *handle) finishMedia(err error, userCancelled bool) error {
 	if err == nil && !userCancelled {
 		drainCtx, cancel := context.WithTimeout(h.evidenceContext(), defaultPlaybackDrainTimeout)
@@ -216,7 +207,6 @@ func (h *handle) finishMedia(err error, userCancelled bool) error {
 	}
 	return errors.Join(err, h.media.Close())
 }
-
 func (h *handle) ensureCaptureTurnAdmissible() error {
 	if h == nil {
 		return session.ErrLiveClosed
@@ -236,7 +226,6 @@ func (h *handle) ensureCaptureTurnAdmissible() error {
 	}
 	return session.ErrLiveClosed
 }
-
 func (h *handle) scheduledAudioError() error {
 	if h == nil {
 		return nil
@@ -249,7 +238,6 @@ func (h *handle) scheduledAudioError() error {
 	h.mu.Unlock()
 	return newScheduledAudioIncompleteError(scheduled, dispatched, completed, terminal)
 }
-
 func shouldDrainPlayback(ctx context.Context, waitErr error) bool {
 	if errors.Is(waitErr, context.Canceled) || errors.Is(waitErr, context.DeadlineExceeded) || errors.Is(waitErr, session.ErrLiveDurationExceeded) {
 		return false
@@ -259,23 +247,20 @@ func shouldDrainPlayback(ctx context.Context, waitErr error) bool {
 	}
 	return true
 }
-
 func isContextTermination(err error) bool {
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 type finishState struct {
-	runErr          error
-	providerErr     error
-	pumpErr         error
-	requested       bool
-	requestedErr    error
-	graceful        bool
-	startErr        error
-	continuationErr error
-	toolResultErr   error
-	parentDone      bool
-	parentCause     error
+	runErr, providerErr, pumpErr error
+	requested                    bool
+	requestedErr                 error
+	graceful                     bool
+	startErr                     error
+	continuationErr              error
+	toolResultErr                error
+	parentDone                   bool
+	parentCause                  error
 }
 
 func (h *handle) finishWhenStopped() {
@@ -287,7 +272,6 @@ func (h *handle) finishWhenStopped() {
 	}
 	h.finish(state.terminalError())
 }
-
 func (h *handle) captureFinishState() finishState {
 	h.runWG.Wait()
 	h.mu.Lock()
@@ -317,7 +301,6 @@ func (h *handle) captureFinishState() finishState {
 	}
 	return state
 }
-
 func (s finishState) userCancellation() bool {
 	if s.graceful || !errors.Is(s.parentCause, session.ErrLiveUserCancellation) || s.continuationErr != nil {
 		return false
@@ -325,11 +308,9 @@ func (s finishState) userCancellation() bool {
 	return contextOnlyOrNil(s.requestedErr) && contextOnlyOrNil(s.providerErr) &&
 		contextOnlyOrNil(s.pumpErr) && contextOnlyOrNil(s.runErr) && contextOnlyOrNil(s.startErr)
 }
-
 func contextOnlyOrNil(err error) bool {
 	return err == nil || isContextTermination(err)
 }
-
 func (s finishState) terminalError() error {
 	if s.requested && !s.graceful {
 		return requestedTerminalError(s)
@@ -357,7 +338,6 @@ func (s finishState) terminalError() error {
 	}
 	return nil
 }
-
 func drainPlayback(parent context.Context, playback devices.Playback, timeout time.Duration) error {
 	if playback == nil {
 		return nil
@@ -387,7 +367,6 @@ func (h *handle) finishMessageObservation(msg messages.StreamMessage) {
 		h.stopGracefully()
 	}
 }
-
 func finalizeRecorder(recorder session.LiveRecorder, ctx context.Context, runErr error) error {
 	if recorder == nil {
 		return nil
@@ -396,4 +375,26 @@ func finalizeRecorder(recorder session.LiveRecorder, ctx context.Context, runErr
 		return errors.New("live recorder finalization context is required")
 	}
 	return recorder.Finalize(context.WithoutCancel(ctx), runErr)
+}
+func (s *terminalDrainSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(completeMessageSender)
+	return ok && sender.SendMessage(ctx, msg)
+}
+func (s *terminalDrainSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	sender, ok := s.inner.(completeMessageWithoutResponseSender)
+	return ok && sender.SendMessageWithoutResponse(ctx, msg)
+}
+func (s *terminalDrainSession) RTCMedia() sharedaudio.MediaEndpoints {
+	provider, ok := s.inner.(sharedaudio.MediaSession)
+	if !ok {
+		return sharedaudio.MediaEndpoints{}
+	}
+	return provider.RTCMedia()
+}
+func (s *terminalDrainSession) RTCMediaWithOptions(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
+	provider, ok := s.inner.(sharedaudio.ConfigurableMediaSession)
+	if !ok {
+		return s.RTCMedia()
+	}
+	return provider.RTCMediaWithOptions(options)
 }

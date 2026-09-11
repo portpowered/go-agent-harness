@@ -1,0 +1,32 @@
+{
+  "cleanup": {},
+  "command": [
+    "go",
+    "test",
+    "-tags=nomicrophone",
+    "-json",
+    "-count=3",
+    "-p=1",
+    "-run",
+    "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+    "./services/rooms/internal/lifecycle",
+    "./services/session/internal/live"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T073000Z-overlay-type/scratch/pr438/go-agent-runtime",
+  "duration_seconds": 8.04077500011772,
+  "ended_at": "2026-09-11T06:52:15.656631+00:00",
+  "exit_code": 0,
+  "first_failure": {
+    "line": 1,
+    "stream": "stderr",
+    "text": "go: downloading github.com/stretchr/testify v1.11.1"
+  },
+  "output_overflow": false,
+  "reader_survivor": false,
+  "started_at": "2026-09-11T06:52:07.615912+00:00",
+  "stderr_bytes": 155,
+  "stderr_sha256": "032503ddfd5c9f98a53378d1e6396929b5f94abe29f26689d467bb6fd7c8da4b",
+  "stdout_bytes": 11979,
+  "stdout_sha256": "4cde84082a91959ff7df7e8b251fde12fe9af9525b6f9a08647920db4b5a738a",
+  "timed_out": false
+}
