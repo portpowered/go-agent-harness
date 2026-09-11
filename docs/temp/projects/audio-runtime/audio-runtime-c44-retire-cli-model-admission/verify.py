@@ -32,6 +32,10 @@ class EvidenceFailure(RuntimeError):
     pass
 
 
+WRONG_PCM_ORACLE_DIAGNOSTIC = "wrong PCM oracle rejected"
+WRONG_MARKER_ORACLE_DIAGNOSTIC = "wrong marker oracle rejected"
+
+
 def sha256(path: pathlib.Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -62,13 +66,22 @@ def process_group_pids(pgid: int) -> list[int]:
             text=True,
             timeout=2,
         )
-    except (OSError, subprocess.SubprocessError):
-        return []
-    return [
-        int(fields[0])
-        for line in completed.stdout.splitlines()
-        if (fields := line.split()) and len(fields) == 2 and fields[0].isdigit() and fields[1].isdigit() and int(fields[1]) == pgid
-    ]
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise EvidenceFailure(f"process inspection unavailable for pgid {pgid}: {exc}") from exc
+    lines = completed.stdout.splitlines()
+    if not lines:
+        raise EvidenceFailure(f"process inspection unavailable for pgid {pgid}: ps returned no rows")
+    pids: list[int] = []
+    for line in lines:
+        fields = line.split()
+        if len(fields) != 2 or not all(field.isdigit() for field in fields):
+            raise EvidenceFailure(f"process inspection unavailable for pgid {pgid}: malformed ps row {line!r}")
+        pid, row_pgid = (int(field) for field in fields)
+        if pid <= 0 or row_pgid < 0:
+            raise EvidenceFailure(f"process inspection unavailable for pgid {pgid}: invalid ps row {line!r}")
+        if row_pgid == pgid:
+            pids.append(pid)
+    return pids
 
 
 def run_process(
@@ -176,7 +189,7 @@ def run_process(
 
 
 def require_ok(result: dict[str, Any]) -> None:
-    if result["timed_out"] or result["exit_code"] != 0 or not result["parent_reaped"]:
+    if result["timed_out"] or result["exit_code"] != 0 or not result["parent_reaped"] or result["surviving_process_group_pids"]:
         raise EvidenceFailure(f"{result['label']} failed; see {result['stderr_path']} and {result['stdout_path']}")
 
 
@@ -374,7 +387,13 @@ def run_invalid_cli(
     with LoopbackProbe() as probe:
         argv = ["rtk", "proxy", str(YUI), "--config-dir", str(case_dir / "config"), "--log-to-stdout", *command, "--base-url", probe.url, "--api-key", "c44-no-network-key"]
         result = run_process(label, argv, case_dir, run_dir, remaining_timeout(started, total_timeout, child_timeout))
-    require(result["exit_code"] != 0 and not result["timed_out"], f"{label} unexpectedly succeeded or timed out")
+    require(
+        result["exit_code"] != 0
+        and not result["timed_out"]
+        and result["parent_reaped"]
+        and not result["surviving_process_group_pids"],
+        f"{label} unexpectedly succeeded, timed out, or left descendants: {result}",
+    )
     output = pathlib.Path(result["stdout_path"]).read_text(encoding="utf-8") + pathlib.Path(result["stderr_path"]).read_text(encoding="utf-8")
     if expected_text.lower() not in output.lower():
         raise EvidenceFailure(f"{label} omitted {expected_text!r}; see {result['stderr_path']}")
@@ -576,8 +595,21 @@ def run_replay_controls(run_dir: pathlib.Path, started: float, total_timeout: fl
     return results
 
 
-def run_wrong_replay_oracles(run_dir: pathlib.Path, started: float, total_timeout: float, child_timeout: float) -> dict[str, Any]:
-    case_dir = run_dir / "replay-audio-tool"
+def run_wrong_replay_oracles(
+    run_dir: pathlib.Path,
+    started: float,
+    total_timeout: float,
+    child_timeout: float,
+    replay_results: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    audio_tool = next((item for item in replay_results or [] if item.get("label") == "audio-tool"), None)
+    case_dir = pathlib.Path(audio_tool["manifest"]).parent.parent if audio_tool is not None else run_dir / "replay-audio-tool"
+    stdout_path = pathlib.Path(audio_tool["stdout_path"]) if audio_tool is not None else run_dir / "yui-replay-audio-tool.stdout"
+    require(stdout_path.is_file(), f"audio-tool replay stdout is missing: {stdout_path}")
+    try:
+        stdout_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise EvidenceFailure(f"audio-tool replay stdout is unreadable: {stdout_path}: {exc}") from exc
     fixture = FIXTURES / FIXTURE_EXPECTATIONS["audio-tool"]["fixture"]
     pcm_script = """
 import pathlib
@@ -588,9 +620,15 @@ module = runpy.run_path(sys.argv[1])
 module["FIXTURE_EXPECTATIONS"]["audio-tool"]["pcm_sha256"] = "0" * 64
 try:
     module["validate_replay"]("audio-tool", pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]))
-except module["EvidenceFailure"]:
-    print("wrong PCM oracle rejected", flush=True)
+except module["EvidenceFailure"] as exc:
+    if not str(exc).startswith("audio-tool exact PCM changed:"):
+        print(f"wrong PCM oracle control failed with unexpected EvidenceFailure: {exc}", file=sys.stderr, flush=True)
+        raise SystemExit(2)
+    print(f'{module["WRONG_PCM_ORACLE_DIAGNOSTIC"]}: {exc}', flush=True)
     raise SystemExit(1)
+except Exception as exc:
+    print(f"wrong PCM oracle control failed with unexpected {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+    raise SystemExit(2)
 raise SystemExit("wrong PCM oracle unexpectedly passed")
 """
     wrong_pcm = run_process(
@@ -600,22 +638,27 @@ raise SystemExit("wrong PCM oracle unexpectedly passed")
         run_dir,
         remaining_timeout(started, total_timeout, child_timeout),
     )
-    require(wrong_pcm["exit_code"] != 0 and not wrong_pcm["timed_out"] and wrong_pcm["parent_reaped"], "wrong PCM oracle did not fail boundedly")
+    require_negative_oracle(wrong_pcm, WRONG_PCM_ORACLE_DIAGNOSTIC, "wrong PCM")
     marker_script = """
 import pathlib
 import runpy
 import sys
 
 module = runpy.run_path(sys.argv[1])
-stdout = pathlib.Path(sys.argv[2]).read_text()
 try:
+    stdout = pathlib.Path(sys.argv[2]).read_text(encoding="utf-8")
     module["require"]("C44_WRONG_MARKER" in stdout, "wrong marker oracle")
-except module["EvidenceFailure"]:
-    print("wrong marker oracle rejected", flush=True)
+except module["EvidenceFailure"] as exc:
+    if str(exc) != "wrong marker oracle":
+        print(f"wrong marker oracle control failed with unexpected EvidenceFailure: {exc}", file=sys.stderr, flush=True)
+        raise SystemExit(2)
+    print(f'{module["WRONG_MARKER_ORACLE_DIAGNOSTIC"]}: {exc}', flush=True)
     raise SystemExit(1)
+except Exception as exc:
+    print(f"wrong marker oracle control failed with unexpected {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+    raise SystemExit(2)
 raise SystemExit("wrong marker oracle unexpectedly passed")
 """
-    stdout_path = case_dir / "yui-replay-audio-tool.stdout"
     wrong_marker = run_process(
         "negative-wrong-marker-oracle",
         [sys.executable, "-c", marker_script, str(HERE / "verify.py"), str(stdout_path)],
@@ -623,8 +666,22 @@ raise SystemExit("wrong marker oracle unexpectedly passed")
         run_dir,
         remaining_timeout(started, total_timeout, child_timeout),
     )
-    require(wrong_marker["exit_code"] != 0 and not wrong_marker["timed_out"] and wrong_marker["parent_reaped"], "wrong marker oracle did not fail boundedly")
+    require_negative_oracle(wrong_marker, WRONG_MARKER_ORACLE_DIAGNOSTIC, "wrong marker")
     return {"wrong_pcm": wrong_pcm, "wrong_marker": wrong_marker}
+
+
+def require_negative_oracle(result: dict[str, Any], diagnostic: str, label: str) -> None:
+    require(result["exit_code"] == 1 and not result["timed_out"], f"{label} oracle did not return the intended bounded rejection: {result}")
+    require(result["parent_reaped"], f"{label} oracle parent was not reaped: {result}")
+    require(not result["surviving_process_group_pids"], f"{label} oracle left process-group survivors: {result}")
+    try:
+        stdout = pathlib.Path(result["stdout_path"]).read_text(encoding="utf-8")
+        stderr = pathlib.Path(result["stderr_path"]).read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise EvidenceFailure(f"{label} oracle output is unavailable: {exc}") from exc
+    lines = stdout.splitlines()
+    require(len(lines) == 1 and lines[0].startswith(f"{diagnostic}: "), f"{label} oracle lost its intended diagnostic: {stdout!r}")
+    require(not stderr, f"{label} oracle emitted an unexpected stderr diagnostic: {stderr!r}")
 
 
 def run_timeout_control(run_dir: pathlib.Path, started: float, total_timeout: float, child_timeout: float) -> dict[str, Any]:
@@ -721,8 +778,9 @@ def main() -> int:
             outcome["public_consumer"] = run_public_consumer(run_dir, started, args.total_timeout, args.child_timeout)
             outcome["effect_observer"] = run_effect_observer_positive(run_dir, started, args.total_timeout, args.child_timeout)
             outcome["cli_admission"] = run_cli_admission_controls(run_dir, started, args.total_timeout, args.child_timeout)
-            outcome["replay"] = run_replay_controls(run_dir, started, args.total_timeout, args.child_timeout)
-            outcome["wrong_replay_oracles"] = run_wrong_replay_oracles(run_dir, started, args.total_timeout, args.child_timeout)
+            replay_results = run_replay_controls(run_dir, started, args.total_timeout, args.child_timeout)
+            outcome["replay"] = replay_results
+            outcome["wrong_replay_oracles"] = run_wrong_replay_oracles(run_dir, started, args.total_timeout, args.child_timeout, replay_results)
             outcome["timeout_cleanup"] = run_timeout_control(run_dir, started, args.total_timeout, args.child_timeout)
         else:
             outcome["timeout_cleanup"] = run_timeout_control(run_dir, started, args.total_timeout, args.child_timeout)
