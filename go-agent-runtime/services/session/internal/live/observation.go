@@ -331,19 +331,19 @@ func (h *handle) observeFiniteResponse(msg messages.StreamMessage, complete ...b
 func (h *handle) observeFiniteResponseMessage(msg messages.StreamMessage) {
 	switch msg.Type {
 	case messages.StreamTypeMessageStart:
-		if msg.Role == messages.RoleTool {
-			return
+		if msg.Role != messages.RoleTool {
+			h.responseStarted, h.responseActive = true, true
+			h.responseObserved++
+			close(h.responseStartWake)
+			h.responseStartWake = make(chan struct{})
 		}
-		h.responseStarted, h.responseActive = true, true
-		h.responseObserved++
-		close(h.responseStartWake)
-		h.responseStartWake = make(chan struct{})
 	case messages.StreamTypeToolCallEnd:
 		h.notePendingToolCallLocked(msg)
 	case messages.StreamTypeMessageEnd:
 		if msg.Role != messages.RoleTool {
 			h.observeFiniteResponseEnd(msg)
 		}
+	case messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
 	}
 }
 func (h *handle) observeFiniteResponseEnd(msg messages.StreamMessage) {

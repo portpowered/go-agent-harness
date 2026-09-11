@@ -124,66 +124,6 @@ func newLoopSessionCloseValue(sessionID, reason string) *messages.SessionCloseVa
 		messages.TerminalOutputNotApplicable,
 	)
 }
-func (c *Coordinator) executeToolOutput(ctx context.Context, curr *state.LoopState) {
-	c.logInfo("Coordinator: tool text output message", logging.Field{Key: "curr.Inputs.ToolOutputMessage", Value: curr.Inputs.ToolOutputMessage})
-	for _, message := range curr.Inputs.ToolOutputMessage {
-		c.sendInferenceResult(ctx, curr, messages.Tool, message)
-	}
-	c.resetModelDeltaWindow(curr)
-	passID := c.nextToolContinuationPass(curr)
-	conversation := append([]messages.Message(nil), curr.History.ConversationBuffer...)
-	if !toolResultsAtHistoryTail(conversation, curr.Inputs.ToolOutputMessage) {
-		conversation = append(conversation, curr.Inputs.ToolOutputMessage...)
-	}
-	curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(conversation, curr.Tools, passID, curr.InferenceDefaults))
-}
-
-func (c *Coordinator) executeModelOutput(ctx context.Context, curr *state.LoopState) {
-	for _, message := range curr.Inputs.ModelOutputMessage {
-		c.sendInferenceResult(ctx, curr, messages.Model, message)
-	}
-	hasFinalResponse := false
-	for _, message := range curr.Inputs.ModelOutputMessage {
-		if c.dispatchModelMessage(ctx, curr, message) {
-			hasFinalResponse = true
-		}
-	}
-	if hasFinalResponse && curr.Mode != state.DuplexSession {
-		c.logInfo("Coordinator: terminating loop", logging.Field{Key: "hasFinalResponse", Value: true})
-		curr.Inputs.TerminateLoop = true
-	}
-	c.resetModelDeltaWindow(curr)
-}
-
-func (c *Coordinator) dispatchModelMessage(ctx context.Context, curr *state.LoopState, message messages.Message) bool {
-	switch {
-	case len(message.ToolCalls) > 0 && !curr.ToolExecutionAvailable:
-		c.logInfo("Coordinator: model tool call without a configured executor delivered as final response", logging.Field{Key: "tool_calls", Value: len(message.ToolCalls)})
-		curr.Outputs.UserInbox.Write(ctx, messages.UserRequest{Message: message})
-		return true
-	case len(message.ToolCalls) > 0:
-		c.logInfo("Coordinator: model tool call output message", logging.Field{Key: "message", Value: message})
-		curr.Outputs.ToolInbox.Write(ctx, messages.ToolBatchRequest{Calls: message.ToolCalls, LoopPassID: c.nextToolBatchPass(curr)})
-		return false
-	case !message.HasOnlyReasoning():
-		c.logInfo("Coordinator: model output message", logging.Field{Key: "message", Value: message})
-		curr.Outputs.UserInbox.Write(ctx, messages.UserRequest{Message: message})
-		return true
-	default:
-		c.logInfo("Coordinator: model reasoning output message", logging.Field{Key: "message", Value: message})
-		return false
-	}
-}
-
-func (c *Coordinator) executeUserOutput(ctx context.Context, curr *state.LoopState) {
-	for _, message := range curr.Inputs.UserOutputMessage {
-		c.logInfo("Coordinator: user text output message", logging.Field{Key: "message", Value: message})
-		c.sendInferenceResult(ctx, curr, messages.User, message)
-	}
-	c.resetModelDeltaWindow(curr)
-	curr.History.CurrentPassID++
-	curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(curr.History.ConversationBuffer, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults))
-}
 
 func (c *Coordinator) resetModelDeltaWindow(curr *state.LoopState) {
 	curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
