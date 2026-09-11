@@ -209,31 +209,35 @@ def group_exists(pgid: int) -> bool:
         return True
 
 
+def signal_group(pgid: int, signum: signal.Signals, attempts: int = 1) -> tuple[bool, str | None]:
+    for attempt in range(attempts):
+        try:
+            os.killpg(pgid, signum)
+            return True, None
+        except ProcessLookupError:
+            return False, None
+        except PermissionError as exc:
+            if attempt + 1 < attempts:
+                time.sleep(0.05)
+                continue
+            return False, f"{type(exc).__name__}: {exc}"
+    return False, None
+
+
 def stop_group(process: subprocess.Popen[bytes], reason: str) -> dict[str, object]:
     pgid = process.pid
-    term_sent = False
-    kill_sent = False
-    try:
-        os.killpg(pgid, signal.SIGTERM)
-        term_sent = True
-    except ProcessLookupError:
-        pass
+    term_sent, term_error = signal_group(pgid, signal.SIGTERM, attempts=3)
     term_deadline = time.monotonic() + 0.75
     while group_exists(pgid) and time.monotonic() < term_deadline:
         time.sleep(0.02)
+    kill_sent = False
+    kill_error = None
     if group_exists(pgid):
-        try:
-            os.killpg(pgid, signal.SIGKILL)
-            kill_sent = True
-        except ProcessLookupError:
-            pass
+        kill_sent, kill_error = signal_group(pgid, signal.SIGKILL, attempts=8)
     try:
         process.wait(timeout=2.0)
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(pgid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        signal_group(pgid, signal.SIGKILL, attempts=8)
         try:
             process.wait(timeout=2.0)
         except subprocess.TimeoutExpired:
@@ -241,13 +245,19 @@ def stop_group(process: subprocess.Popen[bytes], reason: str) -> dict[str, objec
     settle_deadline = time.monotonic() + 0.5
     while group_exists(pgid) and time.monotonic() < settle_deadline:
         time.sleep(0.02)
-    return {
+    group_survivor = group_exists(pgid)
+    cleanup = {
         "reason": reason,
         "term_sent": term_sent,
         "kill_sent": kill_sent,
         "parent_exit_code": process.returncode,
-        "group_survivor": group_exists(pgid),
+        "group_survivor": group_survivor,
     }
+    if group_survivor and term_error:
+        cleanup["term_error"] = term_error
+    if group_survivor and kill_error:
+        cleanup["kill_error"] = kill_error
+    return cleanup
 
 
 def run_bounded(command: list[str], cwd: Path, env: dict[str, str], timeout: float, output_cap: int, result_dir: Path) -> dict[str, object]:

@@ -87,7 +87,15 @@ def process_failure(record: dict[str, object]) -> bool:
     if not isinstance(process, dict):
         return True
     cleanup = process.get("cleanup")
-    return bool(process.get("timed_out") or process.get("output_overflow") or process.get("reader_survivor") or (isinstance(cleanup, dict) and cleanup.get("group_survivor")))
+    return bool(
+        process.get("timed_out")
+        or process.get("output_overflow")
+        or process.get("reader_survivor")
+        or (
+            isinstance(cleanup, dict)
+            and (cleanup.get("group_survivor") or cleanup.get("term_error") or cleanup.get("kill_error"))
+        )
+    )
 
 
 def selection(record: dict[str, object]) -> dict[str, object]:
