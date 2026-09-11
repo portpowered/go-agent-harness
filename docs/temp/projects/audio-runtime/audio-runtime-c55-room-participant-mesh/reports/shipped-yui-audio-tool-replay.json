@@ -1,0 +1,114 @@
+{
+  "acoustic": "not_attempted",
+  "build": {
+    "argv": [
+      "rtk",
+      "proxy",
+      "go",
+      "build",
+      "-tags=nomicrophone",
+      "-trimpath",
+      "-o",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/artifacts/yui",
+      "./cmd/yui"
+    ],
+    "artifact": {
+      "build_input_count": 2191,
+      "build_input_manifest_sha256": "8fc22e853a4ee9ccd730d3192004527c745b555132340e3e1e1dc64968ca4282",
+      "bytes": 50970882,
+      "path": "artifacts/yui",
+      "sha256": "6174b54df0ea9d6f2a4ccdf0e6cc1b0f648867b5167408cae86e415ac3715761"
+    },
+    "cleanup": {
+      "group_alive_after": false,
+      "group_survivor_detected": false,
+      "parent_reaped": true,
+      "reader_threads_stopped": true,
+      "termination_signals": []
+    },
+    "cwd": "agent-cli",
+    "disk_bounded": true,
+    "disk_bytes": 0,
+    "elapsed_ms": 228,
+    "label": "build-yui",
+    "output_bounded": true,
+    "returncode": 0,
+    "stderr": "",
+    "stderr_bytes": 0,
+    "stderr_path": "runs/20260911T153909Z-19799/build-yui.stderr.log",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_truncated": false,
+    "stdout": "",
+    "stdout_bytes": 0,
+    "stdout_path": "runs/20260911T153909Z-19799/build-yui.stdout.log",
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_truncated": false,
+    "timed_out": false
+  },
+  "candidate_revision": "571ad7455295545197dda828c34f46b4924cb134",
+  "credentials": "not_used",
+  "physical_device": "not_attempted",
+  "replays": [
+    {
+      "execution": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/artifacts/yui",
+          "--config-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/runs/20260911T153909Z-19799/replay-audio-tool/config",
+          "--workdir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/runs/20260911T153909Z-19799/replay-audio-tool",
+          "--allow-path",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/runs/20260911T153909Z-19799/replay-audio-tool",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
+          "--replay-timing",
+          "immediate",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/runs/20260911T153909Z-19799/replay-audio-tool/record",
+          "--trace-audio"
+        ],
+        "cleanup": {
+          "group_alive_after": false,
+          "group_survivor_detected": false,
+          "parent_reaped": true,
+          "reader_threads_stopped": true,
+          "termination_signals": []
+        },
+        "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/runs/20260911T153909Z-19799/replay-audio-tool",
+        "disk_bounded": true,
+        "disk_bytes": 146657,
+        "elapsed_ms": 460,
+        "label": "yui-audio-tool-replay",
+        "output_bounded": true,
+        "returncode": 0,
+        "stderr": "",
+        "stderr_bytes": 0,
+        "stderr_path": "runs/20260911T153909Z-19799/replay-audio-tool/yui-audio-tool-replay.stderr.log",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_truncated": false,
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/runs/20260911T153909Z-19799/replay-audio-tool; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+        "stdout_bytes": 819,
+        "stdout_path": "runs/20260911T153909Z-19799/replay-audio-tool/yui-audio-tool-replay.stdout.log",
+        "stdout_sha256": "b9bb77b0222c78a7c66fddfa0133f11d59f4a368e5280fb15a548417ecd3eeb2",
+        "stdout_truncated": false,
+        "timed_out": false
+      },
+      "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
+      "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "manifest_sha256": "3559b061f5bd3977c130aaca4539826ef9edbf74e925187e62ac2f03c1c0cadd",
+      "pcm_bytes": 4800,
+      "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+      "record_dir": "runs/20260911T153909Z-19799/replay-audio-tool/record",
+      "session_log_sha256": "039d49adc0239cb447de0bf28e3fe009a4601e1618ebd5449553e2d903cb4cf3",
+      "terminal": {
+        "classification": "provider_close",
+        "output_state": "not_applicable",
+        "reason": "fixture_complete",
+        "terminal_provenance": "provider",
+        "terminal_reason": "provider_close"
+      }
+    }
+  ],
+  "schema": "audio-runtime.c55.shipped-replay.v1"
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "audio-runtime.c55.quality-gates.v1",
+  "candidate_revision": "571ad7455295545197dda828c34f46b4924cb134",
+  "passed": [
+    {"command": "make fmt", "exit_code": 0},
+    {"command": "make wire-check", "exit_code": 0},
+    {"command": "make coverage-registration", "exit_code": 0, "workspace_packages": 176, "modules": 6},
+    {"command": "make vet", "exit_code": 0},
+    {"command": "make lint", "exit_code": 0, "pinned_version": "2.9.0"},
+    {"command": "make staticcheck", "exit_code": 0, "pinned_version": "2026.1"},
+    {"command": "make test-regressions", "exit_code": 0}
+  ],
+  "architecture_size_gate": {
+    "command": "make architecture-size-check",
+    "exit_code": 2,
+    "finding_count": 8,
+    "handoff_status": "shared_or_unowned_findings_retained_without_policy_edits",
+    "findings": [
+      "baseline-drift agent-cli/internal/transport/cli package files 148 > baseline 147",
+      "baseline-stale agent-cli/internal/room/mesh.go file-lines exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go *Mesh.Close cognitive-complexity exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go *Mesh.Join cognitive-complexity exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go *Mesh.Join cyclomatic-complexity exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go *Mesh.Join function-lines exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go *Mesh.Join function-statements exemption",
+      "baseline-stale agent-cli/internal/room/mesh.go func-literal@553:17 cognitive-complexity exemption"
+    ],
+    "scope_note": "The primary coordination checkpoint authorized the private internal/mesh move; its matching 75.00 coverage registration was added without lowering a floor. Architecture baseline and peer-owned CLI paths remain unowned; no waiver, baseline growth, or policy edit was made."
+  }
+}

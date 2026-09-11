@@ -1,0 +1,35 @@
+{
+  "schema": "audio-runtime.c55.admission.v1",
+  "factory_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+  "server": "http://127.0.0.1:7439",
+  "session": "~default",
+  "verify_command": "project-control.py verify-work --type task --name audio-runtime-c55-room-participant-mesh",
+  "verify_result": {
+    "status": "admitted",
+    "project": "audio-runtime",
+    "name": "audio-runtime-c55-room-participant-mesh"
+  },
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh",
+  "branch": "codex/audio-runtime-c55-room-participant-mesh",
+  "preserved_c55_revision": "ab8a9f0bc665230b857c18a3093ab4f51d4e9523",
+  "fetched_main_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+  "merge_revision": "fddc0224b0e5258a47b827ed601e7c07c8876ae7",
+  "ancestry_verified": [
+    "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+    "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "2456a5d1594e73faf85e1132d6050735bc3e4710",
+    "904e1f4c3be6c1e629138632573bd2fb55d50938",
+    "ab8a9f0bc665230b857c18a3093ab4f51d4e9523"
+  ],
+  "canonical_board_capture": {
+    "path": "reports/admission-board.json",
+    "bytes": 379501,
+    "sha256": "3173ffeb53da23cfe3cc568917781f9870638bb06c7ed0ccf5dc94565ca7ba5b",
+    "command": "you --server $FACTORY_SERVER_URL --json work list --session ~default --max-results 500 --all"
+  },
+  "scope_inventory": {
+    "origin_main_diff_paths": 4,
+    "owned_source_paths": 4,
+    "host_checkout_touched": false
+  }
+}
