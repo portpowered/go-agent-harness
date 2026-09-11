@@ -305,3 +305,29 @@ The candidate is now ready to push and hand to the script-owned current-head
 CI gate. This does not claim CI green, independent review, guarded merge,
 post-delivery vertical validation, physical/acoustic proof, or project
 acceptance.
+
+## Final exact-head artifact/package replay — 2026-09-11T04:38Z
+
+The clean executable candidate at `4bd514e6f1980532a331e0f51b3d66fde08eeecb`
+produced `REPAIRED_ORACLE_PASS` in
+`repaired-20260911T043825Z-52250`. The rebuilt yui is `50,895,362` bytes with
+SHA-256 `79eb1eb02e813a9b427164a4938199f03c18c430b51b99c791ed2a8af20ec831`.
+Tool replay remains 18 wire events/1 tool call with 4,800 provider and 3,200
+rendered bytes; interruption remains 15/0 with 3,840 provider and 3,360
+rendered bytes, including the exact 2,400-byte healthy tail. Frozen hashes,
+strict replay, same-length mutation rejection, and missing-timeline rejection
+all remain proven.
+
+`package-20260911T043835Z-52326` returns `PACKAGE_READY` for that clean exact
+source. Its build covers 2,185 inputs with SHA-256
+`b3ff27ac38d91183097cf162de890e0486e1804c0ec5e2d7f7b66a4ac9fe2fc4`, and the
+artifact hash/size match the repaired replay. Startup, baseline, planning, and
+fresh `origin/main=7f73c8b3b4ebc99b55b8bb5e802beff024385407` ancestry are
+verified. The final ledger commit containing this section is documentation-
+only; no executable build input or oracle changed after the exact replay.
+
+This remains executor handoff evidence only. The next action is to push/update
+PR `#430` and return `ACCEPTED` to script-owned current-head CI without
+polling; CI, independent review, guarded merge, post-delivery vertical
+validation, physical/acoustic proof, and project acceptance remain external
+gates.
