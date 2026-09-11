@@ -1,8 +1,8 @@
 {
-  "candidate_revision": "cbe4d36548c80f203b1bce484c13eba8a71974c6",
+  "candidate_revision": "1985a97f782564f20fcfbf967b57ad6c82554545",
   "cases": {
     "baseline": {
-      "candidate_revision": "cbe4d36548c80f203b1bce484c13eba8a71974c6",
+      "candidate_revision": "1985a97f782564f20fcfbf967b57ad6c82554545",
       "execution": {
         "argv": [
           "go",
@@ -10,7 +10,7 @@
           "-mod=readonly",
           "-trimpath",
           "-o",
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c54-base-_y0pin02/baseline-consumer",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c54-base-g_0fj8wu/baseline-consumer",
           "."
         ],
         "cleanup": {
@@ -24,13 +24,13 @@
         },
         "cwd": "<temporary-base-archive>",
         "disk_bounded": true,
-        "disk_bytes": 398,
-        "elapsed_ms": 145,
+        "disk_bytes": 392,
+        "elapsed_ms": 200,
         "label": "baseline-without-c54-provider",
         "output_bounded": true,
         "returncode": 1,
         "stderr": "artifacts/baseline-failure/stderr.log",
-        "stderr_bytes": 398,
+        "stderr_bytes": 392,
         "stdout": "artifacts/baseline-failure/stdout.log",
         "stdout_bytes": 0,
         "timed_out": false
@@ -58,7 +58,7 @@
           "cwd": ".",
           "disk_bounded": true,
           "disk_bytes": 0,
-          "elapsed_ms": 3036,
+          "elapsed_ms": 3037,
           "label": "forced-timeout-process-group",
           "output_bounded": true,
           "returncode": -9,
@@ -89,7 +89,7 @@
           "cwd": ".",
           "disk_bounded": true,
           "disk_bytes": 65536,
-          "elapsed_ms": 77,
+          "elapsed_ms": 75,
           "label": "bounded-output-overflow",
           "output_bounded": false,
           "returncode": 0,
@@ -106,9 +106,9 @@
     },
     "consumer": {
       "binary": {
-        "bytes": 4571426,
+        "bytes": 4484242,
         "path": "artifacts/c54-consumer",
-        "sha256": "22eaea1c5870e964ab63619541a9a8c51ef2edc1051d50679a06d5f82386be84"
+        "sha256": "d347b9e87e001cce69065d558883e32ea241ddbb42ff266d71d570ff9f5e3729"
       },
       "execution": {
         "argv": [
@@ -132,7 +132,7 @@
         "cwd": "consumer",
         "disk_bounded": true,
         "disk_bytes": 0,
-        "elapsed_ms": 144,
+        "elapsed_ms": 962,
         "label": "build-external-consumer",
         "output_bounded": true,
         "returncode": 0,
@@ -160,7 +160,7 @@
         "cwd": "consumer",
         "disk_bounded": true,
         "disk_bytes": 1400,
-        "elapsed_ms": 99,
+        "elapsed_ms": 202,
         "label": "public-external-consumer",
         "output_bounded": true,
         "returncode": 0,
@@ -172,7 +172,7 @@
       },
       "report": {
         "admit_aliases": true,
-        "candidate_revision": "cbe4d36548c80f203b1bce484c13eba8a71974c6",
+        "candidate_revision": "1985a97f782564f20fcfbf967b57ad6c82554545",
         "constructed_via": "rooms/wire.NewManifestProviderFromRegistry",
         "file_admission": true,
         "json_yaml_equal": true,
@@ -249,7 +249,7 @@
         "cwd": "consumer",
         "disk_bounded": true,
         "disk_bytes": 103,
-        "elapsed_ms": 492,
+        "elapsed_ms": 1356,
         "label": "external-consumer-normal",
         "output_bounded": true,
         "returncode": 0,
@@ -280,7 +280,7 @@
         "cwd": "consumer",
         "disk_bounded": true,
         "disk_bytes": 103,
-        "elapsed_ms": 1570,
+        "elapsed_ms": 2647,
         "label": "external-consumer-race",
         "output_bounded": true,
         "returncode": 0,
@@ -314,7 +314,7 @@
         "cwd": "agent-cli",
         "disk_bounded": true,
         "disk_bytes": 273,
-        "elapsed_ms": 18077,
+        "elapsed_ms": 23035,
         "label": "focused-cli-normal",
         "output_bounded": true,
         "returncode": 0,
@@ -345,7 +345,7 @@
         "cwd": "agent-cli",
         "disk_bounded": true,
         "disk_bytes": 76,
-        "elapsed_ms": 5453,
+        "elapsed_ms": 7235,
         "label": "focused-cli-race",
         "output_bounded": true,
         "returncode": 0,
@@ -375,7 +375,7 @@
         "cwd": "go-agent-runtime",
         "disk_bounded": true,
         "disk_bytes": 928,
-        "elapsed_ms": 1048,
+        "elapsed_ms": 1879,
         "label": "focused-runtime-normal",
         "output_bounded": true,
         "returncode": 0,
@@ -406,7 +406,7 @@
         "cwd": "go-agent-runtime",
         "disk_bounded": true,
         "disk_bytes": 928,
-        "elapsed_ms": 2312,
+        "elapsed_ms": 3052,
         "label": "focused-runtime-race",
         "output_bounded": true,
         "returncode": 0,
@@ -437,7 +437,7 @@
             "cwd": "consumer",
             "disk_bounded": true,
             "disk_bytes": 75,
-            "elapsed_ms": 28,
+            "elapsed_ms": 31,
             "label": "consumer-wrong-normalized-oracle",
             "output_bounded": true,
             "returncode": 1,
@@ -527,7 +527,7 @@
             "cwd": "consumer",
             "disk_bounded": true,
             "disk_bytes": 76,
-            "elapsed_ms": 19,
+            "elapsed_ms": 22,
             "label": "consumer-wrong-redaction-oracle",
             "output_bounded": true,
             "returncode": 1,
@@ -546,9 +546,9 @@
     "replay": {
       "binary": {
         "path": "artifacts/yui",
-        "sha256": "05b2f44b1e3bccc0f378a792f83761b399e21028222f8aaa54b7cf09647f0986"
+        "sha256": "b84e6a82414cdd8497a1b9ba6ce0fc76b201cfb90036a8ccebf9f106428b084d"
       },
-      "candidate_revision": "cbe4d36548c80f203b1bce484c13eba8a71974c6",
+      "candidate_revision": "1985a97f782564f20fcfbf967b57ad6c82554545",
       "effects": {
         "acoustic": "not_attempted",
         "clean_shutdown": true,
@@ -560,20 +560,20 @@
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/yui",
           "--config-dir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T052254-2870/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T080441-81781/config",
           "--log-to-stdout",
           "session",
           "--replay",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
           "--audio-out",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T052254-2870/audio.wav",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T080441-81781/audio.wav",
           "--record-dir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T052254-2870/tool-record",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T080441-81781/tool-record",
           "--trace-audio",
           "--workdir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T052254-2870",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T080441-81781",
           "--allow-path",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T052254-2870"
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/shipped-yui-replay-20260911T080441-81781"
         ],
         "cleanup": {
           "group_alive_after": false,
@@ -584,17 +584,17 @@
           "setup_error": "",
           "term_sent": false
         },
-        "cwd": "artifacts/shipped-yui-replay-20260911T052254-2870",
+        "cwd": "artifacts/shipped-yui-replay-20260911T080441-81781",
         "disk_bounded": true,
-        "disk_bytes": 827,
-        "elapsed_ms": 154,
+        "disk_bytes": 828,
+        "elapsed_ms": 178,
         "label": "shipped-yui-audio-tool-replay",
         "output_bounded": true,
         "returncode": 0,
-        "stderr": "artifacts/shipped-yui-replay-20260911T052254-2870/process/stderr.log",
+        "stderr": "artifacts/shipped-yui-replay-20260911T080441-81781/process/stderr.log",
         "stderr_bytes": 0,
-        "stdout": "artifacts/shipped-yui-replay-20260911T052254-2870/process/stdout.log",
-        "stdout_bytes": 827,
+        "stdout": "artifacts/shipped-yui-replay-20260911T080441-81781/process/stdout.log",
+        "stdout_bytes": 828,
         "timed_out": false
       },
       "fixture": {
@@ -626,21 +626,21 @@
       "passed": true,
       "record": {
         "artifact_count": 5,
-        "manifest": "artifacts/shipped-yui-replay-20260911T052254-2870/tool-record/manifest.json",
-        "pcm": "artifacts/shipped-yui-replay-20260911T052254-2870/tool-record/audio/out-000.pcm",
+        "manifest": "artifacts/shipped-yui-replay-20260911T080441-81781/tool-record/manifest.json",
+        "pcm": "artifacts/shipped-yui-replay-20260911T080441-81781/tool-record/audio/out-000.pcm",
         "pcm_bytes": 4800,
         "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
-        "provider": "artifacts/shipped-yui-replay-20260911T052254-2870/tool-record/provider.json",
-        "session_log": "artifacts/shipped-yui-replay-20260911T052254-2870/tool-record/session-log.jsonl"
+        "provider": "artifacts/shipped-yui-replay-20260911T080441-81781/tool-record/provider.json",
+        "session_log": "artifacts/shipped-yui-replay-20260911T080441-81781/tool-record/session-log.jsonl"
       },
       "schema": "audio-runtime.c54.shipped-replay/v1",
       "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710"
     },
     "yui": {
       "binary": {
-        "bytes": 50895330,
+        "bytes": 50913458,
         "path": "artifacts/yui",
-        "sha256": "05b2f44b1e3bccc0f378a792f83761b399e21028222f8aaa54b7cf09647f0986"
+        "sha256": "b84e6a82414cdd8497a1b9ba6ce0fc76b201cfb90036a8ccebf9f106428b084d"
       },
       "execution": {
         "argv": [
@@ -664,7 +664,7 @@
         "cwd": ".",
         "disk_bounded": true,
         "disk_bytes": 0,
-        "elapsed_ms": 309,
+        "elapsed_ms": 11819,
         "label": "build-shipped-yui",
         "output_bounded": true,
         "returncode": 0,
@@ -686,14 +686,14 @@
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/yui",
           "--config-dir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/cli-admission-20260911T052253-2870/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/cli-admission-20260911T080441-81781/config",
           "--log-to-stdout",
           "room",
           "run",
           "--config",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/fixtures/cli-invalid-nested-browser.yaml",
           "--out",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/cli-admission-20260911T052253-2870/out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/artifacts/cli-admission-20260911T080441-81781/out",
           "--workdir",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission",
           "--allow-path",
@@ -711,13 +711,13 @@
         "cwd": ".",
         "disk_bounded": true,
         "disk_bytes": 1532,
-        "elapsed_ms": 443,
+        "elapsed_ms": 590,
         "label": "shipped-yui-room-admission",
         "output_bounded": true,
         "returncode": 1,
-        "stderr": "artifacts/cli-admission-20260911T052253-2870/process/stderr.log",
+        "stderr": "artifacts/cli-admission-20260911T080441-81781/process/stderr.log",
         "stderr_bytes": 1532,
-        "stdout": "artifacts/cli-admission-20260911T052253-2870/process/stdout.log",
+        "stdout": "artifacts/cli-admission-20260911T080441-81781/process/stdout.log",
         "stdout_bytes": 0,
         "timed_out": false
       },
@@ -732,7 +732,7 @@
   "passed": true,
   "project": "audio-runtime",
   "provenance": "provenance.json",
-  "provenance_candidate_revision": "cbe4d36548c80f203b1bce484c13eba8a71974c6",
+  "provenance_candidate_revision": "1985a97f782564f20fcfbf967b57ad6c82554545",
   "schema": "audio-runtime.c54.verification-summary.v1",
   "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
   "task": "audio-runtime-c54-room-document-admission"

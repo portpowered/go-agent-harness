@@ -10,16 +10,16 @@
   "bounds": {
     "aggregate_timeout_seconds": 600.0,
     "child_timeout_seconds": 60.0,
-    "elapsed_ms": 37570,
+    "elapsed_ms": 60433,
     "max_child_output_bytes": 65536,
     "max_retained_disk_bytes": 8388608
   },
   "branch": "codex/audio-runtime-c54-room-document-admission",
   "build": {
     "consumer": {
-      "bytes": 4571426,
+      "bytes": 4484242,
       "path": "artifacts/c54-consumer",
-      "sha256": "22eaea1c5870e964ab63619541a9a8c51ef2edc1051d50679a06d5f82386be84"
+      "sha256": "d347b9e87e001cce69065d558883e32ea241ddbb42ff266d71d570ff9f5e3729"
     },
     "inputs": [
       {
@@ -93,9 +93,9 @@
         "sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37"
       },
       {
-        "bytes": 3768,
+        "bytes": 4032,
         "path": "agent-cli/internal/room/manifest.go",
-        "sha256": "b6cb9a4a786019168a936d277b00ef82a66132a5f8aaac2d81c94ba2138da78f"
+        "sha256": "bb8f823b7295fd288c5d6ee8baf85a819e058ee1d5c17ca36a2d2662a55cd31c"
       },
       {
         "bytes": 20964,
@@ -103,9 +103,9 @@
         "sha256": "e84ccf1596a5c9b2c946dcb1148d14cdc3bda3e639cfb9ca569141434a1b5592"
       },
       {
-        "bytes": 1856,
+        "bytes": 1860,
         "path": "agent-cli/internal/room/browser_tools.go",
-        "sha256": "dfbae141f836dc927fe18006aa9f499deb57d1fa0b0c954ea6b78cfce519dffb"
+        "sha256": "6d8c70ae0acc1ddc5fc5cf31f1adaf5343f244e6f68826bf28b0556c5bcacf28"
       },
       {
         "bytes": 11517,
@@ -113,29 +113,29 @@
         "sha256": "597041e396ff6b5263fa3d95aec118ae5119521186fbdf7e0564e25ea0e52d49"
       },
       {
-        "bytes": 16031,
+        "bytes": 16083,
         "path": "go-agent-runtime/services/rooms/manifest.go",
-        "sha256": "18acce27beac3bf62f85989e608cbe53e8f8ec573369d9117b22fcdf7af83bbf"
+        "sha256": "6a35f6cc5e211ba87901e20548fab975840c78e860dc105f0e7fe1161ea577d7"
       },
       {
-        "bytes": 12315,
+        "bytes": 15092,
         "path": "go-agent-runtime/services/rooms/browser.go",
-        "sha256": "020df6af2ae60770b3486fa5d5255188ade799b4e0fe0628a40eb9d7ad6a0fa8"
+        "sha256": "4b31ebe74b97cc1c74f553981647ffb1cccdebb6e9d3e79972afd16db6a9685f"
       },
       {
-        "bytes": 11544,
+        "bytes": 15560,
         "path": "go-agent-runtime/services/rooms/internal/manifest/decoder.go",
-        "sha256": "713ed45e6e5c8ac17b2ca998448d4cc46f820cf57cc9073e2f626f6197f84d7c"
+        "sha256": "68fd555c9987a114c2f3b104d3507d2c10131bda31c3329037d361189a9e8bc3"
       },
       {
-        "bytes": 12613,
+        "bytes": 13419,
         "path": "go-agent-runtime/services/rooms/internal/manifest/browser.go",
-        "sha256": "90d6bcd2fa0095d9d59390e25392a15b409876d453e40869c2d6605ab8e3f62b"
+        "sha256": "8bebaa897a7ea19c345a90fd33c4bc6e24cf0e352ae3be965700d1e575d76309"
       },
       {
-        "bytes": 5806,
+        "bytes": 3170,
         "path": "go-agent-runtime/services/rooms/wire/manifest.go",
-        "sha256": "26a1eb5d959201fa4ddbddf55390e387f0c142dac294ab016dbb354e9de32157"
+        "sha256": "48a05ad3f91be93e1620aff1b8aef67dc9c7dc0ff3b85f210e84364c489d134f"
       },
       {
         "bytes": 1752,
@@ -153,9 +153,9 @@
         "sha256": "6d23fab671bf0e3ff790dcbc5bef50d8b54271ba7a34a11a6ebae4895e896434"
       },
       {
-        "bytes": 16815,
+        "bytes": 16826,
         "path": "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/consumer/main.go",
-        "sha256": "dc99a7be8715c7885cc7668983e2b4baef6c053fd92f93fb125b31ad978b9d42"
+        "sha256": "063fb938f140cca7d207ee61721eb6fc8efb7832d217291ce94ed454cdb7cea5"
       },
       {
         "bytes": 561,
@@ -190,12 +190,12 @@
     ],
     "toolchain": "go version go1.26.7 darwin/arm64",
     "yui": {
-      "bytes": 50895330,
+      "bytes": 50913458,
       "path": "artifacts/yui",
-      "sha256": "05b2f44b1e3bccc0f378a792f83761b399e21028222f8aaa54b7cf09647f0986"
+      "sha256": "b84e6a82414cdd8497a1b9ba6ce0fc76b201cfb90036a8ccebf9f106428b084d"
     }
   },
-  "candidate_revision": "cbe4d36548c80f203b1bce484c13eba8a71974c6",
+  "candidate_revision": "1985a97f782564f20fcfbf967b57ad6c82554545",
   "case_names": [
     "consumer",
     "yui"
@@ -204,7 +204,7 @@
     "browser_lines": 37,
     "cli_parser_retired": true,
     "cli_provider_adapter": true,
-    "manifest_lines": 89,
+    "manifest_lines": 97,
     "pinned_browser_lines": 739,
     "pinned_manifest_lines": 765,
     "runtime_raw_decoder_owner": true
@@ -217,7 +217,7 @@
     "expected_pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
   },
   "fresh_fetch_is_newer_descendant": true,
-  "fresh_fetch_origin_main_revision": "ab5fbade1bd69712deb8fcd84e605c0ce9916112",
+  "fresh_fetch_origin_main_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
   "integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "project": "audio-runtime",
   "schema": "audio-runtime.c54.provenance.v1",
