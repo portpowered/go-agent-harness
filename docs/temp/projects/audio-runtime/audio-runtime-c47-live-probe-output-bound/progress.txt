@@ -12,6 +12,15 @@ Review rejection repair continuation
 - `check_python_sources.py`: PASS for both owned production-tool sources and all C47 Python drivers. Working-tree `rtk git diff --check`: PASS after normalizing the two retained stderr artifacts; their dependent hashes/byte counts and report_bytes were refreshed (`1410` bytes, SHA256 `a517d4aabd15138b5e9b332d3c392dfc7c3c99f93e626ef8e342829b46d98966`; report bytes `379243` and `379479`).
 - Next checkpoint is commit of these repairs and then the exact PRD staged-probe command on that committed head; no CI result is claimed.
 
+Committed-head exact probe
+- Repair checkpoint commit: `e0c51bb40cd41a9f82fa6e76e2fb46118954be3c` (`audio-runtime: repair C47 live probe cleanup and bounds`).
+- Exact PRD staged-probe command completed with decision `ACCEPTED` in `runs/latest-staged-probe.json`; raw controls are retained under `runs/runs/staged-probe-20260911T042942Z-47589/`.
+- The probe tested source revision `e0c51bb40cd41a9f82fa6e76e2fb46118954be3c`; original tested source `9f869d1db0a1724128f7c7d083a0054270def68`; integrated C44 source `5f14c45313cfdc71e000fda209e3408fcf863faf`; repaired verify SHA256 `7e79e235865826942b002fa50e10031892ec287e3ee6cb4bb14c5aff1871c6c3`; repaired staged-probe SHA256 `7170b42d3fb54f032565614d85e66c213df3ea79eb993cd08af80fa8e86f66db`.
+- Immutable inputs matched: YUI `d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe`, consumer `5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b`, source snapshot `9a803dab9a439211ecf90617c5f063d8f3e27a4e1f8950d7006bd729170ff399`, descriptor `e62c5da67ff259dfdfe5ade71f2fb2d654b12617b58e84767d853c95a2319d11`; artifact input equivalence was true before/after.
+- Storage preflight projected 174,966,628 bytes including 57,472,980 bytes scratch, 67,108,864 bytes bounded process output, 12,636,048 bytes replay output, 4,194,304 bytes control metadata, and 16 MiB each for the run/latest reports. Minimum observed free space was 148,249,047,040 bytes; 45 reserve samples carried the projection through staging, quiet execution, controls, and cleanup.
+- Observed run tree was 57,787,573 bytes before cleanup, replay outputs 267,501 bytes, and 314,593 bytes after scratch cleanup. Report bytes stabilized at 380,412; latest report was 65,819 bytes. `binary_output_bytes=4718`, `forbidden_helpers_called=[]`, APFS clone staging, and cleanup errors were empty.
+- This final exact evidence supersedes earlier live-07 provenance while preserving all prior checkpoints and the live-06 diagnostic. Next action is push this committed head and update PR #439 for the script CI gate; CI is not polled or claimed.
+
 Admission and ancestry
 - Admission command: rtk python3 "$FACTORY_ROOT/factory/scripts/project-control.py" verify-work --type task --name audio-runtime-c47-live-probe-output-bound
 - Admission result: admitted, project audio-runtime.

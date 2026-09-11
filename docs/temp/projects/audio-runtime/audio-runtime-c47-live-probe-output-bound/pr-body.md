@@ -18,3 +18,11 @@
 - The final exact report records `report_bytes=379480`, scratch cleanup `57472980 -> 0` with no errors, artifact equivalence, timestamped reserve samples, and the C47-owned reserve filesystem root. A prior live-06 miss was a single nondeterministic interruption-boundary result and is retained as diagnostic evidence, not acceptance evidence.
 
 The exact staged mission report and raw control diagnostics are under the task-local `evidence/` directory. CI status is intentionally not claimed here; the open candidate is handed to the script CI gate.
+
+## Current review repair handoff
+
+This current head supersedes the earlier live-07 provenance that the concluded review rejected. Commit `e0c51bb40cd41a9f82fa6e76e2fb46118954be3c` contains the post-Popen whole-group cleanup repair and regression, replay/metadata/report reserve projection, explicit original/integrated/current provenance, the PRD-named C45 regression and Python compile drivers, and normalized live-04/live-07 stderr metadata.
+
+The committed-head exact probe is `runs/latest-staged-probe.json` with raw controls under `runs/runs/staged-probe-20260911T042942Z-47589/`. It is `ACCEPTED` with `tested_source_revision=e0c51bb40cd41a9f82fa6e76e2fb46118954be3c`, original source `9f869d1db0a1724128f7c7d083a0054270def68`, integrated C44 source `5f14c45313cfdc71e000fda209e3408fcf863faf`, verifier SHA256 `7e79e235865826942b002fa50e10031892ec287e3ee6cb4bb14c5aff1871c6c3`, projected growth `174966628`, minimum observed free space `148249047040`, report bytes `380412`, latest report bytes `65819`, and scratch cleanup `57472980 -> 0` with no errors. Artifact input equivalence is true; APFS clone staging was used; forbidden verifier helpers were not called.
+
+Focused gates are green for this candidate: C47 capture/combined resource controls, private unchanged C45 regressions with original revision `5f14c45313cfdc71e000fda209e3408fcf863faf`, all changed Python source compilation, and `git diff --check`. This handoff is ready for the script CI gate; no CI result is claimed or polled here.

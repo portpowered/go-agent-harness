@@ -1,0 +1,1119 @@
+{
+  "schema": "audio-runtime-c45-staged-probe/v1",
+  "decision": "ACCEPTED",
+  "staged_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c45-model-oracle-corrected-vertical-probe",
+  "output_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs",
+  "run_dir": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589",
+  "child_timeout_seconds": 60.0,
+  "total_timeout_seconds": 1500.0,
+  "max_output_bytes": 67108864,
+  "min_free_bytes": 2147483648,
+  "reserve_filesystem_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs",
+  "forbidden_helpers_called": [],
+  "scratch_paths": [
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-source",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-binaries",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/unused-artifacts",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/unused-runs"
+  ],
+  "storage_preflight": {
+    "synthetic_input": false,
+    "prospective_binary_copy_bytes": 57445940,
+    "prospective_fixture_bytes": 27040,
+    "prospective_scratch_bytes": 57472980,
+    "prospective_output_bytes": 67108864,
+    "prospective_replay_output_bytes": 12636048,
+    "replay_output_breakdown": {
+      "provider_fixture_copy_bytes": 27040,
+      "pcm_output_bytes": 8640,
+      "audio_wav_bytes": 8728,
+      "audio_trace_wav_bytes": 8728,
+      "text_output_reserve_bytes": 8388608,
+      "metadata_reserve_bytes": 4194304,
+      "total_bytes": 12636048
+    },
+    "prospective_metadata_bytes": 4194304,
+    "prospective_report_bytes": 16777216,
+    "prospective_latest_report_bytes": 16777216,
+    "projected_growth_bytes": 174966628,
+    "fixture_members": {
+      "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json": {
+        "bytes": 14060,
+        "mode": 436
+      },
+      "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-interruption.session.json": {
+        "bytes": 12980,
+        "mode": 436
+      }
+    },
+    "artifact_input_bytes": 57741957
+  },
+  "artifact_hashes_before": {
+    "artifact-0-yui": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c45-model-oracle-corrected-vertical-probe/artifact-0",
+      "bytes": 51042338,
+      "sha256": "d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe"
+    },
+    "artifact-1-consumer": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c45-model-oracle-corrected-vertical-probe/artifact-1",
+      "bytes": 6403602,
+      "sha256": "5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b"
+    },
+    "artifact-2-source-snapshot": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c45-model-oracle-corrected-vertical-probe/artifact-2.tar",
+      "bytes": 245760,
+      "sha256": "9a803dab9a439211ecf90617c5f063d8f3e27a4e1f8950d7006bd729170ff399"
+    },
+    "artifact-3-build-descriptor": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c45-model-oracle-corrected-vertical-probe/artifact-3.json",
+      "bytes": 50257,
+      "sha256": "e62c5da67ff259dfdfe5ade71f2fb2d654b12617b58e84767d853c95a2319d11"
+    }
+  },
+  "verifier_sha256": "7e79e235865826942b002fa50e10031892ec287e3ee6cb4bb14c5aff1871c6c3",
+  "staged_binary_bytes": 57445940,
+  "binary_output_bytes": 4718,
+  "binary_staging_bytes": 57445940,
+  "execution_bindings": {
+    "artifact-0-yui": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-binaries/artifact-0",
+    "artifact-1-consumer": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-binaries/artifact-1"
+  },
+  "free_space_before_bytes": 148253736960,
+  "source_staging_bytes": 27040,
+  "fixture_bytes": 27040,
+  "staging_method": {
+    "artifact-0-yui": "apfs-clone",
+    "artifact-1-consumer": "apfs-clone"
+  },
+  "original_artifact_provenance": {
+    "descriptor_schema": "audio-runtime-c44-verification/v1",
+    "descriptor_mode": "public",
+    "descriptor_decision": "ACCEPTED",
+    "descriptor_sha256": "e62c5da67ff259dfdfe5ade71f2fb2d654b12617b58e84767d853c95a2319d11",
+    "source_snapshot_sha256": "9a803dab9a439211ecf90617c5f063d8f3e27a4e1f8950d7006bd729170ff399"
+  },
+  "toolchain_and_build_flags": [
+    {
+      "label": "build-external-consumer",
+      "argv": [
+        "rtk",
+        "proxy",
+        "go",
+        "build",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c44-retire-cli-model-admission/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/artifacts/model-admission-consumer",
+        "."
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c44-retire-cli-model-admission/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/consumer",
+      "artifact": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c44-retire-cli-model-admission/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/artifacts/model-admission-consumer",
+        "bytes": 6403602,
+        "sha256": "5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b"
+      }
+    },
+    {
+      "label": "build-yui-nomicrophone",
+      "argv": [
+        "rtk",
+        "proxy",
+        "go",
+        "build",
+        "-tags=nomicrophone",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c44-retire-cli-model-admission/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/artifacts/yui",
+        "./agent-cli/cmd/yui"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c44-retire-cli-model-admission",
+      "artifact": {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c44-retire-cli-model-admission/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/artifacts/yui",
+        "bytes": 51042338,
+        "sha256": "d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe"
+      }
+    }
+  ],
+  "controls": {
+    "public_consumer": {
+      "result": {
+        "label": "public-external-consumer",
+        "argv": [
+          "rtk",
+          "proxy",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-binaries/artifact-1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/consumer",
+        "environment": {
+          "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg08xHbEX:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+          "GOWORK": "",
+          "GOFLAGS": "",
+          "GOTOOLCHAIN": "",
+          "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+          "FACTORY_SERVER_URL": "http://127.0.0.1:7439"
+        },
+        "deadline_seconds": 60.0,
+        "elapsed_seconds": 0.255786,
+        "exit_code": 0,
+        "timed_out": false,
+        "term_sent": false,
+        "kill_sent": false,
+        "parent_reaped": true,
+        "surviving_process_group_pids": [],
+        "survivors_before_final_kill": [],
+        "process_group_inspection_available": true,
+        "process_group_inspection_error": null,
+        "stdout_bytes": 1364,
+        "stdout_sha256": "7e61c5d9d77782b97e9a6b9df3b1f5e613038a04b02efb80137430d5793e1a57",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/public-external-consumer.stdout",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/public-external-consumer.stderr",
+        "output_overflow": false,
+        "capture_failure": null,
+        "primary_failure": null,
+        "cleanup_failures": [],
+        "capture_read_chunk_bytes": 65536,
+        "capture_buffer_high_water_bytes": 1364,
+        "retained_output_bytes": 1364,
+        "output_budget_limit_bytes": 67108864,
+        "output_budget_used_bytes": 1364,
+        "output_budget_remaining_bytes": 67107500,
+        "aggregate_output_bytes": 1364,
+        "remaining_output_bytes": 67107500
+      },
+      "report": {
+        "schema": "audio-runtime-c44-model-admission/v1",
+        "constructed_via": "providers/wire.NewModelAdmission",
+        "custom_supported_ids": [
+          "custom-only",
+          "custom-second"
+        ],
+        "resolver": {
+          "matched": true,
+          "model_id": "custom-only"
+        },
+        "observations": [
+          {
+            "name": "custom-model-admitted",
+            "errors_is_unsupported": false,
+            "errors_is_catalog_required": false
+          },
+          {
+            "name": "custom-catalog-rejects-built-in-model",
+            "error": "OpenAI model \"gpt-realtime\" is not realtime-capable for agent session; supported realtime models: custom-only, custom-second",
+            "error_kind": "UnsupportedRealtimeModelError",
+            "provider": "OpenAI",
+            "model": "gpt-realtime",
+            "supported_ids": [
+              "custom-only",
+              "custom-second"
+            ],
+            "errors_is_unsupported": true,
+            "errors_is_catalog_required": false
+          },
+          {
+            "name": "supported-model-snapshot-isolated",
+            "error": "OpenAI model \"snapshot-probe-2\" is not realtime-capable for agent session; supported realtime models: custom-only, custom-second",
+            "error_kind": "UnsupportedRealtimeModelError",
+            "provider": "OpenAI",
+            "model": "snapshot-probe-2",
+            "supported_ids": [
+              "custom-only",
+              "custom-second"
+            ],
+            "errors_is_unsupported": true,
+            "errors_is_catalog_required": false
+          },
+          {
+            "name": "nil-catalog-fails-closed",
+            "error": "provider model catalog is required",
+            "errors_is_unsupported": false,
+            "errors_is_catalog_required": true
+          },
+          {
+            "name": "non-openai-provider-remains-unrestricted",
+            "errors_is_unsupported": false,
+            "errors_is_catalog_required": false
+          }
+        ]
+      }
+    },
+    "effect_observer": {
+      "result": {
+        "label": "positive-loopback-effect-sentinel",
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "-c",
+          "import socket,sys; connection=socket.create_connection(('127.0.0.1', int(sys.argv[1])), timeout=2); connection.close()",
+          "52041"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589",
+        "environment": {
+          "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg08xHbEX:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+          "GOWORK": "",
+          "GOFLAGS": "",
+          "GOTOOLCHAIN": "",
+          "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+          "FACTORY_SERVER_URL": "http://127.0.0.1:7439"
+        },
+        "deadline_seconds": 60.0,
+        "elapsed_seconds": 0.095091,
+        "exit_code": 0,
+        "timed_out": false,
+        "term_sent": false,
+        "kill_sent": false,
+        "parent_reaped": true,
+        "surviving_process_group_pids": [],
+        "survivors_before_final_kill": [],
+        "process_group_inspection_available": true,
+        "process_group_inspection_error": null,
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/positive-loopback-effect-sentinel.stdout",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/positive-loopback-effect-sentinel.stderr",
+        "output_overflow": false,
+        "capture_failure": null,
+        "primary_failure": null,
+        "cleanup_failures": [],
+        "capture_read_chunk_bytes": 65536,
+        "capture_buffer_high_water_bytes": 0,
+        "retained_output_bytes": 0,
+        "output_budget_limit_bytes": 67108864,
+        "output_budget_used_bytes": 1364,
+        "output_budget_remaining_bytes": 67107500,
+        "aggregate_output_bytes": 1364,
+        "remaining_output_bytes": 67107500
+      },
+      "observer_detected_effect": true
+    },
+    "cli_admission": {
+      "bare_session": {
+        "result": {
+          "label": "invalid-bare-session-admission",
+          "argv": [
+            "rtk",
+            "proxy",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-binaries/artifact-0",
+            "--config-dir",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/invalid-bare-session/config",
+            "--log-to-stdout",
+            "session",
+            "--provider",
+            "openai",
+            "--model",
+            "c44-unknown-model",
+            "--max-duration",
+            "1s",
+            "--base-url",
+            "ws://127.0.0.1:52043",
+            "--api-key",
+            "c44-no-network-key"
+          ],
+          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/invalid-bare-session",
+          "environment": {
+            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg08xHbEX:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+            "GOWORK": "",
+            "GOFLAGS": "",
+            "GOTOOLCHAIN": "",
+            "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+            "FACTORY_SERVER_URL": "http://127.0.0.1:7439"
+          },
+          "deadline_seconds": 60.0,
+          "elapsed_seconds": 0.586433,
+          "exit_code": 1,
+          "timed_out": false,
+          "term_sent": false,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "surviving_process_group_pids": [],
+          "survivors_before_final_kill": [],
+          "process_group_inspection_available": true,
+          "process_group_inspection_error": null,
+          "stdout_bytes": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_bytes": 164,
+          "stderr_sha256": "5e13ecd2d7189343355b16b787272a187615cf9d3f4798dde79bf84887175ec5",
+          "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/invalid-bare-session-admission.stdout",
+          "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/invalid-bare-session-admission.stderr",
+          "output_overflow": false,
+          "capture_failure": null,
+          "primary_failure": {
+            "kind": "exit_code",
+            "message": "invalid-bare-session-admission exited with nonzero status 1",
+            "exit_code": 1
+          },
+          "cleanup_failures": [],
+          "capture_read_chunk_bytes": 65536,
+          "capture_buffer_high_water_bytes": 164,
+          "retained_output_bytes": 164,
+          "output_budget_limit_bytes": 67108864,
+          "output_budget_used_bytes": 1528,
+          "output_budget_remaining_bytes": 67107336,
+          "aggregate_output_bytes": 1528,
+          "remaining_output_bytes": 67107336
+        },
+        "expected_text": "not realtime-capable",
+        "provider_connection_accepted": false,
+        "output_target_exists": false
+      },
+      "self_play": {
+        "result": {
+          "label": "invalid-self-play-admission",
+          "argv": [
+            "rtk",
+            "proxy",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-binaries/artifact-0",
+            "--config-dir",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/invalid-self-play/config",
+            "--log-to-stdout",
+            "session",
+            "self-play",
+            "--provider",
+            "openai",
+            "--model",
+            "c44-unknown-model",
+            "--max-duration",
+            "1s",
+            "--max-turns",
+            "1",
+            "--output-dir",
+            "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/invalid-self-play/self-play-output",
+            "--base-url",
+            "ws://127.0.0.1:52044",
+            "--api-key",
+            "c44-no-network-key"
+          ],
+          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/invalid-self-play",
+          "environment": {
+            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg08xHbEX:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+            "GOWORK": "",
+            "GOFLAGS": "",
+            "GOTOOLCHAIN": "",
+            "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+            "FACTORY_SERVER_URL": "http://127.0.0.1:7439"
+          },
+          "deadline_seconds": 60.0,
+          "elapsed_seconds": 0.094637,
+          "exit_code": 1,
+          "timed_out": false,
+          "term_sent": false,
+          "kill_sent": false,
+          "parent_reaped": true,
+          "surviving_process_group_pids": [],
+          "survivors_before_final_kill": [],
+          "process_group_inspection_available": true,
+          "process_group_inspection_error": null,
+          "stdout_bytes": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_bytes": 1410,
+          "stderr_sha256": "a517d4aabd15138b5e9b332d3c392dfc7c3c99f93e626ef8e342829b46d98966",
+          "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/invalid-self-play-admission.stdout",
+          "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/invalid-self-play-admission.stderr",
+          "output_overflow": false,
+          "capture_failure": null,
+          "primary_failure": {
+            "kind": "exit_code",
+            "message": "invalid-self-play-admission exited with nonzero status 1",
+            "exit_code": 1
+          },
+          "cleanup_failures": [],
+          "capture_read_chunk_bytes": 65536,
+          "capture_buffer_high_water_bytes": 1411,
+          "retained_output_bytes": 1410,
+          "output_budget_limit_bytes": 67108864,
+          "output_budget_used_bytes": 2939,
+          "output_budget_remaining_bytes": 67105925,
+          "aggregate_output_bytes": 2939,
+          "remaining_output_bytes": 67105925
+        },
+        "expected_text": "self-play model",
+        "provider_connection_accepted": false,
+        "output_target_exists": false
+      }
+    },
+    "replay": [
+      {
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-source/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+        "fixture_bytes": 14060,
+        "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/replay-audio-tool/tool-record/manifest.json",
+        "pcm": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/replay-audio-tool/tool-record/audio/out-000.pcm",
+        "pcm_bytes": 4800,
+        "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+        "healthy_tail": {},
+        "terminal": {
+          "reason": "fixture_complete",
+          "classification": "provider_close",
+          "terminal_reason": "provider_close",
+          "terminal_provenance": "provider",
+          "output_state": "not_applicable"
+        },
+        "label": "audio-tool",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/yui-replay-audio-tool.stdout",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/yui-replay-audio-tool.stderr",
+        "clean_shutdown": true
+      },
+      {
+        "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-source/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-interruption.session.json",
+        "fixture_bytes": 12980,
+        "fixture_sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206",
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/replay-interruption/tool-record/manifest.json",
+        "pcm": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/replay-interruption/tool-record/audio/out-000.pcm",
+        "pcm_bytes": 3840,
+        "pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
+        "healthy_tail": {
+          "offset_bytes": 1440,
+          "bytes": 2400,
+          "sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
+        },
+        "terminal": {
+          "reason": "replay_complete",
+          "classification": "replay_complete",
+          "terminal_reason": "replay_complete",
+          "terminal_provenance": "replay",
+          "output_state": "complete"
+        },
+        "label": "interruption",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/yui-replay-interruption.stdout",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/yui-replay-interruption.stderr",
+        "clean_shutdown": true
+      }
+    ],
+    "wrong_replay_oracles": {
+      "wrong_pcm": {
+        "label": "negative-wrong-pcm-oracle",
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "-c",
+          "\nimport pathlib\nimport runpy\nimport sys\n\nmodule = runpy.run_path(sys.argv[1])\nmodule[\"FIXTURE_EXPECTATIONS\"][\"audio-tool\"][\"pcm_sha256\"] = \"0\" * 64\ntry:\n    module[\"validate_replay\"](\"audio-tool\", pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]))\nexcept module[\"EvidenceFailure\"] as exc:\n    if not str(exc).startswith(\"audio-tool exact PCM changed:\"):\n        print(f\"wrong PCM oracle control failed with unexpected EvidenceFailure: {exc}\", file=sys.stderr, flush=True)\n        raise SystemExit(2)\n    print(f'{module[\"WRONG_PCM_ORACLE_DIAGNOSTIC\"]}: {exc}', flush=True)\n    raise SystemExit(1)\nexcept Exception as exc:\n    print(f\"wrong PCM oracle control failed with unexpected {type(exc).__name__}: {exc}\", file=sys.stderr, flush=True)\n    raise SystemExit(2)\nraise SystemExit(\"wrong PCM oracle unexpectedly passed\")\n",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/verify.py",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-source/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/replay-audio-tool"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589",
+        "environment": {
+          "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg08xHbEX:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+          "GOWORK": "",
+          "GOFLAGS": "",
+          "GOTOOLCHAIN": "",
+          "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+          "FACTORY_SERVER_URL": "http://127.0.0.1:7439"
+        },
+        "deadline_seconds": 60.0,
+        "elapsed_seconds": 0.10431,
+        "exit_code": 1,
+        "timed_out": false,
+        "term_sent": false,
+        "kill_sent": false,
+        "parent_reaped": true,
+        "surviving_process_group_pids": [],
+        "survivors_before_final_kill": [],
+        "process_group_inspection_available": true,
+        "process_group_inspection_error": null,
+        "stdout_bytes": 135,
+        "stdout_sha256": "3046f51bd584b52061c89c01e6c58499cb152d3adc2dcbfe8a6f3d9a1bf0d960",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/negative-wrong-pcm-oracle.stdout",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/negative-wrong-pcm-oracle.stderr",
+        "output_overflow": false,
+        "capture_failure": null,
+        "primary_failure": {
+          "kind": "exit_code",
+          "message": "negative-wrong-pcm-oracle exited with nonzero status 1",
+          "exit_code": 1
+        },
+        "cleanup_failures": [],
+        "capture_read_chunk_bytes": 65536,
+        "capture_buffer_high_water_bytes": 135,
+        "retained_output_bytes": 135,
+        "output_budget_limit_bytes": 67108864,
+        "output_budget_used_bytes": 4668,
+        "output_budget_remaining_bytes": 67104196,
+        "aggregate_output_bytes": 4668,
+        "remaining_output_bytes": 67104196
+      },
+      "wrong_marker": {
+        "label": "negative-wrong-marker-oracle",
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "-c",
+          "\nimport pathlib\nimport runpy\nimport sys\n\nmodule = runpy.run_path(sys.argv[1])\ntry:\n    stdout = pathlib.Path(sys.argv[2]).read_text(encoding=\"utf-8\")\n    module[\"require\"](\"C44_WRONG_MARKER\" in stdout, \"wrong marker oracle\")\nexcept module[\"EvidenceFailure\"] as exc:\n    if str(exc) != \"wrong marker oracle\":\n        print(f\"wrong marker oracle control failed with unexpected EvidenceFailure: {exc}\", file=sys.stderr, flush=True)\n        raise SystemExit(2)\n    print(f'{module[\"WRONG_MARKER_ORACLE_DIAGNOSTIC\"]}: {exc}', flush=True)\n    raise SystemExit(1)\nexcept Exception as exc:\n    print(f\"wrong marker oracle control failed with unexpected {type(exc).__name__}: {exc}\", file=sys.stderr, flush=True)\n    raise SystemExit(2)\nraise SystemExit(\"wrong marker oracle unexpectedly passed\")\n",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/verify.py",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/yui-replay-audio-tool.stdout"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589",
+        "environment": {
+          "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg08xHbEX:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+          "GOWORK": "",
+          "GOFLAGS": "",
+          "GOTOOLCHAIN": "",
+          "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+          "FACTORY_SERVER_URL": "http://127.0.0.1:7439"
+        },
+        "deadline_seconds": 60.0,
+        "elapsed_seconds": 0.110086,
+        "exit_code": 1,
+        "timed_out": false,
+        "term_sent": false,
+        "kill_sent": false,
+        "parent_reaped": true,
+        "surviving_process_group_pids": [],
+        "survivors_before_final_kill": [],
+        "process_group_inspection_available": true,
+        "process_group_inspection_error": null,
+        "stdout_bytes": 50,
+        "stdout_sha256": "ac992c224ee13f25aca8d52c0195d54a325f92381cc6ea3142952ace65e39fa0",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/negative-wrong-marker-oracle.stdout",
+        "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/negative-wrong-marker-oracle.stderr",
+        "output_overflow": false,
+        "capture_failure": null,
+        "primary_failure": {
+          "kind": "exit_code",
+          "message": "negative-wrong-marker-oracle exited with nonzero status 1",
+          "exit_code": 1
+        },
+        "cleanup_failures": [],
+        "capture_read_chunk_bytes": 65536,
+        "capture_buffer_high_water_bytes": 50,
+        "retained_output_bytes": 50,
+        "output_budget_limit_bytes": 67108864,
+        "output_budget_used_bytes": 4718,
+        "output_budget_remaining_bytes": 67104146,
+        "aggregate_output_bytes": 4718,
+        "remaining_output_bytes": 67104146
+      }
+    },
+    "timeout_cleanup": {
+      "label": "negative-forced-timeout-cleanup",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-c",
+        "import subprocess,sys,time; subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)']); time.sleep(30)"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589",
+      "environment": {
+        "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg08xHbEX:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+        "GOWORK": "",
+        "GOFLAGS": "",
+        "GOTOOLCHAIN": "",
+        "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+        "FACTORY_SERVER_URL": "http://127.0.0.1:7439"
+      },
+      "deadline_seconds": 2.0,
+      "elapsed_seconds": 2.066059,
+      "exit_code": -15,
+      "timed_out": true,
+      "term_sent": true,
+      "kill_sent": false,
+      "parent_reaped": true,
+      "surviving_process_group_pids": [],
+      "survivors_before_final_kill": [],
+      "process_group_inspection_available": true,
+      "process_group_inspection_error": null,
+      "stdout_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/negative-forced-timeout-cleanup.stdout",
+      "stderr_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/negative-forced-timeout-cleanup.stderr",
+      "output_overflow": false,
+      "capture_failure": null,
+      "primary_failure": {
+        "kind": "timeout",
+        "message": "negative-forced-timeout-cleanup exceeded its 2-second deadline"
+      },
+      "cleanup_failures": [],
+      "capture_read_chunk_bytes": 65536,
+      "capture_buffer_high_water_bytes": 0,
+      "retained_output_bytes": 0,
+      "output_budget_limit_bytes": 67108864,
+      "output_budget_used_bytes": 4718,
+      "output_budget_remaining_bytes": 67104146,
+      "aggregate_output_bytes": 4718,
+      "remaining_output_bytes": 67104146
+    },
+    "output_bytes": 4718,
+    "output_limit_bytes": 67108864,
+    "remaining_output_bytes": 67104146,
+    "elapsed_seconds": 3.726932
+  },
+  "observed_run_tree_bytes_before_cleanup": 57787573,
+  "observed_replay_output_bytes_before_cleanup": 267501,
+  "observed_control_metadata_bytes_before_cleanup": 57520072,
+  "artifact_hashes_after": {
+    "artifact-0-yui": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c45-model-oracle-corrected-vertical-probe/artifact-0",
+      "bytes": 51042338,
+      "sha256": "d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe"
+    },
+    "artifact-1-consumer": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c45-model-oracle-corrected-vertical-probe/artifact-1",
+      "bytes": 6403602,
+      "sha256": "5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b"
+    },
+    "artifact-2-source-snapshot": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c45-model-oracle-corrected-vertical-probe/artifact-2.tar",
+      "bytes": 245760,
+      "sha256": "9a803dab9a439211ecf90617c5f063d8f3e27a4e1f8950d7006bd729170ff399"
+    },
+    "artifact-3-build-descriptor": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c45-model-oracle-corrected-vertical-probe/artifact-3.json",
+      "bytes": 50257,
+      "sha256": "e62c5da67ff259dfdfe5ade71f2fb2d654b12617b58e84767d853c95a2319d11"
+    }
+  },
+  "artifact_input_equivalence": true,
+  "scratch_bytes": 57472980,
+  "scratch_cleanup": {
+    "paths": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-source",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-binaries",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/unused-artifacts",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/unused-runs"
+    ],
+    "bytes_before": 57472980,
+    "bytes_after": 0,
+    "before": [
+      {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-source",
+        "bytes": 27040
+      },
+      {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-binaries",
+        "bytes": 57445940
+      },
+      {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/unused-artifacts",
+        "bytes": 0
+      },
+      {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/unused-runs",
+        "bytes": 0
+      }
+    ],
+    "after": [
+      {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-source",
+        "bytes": 0
+      },
+      {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-binaries",
+        "bytes": 0
+      },
+      {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/unused-artifacts",
+        "bytes": 0
+      },
+      {
+        "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/unused-runs",
+        "bytes": 0
+      }
+    ],
+    "removed": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-source",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c47-live-probe-output-bound/runs/runs/staged-probe-20260911T042942Z-47589/staged-binaries"
+    ],
+    "errors": [],
+    "deadline_exceeded": false
+  },
+  "observed_run_tree_bytes_after_cleanup": 314593,
+  "free_space_samples_bytes": {
+    "before": 148253736960,
+    "during": 148252303360,
+    "after": 148252340224,
+    "minimum_observed": 148249047040,
+    "sample_interval_seconds": 0.1,
+    "samples": [
+      {
+        "phase": "preflight",
+        "timestamp_monotonic": 2352780.793201,
+        "interval_seconds": null,
+        "free_bytes": 148253736960,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-stage-executable",
+        "timestamp_monotonic": 2352780.793558,
+        "interval_seconds": 0.000357,
+        "free_bytes": 148253736960,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "after-stage-executable",
+        "timestamp_monotonic": 2352780.846314,
+        "interval_seconds": 0.052756,
+        "free_bytes": 148253736960,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-stage-executable",
+        "timestamp_monotonic": 2352780.846369,
+        "interval_seconds": 5.5e-05,
+        "free_bytes": 148253736960,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "after-stage-executable",
+        "timestamp_monotonic": 2352780.854216,
+        "interval_seconds": 0.007847,
+        "free_bytes": 148253736960,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-extract-chunk",
+        "timestamp_monotonic": 2352780.855799,
+        "interval_seconds": 0.001582,
+        "free_bytes": 148253736960,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "after-extract-chunk",
+        "timestamp_monotonic": 2352780.855828,
+        "interval_seconds": 2.9e-05,
+        "free_bytes": 148253736960,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-extract-chunk",
+        "timestamp_monotonic": 2352780.855833,
+        "interval_seconds": 5e-06,
+        "free_bytes": 148253736960,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-extract-chunk",
+        "timestamp_monotonic": 2352780.85606,
+        "interval_seconds": 0.000227,
+        "free_bytes": 148253720576,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "after-extract-chunk",
+        "timestamp_monotonic": 2352780.856072,
+        "interval_seconds": 1.2e-05,
+        "free_bytes": 148253720576,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-extract-chunk",
+        "timestamp_monotonic": 2352780.856076,
+        "interval_seconds": 4e-06,
+        "free_bytes": 148253720576,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-launch",
+        "timestamp_monotonic": 2352780.866657,
+        "interval_seconds": 0.010581,
+        "free_bytes": 148253704192,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352780.974275,
+        "interval_seconds": 0.107618,
+        "free_bytes": 148253704192,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-launch",
+        "timestamp_monotonic": 2352781.123505,
+        "interval_seconds": 0.149229,
+        "free_bytes": 148253691904,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-launch",
+        "timestamp_monotonic": 2352781.219565,
+        "interval_seconds": 0.096061,
+        "free_bytes": 148253687808,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352781.331811,
+        "interval_seconds": 0.112246,
+        "free_bytes": 148253687808,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352781.440418,
+        "interval_seconds": 0.108606,
+        "free_bytes": 148253687808,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352781.545612,
+        "interval_seconds": 0.105194,
+        "free_bytes": 148253687808,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352781.653063,
+        "interval_seconds": 0.107451,
+        "free_bytes": 148253687808,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-launch",
+        "timestamp_monotonic": 2352781.828846,
+        "interval_seconds": 0.175783,
+        "free_bytes": 148253667328,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-launch",
+        "timestamp_monotonic": 2352781.931247,
+        "interval_seconds": 0.102401,
+        "free_bytes": 148253655040,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-launch",
+        "timestamp_monotonic": 2352782.054621,
+        "interval_seconds": 0.123375,
+        "free_bytes": 148253450240,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-launch",
+        "timestamp_monotonic": 2352782.167693,
+        "interval_seconds": 0.113071,
+        "free_bytes": 148253298688,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-launch",
+        "timestamp_monotonic": 2352782.272807,
+        "interval_seconds": 0.105114,
+        "free_bytes": 148253286400,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "before-launch",
+        "timestamp_monotonic": 2352782.383932,
+        "interval_seconds": 0.111125,
+        "free_bytes": 148253265920,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352782.492666,
+        "interval_seconds": 0.108734,
+        "free_bytes": 148252454912,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352782.602469,
+        "interval_seconds": 0.109803,
+        "free_bytes": 148249047040,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352782.709582,
+        "interval_seconds": 0.107113,
+        "free_bytes": 148252631040,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352782.817015,
+        "interval_seconds": 0.107433,
+        "free_bytes": 148252864512,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352782.917553,
+        "interval_seconds": 0.100538,
+        "free_bytes": 148252864512,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352783.023406,
+        "interval_seconds": 0.105853,
+        "free_bytes": 148252667904,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352783.128456,
+        "interval_seconds": 0.105051,
+        "free_bytes": 148252635136,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352783.233224,
+        "interval_seconds": 0.104768,
+        "free_bytes": 148252307456,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352783.338076,
+        "interval_seconds": 0.104852,
+        "free_bytes": 148252307456,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352783.443125,
+        "interval_seconds": 0.105049,
+        "free_bytes": 148252307456,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352783.548578,
+        "interval_seconds": 0.105453,
+        "free_bytes": 148252307456,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352783.649872,
+        "interval_seconds": 0.101294,
+        "free_bytes": 148252307456,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352783.754519,
+        "interval_seconds": 0.104646,
+        "free_bytes": 148252307456,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352783.859147,
+        "interval_seconds": 0.104628,
+        "free_bytes": 148252307456,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352783.962633,
+        "interval_seconds": 0.103486,
+        "free_bytes": 148252307456,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352784.075306,
+        "interval_seconds": 0.112673,
+        "free_bytes": 148252307456,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352784.179099,
+        "interval_seconds": 0.103793,
+        "free_bytes": 148252307456,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "during-execution",
+        "timestamp_monotonic": 2352784.286475,
+        "interval_seconds": 0.107376,
+        "free_bytes": 148252307456,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "after-controls",
+        "timestamp_monotonic": 2352784.452648,
+        "interval_seconds": 0.166173,
+        "free_bytes": 148252303360,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      },
+      {
+        "phase": "after-cleanup",
+        "timestamp_monotonic": 2352784.485042,
+        "interval_seconds": 0.032393,
+        "free_bytes": 148252340224,
+        "projected_growth_bytes": 174966628,
+        "required_free_bytes": 2322450276
+      }
+    ]
+  },
+  "tested_source_revision": "e0c51bb40cd41a9f82fa6e76e2fb46118954be3c",
+  "original_tested_source_revision": "9f869d1db0a1724128f7c7d083a0054270def68",
+  "integrated_c44_source_revision": "5f14c45313cfdc71e000fda209e3408fcf863faf",
+  "repaired_tooling_provenance": {
+    "tested_source_revision": "e0c51bb40cd41a9f82fa6e76e2fb46118954be3c",
+    "verify_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/verify.py",
+    "verify_sha256": "7e79e235865826942b002fa50e10031892ec287e3ee6cb4bb14c5aff1871c6c3",
+    "run_staged_probe_path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound/docs/temp/projects/audio-runtime/audio-runtime-c45-model-probe-oracle-repair/run_staged_probe.py",
+    "run_staged_probe_sha256": "7170b42d3fb54f032565614d85e66c213df3ea79eb993cd08af80fa8e86f66db",
+    "original_tested_source_revision": "9f869d1db0a1724128f7c7d083a0054270def68",
+    "integrated_c44_source_revision": "5f14c45313cfdc71e000fda209e3408fcf863faf"
+  },
+  "binary_identity": {
+    "artifact-0-yui": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c45-model-oracle-corrected-vertical-probe/artifact-0",
+      "bytes": 51042338,
+      "sha256": "d8820356f3d1020875c013553aa5614af44f319b8c2b701a36f0e7c6882a8efe"
+    },
+    "artifact-1-consumer": {
+      "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/probes/audio-runtime-c45-model-oracle-corrected-vertical-probe/artifact-1",
+      "bytes": 6403602,
+      "sha256": "5d18828a28f7169c06b280ae9b023335126bd8252c9296d8802cab8b2137449b"
+    }
+  },
+  "elapsed_seconds": 3.782195,
+  "report_bytes": 380412,
+  "latest_report_bytes": 65819
+}
