@@ -402,3 +402,53 @@ C23 bounded ownership checkpoint — 2026-09-11T16:25Z
   self-check/report plus the accumulated C21 controls, then commit/push the
   same PR #415 and submit the changed head to script CI without polling. Do
   not edit C53/C47/C45 production paths or resubmit the known-red candidate.
+
+C23 current-main integration and preserved recording failure — 2026-09-11T22:52Z
+
+- Admission was reverified with `factory/scripts/project-control.py
+  verify-work --type task --name audio-runtime-c23-long-session-tool-characterization`,
+  returning `admitted`. The isolated branch remains
+  `codex/audio-runtime-c23-long-session-tool-characterization`, exactly matching
+  `prd.json.branchName`; the worktree was clean before integration and no host
+  checkout, predecessor, shared, or peer path was changed.
+- Fetched `origin/main=d5d6f84363d8569d5dc1a59985f8d45cf50e1d06` and merged it
+  without reset as candidate `663b8ed1e951596f74cb8d6be0dd708a758e5cc9`.
+  Startup `8bdafc7f947a3a2c9856220abdc539437035bd21`, project baseline
+  `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`, and fetched main are ancestors;
+  the candidate diff remains exactly the seven admitted C23 evidence paths.
+- Fresh `prepare --source-revision d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`
+  passed with 931 hashed build inputs, build-input SHA-256
+  `f53078d102a3ede38d726b1a449709d17adb4f0ad91a7c278fb2a7dc83cc6952`,
+  consumer SHA-256
+  `754cedfeb025349abeaf422f6e006995c9575bb4e824e0cd4945de2aa1c21b4e`,
+  same-source YUI SHA-256
+  `ab769e04aa8029ede164a4f7b88e3363b02316c3d165fa13051a333a1a81280c`,
+  and fixture SHA-256
+  `7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e`.
+  `verify-provenance --negative-control tampered-fixture` rejected the altered
+  fixture digest as expected.
+- The first current-main `controls --child-timeout-seconds 60
+  --total-timeout-seconds 600` run stopped at recording-on 16 turns after
+  `3076ms`; its immutable first-failure record is
+  `artifacts/first-failures/663b8ed1e951596f74cb8d6be0dd708a758e5cc9-controls.json`
+  and child report is
+  `artifacts/runs/20260911T224941Z-controls-on-16/consumer-report.json`.
+  The public run completed with 355 events, 32 tool calls/results, 2,048 PCM
+  bytes, provider-authored completion and clean shutdown, but recording usage
+  reports `accepted_audio=0`, `audio_bytes=0` and no `audio/out-000.pcm`; the
+  manifest contains only provider/client/agent/session transcript files. This
+  is the known C53/C56 production recording boundary, not a C23 runner defect;
+  C23 has no production lease and did not relax the manifest/PCM oracle.
+- Accumulated C21
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` passed
+  normal `-count=5` in `12.971s` and race `-count=1` in `12.083s` from
+  `agent-cli/test/integration`. No C21/shared file changed. No matrix,
+  shipped-regression, self-check or report pass was claimed after the first
+  recording failure; no unchanged retry was run.
+- Disposition is `CONTINUE`, not `ACCEPTED`. The exact next action is for the
+  reviewed recording/media repair to reach `origin/main` (or for primary to
+  issue an explicit ownership decision); then fetch that exact main, rebuild and
+  rebind provenance, rerun the complete bounded C23 sequence plus C21
+  regressions, and only then push/update PR #415 and return `ACCEPTED` to
+  script-owned CI without polling. CI, review, merge, vertical, device,
+  acoustic and project-completion claims remain open.
