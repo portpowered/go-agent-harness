@@ -207,7 +207,7 @@ func (r *testRunner) Start(ctx context.Context, inferencer messages.SessionInfer
 		}
 	})
 	h := &testHandle{session: admitted, deltas: messages.NewTypedBuffer[messages.StreamMessage](64), result: make(chan error, 1), runner: r}
-	go h.relay()
+	go h.relay(ctx)
 	return h, nil
 }
 
@@ -217,6 +217,7 @@ type testHandle struct {
 	result  chan error
 	runner  *testRunner
 	once    sync.Once
+	stopErr error
 }
 
 func (h *testHandle) Deltas() *messages.TypedBuffer[messages.StreamMessage] { return h.deltas }
@@ -225,22 +226,22 @@ func (h *testHandle) SendClose(context.Context) error                       { re
 func (h *testHandle) Stop(context.Context) error {
 	h.once.Do(func() {
 		h.runner.stopCount++
-		_ = h.session.Close()
+		h.stopErr = h.session.Close()
 	})
-	return nil
+	return h.stopErr
 }
-func (h *testHandle) relay() {
+func (h *testHandle) relay(ctx context.Context) {
 	for {
 		select {
 		case msg := <-h.session.Receive().Chan():
-			h.deltas.Write(context.Background(), msg)
+			h.deltas.Write(ctx, msg)
 		case <-h.session.Done():
 			for {
 				msg, ok := h.session.Receive().Read()
 				if !ok {
 					break
 				}
-				h.deltas.Write(context.Background(), msg)
+				h.deltas.Write(ctx, msg)
 			}
 			h.result <- nil
 			return

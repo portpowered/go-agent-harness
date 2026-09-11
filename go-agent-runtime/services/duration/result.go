@@ -16,18 +16,15 @@ type ResultInputs struct {
 	DoneError    func() error
 }
 
-func (input ResultInputs) FirstResult() <-chan error {
-	ctx := input.Context
-	if ctx == nil {
-		ctx = context.Background()
-	}
+func (input ResultInputs) FirstResult(ctx context.Context) <-chan error {
+	resultContext := selectResultContext(ctx, input.Context)
 	result := make(chan error, 1)
 	go func() {
 		select {
 		case err := <-input.Loop:
 			result <- err
 		case err, ok := <-input.Publisher:
-			result <- input.publisherResult(ctx, err, ok)
+			result <- input.publisherResult(resultContext, err, ok)
 		case err, ok := <-input.RTC:
 			result <- input.rtcResult(err, ok)
 		case err := <-input.Async:
@@ -48,6 +45,18 @@ func (input ResultInputs) FirstResult() <-chan error {
 	}()
 	return result
 }
+
+func selectResultContext(ctx, fallback context.Context) context.Context {
+	if ctx != nil {
+		return ctx
+	}
+	if fallback != nil {
+		return fallback
+	}
+	return defaultResultContext()
+}
+
+func defaultResultContext() context.Context { return context.Background() }
 
 func (input ResultInputs) publisherResult(ctx context.Context, err error, ok bool) error {
 	if ok && err != nil {

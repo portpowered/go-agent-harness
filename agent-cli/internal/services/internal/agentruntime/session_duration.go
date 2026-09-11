@@ -38,26 +38,30 @@ func sessionDurationContext(ctx context.Context) context.Context {
 func WithSessionDurationArtifacts(ctx context.Context, artifacts SessionDurationArtifactLifecycle) context.Context {
 	return context.WithValue(sessionDurationContext(ctx), sessionDurationArtifactsContextKey{}, artifacts)
 }
+func sessionDurationContextValue[T any](ctx context.Context, key any) T {
+	value, ok := sessionDurationContext(ctx).Value(key).(T)
+	if ok {
+		return value
+	}
+	var zero T
+	return zero
+}
 func sessionDurationArtifactsFromContext(ctx context.Context) SessionDurationArtifactLifecycle {
-	value, _ := ctx.Value(sessionDurationArtifactsContextKey{}).(SessionDurationArtifactLifecycle)
-	return value
+	return sessionDurationContextValue[SessionDurationArtifactLifecycle](ctx, sessionDurationArtifactsContextKey{})
 }
 func WithSessionDurationArtifactPaths(ctx context.Context, paths SessionDurationArtifactPaths) context.Context {
 	return context.WithValue(sessionDurationContext(ctx), sessionDurationArtifactPathsContextKey{}, &paths)
 }
 func sessionDurationArtifactPathsForRequest(ctx context.Context) *SessionDurationArtifactPaths {
-	paths, _ := ctx.Value(sessionDurationArtifactPathsContextKey{}).(*SessionDurationArtifactPaths)
-	return paths
+	return sessionDurationContextValue[*SessionDurationArtifactPaths](ctx, sessionDurationArtifactPathsContextKey{})
 }
 func prepareSessionDurationArtifacts(ctx context.Context) (context.Context, error) { return ctx, nil }
 func withSessionDurationTerminalRecorder(ctx context.Context, recorder runtimeDuration.TerminalRecorder) context.Context {
 	return context.WithValue(sessionDurationContext(ctx), sessionDurationTerminalRecorderContextKey{}, recorder)
 }
 func sessionDurationTerminalRecorderFromContext(ctx context.Context) runtimeDuration.TerminalRecorder {
-	value, _ := ctx.Value(sessionDurationTerminalRecorderContextKey{}).(runtimeDuration.TerminalRecorder)
-	return value
+	return sessionDurationContextValue[runtimeDuration.TerminalRecorder](ctx, sessionDurationTerminalRecorderContextKey{})
 }
-
 func newSessionDurationAdmission() *struct{} { return &struct{}{} }
 
 type durationAdmission struct {
@@ -72,11 +76,9 @@ func (i *durationAdmission) ConnectSession(ctx context.Context) (messages.Sessio
 }
 func (*durationAdmission) providerTerminalMessage() (m durationMessage, ok bool) { return }
 func (*durationAdmission) isProviderTerminalMessage(durationMessage) bool        { return false }
-
 func recordingTerminalSummaryFromMessage(msg durationMessage) (*transcript.RecordingTerminalSummary, bool, error) {
 	return (runtimeDuration.TerminalSummaryDecoder{}).FromMessage(msg)
 }
-
 func writeDurationSessionReplayMessage(out interface{ Write([]byte) (int, error) }, msg messages.StreamMessage, artifacts SessionDurationArtifactLifecycle) error {
 	if artifacts != nil {
 		if err := artifacts.Accept(msg); err != nil {
@@ -85,7 +87,6 @@ func writeDurationSessionReplayMessage(out interface{ Write([]byte) (int, error)
 	}
 	return writeSessionReplayMessage(out, msg)
 }
-
 func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration) error {
 	if maxDuration == 0 {
 		return RunSessionWithMaxDurationClock(ctx, out, opts, 0, nil)
@@ -96,7 +97,7 @@ func RunSessionWithMaxDuration(ctx context.Context, out io.Writer, opts SessionR
 	}
 	return RunSessionWithMaxDurationClock(ctx, out, opts, maxDuration, clock)
 }
-func runSessionDurationEntry(opts SessionRunOptions, maxDuration time.Duration, run func(SessionRunOptions, sessionRuntimePlan) error) (runErr error) {
+func runSessionDurationEntry(ctx context.Context, opts SessionRunOptions, maxDuration time.Duration, run func(context.Context, SessionRunOptions, sessionRuntimePlan) error) (runErr error) {
 	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
 	defer func() { closeSessionCapabilityIfNeeded(coordinator, &runErr) }()
@@ -115,10 +116,10 @@ func runSessionDurationEntry(opts SessionRunOptions, maxDuration time.Duration, 
 	if err != nil {
 		return err
 	}
-	return run(opts, plan)
+	return run(ctx, opts, plan)
 }
 func RunSessionWithMaxDurationClock(ctx context.Context, out io.Writer, opts SessionRunOptions, maxDuration time.Duration, clock SessionDurationClock) error {
-	return runSessionDurationEntry(opts, maxDuration, func(opts SessionRunOptions, plan sessionRuntimePlan) error {
+	return runSessionDurationEntry(ctx, opts, maxDuration, func(ctx context.Context, opts SessionRunOptions, plan sessionRuntimePlan) error {
 		if maxDuration == 0 {
 			return plan.run(ctx, out)
 		}
@@ -136,7 +137,7 @@ func RunSessionWithTextSeedAndMaxDuration(ctx context.Context, out io.Writer, op
 		return RunSessionWithTextSeed(ctx, out, opts, seed)
 	}
 	opts.Prompt, opts.PromptProvided = seed.Value, true
-	return runSessionDurationEntry(opts, maxDuration, func(opts SessionRunOptions, plan sessionRuntimePlan) error {
+	return runSessionDurationEntry(ctx, opts, maxDuration, func(ctx context.Context, opts SessionRunOptions, plan sessionRuntimePlan) error {
 		wirePrompt := nextSessionTextWirePrompt()
 		plan.loop.Prompt = wirePrompt
 		output := &sessionTextOutput{writer: out}

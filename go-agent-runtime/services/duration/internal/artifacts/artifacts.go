@@ -24,6 +24,8 @@ type Set struct {
 	closeErr   error
 }
 
+const durationFileMode = 0o644
+
 func New(paths duration.ArtifactPaths) (duration.ArtifactLifecycle, error) {
 	if paths.AudioPath == "" || paths.TranscriptPath == "" {
 		return nil, errors.New("duration artifacts require both audio and transcript paths")
@@ -34,8 +36,7 @@ func New(paths duration.ArtifactPaths) (duration.ArtifactLifecycle, error) {
 	}
 	transcriptSink, err := newTranscriptSink(paths.TranscriptPath)
 	if err != nil {
-		_ = audio.Close()
-		return nil, err
+		return nil, errors.Join(err, audio.Close())
 	}
 	return NewWithSinks(audio, transcriptSink), nil
 }
@@ -167,7 +168,7 @@ func newWAVSink(path string) (*wavSink, error) {
 	if path == "" {
 		return nil, errors.New("duration audio path is empty")
 	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, durationFileMode)
 	if err != nil {
 		return nil, fmt.Errorf("open duration audio %q: %w", path, err)
 	}
@@ -223,14 +224,13 @@ func (s *wavSink) Close() error {
 }
 
 func newTranscriptSink(path string) (*transcript.Writer, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, durationFileMode)
 	if err != nil {
 		return nil, fmt.Errorf("open duration transcript %q: %w", path, err)
 	}
 	writer, err := transcript.NewWriterOn(file)
 	if err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("create duration transcript %q: %w", path, err)
+		return nil, errors.Join(fmt.Errorf("create duration transcript %q: %w", path, err), file.Close())
 	}
 	return writer, nil
 }

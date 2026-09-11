@@ -20,7 +20,7 @@ func (s *service) acceptAndHandle(ctx context.Context, req RunRequest, handler M
 
 func (s *service) finish(ctx context.Context, req RunRequest, admission *admission, handle Handle, state *terminalState, planned bool, preferred error) error {
 	errs := s.finishDrain(ctx, req, admission, handle, state, planned)
-	stopCtx, cancel := context.WithTimeout(context.Background(), cleanupTimeout(req.CleanupTimeout))
+	stopCtx, cancel := context.WithTimeout(ctx, cleanupTimeout(req.CleanupTimeout))
 	defer cancel()
 	errs = append(errs, named("stop duration runner", handle.Stop(stopCtx)))
 	errs = append(errs, s.flushBuffered(ctx, req, admission, handle, state, planned))

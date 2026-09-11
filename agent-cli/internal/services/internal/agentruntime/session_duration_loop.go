@@ -63,7 +63,7 @@ func (r *durationRunner) Start(parent context.Context, inferencer messages.Sessi
 	loopDone := make(chan error, 1)
 	go func() { err := loop.Run(runCtx); loopResult <- err; loopDone <- err }()
 	r.observed = observed
-	firstResult := (runtimeDuration.ResultInputs{Context: runCtx, Loop: loopResult, Publisher: publisherErrors, RTC: rtcErrors, Async: r.asyncErrors, SessionDone: observed.Done(), SessionError: r.sessionError, Done: r.opts.Done, DoneError: r.opts.DoneErr}).FirstResult()
+	firstResult := (runtimeDuration.ResultInputs{Context: runCtx, Loop: loopResult, Publisher: publisherErrors, RTC: rtcErrors, Async: r.asyncErrors, SessionDone: observed.Done(), SessionError: r.sessionError, Done: r.opts.Done, DoneError: r.opts.DoneErr}).FirstResult(runCtx)
 	r.loop, r.publisher, r.cancel, r.loopDone, r.result, r.rtcErrors = loop, publisher, cancel, loopDone, firstResult, rtcErrors
 	return r, nil
 }

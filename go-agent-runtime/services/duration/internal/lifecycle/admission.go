@@ -53,12 +53,13 @@ func (a *admission) recordCloseError(err error) {
 	a.closeOnce.Do(func() { close(a.closeDone) })
 }
 
-func (a *admission) Close() {
+func (a *admission) Close(ctx context.Context) {
+	ctx = nonNilContext(ctx)
 	a.mu.Lock()
 	session := a.session
 	a.mu.Unlock()
 	if session != nil {
-		session.closeAdmission()
+		session.closeAdmission(ctx)
 		return
 	}
 	a.gate.close()
@@ -123,13 +124,13 @@ func (g *admissionGate) close() {
 	})
 }
 
-func (g *admissionGate) admit(receive *messages.TypedBuffer[messages.StreamMessage], msg messages.StreamMessage) bool {
+func (g *admissionGate) admit(ctx context.Context, receive *messages.TypedBuffer[messages.StreamMessage], msg messages.StreamMessage) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.closed {
 		return false
 	}
-	return receive.Write(context.Background(), msg)
+	return receive.Write(ctx, msg)
 }
 
 type admittedSession struct {
@@ -223,7 +224,7 @@ func (s *admittedSession) Close() error {
 		s.closeMu.Lock()
 		s.closeStarted = true
 		s.closeMu.Unlock()
-		s.closeAdmission()
+		s.closeAdmission(context.Background())
 		err := s.inner.Close()
 		s.drainSourceAfterClose()
 		s.closeMu.Lock()
@@ -239,7 +240,7 @@ func (s *admittedSession) Close() error {
 	return s.closeErr
 }
 
-func (s *admittedSession) closeAdmission() {
+func (s *admittedSession) closeAdmission(ctx context.Context) {
 	s.gate.close()
 	for {
 		msg, ok := s.inner.Receive().Read()
@@ -250,7 +251,7 @@ func (s *admittedSession) closeAdmission() {
 		if !s.isShutdownMessage(msg) {
 			continue
 		}
-		_ = s.receive.Write(context.Background(), msg)
+		_ = s.receive.Write(ctx, msg)
 	}
 }
 

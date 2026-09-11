@@ -14,7 +14,7 @@ func TestInvalidDurationErrorRetainsSentinelIdentity(t *testing.T) {
 		t.Fatalf("nil error text=%q", nilError.Error())
 	}
 	err := &InvalidDurationError{Duration: -time.Millisecond}
-	if !errors.Is(err, ErrInvalidMaxDuration) || err.Unwrap() != ErrInvalidMaxDuration {
+	if !errors.Is(err, ErrInvalidMaxDuration) || !errors.Is(errors.Unwrap(err), ErrInvalidMaxDuration) {
 		t.Fatalf("invalid duration identity lost: %v", err)
 	}
 }

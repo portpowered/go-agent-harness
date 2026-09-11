@@ -7,6 +7,7 @@ import (
 )
 
 func (s *admittedSession) forward(ctx context.Context) {
+	ctx = nonNilContext(ctx)
 	source := s.inner.Receive()
 	sourceCh := source.Chan()
 	open := true
@@ -14,10 +15,10 @@ func (s *admittedSession) forward(ctx context.Context) {
 	for {
 		select {
 		case <-s.inner.Done():
-			s.finishForward(source, open, true)
+			s.finishForward(ctx, source, open, true)
 			return
 		case <-ctx.Done():
-			s.finishForward(source, open, false)
+			s.finishForward(ctx, source, open, false)
 			return
 		case <-gateDone:
 			open, gateDone = false, nil
@@ -26,26 +27,26 @@ func (s *admittedSession) forward(ctx context.Context) {
 				s.doneOnce.Do(func() { close(s.done) })
 				return
 			}
-			open = s.forwardMessage(open, msg)
+			open = s.forwardMessage(ctx, open, msg)
 		}
 	}
 }
 
-func (s *admittedSession) finishForward(source *messages.TypedBuffer[messages.StreamMessage], open, drain bool) {
+func (s *admittedSession) finishForward(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage], open, drain bool) {
 	if drain {
-		s.drainSource(source, open)
+		s.drainSource(ctx, source, open)
 	}
 	s.waitForCloseCompletion()
 	s.doneOnce.Do(func() { close(s.done) })
 }
 
-func (s *admittedSession) forwardMessage(open bool, msg messages.StreamMessage) bool {
+func (s *admittedSession) forwardMessage(ctx context.Context, open bool, msg messages.StreamMessage) bool {
 	s.observeProviderMessage(msg)
-	if open && s.gate.admit(s.receive, msg) {
+	if open && s.gate.admit(ctx, s.receive, msg) {
 		return true
 	}
 	if s.isShutdownMessage(msg) {
-		_ = s.receive.Write(context.Background(), msg)
+		_ = s.receive.Write(ctx, msg)
 	}
 	return false
 }
@@ -68,19 +69,19 @@ func (s *admittedSession) waitForCloseCompletion() {
 	}
 }
 
-func (s *admittedSession) drainSource(source *messages.TypedBuffer[messages.StreamMessage], open bool) {
+func (s *admittedSession) drainSource(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage], open bool) {
 	for {
 		msg, ok := source.Read()
 		if !ok {
 			return
 		}
 		if open {
-			open = s.forwardMessage(open, msg)
+			open = s.forwardMessage(ctx, open, msg)
 			continue
 		}
 		s.observeProviderMessage(msg)
 		if s.isShutdownMessage(msg) {
-			_ = s.receive.Write(context.Background(), msg)
+			_ = s.receive.Write(ctx, msg)
 		}
 	}
 }

@@ -28,7 +28,7 @@ func (s *service) Run(ctx context.Context, req RunRequest) error {
 	}
 	if handle == nil || handle.Deltas() == nil {
 		if handle != nil {
-			_ = handle.Stop(ctx)
+			return errors.Join(errors.New("duration runner returned an invalid handle"), handle.Stop(ctx))
 		}
 		return errors.New("duration runner returned an invalid handle")
 	}
@@ -36,7 +36,7 @@ func (s *service) Run(ctx context.Context, req RunRequest) error {
 	if req.MaxDuration == 0 {
 		return loop.unbounded()
 	}
-	return loop.bounded()
+	return loop.bounded(ctx)
 }
 
 func nonNilContext(ctx context.Context) context.Context {
@@ -139,7 +139,7 @@ func (r *runLoop) unbounded() error {
 	}
 }
 
-func (r *runLoop) bounded() error {
+func (r *runLoop) bounded(ctx context.Context) error {
 	timer := r.req.Clock.NewTimer(r.req.MaxDuration)
 	if timer == nil {
 		return r.finish(false, errors.New("session duration clock returned a nil timer"))
@@ -148,14 +148,14 @@ func (r *runLoop) bounded() error {
 	r.state.deadline = timer.C()
 	for {
 		if timerReady(timer.C()) && !r.planned {
-			return r.deadlineFinish()
+			return r.deadlineFinish(ctx)
 		}
 		select {
 		case <-timer.C():
 			r.state.deadline = nil
-			return r.deadlineFinish()
+			return r.deadlineFinish(ctx)
 		case err := <-r.handle.Result():
-			return errors.Join(r.finish(r.planned, err), normalizeResultError(r.ctx, err))
+			return errors.Join(r.finish(r.planned, err), normalizeResultError(ctx, err))
 		case msg, ok := <-r.handle.Deltas().Chan():
 			if !ok {
 				return r.finish(r.planned, nil)
@@ -163,8 +163,8 @@ func (r *runLoop) bounded() error {
 			if err := r.processMessage(msg); err != nil {
 				return err
 			}
-		case <-r.ctx.Done():
-			return errors.Join(r.finish(r.planned, nil), r.ctx.Err())
+		case <-ctx.Done():
+			return errors.Join(r.finish(r.planned, nil), ctx.Err())
 		}
 	}
 }
@@ -180,11 +180,11 @@ func (r *runLoop) processMessage(msg messages.StreamMessage) error {
 	return nil
 }
 
-func (r *runLoop) deadlineFinish() error {
-	r.admission.Close()
+func (r *runLoop) deadlineFinish(ctx context.Context) error {
+	r.admission.Close(ctx)
 	if !r.closeSent {
 		r.closeSent = true
-		if err := r.handle.SendClose(r.ctx); err != nil {
+		if err := r.handle.SendClose(ctx); err != nil {
 			return r.finish(false, err)
 		}
 	}
