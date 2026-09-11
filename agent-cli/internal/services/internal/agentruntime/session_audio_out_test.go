@@ -384,14 +384,12 @@ func TestSessionAudioOutput_RetainsDelayedDeltaAcrossCancellationBarrier(t *test
 }
 func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) {
 	ctx, cancel := context.WithCancel(context.Background())
-	provider := &sessionAudioTerminalBarrierSession{scriptedSession: newScriptedSession(), closeStarted: make(chan struct{}), releaseConnect: make(chan struct{}), connectStarted: make(chan struct{})}
+	provider := &sessionAudioTerminalBarrierSession{scriptedSession: newScriptedSession(), releaseConnect: make(chan struct{}), connectStarted: make(chan struct{})}
 	writer := &growingSessionAudioWriter{firstWritten: make(chan struct{})}
-	sink, _ := newSessionAudioSinkAtRate("-", writer, audio.SampleRate)
-	connected := make(chan messages.Session, 1)
-	go func() {
-		session, _ := newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "").ConnectSession(ctx)
-		connected <- session
-	}()
+	sink := mustSessionAudioTestValue(newSessionAudioSinkAtRate("-", writer, audio.SampleRate))
+	inferencer := newSessionAudioOutputInferencer(provider, &sessionAudioOutput{sink: sink, runtime: &sessionRuntimeObservationRecorder{}}, "", "")
+	connected := make(chan *sessionAudioOutputSession, 1)
+	go func() { mustSessionAudioTestValue(inferencer.ConnectSession(ctx)); connected <- inferencer.connected }()
 	waitForClosedTargetSignal(t, context.Background(), provider.connectStarted, "connect start")
 	if cancelBeforeConnect {
 		cancel()
@@ -399,19 +397,19 @@ func runSessionAudioCancellationBarrier(t *testing.T, cancelBeforeConnect bool) 
 	close(provider.releaseConnect)
 	session := <-connected
 	cancel()
-	go func() { _ = session.Close() }()
-	waitForClosedTargetSignal(t, context.Background(), session.(*sessionAudioOutputSession).drainStarted, "cancellation drain start")
+	go func() { mustSessionAudioTestValue(struct{}{}, session.Close()) }()
+	waitForClosedTargetSignal(t, context.Background(), session.drainStarted, "cancellation drain start")
 	want := append(bytes.Repeat([]byte{0x01, 0x02}, 720), bytes.Repeat([]byte{0x03, 0x04}, 1200)...)
 	if !provider.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue(want)}) {
 		t.Fatal("provider did not accept queued cancellation audio")
 	}
 	waitForClosedTargetSignal(t, context.Background(), writer.firstWritten, "queued cancellation audio output")
 	select {
-	case <-provider.closeStarted:
+	case <-provider.Done():
 		t.Fatal("provider closed before queued cancellation audio drained")
 	default:
 	}
-	_ = provider.scriptedSession.Close()
+	mustSessionAudioTestValue(struct{}{}, provider.scriptedSession.Close())
 	select {
 	case <-session.Done():
 	case <-time.After(2 * time.Second):
@@ -648,17 +646,19 @@ func (i *gatedSessionAudioInferencer) ObserveSessionRuntime(SessionRuntimeObserv
 
 type sessionAudioTerminalBarrierSession struct {
 	*scriptedSession
-	closeStarted, releaseConnect, connectStarted chan struct{}
+	releaseConnect, connectStarted chan struct{}
 }
 
+func mustSessionAudioTestValue[T any](value T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return value
+}
 func (s *sessionAudioTerminalBarrierSession) ConnectSession(context.Context) (messages.Session, error) {
 	close(s.connectStarted)
 	<-s.releaseConnect
 	return s, nil
-}
-func (s *sessionAudioTerminalBarrierSession) Close() error {
-	close(s.closeStarted)
-	return s.scriptedSession.Close()
 }
 func (i *gatedSessionAudioInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session := newScriptedSession()
