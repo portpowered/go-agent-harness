@@ -116,6 +116,10 @@ func (r Runner) admitLive(ctx context.Context, state *runState, participant room
 		return nil, closeWithCapabilities(closeLocalMedia(local, errors.New("live service returned a nil participant handle")), release)
 	}
 	active := &activeParticipant{participant: participant, handle: handle, endpoints: handle.Media(), media: local, finished: make(chan struct{})}
+	// Register before starting the provider. Some implementations publish a
+	// terminal event synchronously from Start; the event observer must be able
+	// to retire that participant without promoting its fault to a room failure.
+	state.add(active)
 	active.events = newEventDrain(ctx, handle.Events(), participant.ID, request.OnDiagnostic, request.EventSink, func() { state.noteTurn(participant.ID) }, r.currentTime, func(event session.LiveEvent) {
 		state.noteTerminal(participant.ID, event)
 		if err := terminalLivenessFailure(event); err != nil {
@@ -123,10 +127,23 @@ func (r Runner) admitLive(ctx context.Context, state *runState, participant room
 		}
 	}, state.setFailure)
 	if err := handle.Start(ctx); err != nil {
-		return nil, closeStartedParticipant(active, release, fmt.Errorf("start live participant: %w", err))
+		runErr := closeStartedParticipant(active, release, fmt.Errorf("start live participant: %w", err))
+		state.remove(active)
+		return nil, runErr
 	}
 	startCancellationWatcher(ctx, active)
 	return active, nil
+}
+
+func (s *runState) remove(active *activeParticipant) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for index, candidate := range s.active {
+		if candidate == active {
+			s.active = append(s.active[:index], s.active[index+1:]...)
+			return
+		}
+	}
 }
 
 func closeStartedParticipant(active *activeParticipant, release func() error, runErr error) error {

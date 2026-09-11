@@ -1,0 +1,1 @@
+{"response": {"text": "strict replay continuation", "complete": true, "audio_bytes": 4800}, "tool_events": [{"type": "tool_call"}, {"type": "tool_result", "content": "PROBE_TOOL_MARKER_9182\n"}]}
