@@ -161,7 +161,20 @@ def required_tests_for_cell(cell: dict[str, object]) -> list[str]:
     ]
 
 
-def parse_raw_go_json(stdout_path: Path, required_tests: list[str], package: str) -> dict[str, object]:
+def requested_count_for_cell(cell: dict[str, object]) -> int | None:
+    args = [str(value) for value in cell.get("args", [])]
+    values = [value.split("=", 1)[1] for value in args if value.startswith("-count=")]
+    if len(values) != 1 or not values[0].isdigit() or int(values[0]) <= 0:
+        return None
+    return int(values[0])
+
+
+def parse_raw_go_json(
+    stdout_path: Path,
+    required_tests: list[str],
+    package: str,
+    expected_count: int | None = None,
+) -> dict[str, object]:
     if not stdout_path.is_file():
         raise VerificationError(f"missing raw go test output: {stdout_path}")
     events: list[dict[str, object]] = []
@@ -184,29 +197,59 @@ def parse_raw_go_json(stdout_path: Path, required_tests: list[str], package: str
         if action in counts:
             counts[action] += 1
     output = "\n".join(str(event.get("Output", "")) for event in events if event.get("Action") == "output")
+    cached_marker = "(cached)" in output
+    no_tests_marker = "[no tests to run]" in output or any(
+        event.get("Action") == "output" and "no tests to run" in str(event.get("Output", ""))
+        for event in events
+    )
+    required_test_pass_counts = {test: test_events.get(test, {}).get("pass", 0) for test in required_tests}
+    required_test_fail_counts = {test: test_events.get(test, {}).get("fail", 0) for test in required_tests}
+    required_test_skip_counts = {test: test_events.get(test, {}).get("skip", 0) for test in required_tests}
+    selection_valid = (
+        expected_count is not None
+        and expected_count > 0
+        and not invalid_lines
+        and not cached_marker
+        and not no_tests_marker
+        and all(test_events.get(test, {}).get("run", 0) == expected_count for test in required_tests)
+        and all(required_test_pass_counts[test] == expected_count for test in required_tests)
+        and all(required_test_fail_counts[test] == 0 for test in required_tests)
+        and all(required_test_skip_counts[test] == 0 for test in required_tests)
+    )
     return {
         "json_line_count": len(events),
         "invalid_json_lines": len(invalid_lines),
         "invalid_json_samples": invalid_lines[:3],
         "test_events": test_events,
         "required_test_run_counts": {test: test_events.get(test, {}).get("run", 0) for test in required_tests},
+        "required_test_pass_counts": required_test_pass_counts,
+        "required_test_fail_counts": required_test_fail_counts,
+        "required_test_skip_counts": required_test_skip_counts,
+        "requested_count": expected_count,
+        "selection_valid": selection_valid,
         "relevant_test_names": sorted(name for name in test_events if name.startswith("TestRunnerRoutesTypedLivenessFaultAndPreservesPeer")),
         "package_events": [event for event in events if event.get("Package") == "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle" and not event.get("Test")],
-        "cached_marker": "(cached)" in output,
-        "no_tests_marker": "[no tests to run]" in output or any(event.get("Action") == "output" and "no tests to run" in str(event.get("Output", "")) for event in events),
+        "cached_marker": cached_marker,
+        "no_tests_marker": no_tests_marker,
         "first_assertion": next((line for line in output.splitlines() if "browser_parity_test.go:" in line), ""),
         "package": package,
     }
 
 
-def raw_selection_for_process(stdout_path: Path, process: dict[str, object], required_tests: list[str], package: str) -> dict[str, object]:
+def raw_selection_for_process(
+    stdout_path: Path,
+    process: dict[str, object],
+    required_tests: list[str],
+    package: str,
+    expected_count: int | None = None,
+) -> dict[str, object]:
     if not isinstance(process, dict):
         raise VerificationError(f"missing process record for {stdout_path}")
     if not stdout_path.is_file():
         raise VerificationError(f"missing raw go test output: {stdout_path}")
     if process.get("stdout_bytes") != stdout_path.stat().st_size or process.get("stdout_sha256") != digest(stdout_path):
         raise VerificationError(f"raw stdout does not match process provenance: {stdout_path}")
-    return parse_raw_go_json(stdout_path, required_tests, package)
+    return parse_raw_go_json(stdout_path, required_tests, package, expected_count)
 
 
 def raw_selection_for_record(run_root: Path, record: dict[str, object], cell: dict[str, object]) -> dict[str, object]:
@@ -220,7 +263,46 @@ def raw_selection_for_record(run_root: Path, record: dict[str, object], cell: di
     process = record.get("process")
     if not isinstance(process, dict):
         raise VerificationError(f"missing process record for {label}/{cell_id}")
-    return raw_selection_for_process(stdout_path, process, required_tests_for_cell(cell), EXPECTED_PACKAGE)
+    return raw_selection_for_process(
+        stdout_path,
+        process,
+        required_tests_for_cell(cell),
+        EXPECTED_PACKAGE,
+        requested_count_for_cell(cell),
+    )
+
+
+def validate_raw_selection(
+    parsed: dict[str, object],
+    required_tests: list[str],
+    expected_count: int | None,
+    context: str,
+    *,
+    require_selected: bool,
+) -> None:
+    if expected_count is None or expected_count <= 0:
+        raise VerificationError(f"{context} has no valid frozen -count value")
+    test_events = parsed.get("test_events")
+    if not isinstance(test_events, dict):
+        raise VerificationError(f"{context} has no raw go test action counts")
+    expected = expected_count if require_selected else 0
+    for test in required_tests:
+        counts = test_events.get(test)
+        if not isinstance(counts, dict):
+            raise VerificationError(f"{context} did not emit raw actions for {test}")
+        actual = {
+            "run": counts.get("run", 0),
+            "pass": counts.get("pass", 0),
+            "fail": counts.get("fail", 0),
+            "skip": counts.get("skip", 0),
+        }
+        expected_actions = {"run": expected, "pass": expected, "fail": 0, "skip": 0}
+        if actual != expected_actions:
+            raise VerificationError(f"{context} raw selection for {test} is {actual}, expected {expected_actions}")
+    if require_selected and parsed.get("selection_valid") is not True:
+        raise VerificationError(f"{context} raw selection is not valid")
+    if not require_selected and parsed.get("selection_valid") is True:
+        raise VerificationError(f"{context} unexpectedly validated a zero-test selection")
 
 
 def verify_provenance() -> dict[str, object]:
@@ -298,6 +380,28 @@ def verify_provenance() -> dict[str, object]:
         or digest(metadata_path) != ci.get("metadata_sha256")
     ):
         raise VerificationError("complete prior CI log/metadata is missing or changed")
+    metadata = load(metadata_path)
+    if not isinstance(metadata, dict):
+        raise VerificationError("prior CI metadata must be an object")
+    metadata_identity = {
+        "databaseId": int(ci["run_id"]),
+        "headSha": PR438,
+        "status": ci.get("status"),
+        "conclusion": ci.get("conclusion"),
+        "attempt": ci.get("attempt"),
+    }
+    if any(metadata.get(key) != expected for key, expected in metadata_identity.items()):
+        raise VerificationError("prior CI metadata identity does not match the declared observation")
+    capture = metadata.get("capture")
+    if not isinstance(capture, dict):
+        raise VerificationError("prior CI metadata has no capture provenance")
+    if (
+        capture.get("logSha256") != ci.get("log_sha256")
+        or capture.get("logBytes") != ci.get("log_bytes")
+        or capture.get("logLines") != ci.get("log_lines")
+        or capture.get("logExitCode") != 0
+    ):
+        raise VerificationError("prior CI metadata capture does not match the declared log")
     primary = value.get("primary_observation")
     if not isinstance(primary, dict) or primary.get("status") != "REPORTED_UNDER_PAYLOAD" or primary.get("independently_verified") is not False:
         raise VerificationError("primary rerun must remain explicitly reported, not fabricated")
@@ -317,6 +421,8 @@ def trace_events(path: Path) -> list[dict[str, object]]:
         raise VerificationError(f"missing trace: {path}")
     result: list[dict[str, object]] = []
     sequences: set[int] = set()
+    previous_sequence = 0
+    previous_monotonic = -1
     for line_number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
         try:
             value = json.loads(line)
@@ -325,9 +431,14 @@ def trace_events(path: Path) -> list[dict[str, object]]:
         if not isinstance(value, dict) or value.get("schema") != "audio-runtime-c52-trace-v1":
             raise VerificationError(f"invalid trace record at {path}:{line_number}")
         sequence = value.get("seq")
-        if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence in sequences:
+        if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence in sequences or sequence <= previous_sequence:
             raise VerificationError(f"invalid or duplicate trace sequence at {path}:{line_number}")
         sequences.add(sequence)
+        monotonic = value.get("monotonic_ns")
+        if isinstance(monotonic, bool) or not isinstance(monotonic, int) or monotonic < previous_monotonic:
+            raise VerificationError(f"trace monotonic order is invalid at {path}:{line_number}")
+        previous_sequence = sequence
+        previous_monotonic = monotonic
         result.append(value)
     if not result:
         raise VerificationError(f"empty trace: {path}")
@@ -391,12 +502,22 @@ def verify_matrix() -> dict[str, object]:
         cleanup = record.get("process", {}).get("cleanup") if isinstance(record.get("process"), dict) else None
         if not isinstance(cleanup, dict) or cleanup.get("reason") != "parent_exit":
             raise VerificationError(f"normal parent-exit group cleanup was not recorded for {key}")
-        raw = raw_selection_for_record(run_root, record, expected_cells[key[1]])
+        frozen_cell = expected_cells[key[1]]
+        required_tests = required_tests_for_cell(frozen_cell)
+        expected_test_count = requested_count_for_cell(frozen_cell)
+        raw = raw_selection_for_record(run_root, record, frozen_cell)
+        validate_raw_selection(
+            raw,
+            required_tests,
+            expected_test_count,
+            f"{label}/{key[1]}",
+            require_selected=True,
+        )
         embedded = selection(record)
         if embedded != raw:
             raise VerificationError(f"embedded selection differs from raw go test JSON for {key}")
         counts = {str(name): int(value) for name, value in raw["required_test_run_counts"].items()}
-        if not counts or any(value <= 0 for value in counts.values()):
+        if not counts or any(value != expected_test_count for value in counts.values()):
             raise VerificationError(f"zero required test selection for {key}: {counts}")
         parsed = raw
         if int(parsed.get("invalid_json_lines", 0)) != 0 or parsed.get("cached_marker") is True:
@@ -478,6 +599,8 @@ def validate_case_trace(group: list[dict[str, object]], record: dict[str, object
     classification = event_fields(group[0]).get("classification")
     if classification not in {"silent_provider_timeout", "silent_provider_empty_response"}:
         raise VerificationError("case_started lacks a valid typed liveness classification")
+    if group[0].get("participant") != "silent":
+        raise VerificationError("case_started has an unexpected participant")
     liveness = [event_fields(event) for event in group if event.get("kind") == "live_event_received" and event_fields(event).get("event_kind") == "liveness_fault"]
     if len(liveness) != 1 or liveness[0].get("liveness_classification") != classification:
         raise VerificationError("typed liveness event is missing or transformed")
@@ -485,6 +608,13 @@ def validate_case_trace(group: list[dict[str, object]], record: dict[str, object
     latched = [event_fields(event) for event in group if event.get("kind") == "terminal_metadata_latched"]
     if terminal[0].get("liveness_classification") != classification or latched[0].get("classification") != classification:
         raise VerificationError("terminal metadata does not preserve typed liveness classification")
+    outcomes = [event for event in group if event.get("kind") == "test_outcome"]
+    deferred_outcomes = [event for event in group if event.get("kind") == "test_deferred_outcome"]
+    if observed_failure:
+        if outcomes or len(deferred_outcomes) != 1:
+            raise VerificationError("failed case does not have exactly one bounded deferred outcome")
+    elif len(outcomes) != 1 or deferred_outcomes:
+        raise VerificationError("passing case does not have exactly one direct outcome")
     peer_snapshots = [event_fields(event) for event in group if event.get("kind") == "peer_cancel_snapshot"]
     if observed_failure:
         if len(peer_snapshots) != 1 or peer_snapshots[0].get("before") != "external_room_cancel" or peer_snapshots[0].get("count") == "0":
@@ -664,6 +794,14 @@ def verify_no_retry_and_selection() -> dict[str, object]:
             process,
             ["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"],
             package,
+            1,
+        )
+        validate_raw_selection(
+            raw,
+            ["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"],
+            1,
+            name,
+            require_selected=False,
         )
         if value.get("selection") != raw:
             raise VerificationError(f"{name} embedded selection differs from raw go test JSON")

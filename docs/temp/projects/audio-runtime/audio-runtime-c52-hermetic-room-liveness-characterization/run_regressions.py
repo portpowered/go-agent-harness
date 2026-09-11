@@ -15,6 +15,33 @@ from run import hermetic_base_environment, run_bounded
 EVIDENCE = Path(__file__).resolve().parent
 
 
+def clean_parent_exit(process: object) -> bool:
+    if not isinstance(process, dict):
+        return False
+    required_process = ("exit_code", "timed_out", "output_overflow", "reader_survivor", "cleanup")
+    if any(key not in process for key in required_process):
+        return False
+    cleanup = process.get("cleanup")
+    if not isinstance(cleanup, dict):
+        return False
+    required_cleanup = ("reason", "parent_exit_code", "term_sent", "kill_sent", "group_survivor", "term_error", "kill_error")
+    if any(key not in cleanup for key in required_cleanup):
+        return False
+    return (
+        process.get("exit_code") == 0
+        and process.get("timed_out") is False
+        and process.get("output_overflow") is False
+        and process.get("reader_survivor") is False
+        and cleanup.get("reason") == "parent_exit"
+        and cleanup.get("parent_exit_code") == 0
+        and cleanup.get("term_sent") is False
+        and cleanup.get("kill_sent") is False
+        and cleanup.get("group_survivor") is False
+        and cleanup.get("term_error") is None
+        and cleanup.get("kill_error") is None
+    )
+
+
 def git(repo: Path, *args: str) -> str:
     result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=False)
     if result.returncode != 0:
@@ -55,17 +82,7 @@ def main() -> int:
                 "cwd": str(module),
                 "source_revision": git(repo, "rev-parse", "HEAD"),
                 "process": process,
-                "passes": (
-                    process.get("exit_code") == 0
-                    and not process.get("timed_out")
-                    and not process.get("output_overflow")
-                    and not process.get("reader_survivor")
-                    and isinstance(process.get("cleanup"), dict)
-                    and process["cleanup"].get("reason") == "parent_exit"
-                    and process["cleanup"].get("group_survivor") is False
-                    and not process["cleanup"].get("term_error")
-                    and not process["cleanup"].get("kill_error")
-                ),
+                "passes": clean_parent_exit(process),
             }
             write(output / f"{name}.json", results[name])
             if not results[name]["passes"]:

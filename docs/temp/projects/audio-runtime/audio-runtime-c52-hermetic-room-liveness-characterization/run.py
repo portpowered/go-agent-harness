@@ -173,7 +173,8 @@ def archive_revision(repo: Path, revision: str, destination: Path) -> dict[str, 
         generated_sha256 = sha256_file(partial)
         generated_content_sha256 = archive_content_sha256(partial)
         if destination.exists():
-            existing_sha256 = sha256_file(destination)
+            if destination.is_symlink() or not destination.is_file():
+                raise RuntimeError(f"pre-existing source archive is not a regular file: {destination}")
             existing_content_sha256 = archive_content_sha256(destination)
             if existing_content_sha256 != generated_content_sha256:
                 raise RuntimeError(
@@ -182,6 +183,15 @@ def archive_revision(repo: Path, revision: str, destination: Path) -> dict[str, 
                 )
         else:
             partial.replace(destination)
+        # Re-read the retained path after the reuse decision.  This closes the
+        # validation window if an external process replaces the archive while
+        # the scratch tree is being prepared.
+        retained_content_sha256 = archive_content_sha256(destination)
+        if retained_content_sha256 != generated_content_sha256:
+            raise RuntimeError(
+                f"retained source archive changed after fixed-revision validation for {revision}: "
+                f"{destination} has content {retained_content_sha256}, generated {generated_content_sha256}"
+            )
     finally:
         partial.unlink(missing_ok=True)
     return {
@@ -298,11 +308,12 @@ def stop_group(process: subprocess.Popen[bytes], reason: str) -> dict[str, objec
         "kill_sent": kill_sent,
         "parent_exit_code": process.returncode,
         "group_survivor": group_survivor,
+        # Keep both error fields present even when no error occurred.  The
+        # evidence verifier must be able to distinguish an observed null from
+        # a field that was removed from a copied/tampered process record.
+        "term_error": term_error,
+        "kill_error": kill_error,
     }
-    if group_survivor and term_error:
-        cleanup["term_error"] = term_error
-    if group_survivor and kill_error:
-        cleanup["kill_error"] = kill_error
     return cleanup
 
 
@@ -376,7 +387,7 @@ def first_failure(stdout: bytes, stderr: bytes) -> dict[str, object] | None:
     return None
 
 
-def parse_go_json(stdout_path: Path, required_tests: list[str], package: str) -> dict[str, object]:
+def parse_go_json(stdout_path: Path, required_tests: list[str], package: str, expected_count: int | None = None) -> dict[str, object]:
     events: list[dict[str, object]] = []
     invalid_lines: list[str] = []
     for raw in stdout_path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -400,12 +411,32 @@ def parse_go_json(stdout_path: Path, required_tests: list[str], package: str) ->
     relevant = [name for name in test_events if name.startswith("TestRunnerRoutesTypedLivenessFaultAndPreservesPeer")]
     package_events = [event for event in events if event.get("Package") == "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle" and not event.get("Test")]
     output = "\n".join(str(event.get("Output", "")) for event in events if event.get("Action") == "output")
+    requested_count = expected_count
+    required_pass_counts = {test: test_events.get(test, {}).get("pass", 0) for test in required_tests}
+    required_fail_counts = {test: test_events.get(test, {}).get("fail", 0) for test in required_tests}
+    required_skip_counts = {test: test_events.get(test, {}).get("skip", 0) for test in required_tests}
+    selection_valid = (
+        requested_count is not None
+        and requested_count > 0
+        and not invalid_lines
+        and "(cached)" not in output
+        and "[no tests to run]" not in output
+        and all(test_events.get(test, {}).get("run", 0) == requested_count for test in required_tests)
+        and all(required_pass_counts[test] == requested_count for test in required_tests)
+        and all(required_fail_counts[test] == 0 for test in required_tests)
+        and all(required_skip_counts[test] == 0 for test in required_tests)
+    )
     return {
         "json_line_count": len(events),
         "invalid_json_lines": len(invalid_lines),
         "invalid_json_samples": invalid_lines[:3],
         "test_events": test_events,
         "required_test_run_counts": selected,
+        "required_test_pass_counts": required_pass_counts,
+        "required_test_fail_counts": required_fail_counts,
+        "required_test_skip_counts": required_skip_counts,
+        "requested_count": requested_count,
+        "selection_valid": selection_valid,
         "relevant_test_names": sorted(relevant),
         "package_events": package_events,
         "cached_marker": "(cached)" in output,
@@ -700,6 +731,14 @@ def required_tests_for(cell: dict[str, object]) -> list[str]:
     ]
 
 
+def requested_count_for(cell: dict[str, object]) -> int | None:
+    args = [str(value) for value in cell.get("args", [])]
+    values = [value.split("=", 1)[1] for value in args if value.startswith("-count=")]
+    if len(values) != 1 or not values[0].isdigit() or int(values[0]) <= 0:
+        return None
+    return int(values[0])
+
+
 def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_timeout: float) -> dict[str, object]:
     started = time.monotonic()
     deadline = started + aggregate_timeout
@@ -741,7 +780,12 @@ def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_t
             remaining = max(1.0, deadline - time.monotonic())
             timeout = min(timeout, max(1.0, remaining - 0.25))
             process = run_bounded(command, module_root, env, timeout, int(matrix.get("output_cap_bytes", DEFAULT_OUTPUT_CAP)), cell_dir)
-            parsed = parse_go_json(cell_dir / "stdout.log", required_tests_for(cell), "./services/rooms/internal/lifecycle")
+            parsed = parse_go_json(
+                cell_dir / "stdout.log",
+                required_tests_for(cell),
+                "./services/rooms/internal/lifecycle",
+                requested_count_for(cell),
+            )
             record = {
                 "attempt": 1,
                 "revision_label": label,
@@ -753,7 +797,7 @@ def run_matrix(matrix: dict[str, object], repo: Path, run_dir: Path, aggregate_t
                 "selection": parsed,
                 "trace_path": str(trace_path.relative_to(EVIDENCE)) if trace_path.exists() else None,
                 "trace_sha256": sha256_file(trace_path) if trace_path.exists() else None,
-                "status": "PASS" if process.get("exit_code") == 0 and not process.get("timed_out") and not process.get("output_overflow") and all(int(value) > 0 for value in parsed["required_test_run_counts"].values()) else "FAIL",
+                "status": "PASS" if process.get("exit_code") == 0 and not process.get("timed_out") and not process.get("output_overflow") and parsed.get("selection_valid") is True else "FAIL",
             }
             json_write(cell_dir / "cell.json", record)
             cells.append(record)
@@ -805,20 +849,29 @@ def run_negative_controls(matrix: dict[str, object], scratch: Path, run_dir: Pat
         zero_dir = controls_dir / "zero-test-selection"
         zero_command = ["go", "test", "-json", "-tags=nomicrophone", "-count=1", "-run", "^C52NoSuchTest$", "./services/rooms/internal/lifecycle"]
         zero = run_bounded(zero_command, module_root, env, 45, int(matrix.get("output_cap_bytes", DEFAULT_OUTPUT_CAP)), zero_dir)
-        zero_parsed = parse_go_json(zero_dir / "stdout.log", ["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"], "./services/rooms/internal/lifecycle")
+        zero_parsed = parse_go_json(zero_dir / "stdout.log", ["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"], "./services/rooms/internal/lifecycle", 1)
         controls["zero_test_selection"] = {"process": zero, "selection": zero_parsed, "rejected": int(zero_parsed["required_test_run_counts"]["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"]) == 0}
     if time.monotonic() < deadline:
         wrong_dir = controls_dir / "wrong-package-selection"
         wrong_command = ["go", "test", "-json", "-tags=nomicrophone", "-count=1", "-run", "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$", "./services/session/internal/live"]
         wrong = run_bounded(wrong_command, module_root, env, 45, int(matrix.get("output_cap_bytes", DEFAULT_OUTPUT_CAP)), wrong_dir)
-        wrong_parsed = parse_go_json(wrong_dir / "stdout.log", ["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"], "./services/session/internal/live")
+        wrong_parsed = parse_go_json(wrong_dir / "stdout.log", ["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"], "./services/session/internal/live", 1)
         controls["wrong_test_selection"] = {"process": wrong, "selection": wrong_parsed, "rejected": int(wrong_parsed["required_test_run_counts"]["TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"]) == 0}
     if time.monotonic() < deadline:
         survivor_dir = controls_dir / "survivor-process"
         script = "import os,time; child=os.fork(); time.sleep(30) if child==0 else time.sleep(30)"
         survivor_command = [sys.executable, "-c", script]
         survivor = run_bounded(survivor_command, module_root, env, 0.4, 16384, survivor_dir)
-        controls["survivor_process"] = {"process": survivor, "rejected": bool(survivor.get("timed_out")) and not bool(survivor.get("cleanup", {}).get("group_survivor", True))}
+        survivor_cleanup = survivor.get("cleanup", {}) if isinstance(survivor.get("cleanup"), dict) else {}
+        controls["survivor_process"] = {
+            "process": survivor,
+            "rejected": (
+                survivor.get("timed_out") is True
+                and survivor_cleanup.get("group_survivor") is False
+                and "term_error" in survivor_cleanup
+                and "kill_error" in survivor_cleanup
+            ),
+        }
     if time.monotonic() < deadline:
         normal_dir = controls_dir / "normal-exit-survivor"
         script = "import os,time; child=os.fork(); (os.close(1), os.close(2), time.sleep(30)) if child==0 else os._exit(0)"
@@ -833,6 +886,10 @@ def run_negative_controls(matrix: dict[str, object], scratch: Path, run_dir: Pat
                 and cleanup.get("term_sent") is True
                 and cleanup.get("group_survivor") is False
                 and normal.get("reader_survivor") is False
+                and "term_error" in cleanup
+                and "kill_error" in cleanup
+                and cleanup.get("term_error") is None
+                and cleanup.get("kill_error") is None
             ),
         }
     result = {
