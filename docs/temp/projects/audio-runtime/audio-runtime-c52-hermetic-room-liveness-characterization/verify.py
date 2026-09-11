@@ -436,15 +436,14 @@ def trace_events(path: Path) -> list[dict[str, object]]:
         raise VerificationError(f"empty trace: {path}")
     # Trace writes can be appended by concurrent callbacks in a different
     # order from the atomic sequence assignment.  Sequence is the canonical
-    # event order; validate monotonic time after ordering rather than trusting
-    # the physical JSONL append order.
+    # event order; validate timestamp shape without treating timestamp order
+    # as causal because sampling happens in the callback after sequence
+    # allocation.
     ordered = sorted(result, key=lambda event: int(event["seq"]))
-    previous_monotonic = -1
     for event in ordered:
         monotonic = event.get("monotonic_ns")
-        if isinstance(monotonic, bool) or not isinstance(monotonic, int) or monotonic < previous_monotonic:
-            raise VerificationError(f"trace monotonic order is invalid at {path}")
-        previous_monotonic = monotonic
+        if isinstance(monotonic, bool) or not isinstance(monotonic, int) or monotonic < 0:
+            raise VerificationError(f"trace monotonic timestamp is invalid at {path}")
     return ordered
 
 
