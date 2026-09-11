@@ -82,6 +82,16 @@ Immutable YUI, consumer, source snapshot and descriptor hashes remain the PRD va
 
 This remains executor evidence only; CI, independent review, guarded merge, vertical acceptance and project acceptance are external.
 
+## Current-main resubmission — 2026-09-11
+
+The previously blocked C53 runtime prerequisite is now present on current `origin/main=ab5fbade1bd69712deb8fcd84e605c0ce9916112`; its accepted merge `9779b2364cd00516b9b227f5b3f10275bfe43c7a` is an ancestor. This isolated branch integrated that main as merge commit `3eed77cf437fa4f0eb3fe647d46132854b5a6a0e`, with the required startup and baseline ancestry preserved and no host checkout or peer path changes.
+
+The immutable staged mission was rerun at tested source `3eed77cf437fa4f0eb3fe647d46132854b5a6a0e` with raw controls under `runs/runs/staged-probe-20260911T122526Z-5881/`. It returned `decision=ACCEPTED`; original source is `9f869d1db0a1724128f7c7d083a0054270def68`, integrated C44 source is `5f14c45313cfdc71e000fda209e3408fcf863faf`, verifier SHA256 is `7e79e235865826942b002fa50e10031892ec287e3ee6cb4bb14c5aff1871c6c3`, and staged-probe SHA256 is `7170b42d3fb54f032565614d85e66c213df3ea79eb993cd08af80fa8e86f66db`. Artifact input equivalence is true, APFS clone staging was used, projected growth is `174966628`, minimum observed free space is `105801224192`, binary output is `4716` bytes, `report_bytes=380270`, `latest_report_bytes=65745`, and scratch cleanup is `57472980 -> 0` with no errors, survivors or forbidden helpers.
+
+The post-merge C47 resource controls, private C45 regressions pinned to the original revision, seven-source Python compilation and `git diff --check` all pass. The deterministic low-space control remains intentionally `BLOCKED` before launch. The PRD-literal host-checkout output root was rejected before staging by the C47 isolation guard; the equivalent mission used the isolated C47-owned output root while retaining the immutable staged input.
+
+This candidate is ready for the script-owned CI gate. No CI result, independent review, guarded merge, post-merge vertical acceptance or project acceptance is claimed. Any CI rejection is to be inspected and repaired through this same task.
+
 ## Submitted head
 
 Evidence-only checkpoint `c86fb9a6687dfcb38e35447b42242ca64d6742db` is pushed to `codex/audio-runtime-c47-live-probe-output-bound` and contains the repair ledger, focused reports and exact raw staged run. No executable Python source, Go source, immutable artifact, fixture or peer path changed after tested source `7b03664b9c355709c592998026b093ab547f6290`.
