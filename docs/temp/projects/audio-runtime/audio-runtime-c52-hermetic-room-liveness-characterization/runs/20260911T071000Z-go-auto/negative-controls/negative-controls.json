@@ -1,0 +1,142 @@
+{
+  "all_rejected": true,
+  "controls": {
+    "survivor_process": {
+      "process": {
+        "cleanup": {
+          "group_survivor": false,
+          "kill_sent": false,
+          "parent_exit_code": -15,
+          "reason": "child_timeout",
+          "term_sent": true
+        },
+        "command": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "-c",
+          "import os,time; child=os.fork(); time.sleep(30) if child==0 else time.sleep(30)"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T071000Z-go-auto/scratch/planning-main",
+        "duration_seconds": 0.4322889996692538,
+        "ended_at": "2026-09-11T06:49:28.205865+00:00",
+        "exit_code": -15,
+        "first_failure": null,
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:49:27.773587+00:00",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": true
+      },
+      "rejected": true
+    },
+    "wrong_test_selection": {
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-json",
+          "-tags=nomicrophone",
+          "-count=1",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/session/internal/live"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T071000Z-go-auto/scratch/planning-main",
+        "duration_seconds": 0.030745707917958498,
+        "ended_at": "2026-09-11T06:49:27.773160+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "event": {
+            "Action": "fail",
+            "Elapsed": 0,
+            "FailedBuild": "./services/session/internal/live",
+            "Package": "./services/session/internal/live",
+            "Time": "2026-09-10T23:49:27.759254-07:00"
+          },
+          "stream": "stdout"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:49:27.742431+00:00",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 1060,
+        "stdout_sha256": "0ed3420492c9727126e560290d28f4e12d101998dfe2305ab4eaf7d4d015561a",
+        "timed_out": false
+      },
+      "rejected": true,
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 6,
+        "no_tests_marker": false,
+        "package": "./services/session/internal/live",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      }
+    },
+    "zero_test_selection": {
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-json",
+          "-tags=nomicrophone",
+          "-count=1",
+          "-run",
+          "^C52NoSuchTest$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T071000Z-go-auto/scratch/planning-main",
+        "duration_seconds": 0.024239500053226948,
+        "ended_at": "2026-09-11T06:49:27.742023+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "event": {
+            "Action": "fail",
+            "Elapsed": 0,
+            "FailedBuild": "./services/rooms/internal/lifecycle",
+            "Package": "./services/rooms/internal/lifecycle",
+            "Time": "2026-09-10T23:49:27.733733-07:00"
+          },
+          "stream": "stdout"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:49:27.717792+00:00",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 1089,
+        "stdout_sha256": "9aca9273473128ba6811f7ae3320ca22db0ebbd5a5590a1f6976910227133ecb",
+        "timed_out": false
+      },
+      "rejected": true,
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 6,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      }
+    }
+  },
+  "schema": "audio-runtime-c52-negative-controls-v1"
+}

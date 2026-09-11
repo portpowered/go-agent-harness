@@ -1,0 +1,34 @@
+{
+  "controls": [
+    {
+      "name": "tampered_embedded_raw_selection_count",
+      "rejected": true
+    },
+    {
+      "name": "duplicate_terminal_checkpoint",
+      "rejected": true
+    },
+    {
+      "name": "transformed_typed_liveness_checkpoint",
+      "rejected": true
+    },
+    {
+      "name": "cross_run_trace_substitution",
+      "rejected": true
+    },
+    {
+      "name": "tampered_ci_metadata_hash",
+      "rejected": true
+    },
+    {
+      "name": "selected_behavior_failure_retained",
+      "rejected": true
+    },
+    {
+      "name": "archive_reuse_mismatch",
+      "rejected": true
+    }
+  ],
+  "passes": true,
+  "schema": "audio-runtime-c52-integrity-controls-v1"
+}

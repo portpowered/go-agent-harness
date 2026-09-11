@@ -1,0 +1,1 @@
+go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)

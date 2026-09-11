@@ -1,0 +1,12 @@
+=== RUN   TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints
+--- PASS: TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints (0.00s)
+=== RUN   TestParseManifest_NormalizesValidJSONAndYAMLWithoutCredentials
+--- PASS: TestParseManifest_NormalizesValidJSONAndYAMLWithoutCredentials (0.00s)
+=== RUN   TestReadManifest_ReadsAndValidatesFile
+--- PASS: TestReadManifest_ReadsAndValidatesFile (0.00s)
+=== RUN   TestMeshJoinCreatesOnePairPerUnorderedParticipantPair
+--- PASS: TestMeshJoinCreatesOnePairPerUnorderedParticipantPair (0.00s)
+=== RUN   TestMeshRemovalClosesOnlyRemovedPairAndLeavesSurvivors
+--- PASS: TestMeshRemovalClosesOnlyRemovedPairAndLeavesSurvivors (0.00s)
+PASS
+ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/room	(cached)

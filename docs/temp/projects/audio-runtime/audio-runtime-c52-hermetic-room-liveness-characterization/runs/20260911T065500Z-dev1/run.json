@@ -1,0 +1,2220 @@
+{
+  "aggregate_deadline_met": true,
+  "aggregate_timeout_seconds": 900.0,
+  "archives": {
+    "planning-main": {
+      "bytes": 141281280,
+      "path": "inputs/source-archives/planning-main-7f73c8b3b4eb.tar",
+      "resolved_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "sha256": "4abaf8995d7b63bcc9c6b551f53b829c5e44e1cba8661e81ee3fb5028ca9ba00"
+    },
+    "pr438": {
+      "bytes": 141373440,
+      "path": "inputs/source-archives/pr438-823bd350fe5d.tar",
+      "resolved_revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "sha256": "bf3cb06880caf1bf50b9be79b90ad8916d6013110002988e858b915592cb075a"
+    }
+  },
+  "cell_count": 22,
+  "cells": [
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "id": "provider-timeout-count10",
+        "kind": "focused-count"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "provider-timeout-count10",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/pr438",
+        "duration_seconds": 0.031441583298146725,
+        "ended_at": "2026-09-11T06:44:02.858685+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:02.827254+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/empty_response$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "id": "empty-response-count10",
+        "kind": "focused-count"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/empty_response$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "empty-response-count10",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/empty_response$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/pr438",
+        "duration_seconds": 0.022786791902035475,
+        "ended_at": "2026-09-11T06:44:02.882166+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:02.859392+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "C52_CASE_ORDER": "timeout-first"
+        },
+        "id": "order-timeout-first",
+        "kind": "explicit-order"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_CASE_ORDER": "timeout-first",
+        "C52_MATRIX_CELL": "order-timeout-first",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/pr438",
+        "duration_seconds": 0.028913042042404413,
+        "ended_at": "2026-09-11T06:44:02.911741+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:02.882839+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "C52_CASE_ORDER": "empty-first"
+        },
+        "id": "order-empty-first",
+        "kind": "explicit-order"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_CASE_ORDER": "empty-first",
+        "C52_MATRIX_CELL": "order-empty-first",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/pr438",
+        "duration_seconds": 0.024585749953985214,
+        "ended_at": "2026-09-11T06:44:02.937022+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:02.912447+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=5",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "C52_SHUFFLE_SEED": "17"
+        },
+        "id": "shuffle-seed-17",
+        "kind": "fixed-shuffle"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=5",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "shuffle-seed-17",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "C52_SHUFFLE_SEED": "17",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=5",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/pr438",
+        "duration_seconds": 0.031661541666835546,
+        "ended_at": "2026-09-11T06:44:02.969409+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:02.937760+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=5",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "C52_SHUFFLE_SEED": "28"
+        },
+        "id": "shuffle-seed-28",
+        "kind": "fixed-shuffle"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=5",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "shuffle-seed-28",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "C52_SHUFFLE_SEED": "28",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=5",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/pr438",
+        "duration_seconds": 0.03281587501987815,
+        "ended_at": "2026-09-11T06:44:03.002931+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:02.970130+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=3",
+          "-p=1",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle",
+          "./services/session/internal/live"
+        ],
+        "env": {
+          "GOMAXPROCS": "2"
+        },
+        "id": "package-serialized",
+        "kind": "package-concurrency"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=3",
+        "-p=1",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle",
+        "./services/session/internal/live"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "package-serialized",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMAXPROCS": "2",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=3",
+          "-p=1",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle",
+          "./services/session/internal/live"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/pr438",
+        "duration_seconds": 0.031665833201259375,
+        "ended_at": "2026-09-11T06:44:03.035302+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.003653+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=3",
+          "-p=2",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle",
+          "./services/session/internal/live"
+        ],
+        "env": {
+          "GOMAXPROCS": "2"
+        },
+        "id": "package-concurrent",
+        "kind": "package-concurrency"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=3",
+        "-p=2",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle",
+        "./services/session/internal/live"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "package-concurrent",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMAXPROCS": "2",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=3",
+          "-p=2",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle",
+          "./services/session/internal/live"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/pr438",
+        "duration_seconds": 0.025813542306423187,
+        "ended_at": "2026-09-11T06:44:03.061873+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.036073+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "GOMAXPROCS": "1"
+        },
+        "id": "gomaxprocs-1",
+        "kind": "gomaxprocs"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "gomaxprocs-1",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMAXPROCS": "1",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/pr438",
+        "duration_seconds": 0.02822766685858369,
+        "ended_at": "2026-09-11T06:44:03.090879+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.062663+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "GOMAXPROCS": "4"
+        },
+        "id": "gomaxprocs-4",
+        "kind": "gomaxprocs"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "gomaxprocs-4",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMAXPROCS": "4",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/pr438",
+        "duration_seconds": 0.02281862497329712,
+        "ended_at": "2026-09-11T06:44:03.114420+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.091616+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-race",
+          "-count=1",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "CGO_ENABLED": "1",
+          "GOMAXPROCS": "4"
+        },
+        "id": "focused-race",
+        "kind": "race"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-race",
+        "-count=1",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "focused-race",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "CGO_ENABLED": "1",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMAXPROCS": "4",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-race",
+          "-count=1",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/pr438",
+        "duration_seconds": 0.02668204205110669,
+        "ended_at": "2026-09-11T06:44:03.141794+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.115127+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "revision_label": "pr438",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "id": "provider-timeout-count10",
+        "kind": "focused-count"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "provider-timeout-count10",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+        "duration_seconds": 0.028096667025238276,
+        "ended_at": "2026-09-11T06:44:03.170698+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.142610+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/empty_response$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "id": "empty-response-count10",
+        "kind": "focused-count"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/empty_response$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "empty-response-count10",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/empty_response$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+        "duration_seconds": 0.02299262536689639,
+        "ended_at": "2026-09-11T06:44:03.194371+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.171386+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "C52_CASE_ORDER": "timeout-first"
+        },
+        "id": "order-timeout-first",
+        "kind": "explicit-order"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_CASE_ORDER": "timeout-first",
+        "C52_MATRIX_CELL": "order-timeout-first",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+        "duration_seconds": 0.02707933308556676,
+        "ended_at": "2026-09-11T06:44:03.222112+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.195044+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "C52_CASE_ORDER": "empty-first"
+        },
+        "id": "order-empty-first",
+        "kind": "explicit-order"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_CASE_ORDER": "empty-first",
+        "C52_MATRIX_CELL": "order-empty-first",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+        "duration_seconds": 0.025060500018298626,
+        "ended_at": "2026-09-11T06:44:03.247825+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.222779+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=5",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "C52_SHUFFLE_SEED": "17"
+        },
+        "id": "shuffle-seed-17",
+        "kind": "fixed-shuffle"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=5",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "shuffle-seed-17",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "C52_SHUFFLE_SEED": "17",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=5",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+        "duration_seconds": 0.02424883283674717,
+        "ended_at": "2026-09-11T06:44:03.272792+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.248555+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=5",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "C52_SHUFFLE_SEED": "28"
+        },
+        "id": "shuffle-seed-28",
+        "kind": "fixed-shuffle"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=5",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "shuffle-seed-28",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "C52_SHUFFLE_SEED": "28",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=5",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+        "duration_seconds": 0.02631320897489786,
+        "ended_at": "2026-09-11T06:44:03.299823+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.273521+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=3",
+          "-p=1",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle",
+          "./services/session/internal/live"
+        ],
+        "env": {
+          "GOMAXPROCS": "2"
+        },
+        "id": "package-serialized",
+        "kind": "package-concurrency"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=3",
+        "-p=1",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle",
+        "./services/session/internal/live"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "package-serialized",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMAXPROCS": "2",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=3",
+          "-p=1",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle",
+          "./services/session/internal/live"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+        "duration_seconds": 0.02336433297023177,
+        "ended_at": "2026-09-11T06:44:03.323964+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.300609+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=3",
+          "-p=2",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle",
+          "./services/session/internal/live"
+        ],
+        "env": {
+          "GOMAXPROCS": "2"
+        },
+        "id": "package-concurrent",
+        "kind": "package-concurrency"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=3",
+        "-p=2",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle",
+        "./services/session/internal/live"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "package-concurrent",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMAXPROCS": "2",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=3",
+          "-p=2",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle",
+          "./services/session/internal/live"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+        "duration_seconds": 0.026713791768997908,
+        "ended_at": "2026-09-11T06:44:03.351339+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.324639+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "GOMAXPROCS": "1"
+        },
+        "id": "gomaxprocs-1",
+        "kind": "gomaxprocs"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "gomaxprocs-1",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMAXPROCS": "1",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+        "duration_seconds": 0.025619166903197765,
+        "ended_at": "2026-09-11T06:44:03.377701+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.352095+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "GOMAXPROCS": "4"
+        },
+        "id": "gomaxprocs-4",
+        "kind": "gomaxprocs"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-count=10",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "gomaxprocs-4",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "CGO_ENABLED": "0",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMAXPROCS": "4",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-count=10",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+        "duration_seconds": 0.02359866676852107,
+        "ended_at": "2026-09-11T06:44:03.402021+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.378435+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    },
+    {
+      "cell": {
+        "args": [
+          "test",
+          "-json",
+          "-race",
+          "-count=1",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "env": {
+          "CGO_ENABLED": "1",
+          "GOMAXPROCS": "4"
+        },
+        "id": "focused-race",
+        "kind": "race"
+      },
+      "command": [
+        "go",
+        "test",
+        "-tags=nomicrophone",
+        "-json",
+        "-race",
+        "-count=1",
+        "-run",
+        "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+        "./services/rooms/internal/lifecycle"
+      ],
+      "environment": {
+        "C52_MATRIX_CELL": "focused-race",
+        "C52_OVERLAY_HASH": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+        "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "CGO_ENABLED": "1",
+        "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gocache",
+        "GOFLAGS": "",
+        "GOMAXPROCS": "4",
+        "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gomodcache",
+        "GOSUMDB": "sum.golang.org",
+        "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/cache/gotmp",
+        "GOTOOLCHAIN": "local",
+        "GOTRACEBACK": "all",
+        "GOWORK": ""
+      },
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-tags=nomicrophone",
+          "-json",
+          "-race",
+          "-count=1",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+        "duration_seconds": 0.024947790894657373,
+        "ended_at": "2026-09-11T06:44:03.427661+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "line": 1,
+          "stream": "stderr",
+          "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:44:03.402722+00:00",
+        "stderr_bytes": 73,
+        "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": false
+      },
+      "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "revision_label": "planning-main",
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 0,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 0,
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      },
+      "status": "FAIL",
+      "trace_path": null,
+      "trace_sha256": null
+    }
+  ],
+  "duration_seconds": 13.955436458345503,
+  "ended_at": "2026-09-11T06:44:05.367762+00:00",
+  "matrix_sha256": "b29e716a5224bef69d2e5dc07f223c43ba4f56485e87b13c919d25c128588e80",
+  "negative_controls": {
+    "all_rejected": true,
+    "controls": {
+      "survivor_process": {
+        "process": {
+          "cleanup": {
+            "group_survivor": false,
+            "kill_sent": false,
+            "parent_exit_code": -15,
+            "reason": "child_timeout",
+            "term_sent": true
+          },
+          "command": [
+            "/opt/homebrew/opt/python@3.14/bin/python3.14",
+            "-c",
+            "import os,time; child=os.fork(); time.sleep(30) if child==0 else time.sleep(30)"
+          ],
+          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+          "duration_seconds": 0.42680862499400973,
+          "ended_at": "2026-09-11T06:44:03.912537+00:00",
+          "exit_code": -15,
+          "first_failure": null,
+          "output_overflow": false,
+          "reader_survivor": false,
+          "started_at": "2026-09-11T06:44:03.485742+00:00",
+          "stderr_bytes": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_bytes": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "timed_out": true
+        },
+        "rejected": true
+      },
+      "wrong_test_selection": {
+        "process": {
+          "cleanup": {},
+          "command": [
+            "go",
+            "test",
+            "-json",
+            "-tags=nomicrophone",
+            "-count=1",
+            "-run",
+            "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+            "./services/session/internal/live"
+          ],
+          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+          "duration_seconds": 0.0327440002001822,
+          "ended_at": "2026-09-11T06:44:03.485293+00:00",
+          "exit_code": 1,
+          "first_failure": {
+            "line": 1,
+            "stream": "stderr",
+            "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+          },
+          "output_overflow": false,
+          "reader_survivor": false,
+          "started_at": "2026-09-11T06:44:03.452560+00:00",
+          "stderr_bytes": 73,
+          "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+          "stdout_bytes": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "timed_out": false
+        },
+        "rejected": true,
+        "selection": {
+          "cached_marker": false,
+          "first_assertion": "",
+          "invalid_json_lines": 0,
+          "invalid_json_samples": [],
+          "json_line_count": 0,
+          "no_tests_marker": false,
+          "package": "./services/session/internal/live",
+          "package_events": [],
+          "relevant_test_names": [],
+          "required_test_run_counts": {
+            "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+          },
+          "test_events": {}
+        }
+      },
+      "zero_test_selection": {
+        "process": {
+          "cleanup": {},
+          "command": [
+            "go",
+            "test",
+            "-json",
+            "-tags=nomicrophone",
+            "-count=1",
+            "-run",
+            "^C52NoSuchTest$",
+            "./services/rooms/internal/lifecycle"
+          ],
+          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T065500Z-dev1/scratch/planning-main",
+          "duration_seconds": 0.02371454192325473,
+          "ended_at": "2026-09-11T06:44:03.452151+00:00",
+          "exit_code": 1,
+          "first_failure": {
+            "line": 1,
+            "stream": "stderr",
+            "text": "go: go.work requires go >= 1.26.7 (running go 1.24.5; GOTOOLCHAIN=local)"
+          },
+          "output_overflow": false,
+          "reader_survivor": false,
+          "started_at": "2026-09-11T06:44:03.428449+00:00",
+          "stderr_bytes": 73,
+          "stderr_sha256": "b7adade2928fdce79bb70a685655d9f457dbda1f89bbf7b7cb092f00a762f827",
+          "stdout_bytes": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "timed_out": false
+        },
+        "rejected": true,
+        "selection": {
+          "cached_marker": false,
+          "first_assertion": "",
+          "invalid_json_lines": 0,
+          "invalid_json_samples": [],
+          "json_line_count": 0,
+          "no_tests_marker": false,
+          "package": "./services/rooms/internal/lifecycle",
+          "package_events": [],
+          "relevant_test_names": [],
+          "required_test_run_counts": {
+            "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+          },
+          "test_events": {}
+        }
+      }
+    },
+    "schema": "audio-runtime-c52-negative-controls-v1"
+  },
+  "overlay_sha256": "90cd7228d2964a13cc61f1372ef1fc21af2356998354eb967652f8a17584b3d6",
+  "run_id": "20260911T065500Z-dev1",
+  "schema": "audio-runtime-c52-matrix-run-v1",
+  "started_at": "2026-09-11T06:43:51.412327+00:00"
+}
