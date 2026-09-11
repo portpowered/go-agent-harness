@@ -181,3 +181,25 @@ C48 post-merge formatting and architecture checkpoint — 2026-09-10
   focused failed-continuation integration test pass after the merge. Next:
   checkpoint this budget repair, rerun clean C48 public evidence plus C21 and
   final ancestry/scope checks, then push the same PR for script CI.
+
+C48 final pre-handoff evidence checkpoint — 2026-09-10
+
+- The clean bounded public driver passed on source `fa9689dcd8a29716ad89fd5a88438ad2e15d9679`.
+  Positive report run `20260911T064840Z-100944000` proves both response IDs
+  preceded the first result, all four exact calls/results were correlated once
+  without cross-routing, provider-authored completion was clean, and trace
+  shutdown completed. Fixture SHA256 is
+  `e13d8322a39c37f2d216fad97df9541b497aafe9d7c28c5c19a97ce7f7833461`, the
+  rebuilt consumer binary SHA256 is
+  `5440f74cc212692ed6f95d83673dd27691db7aaf12fa8db6f471fa52f44887f5`, free
+  storage was 138663878656 bytes, and the 10-second/64-KiB/2-GiB limits held.
+  Missing, duplicate, and swapped controls each exited 1 with their intended
+  causal correlation errors.
+- The required C21 `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls`
+  passes in normal and race modes. Architecture-size-check and wire-check
+  remain green, and `git diff --check` is clean. No CI-green, review, merge,
+  primary probe, or project acceptance is claimed.
+- Next action: commit this task-local checkpoint, rerun the bounded driver on
+  that exact final head, push `codex/audio-runtime-c48-overlapping-tool-continuation`,
+  update PR #440 with the exact revision/evidence, and return `ACCEPTED` to the
+  script CI gate without polling it.
