@@ -1,0 +1,56 @@
+{
+  "schema": "audio-runtime-c44-model-admission/v1",
+  "constructed_via": "providers/wire.NewModelAdmission",
+  "custom_supported_ids": [
+    "custom-only",
+    "custom-second"
+  ],
+  "resolver": {
+    "matched": true,
+    "model_id": "custom-only"
+  },
+  "observations": [
+    {
+      "name": "custom-model-admitted",
+      "errors_is_unsupported": false,
+      "errors_is_catalog_required": false
+    },
+    {
+      "name": "custom-catalog-rejects-built-in-model",
+      "error": "OpenAI model \"gpt-realtime\" is not realtime-capable for agent session; supported realtime models: custom-only, custom-second",
+      "error_kind": "UnsupportedRealtimeModelError",
+      "provider": "OpenAI",
+      "model": "gpt-realtime",
+      "supported_ids": [
+        "custom-only",
+        "custom-second"
+      ],
+      "errors_is_unsupported": true,
+      "errors_is_catalog_required": false
+    },
+    {
+      "name": "supported-model-snapshot-isolated",
+      "error": "OpenAI model \"snapshot-probe-2\" is not realtime-capable for agent session; supported realtime models: custom-only, custom-second",
+      "error_kind": "UnsupportedRealtimeModelError",
+      "provider": "OpenAI",
+      "model": "snapshot-probe-2",
+      "supported_ids": [
+        "custom-only",
+        "custom-second"
+      ],
+      "errors_is_unsupported": true,
+      "errors_is_catalog_required": false
+    },
+    {
+      "name": "nil-catalog-fails-closed",
+      "error": "provider model catalog is required",
+      "errors_is_unsupported": false,
+      "errors_is_catalog_required": true
+    },
+    {
+      "name": "non-openai-provider-remains-unrestricted",
+      "errors_is_unsupported": false,
+      "errors_is_catalog_required": false
+    }
+  ]
+}

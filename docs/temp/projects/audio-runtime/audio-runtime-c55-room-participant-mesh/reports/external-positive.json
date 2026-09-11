@@ -1,0 +1,164 @@
+{
+  "build": {
+    "argv": [
+      "rtk",
+      "proxy",
+      "go",
+      "build",
+      "-mod=readonly",
+      "-trimpath",
+      "-o",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/artifacts/mesh-consumer",
+      "./consumer"
+    ],
+    "artifact": {
+      "build_input_count": 2191,
+      "build_input_manifest_sha256": "47001569c90a143e0f1eee9a14ca1c30689cedb955b341c6708230d2d9a40f65",
+      "bytes": 4003090,
+      "path": "artifacts/mesh-consumer",
+      "sha256": "1ba0706e8785d2d85652840ef02ba92fc5b66ed6141a0ac8d2a9497d2b06af3b"
+    },
+    "cleanup": {
+      "group_alive_after": false,
+      "group_survivor_detected": false,
+      "parent_reaped": true,
+      "reader_threads_stopped": true,
+      "termination_signals": []
+    },
+    "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh",
+    "disk_bounded": true,
+    "disk_bytes": 0,
+    "elapsed_ms": 105,
+    "label": "build-consumer",
+    "output_bounded": true,
+    "returncode": 0,
+    "stderr": "",
+    "stderr_bytes": 0,
+    "stderr_path": "runs/20260911T183952Z-79857/build-consumer.stderr.log",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_truncated": false,
+    "stdout": "",
+    "stdout_bytes": 0,
+    "stdout_path": "runs/20260911T183952Z-79857/build-consumer.stdout.log",
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_truncated": false,
+    "timed_out": false
+  },
+  "candidate_revision": "968da5a9ad1345b3da1d08ba1f2759735adb9504",
+  "executions": [
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/artifacts/mesh-consumer",
+        "positive"
+      ],
+      "cleanup": {
+        "group_alive_after": false,
+        "group_survivor_detected": false,
+        "parent_reaped": true,
+        "reader_threads_stopped": true,
+        "termination_signals": []
+      },
+      "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/consumer",
+      "disk_bounded": true,
+      "disk_bytes": 323,
+      "elapsed_ms": 89,
+      "label": "external-positive",
+      "output_bounded": true,
+      "returncode": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stderr_path": "runs/20260911T183952Z-79857/external-positive.stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_truncated": false,
+      "stdout": "{\"case\":\"external-positive\",\"closed_resources\":6,\"done_after_cleanup\":true,\"pair_count\":6,\"participants\":[\"alpha\",\"bravo\",\"charlie\",\"delta\"],\"rollback\":{\"all_closed_after_mesh_close\":3,\"created_closed_before_mesh_close\":2,\"nil_factory_rejected\":true,\"no_half_join\":true,\"typed_connect_failure\":true},\"surviving_pair\":true}\n",
+      "stdout_bytes": 323,
+      "stdout_path": "runs/20260911T183952Z-79857/external-positive.stdout.log",
+      "stdout_sha256": "61790eea85688958d9b014390674083f16b191f9aa9f9004249d5cc8e7711971",
+      "stdout_truncated": false,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/artifacts/mesh-consumer",
+        "close-blocked"
+      ],
+      "cleanup": {
+        "group_alive_after": false,
+        "group_survivor_detected": false,
+        "parent_reaped": true,
+        "reader_threads_stopped": true,
+        "termination_signals": []
+      },
+      "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/consumer",
+      "disk_bounded": true,
+      "disk_bytes": 418,
+      "elapsed_ms": 6,
+      "label": "external-close-blocked",
+      "output_bounded": true,
+      "returncode": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stderr_path": "runs/20260911T183952Z-79857/external-close-blocked.stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_truncated": false,
+      "stdout": "{\"case\":\"close-blocked\",\"closed_resources\":1,\"done_after_cleanup\":true,\"join_terminated\":true}\n",
+      "stdout_bytes": 95,
+      "stdout_path": "runs/20260911T183952Z-79857/external-close-blocked.stdout.log",
+      "stdout_sha256": "a7a44144b330750dad5d3558e50932cc2e3e4ec7c2b50c7d518dd8b24eebe3da",
+      "stdout_truncated": false,
+      "timed_out": false
+    },
+    {
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/artifacts/mesh-consumer",
+        "parent-blocked"
+      ],
+      "cleanup": {
+        "group_alive_after": false,
+        "group_survivor_detected": false,
+        "parent_reaped": true,
+        "reader_threads_stopped": true,
+        "termination_signals": []
+      },
+      "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/consumer",
+      "disk_bounded": true,
+      "disk_bytes": 514,
+      "elapsed_ms": 11,
+      "label": "external-parent-blocked",
+      "output_bounded": true,
+      "returncode": 0,
+      "stderr": "",
+      "stderr_bytes": 0,
+      "stderr_path": "runs/20260911T183952Z-79857/external-parent-blocked.stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_truncated": false,
+      "stdout": "{\"case\":\"parent-blocked\",\"closed_resources\":1,\"done_after_cleanup\":true,\"join_terminated\":true}\n",
+      "stdout_bytes": 96,
+      "stdout_path": "runs/20260911T183952Z-79857/external-parent-blocked.stdout.log",
+      "stdout_sha256": "05575f5f576b828206501a174536060dee25963332bf60133b090881064fa447",
+      "stdout_truncated": false,
+      "timed_out": false
+    }
+  ],
+  "report": {
+    "case": "external-positive",
+    "closed_resources": 6,
+    "done_after_cleanup": true,
+    "pair_count": 6,
+    "participants": [
+      "alpha",
+      "bravo",
+      "charlie",
+      "delta"
+    ],
+    "rollback": {
+      "all_closed_after_mesh_close": 3,
+      "created_closed_before_mesh_close": 2,
+      "nil_factory_rejected": true,
+      "no_half_join": true,
+      "typed_connect_failure": true
+    },
+    "surviving_pair": true
+  },
+  "schema": "audio-runtime.c55.external.v1"
+}

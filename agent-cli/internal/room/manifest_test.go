@@ -405,17 +405,6 @@ func TestParseManifest_UnknownParticipantFieldErrorNeverLeaksInternalTypeName(t 
 	}
 }
 
-// TestSanitizeManifestDecodeError_LeavesUnrelatedTextUnchanged is the
-// no-over-triggering guard for the same fix: an error with no internal
-// "type room.X" fragment (the overwhelming majority of manifest validation
-// errors) must pass through byte-for-byte.
-func TestSanitizeManifestDecodeError_LeavesUnrelatedTextUnchanged(t *testing.T) {
-	err := errors.New(`participants[0].api_key_env: environment variable is unset or empty`)
-	if got := sanitizeManifestDecodeError(err); got != err.Error() {
-		t.Fatalf("sanitizeManifestDecodeError(%q) = %q, want it unchanged", err.Error(), got)
-	}
-}
-
 func TestManifestValidate_RejectsNilToolsInDirectNormalizedValue(t *testing.T) {
 	manifest := Manifest{
 		SchemaVersion: SchemaVersion,

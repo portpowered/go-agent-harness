@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"strings"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"sync"
@@ -26,7 +28,17 @@ func (p productionTargetProbe) Probe(ctx context.Context, browser discovery.Brow
 	// An exact selection must not wait for unrelated suspended/restored pages.
 	// Their metadata remains listed, but capability checks belong to the target
 	// the caller selected. Unknown capabilities never authorize invocation.
-	if selected := p.owner.browser.Selection.Tab; selected != "" && selected != target.ID {
+	selected := strings.TrimSpace(p.owner.browser.Selection.Tab)
+	if refBrowserID, refTargetID, composite := splitCompositeTargetRef(selected); composite {
+		// A composite reference identifies both the browser and target. Keep
+		// the browser half authoritative so the target ID cannot accidentally
+		// authorize a same-named tab in another browser.
+		if browser.ID != refBrowserID {
+			return discovery.TargetCapabilities{ToolCount: -1}, nil
+		}
+		selected = refTargetID
+	}
+	if selected != "" && selected != target.ID {
 		return discovery.TargetCapabilities{ToolCount: -1}, nil
 	}
 	return p.owner.probeTarget(ctx, browser, target)
