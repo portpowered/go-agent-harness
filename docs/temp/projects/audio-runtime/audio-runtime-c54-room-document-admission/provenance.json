@@ -10,7 +10,7 @@
   "bounds": {
     "aggregate_timeout_seconds": 600.0,
     "child_timeout_seconds": 60.0,
-    "elapsed_ms": 39150,
+    "elapsed_ms": 40251,
     "max_child_output_bytes": 65536,
     "max_retained_disk_bytes": 8388608
   },
@@ -173,14 +173,14 @@
         "sha256": "b195f49a495ef5cb4ad49411bbdcde0df50a5a5771c336df50c2cf4d56bc360d"
       },
       {
-        "bytes": 39601,
+        "bytes": 39658,
         "path": "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/run.py",
-        "sha256": "e2a112ee333dcfb3dab189ec76b163f806185ff4b304a0e96ca974ca055b0e5b"
+        "sha256": "641172b581c93a7ad232736d16b4bc2d2820628116dc6909134a0fdad5ba7695"
       },
       {
-        "bytes": 15273,
+        "bytes": 15338,
         "path": "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/verify.py",
-        "sha256": "e524d220348a6381965c7a1ae6726966bed0094288ac5b6226b3061eae3074df"
+        "sha256": "e92a3f688c5269a381ab939039fc3390931369eccb08d02208304dccfc847fcc"
       },
       {
         "bytes": 7201,
@@ -200,7 +200,7 @@
       "sha256": "b84e6a82414cdd8497a1b9ba6ce0fc76b201cfb90036a8ccebf9f106428b084d"
     }
   },
-  "candidate_revision": "ace074c49393cfc31eb6a9b1f9e0f1289367722a",
+  "candidate_revision": "a22c9aad3d5a3dfc055b2c196a0f76ed509f68e9",
   "case_names": [
     "consumer",
     "yui"
@@ -237,6 +237,7 @@
       "go-agent-runtime/services/rooms/internal/manifest/decoder.go",
       "go-agent-runtime/services/rooms/internal/manifest/browser.go",
       "go-agent-runtime/services/rooms/wire/manifest.go",
+      "go-agent-runtime/services/rooms/wire/manifest_test.go",
       "docs/architecture/architecture-size-baseline.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/"
     ],
