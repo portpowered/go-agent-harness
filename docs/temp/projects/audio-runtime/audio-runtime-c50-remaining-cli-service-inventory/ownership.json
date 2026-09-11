@@ -38,11 +38,11 @@
       {
         "last_output": "\n",
         "state": "init",
-        "work_id": "work-review-47",
+        "work_id": "work-review-56",
         "work_type": "review"
       },
       {
-        "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}\nIndependent proof on head 94527e2 passed the C47 resource suite, private C45 regressions, 7-source compilation, and diff check. PR #439 checks are green, but only against base bb29005d. Remote main is cdf416a8 after C48/#440, and HEAD is not its ancestor. Executor must fetch and merge cdf416a8 into the preserved branch, resolve conflicts, rerun focused checks and the exact staged probe with unchanged immutable binaries, refresh current-head provenance/evidence, commit/push, and resubmit to script CI. Do not run ci-wait.py or poll. No merge was performed. The requested implementation-handoff.md is absent; available progress, PR body, and factory review records were used without fabricating evidence.\n{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
+        "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}\nIndependent C47 resource, C45 regression, source-compile, diff-check, and exact staged-probe behavior passed on head e7ae3ec667829f406d65d89e62dacceedbfc6f33; all 9 PR checks are green. The required current-main integration gate is unmet: origin/main is 6b4f32b5940d43192774e86f05e3c7c9293c71e3 and is not an ancestor of the candidate (PR base remains cdf416a8). Executor must merge the latest origin/main into the preserved branch, resolve conflicts, refresh current-source/provenance evidence, rerun focused bounds, pinned C45 regressions, Python checks, diff check, and the exact immutable-artifact staged probe, then commit/push and resubmit to script CI without polling. Do not merge the current head; preserve prior C47 regression coverage.\n{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"c8bf4f979c2e4c7de842520fe5a1d6411aa6cfb8\", \"reused\": true}",
         "state": "in-review",
         "work_id": "work-task-11",
         "work_type": "task"
@@ -57,6 +57,12 @@
         "last_output": "\nIndependent proof on head 94527e2 passed the C47 resource suite, private C45 regressions, 7-source compilation, and diff check. PR #439 checks are green, but only against base bb29005d. Remote main is cdf416a8 after C48/#440, and HEAD is not its ancestor. Executor must fetch and merge cdf416a8 into the preserved branch, resolve conflicts, rerun focused checks and the exact staged probe with unchanged immutable binaries, refresh current-head provenance/evidence, commit/push, and resubmit to script CI. Do not run ci-wait.py or poll. No merge was performed. The requested implementation-handoff.md is absent; available progress, PR body, and factory review records were used without fabricating evidence.",
         "state": "fin",
         "work_id": "work-review-42",
+        "work_type": "review"
+      },
+      {
+        "last_output": "\nIndependent C47 resource, C45 regression, source-compile, diff-check, and exact staged-probe behavior passed on head e7ae3ec667829f406d65d89e62dacceedbfc6f33; all 9 PR checks are green. The required current-main integration gate is unmet: origin/main is 6b4f32b5940d43192774e86f05e3c7c9293c71e3 and is not an ancestor of the candidate (PR base remains cdf416a8). Executor must merge the latest origin/main into the preserved branch, resolve conflicts, refresh current-source/provenance evidence, rerun focused bounds, pinned C45 regressions, Python checks, diff check, and the exact immutable-artifact staged probe, then commit/push and resubmit to script CI without polling. Do not merge the current head; preserve prior C47 regression coverage.",
+        "state": "fin",
+        "work_id": "work-review-47",
         "work_type": "review"
       }
     ],
@@ -81,7 +87,7 @@
       }
     ]
   },
-  "board_sha256": "d9ec9fcdd963e1ca366c09d8d437b0fcafc8672aec57510f63e155766b546fc6",
+  "board_sha256": "86e9e7eedc721b5d78c551b1425594ce3e1ca3e5dbc4721a1be3ca1168c81b2a",
   "previous_review_findings_are_accounted_for": true,
   "prior_c50_reviews": [
     {
@@ -93,6 +99,11 @@
       "state": "fin",
       "text": "\nPR #442 head 7a8ca37a712ede40d85f0ad0116ab08e41f81703 has green required checks, but provenance.json, verification-summary.json, and public/report.json remain bound to 3acf11ab0aab6d8972d51ad3d03b07a85b2004aa. Refresh final-head evidence and hashes with verify.py --mode all --child-timeout 60 --total-timeout 600, commit/push it, rerun SCRIPT CI on the new head, then request fresh review. Independent analyzer and yui replay probes passed; no source defect found.",
       "work_id": "work-review-34"
+    },
+    {
+      "state": "fin",
+      "text": "\nIndependent analyzer and fresh exact-source YUI help/replay passed, including expected 4,800-byte PCM and clean shutdown. Actionable defects remain: provenance.json, verification-summary.json, and runs/public/report.json are bound to baf0dfed2d57a30cfaab58e315758ad20430d364, not submitted HEAD 7b0775ddb9409635696ad6ae4fb9fdb67204c264; this repeats the prior final-head finding. git diff --no-renames also deletes the shared C38 fixture outside C50 scope and hides it as a byte-identical rename to C50 runs/public/replay/tool-record/provider.json. Remove the generated unchecksummed __pycache__/verify.cpython-314.pyc. Restore the C38 fixture, regenerate and consistently rebind all evidence on the repaired candidate, commit/push, rerun SCRIPT CI, then request fresh review; do not merge.",
+      "work_id": "work-review-53"
     }
   ],
   "prior_review_feedback_sha256": [
@@ -103,6 +114,10 @@
     {
       "sha256": "07bc373e02a1d8a47f308b24441ddfde5c36a6ec0714948561f4bc860a801d50",
       "work_id": "work-review-34"
+    },
+    {
+      "sha256": "356607a39a7e1fdc19fc5aaf59347d9a670caf9e74c74eeb1f9370e535614f22",
+      "work_id": "work-review-53"
     }
   ],
   "project": "audio-runtime",
