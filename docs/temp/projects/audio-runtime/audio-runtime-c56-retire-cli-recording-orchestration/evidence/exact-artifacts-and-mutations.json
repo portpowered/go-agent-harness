@@ -24,10 +24,10 @@
       "./go-agent-runtime/services/recording/internal/session"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration",
-    "elapsed_ms": 1094,
+    "elapsed_ms": 1095,
     "returncode": 0,
     "stderr": "",
-    "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/session\t0.499s\n",
+    "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/session\t0.624s\n",
     "timed_out": false
   }
 }
