@@ -125,3 +125,11 @@ PR #439 is open at this head against `main` and is ready for the script-owned CI
 The latest exact rejection is run `34584105269`, job `103214186726`, at head `5efc6a1e0f5e7d1c65debf562b53758b8b931125`. Every other required check passed. The only failure is the separate C53-owned production-binary remote-device control `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst` (`session_tool_audio_remote_e2e_test.go:183`): `41.88s`, `rendered_pcm=463200`, `expected_pcm=174391`, `final_marker=false`, seven tool calls/results, no queue/drop/overflow/discard loss, and the child still running. The full log is preserved at `/tmp/audio-runtime-c47-ci-integration-34584105269.log`.
 
 C47 has no authorized source path in this failure; its Python/evidence candidate remains locally verified. The active C53 runtime repair must reach reviewed main first. After that merge, C47 will integrate the new main, rerun the immutable staged probe and focused controls, and submit the same PR through script CI. No CI green, review, merge, vertical acceptance or project acceptance is claimed.
+
+## Final current-head handoff — supersedes the earlier dependency note
+
+C53's accepted prerequisite is present in `origin/main=904e1f4c3be6c1e629138632573bd2fb55d50938`, which is an ancestor of the current candidate. The current C47 source repair is `c1ab430a8b76af3f06f88b9194f2377246a6d457`; evidence checkpoint `d2a1cba345f7afe0f41d74dd709b06c60ac7999b` is pushed, PR #439 is open at that head, the worktree is clean, and the current main ancestry is preserved.
+
+The exact composite WebMCP test passed five repetitions, the adjacent/full CLI package checks passed, architecture-size-check passed at 185/1891/27914, the bounded C47 resource suite and private C45 regressions are `ACCEPTED`, all seven Python sources compile, and the exact immutable staged mission is `ACCEPTED` at `c1ab430` with raw run `runs/runs/staged-probe-20260911T131838Z-38590/`. The prior CI defect was the composite-selection capability mismatch addressed by this source checkpoint; no new CI result is being claimed or polled.
+
+The next owner is the script CI gate on PR #439 head `d2a1cba345f7afe0f41d74dd709b06c60ac7999b`. Independent review, guarded merge and post-merge vertical/project acceptance remain external; any exact new gate rejection returns to this same task.
