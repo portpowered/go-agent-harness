@@ -1,0 +1,32 @@
+{
+  "cleanup": {
+    "group_survivor": false,
+    "kill_sent": false,
+    "parent_exit_code": 0,
+    "reason": "parent_exit",
+    "term_sent": false
+  },
+  "command": [
+    "go",
+    "test",
+    "-tags=nomicrophone",
+    "-json",
+    "-count=5",
+    "-run",
+    "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+    "./services/rooms/internal/lifecycle"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/pr438/go-agent-runtime",
+  "duration_seconds": 0.4655496249906719,
+  "ended_at": "2026-09-11T08:11:50.009548+00:00",
+  "exit_code": 0,
+  "first_failure": null,
+  "output_overflow": false,
+  "reader_survivor": false,
+  "started_at": "2026-09-11T08:11:49.543997+00:00",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 17398,
+  "stdout_sha256": "99ab11725d4589691ff0480394a0db7168c5cc6c4285db72119a3cc2a18f0e5c",
+  "timed_out": false
+}

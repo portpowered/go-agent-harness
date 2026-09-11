@@ -1,0 +1,27 @@
+{
+  "cleanup": {
+    "group_survivor": false,
+    "kill_sent": false,
+    "parent_exit_code": 0,
+    "reason": "parent_exit",
+    "term_sent": true
+  },
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "-c",
+    "import os,time; child=os.fork(); (os.close(1), os.close(2), time.sleep(30)) if child==0 else os._exit(0)"
+  ],
+  "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T-6b4f32b5-hermetic/scratch/planning-main/go-agent-runtime",
+  "duration_seconds": 0.05461912462487817,
+  "ended_at": "2026-09-11T08:12:22.162969+00:00",
+  "exit_code": 0,
+  "first_failure": null,
+  "output_overflow": false,
+  "reader_survivor": false,
+  "started_at": "2026-09-11T08:12:22.108365+00:00",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 0,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "timed_out": false
+}

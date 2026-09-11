@@ -1,0 +1,6 @@
+{"ImportPath":"./services/rooms/internal/lifecycle","Action":"build-output","Output":"# ./services/rooms/internal/lifecycle\n"}
+{"ImportPath":"./services/rooms/internal/lifecycle","Action":"build-output","Output":"stat /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T071000Z-go-auto/scratch/pr438/services/rooms/internal/lifecycle: directory not found\n"}
+{"ImportPath":"./services/rooms/internal/lifecycle","Action":"build-fail"}
+{"Time":"2026-09-10T23:49:27.165099-07:00","Action":"start","Package":"./services/rooms/internal/lifecycle"}
+{"Time":"2026-09-10T23:49:27.165167-07:00","Action":"output","Package":"./services/rooms/internal/lifecycle","Output":"FAIL\t./services/rooms/internal/lifecycle [setup failed]\n"}
+{"Time":"2026-09-10T23:49:27.165171-07:00","Action":"fail","Package":"./services/rooms/internal/lifecycle","Elapsed":0,"FailedBuild":"./services/rooms/internal/lifecycle"}

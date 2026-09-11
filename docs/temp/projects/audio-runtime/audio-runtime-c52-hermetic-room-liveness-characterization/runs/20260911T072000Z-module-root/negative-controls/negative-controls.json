@@ -1,0 +1,152 @@
+{
+  "all_rejected": true,
+  "controls": {
+    "survivor_process": {
+      "process": {
+        "cleanup": {
+          "group_survivor": false,
+          "kill_sent": false,
+          "parent_exit_code": -15,
+          "reason": "child_timeout",
+          "term_sent": true
+        },
+        "command": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "-c",
+          "import os,time; child=os.fork(); time.sleep(30) if child==0 else time.sleep(30)"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T072000Z-module-root/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 0.4275492080487311,
+        "ended_at": "2026-09-11T06:51:13.514193+00:00",
+        "exit_code": -15,
+        "first_failure": null,
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:51:13.086661+00:00",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timed_out": true
+      },
+      "rejected": true
+    },
+    "wrong_test_selection": {
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-json",
+          "-tags=nomicrophone",
+          "-count=1",
+          "-run",
+          "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+          "./services/session/internal/live"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T072000Z-module-root/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 0.536748958285898,
+        "ended_at": "2026-09-11T06:51:13.086218+00:00",
+        "exit_code": 0,
+        "first_failure": null,
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:51:12.549487+00:00",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 1020,
+        "stdout_sha256": "8ebc03116bdaa712f9c5954ba5c72d689d9b82e418ea37162678521a2abe84bc",
+        "timed_out": false
+      },
+      "rejected": true,
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 5,
+        "no_tests_marker": true,
+        "package": "./services/session/internal/live",
+        "package_events": [],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      }
+    },
+    "zero_test_selection": {
+      "process": {
+        "cleanup": {},
+        "command": [
+          "go",
+          "test",
+          "-json",
+          "-tags=nomicrophone",
+          "-count=1",
+          "-run",
+          "^C52NoSuchTest$",
+          "./services/rooms/internal/lifecycle"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T072000Z-module-root/scratch/planning-main/go-agent-runtime",
+        "duration_seconds": 0.19193095760419965,
+        "ended_at": "2026-09-11T06:51:12.548996+00:00",
+        "exit_code": 1,
+        "first_failure": {
+          "event": {
+            "Action": "fail",
+            "Elapsed": 0,
+            "FailedBuild": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle [github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle.test]",
+            "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+            "Time": "2026-09-10T23:51:12.505464-07:00"
+          },
+          "stream": "stdout"
+        },
+        "output_overflow": false,
+        "reader_survivor": false,
+        "started_at": "2026-09-11T06:51:12.357081+00:00",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 1906,
+        "stdout_sha256": "56b67e20efbe1593599067afa3a2b0c00af4dff07ecbfdc903ffd268576d7ea6",
+        "timed_out": false
+      },
+      "rejected": true,
+      "selection": {
+        "cached_marker": false,
+        "first_assertion": "",
+        "invalid_json_lines": 0,
+        "invalid_json_samples": [],
+        "json_line_count": 6,
+        "no_tests_marker": false,
+        "package": "./services/rooms/internal/lifecycle",
+        "package_events": [
+          {
+            "Action": "start",
+            "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+            "Time": "2026-09-10T23:51:12.505342-07:00"
+          },
+          {
+            "Action": "output",
+            "Output": "FAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle [build failed]\n",
+            "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+            "Time": "2026-09-10T23:51:12.505453-07:00"
+          },
+          {
+            "Action": "fail",
+            "Elapsed": 0,
+            "FailedBuild": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle [github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle.test]",
+            "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+            "Time": "2026-09-10T23:51:12.505464-07:00"
+          }
+        ],
+        "relevant_test_names": [],
+        "required_test_run_counts": {
+          "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+        },
+        "test_events": {}
+      }
+    }
+  },
+  "schema": "audio-runtime-c52-negative-controls-v1"
+}

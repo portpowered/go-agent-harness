@@ -1,0 +1,137 @@
+{
+  "attempt": 1,
+  "cell": {
+    "args": [
+      "test",
+      "-json",
+      "-count=5",
+      "-run",
+      "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+      "./services/rooms/internal/lifecycle"
+    ],
+    "env": {
+      "C52_SHUFFLE_SEED": "28"
+    },
+    "id": "shuffle-seed-28",
+    "kind": "fixed-shuffle"
+  },
+  "command": [
+    "go",
+    "test",
+    "-tags=nomicrophone",
+    "-json",
+    "-count=5",
+    "-run",
+    "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+    "./services/rooms/internal/lifecycle"
+  ],
+  "environment": {
+    "C52_MATRIX_CELL": "shuffle-seed-28",
+    "C52_OVERLAY_HASH": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
+    "C52_REVISION": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+    "C52_SHUFFLE_SEED": "28",
+    "CGO_ENABLED": "0",
+    "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T081500Z-compressed-archives/cache/gocache",
+    "GOFLAGS": "",
+    "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T081500Z-compressed-archives/cache/gomodcache",
+    "GOSUMDB": "sum.golang.org",
+    "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T081500Z-compressed-archives/cache/gotmp",
+    "GOTOOLCHAIN": "auto",
+    "GOTRACEBACK": "all",
+    "GOWORK": ""
+  },
+  "process": {
+    "cleanup": {},
+    "command": [
+      "go",
+      "test",
+      "-tags=nomicrophone",
+      "-json",
+      "-count=5",
+      "-run",
+      "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
+      "./services/rooms/internal/lifecycle"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T081500Z-compressed-archives/scratch/planning-main/go-agent-runtime",
+    "duration_seconds": 0.4565274999476969,
+    "ended_at": "2026-09-11T07:12:14.951535+00:00",
+    "exit_code": 0,
+    "first_failure": null,
+    "output_overflow": false,
+    "reader_survivor": false,
+    "started_at": "2026-09-11T07:12:14.495023+00:00",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_bytes": 17718,
+    "stdout_sha256": "ca4b1c624e228b0ca5dd53c7d20ad2cbde8cfd10bdeb9bb9cc7ee9b077d4ac57",
+    "timed_out": false
+  },
+  "revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+  "revision_label": "planning-main",
+  "selection": {
+    "cached_marker": false,
+    "first_assertion": "",
+    "invalid_json_lines": 0,
+    "invalid_json_samples": [],
+    "json_line_count": 64,
+    "no_tests_marker": false,
+    "package": "./services/rooms/internal/lifecycle",
+    "package_events": [
+      {
+        "Action": "start",
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T00:12:14.729323-07:00"
+      },
+      {
+        "Action": "output",
+        "Output": "PASS\n",
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T00:12:14.933846-07:00"
+      },
+      {
+        "Action": "output",
+        "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.205s\n",
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T00:12:14.934205-07:00"
+      },
+      {
+        "Action": "pass",
+        "Elapsed": 0.205,
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T00:12:14.934214-07:00"
+      }
+    ],
+    "relevant_test_names": [
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer",
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response",
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+    ],
+    "required_test_run_counts": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": 5,
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 5
+    },
+    "test_events": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer": {
+        "fail": 0,
+        "pass": 5,
+        "run": 5,
+        "skip": 0
+      },
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/empty_response": {
+        "fail": 0,
+        "pass": 5,
+        "run": 5,
+        "skip": 0
+      },
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": {
+        "fail": 0,
+        "pass": 5,
+        "run": 5,
+        "skip": 0
+      }
+    }
+  },
+  "status": "PASS",
+  "trace_path": "runs/20260911T081500Z-compressed-archives/cells/planning-main/shuffle-seed-28/trace.jsonl",
+  "trace_sha256": "9dc1deeed35ef2d2a46ad89ce946501b4233f92bf75481ca7f18356dbf0af215"
+}
