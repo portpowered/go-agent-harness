@@ -5,7 +5,7 @@
     "content_sha256": "8fc22e853a4ee9ccd730d3192004527c745b555132340e3e1e1dc64968ca4282",
     "file_count": 2191,
     "path": "reports/build-input-manifest.json",
-    "sha256": "b119628b12b6f43e541cfdf5ddb344914e9820d07aeaec8f56db8abdf3017c7d"
+    "sha256": "f993a4648b87911cad6789b1832832dc625675a13c07c8d4a66a0b17db6f8b6d"
   },
   "builds": {
     "consumer": {
@@ -45,18 +45,18 @@
         "cwd": "agent-cli",
         "disk_bounded": true,
         "disk_bytes": 0,
-        "elapsed_ms": 238,
+        "elapsed_ms": 228,
         "label": "build-yui",
         "output_bounded": true,
         "returncode": 0,
         "stderr": "",
         "stderr_bytes": 0,
-        "stderr_path": "runs/20260911T152907Z-9066/build-yui.stderr.log",
+        "stderr_path": "runs/20260911T153909Z-19799/build-yui.stderr.log",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "stderr_truncated": false,
         "stdout": "",
         "stdout_bytes": 0,
-        "stdout_path": "runs/20260911T152907Z-9066/build-yui.stdout.log",
+        "stdout_path": "runs/20260911T153909Z-19799/build-yui.stdout.log",
         "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "stdout_truncated": false,
         "timed_out": false
@@ -65,7 +65,7 @@
       "sha256": "6174b54df0ea9d6f2a4ccdf0e6cc1b0f648867b5167408cae86e415ac3715761"
     }
   },
-  "candidate_revision": "3ef13971ed25b478358a04cfcec202877af0eb37",
+  "candidate_revision": "571ad7455295545197dda828c34f46b4924cb134",
   "contract_revision": "audio-runtime-v1",
   "credential_environment": "API keys, secrets, passwords, and tokens removed from child environments",
   "fetched_main_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
@@ -96,16 +96,16 @@
     "after": {
       "binary_output_bytes": 54973972,
       "compilation_reserve_bytes": 2147483648,
-      "free_space_bytes": 96433807360,
-      "report_fixture_bytes": 862903,
-      "scratch_bytes": 146646,
+      "free_space_bytes": 95959064576,
+      "report_fixture_bytes": 862941,
+      "scratch_bytes": 146657,
       "staging_bytes": 10345
     },
     "before": {
       "binary_output_bytes": 54973972,
       "compilation_reserve_bytes": 2147483648,
-      "free_space_bytes": 96434003968,
-      "report_fixture_bytes": 862903,
+      "free_space_bytes": 95959248896,
+      "report_fixture_bytes": 862930,
       "scratch_bytes": 0,
       "staging_bytes": 10345
     }
