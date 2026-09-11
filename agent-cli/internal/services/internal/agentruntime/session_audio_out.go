@@ -1,7 +1,6 @@
 package agentruntime
 
 import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-
 import (
 	"context"
 	"errors"
@@ -26,20 +25,12 @@ const (
 	sessionAudioWAVMaxDataSize   = uint64(^uint32(0)) - 36
 )
 
-// RunSessionWithAudioOut runs a session and writes assistant PCM to path. A
-// file-only invocation observes provider AUDIO.DELTA samples. When an RTC
-// output device is also selected, the file instead becomes a secondary tap of
-// PCM successfully accepted at the device boundary, after gain, resampling,
-// pacing, and stale-generation rejection. An empty path preserves the normal
-// session output behavior. A path of "-" writes raw little-endian PCM16 to
-// out.
+// RunSessionWithAudioOut runs a session and writes assistant PCM to path; an empty path preserves normal output and "-" writes raw PCM16.
 func RunSessionWithAudioOut(ctx context.Context, out io.Writer, opts SessionRunOptions, path string) (runErr error) {
 	return RunSessionWithAudioOutAndTextSeed(ctx, out, opts, path, SessionTextSeed{})
 }
 
-// RunSessionWithAudioOutAndTextSeed combines the session text-seed behavior
-// with assistant audio output. An empty path preserves the normal session
-// output behavior, including the --prompt presence contract.
+// RunSessionWithAudioOutAndTextSeed combines text-seed behavior with assistant audio output.
 func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts SessionRunOptions, path string, seed SessionTextSeed) (runErr error) {
 	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
@@ -91,8 +82,6 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, seed.Value)
 		plan.inferencer = wrapped
 
-		// A binary stdout stream cannot also carry session text, announcements,
-		// or terminal decorations. File output keeps the established text path.
 		sessionOut := out
 		if path == "-" {
 			sessionOut = io.Discard
@@ -112,10 +101,7 @@ func RunSessionWithAudioOutAndTextSeed(ctx context.Context, out io.Writer, opts 
 	return plan.run(ctx, sessionOut)
 }
 
-// RunSessionWithAudioOutAndTextSeedAndMaxDuration combines assistant audio
-// output with the session duration controller. The audio wrapper is placed
-// inside the duration admission plan so accepted deltas are written before
-// the sink is finalized, including clean duration cutoffs.
+// RunSessionWithAudioOutAndTextSeedAndMaxDuration combines assistant audio output with duration control.
 func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, path string, maxDuration time.Duration, seed SessionTextSeed) (runErr error) {
 	var coordinator SessionCapabilityCoordinator
 	opts, coordinator = prepareSessionCapabilityCoordinator(opts)
@@ -165,8 +151,6 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 		wrapped := newSessionAudioOutputInferencer(plan.inferencer, audioOut, wirePrompt, seed.Value)
 		plan.inferencer = wrapped
 
-		// A binary stdout stream cannot also carry session text, announcements,
-		// or terminal decorations. File output keeps the established text path.
 		sessionOut := out
 		if path == "-" {
 			sessionOut = io.Discard
@@ -202,32 +186,16 @@ func RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io
 }
 
 type sessionAudioOutput struct {
-	sink    audio.AudioSink
-	runtime *sessionRuntimeObservationRecorder
-	// deviceBound makes this output a secondary tap of PCM successfully
-	// enqueued to an RTC output device. Its sink is opened lazily at the true
-	// negotiated device rate; provider deltas remain consumed by the wrapper
-	// only for stream/seed behavior and are not written a second time.
+	sink         audio.AudioSink
+	runtime      *sessionRuntimeObservationRecorder
 	deviceBound  bool
 	devicePath   string
 	deviceWriter io.Writer
-	// loudness applies this session's fixed, voice-specific gain (see
-	// VoiceLoudnessGainDB) before anything downstream (the sink, the
-	// runtime's clock-stamped output observation) sees the audio, so
-	// --voice selection does not change how loud a single session's
-	// captured/replayed audio is. A nil value keeps this a no-op, which
-	// existing table-driven tests that construct this struct by hand rely
-	// on.
-	loudness *audio.LoudnessNormalizer
-
-	mu        sync.Mutex
-	closed    bool
-	closeOnce sync.Once
-	closeErr  error
-}
-
-type sessionAudioSamplesWriter interface {
-	WriteSamples(context.Context, []int16) error
+	loudness     *audio.LoudnessNormalizer
+	mu           sync.Mutex
+	closed       bool
+	closeOnce    sync.Once
+	closeErr     error
 }
 
 func newSessionAudioOutputForPlan(plan *sessionRuntimePlan, path string, out io.Writer, loudness *audio.LoudnessNormalizer) (*sessionAudioOutput, error) {
@@ -254,7 +222,6 @@ func newSessionAudioOutputForPlan(plan *sessionRuntimePlan, path string, out io.
 	}
 	return &sessionAudioOutput{sink: sink, runtime: plan.runtime, loudness: loudness}, nil
 }
-
 func (o *sessionAudioOutput) writeDeviceSamples(ctx context.Context, sampleRate int, samples []int16) error {
 	if len(samples) == 0 {
 		return nil
@@ -271,17 +238,14 @@ func (o *sessionAudioOutput) writeDeviceSamples(ctx context.Context, sampleRate 
 		}
 		o.sink = sink
 	}
-	writer, ok := o.sink.(sessionAudioSamplesWriter)
+	writer, ok := o.sink.(interface {
+		WriteSamples(context.Context, []int16) error
+	})
 	if !ok {
 		return fmt.Errorf("PCM16 device audio output cannot stream a %d-sample chunk", len(samples))
 	}
 	return writer.WriteSamples(ctx, samples)
 }
-
-// newSessionAudioSinkAtRate creates the streaming session artifact sink at
-// the provider's declared output rate. A raw stream has no header, but keeping
-// the rate on the sink makes the same constructor safe for WAV output and
-// keeps the rate decision at the session boundary.
 func newSessionAudioSinkAtRate(path string, out io.Writer, sampleRate int) (audio.AudioSink, error) {
 	if sampleRate <= 0 {
 		return nil, fmt.Errorf("audio output sample rate must be positive; got %d Hz", sampleRate)
@@ -296,17 +260,11 @@ func newSessionAudioSinkAtRate(path string, out io.Writer, sampleRate int) (audi
 		}
 		return &sessionAudioSink{path: path, raw: raw, writer: out, sampleRate: sampleRate}, nil
 	}
-
-	// Use the established sink as the format/open preflight so its typed path
-	// and format errors remain part of the CLI contract. The session sink below
-	// reopens the now-validated target as a raw frame sink so it can stream WAV
-	// bytes and preserve a non-frame-aligned tail.
 	probe, err := audio.NewFileSink(path, out)
 	if err != nil {
 		return nil, err
 	}
 	_ = probe.Close()
-
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
 		return nil, err
@@ -316,7 +274,6 @@ func newSessionAudioSinkAtRate(path string, out io.Writer, sampleRate int) (audi
 		_ = file.Close()
 		return nil, err
 	}
-
 	sink := &sessionAudioSink{
 		path:       path,
 		raw:        raw,
@@ -334,36 +291,24 @@ func newSessionAudioSinkAtRate(path string, out io.Writer, sampleRate int) (audi
 	return sink, nil
 }
 
-// sessionAudioSink is an AudioSink-backed stream. Session deltas use
-// WriteSamples so every sample becomes observable before the delta returns;
-// the frame-oriented AudioSink API remains available for the established sink
-// contract.
-// WAV headers are rewritten in place after each write, so the file grows and
-// remains readable throughout the session without retaining the response.
 type sessionAudioSink struct {
-	mu sync.Mutex
-
-	path   string
-	raw    audio.AudioSink
-	writer io.Writer
-	file   *os.File
-	wav    bool
-	// sampleRate is the provider output rate represented by this artifact.
-	// It is not inferred from the legacy audio package default.
+	mu         sync.Mutex
+	path       string
+	raw        audio.AudioSink
+	writer     io.Writer
+	file       *os.File
+	wav        bool
 	sampleRate int
-
-	samples  uint64
-	closed   bool
-	closeErr error
+	samples    uint64
+	closed     bool
+	closeErr   error
 }
 
 var _ audio.AudioSink = (*sessionAudioSink)(nil)
-var _ sessionAudioSamplesWriter = (*sessionAudioSink)(nil)
 
 func (s *sessionAudioSink) WriteFrame(ctx context.Context, frame []int16) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	if s.closed {
 		return contract.ErrClosed
 	}
@@ -376,7 +321,6 @@ func (s *sessionAudioSink) WriteFrame(ctx context.Context, frame []int16) error 
 	s.samples += uint64(len(frame))
 	return s.updateWAVHeaderLocked()
 }
-
 func (s *sessionAudioSink) WriteSamples(ctx context.Context, samples []int16) error {
 	if err := sessionAudioContextError(ctx); err != nil {
 		return err
@@ -384,10 +328,8 @@ func (s *sessionAudioSink) WriteSamples(ctx context.Context, samples []int16) er
 	if len(samples) == 0 {
 		return nil
 	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	if s.closed {
 		return contract.ErrClosed
 	}
@@ -404,16 +346,13 @@ func (s *sessionAudioSink) WriteSamples(ctx context.Context, samples []int16) er
 	s.samples += uint64(len(samples))
 	return s.updateWAVHeaderLocked()
 }
-
 func (s *sessionAudioSink) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	if s.closed {
 		return s.closeErr
 	}
 	s.closed = true
-
 	var closeErr error
 	if err := s.raw.Close(); err != nil {
 		closeErr = errors.Join(closeErr, sessionAudioSinkError(s.path, "close", err))
@@ -432,7 +371,6 @@ func (s *sessionAudioSink) Close() error {
 	s.closeErr = closeErr
 	return closeErr
 }
-
 func sessionAudioSinkError(path, operation string, err error) error {
 	if err == nil {
 		return nil
@@ -447,14 +385,12 @@ func sessionAudioSinkError(path, operation string, err error) error {
 	}
 	return &audio.StreamError{Operation: operation, Path: path, Format: sessionAudioFormat(path), Err: err}
 }
-
 func sessionAudioFormat(path string) string {
 	if strings.EqualFold(filepath.Ext(path), ".wav") {
 		return "wav"
 	}
 	return "raw PCM16"
 }
-
 func (s *sessionAudioSink) updateWAVHeaderLocked() error {
 	if !s.wav {
 		return nil
@@ -475,11 +411,9 @@ func (s *sessionAudioSink) updateWAVHeaderLocked() error {
 	_, err = s.file.Seek(0, io.SeekEnd)
 	return err
 }
-
 func sessionAudioWAVSizeFits(samples uint64) bool {
 	return samples <= sessionAudioWAVMaxDataSize/2
 }
-
 func sessionAudioContextError(ctx context.Context) error {
 	if ctx == nil {
 		return nil
@@ -491,7 +425,6 @@ func sessionAudioContextError(ctx context.Context) error {
 		return nil
 	}
 }
-
 func writeSessionAudioAll(writer io.Writer, data []byte) error {
 	for len(data) > 0 {
 		written, err := writer.Write(data)
@@ -508,61 +441,44 @@ func writeSessionAudioAll(writer io.Writer, data []byte) error {
 	}
 	return nil
 }
-
 func (o *sessionAudioOutput) writeDelta(ctx context.Context, content []byte, msg messages.StreamMessage) error {
 	if len(content) == 0 {
 		return nil
 	}
 	if o.deviceBound {
-		// The device-bound tap observes accepted post-conversion PCM separately.
-		// Preserve the provider delta's identity here so the runtime trace can
-		// connect that tap back to its causal response without guessing from
-		// arrival order.
 		o.runtime.audioOutputMessage(content, msg)
 		return nil
 	}
 	if err := codec.ValidatePCM16(content, codec.MaxPCM16Bytes); err != nil {
 		return pcm16AudioDeltaError(len(content), err)
 	}
-
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.closed {
 		return contract.ErrClosed
 	}
 	if o.loudness != nil {
-		// Apply this session's fixed voice gain before anything downstream
-		// sees it, so --voice selection does not change how loud this
-		// session's captured/replayed audio is. Kept inside the same lock
-		// that serializes every other write to this output for simplicity,
-		// even though the gain itself is constant.
 		content = o.loudness.ProcessBytes(content)
 	}
-
 	samples, err := codec.DecodePCM16(content)
 	if err != nil {
 		return pcm16AudioDeltaError(len(content), err)
 	}
-
-	// Observe the exact validated PCM at the CLI output boundary before the
-	// underlying sink is called. This lets a coupled runtime consume the
-	// command's own clock-stamped output event rather than inventing metadata
-	// around the writer.
 	o.runtime.audioOutputMessage(content, msg)
-	writer, ok := o.sink.(sessionAudioSamplesWriter)
+	writer, ok := o.sink.(interface {
+		WriteSamples(context.Context, []int16) error
+	})
 	if !ok {
 		return fmt.Errorf("PCM16 audio output cannot stream a %d-sample delta", len(samples))
 	}
 	return writer.WriteSamples(ctx, samples)
 }
-
 func pcm16AudioDeltaError(byteCount int, err error) error {
 	if errors.Is(err, codec.ErrPCM16OddLength) {
 		return fmt.Errorf("PCM16 audio delta has odd byte length %d: %w", byteCount, err)
 	}
 	return fmt.Errorf("PCM16 audio delta: %w", err)
 }
-
 func (o *sessionAudioOutput) close() error {
 	o.closeOnce.Do(func() {
 		o.mu.Lock()
@@ -586,10 +502,9 @@ type sessionAudioOutputInferencer struct {
 	output     *sessionAudioOutput
 	wirePrompt string
 	seedValue  string
-
-	mu        sync.Mutex
-	lastErr   error
-	connected *sessionAudioOutputSession
+	mu         sync.Mutex
+	lastErr    error
+	connected  *sessionAudioOutputSession
 }
 
 func newSessionAudioOutputInferencer(inner messages.SessionInferencer, output *sessionAudioOutput, wirePrompt string, seedValue string) *sessionAudioOutputInferencer {
@@ -602,7 +517,7 @@ func newSessionAudioOutputInferencer(inner messages.SessionInferencer, output *s
 }
 
 func (i *sessionAudioOutputInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
-	session, err := i.inner.ConnectSession(ctx)
+	session, err := i.inner.ConnectSession(context.WithoutCancel(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -618,18 +533,18 @@ func (i *sessionAudioOutputInferencer) wait() {
 	connected := i.connected
 	i.mu.Unlock()
 	if connected != nil {
-		<-connected.done
+		// Close completes retained draining and captures provider shutdown errors.
+		i.recordErr(connected.Close())
 	}
 }
 
+// recordErr joins stream and provider-close failures from the same session.
 func (i *sessionAudioOutputInferencer) recordErr(err error) {
 	if err == nil {
 		return
 	}
 	i.mu.Lock()
-	if i.lastErr == nil {
-		i.lastErr = err
-	}
+	i.lastErr = errors.Join(i.lastErr, err)
 	i.mu.Unlock()
 }
 
@@ -641,71 +556,68 @@ func (i *sessionAudioOutputInferencer) err() error {
 
 type sessionAudioOutputSession struct {
 	messages.Session
-	ctx        context.Context
-	output     *sessionAudioOutput
-	record     func(error)
-	wirePrompt string
-	seedValue  string
-
-	receive  *messages.TypedBuffer[messages.StreamMessage]
-	done     chan struct{}
-	once     sync.Once
-	seedMu   sync.Mutex
-	seedSent bool
+	ctx            context.Context
+	output         *sessionAudioOutput
+	record         func(error)
+	wirePrompt     string
+	seedValue      string
+	receive        *messages.TypedBuffer[messages.StreamMessage]
+	done           chan struct{}
+	drainStarted   chan struct{}
+	closeRequested chan struct{}
+	closeOnce      sync.Once
+	innerCloseOnce sync.Once
+	innerCloseDone chan struct{}
+	closeErr       error
+	seedMu         sync.Mutex
+	seedSent       bool
 }
 
 func newSessionAudioOutputSession(ctx context.Context, inner messages.Session, output *sessionAudioOutput, record func(error), wirePrompt string, seedValue string) *sessionAudioOutputSession {
 	s := &sessionAudioOutputSession{
-		Session:    inner,
-		ctx:        ctx,
-		output:     output,
-		record:     record,
-		wirePrompt: wirePrompt,
-		seedValue:  seedValue,
-		receive:    messages.NewTypedBuffer[messages.StreamMessage](sessionAudioOutputBufferSize),
-		done:       make(chan struct{}),
+		Session:        inner,
+		ctx:            ctx,
+		output:         output,
+		record:         record,
+		wirePrompt:     wirePrompt,
+		seedValue:      seedValue,
+		receive:        messages.NewTypedBuffer[messages.StreamMessage](sessionAudioOutputBufferSize),
+		done:           make(chan struct{}),
+		drainStarted:   make(chan struct{}),
+		closeRequested: make(chan struct{}),
+		innerCloseDone: make(chan struct{}),
 	}
 	go s.forward()
 	return s
 }
-
 func (s *sessionAudioOutputSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	if s.replaceSeed(msg) {
 		msg.Value = messages.NewTextDeltaValue(s.seedValue)
 	}
 	return s.Session.Send(ctx, msg)
 }
-
-// RequestResponse forwards the optional explicit response capability while
-// keeping audio output observation local to inbound provider events.
 func (s *sessionAudioOutputSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
 	return messages.RequestSessionResponse(ctx, s.Session)
 }
-
 func (s *sessionAudioOutputSession) SupportsResponseRequests() bool {
 	return messages.SupportsSessionResponseRequests(s.Session)
 }
-
 func (s *sessionAudioOutputSession) SendMessage(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.Session.(SessionImageMessageSender)
 	return ok && sender.SendMessage(ctx, msg)
 }
-
 func (s *sessionAudioOutputSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
 	sender, ok := s.Session.(SessionImageMessageSenderWithoutResponse)
 	return ok && sender.SendMessageWithoutResponse(ctx, msg)
 }
-
 func (s *sessionAudioOutputSession) SupportsCompleteMessages() bool {
 	complete, _ := completeMessageCapabilities(s.Session)
 	return complete
 }
-
 func (s *sessionAudioOutputSession) SupportsCompleteMessagesWithoutResponse() bool {
 	_, withoutResponse := completeMessageCapabilities(s.Session)
 	return withoutResponse
 }
-
 func (s *sessionAudioOutputSession) replaceSeed(msg messages.StreamMessage) bool {
 	if s.wirePrompt == "" || msg.Type != messages.StreamTypeTextDelta {
 		return false
@@ -723,14 +635,11 @@ func (s *sessionAudioOutputSession) replaceSeed(msg messages.StreamMessage) bool
 	s.seedSent = true
 	return true
 }
-
 func (s *sessionAudioOutputSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.receive
 }
 
-func (s *sessionAudioOutputSession) Done() <-chan struct{} {
-	return s.done
-}
+func (s *sessionAudioOutputSession) Done() <-chan struct{} { return s.done }
 
 func (s *sessionAudioOutputSession) rtcMedia() (RTCMediaEndpoints, bool) {
 	return rtcMediaFromSession(s.Session)
@@ -741,58 +650,149 @@ func (s *sessionAudioOutputSession) TerminalError() error {
 }
 
 func (s *sessionAudioOutputSession) forward() {
-	defer s.once.Do(func() { close(s.done) })
+	defer func() {
+		s.closeInner()
+		close(s.done)
+	}()
 	input := s.Session.Receive()
 	for {
-		select {
-		case msg := <-input.Chan():
-			if !s.forwardMessage(msg) {
-				return
-			}
-		case <-s.Session.Done():
-			s.drain(input)
-			return
-		case <-s.ctx.Done():
+		if s.ctx.Err() != nil {
+			s.drainAfterCancellation(input)
 			return
 		}
+		if s.forwardNext(input) {
+			continue
+		}
+		if s.ctx.Err() != nil {
+			s.drainAfterCancellation(input)
+		} else {
+			select {
+			case <-s.closeRequested:
+				s.drainAfterCancellation(input)
+			default:
+			}
+		}
+		return
 	}
 }
-
-func (s *sessionAudioOutputSession) drain(input *messages.TypedBuffer[messages.StreamMessage]) {
+func (s *sessionAudioOutputSession) forwardNext(input *messages.TypedBuffer[messages.StreamMessage]) bool {
+	select {
+	case msg := <-input.Chan():
+		retainingCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
+		defer cancel()
+		return s.forwardMessageWithContext(retainingCtx, msg, s.ctx.Err() != nil)
+	case <-s.Session.Done():
+		if s.ctx.Err() == nil {
+			s.drain(input, s.ctx, false)
+		}
+	case <-s.closeRequested:
+	case <-s.ctx.Done():
+	}
+	return false
+}
+func (s *sessionAudioOutputSession) drain(input *messages.TypedBuffer[messages.StreamMessage], ctx context.Context, retaining bool) bool {
 	for {
 		msg, ok := input.Read()
 		if !ok {
-			return
+			return true
 		}
-		if !s.forwardMessage(msg) {
+		if !s.forwardMessageWithContext(ctx, msg, retaining) {
+			return false
+		}
+	}
+}
+func (s *sessionAudioOutputSession) drainAfterCancellation(input *messages.TypedBuffer[messages.StreamMessage]) {
+	close(s.drainStarted)
+	retainCtx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), sessionStragglerDrainWallSafety)
+	defer cancel()
+	terminal := time.NewTimer(sessionStragglerDrainWallSafety)
+	defer terminal.Stop()
+	for {
+		select {
+		case msg := <-input.Chan():
+			if !s.forwardMessageWithContext(retainCtx, msg, true) {
+				return
+			}
+		case <-s.Session.Done():
+			s.closeInner()
+			s.drainAfterInnerClose(input, retainCtx)
+			return
+		case <-terminal.C:
+			s.closeInner()
+			s.drainAfterInnerClose(input, retainCtx)
 			return
 		}
 	}
 }
 
-func (s *sessionAudioOutputSession) forwardMessage(msg messages.StreamMessage) bool {
+func (s *sessionAudioOutputSession) drainAfterInnerClose(input *messages.TypedBuffer[messages.StreamMessage], ctx context.Context) {
+	select {
+	case <-s.innerCloseDone:
+	case <-ctx.Done():
+		return
+	}
+	for {
+		select {
+		case msg := <-input.Chan():
+			if !s.forwardMessageWithContext(ctx, msg, true) {
+				return
+			}
+		case <-time.After(sessionStragglerDrainQuietPeriod):
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *sessionAudioOutputSession) closeInner() {
+	s.innerCloseOnce.Do(func() { go s.finishInnerClose() })
+}
+
+func (s *sessionAudioOutputSession) finishInnerClose() {
+	s.closeErr = s.Session.Close()
+	close(s.innerCloseDone)
+}
+
+func (s *sessionAudioOutputSession) Close() error {
+	s.closeOnce.Do(func() {
+		close(s.closeRequested)
+		<-s.done
+		<-s.innerCloseDone
+	})
+	return s.closeErr
+}
+
+func (s *sessionAudioOutputSession) forwardMessageWithContext(ctx context.Context, msg messages.StreamMessage, retaining bool) bool {
 	if msg.Type == messages.StreamTypeAudioDelta && assistantAudioDelta(msg) {
 		value, ok := msg.Value.(*messages.AudioDeltaValue)
 		if !ok {
 			s.record(fmt.Errorf("AUDIO.DELTA has unexpected value %T", msg.Value))
-			_ = s.Close()
+			s.closeInner()
 			return false
 		}
-		if err := s.output.writeDelta(s.ctx, value.Content, msg); err != nil {
+		if err := s.output.writeDelta(ctx, value.Content, msg); err != nil {
 			s.record(err)
-			_ = s.Close()
+			s.closeInner()
 			return false
 		}
 	}
 
 	for {
-		if outcome := s.receive.WriteContext(s.ctx, msg); outcome.OK() {
+		outcome := s.receive.WriteContext(ctx, msg)
+		if outcome.OK() {
 			return true
-		} else if outcome.Err != nil {
+		}
+		if outcome.Err != nil {
 			return false
 		}
+		if retaining {
+			return true
+		}
 		select {
-		case <-s.ctx.Done():
+		case <-ctx.Done():
+			return false
+		case <-s.closeRequested:
 			return false
 		case <-time.After(time.Millisecond):
 		}
@@ -800,7 +800,5 @@ func (s *sessionAudioOutputSession) forwardMessage(msg messages.StreamMessage) b
 }
 
 func assistantAudioDelta(msg messages.StreamMessage) bool {
-	// Provider session adapters currently omit Role on server events; an
-	// explicitly user/tool/system-authored delta must still be ignored.
 	return msg.Role == "" || msg.Role == messages.RoleAssistant
 }
