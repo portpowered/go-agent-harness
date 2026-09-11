@@ -528,3 +528,35 @@ C23 current-head bounded regression checkpoint — 2026-09-11T23:13:37Z
   the complete bounded C23 sequence and C21 regressions, then update and submit
   the changed same PR to script CI without polling. CI, review, merge, vertical,
   device, acoustic, and project-completion claims remain open.
+
+C23 causal negative-control repair checkpoint — 2026-09-11T23:30:37Z
+
+- The remaining Review-169 defect was repaired only in the owned C23 consumer
+  and driver. The provider-side fallback that manufactured missing/duplicate
+  errors is gone. The fixture executor now returns malformed public tool
+  responses, and the runtime control runs disable only the request max-duration
+  policy while retaining a two-second bounded child context. The report binds
+  the result to the public runtime's native `LiveUnresolvedToolResultsError`,
+  records boundary `runtime_tool_result_forwarder`, and requires the exact
+  unresolved provider call `call-000-beta`; no provider error is injected.
+- Both fresh controls exited nonzero in about two seconds with bounded output,
+  error `tool results were not delivered for 1 unresolved call(s):
+  call-000-beta`, terminal `{kind: terminal, reason: terminal_failure,
+  classification: terminal_failure, provenance: session, output_state: none}`,
+  `clean_shutdown=false`, `trace_complete=true`, zero overflow drops, and one
+  accepted alpha result. The full driver `self-check` passed all four negative
+  controls, including the two report mutations and both causal runtime probes.
+- Focused regressions passed: runtime session/recording packages 292 tests in
+  15 packages; C21 normal `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls`
+  15/15; C21 race count=1 3/3. Python compilation, Go build of the source-file
+  consumer, and `git diff --check` passed. Only the owned `characterize.py`
+  and `consumer/main.go` are currently dirty; generated artifacts remain
+  ignored and unrelated changes are untouched.
+- The full C23 sequence remains intentionally unclaimed because current
+  `origin/main` still reproduces the known C53/C56 recording-on/16 failure
+  (`accepted_audio=0`, `audio_bytes=0`, no `audio/out-000.pcm`). No recording
+  oracle was relaxed and no production path was edited. Next action: checkpoint
+  this causal repair, commit/push the same task branch and update PR #415, then
+  wait for reviewed recording/media repair to reach `origin/main` before
+  rebinding provenance and rerunning the complete bounded sequence; return
+  `ACCEPTED` only after that fresh full sequence passes.

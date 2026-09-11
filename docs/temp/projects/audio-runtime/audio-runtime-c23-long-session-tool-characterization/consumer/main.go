@@ -91,6 +91,7 @@ type report struct {
 	Artifacts       artifactRecord       `json:"artifacts"`
 	RecordingUsage  recordingUsageRecord `json:"recording_usage"`
 	Overlap         overlapRecord        `json:"overlap"`
+	Control         *controlObservation  `json:"control_observation,omitempty"`
 	ToolControl     string               `json:"tool_control,omitempty"`
 	Error           string               `json:"error,omitempty"`
 }
@@ -248,6 +249,14 @@ type overlapRecord struct {
 	ActiveResponseIDs              []string `json:"active_response_ids,omitempty"`
 	CrossRoutingVerified           bool     `json:"cross_routing_verified"`
 	ExactlyOnceToolResultsVerified bool     `json:"exactly_once_tool_results_verified"`
+}
+
+type controlObservation struct {
+	Name              string   `json:"name"`
+	Observed          bool     `json:"observed"`
+	Boundary          string   `json:"boundary"`
+	Detail            string   `json:"detail"`
+	UnresolvedCallIDs []string `json:"unresolved_call_ids,omitempty"`
 }
 
 type traceEvent struct {
@@ -546,33 +555,12 @@ func (s *fixtureSession) sendMatrix(ctx context.Context, msg messages.StreamMess
 			}
 		}
 		ready := turn >= 0
-		controlFailure := false
-		if !ready && s.toolControl != "" && s.queueError == nil {
-			callID := "call-000-beta"
-			for candidate := 0; candidate < s.turns; candidate++ {
-				if s.pendingTools[candidate] > 0 {
-					callID = fmt.Sprintf("call-%03d-beta", candidate)
-					break
-				}
-			}
-			switch s.toolControl {
-			case "missing-result":
-				s.queueError = fmt.Errorf("fixture control missing tool result for %s", callID)
-				controlFailure = true
-			case "duplicate-result":
-				s.queueError = fmt.Errorf("fixture control duplicate tool result for %s", callID)
-				controlFailure = true
-			}
-		}
 		if ready {
 			s.continued[turn] = true
 		}
 		s.mu.Unlock()
 		if ready {
 			s.emitContinuation(turn)
-		}
-		if controlFailure {
-			return false
 		}
 	}
 	return true
@@ -589,6 +577,24 @@ func toolResultFromMessage(msg messages.StreamMessage) toolRecord {
 		result.Turn = responseTurnFromToolID(result.ID)
 	}
 	return result
+}
+
+func runtimeControlObservation(name string, runErr error) *controlObservation {
+	if strings.TrimSpace(name) == "" || runErr == nil {
+		return nil
+	}
+	var unresolved *session.LiveUnresolvedToolResultsError
+	if !errors.As(runErr, &unresolved) || unresolved == nil {
+		return nil
+	}
+	callIDs := unresolved.UnresolvedCallIDs()
+	return &controlObservation{
+		Name:              name,
+		Observed:          len(callIDs) > 0,
+		Boundary:          "runtime_tool_result_forwarder",
+		Detail:            fmt.Sprintf("public live runner rejected %s before provider admission: %s", name, unresolved.Error()),
+		UnresolvedCallIDs: callIDs,
+	}
 }
 
 func (s *fixtureSession) snapshotToolResults() []toolRecord {
@@ -1025,8 +1031,8 @@ func (e *fixtureToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 	content := fmt.Sprintf("result:%s:%03d", name, args.Turn)
 	if e.control == "missing-result" && args.Key == "beta" {
 		// Return a malformed result through the public tool-executor contract.
-		// The fixture provider below, not this executor, must observe and reject
-		// the missing identity for the negative control to be meaningful.
+		// The public runtime's result-forwarding boundary must suppress the
+		// missing identity and report the unresolved provider call.
 		return messages.ToolCallResponse{Name: name, Content: content}, nil
 	}
 	e.mu.Lock()
@@ -1034,8 +1040,8 @@ func (e *fixtureToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 	e.mu.Unlock()
 	resultID := call.ID
 	if e.control == "duplicate-result" && args.Key == "beta" {
-		// The provider fixture validates the message that the runtime sends and
-		// rejects this duplicate identity. Do not predeclare a failure here.
+		// The public runtime's exactly-once result-forwarding boundary must
+		// suppress this duplicate identity and report the unresolved beta call.
 		resultID = fmt.Sprintf("call-%03d-alpha", args.Turn)
 	}
 	return messages.ToolCallResponse{ToolCallID: resultID, Name: name, Content: content}, nil
@@ -1209,10 +1215,15 @@ func runToolMatrix(turns int, recordingEnabled bool, artifactRoot string, toolCo
 		}
 	}
 	runTimeout := 55 * time.Second
+	maxDuration := runTimeout
 	if toolControl != "" {
 		runTimeout = 2 * time.Second
+		// Let the public live runner report its unresolved tool-result cause
+		// when a malformed result is suppressed before provider admission. The
+		// outer context remains the bounded child deadline for this control.
+		maxDuration = 0
 	}
-	request := session.LiveRequest{SessionID: "c23-matrix", ParticipantID: "fixture", Provider: "c23-deterministic", Model: "c23-public-fixture", OpeningPrompt: "c23 deterministic opening", OpeningPromptPresent: true, OutputAudioSampleRate: fixtureSampleRate(), OutputAudioContinuous: true, ToolNames: []string{"lookup_alpha", "lookup_beta"}, FinishAfterResponse: true, ExpectedResponses: turns, MaxDuration: runTimeout}
+	request := session.LiveRequest{SessionID: "c23-matrix", ParticipantID: "fixture", Provider: "c23-deterministic", Model: "c23-public-fixture", OpeningPrompt: "c23 deterministic opening", OpeningPromptPresent: true, OutputAudioSampleRate: fixtureSampleRate(), OutputAudioContinuous: true, ToolNames: []string{"lookup_alpha", "lookup_beta"}, FinishAfterResponse: true, ExpectedResponses: turns, MaxDuration: maxDuration}
 	start := time.Now()
 	before := readMemStats()
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
@@ -1237,6 +1248,7 @@ func runToolMatrix(turns int, recordingEnabled bool, artifactRoot string, toolCo
 	reportValue.Events, reportValue.Responses, reportValue.ToolCalls, reportValue.ToolResults, reportValue.Trace, reportValue.PCM, reportValue.Latency, reportValue.Terminal, reportValue.TraceComplete = events, responses, calls, results, trace, pcm, latency, terminal, traceComplete
 	reportValue.RecordingUsage = recordingUsageFor(recorder, providerUsage, recordingEnabled, limits, events.OverflowDrops)
 	reportValue.Overlap = provider.snapshotOverlap()
+	reportValue.Control = runtimeControlObservation(toolControl, runErr)
 	reportValue.Overlap.CrossRoutingVerified = toolResultsMatchCalls(calls, results)
 	reportValue.Overlap.ExactlyOnceToolResultsVerified = len(results) == len(uniqueToolResultIDs(results))
 	state := emptyStateRecord()

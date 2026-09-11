@@ -1378,8 +1378,8 @@ def self_check(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str
             else:
                 results.append({"control": name, "mode": "report-oracle", "passed": False, "rejected": "negative mutation was accepted"})
         runtime_controls = {
-            "missing-result": {"diagnostic": "fixture control missing tool result", "tool_results": 1},
-            "duplicate-result": {"diagnostic": "fixture control duplicate tool result", "tool_results": 1},
+            "missing-result": {"diagnostic": "tool results were not delivered", "tool_results": 1},
+            "duplicate-result": {"diagnostic": "tool results were not delivered", "tool_results": 1},
         }
         for name, expectation in runtime_controls.items():
             root = new_run_root(f"self-check-{name}")
@@ -1391,7 +1391,11 @@ def self_check(args: argparse.Namespace, provenance: dict[str, Any]) -> dict[str
             set_failure_context(execution=execution, report=runtime_report, report_path=report_path, expected={"tool_control": name, "terminal": EXPECTED_NEGATIVE_TERMINAL, "clean_shutdown": False})
             actual_error = str(runtime_report.get("error", ""))
             require(runtime_report.get("tool_control") == name, f"runtime negative control {name} did not identify its control")
-            require(expectation["diagnostic"] in actual_error.lower(), f"runtime negative control {name} omitted its provider-observed diagnostic: {actual_error}")
+            require(expectation["diagnostic"] in actual_error.lower(), f"runtime negative control {name} omitted its unresolved-result diagnostic: {actual_error}")
+            observation = runtime_report.get("control_observation")
+            require(isinstance(observation, dict) and observation.get("name") == name and observation.get("observed") is True, f"runtime negative control {name} was not observed at the runtime boundary: {observation!r}")
+            require(observation.get("boundary") == "runtime_tool_result_forwarder" and isinstance(observation.get("detail"), str) and observation["detail"], f"runtime negative control {name} omitted its runtime-boundary detail: {observation!r}")
+            require(observation.get("unresolved_call_ids") == ["call-000-beta"], f"runtime negative control {name} did not identify the unresolved provider call: {observation!r}")
             require(runtime_report.get("clean_shutdown") is False, f"runtime negative control {name} unexpectedly shut down cleanly")
             require(runtime_report.get("trace_complete") is True, f"runtime negative control {name} truncated its diagnostic trace")
             require(runtime_report.get("events", {}).get("overflow_drops") == 0, f"runtime negative control {name} overflowed its diagnostic trace")
