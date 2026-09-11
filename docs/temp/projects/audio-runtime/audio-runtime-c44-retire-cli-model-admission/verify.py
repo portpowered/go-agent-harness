@@ -460,10 +460,11 @@ def run_process(
             if primary_failure is None:
                 primary_failure = {"kind": "survivors", "message": f"process group survived cleanup: {survivors}"}
     except BaseException as exc:
-        if primary_exception is None:
-            primary_exception = exc
         if primary_failure is None:
+            primary_exception = primary_exception or exc
             primary_failure = {"kind": "runner", "message": str(exc)}
+        else:
+            cleanup_failures.append({"operation": "runner-cleanup", "error": str(exc)})
         if process is not None:
             state.stop.set()
             try:

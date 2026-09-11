@@ -262,6 +262,31 @@ def capture_controls(timeout: float) -> dict[str, Any]:
         assert "process inspection unavailable" in inspection_message
         assert inspection is not None and inspection["primary_failure"]["kind"] == "process_inspection"
 
+        verifier_globals["process_group_pids"] = lambda _pgid: (_ for _ in ()).throw(
+            module["EvidenceFailure"]("synthetic final process inspection unavailable")
+        )
+        try:
+            overflow_inspection_message, overflow_inspection = expect_failure(
+                lambda: run_child(
+                    module,
+                    root,
+                    "overflow-inspection-failure",
+                    "import sys; sys.stdout.buffer.write(b'R' * 4096); sys.stdout.flush()",
+                    module["OutputBudget"](64),
+                    timeout,
+                ),
+                "overflow with final process inspection failure",
+            )
+        finally:
+            verifier_globals["process_group_pids"] = original_inspector
+        assert "aggregate private output limit" in overflow_inspection_message
+        assert overflow_inspection is not None
+        assert overflow_inspection["primary_failure"]["kind"] == "output_overflow"
+        assert any(
+            item["operation"] == "final-process-inspection"
+            for item in overflow_inspection["cleanup_failures"]
+        )
+
         original_ps_run = verifier_globals["subprocess"].run
         try:
             for ps_output in ("", "424242 only\n"):
