@@ -19,7 +19,7 @@ const (
 	replayComplete    = "replay_complete"
 )
 
-var errTerminalRunFailure = errors.New("independent terminal run failure")
+const errTerminalRunFailure = terminaloutcome.Sentinel("independent terminal run failure")
 
 type completionState uint8
 

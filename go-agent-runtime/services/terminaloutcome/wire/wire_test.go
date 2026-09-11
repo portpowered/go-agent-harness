@@ -1,4 +1,4 @@
-package terminaloutcome_test
+package wire
 
 import (
 	"bytes"
@@ -7,11 +7,10 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/terminaloutcome"
-	terminaloutcomewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/terminaloutcome/wire"
 )
 
-func TestWirePublicConsumerExercisesTerminalOutcomeContract(t *testing.T) {
-	service := terminaloutcomewire.NewService()
+func TestPublicWireConsumerExercisesTerminalOutcomeContract(t *testing.T) {
+	service := NewService()
 	reporter := service.NewReporter()
 	reporter.MarkRunStarted()
 	reporter.ObserveStreamMessage(messages.StreamMessage{

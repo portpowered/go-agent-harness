@@ -3,20 +3,24 @@
 package terminaloutcome
 
 import (
-	"errors"
 	"io"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-var (
+// Sentinel is an immutable error value suitable for errors.Is identity.
+type Sentinel string
+
+func (s Sentinel) Error() string { return string(s) }
+
+const (
 	// ErrSessionTerminalAlreadyPublished identifies a second attempt to cross
 	// the single terminal publication boundary.
-	ErrSessionTerminalAlreadyPublished = errors.New("session terminal already published")
+	ErrSessionTerminalAlreadyPublished Sentinel = "session terminal already published"
 	// ErrSessionMaxDurationExpired is the runtime-neutral duration sentinel.
 	// Hosts with a legacy sentinel may pass that sentinel to
 	// Service.HasIndependentFailure as an ignored error.
-	ErrSessionMaxDurationExpired = errors.New("session max duration expired")
+	ErrSessionMaxDurationExpired Sentinel = "session max duration expired"
 )
 
 // Service constructs isolated reporters. A service has no invocation state;
