@@ -10,7 +10,7 @@
   "bounds": {
     "aggregate_timeout_seconds": 600.0,
     "child_timeout_seconds": 60.0,
-    "elapsed_ms": 37866,
+    "elapsed_ms": 41442,
     "max_child_output_bytes": 65536,
     "max_retained_disk_bytes": 8388608
   },
@@ -200,7 +200,7 @@
       "sha256": "3601f3502fdea48b64e56c192bd72dcb46d3f601e39e3263c45b1186dbeefdfa"
     }
   },
-  "candidate_revision": "85bd4285071faa994ef9caf34df6453f7d48af7b",
+  "candidate_revision": "67d98d3a13fd9d01ac92acc3a8ec8467f06803e0",
   "case_names": [
     "consumer",
     "yui"
@@ -246,6 +246,6 @@
     "wire_gen_unchanged": true
   },
   "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
-  "source_tree_status": "M docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/provenance.json\n M docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/verification-summary.json",
+  "source_tree_status": "",
   "task": "audio-runtime-c54-room-document-admission"
 }
