@@ -124,6 +124,7 @@ def check_scope(provenance: dict[str, Any], final: bool) -> None:
         "go-agent-runtime/services/rooms/internal/manifest/decoder.go",
         "go-agent-runtime/services/rooms/internal/manifest/browser.go",
         "go-agent-runtime/services/rooms/wire/manifest.go",
+        "go-agent-runtime/services/rooms/wire/manifest_test.go",
         "docs/architecture/architecture-size-baseline.json",
     }
     evidence_prefix = "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/"
