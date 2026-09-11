@@ -10,7 +10,7 @@
   "bounds": {
     "aggregate_timeout_seconds": 600.0,
     "child_timeout_seconds": 60.0,
-    "elapsed_ms": 40251,
+    "elapsed_ms": 37866,
     "max_child_output_bytes": 65536,
     "max_retained_disk_bytes": 8388608
   },
@@ -19,7 +19,7 @@
     "consumer": {
       "bytes": 4484242,
       "path": "artifacts/c54-consumer",
-      "sha256": "d347b9e87e001cce69065d558883e32ea241ddbb42ff266d71d570ff9f5e3729"
+      "sha256": "a15f2f973e383d938b71e25c3519ea0c8632f4e2fb5aa37dd4c1255ba1b20077"
     },
     "inputs": [
       {
@@ -113,14 +113,14 @@
         "sha256": "597041e396ff6b5263fa3d95aec118ae5119521186fbdf7e0564e25ea0e52d49"
       },
       {
-        "bytes": 16083,
+        "bytes": 16075,
         "path": "go-agent-runtime/services/rooms/manifest.go",
-        "sha256": "6a35f6cc5e211ba87901e20548fab975840c78e860dc105f0e7fe1161ea577d7"
+        "sha256": "85e4176b65fc66ffcac6634f28ccf48e6d8fdab46c46f3d371f214838f0923fe"
       },
       {
-        "bytes": 15092,
+        "bytes": 15104,
         "path": "go-agent-runtime/services/rooms/browser.go",
-        "sha256": "4b31ebe74b97cc1c74f553981647ffb1cccdebb6e9d3e79972afd16db6a9685f"
+        "sha256": "7888be0db95f3a4715ea2f26700bf74493e07879b8a0e7ebb971520bc55bc9c2"
       },
       {
         "bytes": 15560,
@@ -197,10 +197,10 @@
     "yui": {
       "bytes": 50913458,
       "path": "artifacts/yui",
-      "sha256": "b84e6a82414cdd8497a1b9ba6ce0fc76b201cfb90036a8ccebf9f106428b084d"
+      "sha256": "3601f3502fdea48b64e56c192bd72dcb46d3f601e39e3263c45b1186dbeefdfa"
     }
   },
-  "candidate_revision": "a22c9aad3d5a3dfc055b2c196a0f76ed509f68e9",
+  "candidate_revision": "85bd4285071faa994ef9caf34df6453f7d48af7b",
   "case_names": [
     "consumer",
     "yui"
@@ -246,6 +246,6 @@
     "wire_gen_unchanged": true
   },
   "source_revision": "2456a5d1594e73faf85e1132d6050735bc3e4710",
-  "source_tree_status": "",
+  "source_tree_status": "M docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/provenance.json\n M docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/verification-summary.json",
   "task": "audio-runtime-c54-room-document-admission"
 }
