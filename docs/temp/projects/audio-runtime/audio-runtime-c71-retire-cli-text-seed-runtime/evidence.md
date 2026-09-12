@@ -25,6 +25,7 @@ Date: 2026-09-11
 - Focused normal and race agentruntime prompt/wire tests: 12 tests passed in each mode.
 - Focused `go vet` for the service and agentruntime packages: no issues.
 - Focused `staticcheck` and `golangci-lint` for the service: no issues; focused `golangci-lint` for agentruntime: no issues.
+- Direct package coverage: public contract 100.0%, private service 86.4% (floor 80.00%), and Wire 100.0% (floor 95.00%).
 - `git diff --check`: clean.
 
 ## Pending shared integration
