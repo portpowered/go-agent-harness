@@ -61,19 +61,9 @@ func readTurnResponse(ctx context.Context, connection messages.Session) (message
 	}
 	var deltas []messages.StreamMessage
 	for {
-		if err := ctx.Err(); err != nil {
+		message, err := nextResponseMessage(ctx, connection, buffer)
+		if err != nil {
 			return messages.Message{}, err
-		}
-		var message messages.StreamMessage
-		select {
-		case message = <-buffer.Chan():
-		case <-ctx.Done():
-			return messages.Message{}, ctx.Err()
-		case <-connection.Done():
-			if err := ctx.Err(); err != nil {
-				return messages.Message{}, err
-			}
-			return messages.Message{}, transitionError("read", sessionturns.ErrSessionClosed)
 		}
 		if message.Type == messages.StreamTypeError {
 			if err := responseError(message); err != nil {
@@ -85,6 +75,23 @@ func readTurnResponse(ctx context.Context, connection messages.Session) (message
 		if message.Type == messages.StreamTypeMessageEnd {
 			return messages.ReconstructModelMessageFromDeltas(deltas), nil
 		}
+	}
+}
+
+func nextResponseMessage(ctx context.Context, connection messages.Session, buffer *messages.TypedBuffer[messages.StreamMessage]) (messages.StreamMessage, error) {
+	if err := ctx.Err(); err != nil {
+		return messages.StreamMessage{}, err
+	}
+	select {
+	case message := <-buffer.Chan():
+		return message, nil
+	case <-ctx.Done():
+		return messages.StreamMessage{}, ctx.Err()
+	case <-connection.Done():
+		if err := ctx.Err(); err != nil {
+			return messages.StreamMessage{}, err
+		}
+		return messages.StreamMessage{}, transitionError("read", sessionturns.ErrSessionClosed)
 	}
 }
 

@@ -100,8 +100,8 @@ def check_mutations() -> dict[str, object]:
     tests = (ROOT / RUNTIME / "internal" / "service" / "service_test.go").read_text(encoding="utf-8")
     require("tick <= active.StartTick" in service and "tick <= s.history" in service, "monotonic tick guards are missing")
     require("IsNonTerminal" in protocol and "StreamTypeMessageEnd" in protocol, "terminal response guard is missing")
-    require("InvalidTransitionsPreserveState" in tests and "ResponseErrorsAndCancellation" in tests, "mutation regression tests are missing")
-    run_test(ROOT / "go-agent-runtime", "./services/sessionturns/internal/service", "TestService(InvalidTransitionsPreserveState|ResponseErrorsAndCancellation|DeepCopiesResponseBytes)")
+    require("InvalidTransitionsPreserveState" in tests and "NonTerminalResponseIsSkipped" in tests and "TerminalResponsePreservesIdentity" in tests, "mutation regression tests are missing")
+    run_test(ROOT / "go-agent-runtime", "./services/sessionturns/internal/service", "TestService(InvalidTransitionsPreserveState|NonTerminalResponseIsSkipped|TerminalResponsePreservesIdentity|ResponseCancellationClearsActive|DeepCopiesResponseBytes)")
     return {"monotonic_tick_guard": True, "terminal_boundary_guard": True, "regression_tests": True}
 
 

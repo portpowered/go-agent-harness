@@ -73,13 +73,13 @@ func run() (report, error) {
 	service := turnwire.NewService(turnwire.Dependencies{SessionInferencer: provider})
 	secondService := turnwire.NewService(turnwire.Dependencies{SessionInferencer: secondProvider})
 	input := []byte{1, 2, 3, 4}
-	if _, err := service.RunTurn(context.Background(), sessionturns.NewTextTurnInput("hello"), sessionturns.TurnDirectionUser, 1, 2); err != nil {
+	if _, err := service.RunTurn(context.Background(), sessionturns.TurnInput{Text: "hello"}, sessionturns.TurnDirectionUser, 1, 2); err != nil {
 		return report{}, fmt.Errorf("text turn: %w", err)
 	}
-	if _, err := service.RunTurn(context.Background(), sessionturns.NewAudioTurnInput(input, "audio/pcm"), sessionturns.TurnDirectionUser, 3, 4); err != nil {
+	if _, err := service.RunTurn(context.Background(), sessionturns.TurnInput{Audio: append([]byte(nil), input...), MediaType: "audio/pcm"}, sessionturns.TurnDirectionUser, 3, 4); err != nil {
 		return report{}, fmt.Errorf("audio turn: %w", err)
 	}
-	if _, err := secondService.RunTurn(context.Background(), sessionturns.NewTextTurnInput("independent"), sessionturns.TurnDirectionUser, 1, 2); err != nil {
+	if _, err := secondService.RunTurn(context.Background(), sessionturns.TurnInput{Text: "independent"}, sessionturns.TurnDirectionUser, 1, 2); err != nil {
 		return report{}, fmt.Errorf("independent turn: %w", err)
 	}
 	input[0] = 99
@@ -87,7 +87,7 @@ func run() (report, error) {
 	audioCopied := len(history) == 2 && history[1].Input.Audio[0] == 1
 	history[1].Input.Audio[0] = 88
 	snapshotCopied := service.History()[1].Input.Audio[0] == 1
-	_, invalidErr := service.StartTurn(sessionturns.NewTextTurnInput("late"), sessionturns.TurnDirectionUser, 4)
+	_, invalidErr := service.StartTurn(sessionturns.TurnInput{Text: "late"}, sessionturns.TurnDirectionUser, 4)
 	if !errors.Is(invalidErr, sessionturns.ErrInvalidTurnTick) {
 		return report{}, fmt.Errorf("invalid transition: %w", invalidErr)
 	}

@@ -94,81 +94,36 @@ func newRespondingService(session *testSession, sink sessionturns.TurnEventSink)
 	return New(Dependencies{SessionInferencer: inferencer, EventSink: sink}), inferencer
 }
 
+func textInput(text string) sessionturns.TurnInput { return sessionturns.TurnInput{Text: text} }
+
+func audioInput(audio []byte, mediaType string) sessionturns.TurnInput {
+	return sessionturns.TurnInput{Audio: append([]byte(nil), audio...), MediaType: mediaType}
+}
+
 func TestServiceFiveTurnsReuseSessionAndCopySnapshots(t *testing.T) {
 	provider := newTestSession()
 	fact := "fact: the marigold key is hidden under stone seven"
-	provider.sendFunc = func(message messages.StreamMessage) bool {
-		if message.Type != messages.StreamTypeTextDelta && message.Type != messages.StreamTypeAudioDelta {
-			return true
-		}
-		input := ""
-		if value, ok := message.Value.(*messages.TextDeltaValue); ok {
-			input = value.Content
-		}
-		if strings.HasPrefix(input, "fact:") {
-			textResponse(provider, "stored")
-		} else if strings.Contains(input, "recall") {
-			textResponse(provider, "I remember "+fact)
-		} else {
-			textResponse(provider, "acknowledged")
-		}
-		return true
-	}
+	failure := errors.New("provider response failed")
+	installFactResponder(provider, fact, &failure)
 	var eventsMu sync.Mutex
 	var events []sessionturns.TurnEvent
 	var service *Service
 	var inferencer *testInferencer
 	service, inferencer = newRespondingService(provider, func(event sessionturns.TurnEvent) {
-		// Publication happens without the service state lock. Both snapshots are
-		// safe to call from a callback.
 		_, _ = service.ActiveTurn()
 		_ = service.History()
 		eventsMu.Lock()
 		events = append(events, event)
 		eventsMu.Unlock()
 	})
-
-	failure := errors.New("provider response failed")
 	wantFailure := failure
-	provider.sendFunc = func(message messages.StreamMessage) bool {
-		if message.Type == messages.StreamTypeTextDelta || message.Type == messages.StreamTypeAudioDelta {
-			if failure != nil {
-				provider.push(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValueWithError(failure)})
-				failure = nil
-				return true
-			}
-			input := ""
-			if value, ok := message.Value.(*messages.TextDeltaValue); ok {
-				input = value.Content
-			}
-			if strings.HasPrefix(input, "fact:") {
-				textResponse(provider, "stored")
-			} else if strings.Contains(input, "recall") {
-				textResponse(provider, "I remember "+fact)
-			} else {
-				textResponse(provider, "acknowledged")
-			}
-		}
-		return true
-	}
-	if _, err := service.RunTurn(context.Background(), sessionturns.NewTextTurnInput("failed"), sessionturns.TurnDirectionUser, 1, 2); !errors.Is(err, wantFailure) {
+	if _, err := service.RunTurn(context.Background(), textInput("failed"), sessionturns.TurnDirectionUser, 1, 2); !errors.Is(err, wantFailure) {
 		t.Fatalf("failed turn error = %v, want provider cause", err)
 	}
 
 	audio := []byte{1, 2, 3}
-	inputs := []sessionturns.TurnInput{
-		sessionturns.NewTextTurnInput(fact),
-		sessionturns.NewAudioTurnInput(audio, "audio/pcm"),
-		sessionturns.NewAudioTurnInput([]byte{4, 5, 6}, "audio/pcm"),
-		sessionturns.NewTextTurnInput("Please recall the fact."),
-		sessionturns.NewTextTurnInput("End the scripted conversation."),
-	}
-	for i, input := range inputs {
-		turn, err := service.RunTurn(context.Background(), input, sessionturns.TurnDirectionUser, uint64(2*i+3), uint64(2*i+4))
-		if err != nil || turn.Index != uint64(i+1) {
-			t.Fatalf("turn %d = %#v, err=%v", i+1, turn, err)
-		}
-	}
+	inputs := []sessionturns.TurnInput{textInput(fact), audioInput(audio, "audio/pcm"), audioInput([]byte{4, 5, 6}, "audio/pcm"), textInput("Please recall the fact."), textInput("End the scripted conversation.")}
+	runFiveTurns(t, service, inputs)
 	audio[0] = 99
 	history := service.History()
 	if inferencer.connects.Load() != 1 || len(history) != 5 || service.NextTurnIndex() != 6 {
@@ -182,12 +137,54 @@ func TestServiceFiveTurnsReuseSessionAndCopySnapshots(t *testing.T) {
 		t.Fatal("history returned an aliased audio input")
 	}
 	eventsMu.Lock()
-	defer eventsMu.Unlock()
-	if len(events) != 11 {
-		t.Fatalf("event count = %d, want 11 including the failed start", len(events))
+	observedEvents := append([]sessionturns.TurnEvent(nil), events...)
+	eventsMu.Unlock()
+	assertFiveTurnEvents(t, observedEvents)
+	if err := service.Close(); err != nil || provider.closeCall.Load() != 1 {
+		t.Fatalf("close = %v, calls=%d", err, provider.closeCall.Load())
 	}
-	if events[0].Type != sessionturns.TurnEventStart || events[0].Index != 1 {
-		t.Fatalf("failed start event = %#v", events[0])
+}
+
+func installFactResponder(provider *testSession, fact string, failure *error) {
+	provider.sendFunc = func(message messages.StreamMessage) bool {
+		if message.Type != messages.StreamTypeTextDelta && message.Type != messages.StreamTypeAudioDelta {
+			return true
+		}
+		if *failure != nil {
+			provider.push(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValueWithError(*failure)})
+			*failure = nil
+			return true
+		}
+		input := ""
+		if value, ok := message.Value.(*messages.TextDeltaValue); ok {
+			input = value.Content
+		}
+		switch {
+		case strings.HasPrefix(input, "fact:"):
+			textResponse(provider, "stored")
+		case strings.Contains(input, "recall"):
+			textResponse(provider, "I remember "+fact)
+		default:
+			textResponse(provider, "acknowledged")
+		}
+		return true
+	}
+}
+
+func runFiveTurns(t *testing.T, service *Service, inputs []sessionturns.TurnInput) {
+	t.Helper()
+	for i, input := range inputs {
+		turn, err := service.RunTurn(context.Background(), input, sessionturns.TurnDirectionUser, uint64(2*i+3), uint64(2*i+4))
+		if err != nil || turn.Index != uint64(i+1) {
+			t.Fatalf("turn %d = %#v, err=%v", i+1, turn, err)
+		}
+	}
+}
+
+func assertFiveTurnEvents(t *testing.T, events []sessionturns.TurnEvent) {
+	t.Helper()
+	if len(events) != 11 || events[0].Type != sessionturns.TurnEventStart || events[0].Index != 1 {
+		t.Fatalf("events = %#v, want failed start plus five pairs", events)
 	}
 	for i, event := range events[1:] {
 		if event.Index != uint64(i/2+1) || event.Direction != sessionturns.TurnDirectionUser {
@@ -200,14 +197,11 @@ func TestServiceFiveTurnsReuseSessionAndCopySnapshots(t *testing.T) {
 			t.Fatalf("event %d = %#v, want end", i, event)
 		}
 	}
-	if err := service.Close(); err != nil || provider.closeCall.Load() != 1 {
-		t.Fatalf("close = %v, calls=%d", err, provider.closeCall.Load())
-	}
 }
 
 func TestServiceInvalidTransitionsPreserveState(t *testing.T) {
 	service := New(Dependencies{})
-	started, err := service.StartTurn(sessionturns.NewTextTurnInput("input"), sessionturns.TurnDirectionUser, 10)
+	started, err := service.StartTurn(textInput("input"), sessionturns.TurnDirectionUser, 10)
 	if err != nil || started.Index != 1 {
 		t.Fatalf("StartTurn = %#v, %v", started, err)
 	}
@@ -217,7 +211,7 @@ func TestServiceInvalidTransitionsPreserveState(t *testing.T) {
 		want error
 	}{
 		{"overlap", func() error {
-			_, err := service.StartTurn(sessionturns.NewTextTurnInput("other"), sessionturns.TurnDirectionUser, 11)
+			_, err := service.StartTurn(textInput("other"), sessionturns.TurnDirectionUser, 11)
 			return err
 		}, sessionturns.ErrTurnAlreadyActive},
 		{"mismatch", func() error {
@@ -255,7 +249,7 @@ func TestServiceInvalidTransitionsPreserveState(t *testing.T) {
 	if _, err := service.EndTurn(0, "", messages.NewTextMessage(messages.RoleAssistant, "ok"), 11); err != nil {
 		t.Fatalf("valid EndTurn = %v", err)
 	}
-	if _, err := service.StartTurn(sessionturns.NewTextTurnInput("later"), sessionturns.TurnDirectionUser, 11); !errors.Is(err, sessionturns.ErrInvalidTurnTick) {
+	if _, err := service.StartTurn(textInput("later"), sessionturns.TurnDirectionUser, 11); !errors.Is(err, sessionturns.ErrInvalidTurnTick) {
 		t.Fatalf("non-increasing restart error = %v", err)
 	}
 	if err := service.Close(); err != nil {
@@ -282,7 +276,7 @@ func TestServiceSerializesBlockedEventPublicationWithoutStateLock(t *testing.T) 
 	}})
 	startDone := make(chan struct{})
 	go func() {
-		_, _ = service.StartTurn(sessionturns.NewTextTurnInput("input"), sessionturns.TurnDirectionUser, 1)
+		_, _ = service.StartTurn(textInput("input"), sessionturns.TurnDirectionUser, 1)
 		close(startDone)
 	}()
 	select {
@@ -330,7 +324,7 @@ func TestServiceAudioProtocolAndRejectedCommit(t *testing.T) {
 		return true
 	}
 	service, _ := newRespondingService(provider, nil)
-	input := sessionturns.NewAudioTurnInput([]byte{0, 1, 2, 3, 4}, "audio/pcm")
+	input := audioInput([]byte{0, 1, 2, 3, 4}, "audio/pcm")
 	if _, err := service.RunTurn(context.Background(), input, sessionturns.TurnDirectionUser, 1, 2); err != nil {
 		t.Fatalf("audio RunTurn = %v", err)
 	}
@@ -352,7 +346,7 @@ func TestServiceAudioProtocolAndRejectedCommit(t *testing.T) {
 		return false
 	}
 	commitService, _ := newRespondingService(commitProvider, nil)
-	if _, err := commitService.RunTurn(context.Background(), sessionturns.NewAudioTurnInput([]byte{9, 8, 7}, "audio/pcm"), sessionturns.TurnDirectionUser, 1, 2); !errors.Is(err, sessionturns.ErrTurnInputCommitRejected) {
+	if _, err := commitService.RunTurn(context.Background(), audioInput([]byte{9, 8, 7}, "audio/pcm"), sessionturns.TurnDirectionUser, 1, 2); !errors.Is(err, sessionturns.ErrTurnInputCommitRejected) {
 		t.Fatalf("commit rejection = %v", err)
 	}
 	if len(commitService.History()) != 0 {
@@ -360,89 +354,67 @@ func TestServiceAudioProtocolAndRejectedCommit(t *testing.T) {
 	}
 }
 
-func TestServiceResponseErrorsAndCancellation(t *testing.T) {
-	for _, tc := range []struct {
-		name       string
-		configure  func(*testSession)
-		want       error
-		wantString string
-	}{
-		{
-			name: "nonterminal is skipped",
-			configure: func(s *testSession) {
-				s.sendFunc = func(message messages.StreamMessage) bool {
-					if message.Type == messages.StreamTypeTextDelta {
-						s.push(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewNonTerminalErrorValue("not active yet", "informational")})
-						textResponse(s, "after diagnostic")
-					}
-					return true
-				}
-			},
-		},
-		{
-			name: "typed terminal",
-			configure: func(s *testSession) {
-				cause := errors.New("typed terminal")
-				s.sendFunc = func(message messages.StreamMessage) bool {
-					if message.Type == messages.StreamTypeTextDelta {
-						s.push(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValueWithError(cause)})
-					}
-					return true
-				}
-				// The assertion is made by the dedicated case below.
-			},
-			wantString: "typed terminal",
-		},
-		{
-			name: "message terminal",
-			configure: func(s *testSession) {
-				s.sendFunc = func(message messages.StreamMessage) bool {
-					if message.Type == messages.StreamTypeTextDelta {
-						s.push(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue("provider message")})
-					}
-					return true
-				}
-			},
-			wantString: "provider message",
-		},
-		{
-			name: "blank terminal",
-			configure: func(s *testSession) {
-				s.sendFunc = func(message messages.StreamMessage) bool {
-					if message.Type == messages.StreamTypeTextDelta {
-						s.push(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(" ")})
-					}
-					return true
-				}
-			},
-			want: sessionturns.ErrSessionResponse,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			provider := newTestSession()
-			tc.configure(provider)
-			service, _ := newRespondingService(provider, nil)
-			_, err := service.RunTurn(context.Background(), sessionturns.NewTextTurnInput("input"), sessionturns.TurnDirectionUser, 1, 2)
-			if tc.name == "nonterminal is skipped" {
-				if err != nil || len(service.History()) != 1 {
-					t.Fatalf("nonterminal response = %v, history=%d", err, len(service.History()))
-				}
-				return
-			}
-			if tc.want != nil && !errors.Is(err, tc.want) {
-				t.Fatalf("error = %v, want %v", err, tc.want)
-			}
-			if tc.wantString != "" && !strings.Contains(err.Error(), tc.wantString) {
-				t.Fatalf("error = %v, want message %q", err, tc.wantString)
-			}
-		})
+func TestServiceNonTerminalResponseIsSkipped(t *testing.T) {
+	provider := newTestSession()
+	provider.sendFunc = func(message messages.StreamMessage) bool {
+		if message.Type == messages.StreamTypeTextDelta {
+			provider.push(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewNonTerminalErrorValue("not active yet", "informational")})
+			textResponse(provider, "after diagnostic")
+		}
+		return true
+	}
+	service, _ := newRespondingService(provider, nil)
+	_, err := service.RunTurn(context.Background(), textInput("input"), sessionturns.TurnDirectionUser, 1, 2)
+	if err != nil || len(service.History()) != 1 || service.History()[0].Response.TextContent() != "after diagnostic" {
+		t.Fatalf("nonterminal response = %v, history=%#v", err, service.History())
+	}
+}
+
+func TestServiceTerminalResponsePreservesIdentityAndMessage(t *testing.T) {
+	cause := errors.New("typed terminal")
+	provider := newTestSession()
+	provider.sendFunc = func(message messages.StreamMessage) bool {
+		if message.Type == messages.StreamTypeTextDelta {
+			provider.push(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValueWithError(cause)})
+		}
+		return true
+	}
+	service, _ := newRespondingService(provider, nil)
+	if _, err := service.RunTurn(context.Background(), textInput("typed"), sessionturns.TurnDirectionUser, 1, 2); !errors.Is(err, cause) {
+		t.Fatalf("typed terminal = %v, want identity", err)
 	}
 
+	provider = newTestSession()
+	provider.sendFunc = terminalMessageResponder(provider, "provider message")
+	service, _ = newRespondingService(provider, nil)
+	_, err := service.RunTurn(context.Background(), textInput("message"), sessionturns.TurnDirectionUser, 1, 2)
+	if err == nil || !strings.Contains(err.Error(), "provider message") {
+		t.Fatalf("message terminal = %v", err)
+	}
+
+	provider = newTestSession()
+	provider.sendFunc = terminalMessageResponder(provider, " ")
+	service, _ = newRespondingService(provider, nil)
+	if _, err := service.RunTurn(context.Background(), textInput("blank"), sessionturns.TurnDirectionUser, 1, 2); !errors.Is(err, sessionturns.ErrSessionResponse) {
+		t.Fatalf("blank terminal = %v", err)
+	}
+}
+
+func terminalMessageResponder(provider *testSession, message string) func(messages.StreamMessage) bool {
+	return func(input messages.StreamMessage) bool {
+		if input.Type == messages.StreamTypeTextDelta {
+			provider.push(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue(message)})
+		}
+		return true
+	}
+}
+
+func TestServiceResponseCancellationClearsActive(t *testing.T) {
 	provider := newTestSession()
 	service, _ := newRespondingService(provider, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	if _, err := service.RunTurn(ctx, sessionturns.NewTextTurnInput("wait"), sessionturns.TurnDirectionUser, 1, 2); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err := service.RunTurn(ctx, textInput("wait"), sessionturns.TurnDirectionUser, 1, 2); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("cancellation error = %v", err)
 	}
 	if _, active := service.ActiveTurn(); active {
@@ -464,7 +436,7 @@ func TestServiceCloseIsSingleAndPreservesErrors(t *testing.T) {
 	if err := service.Close(); !errors.Is(err, closeErr) || provider.closeCall.Load() != 1 {
 		t.Fatalf("repeated Close = %v, calls=%d", err, provider.closeCall.Load())
 	}
-	if _, err := service.StartTurn(sessionturns.NewTextTurnInput("closed"), sessionturns.TurnDirectionUser, 1); !errors.Is(err, sessionturns.ErrSessionClosed) {
+	if _, err := service.StartTurn(textInput("closed"), sessionturns.TurnDirectionUser, 1); !errors.Is(err, sessionturns.ErrSessionClosed) {
 		t.Fatalf("closed StartTurn = %v", err)
 	}
 
@@ -473,14 +445,14 @@ func TestServiceCloseIsSingleAndPreservesErrors(t *testing.T) {
 		t.Fatalf("close without provider = %v", err)
 	}
 	missingInferencer := New(Dependencies{})
-	if _, err := missingInferencer.RunTurn(context.Background(), sessionturns.NewTextTurnInput("input"), sessionturns.TurnDirectionUser, 1, 2); !errors.Is(err, sessionturns.ErrMissingTurnInferencer) {
+	if _, err := missingInferencer.RunTurn(context.Background(), textInput("input"), sessionturns.TurnDirectionUser, 1, 2); !errors.Is(err, sessionturns.ErrMissingTurnInferencer) {
 		t.Fatalf("missing inferencer = %v", err)
 	}
 }
 
 func TestServiceDeepCopiesResponseBytes(t *testing.T) {
 	service := New(Dependencies{})
-	if _, err := service.StartTurn(sessionturns.NewTextTurnInput("input"), sessionturns.TurnDirectionUser, 1); err != nil {
+	if _, err := service.StartTurn(textInput("input"), sessionturns.TurnDirectionUser, 1); err != nil {
 		t.Fatal(err)
 	}
 	responseBytes := []byte{1, 2, 3}

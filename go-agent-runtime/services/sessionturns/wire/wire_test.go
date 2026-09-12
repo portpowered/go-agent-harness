@@ -12,7 +12,7 @@ func TestNewServiceReturnsPublicContractWithoutConnecting(t *testing.T) {
 	if service == nil {
 		t.Fatal("NewService returned nil")
 	}
-	if _, err := service.StartTurn(sessionturns.NewTextTurnInput("wire"), sessionturns.TurnDirectionUser, 1); err != nil {
+	if _, err := service.StartTurn(sessionturns.TurnInput{Text: "wire"}, sessionturns.TurnDirectionUser, 1); err != nil {
 		t.Fatalf("StartTurn = %v", err)
 	}
 	if err := service.Close(); !errors.Is(err, sessionturns.ErrSessionEndedWithActiveTurn) {
