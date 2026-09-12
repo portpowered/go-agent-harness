@@ -48,7 +48,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/report.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py"
   ],
-  "candidate_revision": "336cc2aa7591cbf0b1ffdf35bec29095e4dcf898",
+  "candidate_revision": "130b4cd779b504c32cc0878e0e72d58bf229d833",
   "immutable_project_criteria": "AUDIO, DEVICE, EMBED, SERVICE, TRACE, REPLAY, FAILURES, QUALITY and PARITY remain OPEN",
   "independent_review": "not performed by executor",
   "owned_directory": "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps",
@@ -64,19 +64,19 @@
         "-tags=nomicrophone",
         "-trimpath",
         "-o",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-verify-yui-463dcjgy/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-verify-yui-wwme2l__/yui",
         "./agent-cli/cmd/yui"
       ],
       "reports_match": true,
       "sha256": "2c38b32c2a586fe6c77f72b03510977e1275d064f35ec70cd709683920500ae2"
     },
-    "head": "336cc2aa7591cbf0b1ffdf35bec29095e4dcf898",
+    "head": "130b4cd779b504c32cc0878e0e72d58bf229d833",
     "malformed_receipt_absent": true,
     "replay_artifacts_checked": 9,
     "source_equivalent_to_head": true,
     "tested_revisions": {
-      "malformed_truncated": "336cc2aa7591cbf0b1ffdf35bec29095e4dcf898",
-      "replay": "336cc2aa7591cbf0b1ffdf35bec29095e4dcf898"
+      "malformed_truncated": "130b4cd779b504c32cc0878e0e72d58bf229d833",
+      "replay": "130b4cd779b504c32cc0878e0e72d58bf229d833"
     }
   },
   "required_evidence": [

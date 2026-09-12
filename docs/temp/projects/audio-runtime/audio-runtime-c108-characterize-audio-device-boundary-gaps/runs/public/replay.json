@@ -4,10 +4,10 @@
   "audio_output_sha256": "961bd1b82b54dcc2ada46e1f913b6e78bab172f1e3f5190be93747e7fe1e18dc",
   "binary_bytes": 50937874,
   "binary_sha256": "2c38b32c2a586fe6c77f72b03510977e1275d064f35ec70cd709683920500ae2",
-  "candidate_revision": "336cc2aa7591cbf0b1ffdf35bec29095e4dcf898",
+  "candidate_revision": "130b4cd779b504c32cc0878e0e72d58bf229d833",
   "case": "replay",
   "command": [
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-w8bqe1ce/yui",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-x1rbj9lg/yui",
     "session",
     "--replay",
     "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
@@ -24,7 +24,7 @@
   "credential_free": true,
   "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
   "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
-  "manifest_sha256": "d7d55c7852672cde70682706d483d37b842f8a2a7140ddaf87c49224a2847427",
+  "manifest_sha256": "49d330af88c16f6a67233868b216cff893fa25478523d78da6a76e010b67110e",
   "observable_effects": [
     "tool_marker",
     "strict_replay_continuation",
@@ -36,7 +36,7 @@
   "physical_device_consumption": "UNKNOWN_AND_OUT_OF_SCOPE",
   "process": {
     "argv": [
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-w8bqe1ce/yui",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-x1rbj9lg/yui",
       "session",
       "--replay",
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
@@ -51,7 +51,7 @@
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay"
     ],
     "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay",
-    "elapsed_seconds": 0.649,
+    "elapsed_seconds": 0.592,
     "exit_code": 0,
     "label": "yui-replay",
     "output_limited": false,

@@ -30,7 +30,7 @@
           "board_work_id": "batch-audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z-audio-runtime-c101-retire-cli-provider-session-runtime",
           "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
           "diff_sha256": "4d784a2cabec78fc470c086ba5085c0e4439cdf2a45121a5da17a0161c2a4f34",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -77,7 +77,7 @@
           "board_work_id": "batch-audio-runtime-c102-c103-validation-retirement-20260912T1534Z-audio-runtime-c103-retire-cli-rtc-session-runtime",
           "branch": "codex/audio-runtime-c103-retire-cli-rtc-session-runtime",
           "diff_sha256": "bf566ce92c6a1098186a4c674b29b5f777e618d1e6eb5d59c47cd7202df2af25",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -121,7 +121,7 @@
           "board_work_id": "batch-audio-runtime-c102-c103-validation-retirement-20260912T1534Z-audio-runtime-c104-retire-cli-session-finalization-boundary",
           "branch": "codex/audio-runtime-c104-retire-cli-session-finalization-boundary",
           "diff_sha256": "20ea4483cc84dc0c6265f42eb23cb1cc703ab8140cf035bdcea23e3f2a837b4d",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -167,7 +167,7 @@
           "board_work_id": "batch-audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z-audio-runtime-c107-characterize-post-wave-cli-ownership",
           "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
           "diff_sha256": "2ff9fa5603ba2acce89743568ca33af62c6f0d5f3321377c430851aadfe9d91a",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -251,12 +251,12 @@
           "board_work_id": "batch-audio-runtime-c79-c80-retirement-capacity-20260912T0430Z-audio-runtime-c79-retire-cli-response-lifecycle",
           "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
           "diff_sha256": "32963b4709d9e2ebdc48c7aaa36deb563af2c5367e3182f8bbee0fc6b18c1f46",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
             "headRefName": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "headRefOid": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
+            "headRefOid": "996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7",
             "number": 470,
             "state": "OPEN",
             "title": "refactor: retire CLI response lifecycle",
@@ -315,7 +315,7 @@
           "board_work_id": "batch-audio-runtime-c81-c83-retirement-capacity-20260912T0529Z-audio-runtime-c83-retire-cli-browser-scenario-runner",
           "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
           "diff_sha256": "94f184320c3264964541a0397b9b41ac2a859fca3628ed0b21517843e42f4eb4",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -359,7 +359,7 @@
           "board_work_id": "batch-audio-runtime-c84-room-participant-lifecycle-retirement-20260912T0804Z-audio-runtime-c84-retire-cli-room-participant-lifecycle",
           "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
           "diff_sha256": "1d1ac6091d26d2032d2ab54560eb6d608d2f4f1d610df3af1b3cdfe2cdc2cdc3",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -396,7 +396,7 @@
           "board_work_id": "batch-audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z-audio-runtime-c99-retire-cli-room-participant-planning",
           "branch": "codex/audio-runtime-c99-retire-cli-room-participant-planning",
           "diff_sha256": "ab23e1321511e0bedf3c1c2815cbabec21ba720829a47338fb37d095d0745262",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -483,7 +483,7 @@
           "board_work_id": "batch-audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z-audio-runtime-c101-retire-cli-provider-session-runtime",
           "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
           "diff_sha256": "4d784a2cabec78fc470c086ba5085c0e4439cdf2a45121a5da17a0161c2a4f34",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -530,7 +530,7 @@
           "board_work_id": "batch-audio-runtime-c102-c103-validation-retirement-20260912T1534Z-audio-runtime-c103-retire-cli-rtc-session-runtime",
           "branch": "codex/audio-runtime-c103-retire-cli-rtc-session-runtime",
           "diff_sha256": "bf566ce92c6a1098186a4c674b29b5f777e618d1e6eb5d59c47cd7202df2af25",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -574,7 +574,7 @@
           "board_work_id": "batch-audio-runtime-c102-c103-validation-retirement-20260912T1534Z-audio-runtime-c104-retire-cli-session-finalization-boundary",
           "branch": "codex/audio-runtime-c104-retire-cli-session-finalization-boundary",
           "diff_sha256": "20ea4483cc84dc0c6265f42eb23cb1cc703ab8140cf035bdcea23e3f2a837b4d",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -620,7 +620,7 @@
           "board_work_id": "batch-audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z-audio-runtime-c107-characterize-post-wave-cli-ownership",
           "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
           "diff_sha256": "2ff9fa5603ba2acce89743568ca33af62c6f0d5f3321377c430851aadfe9d91a",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -704,12 +704,12 @@
           "board_work_id": "batch-audio-runtime-c79-c80-retirement-capacity-20260912T0430Z-audio-runtime-c79-retire-cli-response-lifecycle",
           "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
           "diff_sha256": "32963b4709d9e2ebdc48c7aaa36deb563af2c5367e3182f8bbee0fc6b18c1f46",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
             "headRefName": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "headRefOid": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
+            "headRefOid": "996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7",
             "number": 470,
             "state": "OPEN",
             "title": "refactor: retire CLI response lifecycle",
@@ -768,7 +768,7 @@
           "board_work_id": "batch-audio-runtime-c81-c83-retirement-capacity-20260912T0529Z-audio-runtime-c83-retire-cli-browser-scenario-runner",
           "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
           "diff_sha256": "94f184320c3264964541a0397b9b41ac2a859fca3628ed0b21517843e42f4eb4",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -812,7 +812,7 @@
           "board_work_id": "batch-audio-runtime-c84-room-participant-lifecycle-retirement-20260912T0804Z-audio-runtime-c84-retire-cli-room-participant-lifecycle",
           "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
           "diff_sha256": "1d1ac6091d26d2032d2ab54560eb6d608d2f4f1d610df3af1b3cdfe2cdc2cdc3",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -849,7 +849,7 @@
           "board_work_id": "batch-audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z-audio-runtime-c99-retire-cli-room-participant-planning",
           "branch": "codex/audio-runtime-c99-retire-cli-room-participant-planning",
           "diff_sha256": "ab23e1321511e0bedf3c1c2815cbabec21ba720829a47338fb37d095d0745262",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -939,7 +939,7 @@
           "board_work_id": "batch-audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z-audio-runtime-c101-retire-cli-provider-session-runtime",
           "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
           "diff_sha256": "4d784a2cabec78fc470c086ba5085c0e4439cdf2a45121a5da17a0161c2a4f34",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -986,7 +986,7 @@
           "board_work_id": "batch-audio-runtime-c102-c103-validation-retirement-20260912T1534Z-audio-runtime-c103-retire-cli-rtc-session-runtime",
           "branch": "codex/audio-runtime-c103-retire-cli-rtc-session-runtime",
           "diff_sha256": "bf566ce92c6a1098186a4c674b29b5f777e618d1e6eb5d59c47cd7202df2af25",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1030,7 +1030,7 @@
           "board_work_id": "batch-audio-runtime-c102-c103-validation-retirement-20260912T1534Z-audio-runtime-c104-retire-cli-session-finalization-boundary",
           "branch": "codex/audio-runtime-c104-retire-cli-session-finalization-boundary",
           "diff_sha256": "20ea4483cc84dc0c6265f42eb23cb1cc703ab8140cf035bdcea23e3f2a837b4d",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1076,7 +1076,7 @@
           "board_work_id": "batch-audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z-audio-runtime-c107-characterize-post-wave-cli-ownership",
           "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
           "diff_sha256": "2ff9fa5603ba2acce89743568ca33af62c6f0d5f3321377c430851aadfe9d91a",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1160,12 +1160,12 @@
           "board_work_id": "batch-audio-runtime-c79-c80-retirement-capacity-20260912T0430Z-audio-runtime-c79-retire-cli-response-lifecycle",
           "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
           "diff_sha256": "32963b4709d9e2ebdc48c7aaa36deb563af2c5367e3182f8bbee0fc6b18c1f46",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
             "headRefName": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "headRefOid": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
+            "headRefOid": "996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7",
             "number": 470,
             "state": "OPEN",
             "title": "refactor: retire CLI response lifecycle",
@@ -1224,7 +1224,7 @@
           "board_work_id": "batch-audio-runtime-c81-c83-retirement-capacity-20260912T0529Z-audio-runtime-c83-retire-cli-browser-scenario-runner",
           "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
           "diff_sha256": "94f184320c3264964541a0397b9b41ac2a859fca3628ed0b21517843e42f4eb4",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1268,7 +1268,7 @@
           "board_work_id": "batch-audio-runtime-c84-room-participant-lifecycle-retirement-20260912T0804Z-audio-runtime-c84-retire-cli-room-participant-lifecycle",
           "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
           "diff_sha256": "1d1ac6091d26d2032d2ab54560eb6d608d2f4f1d610df3af1b3cdfe2cdc2cdc3",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1305,7 +1305,7 @@
           "board_work_id": "batch-audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z-audio-runtime-c99-retire-cli-room-participant-planning",
           "branch": "codex/audio-runtime-c99-retire-cli-room-participant-planning",
           "diff_sha256": "ab23e1321511e0bedf3c1c2815cbabec21ba720829a47338fb37d095d0745262",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1394,7 +1394,7 @@
           "board_work_id": "batch-audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z-audio-runtime-c101-retire-cli-provider-session-runtime",
           "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
           "diff_sha256": "4d784a2cabec78fc470c086ba5085c0e4439cdf2a45121a5da17a0161c2a4f34",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1441,7 +1441,7 @@
           "board_work_id": "batch-audio-runtime-c102-c103-validation-retirement-20260912T1534Z-audio-runtime-c103-retire-cli-rtc-session-runtime",
           "branch": "codex/audio-runtime-c103-retire-cli-rtc-session-runtime",
           "diff_sha256": "bf566ce92c6a1098186a4c674b29b5f777e618d1e6eb5d59c47cd7202df2af25",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1485,7 +1485,7 @@
           "board_work_id": "batch-audio-runtime-c102-c103-validation-retirement-20260912T1534Z-audio-runtime-c104-retire-cli-session-finalization-boundary",
           "branch": "codex/audio-runtime-c104-retire-cli-session-finalization-boundary",
           "diff_sha256": "20ea4483cc84dc0c6265f42eb23cb1cc703ab8140cf035bdcea23e3f2a837b4d",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1531,7 +1531,7 @@
           "board_work_id": "batch-audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z-audio-runtime-c107-characterize-post-wave-cli-ownership",
           "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
           "diff_sha256": "2ff9fa5603ba2acce89743568ca33af62c6f0d5f3321377c430851aadfe9d91a",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1615,12 +1615,12 @@
           "board_work_id": "batch-audio-runtime-c79-c80-retirement-capacity-20260912T0430Z-audio-runtime-c79-retire-cli-response-lifecycle",
           "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
           "diff_sha256": "32963b4709d9e2ebdc48c7aaa36deb563af2c5367e3182f8bbee0fc6b18c1f46",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
             "headRefName": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "headRefOid": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
+            "headRefOid": "996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7",
             "number": 470,
             "state": "OPEN",
             "title": "refactor: retire CLI response lifecycle",
@@ -1679,7 +1679,7 @@
           "board_work_id": "batch-audio-runtime-c81-c83-retirement-capacity-20260912T0529Z-audio-runtime-c83-retire-cli-browser-scenario-runner",
           "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
           "diff_sha256": "94f184320c3264964541a0397b9b41ac2a859fca3628ed0b21517843e42f4eb4",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1723,7 +1723,7 @@
           "board_work_id": "batch-audio-runtime-c84-room-participant-lifecycle-retirement-20260912T0804Z-audio-runtime-c84-retire-cli-room-participant-lifecycle",
           "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
           "diff_sha256": "1d1ac6091d26d2032d2ab54560eb6d608d2f4f1d610df3af1b3cdfe2cdc2cdc3",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1760,7 +1760,7 @@
           "board_work_id": "batch-audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z-audio-runtime-c99-retire-cli-room-participant-planning",
           "branch": "codex/audio-runtime-c99-retire-cli-room-participant-planning",
           "diff_sha256": "ab23e1321511e0bedf3c1c2815cbabec21ba720829a47338fb37d095d0745262",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1841,7 +1841,7 @@
           "board_work_id": "batch-audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z-audio-runtime-c101-retire-cli-provider-session-runtime",
           "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
           "diff_sha256": "4d784a2cabec78fc470c086ba5085c0e4439cdf2a45121a5da17a0161c2a4f34",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1888,7 +1888,7 @@
           "board_work_id": "batch-audio-runtime-c102-c103-validation-retirement-20260912T1534Z-audio-runtime-c103-retire-cli-rtc-session-runtime",
           "branch": "codex/audio-runtime-c103-retire-cli-rtc-session-runtime",
           "diff_sha256": "bf566ce92c6a1098186a4c674b29b5f777e618d1e6eb5d59c47cd7202df2af25",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1932,7 +1932,7 @@
           "board_work_id": "batch-audio-runtime-c102-c103-validation-retirement-20260912T1534Z-audio-runtime-c104-retire-cli-session-finalization-boundary",
           "branch": "codex/audio-runtime-c104-retire-cli-session-finalization-boundary",
           "diff_sha256": "20ea4483cc84dc0c6265f42eb23cb1cc703ab8140cf035bdcea23e3f2a837b4d",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -1978,7 +1978,7 @@
           "board_work_id": "batch-audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z-audio-runtime-c107-characterize-post-wave-cli-ownership",
           "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
           "diff_sha256": "2ff9fa5603ba2acce89743568ca33af62c6f0d5f3321377c430851aadfe9d91a",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -2062,12 +2062,12 @@
           "board_work_id": "batch-audio-runtime-c79-c80-retirement-capacity-20260912T0430Z-audio-runtime-c79-retire-cli-response-lifecycle",
           "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
           "diff_sha256": "32963b4709d9e2ebdc48c7aaa36deb563af2c5367e3182f8bbee0fc6b18c1f46",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
             "headRefName": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "headRefOid": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
+            "headRefOid": "996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7",
             "number": 470,
             "state": "OPEN",
             "title": "refactor: retire CLI response lifecycle",
@@ -2126,7 +2126,7 @@
           "board_work_id": "batch-audio-runtime-c81-c83-retirement-capacity-20260912T0529Z-audio-runtime-c83-retire-cli-browser-scenario-runner",
           "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
           "diff_sha256": "94f184320c3264964541a0397b9b41ac2a859fca3628ed0b21517843e42f4eb4",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -2170,7 +2170,7 @@
           "board_work_id": "batch-audio-runtime-c84-room-participant-lifecycle-retirement-20260912T0804Z-audio-runtime-c84-retire-cli-room-participant-lifecycle",
           "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
           "diff_sha256": "1d1ac6091d26d2032d2ab54560eb6d608d2f4f1d610df3af1b3cdfe2cdc2cdc3",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",
@@ -2207,7 +2207,7 @@
           "board_work_id": "batch-audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z-audio-runtime-c99-retire-cli-room-participant-planning",
           "branch": "codex/audio-runtime-c99-retire-cli-room-participant-planning",
           "diff_sha256": "ab23e1321511e0bedf3c1c2815cbabec21ba720829a47338fb37d095d0745262",
-          "observed_at": "2026-09-12T21:25:39Z",
+          "observed_at": "2026-09-12T21:31:27Z",
           "overlap_with_candidate_writers": [],
           "pr": {
             "baseRefName": "main",

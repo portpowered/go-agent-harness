@@ -1701,6 +1701,22 @@
       "workTypeName": "review"
     },
     {
+      "chainingTraceDepth": 10,
+      "currentChainingTraceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "previousChainingTraceIds": [
+        "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf"
+      ],
+      "requestId": "audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "traceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
+      "workId": "work-review-242",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 5,
       "content": [
         {
@@ -1742,7 +1758,7 @@
       ],
       "requestId": "audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z",
       "state": {
-        "name": "ci-pending",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "tags": {

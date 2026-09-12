@@ -3,11 +3,11 @@
   "acoustic_proof": "OUT_OF_SCOPE_AND_NEVER_PASS",
   "binary_bytes": 50937874,
   "binary_sha256": "2c38b32c2a586fe6c77f72b03510977e1275d064f35ec70cd709683920500ae2",
-  "candidate_revision": "336cc2aa7591cbf0b1ffdf35bec29095e4dcf898",
+  "candidate_revision": "130b4cd779b504c32cc0878e0e72d58bf229d833",
   "case": "malformed-truncated",
   "clean_shutdown": true,
   "command": [
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-xpkb2dcw/yui",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-bcl5rwtj/yui",
     "session",
     "--replay",
     "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/malformed.session.json",
@@ -29,7 +29,7 @@
   "physical_device_consumption": "UNKNOWN_AND_OUT_OF_SCOPE",
   "process": {
     "argv": [
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-xpkb2dcw/yui",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-bcl5rwtj/yui",
       "session",
       "--replay",
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/malformed.session.json",
@@ -44,7 +44,7 @@
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated"
     ],
     "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated",
-    "elapsed_seconds": 0.524,
+    "elapsed_seconds": 0.543,
     "exit_code": 1,
     "label": "yui-malformed-truncated",
     "output_limited": false,
