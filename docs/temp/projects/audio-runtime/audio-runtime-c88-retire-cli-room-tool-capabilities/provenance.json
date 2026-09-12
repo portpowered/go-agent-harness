@@ -1,11 +1,11 @@
 {
   "schema": "audio-runtime.c88.provenance/v1",
   "task": "audio-runtime-c88-retire-cli-room-tool-capabilities",
-  "implementation_revision": "78649197beb29e1de42e703033ecfe3adeb899e0",
+  "implementation_revision": "39af6805139ae45ac2a731a275805fa549e88bf1",
   "source_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
   "required_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "origin_main_revision_at_checkpoint": "59af6325614d80173447fe2018a0471e27b4e7b1",
-  "baseline_integration_merge_revision": "d3b53e6ee47d7467de26dcc75eb64484775d32e0",
+  "origin_main_revision_at_checkpoint": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+  "baseline_integration_merge_revision": "39af6805139ae45ac2a731a275805fa549e88bf1",
   "branch": "codex/audio-runtime-c88-retire-cli-room-tool-capabilities",
   "ancestry": {
     "source_is_ancestor": true,
@@ -29,11 +29,12 @@
     "registry_status": "pending C79 lease release"
   },
   "validation": {
-    "source_revision": "78649197beb29e1de42e703033ecfe3adeb899e0",
+    "source_revision": "39af6805139ae45ac2a731a275805fa549e88bf1",
+    "prior_full_verification_source_revision": "78649197beb29e1de42e703033ecfe3adeb899e0",
     "final_verifier": "passed",
     "credential_free_runner": "passed",
-    "accumulated_review_regressions": "passed: COUNT=3 normal/coverage/race",
-    "changed_coverage": "passed",
+    "accumulated_review_regressions": "passed at prior source revision 78649197: COUNT=3 normal/coverage/race; current-main bounded normal regressions passed",
+    "changed_coverage": "not rerun after current-main merge: the repository-wide six-module command was interrupted before a result; prior source revision 78649197 pass retained as historical",
     "wire_and_architecture": "open: exact C88 generated-Wire registration remains leased behind C79 shared files"
   },
   "scope": {

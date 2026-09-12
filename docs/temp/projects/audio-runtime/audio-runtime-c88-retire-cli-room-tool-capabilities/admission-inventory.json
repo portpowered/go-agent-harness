@@ -13,8 +13,8 @@
   "prd_branch_name": "codex/audio-runtime-c88-retire-cli-room-tool-capabilities",
     "source_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
     "required_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-    "origin_main_revision": "59af6325614d80173447fe2018a0471e27b4e7b1",
-    "baseline_integration_merge_revision": "d3b53e6ee47d7467de26dcc75eb64484775d32e0",
+    "origin_main_revision": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+    "baseline_integration_merge_revision": "39af6805139ae45ac2a731a275805fa549e88bf1",
   "ancestry_verified": true,
   "owned_paths": [
     "agent-cli/internal/services/internal/agentruntime/session_room_tools.go",
@@ -48,8 +48,8 @@
   "shared_prerequisite": {
     "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
     "work_id": "work-task-114",
-      "state_observed": "INIT/PROCESSING",
-      "pr_head_observed": "5e511ab38b38547b5e006c7052bbd626ab43b5d1",
+      "state_observed": "CI-PENDING/PROCESSING",
+      "pr_head_observed": "0f25f07655932ebf3a58621968e6da2e8453d46b",
       "reviewed_guarded_merge_observed": false,
     "paths": [
       "scripts/wire-packages.txt",

@@ -1,13 +1,14 @@
 {
   "schema": "audio-runtime.c88.verification-summary/v1",
   "task": "audio-runtime-c88-retire-cli-room-tool-capabilities",
-  "tested_revision": "78649197beb29e1de42e703033ecfe3adeb899e0",
+  "tested_revision": "39af6805139ae45ac2a731a275805fa549e88bf1",
+  "historical_full_verification_revision": "78649197beb29e1de42e703033ecfe3adeb899e0",
   "local_owned_verification_passed": true,
   "checks": {
     "admission_and_scope": "passed: verify.py --mode all",
     "runtime_normal": "passed: go test ./services/roomcapabilities/... -count=1",
     "runtime_race": "passed: go test -race ./services/roomcapabilities/... -count=1",
-    "current_main_integration": "passed: merged origin/main 59af6325614d80173447fe2018a0471e27b4e7b1 as d3b53e6ee47d7467de26dcc75eb64484775d32e0",
+    "current_main_integration": "passed: merged origin/main 3d3e72786ac6fc1fd47c7e029589e5117674b035 as 39af6805139ae45ac2a731a275805fa549e88bf1; rollback f927de537eff2d499873b559ae03b12bfa4ce388",
     "cli_room_normal": "passed: 45 tests x3",
     "cli_room_race": "passed: 45 tests x1",
     "cli_transport": "passed: 3 tests x3",
@@ -16,14 +17,14 @@
     "non_room_audio_tool_regression": "passed: TestSessionToolSingleCallRoundTripThroughCLI",
     "mutation_oracles": "passed: unrequested-tool and refresh-drops-static intended failures",
     "coverage_registration": "passed: 179 workspace packages across 6 modules",
-    "coverage_changed": "passed: make coverage-changed COVERAGE_BASE=84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
-    "roomcapabilities_coverage": "passed: 86.8 percent aggregate; service floor 75 percent, wire floor 95 percent",
+    "coverage_changed": "not rerun after current-main merge: repository-wide six-module command interrupted before result; prior 78649197 pass retained as historical",
+    "roomcapabilities_coverage": "passed at historical source 78649197: 86.8 percent aggregate; service floor 75 percent, wire floor 95 percent",
     "vet": "passed: roomcapabilities and CLI agentruntime",
-    "staticcheck": "passed: pinned 2026.1 across workspace",
-    "lint": "passed: pinned golangci-lint 2.9.0 across workspace",
+    "staticcheck": "passed on prior pushed C88 head f927de53; not rerun after accepted C65 merge",
+    "lint": "passed on prior pushed C88 head f927de53; not rerun after accepted C65 merge",
     "diff_check": "passed",
     "scope_after_main_integration": "passed: verifier compares the C88 delta to the merged origin/main baseline",
-    "accumulated_review_regressions": "passed: COUNT=3 normal, coverage, and race modes; expected negative controls preserved"
+    "accumulated_review_regressions": "historical source 78649197 passed COUNT=3 normal, coverage, and race modes; current-main bounded normal regressions and expected negative controls passed"
   },
   "known_open_gates": {
     "architecture_size_check": {
@@ -34,6 +35,17 @@
       "status": "blocked_by_shared_lease",
       "exact_failure": "Wire registry mismatch: unregistered=['go-agent-runtime/services/roomcapabilities/wire/wire_gen.go'], outside modules=[]"
     }
+  },
+  "ci_static_rejection": {
+    "run": "34690871152",
+    "job": "103545739451",
+    "head": "f927de537eff2d499873b559ae03b12bfa4ce388",
+    "findings": [
+      "make wire-check: unregistered go-agent-runtime/services/roomcapabilities/wire/wire_gen.go",
+      "make architecture-size-check: generated-file-spoof services/roomcapabilities/wire/wire_gen.go"
+    ],
+    "ownership": "C79 exclusively leases scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json",
+    "resolution": "deferred until C79 reviewed guarded merge releases both paths"
   },
   "shared_prerequisite_open": true,
   "shared_prerequisite_owner": "audio-runtime-c79-retire-cli-response-lifecycle/work-task-114",
