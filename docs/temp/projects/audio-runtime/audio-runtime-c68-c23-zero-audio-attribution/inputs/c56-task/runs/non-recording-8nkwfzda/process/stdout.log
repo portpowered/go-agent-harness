@@ -1,0 +1,6 @@
+Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/non-recording-8nkwfzda/work; additional_allowed_roots=none
+Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.
+Tools: none
+Assistant: Hello! How can I help you today?
+[session closed: fixture_complete]
+[session terminal: classification=session_close terminal_reason=session_close terminal_provenance=session output_state=complete]

@@ -1,0 +1,341 @@
+{
+  "ancestry": {
+    "baseline": true,
+    "current_main": true,
+    "startup": true
+  },
+  "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "bounds": {
+    "child_timeout_seconds": 60.0,
+    "max_child_output_bytes": 65536,
+    "no_realtime_or_hardware_claim": true,
+    "positive_executions": 4,
+    "recording_modes": [
+      "off",
+      "on"
+    ],
+    "total_timeout_seconds": 300.0
+  },
+  "branch": "codex/audio-runtime-c68-c23-zero-audio-attribution",
+  "c23_revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+  "c56_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+  "causal_trace": {
+    "c23_sha256": {
+      "go-agent-runtime/services/recording/internal/evidence/directory.go": "3bdec26ea51c3e2ca91af99b79e786ac4b8003dd83f58724eeedcd6ed1cfa9ba",
+      "go-agent-runtime/services/session/internal/live/lifecycle.go": "dec3ea49fb1ade21fdbb18317d66a0a22f6f21ae42f9c9f9da36f6751c0e8bfb",
+      "go-agent-runtime/services/session/internal/live/observations/observer.go": "934e1149514ac6ca46eb6a1c7d1c3352505371764882f7940d568d76968153f8",
+      "go-agent-runtime/services/session/internal/live/service.go": "2bcf28fbc8c99606bbd3faf6509d566dec33c6a446366a63a0748364c2e2fef9",
+      "go-agent-runtime/services/session/internal/live/session_adapter.go": "0e80b6d72de0ae6f5d1140e52217b2258f5960a047c9bd6e2fbe2a3adcd86b49"
+    },
+    "c56_sha256": {
+      "go-agent-runtime/services/recording/internal/evidence/directory.go": "3bdec26ea51c3e2ca91af99b79e786ac4b8003dd83f58724eeedcd6ed1cfa9ba",
+      "go-agent-runtime/services/session/internal/live/lifecycle.go": "dec3ea49fb1ade21fdbb18317d66a0a22f6f21ae42f9c9f9da36f6751c0e8bfb",
+      "go-agent-runtime/services/session/internal/live/observations/observer.go": "934e1149514ac6ca46eb6a1c7d1c3352505371764882f7940d568d76968153f8",
+      "go-agent-runtime/services/session/internal/live/service.go": "2bcf28fbc8c99606bbd3faf6509d566dec33c6a446366a63a0748364c2e2fef9",
+      "go-agent-runtime/services/session/internal/live/session_adapter.go": "0e80b6d72de0ae6f5d1140e52217b2258f5960a047c9bd6e2fbe2a3adcd86b49"
+    },
+    "shared_runtime_files_unchanged": {
+      "go-agent-runtime/services/recording/internal/evidence/directory.go": true,
+      "go-agent-runtime/services/session/internal/live/lifecycle.go": true,
+      "go-agent-runtime/services/session/internal/live/observations/observer.go": true,
+      "go-agent-runtime/services/session/internal/live/service.go": true,
+      "go-agent-runtime/services/session/internal/live/session_adapter.go": true
+    },
+    "source_files": [
+      "go-agent-runtime/services/session/internal/live/service.go",
+      "go-agent-runtime/services/session/internal/live/lifecycle.go",
+      "go-agent-runtime/services/session/internal/live/session_adapter.go",
+      "go-agent-runtime/services/session/internal/live/observations/observer.go",
+      "go-agent-runtime/services/recording/internal/evidence/directory.go"
+    ],
+    "source_observation": {
+      "empty_media_facade": "lifecycle.go:387-400 exposes MediaSession methods and returns empty endpoints when the inner provider has no media",
+      "false_positive_media_attachment": "session_adapter.go:45-55 sees the wrapper as MediaSession; with no device requirements, satisfiedBy(empty) is true and onMediaAttached(true) runs",
+      "recording_admission": "recording/internal/evidence/directory.go:160-207 drops zero-sample non-terminal frames and enqueues accepted PCM items",
+      "recording_fallback_guard": "observations/observer.go:71-80 calls messageAudio only when mediaAttached is false",
+      "terminal_drain_wrapper": "service.go:338-362 wraps every provider session in terminalDrainSession"
+    }
+  },
+  "contract": "audio-runtime-v1",
+  "current_main": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "fixture": {
+    "bytes": 1077,
+    "path": "inputs/c23-task/fixtures.json",
+    "sha256": "7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e"
+  },
+  "head": "3d93b523eb594fae7cedeecdda2845a582b560bc",
+  "inputs": {
+    "c23": {
+      "files": [
+        {
+          "bytes": 38,
+          "path": ".gitignore",
+          "sha256": "de5e1335e514bc4df94a786dc63f288c0469ea70d04901b8e70c37df7ac49c2c"
+        },
+        {
+          "bytes": 2697,
+          "path": "README.md",
+          "sha256": "486060010b40aeac4049d85b734e576f73be3fba8df0c79a7b844416133d58b9"
+        },
+        {
+          "bytes": 93859,
+          "path": "characterize.py",
+          "sha256": "a5c163e3bbc9c33b7c81ac9b95d586400999495060d2a9489fc5a816d1974886"
+        },
+        {
+          "bytes": 69933,
+          "path": "consumer/main.go",
+          "sha256": "0a8e8239614e5d8f87596e238153f44ddbe30f9d7e1cf123e37c084f2b69c3ec"
+        },
+        {
+          "bytes": 1077,
+          "path": "fixtures.json",
+          "sha256": "599117c498e17771619deb9c63f9be5d79329384f5dfa8375663dc1806cd6a4d"
+        },
+        {
+          "bytes": 997,
+          "path": "process_control.py",
+          "sha256": "2b4688c903f529abbe49771ae26d72f5bbb24d0427a2cb926eec58e17703c630"
+        },
+        {
+          "bytes": 95532,
+          "path": "progress.txt",
+          "sha256": "7fbbb4b5ba466fd8e22ce0ff0127e01f3c4248f9a9fef46e89f8a24aa03c18d4"
+        }
+      ],
+      "manifest_sha256": "ae47ee7360127ddea48eb46154b8bd59e256ac12753ff2d7f23a9e6ee81f59ed",
+      "root": "inputs/c23-task"
+    },
+    "c56": {
+      "files": [
+        {
+          "bytes": 1124,
+          "path": "README.md",
+          "sha256": "46e8751a68e6bab1b23347b296c3a3c180ee3328751c7194d1772f4ca7ee5321"
+        },
+        {
+          "bytes": 6617,
+          "path": "consumer/consumer_test.go",
+          "sha256": "42f7176d10d98cb42a569378017ad336877ebc33fdf8fe061ba0ee6c83f67c69"
+        },
+        {
+          "bytes": 992,
+          "path": "consumer/go.mod",
+          "sha256": "38da0ac8388c05068cfdef412a8d03af27d262b799d936acdd62ba06f535aa99"
+        },
+        {
+          "bytes": 5093,
+          "path": "consumer/go.sum",
+          "sha256": "300a2c432b65a891ff450112e48e510b74c9450f5a7821e23a1e6a6554910e19"
+        },
+        {
+          "bytes": 1486,
+          "path": "evidence/baseline-and-oracles.json",
+          "sha256": "64a65eae746ee1d075c84744626c7cfb3bcc81f9d137f82544a6e0c8395e2733"
+        },
+        {
+          "bytes": 1280,
+          "path": "evidence/cli-retirement.json",
+          "sha256": "355f69b4a9e7e460aee959a2e0bb427339d07d9fa603cd139100c2e09028fe15"
+        },
+        {
+          "bytes": 1320,
+          "path": "evidence/embedding-public-provenance-cleanup.json",
+          "sha256": "80bb9a57e647a7ffd9bf5febaa767bc48dc56de46087b48d22b4344470c20057"
+        },
+        {
+          "bytes": 941,
+          "path": "evidence/exact-artifacts-and-mutations.json",
+          "sha256": "6c2d30003ad714ca9ab5afe836b0d8980a0f5d6218e8467a11025624ab64f038"
+        },
+        {
+          "bytes": 650,
+          "path": "evidence/final-scope-provenance-budget.json",
+          "sha256": "00bcf5bcc33017c255c382f9ddc87df1dcedcdbdbe4bdbad12e343c9c735e823"
+        },
+        {
+          "bytes": 3443,
+          "path": "evidence/formatting-owned-go.json",
+          "sha256": "136746e5472976cc496d7451a78bfa462e288da35814ba306066558ec3630558"
+        },
+        {
+          "bytes": 4300,
+          "path": "evidence/lifecycle-projections-failures.json",
+          "sha256": "a2d69162ed8536e98329d88de85428985730f926a3aac2fbe581d8eaa48ed183"
+        },
+        {
+          "bytes": 2218,
+          "path": "evidence/non-recording-regression.json",
+          "sha256": "7335df84810565ac1dccec7d9516df30f1b2f620da1104843e1eb216dc93232d"
+        },
+        {
+          "bytes": 2277,
+          "path": "evidence/non-recording-regression.summary.json",
+          "sha256": "27ec1d12ae07ccf57381c0e224bd216f03edca03a0d5f52c7659ef2e0cbe9771"
+        },
+        {
+          "bytes": 7125,
+          "path": "evidence/record-finalize-replay.json",
+          "sha256": "0f87290854883e703ea3e1cf79b5450e0c1f78c0c7768c1f3e749c4596630c4b"
+        },
+        {
+          "bytes": 7184,
+          "path": "evidence/record-finalize-replay.summary.json",
+          "sha256": "ac2492ef481116d5c76009220ecd2302fd70e23ead2cb4e062448b7ae9633a5e"
+        },
+        {
+          "bytes": 2463,
+          "path": "evidence/runner-negative-controls.json",
+          "sha256": "c55408d00081df45098654b5d575ad2a6ac91fdba8accc5d03740bf99375755f"
+        },
+        {
+          "bytes": 2523,
+          "path": "evidence/runner-negative-controls.summary.json",
+          "sha256": "3902c298aaa5811ce000fd3340b058f805c4e1bc5fa76ca2fc5fcdc5d2da84d3"
+        },
+        {
+          "bytes": 17174,
+          "path": "run.py",
+          "sha256": "9b7a34221d7df3e77bd621a794d05d3af713f16723a3b775caa6d92ae5c72bb0"
+        },
+        {
+          "bytes": 0,
+          "path": "runs/non-recording-8nkwfzda/process/stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "bytes": 791,
+          "path": "runs/non-recording-8nkwfzda/process/stdout.log",
+          "sha256": "5bc297d059aa2730e84fdba1949ea2a86907744b558d956563ae8ecdc89345e4"
+        },
+        {
+          "bytes": 0,
+          "path": "runs/record-finalize-replay-at6vd0_2/record/process/stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "bytes": 841,
+          "path": "runs/record-finalize-replay-at6vd0_2/record/process/stdout.log",
+          "sha256": "f788c4a5e13fad43fe5e6711181d89473ac96c2749926d61b2b89f244187593c"
+        },
+        {
+          "bytes": 50044,
+          "path": "runs/record-finalize-replay-at6vd0_2/recording/agent.transcript.jsonl",
+          "sha256": "2cbb604fd9462e2b8bf6f0fcd63f85c4bc20efc760aaa5434902651824886734"
+        },
+        {
+          "bytes": 4844,
+          "path": "runs/record-finalize-replay-at6vd0_2/recording/audio-trace/speaker-enqueued.wav",
+          "sha256": "305d40c0fa1b687133be6a7841654dcbe89310b7b7f9800cb624c25bcffd880c"
+        },
+        {
+          "bytes": 17940,
+          "path": "runs/record-finalize-replay-at6vd0_2/recording/audio-trace/timeline.jsonl",
+          "sha256": "95be273852734aca9b7b3ba6ddc959aefe9d809cb70b5834fb3bd153d215b351"
+        },
+        {
+          "bytes": 4800,
+          "path": "runs/record-finalize-replay-at6vd0_2/recording/audio/out-000.pcm",
+          "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
+        },
+        {
+          "bytes": 50050,
+          "path": "runs/record-finalize-replay-at6vd0_2/recording/client.transcript.jsonl",
+          "sha256": "47ffe8aa7c76823b7992be1b32e205cd6a50d3049cc96e524962be57d1336b0d"
+        },
+        {
+          "bytes": 1065,
+          "path": "runs/record-finalize-replay-at6vd0_2/recording/manifest.json",
+          "sha256": "22c5cd82bed91fd5ab832a5d55692185e5e33ee02bbc0598dd892e41eccbcbae"
+        },
+        {
+          "bytes": 14060,
+          "path": "runs/record-finalize-replay-at6vd0_2/recording/provider.json",
+          "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+        },
+        {
+          "bytes": 662,
+          "path": "runs/record-finalize-replay-at6vd0_2/recording/session-log.jsonl",
+          "sha256": "039d49adc0239cb447de0bf28e3fe009a4601e1618ebd5449553e2d903cb4cf3"
+        },
+        {
+          "bytes": 108,
+          "path": "runs/record-finalize-replay-at6vd0_2/replay/process/stderr.log",
+          "sha256": "aa99be63620b012f6cbb0fc6ec1e068def682c6d1ca55040658cbf0151f69fc6"
+        },
+        {
+          "bytes": 26,
+          "path": "runs/record-finalize-replay-at6vd0_2/replay/process/stdout.log",
+          "sha256": "8322cf1a9abd1a5e0227ee092fb1b83ee26aafdb36a27f5e77d3390fac3edd72"
+        },
+        {
+          "bytes": 23,
+          "path": "runs/record-finalize-replay-at6vd0_2/work/evidence/runs/exec-invocations-v4.log",
+          "sha256": "f91134b50758e6d4418ab08f6a3afa9f2acceb91117c3f67d0db515b762eb43e"
+        },
+        {
+          "bytes": 0,
+          "path": "runs/runner-negative-controls-kkth6o7h/overflow/process/stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "bytes": 65536,
+          "path": "runs/runner-negative-controls-kkth6o7h/overflow/process/stdout.log",
+          "sha256": "1f8745f0d2d1387ec1af2211a3cf417b2e9e885e853472649c1d979d0e9370e3"
+        },
+        {
+          "bytes": 0,
+          "path": "runs/runner-negative-controls-kkth6o7h/timeout/process/stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "bytes": 0,
+          "path": "runs/runner-negative-controls-kkth6o7h/timeout/process/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "bytes": 16966,
+          "path": "verify.py",
+          "sha256": "fffb4ade9d47ca0f53ead1dcd09257ca4f44cbc0922f808792b5ed548c32e9f7"
+        }
+      ],
+      "manifest_sha256": "24602ce47c4596745f2b6a6ef9bdaa9249d27a626b2301676e0ea7c70c505b10",
+      "root": "inputs/c56-task"
+    }
+  },
+  "origin_main_after_fetch": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "owned_paths_only": true,
+  "production_source_changed": false,
+  "project": "audio-runtime",
+  "schema": "audio-runtime.c68.zero-audio-attribution.provenance.v1",
+  "sources": {
+    "c23": {
+      "archive": {
+        "bytes": 334213120,
+        "git_archive_sha256": "984e34904ae6aca952ac8ee1df77e052b8516e7cbc7dc734862fedd276f9dbd5",
+        "path": "scratch/archives/c23-b2fb41401cd0934378b9ff1bc131532fdc19f614.tar",
+        "sha256": "984e34904ae6aca952ac8ee1df77e052b8516e7cbc7dc734862fedd276f9dbd5"
+      },
+      "go_work_sha256": "bb93b21299499bd9d9264ccdc956e17ec3364e1f132f58f43282b0ff8a7c40bc",
+      "revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+      "root": "scratch/sources/c23",
+      "tree_files": 10325,
+      "tree_sha256": "19bb59729062616fff5409fbf5f03ae57a247d3fd5d5790e825ffb5133545bd9"
+    },
+    "c56": {
+      "archive": {
+        "bytes": 334223360,
+        "git_archive_sha256": "752bc7d1aae6dece63beb090bdda10d98e91bde48c1dc5b9d7f4a6fb82d90f7e",
+        "path": "scratch/archives/c56-85710a53a2e9449884fb81f979df0599269ef3b3.tar",
+        "sha256": "752bc7d1aae6dece63beb090bdda10d98e91bde48c1dc5b9d7f4a6fb82d90f7e"
+      },
+      "go_work_sha256": "bb93b21299499bd9d9264ccdc956e17ec3364e1f132f58f43282b0ff8a7c40bc",
+      "revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+      "root": "scratch/sources/c56",
+      "tree_files": 10365,
+      "tree_sha256": "915e0698f346c2829c348366a44b769efa4085327e62bc04e65995fc81ad4c25"
+    }
+  },
+  "startup_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "task": "audio-runtime-c68-c23-zero-audio-attribution"
+}
