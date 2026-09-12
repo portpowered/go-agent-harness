@@ -4,241 +4,44 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-	"sync/atomic"
 	"testing"
-	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
-type fakeInferencer struct{}
-
-func (fakeInferencer) ConnectSession(context.Context) (messages.Session, error) { return nil, nil }
-
-func testScope(t *testing.T) roomplanning.FilesystemScope {
-	t.Helper()
-	return roomplanning.FilesystemScope{PrimaryRoot: t.TempDir()}
-}
-
-func testManifest() rooms.Manifest {
-	return rooms.Manifest{Participants: []rooms.Participant{
-		{ID: "alpha", Kind: rooms.ParticipantKindAgent, Provider: "openai", Model: "model", APIKeyEnv: "ALPHA_KEY"},
-		{ID: "beta", Kind: rooms.ParticipantKindAgent, Provider: "openai", Model: "model", APIKeyEnv: "BETA_KEY"},
-	}}
-}
-
-func TestPlanKeepsCredentialOutOfReturnedPlansAndOrdersParticipants(t *testing.T) {
-	secret := "room-secret-do-not-leak"
-	var seen []string
-	service := wire.NewService(wire.Dependencies{})
-	result, err := service.Plan(context.Background(), roomplanning.Options{
-		Manifest: testManifest(), Filesystem: ptr(testScope(t)),
-		LookupCredential: func(name string) (string, bool) {
-			if name == "ALPHA_KEY" {
-				return secret, true
+func TestPublicErrorCodesRemainComparable(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "filesystem", err: roomplanning.ErrFilesystemScope, want: "room planning filesystem scope is unavailable"},
+		{name: "session", err: roomplanning.ErrSessionFactory, want: "room planning session factory is unavailable"},
+		{name: "replay", err: roomplanning.ErrReplayPlanner, want: "room planning replay planner is unavailable"},
+		{name: "tools", err: roomplanning.ErrParticipantTools, want: "room participant tools are unavailable"},
+		{name: "tool match", err: roomplanning.ErrParticipantToolMatch, want: "room participant tool capabilities do not match the manifest"},
+		{name: "browser", err: roomplanning.ErrParticipantBrowser, want: "room participant browser capabilities are unavailable"},
+		{name: "browser contract", err: roomplanning.ErrBrowserCapability, want: "room participant browser capabilities do not match the contract"},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			if test.err.Error() != test.want {
+				t.Fatalf("error text = %q, want %q", test.err, test.want)
 			}
-			return "", false
-		},
-		SessionFactory: func(request roomplanning.LiveSessionRequest) (messages.SessionInferencer, error) {
-			seen = append(seen, request.Participant.ID+":"+request.Credential)
-			return fakeInferencer{}, nil
-		},
-	})
-	if err != nil {
-		t.Fatalf("Plan: %v", err)
-	}
-	if got := []string{seen[0], seen[1]}; got[0] != "alpha:"+secret || got[1] != "beta:" {
-		t.Fatalf("factory credentials = %q", got)
-	}
-	serialized := fmt.Sprintf("%#v", result)
-	if strings.Contains(serialized, secret) {
-		t.Fatalf("returned plan leaked credential: %s", serialized)
-	}
-	if len(result.Plans) != 2 || result.Plans[0].Participant.ID != "alpha" || result.Plans[1].Participant.ID != "beta" {
-		t.Fatalf("plans = %#v, want manifest order", result.Plans)
-	}
-}
-
-func TestPlanReplayNeverConsultsLiveSeams(t *testing.T) {
-	var replayCalls atomic.Int32
-	replay := rooms.RoomReplayPlan{Participants: []rooms.RoomReplayParticipant{
-		{ID: "alpha", Kind: rooms.ParticipantKindAgent, Provider: "openai", Model: "model", CapturePath: "/tmp/alpha.capture"},
-		{ID: "beta", Kind: rooms.ParticipantKindHuman},
-	}}
-	service := wire.NewService(wire.Dependencies{})
-	result, err := service.Plan(context.Background(), roomplanning.Options{
-		Manifest: testManifest(), ReplayPlan: &replay, Filesystem: ptr(testScope(t)),
-		LookupCredential: func(string) (string, bool) { t.Fatal("replay consulted credentials"); return "", false },
-		SessionFactory: func(roomplanning.LiveSessionRequest) (messages.SessionInferencer, error) {
-			t.Fatal("replay called live factory")
-			return nil, nil
-		},
-		ToolFactory: func(rooms.Participant) (roomplanning.ToolCapabilities, error) {
-			t.Fatal("replay called tool factory")
-			return roomplanning.ToolCapabilities{}, nil
-		},
-		BrowserFactory: func(rooms.Participant, roomplanning.ToolCapabilities) (roomplanning.BrowserCapabilities, error) {
-			t.Fatal("replay called browser factory")
-			return roomplanning.BrowserCapabilities{}, nil
-		},
-		ReplayPlanner: func(_ context.Context, request roomplanning.ReplayRequest) (roomplanning.ReplaySession, error) {
-			replayCalls.Add(1)
-			return roomplanning.ReplaySession{Inferencer: fakeInferencer{}, Done: make(chan struct{}), DoneErr: func() error { return nil }}, nil
-		},
-	})
-	if err != nil {
-		t.Fatalf("Plan replay: %v", err)
-	}
-	if replayCalls.Load() != 1 || len(result.Plans) != 2 || !result.Plans[0].Replay || !result.Plans[1].Replay {
-		t.Fatalf("replay calls/plans = %d/%#v", replayCalls.Load(), result.Plans)
-	}
-	if result.Plans[0].Options.ReplayPath != "/tmp/alpha.capture" || result.Plans[0].Options.RoomReplay != true {
-		t.Fatalf("replay options = %#v", result.Plans[0].Options)
-	}
-}
-
-func TestPlanRejectsToolSurfaceBeforeSessionConstruction(t *testing.T) {
-	var sessions atomic.Int32
-	service := wire.NewService(wire.Dependencies{})
-	_, err := service.Plan(context.Background(), roomplanning.Options{
-		Manifest: rooms.Manifest{Participants: []rooms.Participant{
-			{ID: "alpha", Kind: rooms.ParticipantKindAgent, Tools: []string{"wanted"}},
-		}},
-		Filesystem: ptr(testScope(t)),
-		ToolFactory: func(rooms.Participant) (roomplanning.ToolCapabilities, error) {
-			return roomplanning.ToolCapabilities{Executor: &messages.DefaultToolExecutor{}, Definitions: []messages.ToolDefinition{{Name: "other"}}}, nil
-		},
-		SessionFactory: func(roomplanning.LiveSessionRequest) (messages.SessionInferencer, error) {
-			sessions.Add(1)
-			return fakeInferencer{}, nil
-		},
-	})
-	if !errors.Is(err, roomplanning.ErrParticipantToolMatch) {
-		t.Fatalf("error = %v, want tool mismatch", err)
-	}
-	if sessions.Load() != 0 {
-		t.Fatalf("session factory calls = %d, want zero", sessions.Load())
-	}
-}
-
-func TestWireConstructsIndependentServices(t *testing.T) {
-	for i := 0; i < 2; i++ {
-		calls := 0
-		service := wire.NewService(wire.Dependencies{})
-		_, err := service.Plan(context.Background(), roomplanning.Options{
-			Manifest: testManifest(), Filesystem: ptr(testScope(t)),
-			SessionFactory: func(roomplanning.LiveSessionRequest) (messages.SessionInferencer, error) {
-				calls++
-				return fakeInferencer{}, nil
-			},
+			wrapped := fmt.Errorf("wrapped: %w", test.err)
+			if !errors.Is(wrapped, test.err) {
+				t.Fatalf("errors.Is(%q, %q) = false", wrapped, test.err)
+			}
 		})
-		if err != nil {
-			t.Fatalf("independent service %d: Plan: %v", i, err)
-		}
-		if calls != len(testManifest().Participants) {
-			t.Fatalf("independent service %d factory calls = %d", i, calls)
-		}
 	}
 }
 
-func ptr[T any](value T) *T { return &value }
+type serviceStub struct{}
 
-type testCoordinator struct {
-	done     chan struct{}
-	progress chan struct{}
-	active   bool
-	stopping bool
-	roomErr  error
+func (serviceStub) Plan(_ context.Context, _ roomplanning.Options) (roomplanning.PlanResult, error) {
+	return roomplanning.PlanResult{}, nil
 }
 
-func (c *testCoordinator) Done() <-chan struct{}               { return c.done }
-func (c *testCoordinator) Progress() <-chan struct{}           { return c.progress }
-func (c *testCoordinator) IsActive(string) bool                { return c.active }
-func (c *testCoordinator) IsStopping() bool                    { return c.stopping }
-func (c *testCoordinator) Stop(roomplanning.TerminationReason) { c.stopping = true }
-func (c *testCoordinator) FailParticipant(string, error)       { c.active = false }
-func (c *testCoordinator) Fail(err error)                      { c.roomErr = err; c.stopping = true }
-func (c *testCoordinator) RoomError() error                    { return c.roomErr }
+func (serviceStub) Await(context.Context, roomplanning.AwaitOptions) error { return nil }
 
-type testCleanup struct{ done chan time.Time }
-
-func (c *testCleanup) Start()                 {}
-func (c *testCleanup) Done() <-chan time.Time { return c.done }
-
-func TestAwaitWaitsForReadinessAfterConnection(t *testing.T) {
-	coordinator := &testCoordinator{done: make(chan struct{}), progress: make(chan struct{}, 1), active: true}
-	cleanup := &testCleanup{done: make(chan time.Time)}
-	outcomes := make(chan roomplanning.ConnectionOutcome, 1)
-	tracker := &struct{}{}
-	var opened atomic.Bool
-	connected := make(chan struct{})
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	finished := make(chan error, 1)
-	go func() {
-		finished <- wire.NewService(wire.Dependencies{}).Await(ctx, roomplanning.AwaitOptions{
-			Participants: []roomplanning.AdmissionParticipant{{ID: "alpha", Kind: rooms.ParticipantKindAgent, Tracker: tracker, MarkConnected: func(error) { close(connected) }, Snapshot: func() roomplanning.LifecycleSnapshot { return roomplanning.LifecycleSnapshot{Opened: opened.Load()} }}},
-			Outcomes:     outcomes, Coordinator: coordinator, Cleanup: cleanup, Timer: make(chan time.Time), TimerFactory: func(time.Duration) <-chan time.Time { return make(chan time.Time) },
-		})
-	}()
-	outcomes <- roomplanning.ConnectionOutcome{Tracker: tracker}
-	select {
-	case <-connected:
-	case <-time.After(time.Second):
-		t.Fatal("connection outcome was not observed")
-	}
-	select {
-	case err := <-finished:
-		t.Fatalf("admission returned before readiness: %v", err)
-	case <-time.After(20 * time.Millisecond):
-	}
-	opened.Store(true)
-	coordinator.progress <- struct{}{}
-	if err := <-finished; err != nil {
-		t.Fatalf("Await: %v", err)
-	}
-}
-
-func TestAwaitIgnoresTypedNilTracker(t *testing.T) {
-	var tracker *struct{}
-	cleanupDone := make(chan time.Time)
-	close(cleanupDone)
-	coordinator := &testCoordinator{done: make(chan struct{}), progress: make(chan struct{}, 1), active: true}
-	err := wire.NewService(wire.Dependencies{}).Await(context.Background(), roomplanning.AwaitOptions{
-		Participants: []roomplanning.AdmissionParticipant{{
-			ID: "human", Kind: rooms.ParticipantKindHuman, Tracker: tracker,
-			Snapshot: func() roomplanning.LifecycleSnapshot { return roomplanning.LifecycleSnapshot{DeviceReady: true} },
-		}},
-		Outcomes:    make(chan roomplanning.ConnectionOutcome),
-		Coordinator: coordinator,
-		Cleanup:     &testCleanup{done: cleanupDone},
-		Timer:       make(chan time.Time),
-	})
-	if err != nil {
-		t.Fatalf("Await typed-nil tracker: %v", err)
-	}
-}
-
-func TestAwaitReportsUntrackedParticipantWorkDuringCleanup(t *testing.T) {
-	cleanupDone := make(chan time.Time)
-	close(cleanupDone)
-	coordinator := &testCoordinator{done: make(chan struct{}), progress: make(chan struct{}, 1), active: true}
-	tracker := &struct{}{}
-	err := wire.NewService(wire.Dependencies{}).Await(context.Background(), roomplanning.AwaitOptions{
-		Participants: []roomplanning.AdmissionParticipant{
-			{ID: "agent", Kind: rooms.ParticipantKindAgent, Tracker: tracker},
-			{ID: "human", Kind: rooms.ParticipantKindHuman, OutstandingWork: func() []string { return []string{"participant \"human\" phase devices"} }},
-		},
-		Outcomes:    make(chan roomplanning.ConnectionOutcome),
-		Coordinator: coordinator,
-		Cleanup:     &testCleanup{done: cleanupDone},
-		Timer:       make(chan time.Time),
-	})
-	if err == nil || !strings.Contains(err.Error(), `participant "human" phase devices`) || !strings.Contains(err.Error(), `participant "agent" phase connect`) {
-		t.Fatalf("Await cleanup error = %v, want tracked and untracked work", err)
-	}
-}
+var _ roomplanning.Service = serviceStub{}

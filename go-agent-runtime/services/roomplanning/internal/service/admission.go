@@ -10,19 +10,53 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
+type admissionState struct {
+	ctx           context.Context
+	options       roomplanning.AwaitOptions
+	byTracker     map[any]roomplanning.AdmissionParticipant
+	seen          map[any]struct{}
+	remaining     int
+	ctxDone       <-chan struct{}
+	timerDone     <-chan time.Time
+	admissionDone <-chan time.Time
+	roomDone      <-chan struct{}
+}
+
 func awaitAdmission(ctx context.Context, options roomplanning.AwaitOptions) error {
-	if ctx == nil {
-		ctx = context.Background()
+	state, err := newAdmissionState(ctx, options)
+	if err != nil {
+		return err
 	}
+	if err := state.awaitConnections(); err != nil {
+		return err
+	}
+	if state.options.Coordinator.IsStopping() {
+		return nil
+	}
+	return state.awaitReadiness()
+}
+
+func newAdmissionState(ctx context.Context, options roomplanning.AwaitOptions) (*admissionState, error) {
 	if options.Coordinator == nil {
-		return errors.New("room planning admission coordinator is unavailable")
+		return nil, errors.New("room planning admission coordinator is unavailable")
 	}
 	if options.Cleanup == nil {
-		return errors.New("room planning cleanup waiter is unavailable")
+		return nil, errors.New("room planning cleanup waiter is unavailable")
 	}
+	applyAdmissionDefaults(&options)
+	byTracker := admissionTrackers(options.Participants)
+	return &admissionState{
+		ctx: ctx, options: options, byTracker: byTracker,
+		seen: make(map[any]struct{}, len(byTracker)), remaining: len(byTracker),
+		ctxDone: ctx.Done(), timerDone: options.Timer,
+		admissionDone: timerFor(options.TimerFactory, options.AdmissionTimeout),
+		roomDone:      options.Coordinator.Done(),
+	}, nil
+}
+
+func applyAdmissionDefaults(options *roomplanning.AwaitOptions) {
 	if options.ParticipantError == nil {
 		options.ParticipantError = func(_ string, err error) error { return err }
 	}
@@ -38,169 +72,16 @@ func awaitAdmission(ctx context.Context, options roomplanning.AwaitOptions) erro
 	if options.CleanupTimeout <= 0 {
 		options.CleanupTimeout = roomplanning.DefaultCleanupTimeout
 	}
-	byTracker := make(map[any]roomplanning.AdmissionParticipant, len(options.Participants))
-	for _, participant := range options.Participants {
+}
+
+func admissionTrackers(participants []roomplanning.AdmissionParticipant) map[any]roomplanning.AdmissionParticipant {
+	byTracker := make(map[any]roomplanning.AdmissionParticipant, len(participants))
+	for _, participant := range participants {
 		if !nilAdmissionValue(participant.Tracker) && participant.StartupErr == nil {
 			byTracker[participant.Tracker] = participant
 		}
 	}
-	remaining := len(byTracker)
-	seen := make(map[any]struct{}, remaining)
-	ctxDone := ctx.Done()
-	timerDone := options.Timer
-	admissionDone := timerFor(options.TimerFactory, options.AdmissionTimeout)
-	roomDone := options.Coordinator.Done()
-	for remaining > 0 {
-		select {
-		case outcome, ok := <-options.Outcomes:
-			if !ok {
-				options.Outcomes = nil
-				continue
-			}
-			participant, ok := byTracker[outcome.Tracker]
-			if !ok {
-				continue
-			}
-			if _, duplicate := seen[outcome.Tracker]; duplicate {
-				continue
-			}
-			seen[outcome.Tracker] = struct{}{}
-			remaining--
-			if participant.MarkConnected != nil {
-				participant.MarkConnected(outcome.Err)
-			}
-			if outcome.Err != nil {
-				cause := fmt.Errorf("connect live session: %w", outcome.Err)
-				options.Coordinator.FailParticipant(participant.ID, options.ParticipantError(participant.ID, cause))
-			}
-		case <-ctxDone:
-			options.Coordinator.Stop(roomplanning.TerminationStopped)
-			ctxDone = nil
-		case <-timerDone:
-			options.Coordinator.Stop(roomplanning.TerminationMaxDurationReached)
-			timerDone = nil
-		case <-admissionDone:
-			outstanding := make([]string, 0, remaining)
-			for tracker, participant := range byTracker {
-				if _, done := seen[tracker]; done {
-					continue
-				}
-				outstanding = append(outstanding, options.LifecycleLabel(participant.ID, "connect"))
-			}
-			options.Coordinator.Fail(options.LifecycleError(outstanding...))
-			admissionDone = nil
-			options.Cleanup.Start()
-		case <-roomDone:
-			roomDone = nil
-			options.Cleanup.Start()
-		case <-options.Cleanup.Done():
-			return options.LifecycleError(admissionOutstanding(options, byTracker, seen)...)
-		}
-	}
-	if options.Coordinator.IsStopping() {
-		return nil
-	}
-	readinessDone := timerFor(options.TimerFactory, options.AdmissionTimeout)
-	for {
-		allReady := true
-		for _, participant := range options.Participants {
-			if participant.ID == "" || !options.Coordinator.IsActive(participant.ID) {
-				continue
-			}
-			ready, err := participantReady(options.Coordinator, participant, options.ParticipantError)
-			if err != nil {
-				options.Coordinator.FailParticipant(participant.ID, err)
-				continue
-			}
-			if !ready {
-				allReady = false
-			}
-		}
-		if allReady {
-			return nil
-		}
-		select {
-		case <-options.Coordinator.Done():
-			return options.Coordinator.RoomError()
-		case <-ctx.Done():
-			options.Coordinator.Stop(roomplanning.TerminationStopped)
-			return nil
-		case <-options.Timer:
-			options.Coordinator.Stop(roomplanning.TerminationMaxDurationReached)
-			return nil
-		case <-readinessDone:
-			outstanding := make([]string, 0, len(options.Participants))
-			for _, participant := range options.Participants {
-				if participant.ID == "" || !options.Coordinator.IsActive(participant.ID) {
-					continue
-				}
-				snapshot := roomplanning.LifecycleSnapshot{}
-				if participant.Snapshot != nil {
-					snapshot = participant.Snapshot()
-				}
-				if participant.Kind == rooms.ParticipantKindHuman {
-					if !snapshot.DeviceReady {
-						options.Coordinator.FailParticipant(participant.ID, options.ParticipantError(participant.ID, errors.New("human participant devices were not ready")))
-					}
-					continue
-				}
-				if !snapshot.Opened {
-					outstanding = append(outstanding, participant.ID)
-				}
-			}
-			for _, participantID := range outstanding {
-				options.Coordinator.FailParticipant(participantID, options.ParticipantError(participantID, errors.New("session did not become ready before admission deadline")))
-			}
-			if options.Coordinator.IsStopping() {
-				return nil
-			}
-		case <-options.Coordinator.Progress():
-		}
-	}
-}
-
-func participantReady(coordinator roomplanning.AdmissionCoordinator, participant roomplanning.AdmissionParticipant, failure func(string, error) error) (bool, error) {
-	snapshot := roomplanning.LifecycleSnapshot{}
-	if participant.Snapshot != nil {
-		snapshot = participant.Snapshot()
-	}
-	if participant.Kind == rooms.ParticipantKindHuman {
-		if snapshot.DeviceReady {
-			return true, nil
-		}
-		if snapshot.RunFinished || coordinator.IsStopping() {
-			return false, failure(participant.ID, errors.New("human participant devices were not ready"))
-		}
-		return false, nil
-	}
-	if snapshot.Opened {
-		return true, nil
-	}
-	if snapshot.TransportEnded && !snapshot.RunFinished {
-		return false, nil
-	}
-	if snapshot.Closed || snapshot.TransportEnded || snapshot.RunFinished {
-		if snapshot.TerminalObserved && snapshot.TerminalErr != nil {
-			return false, failure(participant.ID, snapshot.TerminalErr)
-		}
-		return false, failure(participant.ID, errors.New("session ended before SESSION.OPEN"))
-	}
-	return false, nil
-}
-
-func admissionOutstanding(options roomplanning.AwaitOptions, participants map[any]roomplanning.AdmissionParticipant, seen map[any]struct{}) []string {
-	outstanding := make([]string, 0, len(participants))
-	for tracker, participant := range participants {
-		if _, done := seen[tracker]; !done {
-			outstanding = append(outstanding, options.LifecycleLabel(participant.ID, "connect"))
-		}
-	}
-	for _, participant := range options.Participants {
-		if participant.OutstandingWork != nil {
-			outstanding = append(outstanding, participant.OutstandingWork()...)
-		}
-	}
-	return outstanding
+	return byTracker
 }
 
 func timerFor(factory func(time.Duration) <-chan time.Time, duration time.Duration) <-chan time.Time {
@@ -219,9 +100,13 @@ func nilAdmissionValue(value any) bool {
 	switch reflected.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 		return reflected.IsNil()
-	default:
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.String,
+		reflect.Struct, reflect.UnsafePointer:
 		return false
 	}
+	return false
 }
 
 func defaultLifecycleLabel(participantID, phase string) string {

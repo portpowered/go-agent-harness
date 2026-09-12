@@ -5,7 +5,6 @@ package roomplanning
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -13,14 +12,18 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-var (
-	ErrFilesystemScope      = errors.New("room planning filesystem scope is unavailable")
-	ErrSessionFactory       = errors.New("room planning session factory is unavailable")
-	ErrReplayPlanner        = errors.New("room planning replay planner is unavailable")
-	ErrParticipantTools     = errors.New("room participant tools are unavailable")
-	ErrParticipantToolMatch = errors.New("room participant tool capabilities do not match the manifest")
-	ErrParticipantBrowser   = errors.New("room participant browser capabilities are unavailable")
-	ErrBrowserCapability    = errors.New("room participant browser capabilities do not match the contract")
+type errorCode string
+
+func (e errorCode) Error() string { return string(e) }
+
+const (
+	ErrFilesystemScope      errorCode = "room planning filesystem scope is unavailable"
+	ErrSessionFactory       errorCode = "room planning session factory is unavailable"
+	ErrReplayPlanner        errorCode = "room planning replay planner is unavailable"
+	ErrParticipantTools     errorCode = "room participant tools are unavailable"
+	ErrParticipantToolMatch errorCode = "room participant tool capabilities do not match the manifest"
+	ErrParticipantBrowser   errorCode = "room participant browser capabilities are unavailable"
+	ErrBrowserCapability    errorCode = "room participant browser capabilities do not match the contract"
 )
 
 const (

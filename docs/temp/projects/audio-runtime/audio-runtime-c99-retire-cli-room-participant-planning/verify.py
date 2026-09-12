@@ -88,17 +88,17 @@ def mutation_matrix() -> list[dict]:
     mutations = [
         causal_mutation(
             "replay-credential-consultation",
-            REPO_ROOT / "go-agent-runtime/services/roomplanning/internal/service/service.go",
+            REPO_ROOT / "go-agent-runtime/services/roomplanning/internal/service/replay.go",
             "\tif options.ReplayPlanner == nil {\n",
             '\tif options.LookupCredential != nil {\n\t\t_, _ = options.LookupCredential("mutant-replay")\n\t}\n\tif options.ReplayPlanner == nil {\n',
-            ["./go-agent-runtime/services/roomplanning", "-run", "TestPlanReplayNeverConsultsLiveSeams", "-count=1", "-timeout=30s"],
+            ["./go-agent-runtime/services/roomplanning/internal/service", "-run", "TestPlanReplayNeverConsultsLiveSeams", "-count=1", "-timeout=30s"],
         ),
         causal_mutation(
             "admission-before-readiness",
-            REPO_ROOT / "go-agent-runtime/services/roomplanning/internal/service/admission.go",
-            "\t\tif allReady {\n\t\t\treturn nil\n\t\t}",
-            "\t\tif allReady || true {\n\t\t\treturn nil\n\t\t}",
-            ["./go-agent-runtime/services/roomplanning", "-run", "TestAwaitWaitsForReadinessAfterConnection", "-count=1", "-timeout=30s"],
+            REPO_ROOT / "go-agent-runtime/services/roomplanning/internal/service/admission_readiness.go",
+            "\t\tif s.allParticipantsReady() {\n\t\t\treturn nil\n\t\t}",
+            "\t\tif true {\n\t\t\treturn nil\n\t\t}",
+            ["./go-agent-runtime/services/roomplanning/internal/service", "-run", "TestAwaitWaitsForReadinessAfterConnection", "-count=1", "-timeout=30s"],
         ),
         causal_mutation(
             "whole-room-local-failure",

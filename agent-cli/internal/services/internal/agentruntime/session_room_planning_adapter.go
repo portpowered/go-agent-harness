@@ -21,19 +21,85 @@ func roomParticipantIsHumanAdapter(plan *roomParticipantPlan) bool {
 	return plan != nil && room.NormalizeParticipantKind(plan.manifest.Kind) == room.ParticipantKindHuman
 }
 
+type roomPlanningAdapterState struct {
+	options               RoomRunOptions
+	policy                *tools.FilesystemPolicy
+	credentials           *roomCredentialLookup
+	evidence              *roomEvidence
+	sessionFactory        func(room.Participant, SessionRunOptions) (messages.SessionInferencer, error)
+	toolFactory           RoomParticipantToolCapabilitiesFactory
+	usesProductionFactory bool
+}
+
+type roomCredentialLookup struct {
+	lookup   func(string) (string, bool)
+	idsByEnv map[string][]string
+	values   map[string]string
+	ok       map[string]bool
+	byID     map[string]string
+}
+
 func buildRoomParticipantPlansAdapter(ctx context.Context, opts RoomRunOptions, validation room.ValidationOptions, evidences ...*roomEvidence) (plans []*roomParticipantPlan, secrets []string, planErr error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	policy := opts.FilesystemPolicy
-	if policy == nil {
-		var err error
-		policy, err = tools.ResolveFilesystemPolicy(opts.WorkDir, opts.AllowPaths...)
-		if err != nil {
-			return nil, nil, fmt.Errorf("resolve filesystem scope: %w", err)
-		}
+	policy, err := resolveRoomPlanningPolicy(opts)
+	if err != nil {
+		return nil, nil, err
 	}
 	opts.FilesystemPolicy, opts.WorkDir, opts.AllowPaths = policy, policy.PrimaryRoot(), policy.AdditionalRoots()
+	state, err := newRoomPlanningAdapterState(ctx, opts, validation, policy, evidences...)
+	if err != nil {
+		return nil, roomSecretsInManifest(opts.Manifest, stateCredentialValues(state)), err
+	}
+	publicOptions := state.publicOptions()
+	state.configureSampleRate(&publicOptions)
+	state.configureCapture(&publicOptions)
+	state.configureReplay(&publicOptions)
+	result, err := runtimePlanningWire.NewService(runtimePlanningWire.Dependencies{}).Plan(ctx, publicOptions)
+	for _, plan := range result.Plans {
+		if plan != nil {
+			plans = append(plans, localRoomParticipantPlan(opts, plan, state.credentials.byID[plan.Participant.ID]))
+		}
+	}
+	if opts.ReplayPlan != nil {
+		return plans, nil, adaptRoomPlanningError(err)
+	}
+	return plans, state.secrets(), adaptRoomPlanningError(err)
+}
+func resolveRoomPlanningPolicy(opts RoomRunOptions) (*tools.FilesystemPolicy, error) {
+	if opts.FilesystemPolicy != nil {
+		return opts.FilesystemPolicy, nil
+	}
+	policy, err := tools.ResolveFilesystemPolicy(opts.WorkDir, opts.AllowPaths...)
+	if err != nil {
+		return nil, fmt.Errorf("resolve filesystem scope: %w", err)
+	}
+	return policy, nil
+}
+func newRoomPlanningAdapterState(ctx context.Context, opts RoomRunOptions, validation room.ValidationOptions, policy *tools.FilesystemPolicy, evidences ...*roomEvidence) (*roomPlanningAdapterState, error) {
+	credentials := newRoomCredentialLookup(opts, validation)
+	if opts.ReplayPlan == nil {
+		credentials.prime(opts.Manifest)
+	}
+	sessionFactory := opts.SessionFactory
+	if sessionFactory == nil {
+		sessionFactory = defaultRoomSessionFactory
+	}
+	toolFactory := opts.ToolCapabilitiesFactory
+	var evidence *roomEvidence
+	if len(evidences) > 0 {
+		evidence = evidences[0]
+	}
+	state := &roomPlanningAdapterState{options: opts, policy: policy, credentials: credentials, evidence: evidence, sessionFactory: sessionFactory, usesProductionFactory: opts.SessionFactory == nil && opts.WebSocketDialerFactory == nil}
+	if toolFactory == nil && roomManifestHasTools(opts.Manifest) {
+		var err error
+		toolFactory, err = newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(ctx, opts.ConfigDir, policy)
+		if err != nil {
+			return state, fmt.Errorf("%w: %w", ErrRoomParticipantToolsUnavailable, err)
+		}
+	}
+	state.toolFactory = toolFactory
+	return state, nil
+}
+func newRoomCredentialLookup(opts RoomRunOptions, validation room.ValidationOptions) *roomCredentialLookup {
 	lookup := validation.LookupCredential
 	if lookup == nil {
 		lookup = opts.CredentialLookup
@@ -41,120 +107,123 @@ func buildRoomParticipantPlansAdapter(ctx context.Context, opts RoomRunOptions, 
 	if lookup == nil {
 		lookup = os.LookupEnv
 	}
-	credentialByID, idsByEnv := map[string]string{}, map[string][]string{}
-	credentialValues, credentialOK := map[string]string{}, map[string]bool{}
+	result := &roomCredentialLookup{lookup: lookup, idsByEnv: map[string][]string{}, values: map[string]string{}, ok: map[string]bool{}, byID: map[string]string{}}
 	for _, participant := range opts.Manifest.Participants {
 		if participant.APIKeyEnv != "" {
-			idsByEnv[participant.APIKeyEnv] = append(idsByEnv[participant.APIKeyEnv], participant.ID)
+			result.idsByEnv[participant.APIKeyEnv] = append(result.idsByEnv[participant.APIKeyEnv], participant.ID)
 		}
 	}
-	recordLookup := func(name string) (string, bool) {
-		if _, lookedUp := credentialValues[name]; lookedUp {
-			return credentialValues[name], credentialOK[name]
-		}
-		value, ok := lookup(name)
-		credentialValues[name], credentialOK[name] = value, ok
-		if ok && value != "" {
-			for _, id := range idsByEnv[name] {
-				credentialByID[id] = value
-			}
-		}
-		return value, ok
-	}
-	if opts.ReplayPlan == nil {
-		for _, participant := range opts.Manifest.Participants {
-			if participant.APIKeyEnv != "" {
-				_, _ = recordLookup(participant.APIKeyEnv)
-			}
+	return result
+}
+func (lookup *roomCredentialLookup) prime(manifest room.Manifest) {
+	for _, participant := range manifest.Participants {
+		if participant.APIKeyEnv != "" {
+			_, _ = lookup.record(participant.APIKeyEnv)
 		}
 	}
-	participantError := func(id string, err error) error { return roomParticipantFailure(id, err, []string{credentialByID[id]}) }
-	usesProductionFactory := opts.SessionFactory == nil && opts.WebSocketDialerFactory == nil
-	sessionFactory := opts.SessionFactory
-	if sessionFactory == nil {
-		sessionFactory = defaultRoomSessionFactory
+}
+func (lookup *roomCredentialLookup) record(name string) (string, bool) {
+	if _, lookedUp := lookup.values[name]; lookedUp {
+		return lookup.values[name], lookup.ok[name]
 	}
-	toolFactory := opts.ToolCapabilitiesFactory
-	if toolFactory == nil && roomManifestHasTools(opts.Manifest) {
-		var err error
-		toolFactory, err = newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(opts.ConfigDir, policy)
-		if err != nil {
-			return nil, roomSecretsInManifest(opts.Manifest, credentialByID), fmt.Errorf("%w: %v", ErrRoomParticipantToolsUnavailable, err)
+	value, ok := lookup.lookup(name)
+	lookup.values[name], lookup.ok[name] = value, ok
+	if ok && value != "" {
+		for _, id := range lookup.idsByEnv[name] {
+			lookup.byID[id] = value
 		}
 	}
-	var evidence *roomEvidence
-	if len(evidences) > 0 {
-		evidence = evidences[0]
+	return value, ok
+}
+func (s *roomPlanningAdapterState) publicOptions() runtimePlanning.Options {
+	return runtimePlanning.Options{
+		Manifest: s.options.Manifest, LookupCredential: s.credentials.record,
+		Filesystem: &runtimePlanning.FilesystemScope{PrimaryRoot: s.policy.PrimaryRoot(), AdditionalRoots: s.policy.AdditionalRoots()},
+		WorkDir:    s.options.WorkDir, AllowPaths: s.options.AllowPaths, ConfigDir: s.options.ConfigDir, BaseURL: s.options.BaseURL,
+		WebSocketDialer: s.options.WebSocketDialer, WebSocketDialerFactory: s.options.WebSocketDialerFactory,
+		ParticipantError: s.participantError, SessionInferencers: s.options.SessionInferencers,
+		SessionFactory: s.sessionFactoryAdapter, ToolFactory: s.toolFactoryAdapter, BrowserFactory: s.browserFactoryAdapter,
 	}
-	publicOptions := runtimePlanning.Options{
-		Manifest: opts.Manifest, LookupCredential: recordLookup, Filesystem: &runtimePlanning.FilesystemScope{PrimaryRoot: policy.PrimaryRoot(), AdditionalRoots: policy.AdditionalRoots()},
-		WorkDir: opts.WorkDir, AllowPaths: opts.AllowPaths, ConfigDir: opts.ConfigDir, BaseURL: opts.BaseURL, WebSocketDialer: opts.WebSocketDialer, WebSocketDialerFactory: opts.WebSocketDialerFactory,
-		ParticipantError: participantError, SessionInferencers: opts.SessionInferencers,
-		SessionFactory: func(request runtimePlanning.LiveSessionRequest) (messages.SessionInferencer, error) {
-			return sessionFactory(request.Participant, roomSessionOptionsFromRuntime(opts, request.Options, request.Credential))
-		},
-		ToolFactory: func(participant room.Participant) (runtimePlanning.ToolCapabilities, error) {
-			if toolFactory == nil {
-				return runtimePlanning.ToolCapabilities{}, runtimePlanning.ErrParticipantTools
-			}
-			capabilities, err := toolFactory(participant)
-			return runtimePlanning.ToolCapabilities{Executor: capabilities.Executor, Definitions: capabilities.Definitions}, err
-		},
-		BrowserFactory: func(participant room.Participant, static runtimePlanning.ToolCapabilities) (runtimePlanning.BrowserCapabilities, error) {
-			if opts.BrowserCapabilitiesFactory == nil {
-				return runtimePlanning.BrowserCapabilities{}, runtimePlanning.ErrParticipantBrowser
-			}
-			capabilities, err := opts.BrowserCapabilitiesFactory(participant)
-			if err != nil {
-				return runtimePlanning.BrowserCapabilities{}, err
-			}
-			composed, err := composeRoomParticipantBrowserCapabilities(participant, RoomParticipantToolCapabilities{Executor: static.Executor, Definitions: static.Definitions}, capabilities)
-			if err != nil {
-				if capabilities.Close != nil {
-					_ = capabilities.Close()
-				}
-				return runtimePlanning.BrowserCapabilities{}, err
-			}
-			return runtimePlanning.BrowserCapabilities{Executor: composed.Executor, Definitions: composed.Definitions, ToolDefinitionBase: composed.ToolDefinitionBase, RefreshToolDefinitions: composed.RefreshToolDefinitions, BrowserWatch: composed.BrowserWatch, BrowserEventWatch: composed.BrowserEventWatch, Initialize: composed.Initialize, Close: composed.Close}, nil
-		},
+}
+func (s *roomPlanningAdapterState) participantError(id string, err error) error {
+	return roomParticipantFailure(id, err, []string{s.credentials.byID[id]})
+}
+func (s *roomPlanningAdapterState) sessionFactoryAdapter(request runtimePlanning.LiveSessionRequest) (messages.SessionInferencer, error) {
+	options := roomSessionOptionsFromRuntime(s.options, request.Options, request.Credential)
+	return s.sessionFactory(request.Participant, options)
+}
+func (s *roomPlanningAdapterState) toolFactoryAdapter(participant room.Participant) (runtimePlanning.ToolCapabilities, error) {
+	if s.toolFactory == nil {
+		return runtimePlanning.ToolCapabilities{}, runtimePlanning.ErrParticipantTools
 	}
-	if usesProductionFactory {
-		publicOptions.ResolveSampleRate = func(value runtimePlanning.SessionOptions, inferencer messages.SessionInferencer) (int, error) {
-			local := roomSessionOptionsFromRuntime(opts, value, "")
-			return resolveSessionAudioSampleRate(local, sessionRuntimePlan{provider: effectiveSessionProvider(local), inferencer: inferencer})
+	capabilities, err := s.toolFactory(participant)
+	return runtimePlanning.ToolCapabilities{Executor: capabilities.Executor, Definitions: capabilities.Definitions}, err
+}
+func (s *roomPlanningAdapterState) browserFactoryAdapter(participant room.Participant, static runtimePlanning.ToolCapabilities) (runtimePlanning.BrowserCapabilities, error) {
+	if s.options.BrowserCapabilitiesFactory == nil {
+		return runtimePlanning.BrowserCapabilities{}, runtimePlanning.ErrParticipantBrowser
+	}
+	capabilities, err := s.options.BrowserCapabilitiesFactory(participant)
+	if err != nil {
+		return runtimePlanning.BrowserCapabilities{}, err
+	}
+	composed, err := composeRoomParticipantBrowserCapabilities(participant, RoomParticipantToolCapabilities{Executor: static.Executor, Definitions: static.Definitions}, capabilities)
+	if err != nil {
+		if closeErr := capabilities.Close(); closeErr != nil {
+			return runtimePlanning.BrowserCapabilities{}, errors.Join(err, closeErr)
 		}
+		return runtimePlanning.BrowserCapabilities{}, err
 	}
-	if evidence != nil {
-		publicOptions.ResolveCapturePath = func(id string) (string, bool) {
-			participantEvidence := evidence.participant(id)
-			if participantEvidence == nil || participantEvidence.artifacts.Capture == "" {
-				return "", false
-			}
-			return filepath.Join(evidence.destination, participantEvidence.artifacts.Capture), true
-		}
+	return runtimePlanning.BrowserCapabilities{Executor: composed.Executor, Definitions: composed.Definitions, ToolDefinitionBase: composed.ToolDefinitionBase, RefreshToolDefinitions: composed.RefreshToolDefinitions, BrowserWatch: composed.BrowserWatch, BrowserEventWatch: composed.BrowserEventWatch, Initialize: composed.Initialize, Close: composed.Close}, nil
+}
+func (s *roomPlanningAdapterState) configureSampleRate(options *runtimePlanning.Options) {
+	if !s.usesProductionFactory {
+		return
 	}
-	if opts.ReplayPlan != nil {
-		replayPlan := runtimeReplayPlan(*opts.ReplayPlan)
-		publicOptions.Manifest, publicOptions.ReplayPlan = replayPlan.Manifest(), &replayPlan
-		publicOptions.ReplayPlanner = func(replayCtx context.Context, request runtimePlanning.ReplayRequest) (runtimePlanning.ReplaySession, error) {
-			local, err := planSessionRuntime(roomSessionOptionsFromRuntime(opts, request.Options, ""))
-			if err != nil {
-				return runtimePlanning.ReplaySession{}, err
-			}
-			_ = replayCtx
-			return runtimePlanning.ReplaySession{Inferencer: local.inferencer, Done: local.loop.Done, DoneErr: local.loop.DoneErr, MaxDuration: local.loop.MaxDuration}, nil
-		}
+	options.ResolveSampleRate = func(value runtimePlanning.SessionOptions, inferencer messages.SessionInferencer) (int, error) {
+		local := roomSessionOptionsFromRuntime(s.options, value, "")
+		return resolveSessionAudioSampleRate(local, sessionRuntimePlan{provider: effectiveSessionProvider(local), inferencer: inferencer})
 	}
-	result, err := runtimePlanningWire.NewService(runtimePlanningWire.Dependencies{}).Plan(ctx, publicOptions)
-	for _, plan := range result.Plans {
-		if plan != nil {
-			plans = append(plans, localRoomParticipantPlan(opts, plan, credentialByID[plan.Participant.ID]))
-		}
+}
+func (s *roomPlanningAdapterState) configureCapture(options *runtimePlanning.Options) {
+	if s.evidence == nil {
+		return
 	}
-	if opts.ReplayPlan != nil {
-		return plans, nil, adaptRoomPlanningError(err)
+	options.ResolveCapturePath = s.capturePath
+}
+func (s *roomPlanningAdapterState) capturePath(id string) (string, bool) {
+	participantEvidence := s.evidence.participant(id)
+	if participantEvidence == nil || participantEvidence.artifacts.Capture == "" {
+		return "", false
 	}
-	return plans, roomSecretsInManifest(opts.Manifest, credentialByID), adaptRoomPlanningError(err)
+	return filepath.Join(s.evidence.destination, participantEvidence.artifacts.Capture), true
+}
+func (s *roomPlanningAdapterState) configureReplay(options *runtimePlanning.Options) {
+	if s.options.ReplayPlan == nil {
+		return
+	}
+	replayPlan := runtimeReplayPlan(*s.options.ReplayPlan)
+	options.Manifest, options.ReplayPlan = replayPlan.Manifest(), &replayPlan
+	options.ReplayPlanner = s.replayPlanner
+}
+func (s *roomPlanningAdapterState) replayPlanner(_ context.Context, request runtimePlanning.ReplayRequest) (runtimePlanning.ReplaySession, error) {
+	//nolint:contextcheck // replay planning cannot pass context through the legacy private contract.
+	local, err := planSessionRuntime(roomSessionOptionsFromRuntime(s.options, request.Options, ""))
+	if err != nil {
+		return runtimePlanning.ReplaySession{}, err
+	}
+	return runtimePlanning.ReplaySession{Inferencer: local.inferencer, Done: local.loop.Done, DoneErr: local.loop.DoneErr, MaxDuration: local.loop.MaxDuration}, nil
+}
+
+func stateCredentialValues(state *roomPlanningAdapterState) map[string]string {
+	if state == nil || state.credentials == nil {
+		return nil
+	}
+	return state.credentials.byID
+}
+
+func (s *roomPlanningAdapterState) secrets() []string {
+	return roomSecretsInManifest(s.options.Manifest, s.credentials.byID)
 }
 
 func adaptRoomPlanningError(err error) error {
@@ -162,11 +231,11 @@ func adaptRoomPlanningError(err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, runtimePlanning.ErrParticipantToolMatch):
-		return fmt.Errorf("%w: %v", ErrRoomParticipantToolMismatch, err)
+		return fmt.Errorf("%w: %w", ErrRoomParticipantToolMismatch, err)
 	case errors.Is(err, runtimePlanning.ErrParticipantTools):
-		return fmt.Errorf("%w: %v", ErrRoomParticipantToolsUnavailable, err)
+		return fmt.Errorf("%w: %w", ErrRoomParticipantToolsUnavailable, err)
 	case errors.Is(err, runtimePlanning.ErrParticipantBrowser):
-		return fmt.Errorf("%w: %v", ErrRoomParticipantBrowserToolsUnavailable, err)
+		return fmt.Errorf("%w: %w", ErrRoomParticipantBrowserToolsUnavailable, err)
 	default:
 		return err
 	}
@@ -205,9 +274,6 @@ func roomSessionOptionsFromRuntime(parent RoomRunOptions, value runtimePlanning.
 }
 
 func awaitRoomParticipantConnectionsAdapter(ctx context.Context, coordinator *roomCoordinator, plans []*roomParticipantPlan, timer *time.Timer, secrets []string, outcomes <-chan roomConnectionOutcome, cleanup *roomCleanupWaiter) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if cleanup == nil {
 		cleanup = &roomCleanupWaiter{}
 	}
@@ -269,8 +335,11 @@ func roomLifecycleSnapshot(plan *roomParticipantPlan) runtimePlanning.LifecycleS
 		return runtimePlanning.LifecycleSnapshot{}
 	}
 	lifecycle := plan.participant.lifecycle
-	_, opened, closed, _, _, _, _ := lifecycle.snapshot()
+	_, opened, closed, _, _, _, connectErr := lifecycle.snapshot()
 	_, terminalErr, terminalObserved := lifecycle.terminal()
+	if terminalErr == nil && connectErr != nil {
+		terminalErr, terminalObserved = connectErr, true
+	}
 	return runtimePlanning.LifecycleSnapshot{DeviceReady: lifecycle.deviceHasReady(), Opened: opened, Closed: closed, TransportEnded: lifecycle.transportHasEnded(), RunFinished: lifecycle.runHasFinished(), TerminalErr: terminalErr, TerminalObserved: terminalObserved}
 }
 
