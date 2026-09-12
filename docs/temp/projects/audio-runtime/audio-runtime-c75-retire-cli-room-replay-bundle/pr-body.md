@@ -10,15 +10,19 @@
 
 ## Evidence
 
-- Runtime normal/race: 21 tests in 3 packages.
+- Runtime normal/race: 49 tests in 3 packages; the owned internal service
+  coverage repair passes 47 package tests at 80.9% local statement coverage
+  against the 80% floor.
 - CLI room replay package: 1,057 tests; focused CLI race: 8 tests.
 - `go vet`, pinned golangci-lint 2.9.0, `staticcheck 2026.1`, coverage registration, and diff check pass.
 - External consumer prints `C75_ROOMREPLAYBUNDLE_CONSUMER PASS` and rejects a
   same-length artifact corruption with `ErrInvalidRoomReplayBundle`.
 - Legacy named CLI production files: 1,899 lines at admitted main; current
   compatibility files: 313 lines; 1,586 production lines retired.
-- Current exact evidence head `bcca5943570d7242c0aee922f490b183c304cd7f`
-  descends from the source repair `c3e8f8901d802dad74d52acb7006551f88171d66`
+- Current exact evidence head `9f4af321087e4c3dbd588486c69d83004320fa8a`
+  descends from the owned coverage repair `17fa4d384f60343480daacc753ebfcc8d155d049`
+  and includes the architecture-budget test split, alongside source repair
+  `c3e8f8901d802dad74d52acb7006551f88171d66`
   and includes freshly fetched `origin/main`
   `84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f`. The repair handles close errors,
   checked JSON/type assertions, malformed timing errors, and the prior
@@ -26,11 +30,17 @@
 - Accumulated session regression controls at `COUNT=1` pass in normal,
   coverage, and race modes, including the expected mismatch, PCM/transcript,
   and tool-continuation negative controls.
-- The current-head rerun also passes the complete bounded C75 runner, including
+- The provided bounded C75 runner passes at `9f4af321`, including
   runtime normal/race, CLI compatibility, vet, staticcheck, coverage
   registration, the GOWORK=off consumer, and diff check. The accumulated
   session regression script passes all normal/coverage/race packages at
   `COUNT=1`.
+
+- The current GitHub CI run `34676139982` at the prior head rejected coverage
+  at 75.40% for the owned internal service and reported the exact peer-owned
+  `test46/slow_device` timeout. The coverage repair is locally verified at
+  80.9%; the focused slow-device reproduction passes 6/6 repetitions. No
+  peer runtime/audio source was changed.
 
 ## Prior CI repair
 

@@ -4187,3 +4187,35 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   baseline entries, rerun the two gates plus focused checks, update PR #465,
   and return `ACCEPTED` to script-owned CI without polling. Do not resubmit the
   unchanged head or self-review.
+
+# C75 owned coverage repair and current-head rejection checkpoint 2026-09-12T06:15Z
+
+- Inspected GitHub CI run `34676139982` for the prior PR #465 head. Static
+  failed only on the known C57/C61 shared Wire/baseline findings; coverage
+  failed at `75.40%` for the owned
+  `go-agent-runtime/services/roomreplaybundle/internal/service` package; and
+  integration failed the peer-owned `test46/slow_device` scenario because the
+  final PCM marker missed its deadline. The exact slow-device reproduction
+  passes `6/6`; no C64/audio-runtime source was changed.
+- Added bounded service/parser/timeline/output-boundary coverage tests. The
+  owned package now passes `47` tests at `80.9%` local statement coverage
+  against the `80.00%` floor. The initial test checkpoint is `17fa4d3`; the
+  follow-up split keeps the original test file at `482` lines and the new
+  additional test file at `312` lines, removing the owned architecture budget
+  findings; that checkpoint is `9f4af32`.
+- The provided C75 runner passes at exact head `9f4af321`: runtime normal/race
+  (`49` tests in three packages), full CLI (`1057`), focused CLI race, vet,
+  staticcheck, coverage registration (`179` packages across six modules), the
+  `GOWORK=off` consumer marker, and diff-check. `verify.py` passes. The shared
+  gates remain exact lease-only failures: one unregistered generated Wire path
+  and `35` C75 downward/stale architecture entries; neither shared file was
+  edited. A transient peer replay-runtime failure during the first runner pass
+  reproduced `3/3` green in isolation, and the second full runner pass was
+  green.
+- Exact next action: commit the refreshed owned evidence/PR body checkpoint,
+  push the same branch and update PR #465, then retain this task through the
+  C57/C61 shared-file release. After release, apply only the demonstrated Wire
+  registration and baseline deletions, rerun the two shared gates plus focused
+  checks, and return `ACCEPTED` to script CI without polling. No CI-green,
+  review, merge, vertical, physical, acoustic, or project-acceptance claim is
+  made.

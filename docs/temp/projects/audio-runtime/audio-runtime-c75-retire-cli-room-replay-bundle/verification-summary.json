@@ -1,6 +1,6 @@
 {
   "branch": "codex/audio-runtime-c75-retire-cli-room-replay-bundle",
-  "candidate_revision": "bcca5943570d7242c0aee922f490b183c304cd7f",
+  "candidate_revision": "9f4af321087e4c3dbd588486c69d83004320fa8a",
   "cli_production_lines": {
     "agent-cli/internal/services/internal/agentruntime/session_room_replay_bundle.go": 88,
     "agent-cli/internal/services/internal/agentruntime/session_room_replay_integrity.go": 6,
@@ -14,9 +14,9 @@
         "./go-agent-runtime/services/roomreplaybundle/...",
         "-count=1"
       ],
-      "elapsed_ms": 1575,
+      "elapsed_ms": 900,
       "label": "runtime-normal",
-      "output_tail": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle\t0.176s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle/internal/service\t0.394s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle/wire\t0.156s",
+      "output_tail": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle\t0.178s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle/internal/service\t0.596s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle/wire\t0.330s",
       "passed": true,
       "returncode": 0
     },
@@ -27,9 +27,9 @@
         "-race",
         "./go-agent-runtime/services/roomreplaybundle/..."
       ],
-      "elapsed_ms": 3031,
+      "elapsed_ms": 228,
       "label": "runtime-race",
-      "output_tail": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle\t1.196s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle/internal/service\t1.530s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle/wire\t1.176s",
+      "output_tail": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle\t(cached)\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle/internal/service\t(cached)\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle/wire\t(cached)",
       "passed": true,
       "returncode": 0
     },
@@ -40,9 +40,9 @@
         "./agent-cli/internal/services/internal/agentruntime",
         "-count=1"
       ],
-      "elapsed_ms": 75613,
+      "elapsed_ms": 69383,
       "label": "cli-room-replay",
-      "output_tail": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t69.028s",
+      "output_tail": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t67.680s",
       "passed": true,
       "returncode": 0
     },
@@ -56,9 +56,9 @@
         "TestLoadRoomReplayPlan|TestRoomReplay|TestRoomEvidence",
         "-count=1"
       ],
-      "elapsed_ms": 14459,
+      "elapsed_ms": 4048,
       "label": "cli-room-replay-focused-race",
-      "output_tail": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.791s",
+      "output_tail": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.792s",
       "passed": true,
       "returncode": 0
     },
@@ -69,7 +69,7 @@
         "./go-agent-runtime/services/roomreplaybundle/...",
         "./agent-cli/internal/services/internal/agentruntime"
       ],
-      "elapsed_ms": 3758,
+      "elapsed_ms": 1013,
       "label": "vet",
       "output_tail": "",
       "passed": true,
@@ -81,7 +81,7 @@
         "./go-agent-runtime/services/roomreplaybundle/...",
         "./agent-cli/internal/services/internal/agentruntime"
       ],
-      "elapsed_ms": 1913,
+      "elapsed_ms": 1885,
       "label": "staticcheck",
       "output_tail": "",
       "passed": true,
@@ -92,7 +92,7 @@
         "make",
         "coverage-registration"
       ],
-      "elapsed_ms": 1300,
+      "elapsed_ms": 1802,
       "label": "coverage-registration",
       "output_tail": "==> coverage-registration\ncoverage registration passed: 179 workspace packages checked across 6 modules",
       "passed": true,
@@ -104,7 +104,7 @@
         "run",
         "."
       ],
-      "elapsed_ms": 988,
+      "elapsed_ms": 390,
       "label": "external-consumer",
       "output_tail": "C75_ROOMREPLAYBUNDLE_CONSUMER PASS",
       "passed": true,
@@ -116,7 +116,7 @@
         "diff",
         "--check"
       ],
-      "elapsed_ms": 115,
+      "elapsed_ms": 102,
       "label": "diff-check",
       "output_tail": "",
       "passed": true,
@@ -127,7 +127,7 @@
         "make",
         "wire-check"
       ],
-      "elapsed_ms": 99,
+      "elapsed_ms": 133,
       "label": "wire-check-active-lease",
       "output_tail": "wire-check: Wire registry mismatch: unregistered=['go-agent-runtime/services/roomreplaybundle/wire/wire_gen.go'], outside modules=[]\nmake: *** [wire-check] Error 1",
       "passed": false,
@@ -138,7 +138,7 @@
         "make",
         "architecture-size-check"
       ],
-      "elapsed_ms": 22606,
+      "elapsed_ms": 19790,
       "label": "architecture-check-active-lease",
       "output_tail": "_room_replay_manifest.go\\x00parseRoomReplayParticipant\" no longer describes a current violation; delete it\n- baseline-stale internal/services/internal/agentruntime/session_room_replay_manifest.go:parseRoomReplayParticipant: baseline entry \"cyclomatic-complexity\\x00github.com/portpowered/go-agent-harness/agent-cli\\x00github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\\x00internal/services/internal/agentruntime/session_room_replay_manifest.go\\x00parseRoomReplayParticipant\" no longer describes a current violation; delete it\n- baseline-stale internal/services/internal/agentruntime/session_room_replay_manifest.go:parseRoomReplayParticipant: baseline entry \"function-lines\\x00github.com/portpowered/go-agent-harness/agent-cli\\x00github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\\x00internal/services/internal/agentruntime/session_room_replay_manifest.go\\x00parseRoomReplayParticipant\" no longer describes a current violation; delete it\n- baseline-stale internal/services/internal/agentruntime/session_room_replay_manifest.go:parseRoomReplayParticipant: baseline entry \"function-statements\\x00github.com/portpowered/go-agent-harness/agent-cli\\x00github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\\x00internal/services/internal/agentruntime/session_room_replay_manifest.go\\x00parseRoomReplayParticipant\" no longer describes a current violation; delete it\n- baseline-stale internal/services/internal/agentruntime/session_room_replay_manifest.go:parseRoomReplayParticipantArtifacts: baseline entry \"cognitive-complexity\\x00github.com/portpowered/go-agent-harness/agent-cli\\x00github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\\x00internal/services/internal/agentruntime/session_room_replay_manifest.go\\x00parseRoomReplayParticipantArtifacts\" no longer describes a current violation; delete it\n- baseline-stale internal/services/internal/agentruntime/session_room_replay_manifest.go:validateRoomReplayManifest: baseline entry \"cognitive-complexity\\x00github.com/portpowered/go-agent-harness/agent-cli\\x00github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\\x00internal/services/internal/agentruntime/session_room_replay_manifest.go\\x00validateRoomReplayManifest\" no longer describes a current violation; delete it\n- baseline-stale internal/services/internal/agentruntime/session_room_replay_manifest.go:validateRoomReplayManifest: baseline entry \"cyclomatic-complexity\\x00github.com/portpowered/go-agent-harness/agent-cli\\x00github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\\x00internal/services/internal/agentruntime/session_room_replay_manifest.go\\x00validateRoomReplayManifest\" no longer describes a current violation; delete it\n- baseline-stale internal/services/internal/agentruntime/session_room_replay_manifest.go:validateRoomReplayManifest: baseline entry \"function-lines\\x00github.com/portpowered/go-agent-harness/agent-cli\\x00github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\\x00internal/services/internal/agentruntime/session_room_replay_manifest.go\\x00validateRoomReplayManifest\" no longer describes a current violation; delete it\n- baseline-stale internal/services/internal/agentruntime/session_room_replay_manifest.go:validateRoomReplayManifest: baseline entry \"function-statements\\x00github.com/portpowered/go-agent-harness/agent-cli\\x00github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\\x00internal/services/internal/agentruntime/session_room_replay_manifest.go\\x00validateRoomReplayManifest\" no longer describes a current violation; delete it\n- generated-file-spoof services/roomreplaybundle/wire/wire_gen.go: generated header is not registered with a reproducible generator\narchitecture gate failed with 35 issue(s)\nexit status 1\nmake: *** [architecture-size-check] Error 1",
       "passed": false,
