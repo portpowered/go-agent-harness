@@ -42,7 +42,7 @@
   ],
   "coverage": {
     "github.com/portpowered/go-agent-harness/go-agent-runtime/services/captureclaim": "100.0%",
-    "github.com/portpowered/go-agent-harness/go-agent-runtime/services/captureclaim/internal/service": "82.4%",
+    "github.com/portpowered/go-agent-harness/go-agent-runtime/services/captureclaim/internal/service": "81.1%",
     "github.com/portpowered/go-agent-harness/go-agent-runtime/services/captureclaim/wire": "100.0%",
     "registration": "179 workspace packages checked across 6 modules"
   },
