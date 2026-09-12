@@ -124,3 +124,54 @@ known C64-owned 6,400-sample integration failure remains in the accepted-main
 line. Next action is to fetch the reviewed/guarded C64 merge once it lands,
 rerun the focused C65 checks and required shipped regression against that exact
 main, then update and submit PR #455 to the script CI gate without polling.
+
+## Current merged-main recheck
+
+The preceding handoff section is historical. C64 is now reviewed and merged as
+59af6325614d80173447fe2018a0471e27b4e7b1, which is the freshly fetched
+origin/main. The isolated branch was merged with that accepted main without
+touching the running host checkout, producing local integration commit
+7e435abf57bcef3006a0a697b71c707bb140fddb. Required ancestry checks pass for
+startup integration 8bdafc7f947a3a2c9856220abdc539437035bd21, planning main
+d5d6f84363d8569d5dc1a59985f8d45cf50e1d06, C64 merge 59af6325, and
+origin/main. Relative to origin/main, the candidate changes only the C65
+owned AgentLoop/test/evidence paths; buffer_capacity_test.go remains
+unchanged.
+
+The latest prior hosted rejection is preserved in
+ci-34666727240-integration-rejection.md. It failed only the C64-owned
+slow-device high-rate terminal-drain test. On the merged-main candidate, the
+required shipped high-rate control passed all 20 trials in each normal,
+coverage, and race mode in scripts/test-session-ci-regressions.sh with
+COUNT=1.
+
+Post-merge focused and accumulated evidence:
+
+    go test ./go-agent-loop/pkg/agentloop -run '^(TestRunJoinsPublishedDeltasBeforeReturningOnEngineError|TestRunCancellationReleasesBlockedDeltaForwarder)$' -count=100: 200 passed
+    go test -race ./go-agent-loop/pkg/agentloop -run '^TestRunJoinsPublishedDeltasBeforeReturningOnEngineError$' -count=20: 20 passed
+    CGO_ENABLED=0 GOMAXPROCS=64 go test ./go-agent-loop/pkg/agentloop -run '^TestRunJoinsPublishedDeltasBeforeReturningOnEngineError$' -count=2000: 2000 passed
+    capacity controls -count=20: 120 passed
+    go test ./go-agent-loop/pkg/agentloop -count=1: 59 passed
+    go test -race ./go-agent-loop/pkg/agentloop -count=1: 59 passed
+    go test ./agent-cli/test/integration -run '^(TestSessionCommand_DefaultRegistryExecRoundTripInStrictOpenAIReplay|TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio)$' -count=1: 14 passed
+    scripts/test-session-ci-regressions.sh all with COUNT=1: normal, coverage, and race exited 0
+
+The causal test still asserts literal delta content, delivery before the
+terminal error, original *messages.ErrorValue identity, and
+errors.Is/errors.As; the full-buffer cancellation control remains green.
+The local quality gates all pass on this merged source: make fmt,
+make verify-architecture (186 packages, 1896 files, 28041 functions),
+make coverage-registration (176 packages across six modules), make vet,
+pinned golangci-lint 2.9.0 with zero issues, pinned staticcheck 2026.1,
+and COVERAGE_BASE=d5d6f84363d8569d5dc1a59985f8d45cf50e1d06 make
+coverage-changed (176 registered packages across seven profiles; the
+agent-cli target-wide run completed in 5m19.465s with 2m40.535s headroom).
+Wire regeneration left generated files unchanged and git diff --check is
+clean.
+
+PR #455 remains open and has no independent review. The current local merge
+candidate is implementation evidence only: it has not yet been pushed, sent
+to the new script-CI run, reviewed, merged, or vertically probed. Next action
+is to commit this evidence update, push the changed same branch, update PR
+#455, and return ACCEPTED to SCRIPT CI without polling; retain C65 ownership
+for any exact current-head rejection.
