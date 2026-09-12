@@ -41,7 +41,8 @@ project acceptance.
 
 ## Latest executor checkpoint
 
-The same admitted task is pushed at `aeed99753bd69c29907235dfd96e98a8976af950`.
+The same admitted task is pushed at the current branch head; PR #458 is the
+single delivery record for this task.
 The latest source/evidence checkpoint is documentation-only after the tested
 implementation; no executable inputs changed. The exact Wire registry and
 architecture-baseline leases remain with C57 and C61. No unchanged script-CI
