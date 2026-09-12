@@ -4225,3 +4225,25 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   release. After release, apply only the demonstrated Wire registration and
   baseline deletions, rerun the two shared gates plus focused checks, push the
   same PR, and return `ACCEPTED` to script CI without polling.
+
+# C75 current-head CI rejection repair 2026-09-12T06:35Z
+
+- The newer completed PR #465 CI run `34677920595` tested head `ff87b074`.
+  Unit, race, coverage, hermetic, WebMCP Chrome, macOS audio release, and
+  Windows software passed. Static failed on the still-unreleased C57/C61
+  shared Wire/baseline findings and two owned `goconst` literals in
+  `service_behavior_additional_test.go`; integration failed only the
+  peer-owned `test46/slow_device` final PCM marker deadline with zero
+  queue/drop/overflow/discard events.
+- Commit `048f52cd8295ad2c1dca6255d1168737411ccb5c` replaces the two repeated
+  test literals with named constants. Roomreplaybundle normal/race passed
+  (`50` tests in `3` packages), pinned `make lint` passed all `15` modules,
+  and the accumulated `COUNT=1` normal/coverage/race regression matrix passed,
+  including expected negative controls and all `20` high-rate trials.
+- The repair is pushed to the existing PR #465 branch. No review, merge,
+  vertical, physical/acoustic, or project acceptance is claimed. C57 and C61
+  remain the canonical shared-file owners; do not resubmit until they release.
+  Exact next action: retain ownership, then apply only the demonstrated
+  roomreplaybundle Wire registration and downward/stale C75 baseline changes
+  after both leases release, rerun the shared gates plus focused checks, update
+  PR #465, and return `ACCEPTED` to script CI without polling.

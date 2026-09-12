@@ -10,7 +10,7 @@
 
 ## Evidence
 
-- Runtime normal/race: 49 tests in 3 packages; the owned internal service
+- Runtime normal/race: 50 tests in 3 packages; the owned internal service
   coverage repair passes 47 package tests at 80.9% local statement coverage
   against the 80% floor.
 - CLI room replay package: 1,057 tests; focused CLI race: 8 tests.
@@ -19,7 +19,7 @@
   same-length artifact corruption with `ErrInvalidRoomReplayBundle`.
 - Legacy named CLI production files: 1,899 lines at admitted main; current
   compatibility files: 313 lines; 1,586 production lines retired.
-- Current exact evidence head `9f4af321087e4c3dbd588486c69d83004320fa8a`
+- Current exact evidence head `048f52cd8295ad2c1dca6255d1168737411ccb5c`
   descends from the owned coverage repair `17fa4d384f60343480daacc753ebfcc8d155d049`
   and includes the architecture-budget test split, alongside source repair
   `c3e8f8901d802dad74d52acb7006551f88171d66`
@@ -44,6 +44,14 @@
   `test46/slow_device` timeout. The coverage repair is locally verified at
   80.9%; the focused slow-device reproduction passes 6/6 repetitions. No
   peer runtime/audio source was changed.
+- The newer current-head CI run `34677920595` at `ff87b074` passed unit, race,
+  coverage, hermetic, WebMCP Chrome, macOS audio release, and Windows software.
+  Static reported the unchanged C57/C61 Wire/baseline lease findings plus two
+  owned `goconst` findings in `service_behavior_additional_test.go`; commit
+  `048f52cd` fixes those literals. Integration still reports only the
+  peer-owned `test46/slow_device` deadline with zero queue/drop/overflow/
+  discard events. Post-repair roomreplaybundle normal/race, pinned lint, and
+  accumulated normal/coverage/race regressions pass.
 
 ## Prior CI repair
 
