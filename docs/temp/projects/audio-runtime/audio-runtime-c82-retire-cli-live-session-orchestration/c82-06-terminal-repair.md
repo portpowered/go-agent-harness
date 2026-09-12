@@ -130,3 +130,39 @@ reviewed releases and a fresh accepted-main reconciliation are still required
 before applying the one generated-Wire registration and the 11 demonstrated
 downward/stale baseline changes. No script-CI, independent-review,
 guarded-merge, vertical, or project-acceptance result is claimed.
+
+## Current-owner revalidation — 2026-09-12T10:32:41Z
+
+The clean pushed head remains `ceb3a09d4e40bff70d5adcc4fd1970a888b52275`.
+Fresh bounded checks pass without touching the C64/C79 leased files:
+
+- sessionlive normal count=5 passed 70 tests across 3 packages; the package
+  race run count=3 passed 42 tests across 3 packages;
+- the selected CLI live/scheduled/response run passed 264 normal tests and 88
+  race tests; the GOWORK=off external consumer passed normal and race at
+  count=3;
+- behavior-matrix and retirement-and-scope passed, with the exact current
+  adapter at `579 + 54 = 633` lines and 500 retired;
+- both mutation controls discovered and passed the positive tests, then failed
+  only at the intended missing-final-delta and unstopped-deadline assertions;
+- `COUNT=3 scripts/test-session-ci-regressions.sh all` exited 0 in normal,
+  coverage, and race modes. The expected replay/PCM/transcript negative
+  diagnostics remained rejected, while high-rate audio/tool, scheduled,
+  simulated-device, and composed-provider controls passed;
+- `make fmt`, `make vet`, and `git diff --check` passed. Required startup,
+  accepted-main, and fetched `origin/main` ancestry still pass, with
+  `origin/main=84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f`.
+
+The local shared gates remain intentionally red only for the known deferred
+work: Wire reports the unregistered C82 generated file, and architecture
+reports the one reduced `session_drain.go` entry plus ten reduced/stale
+`session_live.go` entries. C64 PR459 and C79 PR470 are still open; no shared
+file was edited and no prerequisite was waived. This remains executor
+evidence only: no script-CI, independent-review, guarded-merge, vertical, or
+project-acceptance result is claimed.
+
+Next action: after the reviewed C64 terminal-drain and C79 shared-file merges
+release their leases, fetch and reconcile accepted main on this same branch,
+apply only the C82 generated-Wire registration and its 11 demonstrated
+downward/stale baseline changes, rerun the bounded gates, commit/push the same
+PR474, and submit its changed head to script CI without polling.
