@@ -41,3 +41,8 @@ fixtures and assert exact provider bytes, session-log order, terminal state,
 PCM digests, interruption healthy-tail bytes, tool output, and clean rejecting
 mutations. The architecture-size check remains pending the active C61 shared
 baseline lease; C77 does not edit that shared file while the lease is held.
+
+The prior script-CI rejection at head `0054acad` is preserved in
+`ci-rejection-34676193333.json`, including failed-job metadata, the exact
+architecture diagnostics, the 6,400-sample remote-device loss, Factory
+feedback, and the current non-reproduction evidence for the stress tests.
