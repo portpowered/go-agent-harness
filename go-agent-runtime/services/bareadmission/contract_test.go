@@ -36,7 +36,7 @@ func TestContractErrorsPreserveTypedAndNilBehavior(t *testing.T) {
 	}
 
 	var transportErr *InvalidTransportError
-	if transportErr.Error() != ErrInvalidTransport.Error() || transportErr.Unwrap() != ErrInvalidTransport {
+	if transportErr.Error() != ErrInvalidTransport.Error() || !errors.Is(transportErr, ErrInvalidTransport) {
 		t.Fatalf("nil transport error = %q/%v, want nil-safe sentinel behavior", transportErr.Error(), transportErr.Unwrap())
 	}
 	transportErr = &InvalidTransportError{Transport: "tcp"}
