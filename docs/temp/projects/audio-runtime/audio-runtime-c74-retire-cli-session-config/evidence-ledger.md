@@ -91,3 +91,45 @@ made on the Darwin validator.
   same task until those exact leases are released, then receive only its
   demonstrated Wire registration and downward/deleted C74 ledger changes
   before the scoped gates and a changed-head script-CI handoff are repeated.
+
+## Shared static-gate repair checkpoint
+
+- Direct admission verification remains `admitted` for the sole
+  `audio-runtime/audio-runtime-v1` task `work-task-98`. The isolated branch is
+  `codex/audio-runtime-c74-retire-cli-session-config`; fetched `origin/main` is
+  `84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f`, and startup, planning-main,
+  accepted-main and current-main ancestry checks pass. C57 `work-task-26` and
+  C61 `work-task-34` are terminal `FAILED`, releasing the two exact shared
+  leases; no peer edits or host-checkout mutation were made.
+- The complete latest CI rejection was read from run `34678513215`, head
+  `5d04b1ff1fd8d1ffaecaed81d68e022149e6e8eb`. The only failed job was static:
+  Wire reported the unregistered `sessionconfig/wire/wire_gen.go`, and the
+  architecture lane reported C74's `619 > 930` file drift, stale
+  `resolveOpenAIRealtimeSessionConfig` cognitive/cyclomatic entries, stale
+  `resolveSessionRuntimeSelection` cognitive entry, and the same generated
+  registration finding. Unit, race, integration, coverage, hermetic, WebMCP,
+  macOS audio release and Windows portable software passed. PR `#467` has no
+  review findings or review comments.
+- The bounded repair changes only the demonstrated registries: registers
+  `go-agent-runtime/services/sessionconfig/wire` in
+  `scripts/wire-packages.txt`, registers its exact generated file in
+  `docs/architecture/architecture-policy.json`, lowers the C74 file baseline
+  `930 -> 619`, and deletes only the three stale C74 complexity entries from
+  `docs/architecture/architecture-size-baseline.json`. No threshold was
+  raised, no peer entry was absorbed, and no runtime source was changed.
+- Post-repair checks pass: `make wire-check`; architecture/size at `189`
+  packages, `1,902` files and `28,028` functions; coverage registration at
+  `179` packages across six modules; vet; pinned staticcheck `2026.1`; pinned
+  golangci-lint `2.9.0` with zero issues; sessionconfig normal/race `26/26`;
+  CLI focused normal/race `343/108`; the complete verifier including both
+  mutation controls; the full C74 public runner matrix; and accumulated
+  session regressions in normal, coverage and race modes with `COUNT=1`.
+  `make fmt`, JSON validation, diff-check, and the 930/619/311 line census
+  also pass. The repository's bounded changed-base coverage target completes
+  successfully with exit `0` and no floor violation.
+- This remains executor handoff evidence only. After changed-base coverage
+  completes, commit and push the same PR `#467`, update its body with this
+  repair map, and return `ACCEPTED` to the script-owned CI gate without
+  polling. Do not claim CI green, independent review, guarded merge,
+  immutable-artifact vertical acceptance, physical/acoustic proof or project
+  completion; retain this task through `CONTINUE` for any exact rejection.
