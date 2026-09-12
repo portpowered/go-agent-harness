@@ -1,0 +1,38 @@
+{
+  "schema": "audio-runtime.c88.verification-summary/v1",
+  "task": "audio-runtime-c88-retire-cli-room-tool-capabilities",
+  "tested_revision": "a3cc66ecac39af585fad0c89ee0b95b7a98d5852",
+  "local_owned_verification_passed": true,
+  "checks": {
+    "admission_and_scope": "passed: verify.py --mode all",
+    "runtime_normal": "passed: go test ./services/roomcapabilities/... -count=1",
+    "runtime_race": "passed: go test -race ./services/roomcapabilities/... -count=1",
+    "cli_room_normal": "passed: 45 tests x3",
+    "cli_room_race": "passed: 45 tests x1",
+    "cli_transport": "passed: 3 tests x3",
+    "external_consumer_gowork_off": "passed",
+    "credential_free_room_composition": "passed: wire construction, dispatch, refresh, stale-tool rejection, static preservation, lifecycle",
+    "non_room_audio_tool_regression": "passed: TestSessionToolSingleCallRoundTripThroughCLI",
+    "mutation_oracles": "passed: unrequested-tool and refresh-drops-static intended failures",
+    "coverage_registration": "passed: 179 workspace packages across 6 modules",
+    "roomcapabilities_coverage": "passed: 86.8 percent aggregate; service floor 75 percent, wire floor 95 percent",
+    "vet": "passed: roomcapabilities and CLI agentruntime",
+    "staticcheck": "passed: pinned 2026.1 across workspace",
+    "lint": "passed: pinned golangci-lint 2.9.0 across workspace",
+    "diff_check": "passed"
+  },
+  "known_open_gates": {
+    "architecture_size_check": {
+      "status": "blocked_by_shared_lease",
+      "exact_failure": "generated-file-spoof services/roomcapabilities/wire/wire_gen.go: generated header is not registered with a reproducible generator"
+    },
+    "wire_check": {
+      "status": "blocked_by_shared_lease",
+      "exact_failure": "Wire registry mismatch: unregistered=['go-agent-runtime/services/roomcapabilities/wire/wire_gen.go'], outside modules=[]"
+    }
+  },
+  "shared_prerequisite_open": true,
+  "shared_prerequisite_owner": "audio-runtime-c79-retire-cli-response-lifecycle/work-task-114",
+  "script_ci": "not submitted; handoff requires accepted C79 main and lease release first",
+  "review": "not performed by implementer"
+}

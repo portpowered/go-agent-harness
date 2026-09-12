@@ -1,0 +1,41 @@
+{
+  "schema": "audio-runtime.c88.provenance/v1",
+  "task": "audio-runtime-c88-retire-cli-room-tool-capabilities",
+  "implementation_revision": "a3cc66ecac39af585fad0c89ee0b95b7a98d5852",
+  "source_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "required_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "origin_main_revision_at_checkpoint": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "branch": "codex/audio-runtime-c88-retire-cli-room-tool-capabilities",
+  "ancestry": {
+    "source_is_ancestor": true,
+    "required_integration_is_ancestor": true,
+    "origin_main_is_descended_from_source": true
+  },
+  "rollback_checkpoint": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "retirement": {
+    "baseline_lines": 334,
+    "candidate_lines": 153,
+    "reduction": 181,
+    "maximum_candidate_lines": 154,
+    "minimum_reduction": 180
+  },
+  "generated_wire": {
+    "source": "go-agent-runtime/services/roomcapabilities/wire/wire.go",
+    "generated": "go-agent-runtime/services/roomcapabilities/wire/wire_gen.go",
+    "generator_command": "GOWORK=off go run -mod=mod github.com/google/wire/cmd/wire",
+    "reproducibly_regenerated": true,
+    "registry_status": "pending C79 lease release"
+  },
+  "scope": {
+    "owned_only": true,
+    "excluded_paths_modified": false,
+    "shared_files_modified": false
+  },
+  "handoff": {
+    "script_ci": "pending",
+    "independent_review": "pending",
+    "guarded_merge": "pending",
+    "vertical_probe": "pending",
+    "ci_polled": false
+  }
+}
