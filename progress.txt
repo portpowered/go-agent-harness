@@ -4212,6 +4212,10 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   edited. A transient peer replay-runtime failure during the first runner pass
   reproduced `3/3` green in isolation, and the second full runner pass was
   green.
+- After the evidence checkpoint was pushed, `COUNT=1 bash
+  scripts/test-session-ci-regressions.sh all` exited zero in normal, coverage,
+  and race modes. The expected replay/PCM/transcript negative diagnostics and
+  all `20` high-rate audio trials remained asserted and green.
 - Exact next action: commit the refreshed owned evidence/PR body checkpoint,
   push the same branch and update PR #465, then retain this task through the
   C57/C61 shared-file release. After release, apply only the demonstrated Wire

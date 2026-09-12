@@ -30,6 +30,9 @@
 - Accumulated session regression controls at `COUNT=1` pass in normal,
   coverage, and race modes, including the expected mismatch, PCM/transcript,
   and tool-continuation negative controls.
+- The same accumulated `COUNT=1 bash scripts/test-session-ci-regressions.sh
+  all` matrix was rerun after the pushed checkpoint and exited zero in normal,
+  coverage, and race modes, including all 20 high-rate audio trials.
 - The provided bounded C75 runner passes at `9f4af321`, including
   runtime normal/race, CLI compatibility, vet, staticcheck, coverage
   registration, the GOWORK=off consumer, and diff check. The accumulated
