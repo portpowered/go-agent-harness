@@ -242,10 +242,12 @@ def main() -> int:
     elif args.mode == "cli-retirement":
         result = cli_retirement(args)
     else:
+        mutation_args = argparse.Namespace(**vars(args))
+        mutation_args.expect_failure = True
         results = [
             frozen(args),
-            mutation(args, "mutation-arrival-order"),
-            mutation(args, "mutation-no-bound"),
+            mutation(mutation_args, "mutation-arrival-order"),
+            mutation(mutation_args, "mutation-no-bound"),
             cli_retirement(args),
         ]
         result = {"mode": "all", "status": "passed" if all(item["status"] == "passed" for item in results) else "failed", "checks": results}
