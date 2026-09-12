@@ -25,6 +25,8 @@ import subprocess
 import sys
 import tempfile
 from typing import Any, Callable, Iterable, Mapping, Sequence
+import urllib.error
+import urllib.request
 
 
 DEFAULT_SERVER = "http://127.0.0.1:7439"
@@ -123,6 +125,38 @@ def _json_command(
         raise CleanupBlocked(
             f"{' '.join(command[:5])} returned invalid JSON"
         ) from error
+
+
+def _live_session_snapshot(
+    you: str,
+    server: str,
+    *,
+    runner: CommandRunner = subprocess.run,
+) -> Any:
+    """Read live sessions, bypassing a broken CLI compatibility route if needed."""
+
+    command = [
+        you,
+        "--json",
+        "--remote",
+        "--server",
+        server,
+        "session",
+        "list",
+        "--live-only",
+    ]
+    try:
+        return _json_command(command, runner=runner)
+    except CleanupBlocked as cli_error:
+        endpoint = server.rstrip("/") + "/factory-sessions"
+        try:
+            with urllib.request.urlopen(endpoint, timeout=COMMAND_TIMEOUT_SECONDS) as response:
+                return json.load(response)
+        except (OSError, urllib.error.URLError, ValueError) as http_error:
+            raise CleanupBlocked(
+                f"live Factory Session observation failed through CLI ({cli_error}) "
+                f"and HTTP ({http_error})"
+            ) from http_error
 
 
 def repo_root(path: Path, *, runner: CommandRunner = subprocess.run) -> Path:
@@ -300,19 +334,7 @@ def factory_guard(
 ) -> dict[str, Any]:
     """Read live session, board, and worker ownership as one safety snapshot."""
 
-    response = _json_command(
-        [
-            you,
-            "--json",
-            "--remote",
-            "--server",
-            server,
-            "session",
-            "list",
-            "--live-only",
-        ],
-        runner=runner,
-    )
+    response = _live_session_snapshot(you, server, runner=runner)
     if not isinstance(response, Mapping) or response.get("scope") != "live":
         raise CleanupBlocked("factory session list did not return live scope")
     sessions = response.get("sessions")

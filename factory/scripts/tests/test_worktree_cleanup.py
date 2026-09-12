@@ -45,6 +45,42 @@ class WorktreeCleanupTests(unittest.TestCase):
         self.assertIn("--remote", calls[0])
         self.assertEqual(calls[0][-3:], ["session", "list", "--live-only"])
 
+    def test_factory_guard_falls_back_to_authoritative_http_snapshot(self):
+        response = {
+            "scope": "live",
+            "sessions": [
+                {
+                    "id": "session-1",
+                    "factoryDir": "/repo/factory",
+                    "folderPath": "/repo/factory",
+                    "runtime": {
+                        "lifecycleControlStatus": "RUNNING",
+                        "status": "ACTIVE",
+                        "progress": {"factoryState": "RUNNING", "inFlightCount": 2},
+                        "petri": {"marking": []},
+                    },
+                }
+            ],
+        }
+
+        def runner(command, **kwargs):
+            return subprocess.CompletedProcess(command, 1, "", "compatibility route failed")
+
+        http_response = mock.MagicMock()
+        http_response.__enter__.return_value = http_response
+        http_response.__exit__.return_value = False
+        with mock.patch.object(MODULE.urllib.request, "urlopen", return_value=http_response) as urlopen:
+            with mock.patch.object(MODULE.json, "load", return_value=response):
+                guard = MODULE.factory_guard(
+                    "you", "http://127.0.0.1:7439", runner=runner
+                )
+
+        self.assertEqual(guard["activeWorkerCount"], 2)
+        urlopen.assert_called_once_with(
+            "http://127.0.0.1:7439/factory-sessions",
+            timeout=MODULE.COMMAND_TIMEOUT_SECONDS,
+        )
+
     def test_discovers_ignored_go_tools_in_any_managed_clone(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             owner = Path(temp_dir) / "clone" / ".claude" / "worktrees" / "lane"
