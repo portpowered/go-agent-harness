@@ -18,3 +18,22 @@
 ## Ownership note
 
 The candidate is based on `origin/main` at `d4766c3dbbf2c198142047ead4449d58dd47d485`. The only remaining repository gate findings are shared files owned by active C79: `scripts/wire-packages.txt` must register the generated Wire file, and `docs/architecture/architecture-size-baseline.json` needs the reduced baseline/stale-entry cleanup. This task does not edit those shared paths; after that lease is released, apply the minimal registry/baseline update on this same task, rerun the two gates, and submit to SCRIPT CI.
+
+## Fresh executor recheck
+
+At head `8c17ddfbddfaf82fdd9d767bef5e642cd9660f8e`, admission and the
+retirement verifier still pass (`1,192 -> 972` physical lines, exactly `220`
+retired). Roommedia normal and race suites pass at `-count=3` (`30` tests in
+four packages each), the separate `GOWORK=off` consumer passes at `-count=3`,
+and the focused CLI normal/race suites pass (`156`/`66` tests). The accumulated
+`COUNT=1 scripts/test-session-ci-regressions.sh all` matrix passes in normal,
+coverage, and race modes, including the expected replay and multi-turn
+negative controls. No C93 review findings exist in the canonical board or PR.
+
+The current shared-gate failures remain unchanged and ownership-scoped:
+`make wire-check` reports only the unregistered
+`go-agent-runtime/services/roommedia/wire/wire_gen.go`; `make
+architecture-size-check` reports that generated-file finding plus nine stale or
+downward `session_room_run.go` entries in the C79-owned architecture baseline.
+The C79 lease is still active, so no shared-file mutation or SCRIPT CI
+submission is authorized yet.
