@@ -116,7 +116,7 @@ def verify_causal_source() -> None:
     require("return errors.Join(drainErr, sessionErr, s.binding.Close())" in source, "drain/provider/device errors are not joined")
     for marker in ("terminalObserved", "gracefulCloseRequested", "forwardReceive", "WaitForPump"):
         require(marker in source, f"causal lifecycle marker missing: {marker}")
-    for marker in ("TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio", "drainStarted", "closeStarted", "provider-close-before-drain", "drain-before-provider-close", "reflect.DeepEqual", "DroppedSamples", "OverflowEvents", "DiscardedSamples"):
+    for marker in ("TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio", "drainStarted", "closeStarted", "provider-close-before-drain", "drain-before-provider-close", "reflect.DeepEqual", "RenderedSamples()", "PlaybackStats()", "QueuedSamples", "UnderflowSamples", "C64_RENDER_EVIDENCE", "provider/admission/consumption/queue reconciliation", "DroppedSamples", "OverflowEvents", "DiscardedSamples"):
         require(marker in test, f"deterministic barrier oracle missing: {marker}")
     require("time.Sleep(" not in test, "barrier control uses sleep-only scheduling")
     require(test.count("terminalDrainProviderSamples = 9600") == 1 and test.count("terminalDrainDeviceSamples   = 6400") == 1, "barrier sample counts are not exact")

@@ -84,6 +84,32 @@ def terminate_group(process: subprocess.Popen[bytes]) -> None:
         process.wait(timeout=2.0)
 
 
+def parse_render_evidence(output: str) -> dict[str, object]:
+    marker = "C64_RENDER_EVIDENCE "
+    for line in output.splitlines():
+        if marker not in line:
+            continue
+        fields: dict[str, object] = {}
+        for token in line.split(marker, 1)[1].split():
+            key, separator, value = token.partition("=")
+            if not separator:
+                continue
+            fields[key] = int(value) if value.isdigit() else value
+        required = {
+            "provider_samples": 9600,
+            "admitted_samples": 6400,
+            "consumed_samples": 6400,
+            "rendered_samples": 6720,
+            "queued_samples": 0,
+            "underflow_samples": 320,
+            "callback_count": 14,
+            "shutdown": "complete",
+        }
+        if all(fields.get(key) == value for key, value in required.items()):
+            return fields
+    return {}
+
+
 def run_bounded(command: list[str], timeout: float) -> dict[str, object]:
     started = time.monotonic()
     process = subprocess.Popen(
@@ -165,6 +191,7 @@ def main() -> int:
         TEST_PACKAGE,
         "-run",
         f"^{TEST_NAME}$",
+        "-v",
         "-count=1",
         "-timeout=60s",
     ]
@@ -178,6 +205,9 @@ def main() -> int:
         raise SystemExit(json.dumps({"passed": False, "result": result}, sort_keys=True))
     if int(result["elapsed_ms"]) / 1000 > args.aggregate_timeout:
         raise SystemExit("aggregate timeout exceeded")
+    render_evidence = parse_render_evidence(str(result["output"]))
+    if not render_evidence:
+        raise SystemExit(json.dumps({"passed": False, "result": result, "render_evidence": render_evidence}, sort_keys=True))
 
     production = REPO_ROOT / "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go"
     test = REPO_ROOT / "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go"
@@ -202,7 +232,14 @@ def main() -> int:
                 "accepted_source_first_failure": evidence["accepted_source_first_failure"],
                 "candidate": {
                     "expected_outcome": "repaired-pass",
+                    "provider_samples": render_evidence["provider_samples"],
                     "admitted_device_samples": 6400,
+                    "consumed_device_samples": render_evidence["consumed_samples"],
+                    "rendered_device_samples": render_evidence["rendered_samples"],
+                    "queued_device_samples": render_evidence["queued_samples"],
+                    "underflow_samples": render_evidence["underflow_samples"],
+                    "render_callback_count": render_evidence["callback_count"],
+                    "shutdown": render_evidence["shutdown"],
                     "dropped_samples": 0,
                     "overflow_events": 0,
                     "discarded_samples": 0,

@@ -448,9 +448,40 @@ func (s *terminalDrainExternalScenario) assertOutput(t *testing.T, phase string,
 	if !reflect.DeepEqual(gotPCM, wantPCM) {
 		t.Fatalf("terminal drain phase %s changed admitted PCM: got %d samples, want exact resampled block", phase, len(gotPCM))
 	}
+	providerSamples := s.barrierInbound.samplesRead()
+	renderedPCM := s.registry.RenderedSamples()
 	stats := s.registry.PlaybackStats()
-	if stats.DroppedSamples != 0 || stats.OverflowEvents != 0 || stats.DiscardedSamples != 0 {
+	if providerSamples != len(samples) {
+		t.Fatalf("terminal drain phase %s provider read %d samples, want exact %d", phase, providerSamples, len(samples))
+	}
+	assertTerminalDrainRendered(t, phase, wantPCM, renderedPCM, stats)
+	consumedSamples := stats.RenderedSamples - stats.UnderflowSamples
+	if consumedSamples != uint64(got) || consumedSamples != uint64(len(wantPCM)) || stats.QueuedSamples != 0 {
+		t.Fatalf("terminal drain phase %s failed provider/admission/consumption/queue reconciliation: provider=%d admitted=%d consumed=%d rendered=%d queued=%d stats=%+v", phase, providerSamples, got, consumedSamples, len(renderedPCM), stats.QueuedSamples, stats)
+	}
+	if stats.DroppedSamples != 0 || stats.OverflowEvents != 0 || stats.DiscardedSamples != 0 || stats.DiscardEvents != 0 {
 		t.Fatalf("terminal drain phase %s reported playback loss: %+v", phase, stats)
+	}
+	select {
+	case <-s.provider.done:
+	default:
+		t.Fatalf("terminal drain phase %s returned before provider shutdown", phase)
+	}
+	t.Logf("C64_RENDER_EVIDENCE provider_samples=%d admitted_samples=%d consumed_samples=%d rendered_samples=%d queued_samples=%d underflow_samples=%d callback_count=%d shutdown=complete", providerSamples, got, consumedSamples, len(renderedPCM), stats.QueuedSamples, stats.UnderflowSamples, stats.CallbackCount)
+}
+
+func assertTerminalDrainRendered(t *testing.T, phase string, wantPCM, renderedPCM []int16, stats audio.PlaybackQueueStats) {
+	t.Helper()
+	if len(renderedPCM) < len(wantPCM) || !reflect.DeepEqual(renderedPCM[:len(wantPCM)], wantPCM) {
+		t.Fatalf("terminal drain phase %s changed rendered PCM prefix: got %d samples, want exact resampled block of %d; stats=%+v", phase, len(renderedPCM), len(wantPCM), stats)
+	}
+	if stats.RenderedSamples < stats.UnderflowSamples || stats.RenderedSamples != uint64(len(renderedPCM)) || stats.UnderflowEvents != 1 || stats.UnderflowSamples != uint64(len(renderedPCM)-len(wantPCM)) {
+		t.Fatalf("terminal drain phase %s reported unexpected render accounting: rendered=%d pcm=%d underflow_events=%d underflow_samples=%d", phase, stats.RenderedSamples, len(renderedPCM), stats.UnderflowEvents, stats.UnderflowSamples)
+	}
+	for index, sample := range renderedPCM[len(wantPCM):] {
+		if sample != 0 {
+			t.Fatalf("terminal drain phase %s fabricated nonzero underflow sample at offset %d: %d", phase, index, sample)
+		}
 	}
 }
 
@@ -485,6 +516,24 @@ type terminalDrainExternalInbound struct {
 	audio.InboundMedia
 	drainStarted chan struct{}
 	closeOnce    sync.Once
+	readMu       sync.Mutex
+	readSamples  int
+}
+
+func (m *terminalDrainExternalInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {
+	frame, err := m.InboundMedia.ReadFrame(ctx)
+	if err == nil {
+		m.readMu.Lock()
+		m.readSamples += len(frame.Samples)
+		m.readMu.Unlock()
+	}
+	return frame, err
+}
+
+func (m *terminalDrainExternalInbound) samplesRead() int {
+	m.readMu.Lock()
+	defer m.readMu.Unlock()
+	return m.readSamples
 }
 
 func (m *terminalDrainExternalInbound) Close() error {
