@@ -75,6 +75,8 @@ ALLOWED_CLASSES = {
     "device_audio_implementation",
     "dead_uncertain",
 }
+SHA256_RE = re.compile(r"^[0-9a-f]{40}$")
+RETIREMENT_KEYWORDS = ("retire", "extract", "runtime", "audio")
 
 
 class EvidenceFailure(RuntimeError):
@@ -395,6 +397,67 @@ def admitted_prd_identity() -> dict[str, Any]:
     return identity
 
 
+def retirement_classification(item: dict[str, Any], source_paths: set[str]) -> tuple[bool, dict[str, Any]]:
+    files = item.get("files")
+    if not isinstance(files, list) or any(not isinstance(path, str) or not path for path in files):
+        raise EvidenceFailure(f"open PR has incomplete file inventory: {item.get('number')!r}")
+    source_targets = sorted(set(files) & source_paths)
+    title_branch = f"{item.get('title', '')} {item.get('headRefName', item.get('head_branch', ''))}".lower()
+    keyword_matches = sorted(keyword for keyword in RETIREMENT_KEYWORDS if keyword in title_branch)
+    classification = {
+        "accepted_main_target_paths": source_targets,
+        "title_branch_keywords": keyword_matches,
+    }
+    return bool(source_targets or keyword_matches), classification
+
+
+def validate_pr_inventory(prs: dict[str, Any], source_paths: set[str]) -> dict[int, dict[str, Any]]:
+    """Validate the complete open-PR identity set before using it for subtraction.
+
+    The subtraction ledger is derived from this document, so the document must
+    carry a complete, unique and reproducible identity set.  In particular,
+    `is_retirement_checkpoint` is only a cached result; it is re-derived from
+    the observed file list and title/branch rather than trusted as an input.
+    """
+    if prs.get("schema_version") != "c107-open-pr-inventory-v1":
+        raise EvidenceFailure("open PR inventory schema is not pinned")
+    records = prs.get("prs")
+    if not isinstance(records, list):
+        raise EvidenceFailure("open PR inventory omitted its complete records")
+    by_number: dict[int, dict[str, Any]] = {}
+    for item in records:
+        if not isinstance(item, dict) or not isinstance(item.get("number"), int):
+            raise EvidenceFailure(f"open PR has invalid numeric identity: {item!r}")
+        number = item["number"]
+        if number in by_number:
+            raise EvidenceFailure(f"open PR inventory duplicated identity: {number}")
+        for key in ("head_branch", "base_branch", "head", "base"):
+            value = item.get(key)
+            if not isinstance(value, str) or not value:
+                raise EvidenceFailure(f"open PR {number} is missing {key}")
+        if not SHA256_RE.fullmatch(item["head"]) or not SHA256_RE.fullmatch(item["base"]):
+            raise EvidenceFailure(f"open PR {number} has an unpinned head/base SHA")
+        files = item.get("files")
+        if not isinstance(files, list) or files != sorted(set(files)):
+            raise EvidenceFailure(f"open PR {number} has incomplete or unstable file identity")
+        is_retirement, classification = retirement_classification(item, source_paths)
+        if item.get("accepted_main_changed_production_paths") != classification["accepted_main_target_paths"]:
+            raise EvidenceFailure(f"open PR {number} changed-source inventory is not derived from its files")
+        if item.get("is_retirement_checkpoint") is not is_retirement:
+            raise EvidenceFailure(f"open PR {number} retirement classification is inconsistent")
+        recorded_classification = item.get("retirement_classification")
+        if recorded_classification != classification:
+            raise EvidenceFailure(f"open PR {number} retirement classification evidence is missing or stale")
+        by_number[number] = item
+    all_numbers = sorted(by_number)
+    if prs.get("all_open_pr_numbers") != all_numbers:
+        raise EvidenceFailure("open PR inventory all_open_pr_numbers is incomplete")
+    retirement_numbers = sorted(number for number, item in by_number.items() if item["is_retirement_checkpoint"])
+    if prs.get("all_open_retirement_pr_numbers") != retirement_numbers:
+        raise EvidenceFailure("open PR inventory all_open_retirement_pr_numbers is incomplete")
+    return by_number
+
+
 def capture_board() -> tuple[dict[str, Any], pathlib.Path]:
     if not FACTORY_SERVER:
         raise EvidenceFailure("FACTORY_SERVER_URL is unavailable; cannot capture canonical board")
@@ -425,8 +488,7 @@ def capture_pr_inventory(source_paths: set[str], board_results: list[dict[str, A
         branch = str(item.get("headRefName"))
         candidate_name = branch.removeprefix("codex/")
         task = task_rows.get(candidate_name)
-        target_paths = sorted(set(files) & source_paths)
-        is_retirement = bool(target_paths) or any(word in (str(item.get("title")) + " " + branch).lower() for word in ("retire", "extract", "runtime", "audio"))
+        is_retirement, classification = retirement_classification({**item, "files": files}, source_paths)
         records.append(
             {
                 "number": number,
@@ -439,15 +501,24 @@ def capture_pr_inventory(source_paths: set[str], board_results: list[dict[str, A
                 "draft": bool(item.get("isDraft")),
                 "url": item.get("url"),
                 "files": files,
-                "accepted_main_changed_production_paths": target_paths,
+                "accepted_main_changed_production_paths": classification["accepted_main_target_paths"],
                 "is_retirement_checkpoint": is_retirement,
+                "retirement_classification": classification,
                 "task_work_id": task.get("workId") if task else "NONE",
                 "task_name": candidate_name if task else "NONE",
                 "task_state": task.get("state") if task else "NONE",
                 "observation_commands": [list_command, view_command],
             }
         )
-    capture = {"schema_version": "c107-open-pr-inventory-v1", "observed_at": now(), "commands": [list_command], "prs": records}
+    capture = {
+        "schema_version": "c107-open-pr-inventory-v1",
+        "observed_at": now(),
+        "commands": [list_command],
+        "prs": records,
+        "all_open_pr_numbers": sorted(record["number"] for record in records),
+        "all_open_retirement_pr_numbers": sorted(record["number"] for record in records if record["is_retirement_checkpoint"]),
+    }
+    validate_pr_inventory(capture, source_paths)
     path = HERE / "pr-inventory.json"
     write_json(path, capture)
     return capture, path
@@ -511,7 +582,10 @@ def board_checkpoint(row: dict[str, Any]) -> dict[str, str]:
 def build_subtraction(board: dict[str, Any], prs: dict[str, Any], source_paths: set[str]) -> dict[str, Any]:
     board_results = board["results"]
     tasks = active_task_rows(board_results)
+    retirement_prs = validate_pr_inventory(prs, source_paths)
     task_by_name = {row.get("name"): row for row in tasks}
+    if len(task_by_name) != len(tasks):
+        raise EvidenceFailure("canonical board has duplicate active task identities")
     all_task_rows = {
         row.get("name"): row
         for row in board_results
@@ -525,7 +599,7 @@ def build_subtraction(board: dict[str, Any], prs: dict[str, Any], source_paths: 
     preserved: list[dict[str, Any]] = []
     for pr in prs["prs"]:
         paths = sorted(set(pr.get("accepted_main_changed_production_paths", [])) & source_paths)
-        if not paths and not pr.get("is_retirement_checkpoint"):
+        if not paths and pr["number"] not in retirement_prs:
             continue
         owner_name = pr.get("task_name") if pr.get("task_name") != "NONE" else f"PR#{pr['number']}"
         owner_work_id = pr.get("task_work_id", "NONE")
@@ -601,7 +675,8 @@ def build_subtraction(board: dict[str, Any], prs: dict[str, Any], source_paths: 
         "path_owners": path_owners,
         "shared_path_dependencies": shared_owners,
         "candidate_rule": "a candidate path must be an accepted-main production path with zero path_owners and must not be a shared path dependency",
-        "all_open_retirement_pr_numbers": sorted(pr["number"] for pr in prs["prs"] if pr.get("is_retirement_checkpoint")),
+        "all_open_pr_numbers": sorted(pr["number"] for pr in prs["prs"]),
+        "all_open_retirement_pr_numbers": sorted(retirement_prs),
     }
 
 
@@ -749,6 +824,19 @@ def canonical_inventory_shape() -> dict[str, Any]:
     canonical_symbols = {row.get("id"): row for row in symbols if isinstance(row, dict) and row.get("id")}
     if len(canonical_files) != len(files) or len(canonical_symbols) != len(symbols):
         raise EvidenceFailure("canonical source census contains duplicate file or symbol identities")
+    expected_paths = set(source_production_paths())
+    if set(canonical_files) != expected_paths:
+        missing = sorted(expected_paths - set(canonical_files))
+        extra = sorted(set(canonical_files) - expected_paths)
+        raise EvidenceFailure(f"canonical source census file coverage mismatch; missing={missing[:4]} extra={extra[:4]}")
+    for path, row in canonical_files.items():
+        if row.get("kind") != "production" or not isinstance(row.get("top_level_symbol_ids"), list):
+            raise EvidenceFailure(f"canonical source census file row is incomplete: {path}")
+        source = git_show(SOURCE_REVISION, path)
+        if row.get("bytes") != len(source) or row.get("physical_lines") != len(source.splitlines()):
+            raise EvidenceFailure(f"canonical source census file dimensions are not source-derived: {path}")
+        if len(row["top_level_symbol_ids"]) != len(set(row["top_level_symbol_ids"])):
+            raise EvidenceFailure(f"canonical source census contains duplicate file symbol IDs: {path}")
     CANONICAL_INVENTORY_SHAPE = {
         "files": canonical_files,
         "file_symbol_ids": {path: list(row.get("top_level_symbol_ids") or []) for path, row in canonical_files.items()},
@@ -810,8 +898,8 @@ def validate_inventory(path: pathlib.Path, *, require_subtraction: bool = True) 
             raise EvidenceFailure(f"file row is incomplete: {file.get('path')}")
         source = git_show(SOURCE_REVISION, file["path"])
         line_count = len(source.splitlines())
-        if file.get("physical_lines") != line_count:
-            raise EvidenceFailure(f"physical line count mismatch: {file['path']}")
+        if file.get("physical_lines") != line_count or file.get("bytes") != len(source):
+            raise EvidenceFailure(f"source-derived file dimensions mismatch: {file['path']}")
         ids = file.get("top_level_symbol_ids")
         if not isinstance(ids, list) or len(ids) != len(set(ids)):
             raise EvidenceFailure(f"file symbol index is incomplete: {file['path']}")
@@ -824,6 +912,9 @@ def validate_inventory(path: pathlib.Path, *, require_subtraction: bool = True) 
         expected_symbol = canonical["symbols"].get(symbol["id"])
         if expected_symbol is None or symbol_shape(symbol) != symbol_shape(expected_symbol):
             raise EvidenceFailure(f"inventory symbol identity/span mismatch: {symbol.get('id')}")
+        for key in ("caller_edges", "caller_edge_status", "dynamic_interface_reflection_generated_uncertainty"):
+            if symbol.get(key) != expected_symbol.get(key):
+                raise EvidenceFailure(f"inventory symbol evidence mismatch: {symbol.get('id')}")
         if symbol.get("class") not in ALLOWED_CLASSES:
             raise EvidenceFailure(f"symbol classification missing or invalid: {symbol.get('id')}")
         if symbol.get("class") == "deprecated_adapter":
@@ -1002,16 +1093,114 @@ CANDIDATE_CONFIG = [
         "shared_dependencies": ["scripts/wire-packages.txt", "docs/architecture/architecture-size-baseline.json"],
         "remaining_criteria": ["TRACE", "REPLAY", "SERVICE", "QUALITY", "PARITY"],
     },
+    {
+        "id": "session-failure-projection",
+        "rank": 4,
+        "source_files": [f"{TARGET_ROOT}/session_diagnostics_failure.go"],
+        "destination": {
+            "public_contract": "go-agent-runtime/services/sessionfailure/contract.go: typed failure facts, terminal reason and output-state projection",
+            "private_internal": "go-agent-runtime/services/sessionfailure/internal/service/: provider/session failure normalization and cancellation-safe publication",
+            "wire": "go-agent-runtime/services/sessionfailure/wire/: dedicated constructor for failure projection and diagnostic sinks",
+        },
+        "physical_line_floor": 160,
+        "public_workflow": "credential-free yui session replay and provider/session failure workflows that publish typed terminal evidence",
+        "effects": "retain failure classification, terminal reason/provenance, output state, cancellation boundaries and the original provider error",
+        "focused_checks": ["TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic", "TestSessionCancellation_RecordsTerminalDiagnosticOnce"],
+        "race_checks": ["failure observation, cancellation and terminal publication controls under -race"],
+        "external_consumer": "GOWORK=off Go consumer imports services/sessionfailure and verifies typed failure projection without agent-cli",
+        "accumulated_regression": "scripts/test-session-ci-regressions.sh all, including credential-free replay, interruption and terminal-error controls",
+        "negative_control": "drop terminal failure facts or convert cancellation into failure; the bounded workflow must reject missing/error-classified terminal evidence",
+        "shared_dependencies": ["scripts/wire-packages.txt", "docs/architecture/architecture-size-baseline.json"],
+        "remaining_criteria": ["SERVICE", "TRACE", "REPLAY", "FAILURES", "QUALITY", "PARITY"],
+    },
+    {
+        "id": "session-duration-terminal-boundary",
+        "rank": 5,
+        "source_files": [f"{TARGET_ROOT}/session_duration_terminal.go"],
+        "destination": {
+            "public_contract": "go-agent-runtime/services/sessionduration/contract.go: bounded terminal admission, output state and lifecycle result",
+            "private_internal": "go-agent-runtime/services/sessionduration/internal/service/: provider-terminal observation, max-duration close and transport errors",
+            "wire": "go-agent-runtime/services/sessionduration/wire/: duration terminal coordinator and replay artifact writer",
+        },
+        "physical_line_floor": 90,
+        "public_workflow": "credential-free yui session --max-duration replay and bounded provider-close workflows",
+        "effects": "preserve provider-terminal versus loop-close precedence, output-state projection, terminal replay artifacts and joined lifecycle errors",
+        "focused_checks": ["TestRunSessionWithMaxDuration_PreservesProviderTerminalDuringShutdown", "TestRunSessionWithMaxDuration_FinalizesRealArtifactsAndRejectsLateFrame"],
+        "race_checks": ["bounded duration terminal admission and artifact publication controls under -race"],
+        "external_consumer": "GOWORK=off Go consumer imports services/sessionduration and verifies terminal admission/output state without agent-cli",
+        "accumulated_regression": "scripts/test-session-ci-regressions.sh all, including credential-free replay, max-duration and interruption controls",
+        "negative_control": "admit a loop shutdown close as provider evidence or drop the bounded terminal artifact; the replay verifier must fail closed",
+        "shared_dependencies": ["scripts/wire-packages.txt", "docs/architecture/architecture-size-baseline.json"],
+        "remaining_criteria": ["SERVICE", "REPLAY", "FAILURES", "QUALITY", "PARITY"],
+    },
+    {
+        "id": "session-interactive-tool-policy",
+        "rank": 6,
+        "source_files": [f"{TARGET_ROOT}/session_interactive_policy.go"],
+        "destination": {
+            "public_contract": "go-agent-runtime/services/sessioninteractive/contract.go: per-session tool class, timeout and acknowledgement policy",
+            "private_internal": "go-agent-runtime/services/sessioninteractive/internal/service/: policy validation, cloning and runtime compatibility conversion",
+            "wire": "go-agent-runtime/services/sessioninteractive/wire/: injected interactive policy construction and browser tool-name mapping",
+        },
+        "physical_line_floor": 100,
+        "public_workflow": "credential-free yui tool replay with fast-read and bounded-long-running tool calls",
+        "effects": "preserve request-scoped tool classes, timeout bounds, acknowledgement thresholds, validation and browser-tool mapping",
+        "focused_checks": ["TestInteractiveToolPolicyDefaultsAndClassSelection", "TestInteractiveToolPolicyHonorsOverrides", "TestInteractiveToolExecutorUsesIndependentSessionBudgets"],
+        "race_checks": ["per-session policy cloning and tool timeout decisions under -race"],
+        "external_consumer": "GOWORK=off Go consumer imports services/sessioninteractive and validates policy settings without agent-cli",
+        "accumulated_regression": "scripts/test-session-ci-regressions.sh all, including credential-free tool continuation and cancellation controls",
+        "negative_control": "accept an unbounded or invalid tool policy; the consumer and replay controls must reject it before tool execution",
+        "shared_dependencies": ["scripts/wire-packages.txt", "docs/architecture/architecture-size-baseline.json"],
+        "remaining_criteria": ["SERVICE", "REPLAY", "QUALITY", "PARITY"],
+    },
+    {
+        "id": "session-room-error-sanitization",
+        "rank": 7,
+        "source_files": [f"{TARGET_ROOT}/session_room_errors.go"],
+        "destination": {
+            "public_contract": "go-agent-runtime/services/sessionroomerrors/contract.go: participant failure identity, sanitized cause and room result",
+            "private_internal": "go-agent-runtime/services/sessionroomerrors/internal/service/: secret-aware error unwrapping and termination mapping",
+            "wire": "go-agent-runtime/services/sessionroomerrors/wire/: room failure projection and credential-free diagnostic construction",
+        },
+        "physical_line_floor": 70,
+        "public_workflow": "credential-free multi-participant yui session failure and disconnect replay",
+        "effects": "retain participant identity and termination reason while sanitizing secrets, preserving error identity and projecting a stable room result",
+        "focused_checks": ["TestRunRoom_PreservesFailedEvidenceAndRedactsSecrets", "TestRoomEvidence_RecordingHealthRetainsFirstSanitizedFailure"],
+        "race_checks": ["participant failure projection and room result publication under -race"],
+        "external_consumer": "GOWORK=off Go consumer imports services/sessionroomerrors and verifies sanitized failure identity without agent-cli",
+        "accumulated_regression": "scripts/test-session-ci-regressions.sh all, including credential-free room failure and interruption controls",
+        "negative_control": "publish a raw secret or erase participant failure identity; the room replay verifier must reject the result",
+        "shared_dependencies": ["scripts/wire-packages.txt", "docs/architecture/architecture-size-baseline.json"],
+        "remaining_criteria": ["SERVICE", "FAILURES", "QUALITY", "PARITY"],
+    },
 ]
 
 
 def materialize_candidates() -> dict[str, Any]:
     inventory = read_json(HERE / "analysis/inventory.json")
+    subtraction = read_json(HERE / "subtraction.json")
+    owned_source_paths = {
+        path for path, owners in subtraction.get("path_owners", {}).items() if isinstance(owners, list) and owners
+    }
+    excluded_configs = [
+        config["id"]
+        for config in CANDIDATE_CONFIG
+        if owned_source_paths.intersection(config["source_files"])
+    ]
+    selected_configs = [
+        config
+        for config in CANDIDATE_CONFIG
+        if not owned_source_paths.intersection(config["source_files"])
+    ][:3]
+    if len(selected_configs) < 3:
+        raise EvidenceFailure(
+            f"fewer than three unowned retirement candidates remain after subtraction: {len(selected_configs)}"
+        )
     symbols_by_file: dict[str, list[dict[str, Any]]] = {}
     for symbol in inventory.get("symbols", []):
         symbols_by_file.setdefault(symbol["file"], []).append(symbol)
     candidates = []
-    for config in CANDIDATE_CONFIG:
+    for rank, config in enumerate(selected_configs, 1):
         file_rows = [next((row for row in inventory["files"] if row["path"] == path), None) for path in config["source_files"]]
         if any(row is None for row in file_rows):
             raise EvidenceFailure(f"candidate source file is absent from inventory: {config['id']}")
@@ -1033,7 +1222,7 @@ def materialize_candidates() -> dict[str, Any]:
         candidates.append(
             {
                 "id": config["id"],
-                "rank": config["rank"],
+                "rank": rank,
                 "decision": "independently executable residual boundary; characterization grants no mutation lease",
                 "source_revision": SOURCE_REVISION,
                 "current_writer_paths": config["source_files"],
@@ -1063,7 +1252,12 @@ def materialize_candidates() -> dict[str, Any]:
         "schema_version": "c107-candidates-v1",
         "project": PROJECT,
         "source_revision": SOURCE_REVISION,
-        "selection_rule": "ranked by independent value; all current writer and destination paths are pairwise disjoint and absent from subtraction",
+        "selection_rule": "ranked by independent value; preferred configurations whose source paths are subtraction-owned are excluded, then the first three eligible configurations must have pairwise-disjoint writer and destination paths",
+        "candidate_selection": {
+            "subtraction_owned_source_paths_excluded": sorted(owned_source_paths),
+            "excluded_configurations": excluded_configs,
+            "selected_configurations": [config["id"] for config in selected_configs],
+        },
         "candidates": candidates,
         "all_project_criteria": "OPEN; C107 characterizes only",
     }
@@ -1097,21 +1291,49 @@ def materialize_candidates() -> dict[str, Any]:
     return document
 
 
-def validate_subtraction_document(subtraction: dict[str, Any], prs: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
-    expected_by_number = {str(row.get("number")): row for row in prs.get("prs", [])}
+def validate_subtraction_document(
+    subtraction: dict[str, Any], prs: dict[str, Any], board: dict[str, Any], source_paths: set[str] | None = None
+) -> dict[str, Any]:
+    source_paths = source_paths or set(source_production_paths())
+    expected_by_number = validate_pr_inventory(prs, source_paths)
     path_owners = subtraction.get("path_owners")
     if subtraction.get("source_revision") != SOURCE_REVISION or not isinstance(path_owners, dict):
         raise EvidenceFailure("subtraction ledger is not pinned or has no path_owners")
+    if set(path_owners) != source_paths:
+        missing = sorted(source_paths - set(path_owners))
+        extra = sorted(set(path_owners) - source_paths)
+        raise EvidenceFailure(f"subtraction path coverage mismatch; missing={missing[:4]} extra={extra[:4]}")
     for path, owners in path_owners.items():
+        if not isinstance(owners, list):
+            raise EvidenceFailure(f"subtraction path owner list is invalid: {path}")
+        seen_path_owners: set[int] = set()
         for owner in owners:
-            expected = expected_by_number.get(str(owner.get("pr_number")))
-            if expected is None or expected.get("head") != owner.get("head") or expected.get("base") != owner.get("base") or path not in expected.get("accepted_main_changed_production_paths", []):
+            try:
+                number = int(owner.get("pr_number"))
+            except (TypeError, ValueError) as exc:
+                raise EvidenceFailure(f"subtraction path owner has invalid PR identity: {owner!r}") from exc
+            if number in seen_path_owners:
+                raise EvidenceFailure(f"subtraction path has duplicate PR owner: {path} PR {number}")
+            seen_path_owners.add(number)
+            expected = expected_by_number.get(number)
+            expected_owner = expected.get("task_name") if expected and expected.get("task_name") != "NONE" else f"PR#{number}"
+            expected_paths = sorted(expected.get("accepted_main_changed_production_paths", [])) if expected else []
+            if (
+                expected is None
+                or owner.get("owner") != expected_owner
+                or owner.get("work_id") != expected.get("task_work_id")
+                or owner.get("branch") != expected.get("head_branch")
+                or owner.get("head") != expected.get("head")
+                or owner.get("base") != expected.get("base")
+                or sorted(owner.get("accepted_main_changed_paths", [])) != expected_paths
+                or path not in expected_paths
+            ):
                 raise EvidenceFailure(f"subtraction PR head/path mismatch for {path}: PR {owner.get('pr_number')}")
-    expected_retirement_prs = {
-        int(row["number"]): row
-        for row in prs.get("prs", [])
-        if row.get("is_retirement_checkpoint") and isinstance(row.get("number"), int)
-    }
+    expected_retirement_prs = {number: row for number, row in expected_by_number.items() if row["is_retirement_checkpoint"]}
+    expected_all_numbers = sorted(expected_by_number)
+    recorded_all_numbers = subtraction.get("all_open_pr_numbers")
+    if recorded_all_numbers != expected_all_numbers:
+        raise EvidenceFailure("subtraction all_open_pr_numbers is incomplete")
     preserved = subtraction.get("preserved_unmerged_checkpoints")
     if not isinstance(preserved, list):
         raise EvidenceFailure("subtraction omitted preserved checkpoint rows")
@@ -1157,7 +1379,7 @@ def validate_subtraction_document(subtraction: dict[str, Any], prs: dict[str, An
         raise EvidenceFailure("subtraction required checkpoint identity set is not pinned")
     if sorted(SHARED_PATHS) != sorted(row.get("path") for row in subtraction.get("shared_path_dependencies", [])):
         raise EvidenceFailure("shared Wire/architecture dependencies are not explicit")
-    if sorted(int(number) for number in subtraction.get("all_open_retirement_pr_numbers", [])) != expected_numbers:
+    if subtraction.get("all_open_retirement_pr_numbers") != expected_numbers:
         raise EvidenceFailure("subtraction all_open_retirement_pr_numbers is incomplete")
     return {"source_revision": SOURCE_REVISION, "owned_source_paths": len([path for path, owners in path_owners.items() if owners]), "unsubtracted_source_paths": len([path for path, owners in path_owners.items() if not owners]), "active_tasks": len(subtraction.get("active_tasks", [])), "preserved_checkpoints": len(subtraction.get("preserved_unmerged_checkpoints", [])), "retirement_pr_numbers": expected_numbers}
 
@@ -1275,6 +1497,9 @@ def negative_controls() -> dict[str, Any]:
             raise EvidenceFailure("negative control has no preserved checkpoint row to delete")
         deleted_pr_number = int(target_checkpoint["pr_number"])
         checkpoint_subtraction["preserved_unmerged_checkpoints"] = [row for row in preserved_rows if int(row.get("pr_number", -1)) != deleted_pr_number]
+        checkpoint_subtraction["all_open_retirement_pr_numbers"] = [
+            number for number in checkpoint_subtraction.get("all_open_retirement_pr_numbers", []) if int(number) != deleted_pr_number
+        ]
         write_json(mutated_checkpoint_subtraction, checkpoint_subtraction)
         checkpoint_result = subprocess.run([sys.executable, str(__file__), "--mode", "validate-copy", "--inventory", str(original_inventory), "--subtraction", str(mutated_checkpoint_subtraction), "--pr-inventory", str(original_pr)], cwd=ROOT, env=safe_environment(), capture_output=True, text=True, timeout=min(60, max(1, int(max(1, remaining_time())))))
 
@@ -1293,7 +1518,12 @@ def negative_controls() -> dict[str, Any]:
             "pr_head_mutation": {"exit_code": head_result.returncode, "diagnostic": redact_text(head_result.stderr.strip() or head_result.stdout.strip()), "mutated_from": expected_head, "mutated_to": first_owner["head"]},
             "symbol_classification_deletion": {"exit_code": class_result.returncode, "diagnostic": redact_text(class_result.stderr.strip() or class_result.stdout.strip()), "deleted_symbol_id": deleted_id},
             "symbol_row_deletion": {"exit_code": row_result.returncode, "diagnostic": redact_text(row_result.stderr.strip() or row_result.stdout.strip()), "deleted_symbol_id": deleted_symbol["id"], "self_reported_totals_adjusted": True},
-            "preserved_pr_deletion": {"exit_code": checkpoint_result.returncode, "diagnostic": redact_text(checkpoint_result.stderr.strip() or checkpoint_result.stdout.strip()), "deleted_pr_number": deleted_pr_number},
+            "preserved_pr_deletion": {
+                "exit_code": checkpoint_result.returncode,
+                "diagnostic": redact_text(checkpoint_result.stderr.strip() or checkpoint_result.stdout.strip()),
+                "deleted_pr_number": deleted_pr_number,
+                "self_reported_retirement_list_adjusted": True,
+            },
             "pristine_validation": validate_subtraction(),
         }
     write_json(HERE / "runs/negative-controls/report.json", report)

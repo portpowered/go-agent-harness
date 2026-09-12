@@ -2,11 +2,11 @@
   "command": [
     "go",
     "run",
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-source-z68m_wrn/archive/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analyzer/main.go",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-source-70e8mu_m/archive/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analyzer/main.go",
     "--root",
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-source-z68m_wrn/archive",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-source-70e8mu_m/archive",
     "--out",
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-source-z68m_wrn/raw-c50",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-source-70e8mu_m/raw-c50",
     "--source-revision",
     "d4766c3dbbf2c198142047ead4449d58dd47d485"
   ],
@@ -23,12 +23,12 @@
   ],
   "exit_code": 0,
   "go_version": "go version go1.26.7 darwin/arm64",
-  "inventory_sha256": "d67bef585343dd0b06866d5544b60b3a7b4f075a782a78ccb50ff3cd56089e87",
-  "markdown_sha256": "fb46ce6a1830b7a673c54d3975f3a0c857c3f5b76590778516508b84f824b8fd",
+  "inventory_sha256": "565a35e541e6cc3b67aad92f92bd2b7bf129f71ece5114036ae1b45569ff36cc",
+  "markdown_sha256": "3117d60d056708891c48818124590fa50c64c9d82e6792967aa25fea7102c15d",
   "parser_source_sha256": "ca1e0f31ca2d8b39afd272fe37808cdb477cfb48bc1c3bcf54122679ed3316ee",
-  "run_timestamp": "2026-09-12T22:02:48Z",
+  "run_timestamp": "2026-09-12T23:10:40Z",
   "schema_version": "c107-analysis-run-v1",
   "source_archive_sha256": "d3d02949213d8822047a7d723a487e692f153c6bfe8ca5eb6b927823ee90dbf4",
   "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-  "wall_duration_seconds": 8.235564
+  "wall_duration_seconds": 8.035024
 }

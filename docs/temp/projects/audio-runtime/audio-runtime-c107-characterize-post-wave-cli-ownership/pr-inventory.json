@@ -1,4 +1,112 @@
 {
+  "all_open_pr_numbers": [
+    365,
+    415,
+    438,
+    445,
+    447,
+    448,
+    449,
+    450,
+    451,
+    452,
+    454,
+    456,
+    458,
+    460,
+    461,
+    462,
+    463,
+    464,
+    465,
+    466,
+    467,
+    468,
+    469,
+    470,
+    471,
+    472,
+    473,
+    474,
+    475,
+    476,
+    477,
+    478,
+    479,
+    480,
+    481,
+    482,
+    483,
+    484,
+    485,
+    486,
+    487,
+    488,
+    489,
+    490,
+    491,
+    492,
+    493,
+    494,
+    495,
+    496,
+    497,
+    498
+  ],
+  "all_open_retirement_pr_numbers": [
+    365,
+    415,
+    438,
+    445,
+    447,
+    448,
+    449,
+    450,
+    451,
+    452,
+    454,
+    456,
+    458,
+    460,
+    461,
+    462,
+    463,
+    464,
+    465,
+    466,
+    467,
+    468,
+    469,
+    470,
+    471,
+    472,
+    473,
+    474,
+    475,
+    476,
+    477,
+    478,
+    479,
+    480,
+    481,
+    482,
+    483,
+    484,
+    485,
+    486,
+    487,
+    488,
+    489,
+    490,
+    491,
+    492,
+    493,
+    494,
+    495,
+    496,
+    497,
+    498
+  ],
   "commands": [
     [
       "gh",
@@ -14,7 +122,7 @@
       "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
     ]
   ],
-  "observed_at": "2026-09-12T22:02:47Z",
+  "observed_at": "2026-09-12T23:10:39Z",
   "prs": [
     {
       "accepted_main_changed_production_paths": [],
@@ -60,6 +168,12 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "audio"
+        ]
+      },
       "state": "OPEN",
       "task_name": "NONE",
       "task_state": "NONE",
@@ -110,6 +224,13 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "audio",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c23-long-session-tool-characterization",
       "task_state": {
@@ -179,6 +300,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "NONE",
       "task_state": "NONE",
@@ -227,6 +358,13 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "audio",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c54-room-document-admission",
       "task_state": {
@@ -373,6 +511,13 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "audio",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c60-c52-failed-case-attribution-repair",
       "task_state": {
@@ -492,6 +637,21 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c56-retire-cli-recording-orchestration",
       "task_state": {
@@ -569,6 +729,18 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/selfplay_service.go",
+          "agent-cli/internal/services/internal/agentruntime/session_self_play.go",
+          "agent-cli/internal/services/internal/agentruntime/session_self_play_evidence.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c57-retire-cli-self-play-runtime",
       "task_state": {
@@ -662,6 +834,21 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c59-retire-cli-audio-input-runtime",
       "task_state": {
@@ -743,6 +930,19 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_duration.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_admission.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_artifacts.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c58-retire-cli-duration-runtime",
       "task_state": {
@@ -846,6 +1046,21 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c61-retire-cli-browser-scenario-contract",
       "task_state": {
@@ -915,6 +1130,17 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_terminal_outcome.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c63-retire-cli-terminal-outcome",
       "task_state": {
@@ -984,6 +1210,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_dynamic_tool_publisher.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c66-retire-cli-dynamic-tool-publication",
       "task_state": {
@@ -1049,6 +1285,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_bare.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c69-retire-cli-bare-session-admission",
       "task_state": {
@@ -1118,6 +1364,17 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_image.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c67-retire-cli-image-turn-runtime",
       "task_state": {
@@ -1186,6 +1443,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_text.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c71-retire-cli-text-seed-runtime",
       "task_state": {
@@ -1255,6 +1522,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/metrics_collector.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c70-retire-cli-metrics-replay",
       "task_state": {
@@ -1324,6 +1601,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c72-retire-cli-instruction-transport",
       "task_state": {
@@ -1397,6 +1684,17 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c73-retire-cli-conversation-log",
       "task_state": {
@@ -1482,6 +1780,18 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_bundle.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_integrity.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_manifest.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c75-retire-cli-room-replay-bundle",
       "task_state": {
@@ -1551,6 +1861,18 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c76-retire-cli-playback-observability",
       "task_state": {
@@ -1621,6 +1943,17 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_options.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c74-retire-cli-session-config",
       "task_state": {
@@ -1686,6 +2019,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_tools.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c78-retire-cli-tool-execution-runtime",
       "task_state": {
@@ -1753,6 +2096,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_replay.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c77-retire-cli-session-replay-runtime",
       "task_state": {
@@ -1796,6 +2149,7 @@
         "docs/architecture/architecture-policy.json",
         "docs/architecture/architecture-size-baseline.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720884934.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
@@ -1821,7 +2175,7 @@
         "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
         "scripts/wire-packages.txt"
       ],
-      "head": "34816f5b0bce04cdff768322ba8bc0269ca63d32",
+      "head": "40702f55bbf7406236caff55454ad67cb09b1025",
       "head_branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
       "is_retirement_checkpoint": true,
       "number": 470,
@@ -1850,6 +2204,23 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+          "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c79-retire-cli-response-lifecycle",
       "task_state": {
@@ -1935,6 +2306,19 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_annotations.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_streams.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c81-retire-cli-room-audio-bundle",
       "task_state": {
@@ -2014,6 +2398,19 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence_capture.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence_integrity.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c80-retire-cli-room-evidence-runtime",
       "task_state": {
@@ -2086,6 +2483,20 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c83-retire-cli-browser-scenario-runner",
       "task_state": {
@@ -2165,6 +2576,19 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_drain.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_setup.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c82-retire-cli-live-session-orchestration",
       "task_state": {
@@ -2229,6 +2653,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c86-retire-cli-rate-limit-retry-policy",
       "task_state": {
@@ -2299,6 +2733,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_turns.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c87-retire-cli-session-turns",
       "task_state": {
@@ -2365,6 +2809,17 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_scheduler.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c85-retire-cli-room-replay-scheduler",
       "task_state": {
@@ -2436,6 +2891,17 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c89-retire-cli-provider-liveness",
       "task_state": {
@@ -2508,6 +2974,17 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_browser_capabilities.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_tools.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c88-retire-cli-room-tool-capabilities",
       "task_state": {
@@ -2575,6 +3052,17 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c92-retire-cli-audio-output-runtime",
       "task_state": {
@@ -2646,6 +3134,17 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c91-retire-cli-capture-claim-runtime",
       "task_state": {
@@ -2714,6 +3213,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_diagnostics.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics",
       "task_state": {
@@ -2775,6 +3284,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_terminal.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c94-retire-cli-room-terminal-policy",
       "task_state": {
@@ -2846,6 +3365,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c93-retire-cli-room-media-io",
       "task_state": {
@@ -2911,6 +3440,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/rtc_device_binding.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c96-retire-cli-rtc-device-binding",
       "task_state": {
@@ -2974,6 +3513,17 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c84-retire-cli-room-participant-lifecycle",
       "task_state": {
@@ -3046,6 +3596,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_observation.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c97-retire-cli-session-observation",
       "task_state": {
@@ -3123,6 +3683,18 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_tools.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c99-retire-cli-room-participant-planning",
       "task_state": {
@@ -3197,6 +3769,18 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_replay.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c101-retire-cli-provider-session-runtime",
       "task_state": {
@@ -3266,6 +3850,16 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c103-retire-cli-rtc-session-runtime",
       "task_state": {
@@ -3321,6 +3915,13 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "audio",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c106-repair-c68-cross-rate-probe-oracle",
       "task_state": {
@@ -3394,6 +3995,19 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_cancellation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_finalizer.go",
+          "agent-cli/internal/services/internal/agentruntime/session_termination.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c104-retire-cli-session-finalization-boundary",
       "task_state": {
@@ -3438,6 +4052,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/rtc-transport-causal.stdout",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/negative-controls/report.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/evidence/runs/exec-invocations-v4.log",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/malformed.session.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/yui-malformed-truncated.stderr",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/yui-malformed-truncated.stdout",
@@ -3457,7 +4072,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/report.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py"
       ],
-      "head": "fb826e2aa55aa636a5a4920580c10a5362a07e0c",
+      "head": "c47e39c143c199e3d4023604d6f30fee750126e1",
       "head_branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
       "is_retirement_checkpoint": true,
       "number": 493,
@@ -3486,10 +4101,17 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "audio",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
       "task_state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-222",
@@ -3564,7 +4186,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verification-summary.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py"
       ],
-      "head": "cf20ae6fe0277b5534c3a352983223b79ac65250",
+      "head": "be743f506f1db606fb88ad23c5432359a677c74a",
       "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "is_retirement_checkpoint": true,
       "number": 494,
@@ -3593,6 +4215,13 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "audio",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
       "task_state": {
@@ -3631,7 +4260,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/verification.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py"
       ],
-      "head": "e0af439b2075e14cca1b814dc853fe5e4743b36c",
+      "head": "e3cde9327bf7f8d562bdbe7ba77aecbee77f6a76",
       "head_branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
       "is_retirement_checkpoint": true,
       "number": 495,
@@ -3660,10 +4289,18 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c109-characterize-browser-retirement-integration",
       "task_state": {
-        "name": "init",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-224",
@@ -3699,7 +4336,7 @@
         "go-agent-runtime/services/sessioncontinuation/wire/wire_gen.go",
         "go-agent-runtime/services/sessioncontinuation/wire/wire_test.go"
       ],
-      "head": "70e2a05aa76da03989da7d5f2830817b42d58e56",
+      "head": "9712ed8b2a7879d08dd620eb0a64a895b7309e24",
       "head_branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
       "is_retirement_checkpoint": true,
       "number": 496,
@@ -3728,15 +4365,220 @@
           "files"
         ]
       ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
       "state": "OPEN",
       "task_name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
       "task_state": {
-        "name": "init",
-        "type": "PROCESSING"
+        "name": "failed",
+        "type": "FAILED"
       },
       "task_work_id": "work-task-236",
       "title": "refactor(audio-runtime): retire CLI tool continuation lifecycle",
       "url": "https://github.com/portpowered/go-agent-harness/pull/496"
+    },
+    {
+      "accepted_main_changed_production_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+        "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
+        "agent-cli/internal/services/internal/agentruntime/session_models.go",
+        "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_live.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
+        "agent-cli/internal/services/internal/agentruntime/session_voices.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "base_branch": "main",
+      "draft": false,
+      "files": [
+        "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_format_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_capabilities_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_capture_claim_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
+        "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_interactive_policy_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_models.go",
+        "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_live.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_live_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_selection_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_scheduled_audio_policy_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_voices.go",
+        "agent-cli/internal/transport/cli/internal/livehost/request.go",
+        "agent-cli/internal/transport/cli/internal/livehost/request_test.go",
+        "agent-cli/internal/transport/cli/session_observability.go",
+        "coverage-manifest/go-agent-runtime/services/sessioninstructions/internal/service/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessioninstructions/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessioninstructions/wire/package.json",
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/architecture-size-baseline.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/README.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/admission.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/baseline.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/main.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py",
+        "go-agent-runtime/services/session/instructions.go",
+        "go-agent-runtime/services/session/internal/instructions/service.go",
+        "go-agent-runtime/services/session/wire/providers.go",
+        "go-agent-runtime/services/session/wire/wire_gen.go",
+        "go-agent-runtime/services/sessioninstructions/contract.go",
+        "go-agent-runtime/services/sessioninstructions/contract_test.go",
+        "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
+        "go-agent-runtime/services/sessioninstructions/internal/service/service_test.go",
+        "go-agent-runtime/services/sessioninstructions/wire/wire.go",
+        "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go",
+        "scripts/wire-packages.txt"
+      ],
+      "head": "877866206b1372d4ef5a5836344ab0a6fccc06d7",
+      "head_branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
+      "is_retirement_checkpoint": true,
+      "number": 497,
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "497",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+          "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
+          "agent-cli/internal/services/internal/agentruntime/session_models.go",
+          "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_live.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
+          "agent-cli/internal/services/internal/agentruntime/session_voices.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "extract",
+          "retire",
+          "runtime"
+        ]
+      },
+      "state": "OPEN",
+      "task_name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
+      "task_state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "task_work_id": "work-task-232",
+      "title": "refactor: extract reusable session instruction resolution",
+      "url": "https://github.com/portpowered/go-agent-harness/pull/497"
+    },
+    {
+      "accepted_main_changed_production_paths": [
+        "agent-cli/internal/services/internal/agentruntime/service.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+        "agent-cli/internal/services/internal/agentruntime/trace.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "base_branch": "main",
+      "draft": false,
+      "files": [
+        "agent-cli/internal/services/internal/agentruntime/service.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_trace_test.go",
+        "agent-cli/internal/services/internal/agentruntime/trace.go",
+        "agent-cli/internal/services/internal/agentruntime/trace_c112_test.go",
+        "coverage-manifest/go-agent-runtime/services/sessiontrace/internal/service/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessiontrace/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessiontrace/wire/package.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/README.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/candidate-evidence.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/go.sum",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/main.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/main_test.go",
+        "go-agent-runtime/services/sessiontrace/internal/service/service.go",
+        "go-agent-runtime/services/sessiontrace/internal/service/service_test.go",
+        "go-agent-runtime/services/sessiontrace/service.go",
+        "go-agent-runtime/services/sessiontrace/wire/providers.go",
+        "go-agent-runtime/services/sessiontrace/wire/wire_gen.go",
+        "go-agent-runtime/services/sessiontrace/wire/wire_test.go"
+      ],
+      "head": "8b2983338ea449fd739994e8fbbc958581bd2e7b",
+      "head_branch": "codex/audio-runtime-c112-retire-cli-session-trace-evidence",
+      "is_retirement_checkpoint": true,
+      "number": 498,
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "498",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/service.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+          "agent-cli/internal/services/internal/agentruntime/trace.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
+      "state": "OPEN",
+      "task_name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+      "task_state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "task_work_id": "work-task-238",
+      "title": "feat(runtime): retire CLI session trace orchestration",
+      "url": "https://github.com/portpowered/go-agent-harness/pull/498"
     }
   ],
   "schema_version": "c107-open-pr-inventory-v1"
