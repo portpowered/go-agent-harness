@@ -1,5 +1,5 @@
 {
-  "candidate": "4d026497962a50ec78f60fc58abe5323d59ec560",
+  "candidate": "60236d9eddeb719d7ffebfa4b450153c67103d8c",
   "mode": "response-matrix",
   "payload": {
     "checks": [
@@ -13,10 +13,10 @@
           "-count=1",
           "-timeout=180s"
         ],
-        "elapsed_seconds": 0.393,
+        "elapsed_seconds": 0.547,
         "returncode": 0,
         "stderr": "",
-        "stdout": "?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t[no test files]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.158s\n"
+        "stdout": "?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t[no test files]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.295s\n"
       },
       {
         "argv": [
@@ -28,10 +28,10 @@
           "-count=1",
           "-timeout=210s"
         ],
-        "elapsed_seconds": 9.426,
+        "elapsed_seconds": 6.763,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.278s\n"
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.255s\n"
       },
       {
         "argv": [
@@ -41,10 +41,10 @@
           "-count=1",
           "-timeout=90s"
         ],
-        "elapsed_seconds": 0.341,
+        "elapsed_seconds": 0.319,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \texample.com/audio-runtime-c79-sessiondiagnostics-consumer\t0.167s\n"
+        "stdout": "ok  \texample.com/audio-runtime-c79-sessiondiagnostics-consumer\t0.161s\n"
       }
     ],
     "lines": {
