@@ -2,7 +2,7 @@
 
 ## Scope
 
-Candidate source/test checkpoint: `86aa7f1c4120ee3921fc556378f9a03277700b2b`.
+Candidate source/test checkpoint: `42886f5a2473433021da29ae77b6af52c82386f9`.
 
 Only the admitted task-owned paths changed:
 
@@ -16,11 +16,11 @@ The production adjustment is confined to `AgentLoop.Run`: the finish path cancel
 
 `TestRunJoinsPublishedDeltasBeforeReturningOnEngineError` now:
 
-1. queues provider `SESSION.OPEN` and then a text delta;
-2. waits on the exact `KernelRunner: sending text delta` signal, emitted after the reader-channel publication;
-3. queues the structured terminal error only after that signal;
-4. fills the public delta buffer so the forwarder is blocked when the engine reports the error;
-5. proves `Run` has not returned, releases the bounded backlog, and verifies the exact text delta remains readable after `Run` returns;
+1. queues provider `SESSION.OPEN`, starts `Run`, and reads that exact event from the public buffer;
+2. queues a first text delta and reads its exact content from `AgentLoop.Deltas()` before any terminal error;
+3. fills the public delta buffer, queues a second text delta, and waits on the exact `KernelRunner: sending text delta` signal emitted after reader-channel publication;
+4. queues the structured terminal error only after that second kernel publication;
+5. proves `Run` has not returned, releases the bounded backlog, and verifies the second exact text delta remains readable after `Run` returns;
 6. verifies the original `*messages.ErrorValue` identity plus `errors.Is`/`errors.As` compatibility.
 
 `TestRunCancellationReleasesBlockedDeltaForwarder` covers caller cancellation with the same full-buffer pressure. Capacity tests remain unchanged and passed.
