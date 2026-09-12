@@ -1,0 +1,4 @@
+github.com/pion/opus v0.1.1-0.20260814200708-161621adf560 h1:zpSIBsFsJdQtCyAFdg5XEfafam8t7lE4AEwAhqyB4WA=
+github.com/pion/opus v0.1.1-0.20260814200708-161621adf560/go.mod h1:t5Xog2n682JnawoykACE6nKVmupFvmJvkpM7x6bTv6g=
+github.com/portpowered/go-agent-harness/go-llm-gateway v0.0.5-0.20260904005433-1a695c9c6934 h1:wku8/Equc9itUnPxZMao5/pSdUPPHtYlM0sC3iHUgeI=
+github.com/portpowered/go-agent-harness/go-llm-gateway v0.0.5-0.20260904005433-1a695c9c6934/go.mod h1:C1FgQYfHkCZma6R2UHhY3xrGqc5w/A1lOV1OE8c1JEw=
