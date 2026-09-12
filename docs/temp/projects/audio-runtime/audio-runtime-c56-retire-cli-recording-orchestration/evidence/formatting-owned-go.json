@@ -49,7 +49,7 @@
       "./go-agent-runtime/services/recording/..."
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration",
-    "elapsed_ms": 1021,
+    "elapsed_ms": 165,
     "returncode": 0,
     "stderr": "",
     "stdout": "",

@@ -1,13 +1,26 @@
 {
   "baseline_manifest_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
-  "head": "cf088cf6013ca881b046e0054070d29e1d460db3",
+  "head": "a07f3372c5870b1aaba2596c575fd9ff18f022f4",
   "origin_main": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
   "passed": true,
   "planning_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
   "schema": "audio-runtime.c56.final-scope-provenance-budget.v1",
   "startup_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "status_paths": [],
+  "status_paths": [
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/baseline-and-oracles.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/embedding-public-provenance-cleanup.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/exact-artifacts-and-mutations.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/final-scope-provenance-budget.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/formatting-owned-go.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/lifecycle-projections-failures.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/non-recording-regression.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/non-recording-regression.summary.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/record-finalize-replay.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/record-finalize-replay.summary.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/runner-negative-controls.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/runner-negative-controls.summary.json"
+  ],
   "task": "audio-runtime-c56-retire-cli-recording-orchestration",
   "toolchain": "go version go1.26.7 darwin/arm64",
   "unexpected_paths": []
