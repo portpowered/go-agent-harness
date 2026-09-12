@@ -7,7 +7,7 @@ import (
 	"errors"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 	"io"
-	"reflect"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,9 +16,6 @@ import (
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
 // TestRunSessionRTCDeviceBindingStartsRuntimePumps proves the production
@@ -304,12 +301,24 @@ func TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio(t *tes
 	scenario.push(t, samples)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	cancelOnTerminal := os.Getenv("C64_CANCEL_ON_TERMINAL") == "1"
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
-			ModelCatalog: testModelCatalog(), ReplayPath: "synthetic.json", WaitForClose: true,
+			ModelCatalog: testModelCatalog(), Provider: "grok", Model: "test-model", APIKey: "test-key", WaitForClose: true, BareLive: true,
 			SessionInferencer: &terminalDrainExternalInferencer{session: scenario.provider},
 			RTCDeviceBinding:  scenario.request,
+			ToolExecutor:      scenario.toolExecutor,
+			ToolDefinitions: []messages.ToolDefinition{
+				{Name: terminalDrainFirstToolName},
+				{Name: terminalDrainSecondToolName},
+			},
+			StreamObserver: func(msg messages.StreamMessage) {
+				scenario.observeStream(msg)
+				if cancelOnTerminal && msg.Type == messages.StreamTypeSessionClose {
+					cancel()
+				}
+			},
 		})
 	}()
 	phase := scenario.releaseRun(t, runErr)
@@ -321,6 +330,11 @@ func TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio(t *tes
 	case <-time.After(2 * time.Second):
 		t.Fatalf("run session (%s) did not complete", phase)
 	}
+	if cancelOnTerminal {
+		scenario.assertAcceptedSourceFailure(t, phase, samples)
+		return
+	}
+	scenario.assertContinuationSequence(t)
 	scenario.assertOutput(t, phase, samples)
 }
 
@@ -331,9 +345,12 @@ type terminalDrainExternalScenario struct {
 	barrierInbound  *terminalDrainExternalInbound
 	provider        *terminalDrainExternalSession
 	gate            *terminalDrainExternalGate
+	toolExecutor    *terminalDrainToolExecutor
 	admittedMu      sync.Mutex
 	admittedSamples int
 	admittedPCM     []int16
+	streamMu        sync.Mutex
+	streamEvents    []terminalDrainStreamEvent
 }
 
 func newTerminalDrainExternalScenario(t *testing.T) *terminalDrainExternalScenario {
@@ -348,8 +365,10 @@ func newTerminalDrainExternalScenario(t *testing.T) *terminalDrainExternalScenar
 		t.Fatalf("new callback-clocked registry: %v", err)
 	}
 	scenario.registry = registry
+	gateRelease := make(chan struct{})
+	close(gateRelease)
 	scenario.gate = &terminalDrainExternalGate{
-		started: make(chan struct{}), release: make(chan struct{}),
+		started: make(chan struct{}), release: gateRelease,
 		record:  func(samples []int16) { scenario.record(samples) },
 		advance: func() error { return registry.Advance(1) },
 	}
@@ -366,235 +385,22 @@ func newTerminalDrainExternalScenario(t *testing.T) *terminalDrainExternalScenar
 		drainStarted: make(chan struct{}),
 	}
 	scenario.provider = &terminalDrainExternalSession{
-		receive: messages.NewTypedBuffer[messages.StreamMessage](4), done: make(chan struct{}),
+		receive: messages.NewTypedBuffer[messages.StreamMessage](32), done: make(chan struct{}),
 		media: audio.MediaEndpoints{
 			Inbound: scenario.barrierInbound, Outbound: scenario.providerMedia.Endpoints().Outbound,
 		},
-		closeStarted: make(chan struct{}), releaseClose: make(chan struct{}),
+		closeStarted:          make(chan struct{}),
+		releaseClose:          make(chan struct{}),
+		continuationRequested: make(chan struct{}),
 	}
-	if !scenario.provider.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionClose}) {
-		t.Fatal("provider terminal did not enter receive buffer")
+	scenario.toolExecutor = &terminalDrainToolExecutor{}
+	providerEvents := terminalDrainProviderEvents()
+	for _, event := range providerEvents[:9] {
+		if !scenario.provider.receive.Write(context.Background(), event) {
+			t.Fatalf("provider event %s did not enter receive buffer", event.Type)
+		}
 	}
+	go scenario.provider.writeContinuation(providerEvents[9:])
 	t.Cleanup(func() { scenario.cleanup(t) })
 	return scenario
 }
-
-func terminalDrainExternalSamples() []int16 {
-	samples := make([]int16, terminalDrainProviderSamples)
-	for index := range samples {
-		samples[index] = int16(index%257 - 128)
-	}
-	return samples
-}
-
-func (s *terminalDrainExternalScenario) record(samples []int16) {
-	s.admittedMu.Lock()
-	s.admittedSamples += len(samples)
-	s.admittedPCM = append(s.admittedPCM, samples...)
-	s.admittedMu.Unlock()
-}
-
-func (s *terminalDrainExternalScenario) push(t *testing.T, samples []int16) {
-	t.Helper()
-	if err := s.providerMedia.PushInbound(samples); err != nil {
-		t.Fatalf("push provider response: %v", err)
-	}
-	if err := s.providerMedia.FlushInbound(); err != nil {
-		t.Fatalf("flush provider response: %v", err)
-	}
-}
-
-func (s *terminalDrainExternalScenario) releaseRun(t *testing.T, runErr <-chan error) string {
-	t.Helper()
-	select {
-	case <-s.provider.closeStarted:
-		s.provider.releaseOnce.Do(func() { close(s.provider.releaseClose) })
-		return "provider-close-before-drain"
-	case <-s.barrierInbound.drainStarted:
-		close(s.gate.release)
-		select {
-		case <-s.provider.closeStarted:
-		case <-time.After(time.Second):
-			t.Fatal("provider close did not follow sink drain")
-		}
-		s.provider.releaseOnce.Do(func() { close(s.provider.releaseClose) })
-		return "drain-before-provider-close"
-	case err := <-runErr:
-		t.Fatalf("run session completed before either lifecycle barrier: %v", err)
-	}
-	return ""
-}
-
-func (s *terminalDrainExternalScenario) assertOutput(t *testing.T, phase string, samples []int16) {
-	t.Helper()
-	s.admittedMu.Lock()
-	got := s.admittedSamples
-	gotPCM := append([]int16(nil), s.admittedPCM...)
-	s.admittedMu.Unlock()
-	if phase != "drain-before-provider-close" {
-		t.Fatalf("terminal drain phase = %s, want drain-before-provider-close", phase)
-	}
-	if got != terminalDrainDeviceSamples {
-		t.Fatalf("terminal drain phase %s admitted %d device samples, want exact %d", phase, got, terminalDrainDeviceSamples)
-	}
-	reference, err := wavio.NewPCM16Resampler(terminalDrainProviderRate, audio.SampleRate)
-	if err != nil {
-		t.Fatalf("create exact resampler: %v", err)
-	}
-	wantPCM, err := reference.Process(samples, true)
-	if err != nil {
-		t.Fatalf("resample exact provider block: %v", err)
-	}
-	if !reflect.DeepEqual(gotPCM, wantPCM) {
-		t.Fatalf("terminal drain phase %s changed admitted PCM: got %d samples, want exact resampled block", phase, len(gotPCM))
-	}
-	providerSamples := s.barrierInbound.samplesRead()
-	renderedPCM := s.registry.RenderedSamples()
-	stats := s.registry.PlaybackStats()
-	if providerSamples != len(samples) {
-		t.Fatalf("terminal drain phase %s provider read %d samples, want exact %d", phase, providerSamples, len(samples))
-	}
-	assertTerminalDrainRendered(t, phase, wantPCM, renderedPCM, stats)
-	consumedSamples := stats.RenderedSamples - stats.UnderflowSamples
-	if consumedSamples != uint64(got) || consumedSamples != uint64(len(wantPCM)) || stats.QueuedSamples != 0 {
-		t.Fatalf("terminal drain phase %s failed provider/admission/consumption/queue reconciliation: provider=%d admitted=%d consumed=%d rendered=%d queued=%d stats=%+v", phase, providerSamples, got, consumedSamples, len(renderedPCM), stats.QueuedSamples, stats)
-	}
-	if stats.DroppedSamples != 0 || stats.OverflowEvents != 0 || stats.DiscardedSamples != 0 || stats.DiscardEvents != 0 {
-		t.Fatalf("terminal drain phase %s reported playback loss: %+v", phase, stats)
-	}
-	select {
-	case <-s.provider.done:
-	default:
-		t.Fatalf("terminal drain phase %s returned before provider shutdown", phase)
-	}
-	t.Logf("C64_RENDER_EVIDENCE provider_samples=%d admitted_samples=%d consumed_samples=%d rendered_samples=%d queued_samples=%d underflow_samples=%d callback_count=%d shutdown=complete", providerSamples, got, consumedSamples, len(renderedPCM), stats.QueuedSamples, stats.UnderflowSamples, stats.CallbackCount)
-}
-
-func assertTerminalDrainRendered(t *testing.T, phase string, wantPCM, renderedPCM []int16, stats audio.PlaybackQueueStats) {
-	t.Helper()
-	if len(renderedPCM) < len(wantPCM) || !reflect.DeepEqual(renderedPCM[:len(wantPCM)], wantPCM) {
-		t.Fatalf("terminal drain phase %s changed rendered PCM prefix: got %d samples, want exact resampled block of %d; stats=%+v", phase, len(renderedPCM), len(wantPCM), stats)
-	}
-	if stats.RenderedSamples < stats.UnderflowSamples || stats.RenderedSamples != uint64(len(renderedPCM)) || stats.UnderflowEvents != 1 || stats.UnderflowSamples != uint64(len(renderedPCM)-len(wantPCM)) {
-		t.Fatalf("terminal drain phase %s reported unexpected render accounting: rendered=%d pcm=%d underflow_events=%d underflow_samples=%d", phase, stats.RenderedSamples, len(renderedPCM), stats.UnderflowEvents, stats.UnderflowSamples)
-	}
-	for index, sample := range renderedPCM[len(wantPCM):] {
-		if sample != 0 {
-			t.Fatalf("terminal drain phase %s fabricated nonzero underflow sample at offset %d: %d", phase, index, sample)
-		}
-	}
-}
-
-func (s *terminalDrainExternalScenario) cleanup(t *testing.T) {
-	t.Helper()
-	s.provider.releaseOnce.Do(func() { close(s.provider.releaseClose) })
-	if err := s.providerMedia.Close(); err != nil {
-		t.Errorf("cleanup provider media: %v", err)
-	}
-}
-
-type terminalDrainExternalGate struct {
-	started   chan struct{}
-	release   chan struct{}
-	record    func([]int16)
-	advance   func() error
-	startOnce sync.Once
-}
-
-func (g *terminalDrainExternalGate) observe(ctx context.Context, _ int, samples []int16) error {
-	g.record(samples)
-	g.startOnce.Do(func() { close(g.started) })
-	select {
-	case <-g.release:
-		return g.advance()
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-type terminalDrainExternalInbound struct {
-	audio.InboundMedia
-	drainStarted chan struct{}
-	closeOnce    sync.Once
-	readMu       sync.Mutex
-	readSamples  int
-}
-
-func (m *terminalDrainExternalInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {
-	frame, err := m.InboundMedia.ReadFrame(ctx)
-	if err == nil {
-		m.readMu.Lock()
-		m.readSamples += len(frame.Samples)
-		m.readMu.Unlock()
-	}
-	return frame, err
-}
-
-func (m *terminalDrainExternalInbound) samplesRead() int {
-	m.readMu.Lock()
-	defer m.readMu.Unlock()
-	return m.readSamples
-}
-
-func (m *terminalDrainExternalInbound) Close() error {
-	m.closeOnce.Do(func() { close(m.drainStarted) })
-	return m.InboundMedia.Close()
-}
-
-type terminalDrainExternalInferencer struct {
-	session messages.Session
-}
-
-func (i *terminalDrainExternalInferencer) Request() inference.SessionRequest {
-	return inference.SessionRequest{Config: models.SessionConfig{
-		InputAudioSampleRate: models.SampleRate(terminalDrainProviderRate), OutputAudioSampleRate: models.SampleRate(terminalDrainProviderRate),
-	}}
-}
-
-func (i *terminalDrainExternalInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	return i.session, nil
-}
-
-type terminalDrainExternalSession struct {
-	receive *messages.TypedBuffer[messages.StreamMessage]
-	done    chan struct{}
-	media   audio.MediaEndpoints
-
-	closeStarted chan struct{}
-	releaseClose chan struct{}
-	closeOnce    sync.Once
-	releaseOnce  sync.Once
-	doneOnce     sync.Once
-}
-
-func (s *terminalDrainExternalSession) Send(ctx context.Context, _ messages.StreamMessage) bool {
-	select {
-	case <-ctx.Done():
-		return false
-	default:
-		return true
-	}
-}
-
-func (s *terminalDrainExternalSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
-	return s.receive
-}
-
-func (s *terminalDrainExternalSession) Done() <-chan struct{} { return s.done }
-
-func (s *terminalDrainExternalSession) RTCMedia() agentruntime.RTCMediaEndpoints { return s.media }
-
-func (s *terminalDrainExternalSession) Close() error {
-	var mediaErr error
-	s.closeOnce.Do(func() {
-		close(s.closeStarted)
-		<-s.releaseClose
-		mediaErr = errors.Join(s.media.Inbound.Close(), s.media.Outbound.Close())
-		s.doneOnce.Do(func() { close(s.done) })
-	})
-	return mediaErr
-}
-
-var _ messages.SessionInferencer = (*terminalDrainExternalInferencer)(nil)
-var _ messages.Session = (*terminalDrainExternalSession)(nil)
-var _ agentruntime.RTCMediaSession = (*terminalDrainExternalSession)(nil)
