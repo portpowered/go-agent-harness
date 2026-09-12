@@ -16,15 +16,15 @@ Open criteria: SERVICE, QUALITY, EMBED, PARITY
 
 Exact current symbols and callers are in `candidates.json` and the pinned inventory.
 
-## 2. session-tool-continuation-lifecycle
+## 2. session-terminal-diagnostics
 
-Writer paths: `agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go`
-Baseline: [{'path': 'agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go', 'physical_lines': 147, 'bytes': 5696}]
-Retirement floor: 1 file(s), 90 physical line(s). New runtime/tests/evidence and wrappers receive no credit.
-Public workflow/effects: credential-free tool continuation and scheduled/image response lifecycle through yui session replay; retain typed unresolved-result/continuation errors, exact call IDs/statuses, stable metadata ordering and audio-output error identity
-Destination: public `go-agent-runtime/services/sessioncontinuation/contract.go: typed continuation obligations, statuses and terminal error identity`; private `go-agent-runtime/services/sessioncontinuation/internal/service/: pending tool/image state, deterministic metadata and terminal joins`; Wire `go-agent-runtime/services/sessioncontinuation/wire/: dedicated service construction with session observation dependencies`.
-Negative control: omit a required continuation or corrupt one audio delta; the workflow must fail boundedly with the typed obligation and never silently complete
-Open criteria: SERVICE, REPLAY, FAILURES, QUALITY, PARITY
+Writer paths: `agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go`
+Baseline: [{'path': 'agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go', 'physical_lines': 287, 'bytes': 11824}]
+Retirement floor: 1 file(s), 180 physical line(s). New runtime/tests/evidence and wrappers receive no credit.
+Public workflow/effects: credential-free yui session replay and cancellation/error workflows that publish one terminal diagnostic and metrics record; retain terminal precedence, provider/error classification, output-state semantics, unresolved continuation metadata, cancellation identity and final token/audio accounting
+Destination: public `go-agent-runtime/services/sessionterminal/contract.go: terminal classification, output state, cancellation and metrics projections`; private `go-agent-runtime/services/sessionterminal/internal/service/: terminal precedence, failure facts, continuation metadata and final accounting`; Wire `go-agent-runtime/services/sessionterminal/wire/: dedicated terminal-observation construction with typed diagnostics and clock-independent counters`.
+Negative control: drop the final failure or mutate cancellation/output-state precedence; the bounded workflow must reject missing terminal evidence and never silently publish success
+Open criteria: SERVICE, TRACE, REPLAY, FAILURES, QUALITY, PARITY
 
 Exact current symbols and callers are in `candidates.json` and the pinned inventory.
 

@@ -1,15 +1,15 @@
 {
   "active_task_count": 7,
   "board_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/canonical-board.json",
-  "board_sha256": "e3339e10d6990f13bd79d82737d4a0ae82df1963a12cd19746e8baac1f5eaed1",
+  "board_sha256": "4ad0f1de8359ca51c2cba74dd9cab404fbefbc9b1731e624f42507113b1c6a43",
   "candidate_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-  "candidate_head": "8593f08f481a16bc80b0215d7fba4245aba5d51a",
+  "candidate_head": "0d5ee026345ca99d27d4680ce17bcca170479216",
   "contract_revision": "audio-runtime-v1",
-  "observed_at": "2026-09-12T21:05:43Z",
-  "open_pr_count": 49,
-  "open_retirement_pr_count": 49,
+  "observed_at": "2026-09-12T21:53:26Z",
+  "open_pr_count": 50,
+  "open_retirement_pr_count": 50,
   "pr_inventory_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/pr-inventory.json",
-  "pr_inventory_sha256": "f4aed6f2b66cdc22346975bf963593c55c0ac43a1cf5931346ff0c012fe69c88",
+  "pr_inventory_sha256": "73574a1ab2defe5c3e3af6e4ae6b2191c4ed3e8e242bd6445fac81807fc3ac3e",
   "prd_identity": {
     "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "project": "audio-runtime"
@@ -19,5 +19,5 @@
   "server": "http://127.0.0.1:7439",
   "session": "~default",
   "subtraction_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json",
-  "subtraction_sha256": "0479434528ec8e71ac57249a184d05ee1adadf01a8d3f4436220f434b7b71a45"
+  "subtraction_sha256": "c3f41ba7955cd64a47a88791eddb745081f6a4c6429ecc9afbe0ac14d0733d80"
 }

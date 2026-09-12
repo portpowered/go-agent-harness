@@ -14,7 +14,7 @@
       "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
     ]
   ],
-  "observed_at": "2026-09-12T21:05:43Z",
+  "observed_at": "2026-09-12T21:53:26Z",
   "prs": [
     {
       "accepted_main_changed_production_paths": [],
@@ -1795,6 +1795,7 @@
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/wire/package.json",
         "docs/architecture/architecture-policy.json",
         "docs/architecture/architecture-size-baseline.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
@@ -1820,7 +1821,7 @@
         "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
         "scripts/wire-packages.txt"
       ],
-      "head": "a5d26045b7e39f21a0b5d663826db0394af87b6a",
+      "head": "34816f5b0bce04cdff768322ba8bc0269ca63d32",
       "head_branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
       "is_retirement_checkpoint": true,
       "number": 470,
@@ -1852,7 +1853,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c79-retire-cli-response-lifecycle",
       "task_state": {
-        "name": "in-review",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-114",
@@ -3456,7 +3457,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/report.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py"
       ],
-      "head": "336cc2aa7591cbf0b1ffdf35bec29095e4dcf898",
+      "head": "fb826e2aa55aa636a5a4920580c10a5362a07e0c",
       "head_branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
       "is_retirement_checkpoint": true,
       "number": 493,
@@ -3488,7 +3489,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
       "task_state": {
-        "name": "init",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-222",
@@ -3563,7 +3564,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verification-summary.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py"
       ],
-      "head": "8593f08f481a16bc80b0215d7fba4245aba5d51a",
+      "head": "df07c2be3ae4e4e69b684464c278454f0b6edaab",
       "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "is_retirement_checkpoint": true,
       "number": 494,
@@ -3611,6 +3612,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/README.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/analyze.py",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/revalidation-20260912.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/ledger.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/merge-orders.json",
@@ -3629,7 +3631,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/verification.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py"
       ],
-      "head": "4b0a763dfc89418f070181734bc3d862e625b904",
+      "head": "e0af439b2075e14cca1b814dc853fe5e4743b36c",
       "head_branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
       "is_retirement_checkpoint": true,
       "number": 495,
@@ -3667,6 +3669,74 @@
       "task_work_id": "work-task-224",
       "title": "audio-runtime: characterize C61/C83 browser retirement integration",
       "url": "https://github.com/portpowered/go-agent-harness/pull/495"
+    },
+    {
+      "accepted_main_changed_production_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "base_branch": "main",
+      "draft": false,
+      "files": [
+        "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go",
+        "coverage-manifest/go-agent-runtime/services/sessioncontinuation/internal/service/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessioncontinuation/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessioncontinuation/wire/package.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/admission.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/candidate-evidence.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/external-consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/external-consumer/go.sum",
+        "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/external-consumer/main.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/external-consumer/main_test.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/pr-body.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/run.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/verify.py",
+        "go-agent-runtime/services/sessioncontinuation/contract.go",
+        "go-agent-runtime/services/sessioncontinuation/contract_test.go",
+        "go-agent-runtime/services/sessioncontinuation/internal/service/service.go",
+        "go-agent-runtime/services/sessioncontinuation/wire/alias.go",
+        "go-agent-runtime/services/sessioncontinuation/wire/wire.go",
+        "go-agent-runtime/services/sessioncontinuation/wire/wire_gen.go",
+        "go-agent-runtime/services/sessioncontinuation/wire/wire_test.go"
+      ],
+      "head": "70e2a05aa76da03989da7d5f2830817b42d58e56",
+      "head_branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+      "is_retirement_checkpoint": true,
+      "number": 496,
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "496",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "state": "OPEN",
+      "task_name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+      "task_state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "task_work_id": "work-task-236",
+      "title": "refactor(audio-runtime): retire CLI tool continuation lifecycle",
+      "url": "https://github.com/portpowered/go-agent-harness/pull/496"
     }
   ],
   "schema_version": "c107-open-pr-inventory-v1"
