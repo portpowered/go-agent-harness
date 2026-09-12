@@ -12,9 +12,9 @@ import (
 
 // TestRunJoinsPublishedDeltasBeforeReturningOnEngineError verifies that a
 // delta published by the kernel before a later tick error remains readable
-// after Run returns. The provider's terminal error is queued only after the
-// kernel has emitted the exact text delta, while a full public buffer holds
-// the forwarder inside the lifecycle join.
+// after Run returns. One provider text delta is read from the public buffer
+// before the terminal error is queued; a second exact kernel publication then
+// runs behind a full public buffer and holds the forwarder inside the join.
 func TestRunJoinsPublishedDeltasBeforeReturningOnEngineError(t *testing.T) {
 	session := newRecordingToolSession()
 	mustWriteDeltaBarrierSession(t, session, messages.StreamMessage{
@@ -31,6 +31,21 @@ func TestRunJoinsPublishedDeltasBeforeReturningOnEngineError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	testCtx := contextWithTestTimeout(t)
+	ctx, cancel := context.WithCancel(testCtx)
+	defer cancel()
+	runErr := make(chan error, 1)
+	go func() { runErr <- al.Run(ctx) }()
+
+	readDeltaBarrierType(t, testCtx, al, messages.StreamTypeSessionOpen, "session open")
+	preErrorText := "published before command failure"
+	mustWriteDeltaBarrierSession(t, session, messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue(preErrorText),
+	}, "write pre-error provider text delta")
+	readDeltaBarrierText(t, testCtx, al, preErrorText)
+
 	backlog := []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("consumer backlog 1")},
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("consumer backlog 2")},
@@ -39,22 +54,16 @@ func TestRunJoinsPublishedDeltasBeforeReturningOnEngineError(t *testing.T) {
 	}
 	seedDeltaBarrierBacklog(t, al, backlog)
 
-	testCtx := contextWithTestTimeout(t)
-	ctx, cancel := context.WithCancel(testCtx)
-	defer cancel()
-	runErr := make(chan error, 1)
-	go func() { runErr <- al.Run(ctx) }()
-
-	wantText := "published before command failure"
+	wantText := "published while terminal error is pending"
 	mustWriteDeltaBarrierSession(t, session, messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
 		Role:  messages.RoleAssistant,
 		Value: messages.NewTextDeltaValue(wantText),
 	}, "write provider text delta")
 	// KernelRunner emits this log only after it has sent the exact text delta to
-	// its reader channel. This is the causal publication point, not a length
-	// poll on the consumer-facing buffer.
-	waitForBarrierSignal(t, testCtx, logger.textDeltaPublished, "kernel text publication")
+	// its reader channel. This is the causal publication point, not an
+	// observation that inspects only the consumer-facing buffer length.
+	waitForKernelText(t, testCtx, logger.kernelTextPublished, wantText)
 	terminalCause := errors.New("provider failed after publishing text")
 	terminalValue := messages.NewErrorValueWithError(terminalCause)
 	mustWriteDeltaBarrierSession(t, session, messages.StreamMessage{
@@ -106,7 +115,7 @@ func TestRunCancellationReleasesBlockedDeltaForwarder(t *testing.T) {
 		Role:  messages.RoleAssistant,
 		Value: messages.NewTextDeltaValue("first published delta"),
 	}, "write first provider text delta")
-	waitForBarrierSignal(t, testCtx, logger.textDeltaPublished, "kernel cancellation-test text publication")
+	waitForKernelText(t, testCtx, logger.kernelTextPublished, "first published delta")
 	mustWriteDeltaBarrierSession(t, session, messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
 		Role:  messages.RoleAssistant,
@@ -209,22 +218,33 @@ func hasTextDelta(al *AgentLoop, want string) bool {
 }
 
 type deltaBarrierLogger struct {
-	textDeltaPublished chan struct{}
-	hotLoopError       chan struct{}
+	kernelTextPublished chan string
+	hotLoopError        chan struct{}
 }
 
 func newDeltaBarrierLogger() *deltaBarrierLogger {
 	return &deltaBarrierLogger{
-		textDeltaPublished: make(chan struct{}, 1),
-		hotLoopError:       make(chan struct{}, 1),
+		kernelTextPublished: make(chan string, 16),
+		hotLoopError:        make(chan struct{}, 1),
 	}
 }
 
 func (l *deltaBarrierLogger) Debug(string, ...logging.Field) {}
 
-func (l *deltaBarrierLogger) Info(msg string, _ ...logging.Field) {
-	if msg == "KernelRunner: sending text delta" {
-		signalDeltaBarrier(l.textDeltaPublished)
+func (l *deltaBarrierLogger) Info(msg string, fields ...logging.Field) {
+	if msg != "KernelRunner: sending text delta" {
+		return
+	}
+	// The kernel log carries the text content after the reader-channel send;
+	// retain that identity so a prior text publication cannot satisfy a later
+	// wait accidentally.
+	for _, field := range fields {
+		if field.Key == "delta" {
+			if text, ok := field.Value.(string); ok {
+				signalKernelText(l.kernelTextPublished, text)
+			}
+			return
+		}
 	}
 }
 
@@ -246,6 +266,45 @@ func signalDeltaBarrier(ch chan<- struct{}) {
 	select {
 	case ch <- struct{}{}:
 	default:
+	}
+}
+
+func signalKernelText(ch chan<- string, text string) {
+	ch <- text
+}
+
+func waitForKernelText(t *testing.T, ctx context.Context, published <-chan string, want string) {
+	t.Helper()
+	for {
+		select {
+		case got := <-published:
+			if got == want {
+				return
+			}
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for kernel text publication %q: %v", want, ctx.Err())
+		}
+	}
+}
+
+func readDeltaBarrierType(t *testing.T, ctx context.Context, al *AgentLoop, want messages.StreamMessageType, label string) messages.StreamMessage {
+	t.Helper()
+	got, err := al.Deltas().ReadContext(ctx)
+	if err != nil {
+		t.Fatalf("read %s: %v", label, err)
+	}
+	if got.Type != want {
+		t.Fatalf("read %s type = %s, want %s", label, got.Type, want)
+	}
+	return got
+}
+
+func readDeltaBarrierText(t *testing.T, ctx context.Context, al *AgentLoop, want string) {
+	t.Helper()
+	got := readDeltaBarrierType(t, ctx, al, messages.StreamTypeTextDelta, "pre-error text delta")
+	value, ok := got.Value.(*messages.TextDeltaValue)
+	if !ok || value.Content != want {
+		t.Fatalf("pre-error text delta = %#v, want content %q", got.Value, want)
 	}
 }
 
