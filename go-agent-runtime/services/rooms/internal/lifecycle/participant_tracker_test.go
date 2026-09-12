@@ -224,7 +224,7 @@ func testParticipantConnectionInvalid(t *testing.T) {
 			if _, err := tracker.ConnectSession(context.Background()); err == nil {
 				t.Fatal("connect unexpectedly succeeded")
 			}
-			if _, ready := tracker.Outcome(); !ready {
+			if outcomeErr, ready := tracker.Outcome(); !ready || outcomeErr == nil {
 				t.Fatal("failure outcome was not published")
 			}
 		})
@@ -371,8 +371,8 @@ func testParticipantFailureAndDisconnect(t *testing.T) {
 	if got := failure.TerminalObservationSnapshot(); got.Classification != "transport" || !got.Failure {
 		t.Fatalf("failure observation = %+v", got)
 	}
-	if reason, _, observed := failure.Terminal(); !observed || reason != rooms.ParticipantTerminationError {
-		t.Fatalf("failure terminal = %q, observed=%v", reason, observed)
+	if reason, terminalErr, observed := failure.Terminal(); !observed || reason != rooms.ParticipantTerminationError || terminalErr == nil {
+		t.Fatalf("failure terminal = %q, err=%v, observed=%v", reason, terminalErr, observed)
 	}
 
 	disconnected := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{})
@@ -385,8 +385,8 @@ func testParticipantFailureAndDisconnect(t *testing.T) {
 	if disconnected.ObserveTerminal(rooms.SessionTerminalObservation{TerminalReason: string(messages.TerminalReasonProviderClose), FailingEvent: string(messages.StreamTypeSessionClose), Failure: true}) {
 		t.Fatal("synthetic provider close became a second failure")
 	}
-	if reason, _, observed := disconnected.Terminal(); !observed || reason != rooms.ParticipantTerminationDisconnected {
-		t.Fatalf("disconnect terminal = %q, observed=%v", reason, observed)
+	if reason, terminalErr, observed := disconnected.Terminal(); !observed || reason != rooms.ParticipantTerminationDisconnected || terminalErr != nil {
+		t.Fatalf("disconnect terminal = %q, err=%v, observed=%v", reason, terminalErr, observed)
 	}
 }
 

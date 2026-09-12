@@ -90,7 +90,7 @@ type ct = connectionTracker
 
 const sStart, sAudio, sToolStart, sToolDelta, sToolEnd, sMessageEnd, sOpen, sClose, sCancel, sCreate = m.StreamTypeMessageStart, m.StreamTypeAudioStart, m.StreamTypeToolCallStart, m.StreamTypeToolCallDelta, m.StreamTypeToolCallEnd, m.StreamTypeMessageEnd, m.StreamTypeSessionOpen, m.StreamTypeSessionClose, m.StreamTypeResponseCancel, m.StreamTypeResponseCreate
 const rSessionClose, rProviderClose, rFailure, rCancel, rProviderComplete, rLoopComplete, rReplayComplete, rReplayDivergence, rReplayIncomplete, rPartial = m.TerminalReasonSessionClose, m.TerminalReasonProviderClose, m.TerminalReasonTerminalFailure, m.TerminalReasonCancellation, m.TerminalReasonProviderAuthoredCompletion, m.TerminalReasonLoopSynthesizedCompletion, m.TerminalReasonReplayComplete, m.TerminalReasonReplayDivergence, m.TerminalReasonReplayIncomplete, m.TerminalReasonPartialOutput
-const xFailure, xFailed, xClose, xDisconnected, xCompleted, xGrace, xCancelled, xStopped = "session_failure", "failed", "provider_close", "disconnected", "completed", "completed_during_grace", "cancelled_after_grace", "stopped"
+const xFailure, xFailed, xClose, xDisconnected, xCompleted, xGrace, xCancelled, xStopped, providerClosed = "session_failure", "failed", "provider_close", "disconnected", "completed", "completed_during_grace", "cancelled_after_grace", "stopped", "provider_closed"
 const pError, pDisconnected, pEnded = rm.ParticipantTerminationError, rm.ParticipantTerminationDisconnected, rm.ParticipantTerminationEnded
 const oNone, oNA = m.TerminalOutputNone, m.TerminalOutputNotApplicable
 
@@ -153,7 +153,7 @@ func errorObservation(l *pl, err error) obs {
 	return observation(xFailure, xFailed, E{Classification: errorClass(err), TerminalReason: string(rFailure), TerminalProvenance: string(m.TerminalProvenanceSession), OutputState: outputState(l.has(fso), l.n)}, err, true)
 }
 func closeObservation(v *CV) obs {
-	provider := v.Reason == "provider_closed"
+	provider := v.Reason == providerClosed
 	return obs{a: pick(provider, "provider_close", "participant_completion"), b: pick(provider, "disconnected", "completed"), c: v.Classification, r: first(string(v.TerminalReason), pick(provider, string(rProviderClose), string(rSessionClose))), p: string(v.TerminalProvenance), o: first(string(v.OutputState), string(oNA))}
 }
 func (l *pl) fail(err error) {
@@ -316,13 +316,13 @@ func (l *pl) observeEnd(msg M) {
 }
 func (l *pl) closeValue(v *CV) {
 	l.x[tc], l.x[tt] = v.Reason, string(v.TerminalReason)
-	doIf(l.x[tt] == "" && v.Reason == "provider_closed", func() { l.x[tt] = string(rProviderClose) })
+	doIf(l.x[tt] == "" && v.Reason == providerClosed, func() { l.x[tt] = string(rProviderClose) })
 	doIf(!l.has(ff) && !l.has(ft) && !(l.has(fbs) && l.has(fbc)), func() { l.setObservation(closeObservation(v)) })
 }
 func (l *pl) observeClose(msg M) {
-	v, _ := msg.Value.(*CV)
+	v, ok := msg.Value.(*CV)
 	l.set(fx, true)
-	doIf(v != nil, func() { l.closeValue(v) })
+	doIf(ok && v != nil, func() { l.closeValue(v) })
 	doIf(!l.has(frs) || l.has(fbs) && !l.has(fbc), l.finishClose)
 }
 func (l *pl) observeLocked(msg M) {
@@ -592,7 +592,12 @@ func (i *ct) watchGo(ctx context.Context, session *tr) {
 		i.lifecycle.MarkTransportEndedWithError(session.TerminalError())
 	case <-ctx.Done():
 		doIf(channelClosed(session.Done()), func() { i.lifecycle.MarkTransportEndedWithError(session.TerminalError()) })
-		doIf(!channelClosed(session.Done()), func() { _ = session.Close() })
+		doIf(!channelClosed(session.Done()), func() { closeQuietly(session) })
+	}
+}
+func closeQuietly(session PS) {
+	if err := session.Close(); err != nil {
+		return
 	}
 }
 func (i *ct) invalid() (PS, error) {
@@ -653,7 +658,7 @@ func boundTrigger(reason rm.RoomTerminationReason, mid bool) string {
 	return pick(mid && base != "stopped", base+"_mid_response", base)
 }
 func classClose(closeReason string, terminalReason m.TerminalReason) rm.ParticipantTerminationReason {
-	return pick(closeReason == "provider_closed" || terminalReason == rProviderClose, pDisconnected, pick(terminalReason == rFailure, pError, pEnded))
+	return pick(closeReason == providerClosed || terminalReason == rProviderClose, pDisconnected, pick(terminalReason == rFailure, pError, pEnded))
 }
 
 var _ L = (*pl)(nil)
