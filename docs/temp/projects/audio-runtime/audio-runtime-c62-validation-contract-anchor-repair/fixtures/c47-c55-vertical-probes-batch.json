@@ -1,0 +1,88 @@
+{
+  "requestId": "audio-runtime-c47-c54-c55-vertical-probes-20260911T2120Z",
+  "type": "FACTORY_REQUEST_BATCH",
+  "works": [
+    {
+      "name": "audio-runtime-c47-output-bound-vertical-probe",
+      "workTypeName": "validation",
+      "payload": {
+        "project": "audio-runtime",
+        "contractRevision": "audio-runtime-v1",
+        "scope": "vertical",
+        "vertical": "audio-runtime-c47-live-probe-output-bound",
+        "sourceRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "role": "engineering",
+        "criteria": [
+          {"id": "EMBED", "rubric": "A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization."},
+          {"id": "SERVICE", "rubric": "Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction. The legacy agent-cli/internal/services/internal/agentruntime production package is fully deprecated: all production callers use service-owned contracts and transport integrations, and the package contains no business policy, reusable runtime behavior, composition ownership, or device/audio implementation. Any temporary compatibility symbols are explicit Deprecated: aliases or thin adapters with no independent decisions or mutable state. CLI packages own only presentation, argument/input adaptation, and transport integration into those services."},
+          {"id": "TRACE", "rubric": "Correlated device capture/playback, provider send/receive, tool lifecycle, cancellation, queues/drops and terminal evidence use explicit timing domains and bounded recording resources."},
+          {"id": "REPLAY", "rubric": "Credential-free replay preserves recorded audio packets, ordering, tool events, interruption and termination; hardware and external nondeterminism limits are explicit."},
+          {"id": "FAILURES", "rubric": "Truncated/no playback, barge-in failure, long-conversation slowdown and tool-continuation collisions have reproducible characterization, fixes where demonstrated, and exact residual limitations without false completion claims."},
+          {"id": "QUALITY", "rubric": "Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions."},
+          {"id": "PARITY", "rubric": "Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits."}
+        ],
+        "budget": {"timeSeconds": 1800, "realtimeSessions": 0, "realtimeSeconds": 0},
+        "mission": "Fresh independent Luna engineering validation of reviewed PR439, guarded-merged as d5d6f843 after all nine exact-head CI checks passed. Verify the immutable YUI and source-archive hashes before and after; never rebuild or substitute the executable. Extract the source archive only into probe-owned storage and confirm its Git-tree provenance. Launch the staged shipped YUI and exercise C47's changed public workflow: run the credential-free recorded audio/tool replay and the shipped WebMCP composite target-selection workflow using the committed fixtures/recipes. Require the exact tool marker and continuation, exact provider/rendered PCM effects, bounded stdout/stderr and disk, explicit terminal evidence, exit zero, and no process-group survivors. Reproduce the high-rate tool/audio regression with the unchanged every-sample oracle and require complete playback with no unexplained 6,400-sample loss; reported zero drops/overflows/discards cannot substitute for rendered PCM. Exercise the C47 low-output-budget and forced-timeout negative controls from the exact source: they must fail closed before or during launch for the intended cause, preserve the first causal error, cap aggregate output, terminate/reap the whole process group, and leave no survivors. Recheck an existing interruption plus ordinary audio/tool replay workflow for regression and clean shutdown. Inspect the WebMCP normalization source to confirm bare and browserID/targetID selections succeed while a genuinely unrelated restored target remains fail-closed; source tests are supplemental and cannot replace launching the shipped program. Record exact commands, exits, output/effects, hashes and limitations. Process smoke and software replay are not physical/acoustic proof; native Windows hardware/endpoints and physical acoustic testing are OUT OF SCOPE under the recorded amendment, never PASS. Missing software prerequisites are BLOCKED. ACCEPTED applies only to C47 and does not close any broad project criterion.",
+        "reportPath": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c47-output-bound-vertical-probe.json",
+        "build": {"identity": "c47-c54-c55-merged-yui-d5d6f843", "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c47-c55-merged-artifact/yui", "sha256": "2bf087d1f9fef4df0ba85847a594bc8d67292c5e6d3ce44923cc3e64d53d92d7"},
+        "fixtures": [
+          {"identity": "source-d5d6f84363d8569d5dc1a59985f8d45cf50e1d06", "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c47-c55-merged-artifact/source-d5d6f843.tar.gz", "sha256": "780a5a3ca7dc9b3a8039cf78e1052656eb2e28cb73fc300b1ecea999cfd1ce6f"}
+        ]
+      }
+    },
+    {
+      "name": "audio-runtime-c54-room-document-admission-vertical-probe",
+      "workTypeName": "validation",
+      "payload": {
+        "project": "audio-runtime",
+        "contractRevision": "audio-runtime-v1",
+        "scope": "vertical",
+        "vertical": "audio-runtime-c54-room-document-admission",
+        "sourceRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "role": "engineering",
+        "criteria": [
+          {"id": "EMBED", "rubric": "A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization."},
+          {"id": "SERVICE", "rubric": "Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction. The legacy agent-cli/internal/services/internal/agentruntime production package is fully deprecated: all production callers use service-owned contracts and transport integrations, and the package contains no business policy, reusable runtime behavior, composition ownership, or device/audio implementation. Any temporary compatibility symbols are explicit Deprecated: aliases or thin adapters with no independent decisions or mutable state. CLI packages own only presentation, argument/input adaptation, and transport integration into those services."},
+          {"id": "REPLAY", "rubric": "Credential-free replay preserves recorded audio packets, ordering, tool events, interruption and termination; hardware and external nondeterminism limits are explicit."},
+          {"id": "QUALITY", "rubric": "Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions."},
+          {"id": "PARITY", "rubric": "Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits."}
+        ],
+        "budget": {"timeSeconds": 1800, "realtimeSessions": 0, "realtimeSeconds": 0},
+        "mission": "Fresh independent Luna engineering validation of the C54 room-document admission contribution in merge d5d6f843. Verify the immutable YUI/source hashes before and after, extract source only into probe-owned storage, and never rebuild the executable. Launch the staged shipped YUI through the public room command using a fresh valid room document and require the normalized room/participant output and bounded clean exit. Exercise the committed valid browser-tool document and ensure admission reaches the intended public effect without credentials. On private copies, run invalid nested-browser, malformed participant, unsafe path and wrong-oracle cases; each must fail nonzero for its intended admission cause with bounded output and no residue or survivor. Build and run the committed separate GOWORK=off consumer only as supplementary boundary evidence, confirming it imports the public services/rooms contract and dedicated Wire package without CLI/private imports or hidden initialization. Inspect the exact source to confirm CLI files are decision-free compatibility/presentation adapters and reusable admission/browser policy lives behind the thin public contract/private implementation. Recheck the unchanged credential-free shipped audio/tool replay, exact PCM/tool effects and clean shutdown as regression evidence. Tests and static checks may supplement but cannot substitute for the launched YUI workflow. Record commands, exits, outputs/effects, hashes and limitations. Software replay is not physical/acoustic proof; amended native Windows hardware/endpoints and acoustic testing are OUT OF SCOPE, never PASS. Missing software prerequisites are BLOCKED. ACCEPTED applies only to C54 and does not close a broad criterion.",
+        "reportPath": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission-vertical-probe.json",
+        "build": {"identity": "c47-c54-c55-merged-yui-d5d6f843", "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c47-c55-merged-artifact/yui", "sha256": "2bf087d1f9fef4df0ba85847a594bc8d67292c5e6d3ce44923cc3e64d53d92d7"},
+        "fixtures": [
+          {"identity": "source-d5d6f84363d8569d5dc1a59985f8d45cf50e1d06", "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c47-c55-merged-artifact/source-d5d6f843.tar.gz", "sha256": "780a5a3ca7dc9b3a8039cf78e1052656eb2e28cb73fc300b1ecea999cfd1ce6f"}
+        ]
+      }
+    },
+    {
+      "name": "audio-runtime-c55-room-participant-mesh-vertical-probe",
+      "workTypeName": "validation",
+      "payload": {
+        "project": "audio-runtime",
+        "contractRevision": "audio-runtime-v1",
+        "scope": "vertical",
+        "vertical": "audio-runtime-c55-room-participant-mesh",
+        "sourceRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "role": "engineering",
+        "criteria": [
+          {"id": "EMBED", "rubric": "A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization."},
+          {"id": "SERVICE", "rubric": "Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction. The legacy agent-cli/internal/services/internal/agentruntime production package is fully deprecated: all production callers use service-owned contracts and transport integrations, and the package contains no business policy, reusable runtime behavior, composition ownership, or device/audio implementation. Any temporary compatibility symbols are explicit Deprecated: aliases or thin adapters with no independent decisions or mutable state. CLI packages own only presentation, argument/input adaptation, and transport integration into those services."},
+          {"id": "TRACE", "rubric": "Correlated device capture/playback, provider send/receive, tool lifecycle, cancellation, queues/drops and terminal evidence use explicit timing domains and bounded recording resources."},
+          {"id": "FAILURES", "rubric": "Truncated/no playback, barge-in failure, long-conversation slowdown and tool-continuation collisions have reproducible characterization, fixes where demonstrated, and exact residual limitations without false completion claims."},
+          {"id": "QUALITY", "rubric": "Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions."},
+          {"id": "PARITY", "rubric": "Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits."}
+        ],
+        "budget": {"timeSeconds": 1800, "realtimeSessions": 0, "realtimeSeconds": 0},
+        "mission": "Fresh independent Luna engineering validation of the C55 participant-mesh contribution in merge d5d6f843. Verify the immutable YUI/source hashes before and after, extract source only into probe-owned storage, and never rebuild the executable. Launch the staged shipped YUI with `room run --example`; require the complete two-participant room document, exact bounded output, exit zero and clean shutdown. Then launch the shipped public room workflow with fresh hermetic participant fixtures that establish all requested pairings and lifecycle registration before live start; require observable pair/participant effects, surviving healthy pair behavior, terminal evidence and no goroutine/process/resource survivors. Use the committed external consumer only as supplementary evidence to exercise the public services/rooms mesh contract and dedicated Wire construction without CLI/private imports. Exercise nil-factory, participant-connect failure and partial-construction rollback negatives; require typed failure, no half-joined room, every created resource closed exactly once and bounded cleanup. Recheck the unchanged credential-free shipped audio/tool replay with exact PCM/tool continuation plus clean shutdown. Inspect exact source for thin contracts, private mesh/lifecycle implementation and decision-free CLI compatibility. Tests alone are insufficient. Record exact commands, exits, effects, hashes and limitations. Software/provider replay is not physical/acoustic proof; amended native Windows hardware/endpoints and acoustic testing are OUT OF SCOPE, never PASS. Missing software prerequisites are BLOCKED. ACCEPTED applies only to C55 and does not close a broad project criterion.",
+        "reportPath": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh-vertical-probe.json",
+        "build": {"identity": "c47-c54-c55-merged-yui-d5d6f843", "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c47-c55-merged-artifact/yui", "sha256": "2bf087d1f9fef4df0ba85847a594bc8d67292c5e6d3ce44923cc3e64d53d92d7"},
+        "fixtures": [
+          {"identity": "source-d5d6f84363d8569d5dc1a59985f8d45cf50e1d06", "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/c47-c55-merged-artifact/source-d5d6f843.tar.gz", "sha256": "780a5a3ca7dc9b3a8039cf78e1052656eb2e28cb73fc300b1ecea999cfd1ce6f"}
+        ]
+      }
+    }
+  ],
+  "relations": []
+}
