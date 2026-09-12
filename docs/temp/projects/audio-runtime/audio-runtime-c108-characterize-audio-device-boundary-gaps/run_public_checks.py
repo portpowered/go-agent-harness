@@ -126,6 +126,25 @@ def output_text(run: dict[str, Any]) -> str:
     )
 
 
+def seal_session_capture(document: dict[str, Any]) -> str:
+    """Return the v2 digest over the protected capture envelope.
+
+    This mirrors go-llm-gateway/pkg/testing.ComputeSessionCaptureDigest:
+    the integrity object is excluded, and the remaining fields use the same
+    compact JSON field order as the Go coverage struct.
+    """
+    coverage = {
+        "version": document["version"],
+        "provider": document["provider"],
+        "session": document["session"],
+        "records": document["records"],
+    }
+    if document.get("ends_with_disconnect"):
+        coverage["ends_with_disconnect"] = document["ends_with_disconnect"]
+    encoded = json.dumps(coverage, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def build_yui(build_dir: pathlib.Path) -> tuple[pathlib.Path, dict[str, Any]]:
     build_dir.mkdir(parents=True, exist_ok=True)
     binary = build_dir / "yui"
@@ -229,14 +248,23 @@ def mutate_fixture(destination: pathlib.Path) -> dict[str, Any]:
             break
     if not mutated:
         raise RuntimeError("fixture has no audio delta to mutate")
+    integrity = document.get("integrity")
+    if not isinstance(integrity, dict) or integrity.get("algorithm") != "sha256" or not integrity.get("coverage"):
+        raise RuntimeError("fixture has no supported v2 integrity metadata to reseal")
+    integrity["digest"] = seal_session_capture(document)
     destination.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return {"mutation": "first response.output_audio.delta replaced with one-byte PCM16", "fixture_sha256": sha256(FIXTURE), "mutated_fixture_sha256": sha256(destination)}
+    return {
+        "mutation": "first response.output_audio.delta replaced with one-byte PCM16 and v2 integrity resealed",
+        "mutated_integrity_digest": integrity["digest"],
+        "fixture_sha256": sha256(FIXTURE),
+        "mutated_fixture_sha256": sha256(destination),
+    }
 
 
 def malformed_truncated(binary: pathlib.Path, run_dir: pathlib.Path, build: dict[str, Any]) -> dict[str, Any]:
     if run_dir.exists():
         shutil.rmtree(run_dir)
-    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "evidence" / "runs").mkdir(parents=True, exist_ok=True)
     mutated_fixture = run_dir / "malformed.session.json"
     mutation = mutate_fixture(mutated_fixture)
     record_dir = run_dir / "tool-record"
