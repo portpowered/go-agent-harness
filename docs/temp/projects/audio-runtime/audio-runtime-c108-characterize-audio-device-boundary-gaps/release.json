@@ -13,6 +13,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates-validation.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/canonical-board.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/ci-rejection-34724763555.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/ownership.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/proof-levels.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json",
@@ -49,7 +50,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/report.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py"
   ],
-  "candidate_revision": "c75c87547ff52c416e0fadd92385958d4b24cc78",
+  "candidate_revision": "c1c69000d2d239415bdf5646f4f873e5305d4156",
   "immutable_project_criteria": "AUDIO, DEVICE, EMBED, SERVICE, TRACE, REPLAY, FAILURES, QUALITY and PARITY remain OPEN",
   "independent_review": "not performed by executor",
   "owned_directory": "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps",
@@ -65,19 +66,19 @@
         "-tags=nomicrophone",
         "-trimpath",
         "-o",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-verify-yui-e_7_84bx/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-verify-yui-tv37u6pk/yui",
         "./agent-cli/cmd/yui"
       ],
       "reports_match": true,
       "sha256": "2c38b32c2a586fe6c77f72b03510977e1275d064f35ec70cd709683920500ae2"
     },
-    "head": "c75c87547ff52c416e0fadd92385958d4b24cc78",
+    "head": "c1c69000d2d239415bdf5646f4f873e5305d4156",
     "malformed_receipt_absent": true,
     "replay_artifacts_checked": 9,
     "source_equivalent_to_head": true,
     "tested_revisions": {
-      "malformed_truncated": "c75c87547ff52c416e0fadd92385958d4b24cc78",
-      "replay": "c75c87547ff52c416e0fadd92385958d4b24cc78"
+      "malformed_truncated": "c1c69000d2d239415bdf5646f4f873e5305d4156",
+      "replay": "c1c69000d2d239415bdf5646f4f873e5305d4156"
     }
   },
   "required_evidence": [
@@ -114,6 +115,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates-validation.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/canonical-board.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/ci-rejection-34724763555.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/ownership.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/proof-levels.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json",
