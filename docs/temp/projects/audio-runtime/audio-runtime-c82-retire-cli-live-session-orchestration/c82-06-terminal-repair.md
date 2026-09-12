@@ -166,3 +166,38 @@ release their leases, fetch and reconcile accepted main on this same branch,
 apply only the C82 generated-Wire registration and its 11 demonstrated
 downward/stale baseline changes, rerun the bounded gates, commit/push the same
 PR474, and submit its changed head to script CI without polling.
+
+## Accepted-C64 ancestry revalidation — 2026-09-12T10:44:09Z
+
+C64 PR459 is now merged at `d23f554b97f0dbc3ebcbf5193c23514c09b7e388` and
+fresh `origin/main=59af6325614d80173447fe2018a0471e27b4e7b1` was merged into
+the clean C82 branch as `3262145503e94107a1b8de20db52a4dfe65f73d8`. The merge
+preserved the C82 extraction and all required startup, accepted-main, and
+current-main ancestry; the host checkout was not merged or reset.
+
+Post-merge causal checks pass: sessionlive normal count=5 passed 70 tests
+across 3 packages; the selected service race count=3 passed 42; selected CLI
+live/scheduled/response passed 264 normal and 88 race; and the GOWORK=off
+external consumer passed normal and race count=3. Behavior-matrix and
+retirement-and-scope passed at `579 + 54 = 633` adapter lines with 500
+retired. Both mutation controls passed discovery and positive behavior, then
+failed only at the intended missing-final-delta and unstopped-deadline
+assertions. `COUNT=3 scripts/test-session-ci-regressions.sh all` exited 0 in
+normal, coverage, and race modes after the C64 merge; expected replay/PCM/
+transcript negatives and all high-rate audio/tool, scheduled, simulated-device
+and composed-provider controls remain intact. `make fmt`, `make vet`, and
+`git diff --check` pass.
+
+The merged-head shared gates remain intentionally unresolved only because C79
+PR470 is still open: `make wire-check` reports exactly the unregistered C82
+`go-agent-runtime/services/sessionlive/wire/wire_gen.go`, and
+`make architecture-size-check` reports exactly 11 entries (one reduced
+`session_drain.go` entry plus ten reduced/stale `session_live.go` entries).
+No shared file was edited. No script-CI, independent-review, guarded-merge,
+vertical, or project-acceptance result is claimed.
+
+Next action: when C79's reviewed guarded merge releases both shared-file
+leases, fetch current main again, reconcile it on this same branch, apply only
+the C82 generated-Wire registration and these 11 demonstrated downward/stale
+entries, rerun the bounded gates, push/update PR474, and submit the changed
+head to script CI without polling.
