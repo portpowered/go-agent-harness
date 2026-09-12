@@ -332,8 +332,13 @@ func (s *rtcDeviceBoundSession) Close() error {
 		return nil
 	}
 	var drainErr error
-	if s.cleanTerminal() && s.lifecycleCtx != nil && s.lifecycleCtx.Err() == nil {
-		drainCtx, cancel := context.WithTimeout(s.lifecycleCtx, rtcDevicePlaybackDrainTimeout)
+	if s.cleanTerminal() {
+		// A clean terminal drains with a bounded context after owner cancellation.
+		drainParent := s.lifecycleCtx
+		if drainParent == nil {
+			drainParent = context.Background()
+		}
+		drainCtx, cancel := context.WithTimeout(context.WithoutCancel(drainParent), rtcDevicePlaybackDrainTimeout)
 		drainErr = s.DrainPlayback(drainCtx)
 		cancel()
 	}
