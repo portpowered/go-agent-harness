@@ -57,6 +57,30 @@ The unchanged legacy runner, its large runner test, and C61 policy/report paths 
   `session_browser_scenario_report_test.go` remains outside C83 ownership;
   its normal control passes.
 
+## Cancellation-publication instrumentation checkpoint
+
+- Commit `13794b8f885ae6c6baf7edabb6b8f1d3b27c4064` instruments the owned
+  runner and run paths with ordered `(InvocationID, State, Terminal)`
+  observations for `cancel`, `wait_invocation`, and
+  `record_cancellation`. It does not alter the existing runner or evaluation
+  assertions.
+- The named cancellation test passed 3/3 in normal mode and 3/3 under the
+  race detector. The hermetic `nomicrophone` plus `coverpkg` run passed 10/10
+  with a task-local `GOCACHE`, reporting 7.7% package coverage. The first
+  shared-cache coverpkg attempt failed before test execution because unrelated
+  Go build-cache imports were missing; the isolated-cache rerun passed.
+- Across the bounded verbose runs, every trial retained a terminal
+  `wait_invocation` for the canceled invocation and a terminal
+  `record_cancellation`; a few coverage trials varied the relative publication
+  order of the wrapper `cancel` and wait observations. Existing assertions and
+  evaluation behavior remained green, so this is causal interleaving evidence,
+  not a demonstrated mechanical defect or claimed fix.
+- The current fetch recorded `origin/main` at
+  `d4766c3dbbf2c198142047ead4449d58dd47d485`; it is not yet an ancestor of
+  this isolated branch. The accepted base `84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f`
+  and startup checkpoint `8bdafc7f947a3a2c9856220abdc539437035bd21` remain
+  ancestors. No shared C79 files or C61 paths were edited.
+
 ## Next action
 
 After C79 releases the shared Wire/baseline lease and C61 supplies its reviewed
