@@ -133,3 +133,40 @@ made on the Darwin validator.
   polling. Do not claim CI green, independent review, guarded merge,
   immutable-artifact vertical acceptance, physical/acoustic proof or project
   completion; retain this task through `CONTINUE` for any exact rejection.
+
+## Review-132 repair and mutation checkpoint
+
+- On `2026-09-12`, the admitted `work-task-98` candidate repaired every
+  actionable review finding from review row `work-review-132`. The source
+  revision is `6efc2cf8dd5906d911b936a1981a24639b4ed2c2`. The service now
+  honors `ProviderProvided` and `ModelProvided`, so an explicit empty provider
+  cannot fall through to persisted defaults and an explicit empty Grok model
+  cannot fall through to the configured model. Literal Grok rows now assert
+  copied defaults, explicit overrides, provider mismatch, explicit empty
+  provider, explicit empty model and omitted model behavior. The CLI edge
+  adapter and its provider precedence regression cover the same explicit-empty
+  provider rule.
+- The transport consumer control now supplies WebRTC plus conflicting
+  `Signaling`/`SignalingEndpoint` aliases and asserts the typed
+  `signaling`, `signaling-endpoint` field pair and
+  `ErrSessionRuntimeSelectionConflict`; it no longer uses `quic` as the alias
+  conflict control. `run.py --case all` passed all seven bounded cases,
+  including the expected invalid-model and conflicting-alias rejections.
+- `verify.py --mode mutation-accept-conflicting-transports` passed: the
+  positive `alias_conflict` row passed, an isolated temporary mutation that
+  disabled alias-conflict rejection failed that same row with `error = <nil>`,
+  and the real worktree was clean after detached-worktree cleanup.
+  `verify.py --mode mutation-alias-turn-detection` passed: the positive clone
+  row passed, an isolated temporary mutation returning the caller's turn
+  detection pointer failed with `turn detection was not deeply cloned`, and
+  the real worktree was clean after cleanup. Neither mutation persisted.
+- `verify.py --mode frozen-option-matrix` passed: accepted-main baseline
+  `930`, candidate `619`, retired `311`, independent literal matrix green,
+  GOWORK=off consumer build/replay/default transport/explicit WebRTC checks
+  green, and both causal negative controls rejected. `verify.py --mode parity`
+  passed sessionconfig normal and race tests plus focused CLI regressions.
+  The candidate tree passes `git diff --check` and is clean. This is executor
+  evidence only; it does not claim script CI, independent review, guarded
+  merge, immutable validation, physical/acoustic proof or project completion.
+  The next action is push this same revision, update PR `#467`, and submit the
+  changed head to script-owned CI without polling.
