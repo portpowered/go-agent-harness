@@ -91,3 +91,33 @@ gates, push PR `#473`, and submit that changed head to script CI without
 polling. Then retain the task for any exact CI rejection and repair the same
 task; no CI-green, review, merge, vertical probe or project acceptance is
 claimed here.
+
+## Fresh bounded verification checkpoint — 2026-09-12T18:58:09Z
+
+- The admitted branch remains clean at `5a0cefda` before this documentation
+  checkpoint. `project-control.py verify-work --type task --name
+  audio-runtime-c83-retire-cli-browser-scenario-runner` remains admitted;
+  `prd.json.branchName` matches the isolated branch. `git fetch origin main`
+  reports `origin/main=d4766c3dbbf2c198142047ead4449d58dd47d485`, which is not
+  an ancestor and still has no `go-agent-runtime/services/browserscenario`.
+- Focused normal controls pass: browserrunner `45` tests across three
+  packages, owned CLI cancellation `6` tests, browser/room regressions `132`
+  tests, and the GOWORK=off external consumer, each at count `3`.
+- Focused race controls pass: browserrunner `45` tests, owned CLI cancellation
+  `6` tests, and the GOWORK=off external consumer, each at count `3`.
+  The broader browser/room race pattern reproduced one known out-of-scope
+  timing failure in C61-owned `session_browser_scenario_report_test.go`
+  (`TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict`),
+  with `43` tests passing; no C83-owned test failed and no C61 path was edited.
+- The required `CGO_ENABLED=0`/`nomicrophone` cancellation control with an
+  isolated `GOCACHE`, cross-module `coverpkg`, and count `10` passed all trials
+  with `16.5%` instrumented coverage. `COUNT=1 scripts/test-session-ci-regressions.sh all`
+  passed normal, coverage, and race lanes, including the retained negative
+  controls and twenty high-rate trials. `git diff --check` passed.
+- These results are verification of the already-pushed candidate, not a repair
+  or CI/review/merge/probe result. C61 PR `#452` remains unmerged and C79 PR
+  `#470` retains the shared registry/baseline lease. The exact next action is
+  still to reconcile this same branch only after both prerequisites release;
+  then apply the demonstrated registration and nine downward baseline changes,
+  rerun focused gates, and submit the changed head to script CI without
+  polling.
