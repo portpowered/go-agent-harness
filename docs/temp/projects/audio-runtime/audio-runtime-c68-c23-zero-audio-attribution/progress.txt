@@ -83,3 +83,36 @@ C56_RECORDING_DEFECT at recording_observer_admission, with owner action on
 the existing C56 task. Next action is commit/push/update PR457 and submit the
 same candidate to external script CI without polling; retain ownership for
 any exact rejection.
+
+2026-09-11: Review-86 repair checkpoint 597c75cf6ff640febdc8fae192fbd4b533990536
+closed the remaining source-label trust, frozen-input, escaped-grandchild,
+negative-control, and retained-positive-artifact gates. The exact prior
+integration rejection is preserved in ci-integration-rejection.json: run
+34669154964/job 103487069605 lost 6,400 high-rate rendered samples while
+reporting zero dropped samples, an existing C47/C64 residual outside C68's
+evidence-only lease.
+
+2026-09-11: The first fresh four-case comparison under 597c75cf completed as
+20260912T033652Z-807044000-comparison, but the fail-closed verifier rejected
+its own attempt ledger because the optional historical/complete state label
+was included in one artifact digest. No external or production failure was
+introduced. Repair checkpoint 3d93b523eb594fae7cedeecdda2845a582b560bc
+normalizes that ledger-only label while preserving the prior attempt.
+
+2026-09-11: Fresh prepare/build/control evidence under 3d93b523 passed for
+C23 b2fb41401cd0934378b9ff1bc131532fdc19f614 and C56
+85710a53a2e9449884fb81f979df0599269ef3b3. Cleanup reaped the intentionally
+setsid-escaped grandchild with SIGTERM/SIGKILL and zero survivors; the exact
+first-provider-audio negative returned 1 at the PCM oracle. The single fresh
+comparison 20260912T034156Z-264425000-comparison completed exactly four
+one-turn off/on cases and classified C56_RECORDING_DEFECT. Every provider and
+public boundary had one non-empty 128-byte PCM frame; recording on remained
+accepted_audio=0/audio_bytes=0 with no audio/out-000.pcm.
+
+2026-09-11: C21 normal count=5 and race count=1 passed against 3d93b523.
+verify.py --mode all passed provenance, oracle-controls, boundaries,
+attribution, and cleanup with 1,247,696 retained artifact bytes. The ledger
+accounts for every retained positive root and binds the current attempt to
+the normalized artifact inventory. Next action is force-add the generated
+owned evidence, commit, push/update PR457, and return ACCEPTED to the external
+script-CI gate without polling; retain C68 ownership for any exact rejection.

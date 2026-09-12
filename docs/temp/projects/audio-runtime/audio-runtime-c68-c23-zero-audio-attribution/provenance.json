@@ -63,7 +63,7 @@
     "path": "inputs/c23-task/fixtures.json",
     "sha256": "7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e"
   },
-  "head": "97b4f042869d47705517e651dc97a6ce586cb06a",
+  "head": "3d93b523eb594fae7cedeecdda2845a582b560bc",
   "inputs": {
     "c23": {
       "files": [

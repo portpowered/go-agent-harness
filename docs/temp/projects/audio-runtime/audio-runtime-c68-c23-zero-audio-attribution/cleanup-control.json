@@ -1,0 +1,61 @@
+{
+  "artifact_disk": {
+    "bounded": true,
+    "bytes": 5,
+    "cap_bytes": 4194304,
+    "files": 2
+  },
+  "execution": {
+    "artifact_disk": {
+      "bounded": true,
+      "bytes": 5,
+      "cap_bytes": 4194304,
+      "files": 2
+    },
+    "binary_binding": null,
+    "cleanup": {
+      "descendant_processes_reaped": true,
+      "descendants_after": [],
+      "descendants_before": [
+        2061
+      ],
+      "errors": [],
+      "group_alive_after": false,
+      "group_alive_before": true,
+      "group_members_after": [],
+      "group_members_before": [
+        -1
+      ],
+      "kill_sent": true,
+      "parent_reaped": true,
+      "pgid": 2060,
+      "pipes_reaped": true,
+      "term_sent": true
+    },
+    "command": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-c",
+      "import subprocess,sys,time; p=subprocess.Popen([sys.executable,'-c',sys.argv[1]]); print(p.pid,flush=True); time.sleep(30)",
+      "import os,signal,time; os.setsid(); signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)"
+    ],
+    "cwd": ".",
+    "elapsed_ms": 2105,
+    "label": "cleanup-grandchild",
+    "output_bounded": true,
+    "output_overflow": false,
+    "returncode": -15,
+    "source_revision": "3d93b523eb594fae7cedeecdda2845a582b560bc",
+    "stderr": "artifacts/cleanup-control/20260912T034126Z-766699000-cleanup/process/stderr.log",
+    "stderr_bytes": 0,
+    "stderr_observed_bytes": 0,
+    "stdout": "artifacts/cleanup-control/20260912T034126Z-766699000-cleanup/process/stdout.log",
+    "stdout_bytes": 5,
+    "stdout_observed_bytes": 5,
+    "timed_out": true
+  },
+  "negative_case": "parent exits on TERM while grandchild ignores TERM; group KILL and reap are required",
+  "passed": true,
+  "runner_sha256": "ee5d2ddd103a1d4594360b893641c056aae713d6643ef11d5c841b0df5728079",
+  "schema": "audio-runtime.c68.zero-audio-attribution.cleanup.v1",
+  "task": "audio-runtime-c68-c23-zero-audio-attribution"
+}

@@ -1,7 +1,7 @@
 {
   "artifact_disk": {
     "bounded": true,
-    "bytes": 16443,
+    "bytes": 16424,
     "cap_bytes": 4194304,
     "files": 4
   },
@@ -1914,6 +1914,9 @@
       "verified": true
     },
     "cleanup": {
+      "descendant_processes_reaped": true,
+      "descendants_after": [],
+      "descendants_before": [],
       "errors": [],
       "group_alive_after": false,
       "group_alive_before": false,
@@ -1921,7 +1924,7 @@
       "group_members_before": [],
       "kill_sent": false,
       "parent_reaped": true,
-      "pgid": 44785,
+      "pgid": 2262,
       "pipes_reaped": true,
       "term_sent": false
     },
@@ -1931,20 +1934,20 @@
       "-fixture=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/inputs/c23-task/fixtures.json",
       "-turns=1",
       "-recording=false",
-      "-artifact-root=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/negative-control/20260912T025003Z-520377000-negative",
-      "-output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/negative-control/20260912T025003Z-520377000-negative/report.json"
+      "-artifact-root=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/negative-control/20260912T034150Z-312701000-negative",
+      "-output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/negative-control/20260912T034150Z-312701000-negative/report.json"
     ],
     "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/sources/c56",
-    "elapsed_ms": 128,
+    "elapsed_ms": 199,
     "label": "negative-first-provider-audio",
     "output_bounded": true,
     "output_overflow": false,
     "returncode": 1,
     "source_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
-    "stderr": "artifacts/negative-control/20260912T025003Z-520377000-negative/process/stderr.log",
+    "stderr": "artifacts/negative-control/20260912T034150Z-312701000-negative/process/stderr.log",
     "stderr_bytes": 98,
     "stderr_observed_bytes": 98,
-    "stdout": "artifacts/negative-control/20260912T025003Z-520377000-negative/process/stdout.log",
+    "stdout": "artifacts/negative-control/20260912T034150Z-312701000-negative/process/stdout.log",
     "stdout_bytes": 0,
     "stdout_observed_bytes": 0,
     "timed_out": false
@@ -1960,7 +1963,7 @@
     "bytes": 0,
     "nonempty": false,
     "nonempty_records": 0,
-    "path": "artifacts/negative-control/20260912T025003Z-520377000-negative/provider.session.json",
+    "path": "artifacts/negative-control/20260912T034150Z-312701000-negative/provider.session.json",
     "recorded_bytes": [
       0
     ],
@@ -1971,7 +1974,7 @@
     "expected_rejection": true,
     "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
-  "report": "artifacts/negative-control/20260912T025003Z-520377000-negative/report.json",
+  "report": "artifacts/negative-control/20260912T034150Z-312701000-negative/report.json",
   "schema": "audio-runtime.c68.zero-audio-attribution.negative.v1",
   "task": "audio-runtime-c68-c23-zero-audio-attribution"
 }
