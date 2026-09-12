@@ -13,7 +13,9 @@ It is evidence for the isolated candidate, not whole-project acceptance.
 | fetched execution origin/main | `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06` |
 | candidate branch | `codex/audio-runtime-c69-retire-cli-bare-session-admission` |
 | implementation checkpoint | `38e2ddba71b67a53d07204d9bc43a2e86260a82d` |
-| final pushed PR head | `d85daa6a0780bd64ba08e49ed77374394f1ee2d0` |
+| PR opening head | `d85daa6a0780bd64ba08e49ed77374394f1ee2d0` |
+| latest pushed implementation head | `38e2ddba71b67a53d07204d9bc43a2e86260a82d` |
+| latest evidence refresh commit | `51daa1ea88502fbd8aa3c8e3808b43871a51bb53` |
 | pull request | `#458` |
 | accepted-main production file SHA-256 | `2aadc03e24f3b3dcad97d7a04d25f61e9541275a790674168d3f79487948fb74` |
 | candidate production file SHA-256 | `5a44be4cae20845844e7c64403749c4837912e32e8502f5aa7c78b51b3f98221` |
