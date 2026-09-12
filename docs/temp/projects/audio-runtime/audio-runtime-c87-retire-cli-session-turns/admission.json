@@ -1,0 +1,25 @@
+{
+  "schema": "audio-runtime.c87.admission/v1",
+  "project": "audio-runtime",
+  "contract_revision": "audio-runtime-v1",
+  "task": "audio-runtime-c87-retire-cli-session-turns",
+  "branch": "codex/audio-runtime-c87-retire-cli-session-turns",
+  "status": "admitted",
+  "planning_main": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "startup_integration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "planning_baseline_file": {
+    "path": "agent-cli/internal/services/internal/agentruntime/session_turns.go",
+    "physical_production_lines": 243
+  },
+  "previous_review_findings": [],
+  "shared_changes_deferred": [
+    "scripts/wire-packages.txt",
+    "docs/architecture/architecture-size-baseline.json"
+  ],
+  "ancestry_verified": [
+    "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+    "origin/main"
+  ]
+}
