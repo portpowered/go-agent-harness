@@ -61,3 +61,40 @@ generated-file-spoof for the unregistered roomaudiodiagnostics Wire graph
 No CI was polled. The candidate is ready for the script CI gate after the
 primary releases the shared Wire/baseline ownership and assigns those exact
 repairs; `ACCEPTED` will mean submission to that gate, not green CI.
+
+# C95 current-head continuation checkpoint 2026-09-12T16:13:12Z
+
+- Admission remains valid for the sole `audio-runtime` project: task
+  `work-task-175` is canonical `init`, `project-control.py verify-work
+  --type task --name audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics`
+  returns `admitted`, and the isolated branch exactly matches
+  `prd.json.branchName`. Fetched `origin/main=d4766c3dbbf2c198142047ead4449d58dd47d485`;
+  startup `8bdafc7f`, planning origin `3d3e7278`, and current-main ancestry all
+  pass. The board has no C95 review row or C95 rejection feedback.
+- Current HEAD is `6de65b5f06736ec36f0c99ced72346b535974ef0`. The executable
+  implementation source remains `ee1a44b2`; the intervening HEAD delta is
+  documentation-only in the owned C95 evidence files. A fresh `run.py` build
+  from current HEAD launched `room run --example`, ran all three bounded room
+  and non-room cases, exited zero in `24.242s`, reaped every child, and kept
+  every process group dead. YUI is `50,954,386` bytes with SHA-256
+  `92553b9edce8c5a17f5d8c87c9b1bc998d59c34f26bc364d80f7f330ba668171`.
+- Focused runtime normal/race (`17`/`51` tests), external `GOWORK=off`
+  consumer, positive plus three compiling mutation oracles, CLI room/replay/
+  audio-tool normal/race (`240`/`65` tests), and the retirement/scope audit all
+  pass. `make fmt`, `make vet`, pinned `make lint` (0 issues in 15 modules),
+  pinned `make staticcheck`, `make coverage-registration` (`179` packages),
+  `make architecture-size-check`, `make coverage-changed
+  COVERAGE_BASE=3d3e7278`, and `git diff --check` pass. The accumulated
+  `COUNT=1` normal, coverage, and race session-regression matrix passes,
+  including the 20-trial high-rate audio controls and expected negative
+  diagnostics.
+- `make wire-check` remains the only demonstrated gate failure and reports
+  exactly `unregistered=['go-agent-runtime/services/roomaudiodiagnostics/wire/wire_gen.go']`.
+  C79 `work-task-114` still owns `scripts/wire-packages.txt` and
+  `docs/architecture/architecture-size-baseline.json`; C95 has not edited
+  either shared path. This is an unavailable ownership prerequisite, not a
+  C95 implementation failure. The next action is to retain this same task,
+  wait for C79's reviewed guarded merge and explicit lease release, integrate
+  the accepted main, register only the C95 generated Wire path and remove only
+  demonstrated C95 stale baseline entries, then rerun bounded Wire/architecture
+  gates before submitting the changed same PR to SCRIPT CI.
