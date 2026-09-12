@@ -453,12 +453,27 @@ class PrepareValidationSuccessorTests(unittest.TestCase):
         self.assertEqual(result["status"], "verified")
 
     def test_packet_contract_mutations_fail_closed_before_staging(self):
-        item = self.fixture.batch()["works"][0]
-        base = self.fixture.packet(item)
+        items = self.fixture.batch()["works"]
+        for label, item in zip(("c47", "c54", "c55"), items):
+            base = self.fixture.packet(item)
+            service_entries = [
+                (index, criterion)
+                for index, criterion in enumerate(base["criteria"])
+                if criterion.get("id") == "SERVICE"
+            ]
+            self.assertEqual(len(service_entries), 1)
+            service_index, service = service_entries[0]
+            self.assertEqual(service["rubric"], amendment.SUCCESSOR_SERVICE_RUBRIC)
 
-        weakened = copy.deepcopy(base)
-        weakened["criteria"][1]["rubric"] = "weakened"
-        self._prepare_failure(weakened, "weakened-service", "immutable rubrics")
+            weakened = copy.deepcopy(base)
+            weakened["criteria"][service_index]["rubric"] = "weakened"
+            self._prepare_failure(
+                weakened,
+                "weakened-service-" + label,
+                "immutable rubrics",
+            )
+
+        base = self.fixture.packet(items[0])
 
         removed = copy.deepcopy(base)
         removed["scope"] = "project"
