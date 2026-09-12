@@ -28,9 +28,10 @@ Date: 2026-09-11
 - Direct package coverage: public contract 100.0%, private service 87.0% (floor 80.00%), and Wire 100.0% (floor 95.00%).
 - `make coverage-registration` passes 179 registered workspace packages across 6 modules; `make coverage-changed COVERAGE_BASE=d5d6f84363d8569d5dc1a59985f8d45cf50e1d06` passes 179 packages across 7 profiles.
 - `git diff --check`: clean.
+- Repair checkpoint `1ed5a60e` is committed and pushed to the task branch; the worktree is clean.
 
 ## Pending shared integration
 
-The current canonical board still shows the shared C61 architecture-baseline lease active. The existing shared `scripts/wire-packages.txt` does not yet register `go-agent-runtime/services/textseed/wire`, and the immutable architecture baseline still contains the retired C71 `sessionTextWireSequence` violation. The C71 task does not modify either shared artifact while that lease is active. After the canonical C61 release, the next action is to reconcile the released registry/baseline entries, rerun the focused architecture and Wire gates, then push the same task candidate for independent review and script CI.
+The current canonical board and handoff still show the C57 Wire-registry lease and C61 architecture-baseline lease active. The existing shared `scripts/wire-packages.txt` does not yet register `go-agent-runtime/services/textseed/wire`, and the immutable architecture baseline still contains the retired C71 `sessionTextWireSequence` violation. The C71 task does not modify either shared artifact while those leases are active. After both canonical releases, the next action is to integrate accepted main, reconcile only the released registry/baseline entries, rerun the focused architecture and Wire gates, then push the same task candidate for independent review and script CI.
 
 The current `factory/docs/implementation-handoff.md` and operating policy were read before action. No acceptance waiver was used. The inherited root `progress.txt` contains no C71/textseed task record; canonical board state and task/review rows are the authoritative inbox.
