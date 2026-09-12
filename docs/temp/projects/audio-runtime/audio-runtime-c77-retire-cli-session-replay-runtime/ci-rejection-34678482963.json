@@ -1,0 +1,66 @@
+{
+  "source": {
+    "command": "gh run view 34678482963 --json databaseId,headSha,status,conclusion,event,workflowName,createdAt,updatedAt,url,jobs",
+    "run": {
+      "databaseId": 34678482963,
+      "headSha": "c6aad3ee3485864501bb4d9546e640c748925fe4",
+      "status": "completed",
+      "conclusion": "failure",
+      "event": "pull_request",
+      "workflowName": "CI",
+      "createdAt": "2026-09-12T06:34:29Z",
+      "updatedAt": "2026-09-12T06:45:15Z",
+      "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34678482963"
+    },
+    "failedJobs": [
+      {
+        "databaseId": 103512520634,
+        "name": "CI (static)",
+        "conclusion": "failure",
+        "failedStep": "Verify service architecture and size budgets",
+        "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34678482963/job/103512520634"
+      },
+      {
+        "databaseId": 103512520589,
+        "name": "CI (integration)",
+        "conclusion": "failure",
+        "failedStep": "Run production-binary audio-device replay integration",
+        "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34678482963/job/103512520589"
+      }
+    ]
+  },
+  "failedLogs": {
+    "103512520634": [
+      "make architecture-size-check",
+      "architecture gate failed with 8 issue(s)",
+      "baseline-stale internal/services/internal/agentruntime/session_replay.go: file-lines entry no longer describes a current violation; delete it",
+      "baseline-stale internal/services/internal/agentruntime/session_replay.go:loadReplaySessionAudioTurns: cognitive-complexity entry no longer describes a current violation; delete it",
+      "baseline-stale internal/services/internal/agentruntime/session_replay.go:loadReplaySessionAudioTurns: cyclomatic-complexity entry no longer describes a current violation; delete it",
+      "baseline-stale internal/services/internal/agentruntime/session_replay.go:loadReplaySessionConfiguration: cognitive-complexity entry no longer describes a current violation; delete it",
+      "baseline-stale internal/services/internal/agentruntime/session_replay.go:loadReplaySessionConfiguration: cyclomatic-complexity entry no longer describes a current violation; delete it",
+      "baseline-stale internal/services/internal/agentruntime/session_replay.go:loadReplaySessionConfiguration: function-lines entry no longer describes a current violation; delete it",
+      "baseline-stale internal/services/internal/agentruntime/session_replay.go:loadReplaySessionPrompt: cognitive-complexity entry no longer describes a current violation; delete it",
+      "baseline-stale internal/services/internal/agentruntime/session_replay.go:loadReplaySessionPrompt: cyclomatic-complexity entry no longer describes a current violation; delete it",
+      "Process completed with exit code 2"
+    ],
+    "103512520589": [
+      "make test-audio-device-server-integration",
+      "TestAgentBinaryTest45HighRateToolAudioRegression/trial_10: remote device rendered 171191/177591 compared samples (lost 6400, 96.4% retained)",
+      "TestAgentBinaryTest45HighRateToolAudioRegression/trial_04: remote device rendered 164791/177591 compared samples (lost 12800, 92.8% retained)",
+      "playback: DroppedSamples=0 OverflowEvents=0 DiscardedSamples=0 DiscardEvents=0",
+      "Process completed with exit code 2"
+    ]
+  },
+  "reviewInbox": {
+    "pullRequest": 469,
+    "reviewDecision": "",
+    "reviews": [],
+    "boardTask": "work-task-107",
+    "boardRejectionFeedback": "CI checks failed for PR #469 at head 0054acadba5a3a297debbf3869fc71c0af84c722: required checks failed on current head 0054acadba5a3a297debbf3869fc71c0af84c722: CI (static)=FAILURE",
+    "latestRunSupersedesBoardFeedback": true
+  },
+  "executorDisposition": {
+    "static": "reproduced exactly; eight C77 baseline entries remain shared-file work and are not edited while C79 holds the lease",
+    "integration": "outside C77 ownership and not reproduced by the bounded local COUNT=3 session regression matrix"
+  }
+}
