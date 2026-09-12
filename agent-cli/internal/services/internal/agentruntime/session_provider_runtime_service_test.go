@@ -18,6 +18,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
+const testProviderVoice = "marin"
+
 func TestProviderSessionRuntimeService_RecordPolicyAndBuild(t *testing.T) {
 	live := &stubRuntimeDialer{id: "live"}
 	recorder := &stubRecordingDialer{stubRuntimeDialer: stubRuntimeDialer{id: "record"}}
@@ -30,7 +32,7 @@ func TestProviderSessionRuntimeService_RecordPolicyAndBuild(t *testing.T) {
 	tool := messages.ToolDefinition{Name: "lookup"}
 	plan, err := service.PlanRecord(context.Background(), providersession.RecordRequest{
 		Provider: "openai", Model: "gpt-realtime", APIKey: "redacted-test-key", RecordPath: "capture.json",
-		Voice: "marin", AudioInputAvailable: true, ToolDefinitions: []messages.ToolDefinition{tool},
+		Voice: testProviderVoice, AudioInputAvailable: true, ToolDefinitions: []messages.ToolDefinition{tool},
 		ObserveDialer: func(d transport.Dialer) transport.Dialer { return d },
 	})
 	if err != nil {
@@ -56,7 +58,7 @@ func TestProviderSessionRuntimeService_RecordPolicyAndBuild(t *testing.T) {
 	if !ok {
 		t.Fatalf("inferencer type = %T, want *inference.SessionGatewayInferencer", inferencer)
 	}
-	if got := request.Request().Config; got.Model != "gpt-realtime" || got.Voice != "marin" || len(got.Tools) != 1 || got.InputAudioTranscription == nil {
+	if got := request.Request().Config; got.Model != "gpt-realtime" || got.Voice != testProviderVoice || len(got.Tools) != 1 || got.InputAudioTranscription == nil {
 		t.Fatalf("built session config = %#v", got)
 	}
 }

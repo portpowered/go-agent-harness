@@ -1,4 +1,4 @@
-package providersession_test
+package wire
 
 import (
 	"context"
@@ -7,15 +7,14 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providersession"
-	providersessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providersession/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 func TestWireServiceBuildsIndependentProviderRequests(t *testing.T) {
-	first := providersessionwire.NewService(providersession.Dependencies{})
-	second := providersessionwire.NewService(providersession.Dependencies{})
+	first := NewService(providersession.Dependencies{})
+	second := NewService(providersession.Dependencies{})
 	dialer := noopDialer{}
 
 	openAI, err := first.BuildOpenAI(context.Background(), providersession.BuildRequest{
@@ -63,7 +62,7 @@ func TestWireServiceBuildsIndependentProviderRequests(t *testing.T) {
 }
 
 func TestWireServiceBuildRejectsMissingDialerWithTypedIdentity(t *testing.T) {
-	service := providersessionwire.NewService(providersession.Dependencies{})
+	service := NewService(providersession.Dependencies{})
 	_, err := service.BuildOpenAI(context.Background(), providersession.BuildRequest{Provider: providersession.ProviderOpenAI})
 	if !errors.Is(err, providersession.ErrMissingDialer) {
 		t.Fatalf("BuildOpenAI error = %v, want ErrMissingDialer", err)

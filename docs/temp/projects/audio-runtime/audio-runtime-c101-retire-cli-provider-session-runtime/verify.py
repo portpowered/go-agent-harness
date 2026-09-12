@@ -21,7 +21,7 @@ import tempfile
 
 
 TASK_DIR = Path(__file__).resolve().parent
-ROOT = TASK_DIR.parents[5]
+ROOT = TASK_DIR.parents[4]
 EXTERNAL_CONSUMER = TASK_DIR / "external-consumer"
 REPORT = TASK_DIR / "verification-report.json"
 BRANCH = "codex/audio-runtime-c101-retire-cli-provider-session-runtime"
@@ -60,11 +60,13 @@ def scrub(value: str) -> str:
     return value[-1200:]
 
 
-def run(command: list[str], cwd: Path, timeout: int) -> dict:
+def run(command: list[str], cwd: Path, timeout: int, extra_env: dict[str, str] | None = None) -> dict:
     env = os.environ.copy()
     for key in list(env):
         if re.search(r"(?i)(api[_-]?key|authorization|token|secret|password)", key):
             env.pop(key, None)
+    if extra_env:
+        env.update(extra_env)
     try:
         completed = subprocess.run(
             command,
@@ -126,7 +128,7 @@ def focused_positive() -> list[dict]:
             ROOT,
             300,
         ),
-        run(["go", "test", "./...", "-count=1", "-timeout=240s"], EXTERNAL_CONSUMER, 300),
+        run(["go", "test", "./...", "-count=1", "-timeout=240s"], EXTERNAL_CONSUMER, 300, {"GOWORK": "off"}),
     ]
     results[1]["env"] = {"GOWORK": "off"}
     return results

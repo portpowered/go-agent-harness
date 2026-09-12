@@ -15,7 +15,7 @@ import time
 
 
 TASK_DIR = Path(__file__).resolve().parent
-ROOT = TASK_DIR.parents[5]
+ROOT = TASK_DIR.parents[4]
 DEFAULT_BINARY = TASK_DIR / "artifacts/yui"
 CASES = ("openai-replay", "grok-replay", "divergent-replay", "non-provider-smoke")
 

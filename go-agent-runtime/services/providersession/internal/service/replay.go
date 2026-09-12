@@ -213,7 +213,7 @@ func replaySessionModel(path string, sequence int, session map[string]json.RawMe
 }
 
 func replayAudioRates(session map[string]json.RawMessage) (int, int) {
-	var audio struct {
+	type audioConfiguration struct {
 		Input struct {
 			Format struct {
 				Rate int `json:"rate"`
@@ -225,8 +225,11 @@ func replayAudioRates(session map[string]json.RawMessage) (int, int) {
 			} `json:"format"`
 		} `json:"output"`
 	}
+	var audio audioConfiguration
 	if raw, ok := session["audio"]; ok {
-		_ = json.Unmarshal(raw, &audio)
+		if err := json.Unmarshal(raw, &audio); err != nil {
+			audio = audioConfiguration{}
+		}
 	}
 	in, out := audio.Input.Format.Rate, audio.Output.Format.Rate
 	var format struct {
@@ -234,14 +237,18 @@ func replayAudioRates(session map[string]json.RawMessage) (int, int) {
 	}
 	if in <= 0 {
 		if raw, ok := session["input_audio_format"]; ok {
-			_ = json.Unmarshal(raw, &format)
+			if err := json.Unmarshal(raw, &format); err != nil {
+				format.Rate = 0
+			}
 			in = format.Rate
 		}
 	}
 	format.Rate = 0
 	if out <= 0 {
 		if raw, ok := session["output_audio_format"]; ok {
-			_ = json.Unmarshal(raw, &format)
+			if err := json.Unmarshal(raw, &format); err != nil {
+				format.Rate = 0
+			}
 			out = format.Rate
 		}
 	}
