@@ -27,7 +27,7 @@ func sessionObserverFailure(observer *sessionProgressObserver) *sf.ObserverFailu
 	return nil
 }
 func sessionSIGINTCleanForObserver(err error, intent *SessionCancellationIntent, observer *sessionProgressObserver) bool {
-	return sfw.NewService().SIGINTCleanForObserver(err, intent, sessionObserverFailure(observer), sessionSIGINTOptions())
+	return sessionSIGINTCancellationOnly(err, intent) && sessionSIGINTObserverFailureOnly(observer)
 }
 func sessionSIGINTObserverFailureOnly(observer *sessionProgressObserver) bool {
 	return sfw.NewService().SIGINTObserverFailureOnly(sessionObserverFailure(observer))

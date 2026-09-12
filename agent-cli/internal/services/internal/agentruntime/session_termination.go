@@ -12,8 +12,6 @@ const sessionStragglerDrainQuietPeriod, sessionStragglerDrainWallSafety, errInva
 
 type sessionStragglerDrainPolicy struct{ quietPeriod time.Duration }
 
-var defaultSessionStragglerDrainPolicy = sessionStragglerDrainPolicy{quietPeriod: sessionStragglerDrainQuietPeriod}
-
 type sessionTerminationBoundary struct {
 	ctx                                                context.Context
 	quiesceUpstream, stopOwnedResources, flushBuffered func() error

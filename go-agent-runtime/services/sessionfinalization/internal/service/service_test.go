@@ -20,6 +20,8 @@ type panicIntent struct{}
 
 func (panicIntent) SIGINTReceived() bool { panic("intent panic") }
 
+type contextValueKey struct{}
+
 type causeProbe struct{ cause error }
 
 func (e *causeProbe) Error() string { return "cause boundary" }
@@ -46,28 +48,6 @@ type unwrapMany struct{ causes []error }
 
 func (e unwrapMany) Error() string   { return "joined" }
 func (e unwrapMany) Unwrap() []error { return e.causes }
-
-type closeCounter struct {
-	mu    sync.Mutex
-	order *[]string
-	name  string
-	count int
-	err   error
-	panic any
-}
-
-func (c *closeCounter) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.count++
-	if c.order != nil {
-		*c.order = append(*c.order, c.name)
-	}
-	if c.panic != nil {
-		panic(c.panic)
-	}
-	return c.err
-}
 
 func TestFinalizerOrdersEveryStageAndPreservesErrorIdentity(t *testing.T) {
 	primary := errors.New("primary")
@@ -100,6 +80,7 @@ func TestFinalizerOrdersEveryStageAndPreservesErrorIdentity(t *testing.T) {
 func TestFinalizerIsOnceOnlyAcrossFinishAndCleanup(t *testing.T) {
 	var mu sync.Mutex
 	calls := 0
+	var nilContext context.Context
 	req := sessionfinalization.FinalizerRequest{Finalize: func(context.Context, io.Writer) error {
 		mu.Lock()
 		calls++
@@ -113,9 +94,13 @@ func TestFinalizerIsOnceOnlyAcrossFinishAndCleanup(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			if i%2 == 0 {
-				_ = f.Finish(nil, nil, nil)
+				if err := f.Finish(nilContext, nil, nil); err != nil {
+					t.Errorf("concurrent finish = %v", err)
+				}
 			} else {
-				_ = f.Cleanup(nil, nil)
+				if err := f.Cleanup(nilContext, nil); err != nil {
+					t.Errorf("concurrent cleanup = %v", err)
+				}
 			}
 		}(i)
 	}
@@ -123,7 +108,7 @@ func TestFinalizerIsOnceOnlyAcrossFinishAndCleanup(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("finalizer callback calls = %d, want one", calls)
 	}
-	if err := f.Finish(nil, nil, errors.New("later primary")); !errors.Is(err, errors.New("later primary")) {
+	if err := f.Finish(nilContext, nil, errors.New("later primary")); !errors.Is(err, errors.New("later primary")) {
 		// A fresh errors.New is intentionally not identity-equal; this branch
 		// documents that the cached cleanup does not replace the new primary.
 		if err == nil || err.Error() != "later primary" {
@@ -134,6 +119,7 @@ func TestFinalizerIsOnceOnlyAcrossFinishAndCleanup(t *testing.T) {
 
 func TestFinalizerNormalizesNilInputsAndContinuesAfterPanic(t *testing.T) {
 	panicErr := errors.New("after panic")
+	var nilContext context.Context
 	var gotContext context.Context
 	var gotWriter io.Writer
 	var order []string
@@ -146,7 +132,7 @@ func TestFinalizerNormalizesNilInputsAndContinuesAfterPanic(t *testing.T) {
 			return nil
 		},
 	})
-	err := f.Finish(nil, nil, nil)
+	err := f.Finish(nilContext, nil, nil)
 	if !errors.Is(err, sessionfinalization.ErrFinalizationPanic) || !errors.Is(err, panicErr) {
 		t.Fatalf("panic finalizer error = %v, want panic and later error", err)
 	}
@@ -162,10 +148,11 @@ func TestFinalizerHandlesDecoratorAndCallbackPanics(t *testing.T) {
 	phaseErr := errors.New("phase failure")
 	finalizeErr := errors.New("finalize failure")
 	var gotContext context.Context
+	var nilContext context.Context
 	f := New().NewFinalizer(sessionfinalization.FinalizerRequest{
 		CloseSession: func() error { return phaseErr },
 		FinalizeContext: func(ctx context.Context) context.Context {
-			return context.WithValue(ctx, struct{}{}, "decorated")
+			return context.WithValue(ctx, contextValueKey{}, "decorated")
 		},
 		Finalize: func(ctx context.Context, _ io.Writer) error {
 			gotContext = ctx
@@ -178,7 +165,7 @@ func TestFinalizerHandlesDecoratorAndCallbackPanics(t *testing.T) {
 	if !errors.Is(err, sessionfinalization.ErrFinalizationPanic) {
 		t.Fatalf("decorator panic error = %v", err)
 	}
-	if gotContext == nil || gotContext.Value(struct{}{}) != "decorated" {
+	if gotContext == nil || gotContext.Value(contextValueKey{}) != "decorated" {
 		t.Fatalf("finalize context = %v", gotContext)
 	}
 
@@ -186,7 +173,7 @@ func TestFinalizerHandlesDecoratorAndCallbackPanics(t *testing.T) {
 		FinalizeContext: func(context.Context) context.Context { panic("context decorator panic") },
 		Finalize:        func(ctx context.Context, _ io.Writer) error { return ctx.Err() },
 	})
-	if err := contextPanic.Cleanup(nil, nil); !errors.Is(err, sessionfinalization.ErrFinalizationPanic) {
+	if err := contextPanic.Cleanup(nilContext, nil); !errors.Is(err, sessionfinalization.ErrFinalizationPanic) {
 		t.Fatalf("context decorator panic = %v", err)
 	}
 
@@ -200,11 +187,12 @@ func TestFinalizerHandlesDecoratorAndCallbackPanics(t *testing.T) {
 
 func TestFinalizerAndTerminationNilReceiversAndPanicBoundaries(t *testing.T) {
 	primary := errors.New("primary")
+	var nilContext context.Context
 	var nilFinalizer *finalizer
-	if err := nilFinalizer.Finish(nil, nil, primary); !errors.Is(err, primary) {
+	if err := nilFinalizer.Finish(nilContext, nil, primary); !errors.Is(err, primary) {
 		t.Fatalf("nil finalizer finish = %v", err)
 	}
-	if err := nilFinalizer.Cleanup(nil, nil); err != nil {
+	if err := nilFinalizer.Cleanup(nilContext, nil); err != nil {
 		t.Fatalf("nil finalizer cleanup = %v", err)
 	}
 	var nilBoundary *terminationBoundary
@@ -255,7 +243,8 @@ func TestTerminationOrdersDrainAndJoinsContext(t *testing.T) {
 
 func TestTerminationRequiresDrainAndRunsRemainingStages(t *testing.T) {
 	calls := 0
-	b := New().NewTerminationBoundary(nil, sessionfinalization.TerminationRequest{
+	var nilContext context.Context
+	b := New().NewTerminationBoundary(nilContext, sessionfinalization.TerminationRequest{
 		StopOwnedResources: func() error { calls++; return nil },
 		FlushBuffered:      func() error { calls++; return nil },
 	})
@@ -280,7 +269,12 @@ func TestTerminationIsOnceOnlyAndConvertsPanics(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
-		go func() { defer wg.Done(); _ = b.Terminate(nil) }()
+		go func() {
+			defer wg.Done()
+			if err := b.Terminate(nil); err == nil {
+				t.Error("concurrent termination lost panic")
+			}
+		}()
 	}
 	wg.Wait()
 	if calls != 3 {

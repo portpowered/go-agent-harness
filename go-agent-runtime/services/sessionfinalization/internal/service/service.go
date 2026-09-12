@@ -24,9 +24,6 @@ func (s *Service) NewFinalizer(req sessionfinalization.FinalizerRequest) session
 }
 
 func (s *Service) NewTerminationBoundary(ctx context.Context, req sessionfinalization.TerminationRequest) sessionfinalization.TerminationBoundary {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	return &terminationBoundary{ctx: ctx, req: req}
 }
 
@@ -154,7 +151,11 @@ func (b *terminationBoundary) Terminate(primary error) error {
 		}
 		stopErr := call(b.req.StopOwnedResources)
 		flushErr := call(b.req.FlushBuffered)
-		b.result = errors.Join(primary, quiesceErr, waitErr, stopErr, flushErr, b.ctx.Err())
+		var contextErr error
+		if b.ctx != nil {
+			contextErr = b.ctx.Err()
+		}
+		b.result = errors.Join(primary, quiesceErr, waitErr, stopErr, flushErr, contextErr)
 	})
 	return b.result
 }
@@ -223,7 +224,11 @@ func safeSIGINTReceived(intent sessionfinalization.SIGINTIntent) (received bool)
 	if intent == nil {
 		return false
 	}
-	defer func() { _ = recover() }()
+	defer func() {
+		if recover() != nil {
+			received = false
+		}
+	}()
 	return intent.SIGINTReceived()
 }
 
@@ -283,7 +288,11 @@ func allowedError(err error, allowed []error) bool {
 func cancellationCauseOnly(provider sessionfinalization.CancellationCauseProvider, allowed []error) (clean bool) {
 	var cause error
 	func() {
-		defer func() { _ = recover() }()
+		defer func() {
+			if recover() != nil {
+				cause = nil
+			}
+		}()
 		cause = provider.CancellationCause()
 	}()
 	if cause == nil {
