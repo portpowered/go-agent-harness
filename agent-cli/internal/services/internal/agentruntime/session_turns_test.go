@@ -26,12 +26,12 @@ func (s *compatibilitySession) ConnectSession(context.Context) (messages.Session
 	return s, nil
 }
 
-func (s *compatibilitySession) Send(_ context.Context, message messages.StreamMessage) bool {
+func (s *compatibilitySession) Send(ctx context.Context, message messages.StreamMessage) bool {
 	if message.Type != messages.StreamTypeTextDelta && message.Type != messages.StreamTypeAudioDelta {
 		return true
 	}
-	s.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("ack")})
-	s.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	s.receive.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("ack")})
+	s.receive.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
 	return true
 }
 

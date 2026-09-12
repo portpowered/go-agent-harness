@@ -276,7 +276,9 @@ func TestServiceSerializesBlockedEventPublicationWithoutStateLock(t *testing.T) 
 	}})
 	startDone := make(chan struct{})
 	go func() {
-		_, _ = service.StartTurn(textInput("input"), sessionturns.TurnDirectionUser, 1)
+		if _, err := service.StartTurn(textInput("input"), sessionturns.TurnDirectionUser, 1); err != nil {
+			t.Errorf("StartTurn = %v", err)
+		}
 		close(startDone)
 	}()
 	select {
@@ -462,12 +464,18 @@ func TestServiceDeepCopiesResponseBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	responseBytes[0] = 99
-	returnedAudio := turn.Response.ContentParts[0].(messages.AudioPart)
+	returnedAudio, ok := turn.Response.ContentParts[0].(messages.AudioPart)
+	if !ok {
+		t.Fatalf("returned response part = %#v", turn.Response.ContentParts[0])
+	}
 	if returnedAudio.Bytes[0] != 1 {
 		t.Fatal("completed turn retained caller response bytes")
 	}
 	returnedAudio.Bytes[1] = 77
-	storedAudio := service.History()[0].Response.ContentParts[0].(messages.AudioPart)
+	storedAudio, ok := service.History()[0].Response.ContentParts[0].(messages.AudioPart)
+	if !ok {
+		t.Fatalf("stored response part = %#v", service.History()[0].Response.ContentParts[0])
+	}
 	if storedAudio.Bytes[1] != 2 {
 		t.Fatal("history response snapshot aliases returned turn")
 	}

@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -243,8 +244,11 @@ func (s *Service) sessionFor(ctx context.Context) (messages.Session, error) {
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		_ = connection.Close()
-		return nil, transitionError("run", sessionturns.ErrSessionClosed)
+		closedErr := transitionError("run", sessionturns.ErrSessionClosed)
+		if closeErr := connection.Close(); closeErr != nil {
+			return nil, errors.Join(closedErr, closeErr)
+		}
+		return nil, closedErr
 	}
 	s.connection = connection
 	s.mu.Unlock()
