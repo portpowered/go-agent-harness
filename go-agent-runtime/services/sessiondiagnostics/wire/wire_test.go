@@ -89,8 +89,7 @@ func TestToolContinuationBindsBeforeExplicitRequestObservation(t *testing.T) {
 	// The provider response can arrive from the synchronous response.create
 	// send before the adapter observes EventContinuationRequested.
 	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-continuation"})
-	var bound sessiondiagnostics.Observation
-	bound = apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventBindScheduledBoundary, ResponseID: "response-continuation"})
+	bound := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventBindScheduledBoundary, ResponseID: "response-continuation"})
 	if !bound.Accepted || !bound.HasScheduledIndex || bound.ScheduledIndex != 0 {
 		t.Fatalf("early continuation ownership = %+v, want scheduled index 0", bound)
 	}

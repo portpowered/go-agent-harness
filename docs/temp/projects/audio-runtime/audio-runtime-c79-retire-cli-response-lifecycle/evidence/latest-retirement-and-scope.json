@@ -1,5 +1,5 @@
 {
-  "candidate": "bf970df16936d8286f39ce4c5e23f82d7b39a5ff",
+  "candidate": "af2657eaecedbdaee706fb7b2965705479a28fd6",
   "mode": "retirement-and-scope",
   "payload": {
     "diff_check": {
@@ -8,7 +8,7 @@
         "diff",
         "--check"
       ],
-      "elapsed_seconds": 0.036,
+      "elapsed_seconds": 0.215,
       "returncode": 0,
       "stderr": "",
       "stdout": ""

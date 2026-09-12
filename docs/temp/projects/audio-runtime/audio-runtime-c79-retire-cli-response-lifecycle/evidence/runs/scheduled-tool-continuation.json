@@ -1,5 +1,5 @@
 {
-  "aggregate_timeout_seconds": 240,
+  "aggregate_timeout_seconds": 300,
   "case": "scheduled-tool-continuation",
   "checks": [
     {
@@ -7,21 +7,21 @@
         "go",
         "build",
         "-o",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-3976z5hm/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-cmiikgie/yui",
         "./agent-cli/cmd/yui"
       ],
-      "elapsed_seconds": 7.103,
+      "elapsed_seconds": 5.861,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-3976z5hm/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-cmiikgie/yui",
         "interaction",
         "--help"
       ],
-      "elapsed_seconds": 0.527,
+      "elapsed_seconds": 0.521,
       "returncode": 0,
       "stderr": "",
       "stdout": "Inspect provider-neutral gateway interactions.\n\nUse the replay subcommand to stream normalized PNIG fixture events as one JSON object per line without provider credentials or live network calls.\n\nUsage:\n  yui interaction [flags]\n  yui interaction [command]\n\nExamples:\n  yui interaction replay ./fixtures/example.interaction.json\n\nAvailable Commands:\n  replay      Replay a normalized interaction fixture as NDJSON\n\nFlags:\n  -h, --help   help for interaction\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui interaction [command] --help\" for more information about a command.\n"
@@ -36,10 +36,10 @@
         "-count=1",
         "-timeout=25s"
       ],
-      "elapsed_seconds": 0.368,
+      "elapsed_seconds": 0.399,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.163s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.158s\n"
     },
     {
       "argv": [
@@ -51,10 +51,10 @@
         "-count=1",
         "-timeout=25s"
       ],
-      "elapsed_seconds": 4.838,
+      "elapsed_seconds": 2.136,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.495s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.502s\n"
     },
     {
       "argv": [
@@ -66,15 +66,15 @@
         "-count=1",
         "-timeout=25s"
       ],
-      "elapsed_seconds": 15.087,
+      "elapsed_seconds": 14.312,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/test/integration\t13.213s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/test/integration\t12.713s\n"
     }
   ],
   "child_timeout_seconds": 60,
   "credential_free": true,
-  "elapsed_seconds": 27.928,
+  "elapsed_seconds": 23.235,
   "schema": "audio-runtime-c79-replay/v1",
   "software_replay_only": true
 }
