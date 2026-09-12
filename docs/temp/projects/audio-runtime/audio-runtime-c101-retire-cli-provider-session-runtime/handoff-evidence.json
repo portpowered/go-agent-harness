@@ -1,0 +1,48 @@
+{
+  "task": "audio-runtime-c101-retire-cli-provider-session-runtime",
+  "project": "audio-runtime",
+  "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
+  "baselineRevision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "sourceReduction": {
+    "openai": {
+      "beforeLines": 259,
+      "afterLines": 100,
+      "beforeSha256": "499e9c92856e94192d8e462619deeb4d15246190d2b14effa09502c21ddb8198"
+    },
+    "grok": {
+      "beforeLines": 124,
+      "afterLines": 30,
+      "beforeSha256": "864fa8b8a3f889d883733a4c1b202e0630d0155ce34f03f32beb712085f788d5"
+    },
+    "legacyLinesBefore": 383,
+    "legacyLinesAfter": 130,
+    "reducedLines": 253
+  },
+  "tests": {
+    "providerSession": "go test ./services/providersession/... -count=1: passed in 3 packages",
+    "providerSessionRace": "go test -race ./services/providersession/... -count=1: passed in 3 packages",
+    "providerSessionGOWORKOff": "GOWORK=off go test ./services/providersession/... -count=1: passed",
+    "focusedNormal": "agent-cli internal agentruntime focused suite: 59 passed",
+    "focusedRace": "agent-cli internal agentruntime focused race suite: 16 passed",
+    "accumulated": "agent-cli internal agentruntime: 1071 passed",
+    "vet": "go vet agentruntime packages: no issues found",
+    "embedding": "make embed-check: passed"
+  },
+  "coverage": {
+    "go-agent-runtime/services/providersession": "80.0%",
+    "go-agent-runtime/services/providersession/internal/service": "64.4%",
+    "go-agent-runtime/services/providersession/wire": "100.0%"
+  },
+  "registration": "make coverage-registration: 179 workspace packages checked across 6 modules",
+  "localGateStatus": {
+    "architectureSizeCheck": "blocked by C79-owned baseline data",
+    "architectureIssues": [
+      "baseline-drift: agent-cli internal agentruntime package files 238 > maintained baseline 237",
+      "baseline-stale: removed planOpenAIReplayRuntime cognitive-complexity entry",
+      "baseline-stale: removed planOpenAIReplayRuntime cyclomatic entry",
+      "baseline-stale: removed planOpenAIReplayRuntime function-lines entry"
+    ],
+    "wireCheck": "blocked by C79-owned scripts/wire-packages.txt; go-agent-runtime/services/providersession/wire/wire_gen.go is unregistered"
+  },
+  "nextAction": "After C79 releases its shared baseline and wire registry ownership, update only the demonstrated shared entries, rerun the bounded architecture and wire gates, then submit this same task to script CI."
+}
