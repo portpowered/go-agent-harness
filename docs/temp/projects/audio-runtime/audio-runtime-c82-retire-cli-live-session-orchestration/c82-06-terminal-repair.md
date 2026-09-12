@@ -57,3 +57,21 @@ C64's terminal-drain work and C79's shared-lane lock release reconcile on
 accepted main, apply only the generated Wire registration and demonstrated
 downward/stale baseline entries, rerun both shared gates, and submit the same
 PR to script CI without polling it.
+
+## Current-owner revalidation — 2026-09-12T09:18:07Z
+
+The admitted branch remains clean and pushed at `d6f788a5d487b1a65a1255845cf6066b02d98120`, with freshly fetched `origin/main` and the required startup/accepted-main ancestry intact. The bounded causal revalidation passes:
+
+- sessionlive causal normal tests pass `50/50`; the selected service race set
+  passes `30/30`;
+- CLI live/scheduled/response causal selectors pass `228/228`;
+- behavior-matrix and retirement-and-scope verification pass, with the exact
+  `579 + 54 = 633` adapter count and `500` retired lines;
+- post-Done-drain mutation fails at the missing final delta assertion, and
+  deadline-cleanup mutation fails at the timer-stop assertion;
+- accumulated `scripts/test-session-ci-regressions.sh all` passes in normal,
+  coverage, and race modes, including the high-rate audio/tool, scheduled,
+  replay-negative, simulated-device, and composed-provider controls.
+
+The current shared-gate observations remain unmodified and actionable: Wire
+reports only the unregistered `go-agent-runtime/services/sessionlive/wire/wire_gen.go`; architecture reports 11 downward/stale entries, consisting of the reduced `session_drain.go` baseline and the 10 reduced/stale `session_live.go` entries. C79 still owns the shared Wire registry and architecture baseline, and C64's reviewed terminal-drain release is still required before final main reconciliation. No CI-green, review, merge, vertical, acoustic, or project-acceptance claim is made.
