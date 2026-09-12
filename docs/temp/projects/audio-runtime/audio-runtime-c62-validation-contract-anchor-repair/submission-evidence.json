@@ -1,0 +1,443 @@
+{
+  "schema": "audio-runtime-c62-submission-evidence.v1",
+  "task": "audio-runtime-c62-validation-contract-anchor-repair",
+  "candidateStatus": "READY_FOR_SCRIPT_CI",
+  "candidate": {
+    "branch": "codex/audio-runtime-c62-validation-contract-anchor-repair",
+    "revision": "511d0d81515732ca5098b06d967fd2f97172c926",
+    "implementationRevision": "63988c0af875f2fd379b0fc866282dee600ea09e",
+    "testRepairRevision": "511d0d81515732ca5098b06d967fd2f97172c926",
+    "pullRequest": 453,
+    "pullRequestUrl": "https://github.com/portpowered/go-agent-harness/pull/453",
+    "baselineOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "worktreeStatus": "tracked candidate clean; no untracked paths",
+    "ancestry": {
+      "startupIntegrationIsAncestor": true,
+      "originMainIsAncestor": true,
+      "fetchCommand": "rtk git fetch origin main",
+      "planningOriginMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "acceptedMainRevision": "59af6325614d80173447fe2018a0471e27b4e7b1",
+      "integratedOriginMainRevision": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+      "integrationMergeRevision": "86f6bbe898780e26045d4375df14aa5df29f8afe"
+    }
+  },
+  "admission": {
+    "command": "rtk proxy python3 factory/scripts/project-control.py verify-work --type task --name audio-runtime-c62-validation-contract-anchor-repair",
+    "result": {
+      "status": "admitted",
+      "project": "audio-runtime",
+      "name": "audio-runtime-c62-validation-contract-anchor-repair"
+    },
+    "project": "audio-runtime",
+    "contractRevision": "audio-runtime-v1",
+    "branchNameMatchesWorktree": true
+  },
+  "preFix": {
+    "evidencePath": "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/pre-fix-anchor-failure.json",
+    "evidenceSha256": "0c1b6178ccf421d6c0a7d5279da9a3de14df799db32a642b465a9a10c2d8c01e",
+    "sourceRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "currentManifestSha256": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
+    "trustedOriginalManifestSha256": "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+    "diagnostic": "project_contract.ContractError: original manifest digest is not the reviewed anchor",
+    "validatorDispatch": false,
+    "probeDirectoryCreated": false,
+    "reportPathsCreated": []
+  },
+  "reviewedTransition": {
+    "onlyManifestDigests": [
+      "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d",
+      "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34"
+    ],
+    "changedAuthority": {
+      "path": "factory/projects/audio-runtime/acceptance.md",
+      "originalSha256": "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5",
+      "successorSha256": "edd1f5cbca1de8b49f96cdf8f039732d28a0082ef3718015e10535ff2e6a441a"
+    },
+    "unchangedAuthority": {
+      "sourcePlanSha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
+      "requestSha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0"
+    },
+    "changedCriterion": "SERVICE at authoritative index 3; the strengthened successor rubric is recorded verbatim in pre-fix-anchor-failure.json",
+    "unchangedCriterionIds": [
+      "AUDIO",
+      "DEVICE",
+      "EMBED",
+      "TRACE",
+      "REPLAY",
+      "FAILURES",
+      "QUALITY",
+      "PARITY"
+    ],
+    "unchangedCriteriaCanonicalSha256": "99f7093c18fe84e22d93f108340427824cfadd571c701eeb0b5758ae2cbeef53",
+    "project": "audio-runtime",
+    "contractRevision": "audio-runtime-v1",
+    "realtimeBudget": {
+      "sessionsPerMission": 3,
+      "totalSecondsPerMission": 120
+    },
+    "excludedSubproofs": [
+      "Native Windows hardware/endpoints testing",
+      "Physical acoustic testing"
+    ],
+    "historicalReport": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json",
+      "sha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+      "state": "FAILED/BLOCKED"
+    }
+  },
+  "preservedInputs": {
+    "amendmentId": "user-windows-hardware-scope-20260910",
+    "amendmentSha256": "3032161aa6015ef580eb2e45360b61bb4f336f0ae1813c4814368ecc7c275baa",
+    "authorizationSha256": "c3bfa91543b349b2c89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
+    "preparedBatchPath": "docs/temp/projects/audio-runtime/c47-c55-vertical-probes-batch.json",
+    "preparedBatchSha256": "b03c30d1225e2fd1d533c90524e5aac9ab256627b39cc3ae4a1ce71d98361a3f",
+    "buildSha256": "2bf087d1f9fef4df0ba85847a594bc8d67292c5e6d3ce44923cc3e64d53d92d7",
+    "fixtureSha256": "780a5a3ca7dc9b3a8039cf78e1052656eb2e28cb73fc300b1ecea999cfd1ce6f"
+  },
+  "preflight": {
+    "productionEntryPoint": "factory/scripts/prepare-validation.py:prepare",
+    "packets": [
+      "audio-runtime-c47-output-bound-vertical-probe",
+      "audio-runtime-c54-room-document-admission-vertical-probe",
+      "audio-runtime-c55-room-participant-mesh-vertical-probe"
+    ],
+    "result": "all three exact packets reached the intercepted target-directory creation boundary from tracked fixtures in a clean-checkout fixture root; each packet's strengthened SERVICE rubric mutation was rejected before staging",
+    "stagingReached": false,
+    "artifactCopyReached": false,
+    "missionJsonCreated": false,
+    "reportCreated": false,
+    "sourceInventoryUnchanged": true,
+    "mutationControls": [
+      "per-packet strengthened SERVICE rubric (C47/C54/C55)",
+      "project-scope criterion membership",
+      "manifest criterion order",
+      "project identity",
+      "Realtime budget",
+      "build digest",
+      "fixture digest",
+      "report path",
+      "amendment authority reference",
+      "historical FAILED/BLOCKED state"
+    ],
+    "serviceRubricMutationPackets": [
+      "audio-runtime-c47-output-bound-vertical-probe",
+      "audio-runtime-c54-room-document-admission-vertical-probe",
+      "audio-runtime-c55-room-participant-mesh-vertical-probe"
+    ],
+    "serviceRubricMutationResult": "PASS; production prepare-validation rejected the strengthened SERVICE mutation for all three packets before target-directory creation",
+    "realtimeSessionsUsed": 0,
+    "realtimeSecondsUsed": 0,
+    "validatorsLaunched": false
+  },
+  "reviewFindings": [
+    {
+      "finding": "validate_amended_report compared the staged successor mission authority with the original amendment authority and rejected a prepared mission during completion.",
+      "repairRevision": "63988c0af875f2fd379b0fc866282dee600ea09e",
+      "repair": "The staged mission is checked against the admitted successor contract authority; the amendment reference remains bound to the original authority as provenance.",
+      "causalControl": "test_successor_mission_authority_reaches_completion",
+      "result": "PASS; both role missions prepare and project-control verify_completion returns status=verified."
+    },
+    {
+      "finding": "test_prepare_validation depended on ignored running-root inputs and was absent from the default Makefile selector.",
+      "repairRevision": "63988c0af875f2fd379b0fc866282dee600ea09e",
+      "repair": "The test builds a disposable same-project root from tracked C62 fixtures and unsets FACTORY_ROOT/FACTORY_PROJECT_MANIFEST for the clean-checkout run; the owned module is run directly and through an explicit FACTORY_TEST_MODULES selector without changing Makefile scope.",
+      "causalControl": "env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST python3 -B -m unittest factory.scripts.tests.test_prepare_validation",
+      "result": "PASS; 6 tests."
+    },
+    {
+      "finding": "The submitted candidate was stale relative to the fetched origin/main, and its evidence described the earlier 59af6325 integration rather than current origin/main 3d3e7278.",
+      "repairRevision": "86f6bbe898780e26045d4375df14aa5df29f8afe",
+      "repair": "Fetched origin/main at 3d3e72786ac6fc1fd47c7e029589e5117674b035 and merged it without conflicts into the isolated C62 branch; refreshed exact ancestry and post-integration checks.",
+      "causalControl": "rtk git merge-base --is-ancestor 8bdafc7f947a3a2c9856220abdc539437035bd21 HEAD && rtk git merge-base --is-ancestor origin/main HEAD",
+      "result": "PASS; startup integration and current origin/main are ancestors of tested source 511d0d81515732ca5098b06d967fd2f97172c926."
+    },
+    {
+      "finding": "The packet mutation regression did not prove rejection of the strengthened SERVICE rubric for each prepared C47/C54/C55 packet.",
+      "repairRevision": "511d0d81515732ca5098b06d967fd2f97172c926",
+      "repair": "The test locates the authoritative SERVICE entry by ID, asserts the exact strengthened rubric, mutates that entry independently in each of the three exact packets, and invokes production prepare-validation before staging.",
+      "causalControl": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_prepare_validation.PrepareValidationSuccessorTests.test_packet_contract_mutations_fail_closed_before_staging",
+      "result": "PASS; one focused test covers all three packets, rejects each mutation with the immutable-rubric diagnostic, and leaves target/report paths absent."
+    }
+  ],
+  "priorCiRejection": {
+    "run": 34656009510,
+    "job": 103448454678,
+    "head": "bf768189ccb2a4f61f6413e914567d2756ea7e1d",
+    "failedCheck": "CI (integration)",
+    "result": "REJECTED_EXTERNAL_C47_OWNER",
+    "diagnostic": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_02 rendered 171191/177591 compared samples, losing exactly 6400; provider/playback accounting reported zero drops, overflows and discards.",
+    "scope": "C47-owned shipped audio integration; no C62 factory-script check failed.",
+    "acceptedMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "nextAction": "Preserve this earlier external C47-owned rejection as history; do not retry its old head."
+  },
+  "ciRejection": {
+    "run": 34662416663,
+    "job": 103467472637,
+    "head": "923d90705a4876f2908d59a161a20669d02c6445",
+    "failedCheck": "CI (integration)",
+    "result": "REJECTED_EXTERNAL_C47_OWNER",
+    "diagnostic": "TestAgentBinaryTest46HighRateToolAudioRegression/trial_01 rendered 167991/174391 compared samples, losing exactly 6400 (96.3% retained); playback reported DroppedSamples=0, OverflowEvents=0, DiscardedSamples=0, DiscardEvents=0, UnderflowEvents=64, UnderflowSamples=30240, ZeroFilledSamples=30240, and provider reported responsesSent=9, responseCreates=7, toolResults=7, protocolError empty.",
+    "scope": "C47/C64-owned shipped audio integration; no C62 factory-script check failed.",
+    "logCommand": "rtk proxy gh run view 34662416663 --repo portpowered/go-agent-harness --job 103467472637 --log-failed",
+    "logConclusion": "completed failure; exact job log inspected",
+    "acceptedMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "resolution": "The reviewed C64 provider-audio terminal-drain repair is present in fetched origin/main 59af6325614d80173447fe2018a0471e27b4e7b1 and was integrated into this C62 branch by merge 5323b76ef9eda776564a569b0a7f88faf24b24b6.",
+    "nextAction": "Preserve this external C47/C64-owned rejection as history; do not retry its old head. C62 integrated current origin/main, reran its focused and accumulated controls, and is ready to submit the changed same-task head to SCRIPT CI without polling."
+  },
+  "successorCompletionRegression": {
+    "result": "PASS",
+    "test": "test_successor_mission_authority_reaches_completion",
+    "missionAuthority": "trusted admitted successor authority",
+    "amendmentAuthority": "trusted original authority retained as provenance",
+    "projectControl": "verify_completion returned status=verified",
+    "realtimeSessionsUsed": 0
+  },
+  "postRejectionRevalidation": {
+    "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926",
+    "testRepairRevision": "511d0d81515732ca5098b06d967fd2f97172c926",
+    "acceptedMainRevision": "59af6325614d80173447fe2018a0471e27b4e7b1",
+    "planningOriginMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "integratedOriginMainRevision": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+    "integrationMergeRevision": "86f6bbe898780e26045d4375df14aa5df29f8afe",
+    "originMainAlreadyAncestor": true,
+    "focused": [
+      {
+        "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_project_control factory.scripts.tests.test_prepare_validation",
+        "result": "PASS",
+        "tests": 34,
+        "skipped": 16,
+        "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926"
+      },
+      {
+        "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_prepare_validation.PrepareValidationSuccessorTests.test_packet_contract_mutations_fail_closed_before_staging",
+        "result": "PASS",
+        "tests": 1,
+        "packets": 3,
+        "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926"
+      },
+      {
+        "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 FACTORY_TEST_CONTRACT_CHILD=1 FACTORY_TEST_MODULES='factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target factory.scripts.tests.test_ci_wait factory.scripts.tests.test_project_admission factory.scripts.tests.test_project_control factory.scripts.tests.test_factory_graph factory.scripts.tests.test_reconcile_projects factory.scripts.tests.test_fresh_board factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_prepare_validation' make -e test-factory-scripts",
+        "result": "PASS",
+        "tests": 98,
+        "skipped": 16,
+        "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926",
+        "note": "Explicit selector includes the clean-checkout C62 module; no Makefile scope was changed."
+      }
+    ],
+    "accumulated": {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 FACTORY_TEST_CONTRACT_CHILD=1 FACTORY_TEST_MODULES='factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target factory.scripts.tests.test_ci_wait factory.scripts.tests.test_project_admission factory.scripts.tests.test_project_control factory.scripts.tests.test_factory_graph factory.scripts.tests.test_reconcile_projects factory.scripts.tests.test_fresh_board factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_prepare_validation' make -e test-factory-scripts",
+      "result": "PASS",
+      "tests": 98,
+      "skipped": 16,
+      "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926",
+      "note": "Accumulated relevant factory-script regression selector; the legacy C39 cases skip when their separate historical inputs are unavailable in the isolated checkout."
+    },
+    "quality": {
+      "pyCompile": "PASS",
+      "format": "PASS; make fmt",
+      "gitDiffCheck": "PASS",
+      "startupIntegrationIsAncestor": true,
+      "originMainIsAncestor": true,
+      "testedSourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926",
+      "originMainRevision": "3d3e72786ac6fc1fd47c7e029589e5117674b035"
+    },
+    "realtimeSessionsUsed": 0,
+    "validatorsLaunched": false,
+    "scriptCiRevalidation": {
+      "historical": true,
+      "notCurrentHead": true,
+      "run": 34660505714,
+      "head": "05f4c86bae78d5c14fa05a5d5b3e0dca828bee61",
+      "status": "completed",
+      "conclusion": "success",
+      "requiredChecks": [
+        {"name": "CI (coverage)", "job": 103461829257, "conclusion": "success"},
+        {"name": "CI (WebMCP Chrome)", "job": 103461829436, "conclusion": "success"},
+        {"name": "CI (race)", "job": 103461829440, "conclusion": "success"},
+        {"name": "CI (static)", "job": 103461829463, "conclusion": "success"},
+        {"name": "CI (hermetic)", "job": 103461829476, "conclusion": "success"},
+        {"name": "CI (unit)", "job": 103461829507, "conclusion": "success"},
+        {"name": "CI (macOS audio release)", "job": 103461829533, "conclusion": "success"},
+        {"name": "CI (integration)", "job": 103461829539, "conclusion": "success"},
+        {"name": "CI (Windows audio portable)", "job": 103461829551, "conclusion": "success"}
+      ],
+      "note": "Preserved completed run for the earlier reviewed pre-evidence-update head; it is not evidence for tested source 511d0d81 or the submitted head, and this executor does not poll the replacement run."
+    },
+    "nextAction": "Commit and push the changed same-task head with current-main and per-packet SERVICE evidence, then submit it to SCRIPT CI without polling."
+  },
+  "currentMainIntegration": {
+    "previousHead": "dc3e4fbc32e0fd1f8edb4fa0182d66690da7b521",
+    "originMainRevision": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+    "mergeRevision": "86f6bbe898780e26045d4375df14aa5df29f8afe",
+    "result": "PASS; fetched current origin/main 3d3e7278 was merged cleanly in the isolated C62 worktree, startup integration and current origin/main ancestry both pass, and no C62-owned source or fixture conflict occurred.",
+    "c64Context": "The previously integrated 59af6325 main contribution remains preserved; the newer origin/main merge adds disjoint peer checkpoints and does not change the C62 factory-script ownership."
+  },
+  "changedFiles": {
+    "factory/scripts/project_scope_amendment.py": "fabe4bdc74c21703c872239ba57c3abc15d760a7690985d7e8404ba2d65e8817",
+    "factory/scripts/tests/test_prepare_validation.py": "7d9484ea039aefd18a8cf0521c2630d9f7dfad6321434a23cd96a5595b28b014",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/fixtures/audio-runtime-c32-capture-energy-vertical-probe.json": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/fixtures/c47-c55-vertical-probes-batch.json": "b03c30d1225e2fd1d533c90524e5aac9ab256627b39cc3ae4a1ce71d98361a3f",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/fixtures/scope-amendment-authority.json": "c3bfa91543b349b2c89f48c3a95203db72bf59a4fd93b5e4b1851aee772413",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/fixtures/successor-acceptance.md": "edd1f5cbca1de8b49f96cdf8f039732d28a0082ef3718015e10535ff2e6a441a",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/fixtures/successor-manifest.json": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
+    "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/pre-fix-anchor-failure.json": "0c1b6178ccf421d6c0a7d5279da9a3de14df799db32a642b465a9a10c2d8c01e"
+  },
+  "historicalChecks": [
+    {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_prepare_validation",
+      "result": "PASS",
+      "tests": 6,
+      "note": "Clean-checkout C62 fixture path; includes the successor-authority-to-verified-completion regression."
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_PROJECT_MANIFEST FACTORY_ROOT=<admitted-factory-root> FACTORY_TEST_CONTRACT_CHILD=1 FACTORY_TEST_MODULES='factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_project_control factory.scripts.tests.test_prepare_validation factory.scripts.tests.test_prepare_validation_budget' make -e test-factory-scripts",
+      "result": "PASS",
+      "tests": 38,
+      "skipped": 16,
+      "note": "Accumulated selector; the legacy C39 cases skip when their separate historical inputs are unavailable in the isolated checkout."
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 make test-factory-scripts",
+      "result": "PASS",
+      "tests": 76
+    },
+    {
+      "command": "factory script target command-contract child",
+      "result": "PASS",
+      "tests": 4
+    },
+    {
+      "command": "rtk proxy env PYTHONDONTWRITEBYTECODE=1 python3 -B -m py_compile factory/scripts/project_scope_amendment.py factory/scripts/tests/test_prepare_validation.py factory/scripts/tests/test_project_scope_amendment.py factory/scripts/tests/test_project_control.py factory/scripts/tests/test_prepare_validation_budget.py",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk git diff --check",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk git merge-base --is-ancestor 8bdafc7f947a3a2c9856220abdc539437035bd21 HEAD && rtk git merge-base --is-ancestor origin/main HEAD",
+      "result": "PASS",
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6",
+      "originMainRevision": "59af6325614d80173447fe2018a0471e27b4e7b1"
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_project_control factory.scripts.tests.test_prepare_validation",
+      "result": "PASS",
+      "tests": 34,
+      "skipped": 16,
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6"
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 FACTORY_ROOT=<admitted-factory-root> FACTORY_TEST_CONTRACT_CHILD=1 FACTORY_TEST_MODULES='factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_project_control factory.scripts.tests.test_prepare_validation factory.scripts.tests.test_prepare_validation_budget' make -e test-factory-scripts",
+      "result": "PASS",
+      "tests": 38,
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6"
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 make test-factory-scripts",
+      "result": "PASS",
+      "tests": 76,
+      "commandContractTests": 4,
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6"
+    },
+    {
+      "command": "rtk proxy env PYTHONDONTWRITEBYTECODE=1 python3 -B -m py_compile factory/scripts/project_scope_amendment.py factory/scripts/tests/test_prepare_validation.py factory/scripts/tests/test_project_scope_amendment.py factory/scripts/tests/test_project_control.py factory/scripts/tests/test_prepare_validation_budget.py",
+      "result": "PASS",
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6"
+    },
+    {
+      "command": "rtk git diff --check",
+      "result": "PASS",
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6"
+    }
+  ],
+  "checks": [
+    {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_project_control factory.scripts.tests.test_prepare_validation",
+      "result": "PASS",
+      "tests": 34,
+      "skipped": 16,
+      "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926"
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_prepare_validation.PrepareValidationSuccessorTests.test_packet_contract_mutations_fail_closed_before_staging",
+      "result": "PASS",
+      "tests": 1,
+      "packets": 3,
+      "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926"
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 FACTORY_TEST_CONTRACT_CHILD=1 FACTORY_TEST_MODULES='factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target factory.scripts.tests.test_ci_wait factory.scripts.tests.test_project_admission factory.scripts.tests.test_project_control factory.scripts.tests.test_factory_graph factory.scripts.tests.test_reconcile_projects factory.scripts.tests.test_fresh_board factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_prepare_validation' make -e test-factory-scripts",
+      "result": "PASS",
+      "tests": 98,
+      "skipped": 16,
+      "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926"
+    },
+    {
+      "command": "rtk proxy make fmt",
+      "result": "PASS",
+      "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926"
+    },
+    {
+      "command": "rtk proxy env PYTHONDONTWRITEBYTECODE=1 python3 -B -m py_compile factory/scripts/project_scope_amendment.py factory/scripts/tests/test_prepare_validation.py factory/scripts/tests/test_project_scope_amendment.py factory/scripts/tests/test_project_control.py factory/scripts/tests/test_prepare_validation_budget.py",
+      "result": "PASS",
+      "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926"
+    },
+    {
+      "command": "rtk git diff --check",
+      "result": "PASS",
+      "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926"
+    },
+    {
+      "command": "rtk git merge-base --is-ancestor 8bdafc7f947a3a2c9856220abdc539437035bd21 HEAD && rtk git merge-base --is-ancestor origin/main HEAD",
+      "result": "PASS",
+      "sourceRevision": "511d0d81515732ca5098b06d967fd2f97172c926",
+      "originMainRevision": "3d3e72786ac6fc1fd47c7e029589e5117674b035"
+    }
+  ],
+  "deferredGates": {
+    "AUDIO": "OPEN",
+    "DEVICE": "OPEN",
+    "EMBED": "OPEN",
+    "SERVICE": "OPEN",
+    "TRACE": "OPEN",
+    "REPLAY": "OPEN",
+    "FAILURES": "OPEN",
+    "QUALITY": "OPEN",
+    "PARITY": "OPEN"
+  },
+  "handoff": {
+    "scriptCi": {
+      "owner": "SCRIPT",
+      "status": "READY_FOR_SCRIPT_CI",
+      "pollingByExecutor": false,
+      "nextAction": "Submit the changed same-task C62 head containing tested source 511d0d81515732ca5098b06d967fd2f97172c926 and current-main merge 86f6bbe898780e26045d4375df14aa5df29f8afe to SCRIPT CI without polling. Historical C47/C64 audio-loss rejections and the exit-75 no-merge-SHA checkpoint remain preserved; no C62 factory-script check failed."
+    },
+    "independentReview": "PENDING_SCRIPT_CI_GREEN",
+    "guardedMerge": "PENDING_INDEPENDENT_REVIEW",
+    "noRestartDeployment": {
+      "owner": "primary/meta after guarded merge",
+      "status": "PENDING_MERGED_SHA",
+      "reason": "The running factory imports project_scope_amendment.py from FACTORY_ROOT/factory/scripts in each controller process; no factory restart is required.",
+      "commands": [
+        "MERGED_SHA=<guarded-merge-sha>",
+        "rtk git -C \"$FACTORY_ROOT\" fetch origin main",
+        "rtk git -C \"$FACTORY_ROOT\" cat-file -e \"$MERGED_SHA^{commit}\"",
+        "STAGED_SCRIPT=\"$FACTORY_ROOT/factory/scripts/.project_scope_amendment.py.$MERGED_SHA.tmp\"",
+        "rtk git -C \"$FACTORY_ROOT\" show \"$MERGED_SHA:factory/scripts/project_scope_amendment.py\" > \"$STAGED_SCRIPT\"",
+        "rtk proxy chmod 0644 \"$STAGED_SCRIPT\"",
+        "rtk proxy sha256sum \"$STAGED_SCRIPT\"",
+        "rtk proxy mv -f \"$STAGED_SCRIPT\" \"$FACTORY_ROOT/factory/scripts/project_scope_amendment.py\"",
+        "rtk proxy sha256sum \"$FACTORY_ROOT/factory/scripts/project_scope_amendment.py\"",
+        "rtk proxy env FACTORY_ROOT=\"$FACTORY_ROOT\" FACTORY_PROJECT_MANIFEST=\"$FACTORY_ROOT/factory/projects/audio-runtime/manifest.json\" PYTHONPATH=\"$FACTORY_ROOT/factory/scripts\" python3 -c 'import os, json; from pathlib import Path; import project_scope_amendment as a; root=Path(os.environ[\"FACTORY_ROOT\"]); c=a.admitted_contract(root); assert c[\"project\"] == \"audio-runtime\" and c[\"contractRevision\"] == \"audio-runtime-v1\" and c[\"criteria\"][3][\"rubric\"] == a.SUCCESSOR_SERVICE_RUBRIC; print(json.dumps({\"status\":\"read-only-admitted-success\",\"revision\":os.environ.get(\"MERGED_SHA\", \"recorded-above\")}, sort_keys=True))'",
+        "rtk git -C \"$FACTORY_ROOT\" status --short --branch"
+      ],
+      "safety": [
+        "Preserve all existing dirty running-root paths; do not use git reset, git checkout, merge, restart, Work mutation, or probe launch in FACTORY_ROOT.",
+        "Primary records the expected merged controller hash and confirms only the owned controller inode changed.",
+        "Primary/meta may then resume the preserved C47/C54/C55 packets through normal validation; C62 does not launch them."
+      ]
+    }
+  }
+}

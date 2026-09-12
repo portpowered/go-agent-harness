@@ -1,0 +1,25 @@
+{
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "amendmentId": "user-windows-hardware-scope-20260910",
+  "authority": "Explicit user direction in wake user-scope-service-decomposition-20260910 and factory/docs/operating-policy.md#user-scope-amendment--2026-09-10",
+  "excluded": [
+    "Native Windows hardware/endpoints testing",
+    "Physical acoustic testing"
+  ],
+  "retained": [
+    "Windows software execution and compilation CI",
+    "Hermetic capture-energy/codec tests",
+    "All nine architectural and software criteria",
+    "Original Realtime budget",
+    "Fresh independent scoped and final artifact evidence"
+  ],
+  "historicalReport": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c32-capture-energy-vertical-probe.json",
+    "sha256": "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960",
+    "canonicalState": "failed",
+    "decision": "FAILED",
+    "deviceVerdict": "BLOCKED"
+  },
+  "status": "User scope effective; controller amendment support pending C39. Original report and manifest untouched. Hardware OUT OF SCOPE is never PASS. No C32 acceptance inferred."
+}
