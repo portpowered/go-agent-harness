@@ -11,11 +11,12 @@ acceptance waiver was used. The admitted task verifier returned:
 
 The isolated worktree is
 `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c63-retire-cli-terminal-outcome`
-on branch `codex/audio-runtime-c63-retire-cli-terminal-outcome`. The
-implementation source is clean at `2f24a8cb17f4d09a4a10f1ae70e7722af87b4781`,
-seven commits ahead of freshly fetched `origin/main`
-`d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`; this evidence refresh is a
-documentation-only descendant.
+on branch `codex/audio-runtime-c63-retire-cli-terminal-outcome`. The clean
+candidate head is `427566239c1a7c24ee2363c94370f063899bfff7`, eleven commits
+ahead of freshly fetched `origin/main`
+`d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`. The implementation source is
+unchanged after `2f24a8cb17f4d09a4a10f1ae70e7722af87b4781`; later commits are
+evidence/provenance-only descendants.
 Startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main,
 and baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` are ancestors.
 
@@ -40,9 +41,10 @@ docs/architecture/architecture-size-baseline.json unchanged
 
 The current implementation handoff retains C57's exact Wire-registry lock and
 C61's architecture-baseline ownership. A prior board/meta note recorded a C57
-release, so the state is not treated as authoritative for mutation. C63 does
-not edit either shared file until a synchronized handoff or owner-mediated
-canonical lease amendment authorizes the exact downward-only changes.
+release, but the active handoff and C63 task feedback are not synchronized, so
+the state is not treated as authoritative for mutation. C63 does not edit
+either shared file until a synchronized handoff or owner-mediated canonical
+lease amendment authorizes the exact downward-only changes.
 
 ## Final-head hashes
 
@@ -105,6 +107,46 @@ matrix passes in normal, coverage, and race modes, including the shipped
 terminal/audio/tool controls, simulated device controls, and composed provider
 controls. Expected negative-control diagnostics remain asserted.
 
+## Fresh exact-head executor recheck
+
+At candidate head `427566239c1a7c24ee2363c94370f063899bfff7`, the focused
+recheck passed:
+
+```text
+service focused normal: 47 tests / 3 packages
+service focused race COUNT=3: 141 tests / 3 packages
+legacy focused normal: 308 tests
+legacy focused race: 264 tests
+external GOWORK=off consumer test and run: PASS
+COUNT=1 accumulated normal/coverage/race matrix: PASS
+make coverage-registration: PASS (179 workspace packages)
+```
+
+The same recheck intentionally preserves the shared failures: `make wire-check`
+reports the unregistered `terminaloutcome/wire/wire_gen.go`; local architecture
+reports that generated-file finding plus the stale sentinel mutable-global
+entry; and local size reports the stale legacy file/function/cyclomatic entries.
+These are owner-mediated shared-file repairs, not C63 source failures.
+
+## Latest script-CI rejection
+
+The complete failed-run log for PR #454 is preserved in
+[`ci-rejection-34660918724.json`](./ci-rejection-34660918724.json). Run
+`34660918724` tested head `427566239c1a7c24ee2363c94370f063899bfff7`.
+Unit, coverage, race, hermetic, WebMCP Chrome, macOS audio release, and
+Windows portable software passed. Static failed only on the C63 generated-Wire
+registration and four exact stale legacy baseline entries. Integration failed
+only in C64-owned `TestAgentBinaryTest46HighRateToolAudioRegression/trial_17`:
+`167991/174391` compared samples, exactly `6400` lost, with zero reported
+drops, discards, or overflow events. C63 has no review row or review finding.
+
+The exact next action is to preserve this checkpoint while C64 repairs the
+causal audio loss and the C57/C61 shared-file leases are synchronized or
+released; then integrate the accepted main, apply only the C63 Wire registry
+entry and four downward/deleted baseline entries through the current owners,
+rerun the focused/shared gates, push the changed same-task head, and submit it
+to Script CI without polling.
+
 ## Separate consumer
 
 The temporary module under `consumer/` imports the public terminaloutcome
@@ -132,10 +174,12 @@ The unmodified shared gates report only lease-dependent findings:
 make wire-check
   FAIL: unregistered=['go-agent-runtime/services/terminaloutcome/wire/wire_gen.go']
 make architecture-check
-  FAIL: generated-file-spoof .../services/terminaloutcome/wire/wire_gen.go
+  FAIL: generated-file-spoof .../services/terminaloutcome/wire/wire_gen.go;
+        stale ErrSessionTerminalAlreadyPublished mutable-global entry
 make size-check
-  FAIL: four baseline-stale entries for the retired legacy file (file,
-        function, mutable-global, cyclomatic-complexity)
+  FAIL: three baseline-stale entries for the retired legacy file (file,
+        function, cyclomatic-complexity); the mutable-global entry is reported
+        by architecture-check
 ```
 
 No limit was raised and no peer finding was absorbed. Exact next action: retain
