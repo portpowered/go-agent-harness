@@ -1,0 +1,43 @@
+{
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "work": "audio-runtime-c78-retire-cli-tool-execution-runtime",
+  "branch": "codex/audio-runtime-c78-retire-cli-tool-execution-runtime",
+  "manifestBaselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "planningOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "executionOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "productionLineAccounting": {
+    "path": "agent-cli/internal/services/internal/agentruntime/session_tools.go",
+    "acceptedMainLines": 433,
+    "candidateLines": 130,
+    "retiredLines": 303,
+    "maximumCandidateLines": 150,
+    "retainedResponsibilities": [
+      "Deprecated session constructor compatibility",
+      "CLI observer and diagnostic translation",
+      "CLI physical-display matcher, error-code and typed permission adapters",
+      "Delegation to the registered tools-service execution controller"
+    ]
+  },
+  "focusedEvidence": {
+    "runtimeToolsNormal": "rtk go test ./services/tools/... -count=1 -timeout=180s (352 passed, 18 packages)",
+    "runtimeExecutionRace": "rtk go test -race ./services/tools/internal/execution -count=3 -timeout=240s (36 passed)",
+    "runtimeToolsRace": "rtk go test -race ./services/tools/... -run 'Execution|Invocation|Timeout|Cancel|Panic|Observer|Failure|Permission|Wire' -count=3 -timeout=240s (84 passed, 18 packages)",
+    "cliCompatibilityNormal": "rtk go test ./internal/services/internal/agentruntime -count=1 -timeout=240s (1067 passed)",
+    "cliCompatibilityRace": "rtk go test -race ./internal/services/internal/agentruntime -run 'SessionTool|AgentLoopSession|InteractivePolicy' -count=1 -timeout=240s (91 passed)",
+    "externalConsumer": "rtk env GOWORK=off go test -mod=readonly ./... (pass)",
+    "extractionCoverage": "rtk go test ./services/tools/internal/execution -coverprofile=/tmp/c78-execution.out (97.7%)",
+    "wire": "rtk make wire-check (pass)",
+    "coverageRegistration": "rtk make coverage-registration (177 packages across 6 modules)",
+    "vet": "rtk go vet changed runtime tools and CLI compatibility packages (no issues)"
+  },
+  "architectureEvidence": {
+    "command": "rtk make architecture-size-check",
+    "newC78Violations": 0,
+    "remainingIssues": 4,
+    "remainingIssuesKind": "baseline-stale",
+    "remainingIssuesScope": "C61-owned docs/architecture/architecture-size-baseline.json entries for the retired CLI implementation",
+    "requiredAuthority": "C61 must explicitly release the shared baseline before its downward entries may be deleted; C78 did not edit or grow that baseline"
+  }
+}
