@@ -1,5 +1,5 @@
 {
-  "candidate": "1bcccd46feca53eed770b1507a0f6af921b168a6",
+  "candidate": "bf970df16936d8286f39ce4c5e23f82d7b39a5ff",
   "mode": "retirement-and-scope",
   "payload": {
     "diff_check": {
@@ -8,7 +8,7 @@
         "diff",
         "--check"
       ],
-      "elapsed_seconds": 0.039,
+      "elapsed_seconds": 0.036,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
@@ -17,15 +17,14 @@
       "baseline": 1387,
       "files": {
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": 389,
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 396
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 398
       },
       "maximum": 787,
       "minimum_retired": 600,
-      "retired": 602,
-      "total": 785
+      "retired": 600,
+      "total": 787
     },
     "scope": {
-      "forbidden_shared_paths": [],
       "outside_owned_paths": [],
       "paths": [
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
@@ -33,6 +32,8 @@
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/internal/service/package.json",
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/package.json",
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/wire/package.json",
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/architecture-size-baseline.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
@@ -40,6 +41,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/credential-free-audio-tool-replay.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/scheduled-tool-continuation.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/terminal-and-malformed.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/static-repair-2f6713d4.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/go.mod",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/main_test.go",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/run.py",
@@ -53,7 +55,13 @@
         "go-agent-runtime/services/sessiondiagnostics/service.go",
         "go-agent-runtime/services/sessiondiagnostics/wire/providers.go",
         "go-agent-runtime/services/sessiondiagnostics/wire/wire_gen.go",
-        "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go"
+        "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
+        "scripts/wire-packages.txt"
+      ],
+      "released_shared_paths": [
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/architecture-size-baseline.json",
+        "scripts/wire-packages.txt"
       ]
     },
     "service_forbidden_token_scan": "pass"
