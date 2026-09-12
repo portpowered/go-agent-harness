@@ -1,8 +1,8 @@
 {
   "schema": "audio-runtime-c79-evidence/v1",
   "mode": "static-repair",
-  "candidate": "2f6713d44060b8987ccb5a588c05b6ce2df4d13e",
-  "parent": "63d411f26deaebd377b7e132e9ffb177b3a138be",
+  "candidate": "be237ef2953d8513563522b92fc5d6cfa2a3ce60",
+  "parent": "6a85636df744c8a4a58f33c5a4b8ba8315a07b52",
   "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
   "origin_main": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
   "changes": {
@@ -21,37 +21,40 @@
       "cyclomatic-complexity:*sessionProgressObserver.ownsObservedResponseEnd",
       "cognitive-complexity:recordContinuationTerminalLocked",
       "cyclomatic-complexity:recordContinuationTerminalLocked"
-    ]
+    ],
+    "response_finish_owner_validation": "EventResponseFinish rejects a mismatched active response ID; TestResponseFinishRejectsWrongIDWithoutClearingActiveResponse covers the regression",
+    "private_adapter_bridge": "public EventSyncLegacy/LegacyState and reducer restore helpers removed; CLI tool acknowledgements and continuation requests use lifecycle events",
+    "replay_provenance": "run.py v2 records shipped binary, fixture, source-tree, and executable lifecycle observations"
   },
   "gates": {
-    "fmt": "pass",
-    "wire_check": "pass",
-    "architecture_size": "pass: 189 packages, 1905 files, 28058 functions",
+    "fmt": "pass: affected Go files gofmt-clean",
+    "wire_check": "pass: all registered Wire injectors regenerated without drift",
+    "architecture_size": "pass: 189 packages, 1906 files, 28056 functions",
     "coverage_registration": "pass: 179 packages across 6 modules",
-    "vet": "pass",
-    "lint": "pass: pinned golangci-lint v2.9.0, 0 issues",
-    "staticcheck": "pass: pinned staticcheck 2026.1",
+    "vet": "prior CI at c4bd115b passed; script CI remains authoritative for the final head",
+    "lint": "prior CI at c4bd115b passed; script CI remains authoritative for the final head",
+    "staticcheck": "prior CI at c4bd115b passed; script CI remains authoritative for the final head",
     "diff_check": "pass"
   },
   "causal_regressions": {
-    "response_matrix": "pass",
-    "service_race": "pass: 12 tests across 3 packages, count=3",
+    "response_matrix": "pass: reducer, adapter, and GOWORK=off consumer matrix",
+    "service_race": "pass: focused wire and adapter race checks",
     "external_consumer": "pass: GOWORK=off",
     "mutation_remove_continuation_owner": "expected failure",
     "mutation_duplicate_scheduled_disposition": "expected failure",
-    "cli_normal": "pass: 218 tests",
-    "cli_race": "pass: 218 tests",
+    "cli_normal": "pass: accumulated focused observer and integration regressions",
+    "cli_race": "pass: focused wrong-ID, continuation-owner, and terminal race checks",
     "public_scheduled_tool_continuation": "pass",
     "public_terminal_and_malformed": "pass",
     "public_credential_free_audio_tool_replay": "pass"
   },
   "prior_ci_rejection": {
-    "run": "34677755468",
-    "job": "103510566504",
-    "old_head": "85ed181d2073e501ea00c5ba8f581f9dc009998d",
-    "code_findings": "resolved by preserved C79 commits before this static checkpoint",
-    "remaining_findings": "Wire registration and 12 stale C79 baseline entries, resolved here"
+    "run": "work-review-152",
+    "job": "independent review",
+    "old_head": "c4bd115b10b5c9e4e055b85d94079ed5aa0122f8",
+    "code_findings": "wrong-ID finish ownership and public legacy-state escape hatch repaired at this candidate",
+    "remaining_findings": "none observed; script CI and independent review remain pending"
   },
-  "known_scope_helper_limitation": "The legacy retirement-and-scope verifier still hard-codes scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json as forbidden. The handoff released those exact leases; the direct diff and architecture/Wire gates are the authoritative post-release checks. The verifier was not weakened.",
+  "known_scope_helper_limitation": "none; the retirement-and-scope verifier records the handoff-released Wire and architecture leases explicitly",
   "acceptance": "executor evidence only; no script-CI success, review, merge, vertical probe or project acceptance claimed"
 }
