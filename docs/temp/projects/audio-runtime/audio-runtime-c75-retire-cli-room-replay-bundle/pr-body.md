@@ -17,10 +17,15 @@
   same-length artifact corruption with `ErrInvalidRoomReplayBundle`.
 - Legacy named CLI production files: 1,899 lines at admitted main; current
   compatibility files: 313 lines; 1,586 production lines retired.
-- Current candidate `c3e8f8901d802dad74d52acb7006551f88171d66` includes freshly
-  fetched `origin/main` `84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f`. The repair
-  handles close errors, checked JSON/type assertions, malformed timing errors,
-  and the prior roundtrip-test budget growth.
+- Current exact evidence head `25609520a201d210dc346da955bded16a14398dc`
+  descends from the source repair `c3e8f8901d802dad74d52acb7006551f88171d66`
+  and includes freshly fetched `origin/main`
+  `84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f`. The repair handles close errors,
+  checked JSON/type assertions, malformed timing errors, and the prior
+  roundtrip-test budget growth.
+- Accumulated session regression controls at `COUNT=1` pass in normal,
+  coverage, and race modes, including the expected mismatch, PCM/transcript,
+  and tool-continuation negative controls.
 
 ## Prior CI repair
 
