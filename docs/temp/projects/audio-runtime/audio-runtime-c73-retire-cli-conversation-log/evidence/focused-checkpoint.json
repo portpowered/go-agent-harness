@@ -1,0 +1,76 @@
+{
+  "task": "audio-runtime-c73-retire-cli-conversation-log",
+  "session": "~default",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c73-retire-cli-conversation-log",
+  "branch": "codex/audio-runtime-c73-retire-cli-conversation-log",
+  "admission": {
+    "verifyWork": "admitted",
+    "manifest": "factory/projects/audio-runtime/manifest.json",
+    "waiver": false,
+    "secondProject": false
+  },
+  "ancestry": {
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "planningOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "fetchedExecutionOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+    "ancestorChecks": "passed",
+    "workingTreeAtSetup": "clean"
+  },
+  "acceptedMainBaseline": {
+    "productionPath": "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
+    "productionLines": 531,
+    "productionSHA256": "ebc1f27e6ae9e2c0e1875d145ffbb130f56c80e049495d903192b61c2a1ea81",
+    "directTestPath": "agent-cli/internal/services/internal/agentruntime/session_conversation_log_test.go",
+    "directTestSHA256": "b9d8ef2858dd673cc1096e53177757c8725770b13a865651f8e2ecebe35cfc16"
+  },
+  "candidateSourceSHA256": {
+    "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go": "caa3d4068b791a87720833a52579e203abf796c570f23effc831d19c7ceec2fb",
+    "go-agent-runtime/services/conversationlog/contract.go": "d454213f1a6fba4528e5bed1809aa0abf98d5f275a57bceafe4345f0c4544a5e",
+    "go-agent-runtime/services/conversationlog/conversationlog_test.go": "3f7d6e99be08e8904bddf6ce918cf6b718e5a279ed523e23210ca331c1fff73e",
+    "go-agent-runtime/services/conversationlog/internal/service/service.go": "14cbb3d4b217b93dda342fa94bdd8424f1a7c87d0b6ac700d2dcc6bdceb407c6",
+    "go-agent-runtime/services/conversationlog/wire/providers.go": "d30bbaf8f39301efe8cee1a705b011915ca500abd3b3aa365cfe16dd997c3e1c",
+    "go-agent-runtime/services/conversationlog/wire/wire_gen.go": "c82b6e92b6c7b5209e3300716099bba2bd7c4e8a159c27272cc6b1e04e647c22"
+  },
+  "retirement": {
+    "candidateProductionLines": 121,
+    "retiredProductionLines": 410,
+    "maximumCandidateLines": 265,
+    "minimumRetiredLines": 266,
+    "deprecatedAliases": 6,
+    "policyTokensFoundInCLIBridge": []
+  },
+  "focusedEvidence": [
+    "GOWORK=off go test ./go-agent-runtime/services/conversationlog/...: passed",
+    "GOWORK=off go test -race ./go-agent-runtime/services/conversationlog/...: passed",
+    "GOWORK=off go vet ./go-agent-runtime/services/conversationlog/... and ./go-agent-runtime/...: passed",
+    "GOWORK=off staticcheck ./go-agent-runtime/services/conversationlog/...: passed",
+    "GOWORK=off golangci-lint run ./go-agent-runtime/services/conversationlog/...: passed",
+    "GOWORK=off external-consumer go test ./...: passed",
+    "CLI causal conversation/recording race selector: passed",
+    "bounded recorded-audio/tool, non-recorded regression and runner-negative-control cases: passed",
+    "coverage-registration: 179 workspace packages checked across 6 modules",
+    "focused conversationlog coverage: 89.4% aggregate"
+  ],
+  "mutationEvidence": {
+    "arrivalOrder": "control passed; overlay mutation failed TestPublicServiceCorrelatesLateAndEmptyTranscripts on turn 1 attribution",
+    "noBound": "control passed; overlay mutation failed TestPublicServiceBoundsValuesAndDeeplySnapshotsState on 64 KiB suffix oracle"
+  },
+  "knownOutOfScopeFailures": [
+    "The broad CLI race selector also exercised an existing browser-validator timeout and audio replay/device-environment regressions; no C73 peer-owned source was changed to mask them."
+  ],
+  "ownership": {
+    "changedPrefixes": [
+      "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
+      "go-agent-runtime/services/conversationlog/",
+      "coverage-manifest/go-agent-runtime/services/conversationlog/",
+      "docs/temp/projects/audio-runtime/audio-runtime-c73-retire-cli-conversation-log/"
+    ],
+    "sharedFilesUntouched": [
+      "scripts/wire-packages.txt",
+      "docs/architecture/architecture-size-baseline.json"
+    ]
+  }
+}
