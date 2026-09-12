@@ -163,7 +163,7 @@ def check_scope(root: Path) -> None:
     status_lines = [
         line
         for line in rtk("git", "status", "--porcelain", "--untracked-files=all").splitlines()
-        if line and line not in {"Changes:", "clean — nothing to commit"}
+        if line and line not in {"Changes:", "clean — nothing to commit", "ok"}
     ]
     if status_lines:
         fail("worktree is not clean at staged-artifact verification")
