@@ -4,17 +4,18 @@
   "candidateStatus": "READY_FOR_SCRIPT_CI",
   "candidate": {
     "branch": "codex/audio-runtime-c62-validation-contract-anchor-repair",
-    "revision": "bf768189ccb2a4f61f6413e914567d2756ea7e1d",
+    "revision": "de85685cdffe02c986e78d45e8a50dcff19ab521",
     "implementationRevision": "63988c0af875f2fd379b0fc866282dee600ea09e",
     "pullRequest": 453,
     "pullRequestUrl": "https://github.com/portpowered/go-agent-harness/pull/453",
     "baselineOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
     "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-    "worktreeStatus": "clean after evidence checkpoint",
+    "worktreeStatus": "tracked candidate clean; pre-existing untracked test bytecode preserved",
     "ancestry": {
       "startupIntegrationIsAncestor": true,
       "originMainIsAncestor": true,
-      "fetchCommand": "rtk git fetch origin main"
+      "fetchCommand": "rtk git fetch origin main",
+      "acceptedMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06"
     }
   },
   "admission": {
@@ -143,7 +144,8 @@
     "result": "REJECTED_EXTERNAL_C47_OWNER",
     "diagnostic": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_02 rendered 171191/177591 compared samples, losing exactly 6400; provider/playback accounting reported zero drops, overflows and discards.",
     "scope": "C47-owned shipped audio integration; no C62 factory-script check failed.",
-    "nextAction": "Do not resubmit this unchanged C47 failure. After C47 repairs and accepted-main ancestry is available, integrate the accepted head into this same C62 branch, rerun the focused C62 selector and current-head handoff checks, then submit the changed task head to SCRIPT CI without polling."
+    "acceptedMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "nextAction": "Do not resubmit this unchanged C47 failure. C47's repaired reviewed merge is now the accepted-main ancestor; this same C62 branch retains that ancestry, has rerun the focused and accumulated C62 controls, and is ready to submit its changed head to SCRIPT CI without polling."
   },
   "successorCompletionRegression": {
     "result": "PASS",
@@ -152,6 +154,49 @@
     "amendmentAuthority": "trusted original authority retained as provenance",
     "projectControl": "verify_completion returned status=verified",
     "realtimeSessionsUsed": 0
+  },
+  "postRejectionRevalidation": {
+    "sourceRevision": "de85685cdffe02c986e78d45e8a50dcff19ab521",
+    "acceptedMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "originMainAlreadyAncestor": true,
+    "focused": [
+      {
+        "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_project_scope_amendment",
+        "result": "PASS",
+        "tests": 16,
+        "skipped": 16
+      },
+      {
+        "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_project_control",
+        "result": "PASS",
+        "tests": 12
+      },
+      {
+        "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_prepare_validation",
+        "result": "PASS",
+        "tests": 6
+      },
+      {
+        "command": "rtk proxy env -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 FACTORY_ROOT=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness FACTORY_TEST_CONTRACT_CHILD=1 FACTORY_TEST_MODULES='factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_project_control factory.scripts.tests.test_prepare_validation factory.scripts.tests.test_prepare_validation_budget' make -e test-factory-scripts",
+        "result": "PASS",
+        "tests": 38
+      }
+    ],
+    "accumulated": {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 make test-factory-scripts",
+      "result": "PASS",
+      "tests": 76,
+      "commandContractTests": 4
+    },
+    "quality": {
+      "pyCompile": "PASS",
+      "gitDiffCheck": "PASS",
+      "startupIntegrationIsAncestor": true,
+      "originMainIsAncestor": true
+    },
+    "realtimeSessionsUsed": 0,
+    "validatorsLaunched": false,
+    "nextAction": "Push this changed same-task head and submit it to SCRIPT CI; the executor does not poll CI."
   },
   "changedFiles": {
     "factory/scripts/project_scope_amendment.py": "fabe4bdc74c21703c872239ba57c3abc15d760a7690985d7e8404ba2d65e8817",
@@ -210,9 +255,9 @@
   "handoff": {
     "scriptCi": {
       "owner": "SCRIPT",
-      "status": "REJECTED_EXTERNAL_C47_OWNER",
+      "status": "READY_FOR_SCRIPT_CI",
       "pollingByExecutor": false,
-      "nextAction": "Preserve run 34656009510/job 103448454678 as the exact C47-owned rejection. Do not retry unchanged. Once C47's reviewed repair is on accepted main, integrate it here, rerun focused C62 checks, and submit the changed same-task head to SCRIPT CI without polling."
+      "nextAction": "Submit the changed current C62 head to SCRIPT CI without polling. The historical run 34656009510/job 103448454678 remains preserved as an external C47-owned rejection; no C62 check failed."
     },
     "independentReview": "PENDING_SCRIPT_CI_GREEN",
     "guardedMerge": "PENDING_INDEPENDENT_REVIEW",
