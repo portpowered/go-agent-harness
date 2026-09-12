@@ -14,7 +14,7 @@
       "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
     ]
   ],
-  "observed_at": "2026-09-12T21:53:26Z",
+  "observed_at": "2026-09-12T22:02:47Z",
   "prs": [
     {
       "accepted_main_changed_production_paths": [],
@@ -1853,7 +1853,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c79-retire-cli-response-lifecycle",
       "task_state": {
-        "name": "ci-pending",
+        "name": "init",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-114",
@@ -3564,7 +3564,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verification-summary.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py"
       ],
-      "head": "df07c2be3ae4e4e69b684464c278454f0b6edaab",
+      "head": "cf20ae6fe0277b5534c3a352983223b79ac65250",
       "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "is_retirement_checkpoint": true,
       "number": 494,

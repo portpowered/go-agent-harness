@@ -12,7 +12,7 @@
     "500",
     "--all"
   ],
-  "observed_at": "2026-09-12T21:52:54Z",
+  "observed_at": "2026-09-12T22:02:18Z",
   "results": [
     {
       "chainingTraceDepth": 1,
@@ -1726,12 +1726,12 @@
       ],
       "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
       "state": {
-        "name": "ci-pending",
+        "name": "init",
         "type": "PROCESSING"
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
-        "_rejection_feedback": "CI checks failed for PR #470 at head 996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7: required checks failed on current head 996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7: CI (WebMCP Chrome)=FAILURE; checks: CI (WebMCP Chrome)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34720097094/job/103624263489). Return this task to the executor with the listed failures.",
+        "_rejection_feedback": "CI checks failed for PR #470 at head 34816f5b0bce04cdff768322ba8bc0269ca63d32: required checks failed on current head 34816f5b0bce04cdff768322ba8bc0269ca63d32: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34720884934/job/103626389155). Return this task to the executor with the listed failures.",
         "continue_feedback": "HEAD 1bcccd46 is clean, pushed on PR #470, admitted, and contains required ancestry through origin/main 84c91ee1. Focused normal/race, external consumer, mutation oracles, lint, staticcheck, and diff checks pass. Remaining exact failures are the unregistered sessiondiagnostics Wire path and 12 stale C79 baseline entries. C57 PR449 and C61 PR452 remain open, so their shared leases are unreleased. After release, make only those registry/baseline edits, rerun gates, commit/push PR #470, and submit the same task to script CI without polling."
       },
       "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
@@ -1861,7 +1861,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"branch\": \"codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-        "continue_feedback": "Admission verified; branch matches PRD and worktree is clean at 70e2a05a (PR #496). Focused/race, vet, lint, staticcheck, consumer, regressions, coverage and replay evidence pass; no C111 review findings. Required startup and accepted-main ancestry pass. C79 still owns both shared files and has not completed guarded merge/released them. Next: after explicit C79 release, fetch origin/main, integrate it, apply only demonstrated C111 Wire/baseline changes, rerun bounded gates, push PR #496 and submit changed head to SCRIPT CI without polling."
+        "continue_feedback": "HEAD 70e2a05 is clean, pushed, and PR #496 is open. Admission, ancestry, 147-line baseline hash, 57-line adapter/90-line retirement, focused normal/race tests, GOWORK=off consumer, four regressions, and both verifier modes pass. make wire-check reports only the expected unregistered sessioncontinuation Wire file. C79 PR #470 remains OPEN/unmerged, so shared registries are unreleased. After guarded merge release, fetch and integrate current origin/main, apply only demonstrated C111 registry/baseline changes, rerun bounded gates, push/update PR #496, and submit to SCRIPT CI without polling."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-236",

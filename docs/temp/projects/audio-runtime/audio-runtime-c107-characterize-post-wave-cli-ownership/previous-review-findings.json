@@ -641,9 +641,9 @@
     {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
       "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-      "rejection_feedback": "CI checks failed for PR #470 at head 996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7: required checks failed on current head 996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7: CI (WebMCP Chrome)=FAILURE; checks: CI (WebMCP Chrome)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34720097094/job/103624263489). Return this task to the executor with the listed failures.",
+      "rejection_feedback": "CI checks failed for PR #470 at head 34816f5b0bce04cdff768322ba8bc0269ca63d32: required checks failed on current head 34816f5b0bce04cdff768322ba8bc0269ca63d32: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34720884934/job/103626389155). Return this task to the executor with the listed failures.",
       "state": {
-        "name": "ci-pending",
+        "name": "init",
         "type": "PROCESSING"
       },
       "work_id": "work-task-114",
@@ -848,6 +848,6 @@
       "work_type": "task"
     }
   ],
-  "observed_at": "2026-09-12T21:53:26Z",
+  "observed_at": "2026-09-12T22:02:47Z",
   "schema_version": "c107-previous-review-findings-v1"
 }

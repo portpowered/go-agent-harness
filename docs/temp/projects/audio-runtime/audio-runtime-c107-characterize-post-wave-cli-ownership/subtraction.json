@@ -4,8 +4,8 @@
       "accepted_main_changed_paths": [],
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "checkpoint_sha": "df07c2be3ae4e4e69b684464c278454f0b6edaab",
-      "head": "df07c2be3ae4e4e69b684464c278454f0b6edaab",
+      "checkpoint_sha": "cf20ae6fe0277b5534c3a352983223b79ac65250",
+      "head": "cf20ae6fe0277b5534c3a352983223b79ac65250",
       "lease_paths": [],
       "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
       "observation_command": "canonical board row + gh pr view --json files",
@@ -137,7 +137,7 @@
       "observation_command": "canonical board row + gh pr view --json files",
       "pr_number": 470,
       "state": {
-        "name": "ci-pending",
+        "name": "init",
         "type": "PROCESSING"
       },
       "work_id": "work-task-114",
@@ -197,10 +197,10 @@
     496
   ],
   "candidate_rule": "a candidate path must be an accepted-main production path with zero path_owners and must not be a shared path dependency",
-  "canonical_board_sha256": "4ad0f1de8359ca51c2cba74dd9cab404fbefbc9b1731e624f42507113b1c6a43",
-  "captured_at": "2026-09-12T21:53:26Z",
+  "canonical_board_sha256": "73fc6fca0eed1fa520e2f27a2422a85a057c2cc66400c729b0b1599495572bfc",
+  "captured_at": "2026-09-12T22:02:47Z",
   "contract_revision": "audio-runtime-v1",
-  "open_pr_inventory_sha256": "73574a1ab2defe5c3e3af6e4ae6b2191c4ed3e8e242bd6445fac81807fc3ac3e",
+  "open_pr_inventory_sha256": "0d885b03cf8c85095c2b3b63a2c8a077ead66a14aab7f72e075598a51973d2c1",
   "path_owners": {
     "agent-cli/internal/services/internal/agentruntime/capability_alias.go": [],
     "agent-cli/internal/services/internal/agentruntime/metrics_collector.go": [
@@ -5774,7 +5774,7 @@
       "accepted_main_changed_paths": [],
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "head": "df07c2be3ae4e4e69b684464c278454f0b6edaab",
+      "head": "cf20ae6fe0277b5534c3a352983223b79ac65250",
       "observation_commands": [
         [
           "gh",

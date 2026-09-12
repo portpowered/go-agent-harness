@@ -19,7 +19,7 @@
       "tests"
     ]
   },
-  "candidate_revision_at_run": "0d5ee026345ca99d27d4680ce17bcca170479216",
+  "candidate_revision_at_run": "cf20ae6fe0277b5534c3a352983223b79ac65250",
   "credential_free": true,
   "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
   "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
@@ -27,13 +27,13 @@
     "session": {
       "aggregate_deadline_seconds": 600,
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-kc7jkh4_/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-4rm4aopj/yui",
         "session",
         "--help"
       ],
-      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-kc7jkh4_/archive",
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-4rm4aopj/archive",
       "deadline_seconds": 240,
-      "elapsed_seconds": 0.037371,
+      "elapsed_seconds": 0.041259,
       "environment": {
         "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
         "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -46,7 +46,7 @@
       "label": "yui-session-help",
       "output_limited": false,
       "process_group_gone": true,
-      "process_group_id": 10027,
+      "process_group_id": 28841,
       "schema_version": "c107-command-run-v1",
       "stderr_bytes": 0,
       "stderr_path": "runs/public/yui-session-help.stderr",
@@ -58,12 +58,12 @@
     "top": {
       "aggregate_deadline_seconds": 600,
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-kc7jkh4_/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-4rm4aopj/yui",
         "--help"
       ],
-      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-kc7jkh4_/archive",
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-4rm4aopj/archive",
       "deadline_seconds": 240,
-      "elapsed_seconds": 0.546252,
+      "elapsed_seconds": 0.536432,
       "environment": {
         "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
         "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -76,7 +76,7 @@
       "label": "yui-help",
       "output_limited": false,
       "process_group_gone": true,
-      "process_group_id": 10001,
+      "process_group_id": 28814,
       "schema_version": "c107-command-run-v1",
       "stderr_bytes": 0,
       "stderr_path": "runs/public/yui-help.stderr",
@@ -86,8 +86,8 @@
       "timed_out": false
     }
   },
-  "observed_at": "2026-09-12T21:56:01Z",
-  "owned_output_bytes": 149640,
+  "observed_at": "2026-09-12T22:05:23Z",
+  "owned_output_bytes": 149631,
   "raw_pcm": {
     "bytes": 4800,
     "path": "runs/public/replay/tool-record/audio/out-000.pcm",
@@ -97,10 +97,10 @@
   "replay": {
     "aggregate_deadline_seconds": 600,
     "argv": [
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-kc7jkh4_/yui",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-4rm4aopj/yui",
       "session",
       "--replay",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-kc7jkh4_/archive/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-4rm4aopj/archive/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
       "--audio-out",
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/runs/public/replay/audio.wav",
       "--record-dir",
@@ -113,7 +113,7 @@
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/runs/public/replay",
     "deadline_seconds": 240,
-    "elapsed_seconds": 0.083652,
+    "elapsed_seconds": 0.08706,
     "environment": {
       "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
       "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -126,7 +126,7 @@
     "label": "yui-local-replay",
     "output_limited": false,
     "process_group_gone": true,
-    "process_group_id": 10032,
+    "process_group_id": 28844,
     "schema_version": "c107-command-run-v1",
     "stderr_bytes": 0,
     "stderr_path": "runs/public/yui-local-replay.stderr",
