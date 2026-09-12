@@ -121,3 +121,32 @@ claimed here.
   then apply the demonstrated registration and nine downward baseline changes,
   rerun focused gates, and submit the changed head to script CI without
   polling.
+
+## Fresh focused and accumulated regression verification — 2026-09-12T19:09:22Z
+
+- Revalidated admission and ownership before running checks: the same C83 task
+  remains admitted and owned; C79 `work-task-114` remains `ci-pending` with the
+  shared Wire/architecture-baseline lease; C61 `work-task-34` is terminal
+  failed and PR `#452` remains open/unmerged, so its public contract is still
+  absent from `origin/main=d4766c3d`.
+- `GOWORK=off go test ./services/browserrunner/... -run '^Test' -count=3`
+  and its `-race` equivalent both passed. The two owned CLI cancellation paths
+  (`TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab`
+  and `TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation`)
+  passed normal and race at count `3` (six cases per lane).
+- The external `GOWORK=off` consumer passed normal and race at count `3`.
+  The isolated-cache `CGO_ENABLED=0`/`nomicrophone` cross-module `coverpkg`
+  cancellation control passed `10/10`, with `15.4%` instrumented package
+  coverage. No test assertion, timeout, or cancellation check was weakened.
+- `COUNT=1 scripts/test-session-ci-regressions.sh all` passed its normal,
+  coverage, and race lanes, including the expected replay/PCM/transcript
+  negative controls and twenty high-rate audio trials. `git diff --check`
+  remains clean after the checkpoint update.
+- This is fresh verification of the already-pushed bounded candidate, not a
+  repair, CI result, independent review, guarded merge, vertical probe, or
+  project acceptance. The next action remains to wait for C61’s reviewed
+  guarded contract merge and C79’s reviewed guarded shared-file release, then
+  fetch/reconcile current `origin/main` on this same branch, apply only the
+  demonstrated browserrunner Wire registration and nine downward baseline
+  deletions, rerun the focused gates, push PR `#473`, and submit the changed
+  head to script CI without polling.
