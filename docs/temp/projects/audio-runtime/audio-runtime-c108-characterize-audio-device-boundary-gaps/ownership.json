@@ -28,6 +28,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/rtc-transport-causal.stdout",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/negative-controls/report.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/evidence/runs/exec-invocations-v4.log",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/malformed.session.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/yui-malformed-truncated.stderr",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/yui-malformed-truncated.stdout",
@@ -49,7 +50,7 @@
   ],
   "controlled_shared_paths": {
     "C101": {
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "overlap_with_c108_evidence": [],
       "status": "read_only_dependency_recheck",
       "writer_paths": [
@@ -80,7 +81,7 @@
       ]
     },
     "C103": {
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "overlap_with_c108_evidence": [],
       "status": "read_only_dependency_recheck",
       "writer_paths": [
@@ -108,7 +109,7 @@
       ]
     },
     "C104": {
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "overlap_with_c108_evidence": [],
       "status": "read_only_dependency_recheck",
       "writer_paths": [
@@ -138,7 +139,7 @@
       ]
     },
     "C107": {
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "overlap_with_c108_evidence": [],
       "status": "read_only_dependency_recheck",
       "writer_paths": [
@@ -206,7 +207,7 @@
       ]
     },
     "C79": {
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "overlap_with_c108_evidence": [],
       "status": "read_only_dependency_recheck",
       "writer_paths": [
@@ -228,6 +229,7 @@
         "docs/architecture/architecture-policy.json",
         "docs/architecture/architecture-size-baseline.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720884934.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
@@ -255,7 +257,7 @@
       ]
     },
     "C83": {
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "overlap_with_c108_evidence": [],
       "status": "read_only_dependency_recheck",
       "writer_paths": [
@@ -283,7 +285,7 @@
       ]
     },
     "C84": {
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "overlap_with_c108_evidence": [],
       "status": "read_only_dependency_recheck",
       "writer_paths": [
@@ -304,7 +306,7 @@
       ]
     },
     "C99": {
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "overlap_with_c108_evidence": [],
       "status": "read_only_dependency_recheck",
       "writer_paths": [
@@ -354,7 +356,7 @@
       "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
     ]
   },
-  "observed_at": "2026-09-12T22:17:28Z",
+  "observed_at": "2026-09-12T22:45:21Z",
   "ownership_claim": "C108 owns only its evidence directory; no repair lease, shared-file lease, or project acceptance is claimed.",
   "passes": true,
   "peer_observations": [
@@ -391,6 +393,7 @@
           "docs/architecture/architecture-policy.json",
           "docs/architecture/architecture-size-baseline.json",
           "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720884934.json",
           "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
           "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
           "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
@@ -424,14 +427,14 @@
           "470",
           "--name-only"
         ],
-        "sha256": "b5251b57688db4ec60f265acf0043501e7fde5ffc661c555ccd82fba60b186a2"
+        "sha256": "5b221d18f4a615057ef4628b37544f13d5b97a6637066eaa2cb6b763c0e10afd"
       },
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "peer": "C79",
       "pr": {
         "baseRefName": "main",
         "headRefName": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-        "headRefOid": "34816f5b0bce04cdff768322ba8bc0269ca63d32",
+        "headRefOid": "40702f55bbf7406236caff55454ad67cb09b1025",
         "number": 470,
         "state": "OPEN",
         "title": "refactor: retire CLI response lifecycle",
@@ -485,7 +488,7 @@
         ],
         "sha256": "94f184320c3264964541a0397b9b41ac2a859fca3628ed0b21517843e42f4eb4"
       },
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "peer": "C83",
       "pr": {
         "baseRefName": "main",
@@ -537,7 +540,7 @@
         ],
         "sha256": "1d1ac6091d26d2032d2ab54560eb6d608d2f4f1d610df3af1b3cdfe2cdc2cdc3"
       },
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "peer": "C84",
       "pr": {
         "baseRefName": "main",
@@ -603,7 +606,7 @@
         ],
         "sha256": "ab23e1321511e0bedf3c1c2815cbabec21ba720829a47338fb37d095d0745262"
       },
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "peer": "C99",
       "pr": {
         "baseRefName": "main",
@@ -665,7 +668,7 @@
         ],
         "sha256": "4d784a2cabec78fc470c086ba5085c0e4439cdf2a45121a5da17a0161c2a4f34"
       },
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "peer": "C101",
       "pr": {
         "baseRefName": "main",
@@ -724,7 +727,7 @@
         ],
         "sha256": "bf566ce92c6a1098186a4c674b29b5f777e618d1e6eb5d59c47cd7202df2af25"
       },
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "peer": "C103",
       "pr": {
         "baseRefName": "main",
@@ -785,7 +788,7 @@
         ],
         "sha256": "20ea4483cc84dc0c6265f42eb23cb1cc703ab8140cf035bdcea23e3f2a837b4d"
       },
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "peer": "C104",
       "pr": {
         "baseRefName": "main",
@@ -884,7 +887,7 @@
         ],
         "sha256": "2ff9fa5603ba2acce89743568ca33af62c6f0d5f3321377c430851aadfe9d91a"
       },
-      "observed_at": "2026-09-12T22:17:28Z",
+      "observed_at": "2026-09-12T22:45:21Z",
       "peer": "C107",
       "pr": {
         "baseRefName": "main",

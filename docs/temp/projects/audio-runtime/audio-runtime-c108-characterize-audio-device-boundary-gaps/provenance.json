@@ -86,7 +86,7 @@
     }
   ],
   "branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
-  "candidate_revision": "39917ad57a259867f6fefb729f4c4f58ed32cffa",
+  "candidate_revision": "03042970b8c6f83b67cde57e6d8305e0096a61d9",
   "contract_revision": "audio-runtime-v1",
   "factory_server": "http://127.0.0.1:7439",
   "factory_session": "~default",
@@ -98,7 +98,7 @@
       "main"
     ],
     "cwd": ".",
-    "elapsed_seconds": 0.528,
+    "elapsed_seconds": 0.526,
     "exit_code": 0,
     "stderr": "From https://github.com/portpowered/go-agent-harness\n * branch              main       -> FETCH_HEAD\nAuto packing the repository in background for optimum performance.\nSee \"git help gc\" for manual housekeeping.\nwarning: The last gc run reported the following. Please correct the root cause\nand remove /Users/abdifamily/work/harness/go-agent-harness/.git/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/gc.log\nAutomatic cleanup will not be performed until the file is removed.\n\nwarning: There are too many unreachable loose objects; run 'git prune' to remove them.\n\n",
     "stdout": "",
@@ -3633,6 +3633,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/rtc-transport-causal.stdout",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/negative-controls/report.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/evidence/runs/exec-invocations-v4.log",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/malformed.session.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/yui-malformed-truncated.stderr",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/yui-malformed-truncated.stdout",
