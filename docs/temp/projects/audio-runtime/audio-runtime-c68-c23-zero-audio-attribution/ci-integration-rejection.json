@@ -1,0 +1,25 @@
+{
+  "schema": "audio-runtime.c68.zero-audio-attribution.ci-rejection.v1",
+  "task": "audio-runtime-c68-c23-zero-audio-attribution",
+  "pull_request": 457,
+  "candidate_head": "faa8ef04c0ca39ec474f5b08304e882b1c1a667e",
+  "run_id": "34669154964",
+  "job_id": "103487069605",
+  "job": "integration",
+  "status": "rejected",
+  "log_sha256": "db79d00f150ea813e9d4ece7ae405812cf2f70c86b65d5efb6df91132c0c3511",
+  "failed_check": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_15",
+  "observation": {
+    "rendered_samples": 171191,
+    "compared_samples": 177591,
+    "lost_samples": 6400,
+    "retained_percent": 96.4,
+    "reported_dropped_samples": 0,
+    "underflow_events": 49,
+    "underflow_samples": 23200,
+    "zero_filled_samples": 23200
+  },
+  "disposition": "Residual C47/C64 high-rate audio stability integration failure; C68 owns only task-local attribution evidence and makes no production or shared-runtime mutation.",
+  "ci_green_claimed": false,
+  "next_action": "Preserve this exact rejection, submit the repaired C68 candidate to the external script CI gate, and route the high-rate production-binary loss to its existing owner."
+}
