@@ -1,38 +1,35 @@
 package agentruntime
 
 import (
-	"errors"
-	"os"
-	"time"
-
 	"encoding/json"
+	"errors"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomaudio"
+	roomaudiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomaudio/wire"
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
 
-var (
-	// ErrRoomReplayDeltaReconstruction identifies a valid bundle whose recorded
-	// PCM deltas do not reproduce the corresponding WAV payload.
-	ErrRoomReplayDeltaReconstruction = errors.New("room replay delta reconstruction failed")
-	// ErrRoomReplayAudioTimeline identifies an audio artifact or annotation
-	// outside the finalized room timeline.
-	ErrRoomReplayAudioTimeline = errors.New("room replay audio timeline is inconsistent")
-	// ErrRoomReplayToleranceProfile identifies a fixture profile that is
-	// malformed or attempts to weaken a suite default.
-	ErrRoomReplayToleranceProfile = errors.New("invalid room replay tolerance profile")
+// The audio projection is now owned by the host-neutral runtime service. The
+// aliases keep the CLI's historical test and command vocabulary source
+// compatible while preventing the decoder from depending on CLI state.
+
+const (
+	ErrRoomReplayDeltaReconstruction = roomaudio.ErrRoomReplayDeltaReconstruction
+	ErrRoomReplayAudioTimeline       = roomaudio.ErrRoomReplayAudioTimeline
+	ErrRoomReplayToleranceProfile    = roomaudio.ErrRoomReplayToleranceProfile
 )
 
-// RoomReplayToleranceProfile is the fully expanded, immutable-by-convention
-// analysis profile attached to a replay bundle. Omitting a profile in the
-// manifest selects the documented suite defaults. A supplied profile may only
-// tighten those defaults.
-type RoomReplayToleranceProfile struct {
-	Name         string
-	StreamConfig roomanalysis.PCM16AnalysisConfig
-	RoomConfig   roomanalysis.PCM16RoomAnalysisConfig
-}
+type (
+	RoomReplayToleranceProfile         = roomaudio.RoomReplayToleranceProfile
+	RoomReplayAudioDelta               = roomaudio.RoomReplayAudioDelta
+	RoomReplayDeltaReconstructionError = roomaudio.RoomReplayDeltaReconstructionError
+	RoomReplayAudioStream              = roomaudio.RoomReplayAudioStream
+	RoomReplayAudioParticipant         = roomaudio.RoomReplayAudioParticipant
+	RoomReplayAudioAnnotation          = roomaudio.RoomReplayAudioAnnotation
+	RoomReplayAudioBundle              = roomaudio.RoomReplayAudioBundle
+)
 
-// DefaultRoomReplayToleranceProfile returns the complete suite profile used
-// when a bundle omits a tolerance section.
 func DefaultRoomReplayToleranceProfile() RoomReplayToleranceProfile {
 	return RoomReplayToleranceProfile{
 		Name:         "suite-default",
@@ -41,194 +38,98 @@ func DefaultRoomReplayToleranceProfile() RoomReplayToleranceProfile {
 	}
 }
 
-// RoomReplayAudioDelta is one decoded audio delta in recorded JSONL order.
-// PCM is a copy of the raw little-endian PCM16 payload. Sequence is the
-// recorded sequence when the capture supplied one; LineNumber always points
-// back to the source JSONL line.
-type RoomReplayAudioDelta struct {
-	ID          string
-	Sequence    int64
-	HasSequence bool
-	Offset      time.Duration
-	HasOffset   bool
-	TurnID      string
-	LineNumber  int
-	PCM         []byte
-}
-
-// RoomReplayAudioStream is an identity- and time-aware mono PCM16 stream
-// resolved from a room bundle. PCM and Samples are caller-owned copies; the
-// embedded audio input is ready to pass to the analysis package.
-type RoomReplayAudioStream struct {
-	roomanalysis.PCM16TimedStream
-	Role          string
-	PCM           []byte
-	SampleCount   int
-	Artifact      RoomReplayArtifact
-	DeltaArtifact RoomReplayArtifact
-	Deltas        []RoomReplayAudioDelta
-}
-
-// RoomReplayAudioParticipant groups the independent output, sent, and
-// received streams for one stable participant identity.
-type RoomReplayAudioParticipant struct {
-	ID          string
-	WAV         RoomReplayAudioStream
-	Sent        RoomReplayAudioStream
-	Received    RoomReplayAudioStream
-	Events      []json.RawMessage
-	Diagnostics []json.RawMessage
-}
-
-// RoomReplayAudioAnnotation retains the generic annotation identity and
-// interval while the typed slices on RoomReplayAudioBundle expose the
-// analysis-ready overlap, barge-in, and loudness forms.
-type RoomReplayAudioAnnotation struct {
-	ID                       string
-	Kind                     string
-	Start                    time.Duration
-	End                      time.Duration
-	Participants             []string
-	SourceParticipantID      string
-	TargetParticipantID      string
-	InterrupterParticipantID string
-	InterruptedParticipantID string
-	Raw                      json.RawMessage
-}
-
-// RoomReplayAudioBundle is the validated audio projection of a landed room
-// replay plan. LoadRoomReplayAudioBundle performs all filesystem, hash,
-// format, identity, timing, sidecar, tolerance, and delta reconstruction
-// checks before returning this value.
-type RoomReplayAudioBundle struct {
-	Plan         RoomReplayPlan
-	Format       RoomReplayPCMFormat
-	Tolerances   RoomReplayToleranceProfile
-	Participants []RoomReplayAudioParticipant
-	RoomMix      RoomReplayAudioStream
-	Annotations  []RoomReplayAudioAnnotation
-	Overlaps     []roomanalysis.PCM16OverlapInterval
-	BargeIns     []roomanalysis.PCM16BargeInAnnotation
-	Loudness     []roomanalysis.PCM16LoudnessInterval
-}
-
-// Participant returns a participant's resolved audio evidence by stable ID.
-func (b RoomReplayAudioBundle) Participant(id string) (RoomReplayAudioParticipant, bool) {
-	for _, participant := range b.Participants {
-		if participant.ID == id {
-			return participant, true
-		}
-	}
-	return RoomReplayAudioParticipant{}, false
-}
-
-// AnalysisInput converts the resolved streams and annotations into the
-// side-effect-free audio analyzer input. Every stream identity remains
-// independent, including room mix and sent/received evidence.
-func (b RoomReplayAudioBundle) AnalysisInput() roomanalysis.PCM16RoomInput {
-	input := roomanalysis.PCM16RoomInput{
-		Overlaps: append([]roomanalysis.PCM16OverlapInterval(nil), b.Overlaps...),
-		BargeIns: append([]roomanalysis.PCM16BargeInAnnotation(nil), b.BargeIns...),
-		Loudness: append([]roomanalysis.PCM16LoudnessInterval(nil), b.Loudness...),
-	}
-	for _, participant := range b.Participants {
-		input.Streams = append(input.Streams,
-			cloneTimedStream(participant.WAV.PCM16TimedStream),
-			cloneTimedStream(participant.Sent.PCM16TimedStream),
-			cloneTimedStream(participant.Received.PCM16TimedStream),
-		)
-	}
-	if b.RoomMix.StreamID != "" {
-		input.Streams = append(input.Streams, cloneTimedStream(b.RoomMix.PCM16TimedStream))
-	}
-	return input
-}
-
-// AnalysisConfig returns the fully expanded room profile for ordinary replay
-// assertions.
-func (b RoomReplayAudioBundle) AnalysisConfig() roomanalysis.PCM16RoomAnalysisConfig {
-	return b.Tolerances.RoomConfig
-}
-
-// LoadRoomReplayAudioBundle validates and resolves a complete room replay
-// bundle. The existing LoadRoomReplayPlan is deliberately the first step so
-// no audio property is evaluated against an untrusted or hash-inconsistent
-// bundle.
+// LoadRoomReplayAudioBundle retains the CLI path-admission boundary and then
+// delegates all audio parsing to the public roomaudio service.
 func LoadRoomReplayAudioBundle(bundle string) (RoomReplayAudioBundle, error) {
 	plan, err := LoadRoomReplayPlan(bundle)
 	if err != nil {
 		return RoomReplayAudioBundle{}, err
 	}
-	manifestData, err := os.ReadFile(plan.ManifestPath)
+	loaded, err := roomaudiowire.NewService().Load(toRoomAudioPlan(plan))
 	if err != nil {
-		return RoomReplayAudioBundle{}, roomReplayAudioIncomplete("run-manifest.json", "", "readable manifest", err.Error(), err)
+		return RoomReplayAudioBundle{}, adaptRoomReplayAudioError(err)
 	}
-	manifest, err := roomReplayObject(manifestData)
-	if err != nil {
-		return RoomReplayAudioBundle{}, roomReplayAudioMismatch("run-manifest.json", "", "JSON object", "invalid", err)
-	}
-	profile, err := parseRoomReplayToleranceProfile(manifest)
-	if err != nil {
-		return RoomReplayAudioBundle{}, err
-	}
-	participantObjects, err := roomReplayAudioParticipantObjects(manifest)
-	if err != nil {
-		return RoomReplayAudioBundle{}, err
-	}
-
-	result := RoomReplayAudioBundle{
-		Plan:         plan,
-		Format:       plan.PCMFormat,
-		Tolerances:   profile,
-		Participants: make([]RoomReplayAudioParticipant, 0, len(plan.Participants)),
-	}
-	streamParticipants := make(map[string]string, len(plan.Participants)*3)
-	for _, participant := range plan.Participants {
-		participantObject := participantObjects[participant.ID]
-		resolved, err := loadRoomReplayAudioParticipant(plan, participant, participantObject)
-		if err != nil {
-			return RoomReplayAudioBundle{}, err
-		}
-		result.Participants = append(result.Participants, resolved)
-		for _, stream := range []RoomReplayAudioStream{resolved.WAV, resolved.Sent, resolved.Received} {
-			if owner, exists := streamParticipants[stream.StreamID]; exists {
-				return RoomReplayAudioBundle{}, roomReplayAudioMismatch("streams."+stream.StreamID, "run-manifest.json", "unique stream identity", owner+" and "+participant.ID, nil)
-			}
-			streamParticipants[stream.StreamID] = participant.ID
-		}
-	}
-
-	roomMixArtifact, ok := findRoomReplayArtifact(plan.Artifacts, "room:mix")
-	if !ok {
-		return RoomReplayAudioBundle{}, roomReplayAudioIncomplete("artifacts.room_mix", "", "validated room mix artifact", "missing", ErrRoomReplayBundleIncomplete)
-	}
-	roomMix, err := loadRoomReplayWAVStream(plan, roomMixArtifact, "room:mix", "room", "room-mix")
-	if err != nil {
-		return RoomReplayAudioBundle{}, err
-	}
-	if err := validateRoomReplayAudioStreamTimeline(roomMix, plan, "room_mix"); err != nil {
-		return RoomReplayAudioBundle{}, err
-	}
-	if owner, exists := streamParticipants[roomMix.StreamID]; exists {
-		return RoomReplayAudioBundle{}, roomReplayAudioMismatch("streams."+roomMix.StreamID, "run-manifest.json", "unique stream identity", owner+" and room", nil)
-	}
-	result.RoomMix = roomMix
-	streamParticipants[roomMix.StreamID] = "room"
-
-	annotations, overlaps, barges, loudness, err := parseRoomReplayAudioAnnotations(manifest, plan, result.Participants, streamParticipants)
-	if err != nil {
-		return RoomReplayAudioBundle{}, err
-	}
-	result.Annotations = annotations
-	result.Overlaps = overlaps
-	result.BargeIns = barges
-	result.Loudness = loudness
-	return result, nil
+	return loaded, nil
 }
 
-// ValidateRoomReplayAudioBundle is the admission-only form of
-// LoadRoomReplayAudioBundle.
 func ValidateRoomReplayAudioBundle(bundle string) error {
 	_, err := LoadRoomReplayAudioBundle(bundle)
 	return err
+}
+
+func adaptRoomReplayAudioError(err error) error {
+	var detail *roomaudio.RoomReplayBundleError
+	if !errors.As(err, &detail) {
+		return err
+	}
+	legacy := &RoomReplayBundleError{
+		Kind:     RoomReplayBundleErrorKind(detail.Kind),
+		Field:    detail.Field,
+		Artifact: detail.Artifact,
+		Expected: detail.Expected,
+		Actual:   detail.Actual,
+		Err:      detail.Err,
+	}
+	// Keep both the legacy error identity used by CLI callers and the public
+	// service detail available to diagnostics and errors.As callers.
+	return errors.Join(legacy, err)
+}
+
+func toRoomAudioPlan(plan RoomReplayPlan) roomaudio.RoomReplayPlan {
+	converted := roomaudio.RoomReplayPlan{
+		BundlePath:    plan.BundlePath,
+		ManifestPath:  plan.ManifestPath,
+		SchemaVersion: plan.SchemaVersion,
+		Finalized:     plan.Finalized,
+		ClockBase:     plan.ClockBase,
+		StartedAt:     plan.StartedAt,
+		EndedAt:       plan.EndedAt,
+		PCMFormat:     runtimeRooms.RoomReplayPCMFormat{SampleRate: plan.PCMFormat.SampleRate, Channels: plan.PCMFormat.Channels, SampleWidthBits: plan.PCMFormat.SampleWidthBits, SampleWidthBit: plan.PCMFormat.SampleWidthBit, ByteOrder: plan.PCMFormat.ByteOrder, Encoding: plan.PCMFormat.Encoding},
+		TimelinePath:  plan.TimelinePath,
+		RoomMixPath:   plan.RoomMixPath,
+	}
+	converted.Participants = make([]runtimeRooms.RoomReplayParticipant, 0, len(plan.Participants))
+	for _, participant := range plan.Participants {
+		convertedParticipant := runtimeRooms.RoomReplayParticipant{
+			ID: participant.ID, Kind: runtimeRooms.ParticipantKind(participant.Kind), Provider: participant.Provider, Model: participant.Model,
+			Voice: participant.Voice, OpeningPrompt: participant.OpeningPrompt, SystemPrompt: participant.SystemPrompt,
+			CapturePath: participant.CapturePath, Capture: toRoomAudioArtifact(participant.Capture), RecordedTurnCount: participant.RecordedTurnCount,
+			Artifacts: make([]runtimeRooms.RoomReplayArtifact, 0, len(participant.Artifacts)),
+		}
+		for _, artifact := range participant.Artifacts {
+			convertedParticipant.Artifacts = append(convertedParticipant.Artifacts, toRoomAudioArtifact(artifact))
+		}
+		converted.Participants = append(converted.Participants, convertedParticipant)
+	}
+	converted.Timeline = make([]runtimeRooms.RoomReplayTimelineEvent, 0, len(plan.Timeline))
+	for _, event := range plan.Timeline {
+		converted.Timeline = append(converted.Timeline, runtimeRooms.RoomReplayTimelineEvent{
+			Sequence: event.Sequence, OffsetMS: event.OffsetMS, OffsetNanos: event.OffsetNanos, UnixMS: event.UnixMS,
+			Type: event.Type, ParticipantID: event.ParticipantID, Raw: append(json.RawMessage(nil), event.Raw...),
+		})
+	}
+	converted.Artifacts = make([]runtimeRooms.RoomReplayArtifact, 0, len(plan.Artifacts))
+	for _, artifact := range plan.Artifacts {
+		converted.Artifacts = append(converted.Artifacts, toRoomAudioArtifact(artifact))
+	}
+	return converted
+}
+
+func toRoomAudioArtifact(artifact RoomReplayArtifact) runtimeRooms.RoomReplayArtifact {
+	return runtimeRooms.RoomReplayArtifact{
+		Name: artifact.Name, Role: artifact.Role, Owner: artifact.Owner, Path: artifact.Path,
+		AbsolutePath: artifact.AbsolutePath, Size: artifact.Size, SHA256: artifact.SHA256,
+	}
+}
+
+// roomReplayParticipantArtifact remains a decision-free CLI lookup for the
+// scheduler's existing session composition. Audio decoding itself is owned by
+// roomaudio/internal/service.
+func roomReplayParticipantArtifact(participant RoomReplayParticipant, role string) (RoomReplayArtifact, bool) {
+	for _, artifact := range participant.Artifacts {
+		if artifact.Role == role || artifact.Name == role {
+			return artifact, true
+		}
+	}
+	return RoomReplayArtifact{}, false
 }

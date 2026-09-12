@@ -1,4 +1,4 @@
-package agentruntime
+package service
 
 import (
 	"bytes"
@@ -46,7 +46,12 @@ func decodeRoomReplayWAV(data []byte, artifact string) (roomReplayWAVPayload, er
 		}
 		return roomReplayWAVPayload{}, roomReplayAudioMismatch("artifact.wav", artifact, "PCM16 WAV", err.Error(), err)
 	}
-	return roomReplayWAVPayload{SampleRate: layout.SampleRate, Channels: 1, Bits: 16, PCM: append([]byte(nil), data[layout.DataOffset:layout.DataOffset+int64(layout.DataBytes)]...)}, nil
+	if layout.DataOffset < 0 || uint64(layout.DataOffset) > uint64(len(data)) || layout.DataBytes > uint64(len(data))-uint64(layout.DataOffset) {
+		return roomReplayWAVPayload{}, roomReplayAudioIncomplete("artifact.wav", artifact, "complete PCM16 WAV payload", "data chunk outside file", wavio.ErrTruncated)
+	}
+	start := int(layout.DataOffset)
+	end := start + int(layout.DataBytes)
+	return roomReplayWAVPayload{SampleRate: layout.SampleRate, Channels: 1, Bits: 16, PCM: append([]byte(nil), data[start:end]...)}, nil
 }
 
 func validateRoomReplayWAVFormat(wav roomReplayWAVPayload, declared RoomReplayPCMFormat, artifact string) error {
@@ -64,43 +69,49 @@ func validateRoomReplayWAVFormat(wav roomReplayWAVPayload, declared RoomReplayPC
 }
 
 func roomReplayAudioParticipantObjects(manifest roomReplayJSONObject) (map[string]roomReplayJSONObject, error) {
-	result := make(map[string]roomReplayJSONObject)
 	raw, ok := manifest["participants"]
 	if !ok {
-		return result, roomReplayAudioIncomplete("participants", "run-manifest.json", "participant objects", "missing", ErrRoomReplayBundleIncomplete)
+		return nil, roomReplayAudioIncomplete("participants", "run-manifest.json", "participant objects", "missing", ErrRoomReplayBundleIncomplete)
 	}
 	if strings.HasPrefix(strings.TrimSpace(string(raw)), "[") {
-		var values []roomReplayJSONObject
-		if err := json.Unmarshal(raw, &values); err != nil {
-			return nil, roomReplayAudioMismatch("participants", "run-manifest.json", "participant array", "invalid", err)
-		}
-		for index, object := range values {
-			id, _, err := firstRoomReplayStringField(object, nil, "id", "participant_id")
-			if err != nil || strings.TrimSpace(id) == "" {
-				return nil, roomReplayAudioIncomplete(fmt.Sprintf("participants[%d].id", index), "run-manifest.json", "participant identity", "missing", ErrRoomReplayBundleIncomplete)
-			}
-			if _, exists := result[id]; exists {
-				return nil, roomReplayAudioMismatch("participants.id", "run-manifest.json", "unique participant identity", id, nil)
-			}
-			result[id] = object
-		}
-		return result, nil
+		return roomReplayAudioParticipantArray(raw)
 	}
+	return roomReplayAudioParticipantMap(raw)
+}
+
+func roomReplayAudioParticipantArray(raw json.RawMessage) (map[string]roomReplayJSONObject, error) {
+	var values []roomReplayJSONObject
+	if err := json.Unmarshal(raw, &values); err != nil {
+		return nil, roomReplayAudioMismatch("participants", "run-manifest.json", "participant array", "invalid", err)
+	}
+	result := make(map[string]roomReplayJSONObject, len(values))
+	for index, object := range values {
+		id, _, err := firstRoomReplayStringField(object, nil, "id", "participant_id")
+		if err != nil || strings.TrimSpace(id) == "" {
+			return nil, roomReplayAudioIncomplete(fmt.Sprintf("participants[%d].id", index), "run-manifest.json", "participant identity", "missing", ErrRoomReplayBundleIncomplete)
+		}
+		if _, exists := result[id]; exists {
+			return nil, roomReplayAudioMismatch("participants.id", "run-manifest.json", "unique participant identity", id, nil)
+		}
+		result[id] = object
+	}
+	return result, nil
+}
+
+func roomReplayAudioParticipantMap(raw json.RawMessage) (map[string]roomReplayJSONObject, error) {
 	var values map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &values); err != nil {
 		return nil, roomReplayAudioMismatch("participants", "run-manifest.json", "participant map", "invalid", err)
 	}
+	result := make(map[string]roomReplayJSONObject, len(values))
 	for key, value := range values {
 		object, err := roomReplayObject(value)
 		if err != nil {
 			return nil, roomReplayAudioMismatch("participants["+key+"]", "run-manifest.json", "participant object", "invalid", err)
 		}
-		id, present, idErr := firstRoomReplayStringField(object, nil, "id", "participant_id")
-		if idErr != nil {
-			return nil, roomReplayAudioMismatch("participants["+key+"].id", "run-manifest.json", "string participant identity", "invalid", idErr)
-		}
-		if !present || strings.TrimSpace(id) == "" {
-			id = key
+		id, err := roomReplayAudioParticipantID(object, key)
+		if err != nil {
+			return nil, err
 		}
 		if id != key {
 			return nil, roomReplayAudioMismatch("participants["+key+"].id", "run-manifest.json", key, id, nil)
@@ -111,6 +122,17 @@ func roomReplayAudioParticipantObjects(manifest roomReplayJSONObject) (map[strin
 		result[id] = object
 	}
 	return result, nil
+}
+
+func roomReplayAudioParticipantID(object roomReplayJSONObject, key string) (string, error) {
+	id, present, err := firstRoomReplayStringField(object, nil, "id", "participant_id")
+	if err != nil {
+		return "", roomReplayAudioMismatch("participants["+key+"].id", "run-manifest.json", "string participant identity", "invalid", err)
+	}
+	if !present || strings.TrimSpace(id) == "" {
+		return key, nil
+	}
+	return id, nil
 }
 
 func roomReplayAudioMismatch(field, artifact, expected, actual string, cause error) error {
