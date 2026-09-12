@@ -12,7 +12,7 @@
     "500",
     "--all"
   ],
-  "observed_at": "2026-09-12T20:08:34Z",
+  "observed_at": "2026-09-12T20:15:24Z",
   "results": [
     {
       "chainingTraceDepth": 1,
@@ -45,6 +45,22 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-thoughts-228",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 25,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c104-retire-cli-session-finalization-boundary",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c102-c103-validation-retirement-20260912T1534Z",
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-229",
       "workTypeName": "thoughts"
     },
     {
@@ -1616,22 +1632,6 @@
       "workTypeName": "idea"
     },
     {
-      "chainingTraceDepth": 6,
-      "currentChainingTraceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
-      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-      "previousChainingTraceIds": [
-        "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309"
-      ],
-      "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
-      "workId": "work-review-225",
-      "workTypeName": "review"
-    },
-    {
       "chainingTraceDepth": 5,
       "content": [
         {
@@ -1646,12 +1646,12 @@
       ],
       "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
       "state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
-        "_rejection_feedback": "CI checks failed for PR #470 at head e42e4e2af6dd8098bc9d96d7d167d09b03296a37: required checks failed on current head e42e4e2af6dd8098bc9d96d7d167d09b03296a37: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34712844183/job/103604634784). Return this task to the executor with the listed failures.",
+        "_rejection_feedback": "PR #470 head ccfc3ee8 is green on all nine reported checks, and independent focused/race, GOWORK=off consumer, and credential-free replay checks pass. Code defects remain: response.go:66-75 accepts foreign response-b before any explicit boundary, replacing active response-a; response.go:191-194 leaves purpose/terminal state stale, so tool-ack finish followed by terminal-only normal end is not admitted; continuation.go:74-89 reports duplicate response ends as Candidate/Admitted=true. Add public regressions and fix ownership, per-generation reset, and duplicate handling while preserving stale-ID rejection. Checked-in evidence is source-pinned to 795ac1bc8147353cb36a806e9acd641512cc9110 rather than reviewed head ccfc3ee8; regenerate or explicitly bind evidence to the resulting head, rebuilding replay artifacts as needed. Commit/push PR 470, submit changed-head script CI without polling, and preserve the peer-owned 6400-sample high-rate audio-drain regression.",
         "continue_feedback": "HEAD 1bcccd46 is clean, pushed on PR #470, admitted, and contains required ancestry through origin/main 84c91ee1. Focused normal/race, external consumer, mutation oracles, lint, staticcheck, and diff checks pass. Remaining exact failures are the unregistered sessiondiagnostics Wire path and 12 stale C79 baseline entries. C57 PR449 and C61 PR452 remain open, so their shared leases are unreleased. After release, make only those registry/baseline edits, rerun gates, commit/push PR #470, and submit the same task to script CI without polling."
       },
       "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
@@ -1682,33 +1682,6 @@
       },
       "traceId": "trace-request-time-6856b79998050320ff15cec7aa8baf47",
       "workId": "work-task-136",
-      "workTypeName": "task"
-    },
-    {
-      "chainingTraceDepth": 24,
-      "content": [
-        {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"branch\": \"codex/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-          "type": "text"
-        }
-      ],
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c104-retire-cli-session-finalization-boundary",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-c102-c103-validation-retirement-20260912T1534Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"branch\": \"codex/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-        "_rejection_feedback": "CI checks failed for PR #492 at head d5734d2c05d681794806ed367e72d2b92466e36b: required checks failed on current head d5734d2c05d681794806ed367e72d2b92466e36b: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34711933877/job/103602137349). Return this task to the executor with the listed failures.",
-        "continue_feedback": "Clean d5734d2c checkpoint preserved. Admission, branch ancestry, focused normal/race, consumer, mutation, shipped replay, and 8/9 CI checks pass. Static has exactly six findings: one Wire registration and five stale C104 baseline entries. C79 still owns both shared registries and PR470 is unmerged. After its guarded merge, integrate accepted main, apply only those six changes, rerun bounded gates, commit/push PR492, and return ACCEPTED to script CI without polling."
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-task-202",
       "workTypeName": "task"
     },
     {
@@ -1751,7 +1724,7 @@
       ],
       "requestId": "audio-runtime-c108-audio-device-boundary-characterization-20260912T1920Z",
       "state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "tags": {
@@ -2099,6 +2072,25 @@
       },
       "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
       "workId": "work-review-211",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 6,
+      "currentChainingTraceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309"
+      ],
+      "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #470 head ccfc3ee8 is green on all nine reported checks, and independent focused/race, GOWORK=off consumer, and credential-free replay checks pass. Code defects remain: response.go:66-75 accepts foreign response-b before any explicit boundary, replacing active response-a; response.go:191-194 leaves purpose/terminal state stale, so tool-ack finish followed by terminal-only normal end is not admitted; continuation.go:74-89 reports duplicate response ends as Candidate/Admitted=true. Add public regressions and fix ownership, per-generation reset, and duplicate handling while preserving stale-ID rejection. Checked-in evidence is source-pinned to 795ac1bc8147353cb36a806e9acd641512cc9110 rather than reviewed head ccfc3ee8; regenerate or explicitly bind evidence to the resulting head, rebuilding replay artifacts as needed. Commit/push PR 470, submit changed-head script CI without polling, and preserve the peer-owned 6400-sample high-rate audio-drain regression."
+      },
+      "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "workId": "work-review-225",
       "workTypeName": "review"
     },
     {
@@ -2802,6 +2794,33 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-200",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 24,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"branch\": \"codex/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c104-retire-cli-session-finalization-boundary",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c102-c103-validation-retirement-20260912T1534Z",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"branch\": \"codex/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+        "_rejection_feedback": "CI checks failed for PR #492 at head d5734d2c05d681794806ed367e72d2b92466e36b: required checks failed on current head d5734d2c05d681794806ed367e72d2b92466e36b: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34711933877/job/103602137349). Return this task to the executor with the listed failures.",
+        "continue_feedback": "Clean pushed head d5734d2c05d681794806ed367e72d2b92466e36b on PR #492. Admission and branch/ancestry checks pass. SCRIPT CI run 34711933877 has 8/9 checks passing; static fails only on one Wire registration and five C104 stale baseline entries. C104 normal/race, legacy controls, external consumer, and mutation verifier pass. C79 work-task-114 still owns both shared registry files and PR #470 is unmerged. After its guarded merge, integrate accepted main, apply exactly those six shared-file changes, rerun bounded gates, commit/push PR #492, and submit the changed head to SCRIPT CI without polling."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-202",
       "workTypeName": "task"
     },
     {

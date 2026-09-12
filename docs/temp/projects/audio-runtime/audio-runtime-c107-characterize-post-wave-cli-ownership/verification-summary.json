@@ -1,11 +1,11 @@
 {
   "all_project_criteria": "OPEN",
-  "candidate_revision": "164cc3e7aa8807820bde78ae64c6d19e0189a916",
+  "candidate_revision": "0670a6061033e11f176df1e0aabbdedd05ea4146",
   "ci": "submitted by script gate after this handoff; not polled by executor",
-  "observed_at": "2026-09-12T20:13:21Z",
+  "observed_at": "2026-09-12T20:20:04Z",
   "reports": {
     "accumulated_regressions": {
-      "candidate_revision_at_run": "164cc3e7aa8807820bde78ae64c6d19e0189a916",
+      "candidate_revision_at_run": "0670a6061033e11f176df1e0aabbdedd05ea4146",
       "ci_polling": "not performed",
       "command": "COUNT=1 scripts/test-session-ci-regressions.sh all",
       "count": 1,
@@ -18,8 +18,8 @@
           "all"
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
-        "deadline_seconds": 473,
-        "elapsed_seconds": 161.511746,
+        "deadline_seconds": 480,
+        "elapsed_seconds": 160.287973,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -32,11 +32,11 @@
         "label": "session-ci-regressions-count-1-all",
         "output_limited": false,
         "process_group_gone": true,
-        "process_group_id": 48675,
+        "process_group_id": 57263,
         "schema_version": "c107-command-run-v1",
         "stderr_bytes": 0,
         "stderr_path": "runs/accumulated-regressions/session-ci-regressions-count-1-all.stderr",
-        "stdout_bytes": 45902,
+        "stdout_bytes": 45816,
         "stdout_path": "runs/accumulated-regressions/session-ci-regressions-count-1-all.stdout",
         "termination": null,
         "timed_out": false
@@ -59,7 +59,7 @@
         "*.pyc"
       ],
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/SHA256SUMS",
-      "sha256": "8f249143b190f6d31a14ed93154584cb1e592afec84c12211f4fe7f8b9a8ac1d"
+      "sha256": "959963ef03e0b786a5cb5c353883ea338c68fbe6de95d0a5709cc2092a3c23f8"
     },
     "focused_regressions": {
       "ci_polling": "not performed",
@@ -79,7 +79,7 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/agent-cli",
           "deadline_seconds": 150,
-          "elapsed_seconds": 3.345897,
+          "elapsed_seconds": 2.102529,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -97,7 +97,7 @@
           "label": "agentruntime-normal",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 48558,
+          "process_group_id": 57201,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/focused-regressions/agentruntime-normal.stderr",
@@ -122,7 +122,7 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/agent-cli",
           "deadline_seconds": 150,
-          "elapsed_seconds": 3.903842,
+          "elapsed_seconds": 3.644441,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -140,7 +140,7 @@
           "label": "agentruntime-race",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 48649,
+          "process_group_id": 57242,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/focused-regressions/agentruntime-race.stderr",
@@ -167,8 +167,8 @@
         },
         "inventory.json": {
           "byte_identical_after_run_timestamp_normalization": true,
-          "first_sha256": "cee5ade042090254844e75726a00bd2f544a4d00714cd6fcd248e683806d9556",
-          "second_sha256": "cee5ade042090254844e75726a00bd2f544a4d00714cd6fcd248e683806d9556"
+          "first_sha256": "22304536eb370679516ba4c37af998be0a0680acafac771f5ec436a1521157b8",
+          "second_sha256": "22304536eb370679516ba4c37af998be0a0680acafac771f5ec436a1521157b8"
         },
         "inventory.md": {
           "byte_identical_after_run_timestamp_normalization": true,
@@ -188,13 +188,13 @@
             "--source",
             "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "--output-dir",
-            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-1-ohr4es71",
+            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-1-yoyva9yr",
             "--subtraction",
             "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json"
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
           "deadline_seconds": 240,
-          "elapsed_seconds": 11.20548,
+          "elapsed_seconds": 10.934292,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -207,7 +207,7 @@
           "label": "analyzer",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 46403,
+          "process_group_id": 54731,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/inventory/analyzer.stderr",
@@ -226,13 +226,13 @@
             "--source",
             "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "--output-dir",
-            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-2-cli73pf6",
+            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-2-n70r8mgu",
             "--subtraction",
             "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json"
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
           "deadline_seconds": 240,
-          "elapsed_seconds": 9.801391,
+          "elapsed_seconds": 10.145231,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -245,7 +245,7 @@
           "label": "analyzer",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 46511,
+          "process_group_id": 54804,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/inventory/analyzer.stderr",
@@ -266,7 +266,7 @@
         "mutated_to": "0000000000000000000000000000000000000000"
       },
       "pristine_validation": {
-        "active_tasks": 6,
+        "active_tasks": 5,
         "owned_source_paths": 80,
         "preserved_checkpoints": 41,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
@@ -291,25 +291,25 @@
       "ancestry": {
         "accepted_source": {
           "ancestor": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-          "descendant": "164cc3e7aa8807820bde78ae64c6d19e0189a916",
+          "descendant": "0670a6061033e11f176df1e0aabbdedd05ea4146",
           "exit_code": 0,
           "passed": true
         },
         "baseline": {
           "ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
-          "descendant": "164cc3e7aa8807820bde78ae64c6d19e0189a916",
+          "descendant": "0670a6061033e11f176df1e0aabbdedd05ea4146",
           "exit_code": 0,
           "passed": true
         },
         "current_origin_main": {
           "ancestor": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-          "descendant": "164cc3e7aa8807820bde78ae64c6d19e0189a916",
+          "descendant": "0670a6061033e11f176df1e0aabbdedd05ea4146",
           "exit_code": 0,
           "passed": true
         },
         "startup_integration": {
           "ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-          "descendant": "164cc3e7aa8807820bde78ae64c6d19e0189a916",
+          "descendant": "0670a6061033e11f176df1e0aabbdedd05ea4146",
           "exit_code": 0,
           "passed": true
         }
@@ -323,7 +323,7 @@
       },
       "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
       "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "candidate_revision": "164cc3e7aa8807820bde78ae64c6d19e0189a916",
+      "candidate_revision": "0670a6061033e11f176df1e0aabbdedd05ea4146",
       "contract_revision": "audio-runtime-v1",
       "credentials": "not used; command environment for public replay removes credential variables",
       "current_origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
@@ -340,7 +340,7 @@
         "stderr_sha256": "5734d4f16efc02917bc8fcad6a99bca535438180ce08197ee6e22031f788af7b",
         "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       },
-      "observed_at": "2026-09-12T20:09:11Z",
+      "observed_at": "2026-09-12T20:15:57Z",
       "prd_identity": {
         "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
         "project": "audio-runtime"
@@ -373,7 +373,7 @@
           "tests"
         ]
       },
-      "candidate_revision_at_run": "164cc3e7aa8807820bde78ae64c6d19e0189a916",
+      "candidate_revision_at_run": "0670a6061033e11f176df1e0aabbdedd05ea4146",
       "credential_free": true,
       "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
       "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
@@ -381,13 +381,13 @@
         "session": {
           "aggregate_deadline_seconds": 600,
           "argv": [
-            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-0ar77qjf/yui",
+            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-bqpds0cx/yui",
             "session",
             "--help"
           ],
-          "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-0ar77qjf/archive",
+          "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-bqpds0cx/archive",
           "deadline_seconds": 60,
-          "elapsed_seconds": 0.039128,
+          "elapsed_seconds": 0.035141,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -400,7 +400,7 @@
           "label": "yui-session-help",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 48532,
+          "process_group_id": 57184,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/public/yui-session-help.stderr",
@@ -412,12 +412,12 @@
         "top": {
           "aggregate_deadline_seconds": 600,
           "argv": [
-            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-0ar77qjf/yui",
+            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-bqpds0cx/yui",
             "--help"
           ],
-          "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-0ar77qjf/archive",
+          "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-bqpds0cx/archive",
           "deadline_seconds": 60,
-          "elapsed_seconds": 0.540329,
+          "elapsed_seconds": 0.533774,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -430,7 +430,7 @@
           "label": "yui-help",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 48523,
+          "process_group_id": 57183,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/public/yui-help.stderr",
@@ -440,8 +440,8 @@
           "timed_out": false
         }
       },
-      "observed_at": "2026-09-12T20:10:31Z",
-      "owned_output_bytes": 149611,
+      "observed_at": "2026-09-12T20:17:17Z",
+      "owned_output_bytes": 149638,
       "raw_pcm": {
         "bytes": 4800,
         "path": "runs/public/replay/tool-record/audio/out-000.pcm",
@@ -451,10 +451,10 @@
       "replay": {
         "aggregate_deadline_seconds": 600,
         "argv": [
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-0ar77qjf/yui",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-bqpds0cx/yui",
           "session",
           "--replay",
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-0ar77qjf/archive/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-bqpds0cx/archive/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
           "--audio-out",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/runs/public/replay/audio.wav",
           "--record-dir",
@@ -467,7 +467,7 @@
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/runs/public/replay",
         "deadline_seconds": 240,
-        "elapsed_seconds": 0.096648,
+        "elapsed_seconds": 0.081589,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -480,7 +480,7 @@
         "label": "yui-local-replay",
         "output_limited": false,
         "process_group_gone": true,
-        "process_group_id": 48537,
+        "process_group_id": 57185,
         "schema_version": "c107-command-run-v1",
         "stderr_bytes": 0,
         "stderr_path": "runs/public/yui-local-replay.stderr",
@@ -574,7 +574,7 @@
       "shared_paths_unchanged": true
     },
     "subtraction": {
-      "active_tasks": 6,
+      "active_tasks": 5,
       "owned_source_paths": 80,
       "preserved_checkpoints": 41,
       "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",

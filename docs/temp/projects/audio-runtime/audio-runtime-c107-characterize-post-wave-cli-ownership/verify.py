@@ -467,7 +467,7 @@ def active_task_rows(board_results: list[dict[str, Any]]) -> list[dict[str, Any]
 def review_findings(board_results: list[dict[str, Any]]) -> dict[str, Any]:
     rows = []
     for row in board_results:
-        if row.get("workTypeName") != "review":
+        if row.get("workTypeName") not in {"review", "task"}:
             continue
         tags = row.get("tags") if isinstance(row.get("tags"), dict) else {}
         feedback = tags.get("_rejection_feedback")
@@ -476,6 +476,7 @@ def review_findings(board_results: list[dict[str, Any]]) -> dict[str, Any]:
                 {
                     "work_id": row.get("workId"),
                     "name": row.get("name"),
+                    "work_type": row.get("workTypeName"),
                     "state": row.get("state"),
                     "rejection_feedback": feedback or "",
                     "last_output": tags.get("_last_output", ""),

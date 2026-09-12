@@ -1,6 +1,204 @@
 {
   "findings": [
     {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c101-retire-cli-provider-session-runtime\", \"branch\": \"codex/audio-runtime-c101-retire-cli-provider-session-runtime\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c101-retire-cli-provider-session-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-194",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c103-retire-cli-rtc-session-runtime\", \"branch\": \"codex/audio-runtime-c103-retire-cli-rtc-session-runtime\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c103-retire-cli-rtc-session-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-200",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"branch\": \"codex/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c104-retire-cli-session-finalization-boundary",
+      "rejection_feedback": "CI checks failed for PR #492 at head d5734d2c05d681794806ed367e72d2b92466e36b: required checks failed on current head d5734d2c05d681794806ed367e72d2b92466e36b: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34711933877/job/103602137349). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-202",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c105-characterize-browser-cancel-coverage-regression\", \"branch\": \"codex/audio-runtime-c105-characterize-browser-cancel-coverage-regression\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c105-characterize-browser-cancel-coverage-regression",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-206",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c106-repair-c68-cross-rate-probe-oracle\", \"branch\": \"codex/audio-runtime-c106-repair-c68-cross-rate-probe-oracle\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c106-repair-c68-cross-rate-probe-oracle",
+      "rejection_feedback": "CI checks failed for PR #491 at head d8f3cb273afe3bd1738577dcf6d94b590aca32fe: required checks failed on current head d8f3cb273afe3bd1738577dcf6d94b590aca32fe: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34707684304/job/103590601473). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-210",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"branch\": \"codex/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-218",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"branch\": \"codex/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
+      "rejection_feedback": "",
+      "state": {
+        "name": "ci-pending",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-222",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration\", \"branch\": \"codex/audio-runtime-c109-characterize-browser-retirement-integration\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-224",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization\", \"branch\": \"codex/audio-runtime-c23-long-session-tool-characterization\", \"baseRevision\": \"17abc4288718bc635af496672086eab13b67a10a\", \"reused\": true}",
+      "name": "audio-runtime-c23-long-session-tool-characterization",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-21",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"49d809eac72688d3c5e8bf0f3934bb1632341005\", \"reused\": true}",
+      "name": "audio-runtime-c47-live-probe-output-bound",
+      "rejection_feedback": "CI checks failed for PR #439 at head 584a393608debbae9f0ef3944f37eebefceba4aa: required checks failed on current head 584a393608debbae9f0ef3944f37eebefceba4aa: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34638493032/job/103392143324). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "work_id": "work-task-22",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission\", \"branch\": \"codex/audio-runtime-c54-room-document-admission\", \"baseRevision\": \"8f6d95039328ef3b41f4afcf261255913d93e79a\", \"reused\": true}",
+      "name": "audio-runtime-c54-room-document-admission",
+      "rejection_feedback": "CI checks failed for PR #445 at head c8c3a173230940cffe61fb24d3cbf3f22c3307f9: required checks failed on current head c8c3a173230940cffe61fb24d3cbf3f22c3307f9: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34657803912/job/103453870579). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-23",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh\", \"branch\": \"codex/audio-runtime-c55-room-participant-mesh\", \"baseRevision\": \"c74f740c1aa38fb3aea7450a004c68202c011b39\", \"reused\": true}",
+      "name": "audio-runtime-c55-room-participant-mesh",
+      "rejection_feedback": "CI checks failed for PR #446 at head 48ce53e80a516dae13d995b198b330d1103395d1: required checks failed on current head 48ce53e80a516dae13d995b198b330d1103395d1: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34634760206/job/103379843397). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-24",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration\", \"branch\": \"codex/audio-runtime-c56-retire-cli-recording-orchestration\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": true}",
+      "name": "audio-runtime-c56-retire-cli-recording-orchestration",
+      "rejection_feedback": "CI checks failed for PR #448 at head 4f02c1e17c98a6666330adb62385d0585fce06e0: required checks failed on current head 4f02c1e17c98a6666330adb62385d0585fce06e0: CI (hermetic)=FAILURE, CI (integration)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34663786271/job/103471496057); CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34663786271/job/103471496073). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-25",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c57-retire-cli-self-play-runtime\", \"branch\": \"codex/audio-runtime-c57-retire-cli-self-play-runtime\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": true}",
+      "name": "audio-runtime-c57-retire-cli-self-play-runtime",
+      "rejection_feedback": "CI checks failed for PR #449 at head af45bd3faee185d6ddc7b92d2432080d37a99c54: required checks failed on current head af45bd3faee185d6ddc7b92d2432080d37a99c54: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34651018208/job/103432936653). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-26",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c58-retire-cli-duration-runtime\", \"branch\": \"codex/audio-runtime-c58-retire-cli-duration-runtime\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": true}",
+      "name": "audio-runtime-c58-retire-cli-duration-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-27",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c59-retire-cli-audio-input-runtime\", \"branch\": \"codex/audio-runtime-c59-retire-cli-audio-input-runtime\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": true}",
+      "name": "audio-runtime-c59-retire-cli-audio-input-runtime",
+      "rejection_feedback": "CI checks failed for PR #450 at head 78fcd2e623c661f9000e54b17becae8159a365cb: required checks failed on current head 78fcd2e623c661f9000e54b17becae8159a365cb: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34658959087/job/103457270695). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-3",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair\", \"branch\": \"codex/audio-runtime-c60-c52-failed-case-attribution-repair\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": true}",
+      "name": "audio-runtime-c60-c52-failed-case-attribution-repair",
+      "rejection_feedback": "CI checks failed for PR #447 at head 3940ef20c8a3f001e568ac40c98a937f673c8ed7: required checks failed on current head 3940ef20c8a3f001e568ac40c98a937f673c8ed7: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34653353769/job/103440293707). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-6",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c61-retire-cli-browser-scenario-contract\", \"branch\": \"codex/audio-runtime-c61-retire-cli-browser-scenario-contract\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": false}",
+      "name": "audio-runtime-c61-retire-cli-browser-scenario-contract",
+      "rejection_feedback": "CI checks failed for PR #452 at head 8e8177c031a7b3b9322d712af19970e13fa7a1bc: required checks failed on current head 8e8177c031a7b3b9322d712af19970e13fa7a1bc: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34658619207/job/103456263118). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-34",
+      "work_type": "task"
+    },
+    {
       "last_output": "",
       "name": "audio-runtime-c62-validation-contract-anchor-repair",
       "rejection_feedback": "Independent tests pass, and PR #453 head dc3e4fbc has all nine checks green. Delivery is stale: origin/main is 3d3e7278, while the branch/evidence integrate only 59af6325; evidence also records revision 5323b76e and old SCRIPT CI run 34660505714. Additionally, test_prepare_validation.py:459 mutates DEVICE (criteria[1]), not strengthened SERVICE (criteria[3]), so required SERVICE negatives for C47/C54/C55 are unproven. Executor: integrate origin/main, add/run per-packet SERVICE-rubric mutation negatives through production preflight with no staging, refresh evidence to the post-integration head and checks, push, and submit to SCRIPT CI without polling. Preserve prior C47/C64 audio-loss rejections and the exit-75 no-merge-SHA checkpoint; do not merge this head.",
@@ -8,7 +206,8 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-165"
+      "work_id": "work-review-165",
+      "work_type": "review"
     },
     {
       "last_output": "",
@@ -18,7 +217,8 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-56"
+      "work_id": "work-review-56",
+      "work_type": "review"
     },
     {
       "last_output": "",
@@ -28,7 +228,30 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-69"
+      "work_id": "work-review-69",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c62-validation-contract-anchor-repair\", \"branch\": \"codex/audio-runtime-c62-validation-contract-anchor-repair\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c62-validation-contract-anchor-repair",
+      "rejection_feedback": "Independent tests pass, and PR #453 head dc3e4fbc has all nine checks green. Delivery is stale: origin/main is 3d3e7278, while the branch/evidence integrate only 59af6325; evidence also records revision 5323b76e and old SCRIPT CI run 34660505714. Additionally, test_prepare_validation.py:459 mutates DEVICE (criteria[1]), not strengthened SERVICE (criteria[3]), so required SERVICE negatives for C47/C54/C55 are unproven. Executor: integrate origin/main, add/run per-packet SERVICE-rubric mutation negatives through production preflight with no staging, refresh evidence to the post-integration head and checks, push, and submit to SCRIPT CI without polling. Preserve prior C47/C64 audio-loss rejections and the exit-75 no-merge-SHA checkpoint; do not merge this head.",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "work_id": "work-task-55",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c63-retire-cli-terminal-outcome\", \"branch\": \"codex/audio-runtime-c63-retire-cli-terminal-outcome\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c63-retire-cli-terminal-outcome",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-60",
+      "work_type": "task"
     },
     {
       "last_output": "",
@@ -38,7 +261,8 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-117"
+      "work_id": "work-review-117",
+      "work_type": "review"
     },
     {
       "last_output": "",
@@ -48,7 +272,8 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-141"
+      "work_id": "work-review-141",
+      "work_type": "review"
     },
     {
       "last_output": "",
@@ -58,7 +283,52 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-91"
+      "work_id": "work-review-91",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c64-provider-audio-terminal-drain-repair\", \"branch\": \"codex/audio-runtime-c64-provider-audio-terminal-drain-repair\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c64-provider-audio-terminal-drain-repair",
+      "rejection_feedback": "Independent runtime checks passed, including C64 normal/race paths and 20-trial Test45/Test46 regressions. However, checked-in negative-evidence.json is stale: candidate/fixture revision 9742efc and diff SHA 25aa18be, while reviewed HEAD is bfc25d2b and current diff SHA is f6c5bca5. verify.py only accepts an ancestor and any 64-hex diff, so it does not enforce current-head provenance. Regenerate both source-control and repaired evidence at bfc25d2b, record current head/diff plus complete executable-input/toolchain/flag/artifact hashes, or add explicit hash-bound evidence-only descendant proof; strengthen verification accordingly, rerun focused evidence/tests, commit and push, then resubmit through script CI. Do not merge this head.",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "work_id": "work-task-63",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c65-agentloop-delta-publication-barrier-repair\", \"branch\": \"codex/audio-runtime-c65-agentloop-delta-publication-barrier-repair\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c65-agentloop-delta-publication-barrier-repair",
+      "rejection_feedback": "CI checks failed for PR #455 at head 9fb29c504da68bb48b121309ce79221b0b9a9af3: required checks failed on current head 9fb29c504da68bb48b121309ce79221b0b9a9af3: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34663256624/job/103469965579). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "work_id": "work-task-67",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c66-retire-cli-dynamic-tool-publication\", \"branch\": \"codex/audio-runtime-c66-retire-cli-dynamic-tool-publication\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c66-retire-cli-dynamic-tool-publication",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-71",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c67-retire-cli-image-turn-runtime\", \"branch\": \"codex/audio-runtime-c67-retire-cli-image-turn-runtime\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c67-retire-cli-image-turn-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-74",
+      "work_type": "task"
     },
     {
       "last_output": "",
@@ -68,7 +338,74 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-86"
+      "work_id": "work-review-86",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution\", \"branch\": \"codex/audio-runtime-c68-c23-zero-audio-attribution\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c68-c23-zero-audio-attribution",
+      "rejection_feedback": "CI checks failed for PR #457 at head 0efdb49b53cb4bb0edf925f2d3ba1c35d3866760: required checks failed on current head 0efdb49b53cb4bb0edf925f2d3ba1c35d3866760: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34671293029/job/103493004872). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "work_id": "work-task-77",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c69-retire-cli-bare-session-admission\", \"branch\": \"codex/audio-runtime-c69-retire-cli-bare-session-admission\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c69-retire-cli-bare-session-admission",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-80",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c70-retire-cli-metrics-replay\", \"branch\": \"codex/audio-runtime-c70-retire-cli-metrics-replay\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c70-retire-cli-metrics-replay",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-82",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c71-retire-cli-text-seed-runtime\", \"branch\": \"codex/audio-runtime-c71-retire-cli-text-seed-runtime\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c71-retire-cli-text-seed-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-87",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c72-retire-cli-instruction-transport\", \"branch\": \"codex/audio-runtime-c72-retire-cli-instruction-transport\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c72-retire-cli-instruction-transport",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-89",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c73-retire-cli-conversation-log\", \"branch\": \"codex/audio-runtime-c73-retire-cli-conversation-log\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c73-retire-cli-conversation-log",
+      "rejection_feedback": "CI checks failed for PR #464 at head 9300d1aeed7acabf3e823e96f5354bd5ccde9e5b: required checks failed on current head 9300d1aeed7acabf3e823e96f5354bd5ccde9e5b: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34672099665/job/103495254542). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-95",
+      "work_type": "task"
     },
     {
       "last_output": "",
@@ -78,7 +415,63 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-132"
+      "work_id": "work-review-132",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c74-retire-cli-session-config\", \"branch\": \"codex/audio-runtime-c74-retire-cli-session-config\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c74-retire-cli-session-config",
+      "rejection_feedback": "CI checks failed for PR #467 at head 67f38e0e9aaaea7047ccedfe9bdc2636ea308fd8: required checks failed on current head 67f38e0e9aaaea7047ccedfe9bdc2636ea308fd8: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34683471540/job/103526211116). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-98",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c75-retire-cli-room-replay-bundle\", \"branch\": \"codex/audio-runtime-c75-retire-cli-room-replay-bundle\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c75-retire-cli-room-replay-bundle",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-100",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c76-retire-cli-playback-observability\", \"branch\": \"codex/audio-runtime-c76-retire-cli-playback-observability\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c76-retire-cli-playback-observability",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-105",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c77-retire-cli-session-replay-runtime\", \"branch\": \"codex/audio-runtime-c77-retire-cli-session-replay-runtime\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c77-retire-cli-session-replay-runtime",
+      "rejection_feedback": "CI checks failed for PR #469 at head 0054acadba5a3a297debbf3869fc71c0af84c722: required checks failed on current head 0054acadba5a3a297debbf3869fc71c0af84c722: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34676193333/job/103506376510). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-107",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c78-retire-cli-tool-execution-runtime\", \"branch\": \"codex/audio-runtime-c78-retire-cli-tool-execution-runtime\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c78-retire-cli-tool-execution-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-109",
+      "work_type": "task"
     },
     {
       "last_output": "",
@@ -88,7 +481,8 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-152"
+      "work_id": "work-review-152",
+      "work_type": "review"
     },
     {
       "last_output": "",
@@ -98,7 +492,8 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-167"
+      "work_id": "work-review-167",
+      "work_type": "review"
     },
     {
       "last_output": "",
@@ -108,7 +503,8 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-176"
+      "work_id": "work-review-176",
+      "work_type": "review"
     },
     {
       "last_output": "",
@@ -118,7 +514,8 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-185"
+      "work_id": "work-review-185",
+      "work_type": "review"
     },
     {
       "last_output": "",
@@ -128,9 +525,230 @@
         "name": "fin",
         "type": "FAILED"
       },
-      "work_id": "work-review-211"
+      "work_id": "work-review-211",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head ccfc3ee8 is green on all nine reported checks, and independent focused/race, GOWORK=off consumer, and credential-free replay checks pass. Code defects remain: response.go:66-75 accepts foreign response-b before any explicit boundary, replacing active response-a; response.go:191-194 leaves purpose/terminal state stale, so tool-ack finish followed by terminal-only normal end is not admitted; continuation.go:74-89 reports duplicate response ends as Candidate/Admitted=true. Add public regressions and fix ownership, per-generation reset, and duplicate handling while preserving stale-ID rejection. Checked-in evidence is source-pinned to 795ac1bc8147353cb36a806e9acd641512cc9110 rather than reviewed head ccfc3ee8; regenerate or explicitly bind evidence to the resulting head, rebuilding replay artifacts as needed. Commit/push PR 470, submit changed-head script CI without polling, and preserve the peer-owned 6400-sample high-rate audio-drain regression.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-225",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head ccfc3ee8 is green on all nine reported checks, and independent focused/race, GOWORK=off consumer, and credential-free replay checks pass. Code defects remain: response.go:66-75 accepts foreign response-b before any explicit boundary, replacing active response-a; response.go:191-194 leaves purpose/terminal state stale, so tool-ack finish followed by terminal-only normal end is not admitted; continuation.go:74-89 reports duplicate response ends as Candidate/Admitted=true. Add public regressions and fix ownership, per-generation reset, and duplicate handling while preserving stale-ID rejection. Checked-in evidence is source-pinned to 795ac1bc8147353cb36a806e9acd641512cc9110 rather than reviewed head ccfc3ee8; regenerate or explicitly bind evidence to the resulting head, rebuilding replay artifacts as needed. Commit/push PR 470, submit changed-head script CI without polling, and preserve the peer-owned 6400-sample high-rate audio-drain regression.",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-114",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c80-retire-cli-room-evidence-runtime\", \"branch\": \"codex/audio-runtime-c80-retire-cli-room-evidence-runtime\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c80-retire-cli-room-evidence-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-116",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c81-retire-cli-room-audio-bundle\", \"branch\": \"codex/audio-runtime-c81-retire-cli-room-audio-bundle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c81-retire-cli-room-audio-bundle",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-121",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c82-retire-cli-live-session-orchestration\", \"branch\": \"codex/audio-runtime-c82-retire-cli-live-session-orchestration\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c82-retire-cli-live-session-orchestration",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-123",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c83-retire-cli-browser-scenario-runner\", \"branch\": \"codex/audio-runtime-c83-retire-cli-browser-scenario-runner\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c83-retire-cli-browser-scenario-runner",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-125",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"branch\": \"codex/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c84-retire-cli-room-participant-lifecycle",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-136",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c85-retire-cli-room-replay-scheduler\", \"branch\": \"codex/audio-runtime-c85-retire-cli-room-replay-scheduler\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c85-retire-cli-room-replay-scheduler",
+      "rejection_feedback": "CI checks failed for PR #477 at head f22179dc729cbb24264194ebb6595769341dc657: required checks failed on current head f22179dc729cbb24264194ebb6595769341dc657: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34686754247/job/103534962321). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-140",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c86-retire-cli-rate-limit-retry-policy\", \"branch\": \"codex/audio-runtime-c86-retire-cli-rate-limit-retry-policy\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c86-retire-cli-rate-limit-retry-policy",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-144",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c87-retire-cli-session-turns\", \"branch\": \"codex/audio-runtime-c87-retire-cli-session-turns\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c87-retire-cli-session-turns",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-146",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c88-retire-cli-room-tool-capabilities\", \"branch\": \"codex/audio-runtime-c88-retire-cli-room-tool-capabilities\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c88-retire-cli-room-tool-capabilities",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-148",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c89-retire-cli-provider-liveness\", \"branch\": \"codex/audio-runtime-c89-retire-cli-provider-liveness\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c89-retire-cli-provider-liveness",
+      "rejection_feedback": "CI checks failed for PR #478 at head c5e29d61e21d297714846d1e508881082da5c784: required checks failed on current head c5e29d61e21d297714846d1e508881082da5c784: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34688382696/job/103539274300). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-151",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c91-retire-cli-capture-claim-runtime\", \"branch\": \"codex/audio-runtime-c91-retire-cli-capture-claim-runtime\", \"baseRevision\": \"59af6325614d80173447fe2018a0471e27b4e7b1\", \"reused\": false}",
+      "name": "audio-runtime-c91-retire-cli-capture-claim-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-160",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c92-retire-cli-audio-output-runtime\", \"branch\": \"codex/audio-runtime-c92-retire-cli-audio-output-runtime\", \"baseRevision\": \"59af6325614d80173447fe2018a0471e27b4e7b1\", \"reused\": false}",
+      "name": "audio-runtime-c92-retire-cli-audio-output-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-163",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c93-retire-cli-room-media-io\", \"branch\": \"codex/audio-runtime-c93-retire-cli-room-media-io\", \"baseRevision\": \"3d3e72786ac6fc1fd47c7e029589e5117674b035\", \"reused\": false}",
+      "name": "audio-runtime-c93-retire-cli-room-media-io",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-169",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c94-retire-cli-room-terminal-policy\", \"branch\": \"codex/audio-runtime-c94-retire-cli-room-terminal-policy\", \"baseRevision\": \"3d3e72786ac6fc1fd47c7e029589e5117674b035\", \"reused\": false}",
+      "name": "audio-runtime-c94-retire-cli-room-terminal-policy",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-171",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics\", \"branch\": \"codex/audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics\", \"baseRevision\": \"3d3e72786ac6fc1fd47c7e029589e5117674b035\", \"reused\": false}",
+      "name": "audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-175",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c96-retire-cli-rtc-device-binding\", \"branch\": \"codex/audio-runtime-c96-retire-cli-rtc-device-binding\", \"baseRevision\": \"3d3e72786ac6fc1fd47c7e029589e5117674b035\", \"reused\": false}",
+      "name": "audio-runtime-c96-retire-cli-rtc-device-binding",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-180",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c97-retire-cli-session-observation\", \"branch\": \"codex/audio-runtime-c97-retire-cli-session-observation\", \"baseRevision\": \"3d3e72786ac6fc1fd47c7e029589e5117674b035\", \"reused\": false}",
+      "name": "audio-runtime-c97-retire-cli-session-observation",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-182",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c99-retire-cli-room-participant-planning\", \"branch\": \"codex/audio-runtime-c99-retire-cli-room-participant-planning\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c99-retire-cli-room-participant-planning",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-192",
+      "work_type": "task"
     }
   ],
-  "observed_at": "2026-09-12T20:09:09Z",
+  "observed_at": "2026-09-12T20:15:55Z",
   "schema_version": "c107-previous-review-findings-v1"
 }

@@ -6,7 +6,7 @@
     "mutated_to": "0000000000000000000000000000000000000000"
   },
   "pristine_validation": {
-    "active_tasks": 6,
+    "active_tasks": 5,
     "owned_source_paths": 80,
     "preserved_checkpoints": 41,
     "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
