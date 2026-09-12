@@ -1,8 +1,6 @@
 package agentruntime
 
 import (
-	"sync"
-
 	devicecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devicebinding"
 	devicebindingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devicebinding/wire"
@@ -32,13 +30,11 @@ func (r RTCDeviceBindingRequest) selected() bool       { return r.serviceRequest
 
 // RTCDeviceBinding is a deprecated concrete compatibility adapter; use devicebinding.Binding.
 type RTCDeviceBinding struct {
-	Source    *devicert.RTCDeviceSource
-	Sink      *devicert.RTCDeviceSink
-	Capture   *devicert.BufferedCapture
-	feedback  *audio.PCM16FeedbackGate
-	inner     *devicebinding.Binding
-	closeOnce sync.Once
-	closeErr  error
+	Source   *devicert.RTCDeviceSource
+	Sink     *devicert.RTCDeviceSink
+	Capture  *devicert.BufferedCapture
+	feedback *audio.PCM16FeedbackGate
+	inner    *devicebinding.Binding
 }
 
 func adaptRTCDeviceBinding(inner *devicebinding.Binding) *RTCDeviceBinding {
@@ -58,10 +54,7 @@ func (b *RTCDeviceBinding) Close() error {
 	if b.inner != nil {
 		return b.inner.Close()
 	}
-	b.closeOnce.Do(func() {
-		b.closeErr = (&devicebinding.Binding{Source: b.Source, Sink: b.Sink, Feedback: b.feedback}).Close()
-	})
-	return b.closeErr
+	return (&devicebinding.Binding{Source: b.Source, Sink: b.Sink, Feedback: b.feedback}).Close()
 }
 
 // Deprecated: use devicebindingwire.NewService().Open.
