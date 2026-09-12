@@ -198,11 +198,12 @@ type sessionProgressObserver struct {
 	// continuation association, retry budget, and terminal dispositions. The
 	// fields below are compatibility projections consumed by the existing CLI
 	// scheduler and tests; they do not make lifecycle decisions.
-	lifecycle      sessiondiagnostics.Service
-	sink           SessionDiagnosticSink
-	recorder       metrics.Recorder
-	productionSink *metrics.InMemorySink
-	streamObserver SessionStreamObserver
+	lifecycle             sessiondiagnostics.Service
+	lifecycleProjectionMu sync.Mutex
+	sink                  SessionDiagnosticSink
+	recorder              metrics.Recorder
+	productionSink        *metrics.InMemorySink
+	streamObserver        SessionStreamObserver
 	// admittedTurnObserver runs after this observer has admitted one provider
 	// response as a completed turn. Room accounting uses this boundary instead
 	// of counting raw MESSAGE.END events.

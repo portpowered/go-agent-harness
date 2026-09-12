@@ -58,6 +58,8 @@ func (o *sessionProgressObserver) applyLifecycle(ctx context.Context, event sd.E
 	if o == nil {
 		return sd.Observation{}, sd.ErrClosed
 	}
+	o.lifecycleProjectionMu.Lock()
+	defer o.lifecycleProjectionMu.Unlock()
 	lifecycle := o.ensureLifecycle()
 	if lifecycle == nil {
 		return sd.Observation{}, sd.ErrClosed
@@ -143,12 +145,6 @@ func (o *sessionProgressObserver) projectToolContinuations(states []sd.Continuat
 			continuationFailureObserved: value.ContinuationFailure, continuationComplete: value.ContinuationComplete || prior != nil && (prior.continuationComplete || continuationSupersededByServerTurnLocked(prior)),
 		}
 	}
-}
-func (o *sessionProgressObserver) activeResponsePurpose() messages.ResponsePurpose {
-	if o == nil || o.lifecycle == nil {
-		return ""
-	}
-	return messages.ResponsePurpose(o.lifecycle.Snapshot().ActivePurpose)
 }
 func (o *sessionProgressObserver) lifecycleEvent(event sd.Event) sd.Observation {
 	observation, err := o.applyLifecycle(context.Background(), event)

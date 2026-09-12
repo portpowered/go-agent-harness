@@ -92,11 +92,16 @@ def private_state_boundary() -> dict:
 
 
 def scope_evidence() -> dict:
-    result = command(["git", "diff", "--name-only", "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f..HEAD"])
+    scope_revision = command(["git", "rev-parse", "--verify", "origin/main"])
+    require(scope_revision["returncode"] == 0, f"fresh origin/main is unavailable: {scope_revision}")
+    scope_base = scope_revision["stdout"].strip()
+    ancestry = command(["git", "merge-base", "--is-ancestor", scope_base, "HEAD"])
+    require(ancestry["returncode"] == 0, f"origin/main is not an ancestor of the candidate: {ancestry}")
+    result = command(["git", "diff", "--name-only", f"{scope_base}..HEAD"])
     paths = [line for line in result["stdout"].splitlines() if line]
     outside = [path for path in paths if not any(path == prefix or path.startswith(prefix) for prefix in ALLOWED_PREFIXES)]
     released = [path for path in paths if path in RELEASED_SHARED_PATHS]
-    return {"paths": paths, "outside_owned_paths": outside, "released_shared_paths": released}
+    return {"base": scope_base, "paths": paths, "outside_owned_paths": outside, "released_shared_paths": released}
 
 
 def focused() -> dict:
