@@ -32,7 +32,7 @@ func TestPrepareNormalizesAndClonesImageInput(t *testing.T) {
 		"input.png": messages.ImagePart{Bytes: data, MediaType: " IMAGE/PNG "},
 	}}
 	service := New(loader)
-	supported := []string{" IMAGE/PNG ", "image/png", "IMAGE/JPEG"}
+	supported := []string{" IMAGE/PNG ", imagePNG, "IMAGE/JPEG"}
 	parts, err := service.Prepare(context.Background(), []string{"input.png"}, imageinput.Capabilities{
 		Model:                   "vision",
 		SupportsImageInput:      true,
@@ -41,7 +41,7 @@ func TestPrepareNormalizesAndClonesImageInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
-	if len(parts) != 1 || parts[0].MediaType != "image/png" {
+	if len(parts) != 1 || parts[0].MediaType != imagePNG {
 		t.Fatalf("parts = %#v, want one normalized PNG", parts)
 	}
 	if string(parts[0].Bytes) != string(data) {
@@ -62,29 +62,29 @@ func TestPrepareAcceptsJPEGAndCanonicalizesMIME(t *testing.T) {
 	}}
 	parts, err := New(loader).Prepare(context.Background(), []string{"input.jpeg"}, imageinput.Capabilities{
 		SupportsImageInput:      true,
-		SupportedInputMIMETypes: []string{"image/png", " IMAGE/JPEG "},
+		SupportedInputMIMETypes: []string{imagePNG, " IMAGE/JPEG "},
 	})
 	if err != nil {
 		t.Fatalf("Prepare JPEG: %v", err)
 	}
-	if len(parts) != 1 || parts[0].MediaType != "image/jpeg" || len(parts[0].Bytes) == 0 {
+	if len(parts) != 1 || parts[0].MediaType != imageJPEG || len(parts[0].Bytes) == 0 {
 		t.Fatalf("JPEG parts = %#v, want one canonical non-empty JPEG", parts)
 	}
 }
 
 func TestPrepareRejectsMIMEThatDoesNotMatchDecodedImage(t *testing.T) {
 	loader := &contentLoader{parts: map[string]messages.ContentPart{
-		"mismatch": messages.ImagePart{Bytes: testJPEG(t), MediaType: "image/png"},
+		"mismatch": messages.ImagePart{Bytes: testJPEG(t), MediaType: imagePNG},
 	}}
 	_, err := New(loader).Prepare(context.Background(), []string{"mismatch"}, imageinput.Capabilities{
 		SupportsImageInput:      true,
-		SupportedInputMIMETypes: []string{"image/png", "image/jpeg"},
+		SupportedInputMIMETypes: []string{imagePNG, imageJPEG},
 	})
 	if !errors.Is(err, imageinput.ErrInvalidContent) {
 		t.Fatalf("mismatch error = %v, want invalid-content identity", err)
 	}
 	var typed *imageinput.InvalidContentError
-	if !errors.As(err, &typed) || typed.DetectedMIME != "image/png" {
+	if !errors.As(err, &typed) || typed.DetectedMIME != imagePNG {
 		t.Fatalf("mismatch error = %#v, want typed PNG declaration", err)
 	}
 }
@@ -94,8 +94,8 @@ func TestPrepareReturnsTypedCausalFailures(t *testing.T) {
 	loader := &contentLoader{
 		parts: map[string]messages.ContentPart{
 			"unsupported": messages.FilePart{Bytes: []byte("file"), MediaType: "text/plain"},
-			"invalid":     messages.ImagePart{Bytes: []byte("not an image"), MediaType: "image/png"},
-			"empty":       messages.ImagePart{MediaType: "image/png"},
+			"invalid":     messages.ImagePart{Bytes: []byte("not an image"), MediaType: imagePNG},
+			"empty":       messages.ImagePart{MediaType: imagePNG},
 		},
 		errs: map[string]error{
 			"missing":    os.ErrNotExist,
@@ -136,7 +136,7 @@ func TestPreparePreservesCancellationIdentity(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	loader := &contentLoader{parts: map[string]messages.ContentPart{
-		"input.png": messages.ImagePart{Bytes: testPNG(t), MediaType: "image/png"},
+		"input.png": messages.ImagePart{Bytes: testPNG(t), MediaType: imagePNG},
 	}}
 	_, err := New(loader).Prepare(ctx, []string{"input.png"}, imageinput.Capabilities{SupportsImageInput: true})
 	if !errors.Is(err, context.Canceled) {

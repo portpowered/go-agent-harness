@@ -11,7 +11,7 @@ import (
 
 func TestAttachPublishesOneOrderedImageTurn(t *testing.T) {
 	data := testPNG(t)
-	parts := []messages.ImagePart{{Bytes: data, MediaType: "image/png"}}
+	parts := []messages.ImagePart{{Bytes: data, MediaType: imagePNG}}
 	provider := newFakeSession()
 	provider.complete = true
 	attachment, err := New(nil).Attach(&fakeInferencer{session: provider}, parts, imageinput.TurnOptions{})
@@ -64,7 +64,7 @@ func TestAttachDefersImageOnlyResponse(t *testing.T) {
 	provider := newFakeSession()
 	provider.complete = true
 	provider.without = true
-	attachment, err := New(nil).Attach(&fakeInferencer{session: provider}, []messages.ImagePart{{Bytes: testPNG(t), MediaType: "image/png"}}, imageinput.TurnOptions{DeferResponse: true})
+	attachment, err := New(nil).Attach(&fakeInferencer{session: provider}, []messages.ImagePart{{Bytes: testPNG(t), MediaType: imagePNG}}, imageinput.TurnOptions{DeferResponse: true})
 	if err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestAttachFailureKeepsSendAndCancellationIdentity(t *testing.T) {
 	provider := newFakeSession()
 	provider.complete = true
 	provider.sendOK = false
-	attachment, err := New(nil).Attach(&fakeInferencer{session: provider}, []messages.ImagePart{{Bytes: testPNG(t), MediaType: "image/png"}}, imageinput.TurnOptions{})
+	attachment, err := New(nil).Attach(&fakeInferencer{session: provider}, []messages.ImagePart{{Bytes: testPNG(t), MediaType: imagePNG}}, imageinput.TurnOptions{})
 	if err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestAttachFailureKeepsSendAndCancellationIdentity(t *testing.T) {
 func TestAttachMalformedFirstDeltaFailsClosedAndSignalsOnce(t *testing.T) {
 	provider := newFakeSession()
 	provider.complete = true
-	attachment, err := New(nil).Attach(&fakeInferencer{session: provider}, []messages.ImagePart{{Bytes: testPNG(t), MediaType: "image/png"}}, imageinput.TurnOptions{})
+	attachment, err := New(nil).Attach(&fakeInferencer{session: provider}, []messages.ImagePart{{Bytes: testPNG(t), MediaType: imagePNG}}, imageinput.TurnOptions{})
 	if err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestAttachMalformedFirstDeltaFailsClosedAndSignalsOnce(t *testing.T) {
 
 func TestAttachShutdownSignalsPendingFirstTurn(t *testing.T) {
 	provider := newFakeSession()
-	attachment, err := New(nil).Attach(&fakeInferencer{session: provider}, []messages.ImagePart{{Bytes: testPNG(t), MediaType: "image/png"}}, imageinput.TurnOptions{})
+	attachment, err := New(nil).Attach(&fakeInferencer{session: provider}, []messages.ImagePart{{Bytes: testPNG(t), MediaType: imagePNG}}, imageinput.TurnOptions{})
 	if err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestSendPreservesProviderErrorIdentity(t *testing.T) {
 	providerCause := errors.New("provider queue stopped")
 	provider := &errorSession{fakeSession: newFakeSession(), err: providerCause}
 	provider.complete = true
-	err := New(nil).Send(context.Background(), provider, "describe", []messages.ImagePart{{Bytes: testPNG(t), MediaType: "image/png"}}, imageinput.TurnOptions{})
+	err := New(nil).Send(context.Background(), provider, "describe", []messages.ImagePart{{Bytes: testPNG(t), MediaType: imagePNG}}, imageinput.TurnOptions{})
 	if !errors.Is(err, imageinput.ErrSend) || !errors.Is(err, providerCause) {
 		t.Fatalf("send error = %v, want send and provider identities", err)
 	}
@@ -179,7 +179,7 @@ func TestSendPreservesProviderErrorIdentity(t *testing.T) {
 
 func TestSendRejectsStreamOnlyWithoutPartialMessage(t *testing.T) {
 	provider := &streamOnlySession{fakeSession: newFakeSession()}
-	err := New(nil).Send(context.Background(), provider, "describe", []messages.ImagePart{{Bytes: testPNG(t), MediaType: "image/png"}}, imageinput.TurnOptions{})
+	err := New(nil).Send(context.Background(), provider, "describe", []messages.ImagePart{{Bytes: testPNG(t), MediaType: imagePNG}}, imageinput.TurnOptions{})
 	if !errors.Is(err, imageinput.ErrSend) {
 		t.Fatalf("send error = %v, want send identity", err)
 	}

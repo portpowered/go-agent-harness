@@ -136,12 +136,6 @@ func (session *fakeSession) messagesCopy() []messages.Message {
 	return append([]messages.Message(nil), session.messages...)
 }
 
-func (session *fakeSession) eventsCopy() []messages.StreamMessage {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	return append([]messages.StreamMessage(nil), session.events...)
-}
-
 type fakeInferencer struct{ session *fakeSession }
 
 func (inferencer *fakeInferencer) ConnectSession(context.Context) (messages.Session, error) {

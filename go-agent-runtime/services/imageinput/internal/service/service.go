@@ -89,7 +89,7 @@ func classifyLoadError(path string, cause error) error {
 
 func normalizedSupportedMIMETypes(supported []string) []string {
 	if len(supported) == 0 {
-		return []string{"image/png", "image/jpeg"}
+		return []string{imagePNG, imageJPEG}
 	}
 	result := make([]string, 0, len(supported))
 	seen := make(map[string]struct{}, len(supported))

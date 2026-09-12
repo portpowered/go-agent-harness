@@ -12,6 +12,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/imageinput"
 )
 
+const (
+	imagePNG  = "image/png"
+	imageJPEG = "image/jpeg"
+)
+
 func imageContent(content messages.ContentPart) (data []byte, mediaType string, isImage bool) {
 	switch part := content.(type) {
 	case messages.ImagePart:
@@ -60,9 +65,9 @@ func validateDecodedImage(path, mediaType string, data []byte) error {
 
 func expectedImageFormat(mediaType string) string {
 	switch strings.ToLower(strings.TrimSpace(mediaType)) {
-	case "image/png":
+	case imagePNG:
 		return "png"
-	case "image/jpeg":
+	case imageJPEG:
 		return "jpeg"
 	default:
 		return ""
