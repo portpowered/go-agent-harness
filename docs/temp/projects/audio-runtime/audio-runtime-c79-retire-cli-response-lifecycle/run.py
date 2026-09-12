@@ -633,7 +633,7 @@ def run_shipped_scheduled_workflow(binary: Path, directory: Path, *, timeout: in
     check["observations"] = {
         "two_audio_turns_recorded": contract["audio_turns"] == 2,
         "first_scheduled_output": "Carrot grows underground." in combined,
-        "follow_on_scheduled_output": "Six letters in" in combined,
+        "follow_on_scheduled_output": any("Six letters in" in marker for marker in contract["output_markers"]),
         "replay_completion_diagnostic": "[session replay complete]" in combined,
         "shutdown_diagnostic": "[session terminal:" in combined,
     }
