@@ -16,9 +16,11 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
 var _ contract.Runtime = (*Dispatcher)(nil)
@@ -335,4 +337,52 @@ func applyToolVisibility(cfg *config.Config, computerUse, experimentalTools, noT
 		}
 	}
 	return &copyCfg
+}
+
+func traceCredentials(r *public.Request) []string {
+	values := []string{r.APIKey}
+	if config := r.LoadedConfig; config != nil {
+		if config.Model.OpenAI != nil {
+			values = append(values, config.Model.OpenAI.APIKey)
+		}
+		if config.Model.Claude != nil {
+			values = append(values, config.Model.Claude.APIKey)
+		}
+		if config.Model.OpenRouter != nil {
+			values = append(values, config.Model.OpenRouter.APIKey)
+		}
+		if config.Model.Local != nil {
+			values = append(values, config.Model.Local.APIKey)
+		}
+		if config.Model.Fal != nil {
+			values = append(values, config.Model.Fal.APIKey)
+		}
+		if config.Model.Grok != nil {
+			values = append(values, config.Model.Grok.APIKey)
+		}
+	}
+	return values
+}
+
+func setTraceBinding(o *SessionRunOptions, b sessiontrace.DeviceBinding) {
+	o.RTCDeviceBinding.PreGateSamplesObserver = devicert.RTCDeviceCaptureSamplesObserver(b.PreGateSamplesObserver)
+	o.RTCDeviceBinding.UploadedSamplesObserver = devicert.RTCDeviceCaptureSamplesObserver(b.UploadedSamplesObserver)
+	o.RTCDeviceBinding.PlaybackSamplesObserver = devicert.RTCDevicePlaybackSamplesObserver(b.PlaybackSamplesObserver)
+	o.RTCDeviceBinding.RenderedSamplesObserver = devicert.RTCDeviceRenderedSamplesObserver(b.RenderedSamplesObserver)
+	o.RTCDeviceBinding.RenderedSamplesUnavailable = b.RenderedSamplesUnavailable
+}
+
+func runtimeObserverCallback(observer SessionRuntimeObserver) func(SessionRuntimeObservation) {
+	if observer == nil {
+		return func(SessionRuntimeObservation) {}
+	}
+	return observer.ObserveSessionRuntime
+}
+
+func traceRetainCommitPayload(observer SessionRuntimeObserver) bool {
+	if observer == nil {
+		return false
+	}
+	preference, ok := observer.(interface{ RetainCommitPayload() bool })
+	return !ok || preference.RetainCommitPayload()
 }
