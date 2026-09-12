@@ -1,0 +1,58 @@
+{
+  "aggregate_elapsed_ms": 27436,
+  "candidate_revision": "c44dc237a4deee2f6fab594bec36de7bdd7d08fd",
+  "classification": {
+    "acoustic": "not_attempted",
+    "audio_tool_continuation": "proved",
+    "physical_device": "not_attempted",
+    "provider_edge": "local fixture-controlled WebSocket"
+  },
+  "credential_free": true,
+  "execution": {
+    "cleanup": {
+      "group_alive_after": false,
+      "group_alive_before": true,
+      "kill_sent": false,
+      "parent_reaped": true,
+      "reader_threads_joined": true,
+      "setup_error": "",
+      "term_sent": false
+    },
+    "command": [
+      "go",
+      "test",
+      "./test/integration",
+      "-run",
+      "^TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM$/provider_close_tool_continuation$",
+      "-count=1",
+      "-timeout=60s"
+    ],
+    "cwd": "agent-cli",
+    "disk_bounded": true,
+    "disk_bytes": 79,
+    "elapsed_ms": 27213,
+    "label": "audio-tool-continuation",
+    "output_bounded": true,
+    "returncode": 0,
+    "stderr": "artifacts/audio-tool-continuation/process/stderr.log",
+    "stderr_bytes": 0,
+    "stdout": "artifacts/audio-tool-continuation/process/stdout.log",
+    "stdout_bytes": 79,
+    "timed_out": false
+  },
+  "passed": true,
+  "peer": {
+    "branch": "codex/audio-runtime-c23-long-session-tool-characterization",
+    "capture_sha256": "49feab183f1222b5f2e866d130703cd468d49c95c4d5edd2d364d44e8e9ddd52",
+    "config_sha256": "24758d877b369728e37e7bbcc1b1c82ac402d126966fbe43397d6a16f66e7e29",
+    "fixture_sha256": "599117c498e17771619deb9c63f9be5d79329384f5dfa8375663dc1806cd6a4d",
+    "head": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+    "manifest_sha256": "1e0adfb75f2d3c3895026a70276c974d7172ed8b7e79a6e3f071a4de2a93b191",
+    "status": "clean",
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization"
+  },
+  "schema": "audio-runtime.c97.audio-tool-continuation.v1",
+  "source_pinned": true,
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "test": "^TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM$/provider_close_tool_continuation$"
+}

@@ -1,11 +1,10 @@
-package wire_test
+package wire
 
 import (
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionobservation"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionobservation/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -21,8 +20,8 @@ func TestNewServiceCreatesIndependentInstances(t *testing.T) {
 	firstObserver, secondObserver := &observer{}, &observer{}
 	firstClock := platformclock.NewDeterministic(time.Unix(1700000000, 0), time.Second)
 	secondClock := platformclock.NewDeterministic(time.Unix(1700000000, 0), time.Second)
-	first := wire.NewService(firstObserver, firstClock)
-	second := wire.NewService(secondObserver, secondClock)
+	first := NewService(firstObserver, firstClock)
+	second := NewService(secondObserver, secondClock)
 
 	first.ProviderAudioSent([]byte("first"))
 	second.ProviderAudioSent([]byte("second"))
