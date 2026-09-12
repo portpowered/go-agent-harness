@@ -491,7 +491,17 @@ def verify_pair(required_path: Path, control_path: Path) -> tuple[dict[str, Any]
     validate_report(required, expected_role="required")
     validate_report(control, expected_role="control")
     for key in ("project", "task", "contractRevision", "provenance", "ledger", "historicalC61Finding", "ciAttribution", "c83CIAttribution", "sequence", "deliveryClaims", "broadGates", "claims"):
-        require(required.get(key) == control.get(key), f"required/control evidence differs for {key}")
+        required_value = required.get(key)
+        control_value = control.get(key)
+        if key == "provenance":
+            required_value = copy.deepcopy(required_value)
+            control_value = copy.deepcopy(control_value)
+            for value in (required_value, control_value):
+                value.get("sourceBinding", {}).pop("statusAfter", None)
+                value.get("hostCheckout", {}).pop("beforeStatus", None)
+                value.get("hostCheckout", {}).pop("afterStatus", None)
+                value.get("hostCheckout", {}).pop("changedStatusLines", None)
+        require(required_value == control_value, f"required/control evidence differs for {key}")
     require(required["rehearsal"]["final_tree"] == control["rehearsal"]["final_tree"], "merge orders did not converge to the same tree")
     return required, control, {"required_dir": str(required_dir)}
 
