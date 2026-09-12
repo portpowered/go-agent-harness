@@ -280,6 +280,46 @@ func TestRunRejectsMissingUncontrolledAndInactiveTargets(t *testing.T) {
 	}
 }
 
+func TestRunRechecksTargetActivityBeforeEachContribution(t *testing.T) {
+	schedule := &schedule{
+		targetIDs: []string{"alpha", "beta", "gamma"},
+		frames: []scheduledFrame{{contributions: []contribution{
+			{sourceID: "alpha", pcm: []byte{1, 0}},
+			{sourceID: "gamma", pcm: []byte{2, 0}},
+		}}},
+	}
+
+	active := map[string]bool{"alpha": true, "beta": true, "gamma": true}
+	var betaReleases int
+	target := func(id string) roomreplayschedule.Target {
+		return roomreplayschedule.Target{
+			ID:     id,
+			Active: func() bool { return active[id] },
+			Release: func(_ context.Context, _ string, _ []byte) error {
+				if id == "beta" {
+					betaReleases++
+					if betaReleases == 1 {
+						active[id] = false
+					}
+				}
+				return nil
+			},
+			Advance:              func(context.Context) error { return nil },
+			AwaitAcknowledgement: func(context.Context) error { return nil },
+		}
+	}
+
+	err := schedule.Run(context.Background(), roomreplayschedule.RunRequest{
+		Targets: []roomreplayschedule.Target{target("alpha"), target("beta"), target("gamma")},
+	})
+	if !errors.Is(err, roomreplayschedule.ErrTargetInactive) {
+		t.Fatalf("mid-frame inactive target error = %v, want errors.Is(%v)", err, roomreplayschedule.ErrTargetInactive)
+	}
+	if betaReleases != 1 {
+		t.Fatalf("inactive target releases = %d, want one", betaReleases)
+	}
+}
+
 func TestRunPreservesDeadlineIdentity(t *testing.T) {
 	schedule := &schedule{targetIDs: []string{"target"}, frames: []scheduledFrame{{}}}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)

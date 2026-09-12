@@ -102,6 +102,12 @@ func releaseFrame(ctx context.Context, request roomreplayschedule.RunRequest, ta
 }
 
 func releaseContribution(ctx context.Context, request roomreplayschedule.RunRequest, target roomreplayschedule.Target, frameIndex int, targetID string, source contribution) error {
+	if !target.Active() {
+		if stopping(request) {
+			return nil
+		}
+		return fmt.Errorf("%w: %q before logical frame %d", roomreplayschedule.ErrTargetInactive, targetID, frameIndex)
+	}
 	pcm := append([]byte(nil), source.pcm...)
 	if err := target.Release(ctx, source.sourceID, pcm); err != nil {
 		if stopping(request) {
