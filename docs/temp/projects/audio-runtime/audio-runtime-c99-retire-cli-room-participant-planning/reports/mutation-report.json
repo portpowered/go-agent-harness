@@ -1,24 +1,24 @@
 {
-  "candidate_revision": "74964b08807338973c7d0011bb5ebc5ec38da2ae",
+  "candidate_revision": "8ad260337450ef3daff78208f5adcee088c8c521",
   "matrix": [
     {
       "mutations": [
         {
           "compiled": true,
           "label": "replay-credential-consultation",
-          "output": "--- FAIL: TestPlanReplayNeverConsultsLiveSeams (0.00s)\n    service_test.go:72: replay consulted credentials\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning/internal/service\t0.538s\nFAIL\n",
+          "output": "--- FAIL: TestPlanReplayNeverConsultsLiveSeams (0.00s)\n    service_test.go:72: replay consulted credentials\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning/internal/service\t0.218s\nFAIL\n",
           "rejected": true
         },
         {
           "compiled": true,
           "label": "admission-before-readiness",
-          "output": "--- FAIL: TestAwaitWaitsForReadinessAfterConnection (0.00s)\n    service_test.go:172: admission returned before readiness: <nil>\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning/internal/service\t0.179s\nFAIL\n",
+          "output": "--- FAIL: TestAwaitWaitsForReadinessAfterConnection (0.00s)\n    service_test.go:172: admission returned before readiness: <nil>\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning/internal/service\t0.177s\nFAIL\n",
           "rejected": true
         },
         {
           "compiled": true,
           "label": "whole-room-local-failure",
-          "output": "--- FAIL: TestRunRoom_StartupParticipantFailurePreservesViableParticipants (2.00s)\n    session_room_test.go:733: viable participants were not admitted: map[]\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t2.467s\nFAIL\n",
+          "output": "--- FAIL: TestRunRoom_StartupParticipantFailurePreservesViableParticipants (2.00s)\n    session_room_test.go:733: viable participants were not admitted: map[]\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t2.447s\nFAIL\n",
           "rejected": true
         }
       ],
