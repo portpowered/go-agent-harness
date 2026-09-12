@@ -25,7 +25,7 @@ Only the admitted legacy file/test, new `go-agent-runtime/services/terminaloutco
 its coverage manifests, and this evidence directory changed. Existing
 agentruntime caller files are byte-identical; the excluded caller diff command
 returned no output. The accepted production baseline is 576 physical lines;
-the candidate adapter is 125 lines, a direct 451-line reduction. The adapter
+the candidate adapter is 126 lines, a direct 450-line reduction. The adapter
 only forwards context, lifecycle evidence, publication, and the legacy
 duration sentinel. State, synchronization, precedence, normalization, bounded
 error traversal, rendering, and publication policy are private to the runtime
