@@ -14,12 +14,16 @@ import (
 // aliases keep the CLI's historical test and command vocabulary source
 // compatible while preventing the decoder from depending on CLI state.
 
+// Deprecated: use the corresponding errors from services/roomaudio. These
+// names remain only for source compatibility with the legacy CLI tests.
 const (
 	ErrRoomReplayDeltaReconstruction = roomaudio.ErrRoomReplayDeltaReconstruction
 	ErrRoomReplayAudioTimeline       = roomaudio.ErrRoomReplayAudioTimeline
 	ErrRoomReplayToleranceProfile    = roomaudio.ErrRoomReplayToleranceProfile
 )
 
+// Deprecated: use the corresponding contracts from services/roomaudio. These
+// aliases remain only for source compatibility with the legacy CLI tests.
 type (
 	RoomReplayToleranceProfile         = roomaudio.RoomReplayToleranceProfile
 	RoomReplayAudioDelta               = roomaudio.RoomReplayAudioDelta
@@ -30,6 +34,7 @@ type (
 	RoomReplayAudioBundle              = roomaudio.RoomReplayAudioBundle
 )
 
+// Deprecated: use the roomaudio service's admitted profile selection.
 func DefaultRoomReplayToleranceProfile() RoomReplayToleranceProfile {
 	return RoomReplayToleranceProfile{
 		Name:         "suite-default",
@@ -40,6 +45,7 @@ func DefaultRoomReplayToleranceProfile() RoomReplayToleranceProfile {
 
 // LoadRoomReplayAudioBundle retains the CLI path-admission boundary and then
 // delegates all audio parsing to the public roomaudio service.
+// Deprecated: use services/roomaudio with an admitted RoomReplayPlan.
 func LoadRoomReplayAudioBundle(bundle string) (RoomReplayAudioBundle, error) {
 	plan, err := LoadRoomReplayPlan(bundle)
 	if err != nil {
@@ -52,6 +58,7 @@ func LoadRoomReplayAudioBundle(bundle string) (RoomReplayAudioBundle, error) {
 	return loaded, nil
 }
 
+// Deprecated: use services/roomaudio.Validate with an admitted plan.
 func ValidateRoomReplayAudioBundle(bundle string) error {
 	_, err := LoadRoomReplayAudioBundle(bundle)
 	return err

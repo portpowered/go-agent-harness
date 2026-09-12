@@ -36,3 +36,18 @@ Repair checkpoint after the current-head static rejection:
 - `make coverage-registration` passes with 179 workspace packages across 6 modules.
 - `make coverage-changed COVERAGE_BASE=84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f` reached the existing WebMCP cross-process test, which failed only under coverage because its child emitted a receipt on stderr; the exact test passes standalone.
 - `make architecture-size-check` now reports only the 32 shared baseline/generated-file issues, and `make wire-check` reports only the unregistered generated Wire file. No shared inventory was edited.
+
+Evidence harness checkpoint:
+
+- `run.py --case room-audio-bundle` passed the separate `GOWORK=off` public
+  roomaudio/wire probe and candidate-built `yui room run --example`; the probe
+  observed exact PCM16 samples, stream/delta order, timeline offsets,
+  overlap/barge-in/loudness annotations, detached views, and clean shutdown.
+- `run.py --case corrupted-bundle` passed the typed first-divergence rejection;
+  `run.py --case non-room-audio-tool` passed the existing credential-free
+  audio/tool replay with `PROBE_TOOL_MARKER_9182` and retained terminal logs.
+- `verify.py` passed `positive-behavior`, all four `--expect-failure` mutation
+  modes, and `retirement-and-scope`. The public roomaudio effect is deliberately
+  separate from `yui room --replay`: that scheduler currently requires its own
+  provider-capture schema and credential seam, which is outside the C81 owned
+  paths.
