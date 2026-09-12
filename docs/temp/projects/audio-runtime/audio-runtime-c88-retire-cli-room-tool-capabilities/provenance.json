@@ -2,6 +2,7 @@
   "schema": "audio-runtime.c88.provenance/v1",
   "task": "audio-runtime-c88-retire-cli-room-tool-capabilities",
   "implementation_revision": "39af6805139ae45ac2a731a275805fa549e88bf1",
+  "evidence_revision": "c7fc6260eb70d18c4f75a7df09aea1a37e92e23e",
   "source_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
   "required_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "origin_main_revision_at_checkpoint": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
@@ -33,9 +34,9 @@
     "prior_full_verification_source_revision": "78649197beb29e1de42e703033ecfe3adeb899e0",
     "final_verifier": "passed",
     "credential_free_runner": "passed",
-    "accumulated_review_regressions": "passed at prior source revision 78649197: COUNT=3 normal/coverage/race; current-main bounded normal regressions passed",
+    "accumulated_review_regressions": "passed at evidence revision c7fc6260: COUNT=3 normal/coverage/race; all bounded session/audio/tool regressions and expected negative controls passed",
     "changed_coverage": "not rerun after current-main merge: the repository-wide six-module command was interrupted before a result; prior source revision 78649197 pass retained as historical",
-    "wire_and_architecture": "open: exact C88 generated-Wire registration remains leased behind C79 shared files"
+    "wire_and_architecture": "open: exact C88 generated-Wire registration remains leased behind C79 shared files; both gates rechecked at c7fc6260"
   },
   "scope": {
     "owned_only": true,

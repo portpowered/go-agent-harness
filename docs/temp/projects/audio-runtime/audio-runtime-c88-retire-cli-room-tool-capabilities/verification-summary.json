@@ -1,39 +1,39 @@
 {
   "schema": "audio-runtime.c88.verification-summary/v1",
   "task": "audio-runtime-c88-retire-cli-room-tool-capabilities",
-  "tested_revision": "39af6805139ae45ac2a731a275805fa549e88bf1",
+  "tested_revision": "c7fc6260eb70d18c4f75a7df09aea1a37e92e23e",
   "historical_full_verification_revision": "78649197beb29e1de42e703033ecfe3adeb899e0",
   "local_owned_verification_passed": true,
   "checks": {
     "admission_and_scope": "passed: verify.py --mode all",
-    "runtime_normal": "passed: go test ./services/roomcapabilities/... -count=1",
-    "runtime_race": "passed: go test -race ./services/roomcapabilities/... -count=1",
+    "runtime_normal": "passed at c7fc6260: go test ./go-agent-runtime/services/roomcapabilities/... -count=3 (24 tests)",
+    "runtime_race": "passed at c7fc6260: go test -race ./go-agent-runtime/services/roomcapabilities/... -count=3 (24 tests)",
     "current_main_integration": "passed: merged origin/main 3d3e72786ac6fc1fd47c7e029589e5117674b035 as 39af6805139ae45ac2a731a275805fa549e88bf1; rollback f927de537eff2d499873b559ae03b12bfa4ce388",
-    "cli_room_normal": "passed: 45 tests x3",
-    "cli_room_race": "passed: 45 tests x1",
-    "cli_transport": "passed: 3 tests x3",
-    "external_consumer_gowork_off": "passed",
-    "credential_free_room_composition": "passed: wire construction, dispatch, refresh, stale-tool rejection, static preservation, lifecycle",
-    "non_room_audio_tool_regression": "passed: TestSessionToolSingleCallRoundTripThroughCLI",
-    "mutation_oracles": "passed: unrequested-tool and refresh-drops-static intended failures",
+    "cli_room_normal": "passed at c7fc6260: room tool/browser capability pattern x3 (45 tests)",
+    "cli_room_race": "passed at c7fc6260: room tool/browser capability pattern with -race (45 tests)",
+    "cli_transport": "passed at c7fc6260: room browser capability pattern x3 (3 tests)",
+    "external_consumer_gowork_off": "passed at c7fc6260: GOWORK=off go test ./...",
+    "credential_free_room_composition": "passed at c7fc6260: wire construction, dispatch, refresh, stale-tool rejection, static preservation, lifecycle",
+    "non_room_audio_tool_regression": "passed at c7fc6260: TestSessionToolSingleCallRoundTripThroughCLI",
+    "mutation_oracles": "passed at c7fc6260: unrequested-tool and refresh-drops-static intended failures",
     "coverage_registration": "passed: 179 workspace packages across 6 modules",
     "coverage_changed": "not rerun after current-main merge: repository-wide six-module command interrupted before result; prior 78649197 pass retained as historical",
     "roomcapabilities_coverage": "passed at historical source 78649197: 86.8 percent aggregate; service floor 75 percent, wire floor 95 percent",
-    "vet": "passed: roomcapabilities and CLI agentruntime",
-    "staticcheck": "passed on prior pushed C88 head f927de53; not rerun after accepted C65 merge",
-    "lint": "passed on prior pushed C88 head f927de53; not rerun after accepted C65 merge",
+    "vet": "passed at c7fc6260: go vet roomcapabilities and CLI agentruntime",
+    "staticcheck": "passed at c7fc6260 with pinned staticcheck 2026.1 across 15 modules",
+    "lint": "passed at c7fc6260 with pinned golangci-lint 2.9.0 across 15 modules (0 issues)",
     "diff_check": "passed",
     "scope_after_main_integration": "passed: verifier compares the C88 delta to the merged origin/main baseline",
-    "accumulated_review_regressions": "historical source 78649197 passed COUNT=3 normal, coverage, and race modes; current-main bounded normal regressions and expected negative controls passed"
+    "accumulated_review_regressions": "passed at c7fc6260: COUNT=3 normal, coverage, and race modes; all bounded session/audio/tool regressions and expected negative controls passed"
   },
   "known_open_gates": {
     "architecture_size_check": {
       "status": "blocked_by_shared_lease",
-      "exact_failure": "generated-file-spoof services/roomcapabilities/wire/wire_gen.go: generated header is not registered with a reproducible generator"
+      "exact_failure": "rechecked at c7fc6260: generated-file-spoof services/roomcapabilities/wire/wire_gen.go: generated header is not registered with a reproducible generator"
     },
     "wire_check": {
       "status": "blocked_by_shared_lease",
-      "exact_failure": "Wire registry mismatch: unregistered=['go-agent-runtime/services/roomcapabilities/wire/wire_gen.go'], outside modules=[]"
+      "exact_failure": "rechecked at c7fc6260: Wire registry mismatch: unregistered=['go-agent-runtime/services/roomcapabilities/wire/wire_gen.go'], outside modules=[]"
     }
   },
   "ci_static_rejection": {
@@ -45,10 +45,10 @@
       "make architecture-size-check: generated-file-spoof services/roomcapabilities/wire/wire_gen.go"
     ],
     "ownership": "C79 exclusively leases scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json",
-    "resolution": "deferred until C79 reviewed guarded merge releases both paths"
+    "resolution": "deferred until C79 reviewed guarded merge releases both paths; C79 PR #470 remains open"
   },
   "shared_prerequisite_open": true,
   "shared_prerequisite_owner": "audio-runtime-c79-retire-cli-response-lifecycle/work-task-114",
   "script_ci": "not submitted; handoff requires accepted C79 main and lease release first",
-  "review": "not performed by implementer"
+  "review": "not performed by implementer; no C88-specific review finding in canonical board"
 }
