@@ -4,6 +4,53 @@ All commands below were run in the isolated C69 worktree with the repository's
 `rtk` command wrapper. No Realtime session, physical device, or acoustic claim
 is made by this slice. PR #458 is open; CI was not polled.
 
+## Current executor checkpoint
+
+The admitted task and branch were reverified before this checkpoint. The
+fetched `origin/main` remains
+`d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`; startup integration
+`8bdafc7f947a3a2c9856220abdc539437035bd21` and planning main are ancestors of
+the tested source. The tested source tree was clean at
+`a6c2bc0bd604dd3e154f9b928a913b614d1aa04b`; the follow-up ledger commit is
+documentation-only and does not change executable inputs.
+
+Fresh focused evidence on that source passes:
+
+```text
+go-agent-runtime/services/bareadmission normal: 16 tests across 3 packages
+go-agent-runtime/services/bareadmission race COUNT=3: 48 tests across 3 packages
+CLI bare-session compatibility normal/race: 27 tests each
+GOWORK=off external consumer normal; race COUNT=3: pass
+COUNT=1 scripts/test-session-ci-regressions.sh all: normal, coverage, race pass
+coverage gate over 7 generated profiles: 179 registered packages pass
+make fmt, make vet, pinned make lint, pinned make staticcheck: pass
+git diff --check: pass
+```
+
+The accumulated matrix retains its expected mismatch, PCM, transcript and
+provider-control negative diagnostics; no assertion, deadline, baseline or
+output cap was weakened. The standalone consumer constructs the public Wire
+service and proves explicit resolution, typed redacted failure, cancellation,
+immutability and deterministic repetition.
+
+The remaining gate output is unchanged and lease-scoped:
+
+```text
+make wire-check: one unregistered generated path,
+  go-agent-runtime/services/bareadmission/wire/wire_gen.go
+make architecture-check: that same one generated-file registration finding
+make architecture-size-check: five stale C69 session_bare.go entries plus
+  that same generated-file registration finding
+```
+
+The generated Wire registry remains owned by C57 and the architecture baseline
+remains owned by C61. No shared file was edited, no CI result was polled or
+claimed green, and no C69 review row or prior review finding exists in the
+canonical `~default` inbox. After those leases release, integrate the exact
+accepted main, make only the C69 registration and five downward/deletion
+changes, rerun the gates, and submit this same task to script CI without
+polling.
+
 ## Passing focused evidence
 
 ```text
