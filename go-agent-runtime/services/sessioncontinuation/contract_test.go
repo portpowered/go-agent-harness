@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioncontinuation"
 )
 
@@ -30,5 +31,45 @@ func TestUnresolvedToolResultsErrorOwnsSnapshots(t *testing.T) {
 	var nilErr *sessioncontinuation.UnresolvedToolResultsError
 	if nilErr.Error() != sessioncontinuation.ErrUnresolvedToolResults.Error() || nilErr.UnresolvedCallIDs() != nil || nilErr.SendStatusSnapshot() != nil {
 		t.Fatal("nil unresolved error did not return safe empty snapshots")
+	}
+}
+
+func TestContinuationSentinelsRetainLiveRuntimeIdentity(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		target error
+	}{
+		{
+			name:   "image",
+			err:    &runtimesession.LiveImageContinuationError{CallIDs: []string{"image-call"}},
+			target: sessioncontinuation.ErrImageContinuationIncomplete,
+		},
+		{
+			name:   "tool",
+			err:    &runtimesession.LiveToolContinuationError{CallIDs: []string{"tool-call"}},
+			target: sessioncontinuation.ErrToolContinuationIncomplete,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if !errors.Is(test.err, test.target) {
+				t.Fatalf("live runtime error %v does not match continuation sentinel %v", test.err, test.target)
+			}
+		})
+	}
+}
+
+func TestContinuationErrorsExposeLegacyRuntimeViews(t *testing.T) {
+	image := &sessioncontinuation.ImageContinuationError{CallIDs: []string{"image-call"}}
+	var legacyImage *runtimesession.LiveImageContinuationError
+	if !errors.As(image, &legacyImage) || legacyImage == nil || legacyImage.CallIDs[0] != "image-call" {
+		t.Fatalf("image continuation did not expose its legacy view: %v", image)
+	}
+
+	tool := &sessioncontinuation.ToolContinuationError{CallIDs: []string{"tool-call"}}
+	var legacyTool *runtimesession.LiveToolContinuationError
+	if !errors.As(tool, &legacyTool) || legacyTool == nil || legacyTool.CallIDs[0] != "tool-call" {
+		t.Fatalf("tool continuation did not expose its legacy view: %v", tool)
 	}
 }

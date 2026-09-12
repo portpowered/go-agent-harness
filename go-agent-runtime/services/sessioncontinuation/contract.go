@@ -11,19 +11,18 @@ import (
 	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
-type lifecycleSentinel string
-
-func (e lifecycleSentinel) Error() string { return string(e) }
-
-// These immutable sentinels give continuation consumers a focused package to
-// depend on while the typed errors retain compatibility with session errors.
+// These sentinels give continuation consumers a focused package to depend on
+// while retaining identity with the live runtime's existing error contract.
 const (
-	ErrUnresolvedToolResults                                = runtimesession.ErrLiveUnresolvedToolResults
-	ErrSessionUnresolvedToolResults                         = ErrUnresolvedToolResults
-	ErrImageContinuationIncomplete        lifecycleSentinel = "session ended before the image tool continuation"
-	ErrSessionImageContinuationIncomplete                   = ErrImageContinuationIncomplete
-	ErrToolContinuationIncomplete         lifecycleSentinel = "session ended before the tool continuation"
-	ErrSessionToolContinuationIncomplete                    = ErrToolContinuationIncomplete
+	ErrUnresolvedToolResults        = runtimesession.ErrLiveUnresolvedToolResults
+	ErrSessionUnresolvedToolResults = ErrUnresolvedToolResults
+)
+
+var (
+	ErrImageContinuationIncomplete        = runtimesession.ErrLiveImageContinuationIncomplete
+	ErrSessionImageContinuationIncomplete = ErrImageContinuationIncomplete
+	ErrToolContinuationIncomplete         = runtimesession.ErrLiveToolContinuationIncomplete
+	ErrSessionToolContinuationIncomplete  = ErrToolContinuationIncomplete
 )
 
 // ErrAudioResponseIncomplete is a compatibility alias for the finite audio
@@ -129,6 +128,10 @@ type ImageContinuationError struct {
 	ProviderDetails  map[string]string
 }
 
+// LegacyImageContinuationError is the compatibility view emitted by the
+// reusable live runtime before the sessioncontinuation extraction.
+type LegacyImageContinuationError = runtimesession.LiveImageContinuationError
+
 func (e *ImageContinuationError) Error() string {
 	if e == nil || len(e.CallIDs) == 0 {
 		return ErrImageContinuationIncomplete.Error()
@@ -142,6 +145,26 @@ func (e *ImageContinuationError) Is(target error) bool {
 	return target == ErrImageContinuationIncomplete || target == runtimesession.ErrLiveImageContinuationIncomplete
 }
 
+// As exposes the legacy live-runtime view for compatibility callers while
+// keeping ImageContinuationError as the canonical public type.
+func (e *ImageContinuationError) As(target any) bool {
+	legacy, ok := target.(**runtimesession.LiveImageContinuationError)
+	if !ok {
+		return false
+	}
+	if e == nil {
+		*legacy = nil
+		return true
+	}
+	*legacy = &runtimesession.LiveImageContinuationError{
+		CallIDs:          append([]string(nil), e.CallIDs...),
+		ProviderStatuses: copyErrorMetadata(e.ProviderStatuses),
+		ProviderCodes:    copyErrorMetadata(e.ProviderCodes),
+		ProviderDetails:  copyErrorMetadata(e.ProviderDetails),
+	}
+	return true
+}
+
 // SessionImageContinuationError is the descriptive compatibility name.
 type SessionImageContinuationError = ImageContinuationError
 
@@ -152,6 +175,10 @@ type ToolContinuationError struct {
 	ProviderCodes    map[string]string
 	ProviderDetails  map[string]string
 }
+
+// LegacyToolContinuationError is the compatibility view emitted by the
+// reusable live runtime before the sessioncontinuation extraction.
+type LegacyToolContinuationError = runtimesession.LiveToolContinuationError
 
 func (e *ToolContinuationError) Error() string {
 	if e == nil || len(e.CallIDs) == 0 {
@@ -166,6 +193,26 @@ func (e *ToolContinuationError) Is(target error) bool {
 	return target == ErrToolContinuationIncomplete || target == runtimesession.ErrLiveToolContinuationIncomplete
 }
 
+// As exposes the legacy live-runtime view for compatibility callers while
+// keeping ToolContinuationError as the canonical public type.
+func (e *ToolContinuationError) As(target any) bool {
+	legacy, ok := target.(**runtimesession.LiveToolContinuationError)
+	if !ok {
+		return false
+	}
+	if e == nil {
+		*legacy = nil
+		return true
+	}
+	*legacy = &runtimesession.LiveToolContinuationError{
+		CallIDs:          append([]string(nil), e.CallIDs...),
+		ProviderStatuses: copyErrorMetadata(e.ProviderStatuses),
+		ProviderCodes:    copyErrorMetadata(e.ProviderCodes),
+		ProviderDetails:  copyErrorMetadata(e.ProviderDetails),
+	}
+	return true
+}
+
 // SessionToolContinuationError is the descriptive compatibility name.
 type SessionToolContinuationError = ToolContinuationError
 
@@ -177,7 +224,7 @@ func formatContinuationFailureIDs(ids []string, statuses, codes, details map[str
 		if strings.TrimSpace(id) == "" {
 			continue
 		}
-		annotations := make([]string, 0, 3)
+		annotations := make([]string, 0)
 		if status := strings.TrimSpace(statuses[id]); status != "" {
 			annotations = append(annotations, "status="+status)
 		}
@@ -194,4 +241,15 @@ func formatContinuationFailureIDs(ids []string, statuses, codes, details map[str
 		formatted = append(formatted, fmt.Sprintf("%s (%s)", id, strings.Join(annotations, "; ")))
 	}
 	return strings.Join(formatted, ", ")
+}
+
+func copyErrorMetadata(values map[string]string) map[string]string {
+	if values == nil {
+		return nil
+	}
+	copy := make(map[string]string, len(values))
+	for key, value := range values {
+		copy[key] = value
+	}
+	return copy
 }

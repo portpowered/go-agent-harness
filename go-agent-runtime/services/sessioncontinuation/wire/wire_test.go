@@ -169,10 +169,10 @@ func TestJoinAudioOutputErrorPreservesDistinctOutputCause(t *testing.T) {
 	if !errors.Is(joined, primary) || !errors.Is(joined, output) || !strings.Contains(joined.Error(), `--audio-out "answer.wav"`) {
 		t.Fatalf("joined audio error = %v", joined)
 	}
-	if got := service.JoinAudioOutputError(joined, "answer.wav", output); got != joined {
+	if got := service.JoinAudioOutputError(joined, "answer.wav", output); !errors.Is(got, joined) {
 		t.Fatalf("duplicate output cause returned a new error: %v", got)
 	}
-	if got := service.JoinAudioOutputError(primary, "answer.wav", nil); got != primary {
+	if got := service.JoinAudioOutputError(primary, "answer.wav", nil); !errors.Is(got, primary) {
 		t.Fatalf("nil output changed primary: %v", got)
 	}
 }

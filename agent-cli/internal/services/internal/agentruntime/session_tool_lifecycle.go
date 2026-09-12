@@ -22,11 +22,11 @@ var ErrSessionToolContinuationIncomplete = sc.ErrToolContinuationIncomplete
 // Deprecated: use sessioncontinuation.UnresolvedToolResultsError.
 type SessionUnresolvedToolResultsError = sessionpublic.SessionUnresolvedToolResultsError
 
-// Deprecated: use sessioncontinuation.ImageContinuationError.
-type SessionImageContinuationError = sc.ImageContinuationError
+// Compatibility alias (deprecated; use sessioncontinuation.ImageContinuationError).
+type SessionImageContinuationError = sc.LegacyImageContinuationError
 
-// Deprecated: use sessioncontinuation.ToolContinuationError.
-type SessionToolContinuationError = sc.ToolContinuationError
+// Compatibility alias (deprecated; use sessioncontinuation.ToolContinuationError).
+type SessionToolContinuationError = sc.LegacyToolContinuationError
 
 func joinSessionAudioOutputError(a error, p string, o error) error {
 	return w.New().JoinAudioOutputError(a, p, o)
