@@ -9,13 +9,17 @@ coverage and 4/30 times with coverage. The detached predecessor at
 
 The repair keeps caller-owned finite input producers alive through the bounded
 provider straggler drain, then cancels and joins input before owned-resource
-cleanup. This preserves the extracted service's one terminal boundary and
-keeps process-owned blocking input cancellation within the same bounded
-cleanup path. A service regression test now asserts cancellation ordering.
+cleanup. The CLI adapter opts process-owned, no-send sources into input
+cancellation immediately after upstream quiescing, preserving their prior
+termination behavior without cancelling caller-owned finite producers. This
+preserves the extracted service's one terminal boundary and keeps both input
+classes within the same bounded cleanup path. Service regression tests assert
+both cancellation orderings.
 
 Current focused evidence:
 
 - service cancellation-order test: normal 20/20, race 5/5;
+- process-owned early-cancellation service ordering assertion: pass;
 - paced three-frame audio oracle: normal 50/50 and coverage-instrumented
   50/50;
 - focused audio cancellation control: normal 20/20, race 10/10;
@@ -25,8 +29,8 @@ Current focused evidence:
 - `make fmt`, `make vet`, pinned golangci-lint, pinned staticcheck, and
   coverage registration (179 packages across 6 modules) pass;
 - behavior matrix, both mutation controls, and retirement-and-scope pass;
-- retirement remains `session_live.go` 574 + `session_live_setup.go` 54,
-  total 628, with 505 lines retired.
+- retirement remains `session_live.go` 579 + `session_live_setup.go` 54,
+  total 633, with 500 lines retired.
 
 The exact rejected findings are repaired: the three unchecked test closes and
 the magic timeout are gone, and the now-unreferenced

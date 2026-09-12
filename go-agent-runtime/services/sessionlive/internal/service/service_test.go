@@ -301,6 +301,55 @@ func TestRunCancelsInputAfterStragglerWait(t *testing.T) {
 	}
 }
 
+func TestRunCanCancelProcessOwnedInputBeforeStragglerWait(t *testing.T) {
+	session := newScriptedSession()
+	inferencer := &scriptedInferencer{
+		session: session,
+		events: []messages.StreamMessage{
+			{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("owned", "test")},
+		},
+	}
+	loop, err := New().NewLoop(sessionlive.LoopOptions{Inferencer: inferencer})
+	if err != nil {
+		t.Fatalf("NewLoop: %v", err)
+	}
+	done := make(chan struct{})
+	var inputCtx context.Context
+	err = New().Run(context.Background(), sessionlive.RunOptions{
+		Loop: loop,
+		Handler: func(context.Context, *sessionlive.Loop, messages.StreamMessage, sessionlive.MessageContext) (sessionlive.MessageResult, error) {
+			return sessionlive.MessageResult{}, nil
+		},
+		StartInput: func(ctx context.Context, _ *sessionlive.Loop) (<-chan error, error) {
+			inputCtx = ctx
+			inputErr := make(chan error, 1)
+			go func() {
+				<-ctx.Done()
+				inputErr <- nil
+			}()
+			close(done)
+			return inputErr, nil
+		},
+		Done:                           done,
+		CancelInputBeforeStragglerWait: true,
+		WaitForStragglers: func(context.Context) error {
+			if inputCtx.Err() == nil {
+				return errors.New("process-owned input was not cancelled before straggler drain")
+			}
+			return nil
+		},
+		StopOwnedResources: func(context.Context) error {
+			if inputCtx.Err() == nil {
+				return errors.New("process-owned input was not cancelled before cleanup")
+			}
+			return session.Close()
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run error = %v, want ordered process-owned input cancellation", err)
+	}
+}
+
 func TestFlushPublishedDrainsAcceptedDelta(t *testing.T) {
 	session := newScriptedSession()
 	loop, err := New().NewLoop(sessionlive.LoopOptions{Inferencer: &scriptedInferencer{session: session}})

@@ -206,8 +206,9 @@ type RunOptions struct {
 	// QuiesceUpstream runs before input cancellation and the bounded provider
 	// straggler wait. Hosts may use it to stop a process-owned producer early;
 	// caller-owned finite producers remain live until the service joins them.
-	QuiesceUpstream   func() error
-	WaitForStragglers func(context.Context) error
+	QuiesceUpstream                func() error
+	CancelInputBeforeStragglerWait bool
+	WaitForStragglers              func(context.Context) error
 	// StopOwnedResources runs after input cancellation, optional playback
 	// drain, and loop cancellation. It closes provider/device bindings owned by
 	// the host and returns those cleanup errors for joining.

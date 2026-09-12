@@ -436,6 +436,10 @@ func forwardSessionActions[T any](ctx context.Context, input <-chan T, adapt fun
 	}
 }
 
+func sessionLiveInputNeedsEarlyCancellation(source *sessionAudioSource) bool {
+	return source != nil && source.send == nil && (source.reader == nil || source.reader.closeOnCancel)
+}
+
 func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInferencer messages.SessionInferencer, opts sessionLoopOptions) (runErr error) {
 	var finishOutput func(error) error
 	out, finishOutput = prepareSessionStreamOutput(out, &opts)
@@ -513,15 +517,16 @@ func runAgentLoopSessionStream(ctx context.Context, out io.Writer, sessionInfere
 		SessionUpdatedError: func(timeout time.Duration) error {
 			return sessionScheduledAudioConfigTimeoutErrorWithTimeout(opts, timeout)
 		},
-		Done:              opts.Done,
-		DoneErr:           opts.DoneErr,
-		AdmissionClosed:   opts.AdmissionClosed,
-		BoundCancellation: opts.BoundCancellation,
-		Actions:           audioActions,
-		ToolLifecycle:     toolActions,
-		Errors:            mergeSessionErrorChannels(ctx, publisherErrors, rtcPumpErrors),
-		OnAdmissionClosed: func() {},
-		QuiesceUpstream:   opts.quiesceUpstream,
+		Done:                           opts.Done,
+		DoneErr:                        opts.DoneErr,
+		AdmissionClosed:                opts.AdmissionClosed,
+		BoundCancellation:              opts.BoundCancellation,
+		Actions:                        audioActions,
+		ToolLifecycle:                  toolActions,
+		Errors:                         mergeSessionErrorChannels(ctx, publisherErrors, rtcPumpErrors),
+		OnAdmissionClosed:              func() {},
+		QuiesceUpstream:                opts.quiesceUpstream,
+		CancelInputBeforeStragglerWait: sessionLiveInputNeedsEarlyCancellation(opts.AudioIn),
 		WaitForStragglers: func(waitCtx context.Context) error {
 			return waitForSessionLoopStragglersWithContext(waitCtx, out, loop, defaultSessionStragglerDrainPolicy, opts.observer, opts.clockSource)
 		},

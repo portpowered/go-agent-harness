@@ -10,21 +10,11 @@ import (
 
 func (r *runState) terminate(primary error, drainPlayback bool) error {
 	r.terminateOnce.Do(func() {
-		var quiesceErr, waitErr, stopErr, flushErr error
+		var quiesceErr, stopErr, flushErr error
 		if r.opts.QuiesceUpstream != nil {
 			quiesceErr = r.opts.QuiesceUpstream()
 		}
-		if r.opts.WaitForStragglers == nil {
-			waitErr = errors.New("session live termination requires a straggler waiter")
-		} else {
-			waitErr = r.opts.WaitForStragglers(r.ctx)
-		}
-		// Keep caller-owned finite producers alive through the bounded provider
-		// drain. An admitted audio frame or end-of-turn signal may still be
-		// completing while the provider's terminal signal is being observed.
-		// Process-owned producers that cannot safely remain active can be
-		// quiesced by the host callback above.
-		r.cancelInput()
+		waitErr := r.waitForStragglers()
 		var playbackErr error
 		if drainPlayback && r.opts.Lifecycle.DrainPlayback != nil {
 			playbackErr = r.opts.Lifecycle.DrainPlayback(r.ctx)
@@ -46,6 +36,25 @@ func (r *runState) terminate(primary error, drainPlayback bool) error {
 		}
 	})
 	return r.terminalErr
+}
+
+func (r *runState) waitForStragglers() error {
+	if r.opts.CancelInputBeforeStragglerWait {
+		r.cancelInput()
+	}
+	var waitErr error
+	if r.opts.WaitForStragglers == nil {
+		waitErr = errors.New("session live termination requires a straggler waiter")
+	} else {
+		waitErr = r.opts.WaitForStragglers(r.ctx)
+	}
+	// Keep caller-owned finite producers alive through the bounded provider
+	// drain. An admitted audio frame or end-of-turn signal may still be
+	// completing while the provider's terminal signal is being observed.
+	if !r.opts.CancelInputBeforeStragglerWait {
+		r.cancelInput()
+	}
+	return waitErr
 }
 
 func flushPublished(ctx context.Context, opts sessionlive.RunOptions, loop *sessionlive.Loop) error {
