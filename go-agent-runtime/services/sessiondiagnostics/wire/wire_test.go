@@ -9,6 +9,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 )
 
+const testResponseA = "response-a"
+
 func TestResponseIdentityRejectsWrongAndStaleTerminals(t *testing.T) {
 	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()
@@ -32,7 +34,7 @@ func TestResponseIdentityRejectsWrongAndStaleTerminals(t *testing.T) {
 func TestResponseFinishRejectsWrongIDWithoutClearingActiveResponse(t *testing.T) {
 	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()
-	if _, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-a"}); err != nil {
+	if _, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: testResponseA}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -40,11 +42,11 @@ func TestResponseFinishRejectsWrongIDWithoutClearingActiveResponse(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wrong.Accepted || service.Snapshot().ActiveResponseID != "response-a" {
+	if wrong.Accepted || service.Snapshot().ActiveResponseID != testResponseA {
 		t.Fatalf("wrong finish changed active response: observation=%+v snapshot=%+v", wrong, service.Snapshot())
 	}
 
-	finish, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseFinish, ResponseID: "response-a"})
+	finish, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseFinish, ResponseID: testResponseA})
 	if err != nil || !finish.Accepted {
 		t.Fatalf("matching finish = %+v, err=%v", finish, err)
 	}
@@ -65,14 +67,14 @@ func TestResponseOpenRejectsForeignIDUntilExplicitBoundary(t *testing.T) {
 		return observation
 	}
 
-	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-a"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: testResponseA})
 	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseContent})
 	foreign := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-b"})
-	if foreign.Accepted || foreign.NewResponse || service.Snapshot().ActiveResponseID != "response-a" {
+	if foreign.Accepted || foreign.NewResponse || service.Snapshot().ActiveResponseID != testResponseA {
 		t.Fatalf("foreign open stole active response: observation=%+v snapshot=%+v", foreign, service.Snapshot())
 	}
 
-	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseFinish, ResponseID: "response-a"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseFinish, ResponseID: testResponseA})
 	fresh := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-b"})
 	if !fresh.Accepted || !fresh.NewResponse || service.Snapshot().ActiveResponseID != "response-b" {
 		t.Fatalf("fresh open after finish = %+v, snapshot=%+v", fresh, service.Snapshot())
@@ -82,7 +84,7 @@ func TestResponseOpenRejectsForeignIDUntilExplicitBoundary(t *testing.T) {
 func TestResponseOpenRejectsForeignIDBeforeAnyBoundary(t *testing.T) {
 	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()
-	if _, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-a"}); err != nil {
+	if _, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: testResponseA}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -90,7 +92,7 @@ func TestResponseOpenRejectsForeignIDBeforeAnyBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if foreign.Accepted || foreign.NewResponse || service.Snapshot().ActiveResponseID != "response-a" {
+	if foreign.Accepted || foreign.NewResponse || service.Snapshot().ActiveResponseID != testResponseA {
 		t.Fatalf("foreign open before a boundary stole active response: observation=%+v snapshot=%+v", foreign, service.Snapshot())
 	}
 }
@@ -134,10 +136,10 @@ func TestResponseEndRejectsDuplicateBeforeFinish(t *testing.T) {
 		return observation
 	}
 
-	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-a"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: testResponseA})
 	first := apply(sessiondiagnostics.Event{
 		Kind:       sessiondiagnostics.EventResponseEnd,
-		ResponseID: "response-a",
+		ResponseID: testResponseA,
 		Output:     true,
 		Terminal:   &sessiondiagnostics.Terminal{Status: "completed", Reason: "provider_authored_completion"},
 	})
@@ -147,7 +149,7 @@ func TestResponseEndRejectsDuplicateBeforeFinish(t *testing.T) {
 
 	duplicate := apply(sessiondiagnostics.Event{
 		Kind:       sessiondiagnostics.EventResponseEnd,
-		ResponseID: "response-a",
+		ResponseID: testResponseA,
 		Output:     true,
 		Terminal:   &sessiondiagnostics.Terminal{Status: "completed", Reason: "provider_authored_completion"},
 	})
