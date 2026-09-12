@@ -14,6 +14,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[4]
 EVIDENCE = HERE / "evidence"
 SERVICE_FILE = ROOT / "go-agent-runtime/services/sessiondiagnostics/internal/service/scheduled.go"
+PUBLIC_SERVICE_FILE = ROOT / "go-agent-runtime/services/sessiondiagnostics/service.go"
+CONTINUATION_FILE = ROOT / "go-agent-runtime/services/sessiondiagnostics/internal/service/continuation.go"
+EVENTS_FILE = ROOT / "go-agent-runtime/services/sessiondiagnostics/internal/service/events.go"
 LEGACY_FILES = [
     ROOT / "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
     ROOT / "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
@@ -67,6 +70,26 @@ def line_evidence() -> dict:
     return {"files": counts, "total": total, "baseline": 1387, "retired": 1387 - total, "maximum": 787, "minimum_retired": 600}
 
 
+def private_state_boundary() -> dict:
+    files = {
+        str(path.relative_to(ROOT)): path.read_text(encoding="utf-8")
+        for path in (PUBLIC_SERVICE_FILE, CONTINUATION_FILE, EVENTS_FILE)
+    }
+    forbidden = ("EventSyncLegacy", "LegacyState", "syncLegacy", "restoreLegacy")
+    violations = {
+        path: [token for token in forbidden if token in text]
+        for path, text in files.items()
+    }
+    violations = {path: tokens for path, tokens in violations.items() if tokens}
+    require(not violations, f"public lifecycle state escape hatch remains: {violations}")
+    return {
+        "forbidden_tokens": list(forbidden),
+        "scanned_files": sorted(files),
+        "violations": violations,
+        "status": "private reducer state; adapter uses lifecycle events",
+    }
+
+
 def scope_evidence() -> dict:
     result = command(["git", "diff", "--name-only", "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f..HEAD"])
     paths = [line for line in result["stdout"].splitlines() if line]
@@ -89,6 +112,7 @@ def retirement() -> dict:
     lines = line_evidence()
     scope = scope_evidence()
     response = (LEGACY_FILES[1]).read_text(encoding="utf-8")
+    boundary = private_state_boundary()
     service_root = ROOT / "go-agent-runtime/services/sessiondiagnostics"
     service_text = "\n".join(path.read_text(encoding="utf-8") for path in service_root.rglob("*.go"))
     diff_check = command(["git", "diff", "--check"])
@@ -97,7 +121,13 @@ def retirement() -> dict:
     require("Deprecated:" in response, "legacy adapter lacks an explicit Deprecated marker")
     require(not any(token in service_text for token in ("func init(", "os.Getenv", "os.LookupEnv", "time.Sleep")), "service boundary contains forbidden initialization or sleeping")
     require(diff_check["returncode"] == 0, f"diff check failed: {diff_check}")
-    return {"lines": lines, "scope": scope, "diff_check": diff_check, "service_forbidden_token_scan": "pass"}
+    return {
+        "lines": lines,
+        "scope": scope,
+        "diff_check": diff_check,
+        "private_state_boundary": boundary,
+        "service_forbidden_token_scan": "pass",
+    }
 
 
 def mutation(mode: str) -> dict:

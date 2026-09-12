@@ -6,8 +6,6 @@ import (
 	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	sdw "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
 	"maps"
-	"slices"
-	"sort"
 	"strings"
 	"time"
 )
@@ -56,80 +54,6 @@ func lifecycleTerminal(value *messages.MessageEndValue) *sd.Terminal {
 	}
 }
 
-func (o *sessionProgressObserver) legacyLifecycleState() *sd.LegacyState {
-	if o == nil {
-		return nil
-	}
-	state := &sd.LegacyState{
-		ActiveResponse:        o.activeResponse,
-		ActiveResponseID:      o.activeResponseID,
-		ActivePurpose:         sd.ResponsePurpose(o.activeResponsePurpose()),
-		CompletedResponseIDs:  sortedStrings(o.completedResponseIDs),
-		RetiredResponseIDs:    sortedStrings(o.retiredResponseIDs),
-		NextScheduledResponse: o.nextScheduledResponse,
-		ActiveScheduledIndex:  o.activeScheduledResponseIndex,
-		ActiveScheduledID:     o.activeScheduledResponseID,
-		ActiveScheduledSet:    o.activeScheduledResponseSet,
-		LogicalScheduledIndex: o.logicalScheduledResponseIndex,
-		LogicalScheduledID:    o.logicalScheduledResponseID,
-		LogicalScheduledSet:   o.logicalScheduledResponseSet,
-		RetryCandidateIndex:   o.retryCandidateIndex,
-		RetryCandidateSet:     o.retryCandidateSet,
-		RetryCandidateID:      o.retryCandidateID,
-		ScheduledResponseByID: maps.Clone(o.scheduledResponseByID),
-	}
-	state.Scheduled = make([]sd.ScheduledState, len(o.scheduledResponses))
-	for index, value := range o.scheduledResponses {
-		state.Scheduled[index] = sd.ScheduledState{
-			Bound:                 value.bound,
-			Disposition:           value.disposition,
-			RetryUsed:             value.retryUsed,
-			RetryPending:          value.retryPending,
-			TerminalFailure:       value.terminalFailure,
-			TerminalStatus:        value.terminalStatus,
-			TerminalErrorCode:     value.terminalErrorCode,
-			TerminalStatusDetails: value.terminalStatusDetails,
-		}
-	}
-	for id, index := range o.scheduledResponseByID {
-		if index >= 0 && index < len(state.Scheduled) && strings.TrimSpace(id) != "" {
-			state.Scheduled[index].ResponseIDs = append(state.Scheduled[index].ResponseIDs, id)
-		}
-	}
-	for index := range state.Scheduled {
-		sort.Strings(state.Scheduled[index].ResponseIDs)
-	}
-	o.toolStateMu.Lock()
-	state.ContinuationStates = make([]sd.ContinuationState, 0, len(o.toolContinuations))
-	for callID, value := range o.toolContinuations {
-		if value == nil || strings.TrimSpace(callID) == "" {
-			continue
-		}
-		state.ContinuationStates = append(state.ContinuationStates, sd.ContinuationState{
-			CallID:                     callID,
-			ToolName:                   value.toolName,
-			ResponseID:                 value.responseID,
-			ProviderCallObserved:       value.providerCallObserved,
-			ResultAccepted:             value.resultAccepted,
-			ToolResponseComplete:       value.toolResponseComplete,
-			ContinuationRequested:      value.continuationRequested,
-			ContinuationResponseID:     value.continuationResponseID,
-			ContinuationScheduledIndex: value.continuationScheduledIndex,
-			ContinuationScheduledSet:   value.continuationScheduledSet,
-			ContinuationTerminalSeen:   value.continuationTerminalSeen,
-			ContinuationStatus:         value.continuationStatus,
-			ContinuationErrorCode:      value.continuationErrorCode,
-			ContinuationStatusDetails:  value.continuationStatusDetails,
-			ContinuationReason:         string(value.continuationTerminalReason),
-			ContinuationOutput:         value.continuationOutputObserved,
-			ContinuationFailure:        value.continuationFailureObserved,
-			ContinuationComplete:       value.continuationComplete,
-		})
-	}
-	o.toolStateMu.Unlock()
-	sort.Slice(state.ContinuationStates, func(i, j int) bool { return state.ContinuationStates[i].CallID < state.ContinuationStates[j].CallID })
-	return state
-}
 func (o *sessionProgressObserver) applyLifecycle(ctx context.Context, event sd.Event) (sd.Observation, error) {
 	if o == nil {
 		return sd.Observation{}, sd.ErrClosed
@@ -138,12 +62,27 @@ func (o *sessionProgressObserver) applyLifecycle(ctx context.Context, event sd.E
 	if lifecycle == nil {
 		return sd.Observation{}, sd.ErrClosed
 	}
-	if _, err := lifecycle.Apply(ctx, sd.Event{Kind: sd.EventSyncLegacy, Legacy: o.legacyLifecycleState()}); err != nil {
+	if err := o.ensureLifecycleSchedule(ctx, lifecycle); err != nil {
 		return sd.Observation{}, err
 	}
 	observation, err := lifecycle.Apply(ctx, event)
 	o.syncLifecycleProjection()
 	return observation, err
+}
+
+// ensureLifecycleSchedule is the private CLI adapter bridge for legacy test
+// setup. It only declares the number of scheduled slots; all response IDs,
+// ownership, continuation, retry, and disposition state remains private to
+// the runtime reducer and can only be changed through lifecycle events.
+func (o *sessionProgressObserver) ensureLifecycleSchedule(ctx context.Context, lifecycle sd.Service) error {
+	if o == nil || lifecycle == nil {
+		return sd.ErrClosed
+	}
+	if len(lifecycle.Snapshot().Scheduled) >= len(o.scheduledResponses) {
+		return nil
+	}
+	_, err := lifecycle.Apply(ctx, sd.Event{Kind: sd.EventEnsureScheduled, Count: len(o.scheduledResponses)})
+	return err
 }
 func (o *sessionProgressObserver) syncLifecycleProjection() {
 	if o == nil || o.lifecycle == nil {
@@ -205,7 +144,6 @@ func (o *sessionProgressObserver) projectToolContinuations(states []sd.Continuat
 		}
 	}
 }
-func sortedStrings(values map[string]struct{}) []string { return slices.Sorted(maps.Keys(values)) }
 func (o *sessionProgressObserver) activeResponsePurpose() messages.ResponsePurpose {
 	if o == nil || o.lifecycle == nil {
 		return ""

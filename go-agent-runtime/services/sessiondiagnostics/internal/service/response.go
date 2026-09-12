@@ -128,6 +128,15 @@ func (r *reducer) ownsResponseEndLocked(rawID string) bool {
 
 func (r *reducer) finishResponseLocked(rawID string) sessiondiagnostics.Observation {
 	id := strings.TrimSpace(rawID)
+	if !r.activeResponse || !r.ownsResponseEndLocked(id) {
+		return sessiondiagnostics.Observation{ResponseID: id}
+	}
+	if r.activeResponseID == "" && id != "" {
+		adopted := r.adoptResponseLocked(id)
+		if !adopted.Accepted {
+			return adopted
+		}
+	}
 	if id == "" {
 		id = r.activeResponseID
 	}

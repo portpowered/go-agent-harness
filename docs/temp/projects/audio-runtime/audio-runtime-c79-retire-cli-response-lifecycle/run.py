@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -77,6 +78,9 @@ CASES = {
     ],
 }
 
+HEALTHY_REPLAY_FIXTURE = ROOT / "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
+ERROR_REPLAY_FIXTURE = ROOT / "agent-cli/test/integration/testdata/openai_realtime_error.session.json"
+
 
 def clean_environment() -> dict[str, str]:
     env = os.environ.copy()
@@ -85,6 +89,47 @@ def clean_environment() -> dict[str, str]:
             env.pop(name, None)
     env["GOCACHE"] = "/tmp/go-build-audio-runtime-c79-replay"
     return env
+
+
+def source_provenance() -> dict:
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True
+    ).stdout.split(b"\0")
+    digest = hashlib.sha256()
+    input_count = 0
+    for raw_path in tracked:
+        if not raw_path:
+            continue
+        path = ROOT / os.fsdecode(raw_path)
+        digest.update(raw_path)
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
+        input_count += 1
+    go_version = subprocess.run(
+        ["go", "version"], cwd=ROOT, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    return {
+        "revision": revision,
+        "status": status,
+        "tracked_input_count": input_count,
+        "tracked_input_sha256": digest.hexdigest(),
+        "go_version": go_version,
+    }
+
+
+def file_provenance(path: Path) -> dict:
+    data = path.read_bytes()
+    return {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
 
 
 def run_child(argv: list[str], *, timeout: int, deadline: float, env: dict[str, str]) -> dict:
@@ -110,6 +155,24 @@ def run_child(argv: list[str], *, timeout: int, deadline: float, env: dict[str, 
         }
 
 
+def run_shipped_workflow(binary: Path, config_dir: Path, fixture: Path, *, timeout: int, deadline: float, env: dict[str, str]) -> dict:
+    check = run_child(
+        [str(binary), "--config-dir", str(config_dir), "session", "--replay", str(fixture)],
+        timeout=timeout,
+        deadline=deadline,
+        env=env,
+    )
+    combined = check["stdout"] + check["stderr"]
+    check["fixture"] = str(fixture.relative_to(ROOT))
+    check["observations"] = {
+        "first_assistant_output": "Assistant: Hello there" in combined,
+        "second_assistant_output": "Assistant: Second turn reply" in combined,
+        "session_closed": "[session closed: healthy_complete]" in combined,
+        "terminal_observed": "[session terminal:" in combined,
+    }
+    return check
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", required=True, choices=sorted(CASES))
@@ -120,32 +183,66 @@ def main() -> int:
     started = time.monotonic()
     deadline = started + args.aggregate_timeout
     env = clean_environment()
+    source = source_provenance()
+    if source["status"]:
+        raise RuntimeError(f"source worktree is not clean before shipped replay: {source['status']!r}")
     checks = []
+    shipped = None
+    malformed = None
+    artifact = None
     with tempfile.TemporaryDirectory(prefix="audio-runtime-c79-yui-") as directory:
-        binary = Path(directory) / "yui"
+        directory_path = Path(directory)
+        binary = directory_path / "yui"
+        config_dir = directory_path / "config"
         checks.append(run_child(["go", "build", "-o", str(binary), "./agent-cli/cmd/yui"], timeout=args.child_timeout, deadline=deadline, env=env))
         if checks[-1]["returncode"] == 0:
+            artifact = file_provenance(binary)
             checks.append(run_child([str(binary), "interaction", "--help"], timeout=args.child_timeout, deadline=deadline, env=env))
+            shipped = run_shipped_workflow(binary, config_dir, HEALTHY_REPLAY_FIXTURE, timeout=args.child_timeout, deadline=deadline, env=env)
+            checks.append(shipped)
+            if args.case == "terminal-and-malformed" and time.monotonic() < deadline:
+                malformed = run_child(
+                    [str(binary), "--config-dir", str(config_dir), "session", "--replay", str(ERROR_REPLAY_FIXTURE)],
+                    timeout=args.child_timeout,
+                    deadline=deadline,
+                    env=env,
+                )
+                malformed["fixture"] = str(ERROR_REPLAY_FIXTURE.relative_to(ROOT))
+                malformed["expected_failure"] = True
+                malformed["terminal_failure_observed"] = "terminal_failure" in malformed["stdout"] + malformed["stderr"]
+                checks.append(malformed)
         for command in CASES[args.case]:
             if time.monotonic() >= deadline:
                 checks.append({"argv": command, "returncode": 124, "timeout": True, "error": "aggregate timeout exhausted"})
                 break
             checks.append(run_child(command, timeout=args.child_timeout, deadline=deadline, env=env))
 
+    if shipped is not None and (shipped["returncode"] != 0 or not all(shipped["observations"].values())):
+        raise RuntimeError(f"shipped healthy replay did not prove lifecycle output: {json.dumps(shipped, sort_keys=True)}")
+    if malformed is not None and (malformed["returncode"] == 0 or not malformed["terminal_failure_observed"]):
+        raise RuntimeError(f"shipped malformed replay did not fail closed: {json.dumps(malformed, sort_keys=True)}")
     result = {
-        "schema": "audio-runtime-c79-replay/v1",
+        "schema": "audio-runtime-c79-replay/v2",
         "case": args.case,
         "credential_free": True,
         "software_replay_only": True,
         "child_timeout_seconds": args.child_timeout,
         "aggregate_timeout_seconds": args.aggregate_timeout,
         "elapsed_seconds": round(time.monotonic() - started, 3),
+        "source": source,
+        "artifact": artifact,
+        "fixtures": {
+            "healthy": file_provenance(HEALTHY_REPLAY_FIXTURE),
+            "malformed": file_provenance(ERROR_REPLAY_FIXTURE),
+        },
+        "shipped_workflow": shipped,
+        "malformed_workflow": malformed,
         "checks": checks,
     }
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     (EVIDENCE / f"{args.case}.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0 if all(check.get("returncode") == 0 for check in checks) else 1
+    return 0 if all(check.get("returncode") == 0 or check is malformed for check in checks) else 1
 
 
 if __name__ == "__main__":

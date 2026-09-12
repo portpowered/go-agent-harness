@@ -29,6 +29,30 @@ func TestResponseIdentityRejectsWrongAndStaleTerminals(t *testing.T) {
 	}
 }
 
+func TestResponseFinishRejectsWrongIDWithoutClearingActiveResponse(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	if _, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-a"}); err != nil {
+		t.Fatal(err)
+	}
+
+	wrong, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseFinish, ResponseID: "response-b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wrong.Accepted || service.Snapshot().ActiveResponseID != "response-a" {
+		t.Fatalf("wrong finish changed active response: observation=%+v snapshot=%+v", wrong, service.Snapshot())
+	}
+
+	finish, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseFinish, ResponseID: "response-a"})
+	if err != nil || !finish.Accepted {
+		t.Fatalf("matching finish = %+v, err=%v", finish, err)
+	}
+	if service.Snapshot().ActiveResponse {
+		t.Fatal("matching finish left the response active")
+	}
+}
+
 func TestToolContinuationRemainsOneScheduledLifecycle(t *testing.T) {
 	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()

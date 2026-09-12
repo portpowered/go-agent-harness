@@ -2,6 +2,7 @@ package agentruntime
 
 import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 	tools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"sort"
 	"strings"
@@ -159,6 +160,7 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 	delete(o.toolResultRejections, callID)
 	lifecycleCh := o.toolLifecycleCh
 	o.toolStateMu.Unlock()
+	o.lifecycleEvent(sd.Event{Kind: sd.EventToolResultAccepted, CallID: callID})
 
 	// One wake-up is enough even when several results are accepted before the
 	// session loop selects this branch: the close predicate observes the whole
@@ -202,6 +204,7 @@ func (o *sessionProgressObserver) noteToolContinuationRequested() {
 	}
 	lifecycleCh := o.toolLifecycleCh
 	o.toolStateMu.Unlock()
+	o.lifecycleEvent(sd.Event{Kind: sd.EventContinuationRequested})
 	if changed {
 		select {
 		case lifecycleCh <- struct{}{}:
@@ -234,6 +237,7 @@ func (o *sessionProgressObserver) noteToolContinuationRequestedFor(callID string
 		}
 	}
 	o.toolStateMu.Unlock()
+	o.lifecycleEvent(sd.Event{Kind: sd.EventContinuationRequested, CallID: callID})
 	o.noteToolContinuationRequested()
 }
 

@@ -31,8 +31,6 @@ func (r *reducer) applyLocked(event sessiondiagnostics.Event) (sessiondiagnostic
 		sessiondiagnostics.EventToolResultAccepted,
 		sessiondiagnostics.EventContinuationRequested:
 		return r.applyToolLocked(event)
-	case sessiondiagnostics.EventSyncLegacy:
-		return r.syncLegacyLocked(event.Legacy), 0, false, nil
 	case sessiondiagnostics.EventReset:
 		r.resetLocked()
 		return sessiondiagnostics.Observation{Accepted: true}, 0, false, nil

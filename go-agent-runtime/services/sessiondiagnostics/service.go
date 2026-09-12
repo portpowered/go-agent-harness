@@ -57,7 +57,6 @@ const (
 	EventToolCall                  EventKind = "tool.call"
 	EventToolResultAccepted        EventKind = "tool.result_accepted"
 	EventContinuationRequested     EventKind = "tool.continuation_requested"
-	EventSyncLegacy                EventKind = "adapter.sync"
 	EventReset                     EventKind = "lifecycle.reset"
 )
 
@@ -86,7 +85,6 @@ type Event struct {
 	Disposition Disposition
 	Index       int
 	Count       int
-	Legacy      *LegacyState
 }
 
 // RetryScheduler is injected by hosts that want the service to advance a
@@ -158,30 +156,6 @@ type ContinuationState struct {
 	ContinuationOutput         bool
 	ContinuationFailure        bool
 	ContinuationComplete       bool
-}
-
-// LegacyState is a compatibility projection used by the CLI adapter while
-// callers outside the runtime migrate. It is input-only to EventSyncLegacy;
-// the reducer remains the owner of decisions and returns a fresh Snapshot.
-type LegacyState struct {
-	ActiveResponse        bool
-	ActiveResponseID      string
-	ActivePurpose         ResponsePurpose
-	CompletedResponseIDs  []string
-	RetiredResponseIDs    []string
-	Scheduled             []ScheduledState
-	ScheduledResponseByID map[string]int
-	NextScheduledResponse int
-	ActiveScheduledIndex  int
-	ActiveScheduledID     string
-	ActiveScheduledSet    bool
-	LogicalScheduledIndex int
-	LogicalScheduledID    string
-	LogicalScheduledSet   bool
-	RetryCandidateIndex   int
-	RetryCandidateSet     bool
-	RetryCandidateID      string
-	ContinuationStates    []ContinuationState
 }
 
 // Snapshot is a deep immutable view of the reducer state.
