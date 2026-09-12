@@ -27,6 +27,8 @@ CURRENT_MAIN_REVISION = "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f"
 STARTUP_INTEGRATION_REVISION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 EXPECTED_BRANCH = "codex/audio-runtime-c64-provider-audio-terminal-drain-repair"
 OWNED_PREFIX = "docs/temp/projects/audio-runtime/audio-runtime-c64-provider-audio-terminal-drain-repair/"
+TEST_PACKAGE = "./agent-cli/internal/services/internal/agentruntime"
+TEST_NAME = "TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio"
 ALLOWED_PATHS = {
 	"agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
 	"agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go",
