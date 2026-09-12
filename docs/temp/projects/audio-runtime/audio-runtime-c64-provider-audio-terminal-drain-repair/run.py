@@ -39,6 +39,17 @@ MAX_CHILD_SECONDS = 60.0
 MAX_AGGREGATE_SECONDS = 180.0
 MAX_OUTPUT_BYTES = 64 * 1024
 COMPACT_OUTPUT_BYTES = 12 * 1024
+BUILD_INPUT_PREFIXES = (
+    "agent-cli",
+    "go-agent-loop",
+    "go-agent-runtime",
+    "go-audio",
+    "go-device-gateway",
+    "go-llm-gateway",
+    "go.work",
+    "go.work.sum",
+)
+BUILD_ENV_KEYS = ("GOOS", "GOARCH", "CGO_ENABLED", "GOFLAGS", "GOTOOLCHAIN", "GOVERSION", "GOWORK")
 
 
 class RunnerError(RuntimeError):
@@ -91,6 +102,58 @@ def sha256_candidate_diff(revision: str) -> str:
         capture_output=True,
     )
     return sha256_bytes(result.stdout)
+
+
+def build_input_paths(cwd: Path) -> list[Path]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--", *BUILD_INPUT_PREFIXES],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+    )
+    paths = [Path(raw) for raw in result.stdout.decode().split("\0") if raw]
+    if not paths:
+        raise RunnerError(f"no tracked build inputs found in {cwd}")
+    return paths
+
+
+def build_input_manifest(cwd: Path) -> dict[str, object]:
+    digest = hashlib.sha256()
+    paths = build_input_paths(cwd)
+    for relative in paths:
+        digest.update(relative.as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update((cwd / relative).read_bytes())
+        digest.update(b"\0")
+    return {
+        "algorithm": "path-nul-content-nul-sha256-v1",
+        "path_prefixes": list(BUILD_INPUT_PREFIXES),
+        "file_count": len(paths),
+        "sha256": digest.hexdigest(),
+    }
+
+
+def toolchain_provenance(cwd: Path) -> dict[str, object]:
+    environment = {**os.environ, "CGO_ENABLED": "0"}
+    version = subprocess.run(["go", "version"], cwd=cwd, check=True, capture_output=True, text=True, env=environment).stdout.strip()
+    result = subprocess.run(
+        ["go", "env", "-json", *BUILD_ENV_KEYS], cwd=cwd, check=True, capture_output=True, text=True, env=environment
+    )
+    go_env = json.loads(result.stdout)
+    return {"go_version": version, "go_env": {key: str(go_env.get(key, "")) for key in BUILD_ENV_KEYS}}
+
+
+def build_provenance(
+    *, cwd: Path, command: list[str], artifact: Path, tested_source_revision: str, fixture_revision: str
+) -> dict[str, object]:
+    return {
+        "tested_source_revision": tested_source_revision,
+        "fixture_revision": fixture_revision,
+        "build_inputs": build_input_manifest(cwd),
+        "toolchain": toolchain_provenance(cwd),
+        "build_flags": {"tags": ["nomicrophone"], "cgo_enabled": "0", "test_package": TEST_PACKAGE, "command": command},
+        "artifact": {"bytes": artifact.stat().st_size, "sha256": sha256_file(artifact)},
+    }
 
 
 def group_alive(pgid: int) -> bool:
@@ -234,6 +297,8 @@ def build_test(
     timeout: float,
     deadline: float,
     label: str,
+    tested_source_revision: str,
+    fixture_revision: str,
 ) -> dict[str, object]:
     ensure_aggregate(deadline, f"{label} build")
     command = [
@@ -249,6 +314,13 @@ def build_test(
     require_process(result, label=f"{label} build", returncode=0)
     if not artifact.is_file():
         raise RunnerError(f"{label} build did not produce {artifact}")
+    result["provenance"] = build_provenance(
+        cwd=cwd,
+        command=command,
+        artifact=artifact,
+        tested_source_revision=tested_source_revision,
+        fixture_revision=fixture_revision,
+    )
     ensure_aggregate(deadline, f"{label} build completion")
     return result
 
@@ -272,6 +344,13 @@ def run_test_binary(
         "-test.timeout=60s",
     ]
     result = run_bounded(command, timeout, cwd=cwd, env_overrides=env_overrides)
+    result["test_flags"] = {
+        "run": f"^{TEST_NAME}$",
+        "verbose": True,
+        "count": 1,
+        "timeout": "60s",
+    }
+    result["environment_overrides"] = env_overrides or {}
     ensure_aggregate(deadline, f"{label} execution completion")
     return result
 
@@ -423,6 +502,8 @@ def main() -> int:
                 timeout=args.child_timeout,
                 deadline=aggregate_deadline,
                 label="repaired candidate",
+                tested_source_revision=candidate_revision,
+                fixture_revision=candidate_revision,
             )
             run = run_test_binary(
                 artifact=artifact,
@@ -450,6 +531,10 @@ def main() -> int:
                 "candidate_diff_sha256": sha256_candidate_diff(candidate_revision),
                 "fixture_revision": candidate_revision,
                 "fixture_test_hashes": candidate_hashes["test_fixtures"],
+                "evidence_only_descendant": False,
+                "evidence_only_paths": [],
+                "verification_revision": candidate_revision,
+                "verification_diff_sha256": sha256_candidate_diff(candidate_revision),
                 "candidate": candidate,
             }
         else:
@@ -468,6 +553,8 @@ def main() -> int:
                 timeout=args.child_timeout,
                 deadline=aggregate_deadline,
                 label="accepted source",
+                tested_source_revision=BASE_REVISION,
+                fixture_revision=candidate_revision,
             )
             run = run_test_binary(
                 artifact=artifact,
@@ -496,6 +583,11 @@ def main() -> int:
                 "candidate_diff_sha256": sha256_candidate_diff(candidate_revision),
                 "fixture_revision": candidate_revision,
                 "fixture_test_hashes": candidate_hashes["test_fixtures"],
+                "evidence_only_descendant": False,
+                "evidence_only_paths": [],
+                "verification_revision": candidate_revision,
+                "verification_diff_sha256": sha256_candidate_diff(candidate_revision),
+                "source_control_mode": "detached accepted-source production with candidate fixture",
                 "accepted_source_control": source,
             }
         ensure_aggregate(aggregate_deadline, "evidence assembly")

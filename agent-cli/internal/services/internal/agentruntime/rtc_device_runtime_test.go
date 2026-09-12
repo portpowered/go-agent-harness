@@ -301,6 +301,7 @@ type terminalDrainExternalScenario struct {
 	toolExecutor    *terminalDrainToolExecutor
 	admittedSamples int
 	admittedPCM     []int16
+	renderedPCM     []int16
 	providerSamples int
 	streamEvents    []string
 }
@@ -322,7 +323,7 @@ func newTerminalDrainExternalScenario(t *testing.T) *terminalDrainExternalScenar
 		HoldToneConfig: &holdTone, PlaybackSamplesObserver: func(_ context.Context, _ int, samples []int16) error {
 			s.record(samples)
 			return registry.Advance(1) //nolint:contextcheck // Simulated callback advancement is synchronous and has no context-aware API.
-		},
+		}, RenderedSamplesObserver: func(_ int, samples []int16) { s.renderedPCM = append(s.renderedPCM, samples...) },
 	}
 	s.providerMedia = audio.NewSessionMediaAtRate(nil, terminalDrainProviderRate)
 	s.barrierInbound = &terminalDrainExternalInbound{InboundMedia: s.providerMedia.Endpoints().Inbound,
@@ -442,11 +443,10 @@ func (s *terminalDrainExternalScenario) assertContinuationSequence(t *testing.T)
 func (s *terminalDrainExternalScenario) assertAcceptedSourceFailure(t *testing.T, phase string, samples []int16) {
 	providerSamples, admitted := s.providerSamples, s.admittedSamples
 	readSamples := s.barrierInbound.samplesRead()
-	renderedPCM := s.registry.RenderedSamples()
-	stats := s.registry.PlaybackStats()
+	renderedPCM, stats := s.registry.RenderedSamples(), s.registry.PlaybackStats()
 	consumed := stats.RenderedSamples - stats.UnderflowSamples
 	t.Logf("C64_ACCEPTED_SOURCE_FAILURE provider_samples=%d admitted_samples=%d consumed_samples=%d rendered_samples=%d queued_samples=%d underflow_samples=%d callback_count=%d shutdown=provider-close", providerSamples, admitted, consumed, len(renderedPCM), stats.QueuedSamples, stats.UnderflowSamples, stats.CallbackCount)
-	if phase != "provider-close-before-drain" || providerSamples != len(samples) || readSamples != 0 || admitted != 0 || consumed != 0 || len(renderedPCM) != 0 || stats.QueuedSamples != 0 {
+	if phase != "provider-close-before-drain" || providerSamples != len(samples) || readSamples != 0 || admitted != 0 || consumed != 0 || len(renderedPCM) != 0 || len(s.renderedPCM) != 0 || stats.QueuedSamples != 0 {
 		t.Fatalf("accepted source control did not reproduce provider-close-before-drain: phase=%s provider=%d read=%d admitted=%d consumed=%d rendered=%d queued=%d stats=%+v", phase, providerSamples, readSamples, admitted, consumed, len(renderedPCM), stats.QueuedSamples, stats)
 	}
 	t.Fatalf("accepted source incorrectly passed terminal drain control: phase=%s provider=%d admitted=%d consumed=%d rendered=%d queued=%d", phase, providerSamples, admitted, consumed, len(renderedPCM), stats.QueuedSamples)
@@ -472,12 +472,14 @@ func (s *terminalDrainExternalScenario) assertOutput(t *testing.T, phase string,
 	if !reflect.DeepEqual(gotPCM, wantPCM) {
 		t.Fatalf("terminal drain changed admitted PCM: got %d samples, want exact resampled block", len(gotPCM))
 	}
-	renderedPCM := s.registry.RenderedSamples()
-	stats := s.registry.PlaybackStats()
+	renderedPCM, stats := s.registry.RenderedSamples(), s.registry.PlaybackStats()
 	if pushed != len(samples) || s.barrierInbound.samplesRead() != len(samples) {
 		t.Fatalf("terminal drain provider receipt/read %d/%d samples, want exact %d", pushed, s.barrierInbound.samplesRead(), len(samples))
 	}
 	assertTerminalDrainRendered(t, phase, wantPCM, renderedPCM, stats)
+	if !reflect.DeepEqual(s.renderedPCM, renderedPCM) || stats.CallbackCount != uint64(len(renderedPCM)/audio.FrameSize) {
+		t.Fatalf("terminal drain render boundary disagrees with simulated device: observer=%d registry=%d observer_callbacks=%d stats_callbacks=%d", len(s.renderedPCM), len(renderedPCM), len(s.renderedPCM)/audio.FrameSize, stats.CallbackCount)
+	}
 	consumed := stats.RenderedSamples - stats.UnderflowSamples
 	if consumed != uint64(got) || consumed != uint64(len(wantPCM)) || stats.QueuedSamples != 0 {
 		t.Fatalf("terminal drain phase %s failed provider/admission/consumption/queue reconciliation: provider=%d admitted=%d consumed=%d rendered=%d queued=%d stats=%+v", phase, s.barrierInbound.samplesRead(), got, consumed, len(renderedPCM), stats.QueuedSamples, stats)
