@@ -1,7 +1,7 @@
 {
   "ancestry": {
     "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
-    "head": "21d72e647c2572d47693a4b018437bd990b9a41a",
+    "head": "6ff561ac9b809a3fe9c9826ae78923e5d04e49bc",
     "origin_main": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
     "origin_main_is_ancestor_of_head": true,
     "origin_main_is_descendant_of_planning_revision": true,
@@ -23,8 +23,6 @@
   "planning_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
   "schema": "audio-runtime.c56.baseline-and-oracles.v1",
   "startup_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "status_paths": [
-    "docs/architecture/architecture-policy.json"
-  ],
+  "status_paths": [],
   "task": "audio-runtime-c56-retire-cli-recording-orchestration"
 }
