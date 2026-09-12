@@ -37,3 +37,21 @@ architecture-size-check` reports that generated-file finding plus nine stale or
 downward `session_room_run.go` entries in the C79-owned architecture baseline.
 The C79 lease is still active, so no shared-file mutation or SCRIPT CI
 submission is authorized yet.
+
+## Coverage-floor repair checkpoint
+
+- The changed-coverage run exposed one owned floor deficit in
+  `go-agent-runtime/services/roommedia/transports`: 79.10% measured versus the
+  existing 80.00% minimum. Added `adapter_test.go` covers the public transport
+  seams and failure/identity behavior without changing the contract or floor.
+- Post-repair evidence is green: transport normal/race tests pass at count 3,
+  focused roommedia normal/race suites pass, transport coverage is 97.8%,
+  coverage registration passes all 180 workspace packages, and pinned lint,
+  staticcheck, vet, and diff checks pass. The architecture gate is back to the
+  exact 10 pre-existing C93 findings: one generated Wire registration, one
+  downward retirement entry, and eight stale owned-symbol entries in C79's
+  shared baseline.
+- No C93 review finding exists. After C79's guarded merge and the separate
+  go-audio clock-coverage disposition, fetch/merge current `origin/main`, apply
+  only the demonstrated shared C93 registration/baseline changes, rerun bounded
+  gates, push this same PR, and return `ACCEPTED` to SCRIPT CI without polling.
