@@ -787,3 +787,41 @@ C23 executor visit: admission and accumulated regression recheck — 2026-09-12
   regressions, then update and submit this same PR to script CI without
   polling. No CI-green, review, merge, vertical, device, acoustic, or project
   completion claim is made.
+
+C23 executor visit: preserved recording prerequisite and regression evidence — 2026-09-12T00:36:10Z
+
+- Re-read the complete operating policy and implementation handoff, the sole
+  admitted `audio-runtime` manifest, `prd.json`, this task-local ledger, the
+  canonical `~default` all/500 Work response, and preserved Review-155,
+  Review-169, and Review-191 findings. The exact
+  `project-control.py verify-work --type task --name
+  audio-runtime-c23-long-session-tool-characterization` command returned
+  `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c23-long-session-tool-characterization"}`.
+  The isolated branch matches `prd.json.branchName` and remains clean at
+  `2dbb6ce812e850cd79b8dc989e47a01d83991784`.
+- Fresh `git fetch origin main` still resolves `origin/main` to
+  `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`; startup and project-baseline
+  ancestry remain intact. The candidate diff is exactly the seven admitted
+  C23 evidence paths. PR #415 is open at this same head. Read-only PR #448
+  inspection shows C56 head `9f089bfa703a0e024844b5f0fdbe62b4c44720d8`
+  remains open, unreviewed and unmerged, so it was not consumed.
+- Accumulated C21
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` passed
+  normal `-count=5` in `13.130s` and race `-count=1` in `12.239s`. Python
+  compilation, driver command help (including `probe`) and `git diff --check`
+  also pass. No C21/shared or production path changed.
+- The required C23 recording-on/16 first failure remains immutable and out of
+  lease: the current-main public run has provider PCM and clean completion but
+  `accepted_audio=0`, `audio_bytes=0`, `audio_items=0`, and no
+  `audio/out-000.pcm`, while the pre-C53 same-fixture run recorded
+  `accepted_audio=32` and `audio_bytes=2048`. Current generated artifacts bind
+  older candidate/source revisions and are not relabeled for this ledger head;
+  the unchanged red control was not rerun.
+- Disposition remains `CONTINUE`, not `ACCEPTED`. Exact next action: when a
+  reviewed recording/media repair reaches `origin/main`, or primary gives an
+  explicit ownership decision for that boundary, fetch and integrate that
+  exact main without reset, rebuild/rebind provenance, run the complete bounded
+  controls, matrix, shipped-regressions, self-check and report sequence plus
+  C21 normal/race regressions, then update/push PR #415 and return `ACCEPTED`
+  to script-owned CI without polling. Until then preserve this task and do not
+  submit the unchanged C53/C56-red candidate.
