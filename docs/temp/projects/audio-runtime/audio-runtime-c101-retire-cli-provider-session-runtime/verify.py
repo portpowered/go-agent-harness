@@ -31,7 +31,14 @@ MANIFEST_BASELINE = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 
 OPENAI = Path("agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go")
 GROK = Path("agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go")
+CLEANUP_PATH = Path("agent-cli/internal/services/internal/agentruntime/session_replay.go")
 CAUSAL_TEST = "^TestProviderSessionRuntimeService_ReplayPreservesCausalCredentialHandshakeAndBareAudio$"
+CLEANUP_DIFF_SHA256 = "ae480fb964f5883e2bd0fe06393f9433b416b3e110eb9a406ce2bfdad7bba2b8"
+DEAD_REPLAY_HELPERS = (
+    "replayLoopMaxDuration",
+    "grokReplayCaptureHasSessionClose",
+    "captureHasEvent",
+)
 
 MUTATIONS = (
     (
@@ -185,10 +192,38 @@ def retirement_census() -> dict:
         "coverage-manifest/go-agent-runtime/services/providersession/",
         "docs/temp/projects/audio-runtime/audio-runtime-c101-retire-cli-provider-session-runtime/",
     )
+    cleanup_path = str(CLEANUP_PATH)
     preserved_shared = ("docs/architecture/architecture-policy.json",)
     unexpected = [
-        path for path in changed if not path.startswith(owned_prefixes) and path not in preserved_shared
+        path
+        for path in changed
+        if not path.startswith(owned_prefixes) and path not in preserved_shared and path != cleanup_path
     ]
+    cleanup_diff_result = git(
+        "diff", "--unified=0", f"{BASELINE}...HEAD", "--", cleanup_path
+    )
+    cleanup_diff = cleanup_diff_result.stdout
+    cleanup_callers = {}
+    for helper in DEAD_REPLAY_HELPERS:
+        caller_result = git("grep", "-n", "-F", helper, "--", "*.go")
+        cleanup_callers[helper] = caller_result.stdout.splitlines()
+    cleanup_diff_sha256 = hashlib.sha256(cleanup_diff.encode("utf-8")).hexdigest()
+    cleanup = {
+        "path": cleanup_path,
+        "diff_sha256": cleanup_diff_sha256,
+        "expected_diff_sha256": CLEANUP_DIFF_SHA256,
+        "added_lines": [
+            line for line in cleanup_diff.splitlines() if line.startswith("+") and not line.startswith("+++")
+        ],
+        "dead_helpers": list(DEAD_REPLAY_HELPERS),
+        "callers": cleanup_callers,
+    }
+    cleanup["passed"] = (
+        cleanup_diff_result.returncode == 0
+        and cleanup_diff_sha256 == CLEANUP_DIFF_SHA256
+        and not cleanup["added_lines"]
+        and all(not matches for matches in cleanup_callers.values())
+    )
     callers_result = git(
         "grep",
         "-n",
@@ -240,6 +275,7 @@ def retirement_census() -> dict:
         "ancestry": ancestry,
         "changed_paths": changed,
         "unexpected_changed_paths": unexpected,
+        "cleanup": cleanup,
         "source": source,
         "legacy_lines_before": 383,
         "legacy_lines_after": sum(item["after_lines"] for item in source.values()),
@@ -270,6 +306,7 @@ def retirement_and_owned_paths() -> int:
         and census["ancestry"]["baseline_main"]
         and census["ancestry"]["startup"]
         and not census["unexpected_changed_paths"]
+        and census["cleanup"]["passed"]
         and census["legacy_lines_after"] <= 133
         and census["legacy_lines_reduced"] >= 250
         and all(item["after_lines"] == item["expected_after_lines"] for item in census["source"].values())
