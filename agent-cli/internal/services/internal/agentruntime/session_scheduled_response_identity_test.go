@@ -180,7 +180,7 @@ func TestSessionProgressObserver_UnknownScheduledResponseIDCannotFallbackToCurre
 
 func TestSessionProgressObserver_LateDispositionCannotClearNewerScheduledOwner(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
-	observer.scheduledResponses = []scheduledAudioResponseLifecycle{{}}
+	observer.scheduledResponses = []scheduledAudioResponseLifecycle{{}, {}}
 	if !observer.bindScheduledResponseID(0, "response-old") || !observer.setActiveScheduledResponseWithID(0, "response-old") {
 		t.Fatal("failed to establish initial scheduled owner")
 	}
@@ -189,7 +189,7 @@ func TestSessionProgressObserver_LateDispositionCannotClearNewerScheduledOwner(t
 		t.Fatalf("cancelled lifecycle count = %d, want 1", observer.completedScheduled)
 	}
 
-	if !observer.bindScheduledResponseID(0, "response-new") || !observer.setActiveScheduledResponseWithID(0, "response-new") {
+	if !observer.bindScheduledResponseID(1, "response-new") || !observer.setActiveScheduledResponseWithID(1, "response-new") {
 		t.Fatal("failed to establish replacement scheduled owner")
 	}
 	observer.noteScheduledResponseDisposition("response-old", scheduledAudioResponseCompleted)
@@ -204,7 +204,7 @@ func TestSessionProgressObserver_LateDispositionCannotClearNewerScheduledOwner(t
 	if observer.activeScheduledResponseSet || observer.logicalScheduledResponseSet {
 		t.Fatal("current disposition did not clear its own owner")
 	}
-	if observer.completedScheduled != 1 {
-		t.Fatalf("duplicate resolved disposition changed completed count to %d, want 1", observer.completedScheduled)
+	if observer.completedScheduled != 2 {
+		t.Fatalf("duplicate resolved disposition changed completed count to %d, want 2", observer.completedScheduled)
 	}
 }

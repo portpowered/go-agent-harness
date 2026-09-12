@@ -51,6 +51,9 @@ func (r *reducer) bindScheduledIDLocked(index int, rawID string) sessiondiagnost
 	if index < 0 || index >= len(r.scheduled) {
 		return sessiondiagnostics.Observation{}
 	}
+	if r.scheduled[index].Disposition != sessiondiagnostics.DispositionPending {
+		return sessiondiagnostics.Observation{ResponseID: id, ScheduledIndex: index, HasScheduledIndex: true}
+	}
 	if id != "" {
 		if existing, ok := r.scheduledResponseByID[id]; ok && existing != index {
 			return sessiondiagnostics.Observation{ResponseID: id}
@@ -72,6 +75,9 @@ func (r *reducer) setScheduledOwnerLocked(index int, rawID string) sessiondiagno
 	id := strings.TrimSpace(rawID)
 	if index < 0 || index >= len(r.scheduled) {
 		return sessiondiagnostics.Observation{ResponseID: id}
+	}
+	if r.scheduled[index].Disposition != sessiondiagnostics.DispositionPending {
+		return sessiondiagnostics.Observation{ResponseID: id, ScheduledIndex: index, HasScheduledIndex: true}
 	}
 	if id != "" {
 		if existing, ok := r.scheduledResponseByID[id]; ok && existing != index {
@@ -293,28 +299,31 @@ func (r *reducer) claimRetryLocked(rawID string, terminal *sessiondiagnostics.Te
 	return sessiondiagnostics.Observation{Accepted: true, ScheduledIndex: index, HasScheduledIndex: true, Retry: sessiondiagnostics.RetryRequest{Accepted: true, Delay: delay}}, delay, true, nil
 }
 
-func (r *reducer) noteDispositionLocked(rawID string, disposition sessiondiagnostics.Disposition) sessiondiagnostics.Observation {
-	if disposition == sessiondiagnostics.DispositionPending {
-		return sessiondiagnostics.Observation{}
+func (r *reducer) noteDispositionLocked(rawID string, disposition sessiondiagnostics.Disposition) (sessiondiagnostics.Observation, error) {
+	switch disposition {
+	case sessiondiagnostics.DispositionPending:
+		return sessiondiagnostics.Observation{}, nil
+	case sessiondiagnostics.DispositionCompleted, sessiondiagnostics.DispositionCancelled:
+	default:
+		return sessiondiagnostics.Observation{}, sessiondiagnostics.ErrMalformedSequence
 	}
 	index, ok := r.scheduledIndexForLocked(rawID)
 	if !ok {
 		if strings.TrimSpace(rawID) != "" || !r.canBindUnidentifiedLocked(rawID) {
-			return sessiondiagnostics.Observation{}
+			return sessiondiagnostics.Observation{}, nil
 		}
 		bound := r.bindNextLocked(rawID)
 		if !bound.Accepted {
-			return bound
+			return bound, nil
 		}
 		index, ok = r.scheduledIndexForLocked(rawID)
 	}
 	if !ok || index < 0 || index >= len(r.scheduled) || !r.scheduled[index].Bound || !r.ownerMatchesLocked(index, rawID) {
-		return sessiondiagnostics.Observation{}
+		return sessiondiagnostics.Observation{}, nil
 	}
 	lifecycle := &r.scheduled[index]
 	if lifecycle.Disposition != sessiondiagnostics.DispositionPending {
-		r.clearScheduledOwnerLocked(index, rawID)
-		return sessiondiagnostics.Observation{ScheduledIndex: index, HasScheduledIndex: true, Disposition: lifecycle.Disposition}
+		return sessiondiagnostics.Observation{ScheduledIndex: index, HasScheduledIndex: true, Disposition: lifecycle.Disposition}, nil
 	}
 	lifecycle.Disposition = disposition
 	lifecycle.RetryPending = false
@@ -324,7 +333,7 @@ func (r *reducer) noteDispositionLocked(rawID string, disposition sessiondiagnos
 	lifecycle.TerminalErrorCode = ""
 	lifecycle.TerminalStatusDetails = ""
 	r.clearScheduledOwnerLocked(index, rawID)
-	return sessiondiagnostics.Observation{Accepted: true, ScheduledIndex: index, HasScheduledIndex: true, Disposition: disposition}
+	return sessiondiagnostics.Observation{Accepted: true, ScheduledIndex: index, HasScheduledIndex: true, Disposition: disposition}, nil
 }
 
 func (r *reducer) canBindUnidentifiedLocked(rawID string) bool {

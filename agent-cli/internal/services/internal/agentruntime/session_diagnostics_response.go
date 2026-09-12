@@ -227,6 +227,9 @@ func (o *sessionProgressObserver) resetObservedResponseState() {
 	if o == nil {
 		return
 	}
+	if !o.activeResponse {
+		o.lifecycleEvent(sd.Event{Kind: sd.EventReset})
+	}
 	o.toolStateMu.Lock()
 	o.resetResponseOutputLocked()
 	o.assistantResponseDone = false

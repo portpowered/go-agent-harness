@@ -88,7 +88,8 @@ func (r *reducer) applyScheduledLocked(event sessiondiagnostics.Event) (sessiond
 	case sessiondiagnostics.EventClaimRetry:
 		return r.claimRetryLocked(event.ResponseID, event.Terminal)
 	case sessiondiagnostics.EventScheduledDisposition:
-		return r.noteDispositionLocked(event.ResponseID, event.Disposition), 0, false, nil
+		observation, err := r.noteDispositionLocked(event.ResponseID, event.Disposition)
+		return observation, 0, false, err
 	default:
 		return sessiondiagnostics.Observation{}, 0, false, sessiondiagnostics.ErrMalformedSequence
 	}

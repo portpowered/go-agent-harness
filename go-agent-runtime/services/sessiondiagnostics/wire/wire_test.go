@@ -53,6 +53,75 @@ func TestResponseFinishRejectsWrongIDWithoutClearingActiveResponse(t *testing.T)
 	}
 }
 
+func TestResetClearsReducerStateWithoutReplacingMutex(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	for _, event := range []sessiondiagnostics.Event{
+		{Kind: sessiondiagnostics.EventEnsureScheduled, Count: 1},
+		{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-before-reset"},
+		{Kind: sessiondiagnostics.EventBindScheduledBoundary, ResponseID: "response-before-reset"},
+	} {
+		if _, err := service.Apply(ctx, event); err != nil {
+			t.Fatalf("apply %s: %v", event.Kind, err)
+		}
+	}
+
+	service.Reset()
+	snapshot := service.Snapshot()
+	if snapshot.ActiveResponse || snapshot.ActiveResponseID != "" || len(snapshot.Scheduled) != 0 || len(snapshot.ContinuationStates) != 0 {
+		t.Fatalf("reset left lifecycle state: %+v", snapshot)
+	}
+	opened, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-after-reset"})
+	if err != nil || !opened.NewResponse {
+		t.Fatalf("open after reset = %+v, err=%v", opened, err)
+	}
+}
+
+func TestScheduledLifecycleRejectsInvalidDispositionAndDisposedRebind(t *testing.T) {
+	for _, terminalDisposition := range []sessiondiagnostics.Disposition{
+		sessiondiagnostics.DispositionCompleted,
+		sessiondiagnostics.DispositionCancelled,
+	} {
+		t.Run(string(terminalDisposition), func(t *testing.T) {
+			service := NewService(sessiondiagnostics.Options{})
+			ctx := context.Background()
+			apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
+				t.Helper()
+				observation, err := service.Apply(ctx, event)
+				if err != nil {
+					t.Fatalf("apply %s: %v", event.Kind, err)
+				}
+				return observation
+			}
+			apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventEnsureScheduled, Count: 1})
+			apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventBindScheduledID, Index: 0, ResponseID: "response-original"})
+			apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventSetScheduledOwner, Index: 0, ResponseID: "response-original"})
+
+			if _, err := service.Apply(ctx, sessiondiagnostics.Event{
+				Kind:        sessiondiagnostics.EventScheduledDisposition,
+				ResponseID:  "response-original",
+				Disposition: sessiondiagnostics.Disposition("bogus"),
+			}); !errors.Is(err, sessiondiagnostics.ErrMalformedSequence) {
+				t.Fatalf("invalid disposition error = %v, want ErrMalformedSequence", err)
+			}
+			if got := service.Snapshot().Scheduled[0].Disposition; got != sessiondiagnostics.DispositionPending {
+				t.Fatalf("invalid disposition changed lifecycle to %q", got)
+			}
+
+			apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventScheduledDisposition, ResponseID: "response-original", Disposition: terminalDisposition})
+			rebind := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventBindScheduledID, Index: 0, ResponseID: "response-rebound"})
+			owner := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventSetScheduledOwner, Index: 0, ResponseID: "response-rebound"})
+			if rebind.Accepted || owner.Accepted {
+				t.Fatalf("disposed lifecycle was rebound: bind=%+v owner=%+v", rebind, owner)
+			}
+			snapshot := service.Snapshot()
+			if snapshot.Scheduled[0].Disposition != terminalDisposition || len(snapshot.Scheduled[0].ResponseIDs) != 1 || snapshot.Scheduled[0].ResponseIDs[0] != "response-original" {
+				t.Fatalf("disposed lifecycle mutated during rebind: %+v", snapshot.Scheduled[0])
+			}
+		})
+	}
+}
+
 func TestToolContinuationRemainsOneScheduledLifecycle(t *testing.T) {
 	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()

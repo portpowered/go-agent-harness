@@ -124,6 +124,40 @@ func TestSessionProgressObserver_IgnoresNonTerminalProviderDiagnostic(t *testing
 	}
 }
 
+func TestSessionProgressObserver_SessionOpenResetsReducerBeforeUntaggedResponse(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.observe(messages.StreamMessage{
+		Type:       messages.StreamTypeMessageStart,
+		ResponseID: "response-old",
+		Value:      messages.NewMessageStartValue(),
+	})
+	if !observer.activeResponse || observer.activeResponseID != "response-old" {
+		t.Fatalf("initial response owner = active=%t id=%q, want response-old", observer.activeResponse, observer.activeResponseID)
+	}
+
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeSessionOpen,
+		Value: messages.NewSessionOpenValue("session-new", "openai"),
+	})
+	if snapshot := observer.lifecycle.Snapshot(); snapshot.ActiveResponse || len(snapshot.CompletedResponseIDs) != 0 || len(snapshot.RetiredResponseIDs) != 0 {
+		t.Fatalf("SESSION.OPEN left prior reducer state: %+v", snapshot)
+	}
+
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()})
+	if !observer.activeResponse || observer.activeResponseID != "" {
+		t.Fatalf("untagged response owner = active=%t id=%q, want a fresh untagged response", observer.activeResponse, observer.activeResponseID)
+	}
+	observer.observe(messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Role:  messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue("fresh response"),
+	})
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	if observer.turnsCompleted != 1 {
+		t.Fatalf("fresh untagged response completed turns = %d, want 1", observer.turnsCompleted)
+	}
+}
+
 // failureSignature is the identifying structured signature of one closed-set
 // failure mode: exact field values on the single canonical failure record.
 type failureSignature struct {

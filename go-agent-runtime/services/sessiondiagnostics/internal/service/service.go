@@ -87,14 +87,7 @@ func (r *reducer) Reset() {
 		return
 	}
 	r.mu.Lock()
-	scheduler := r.scheduler
-	*r = reducer{
-		scheduler:             scheduler,
-		completedIDs:          make(map[string]struct{}),
-		retiredIDs:            make(map[string]struct{}),
-		scheduledResponseByID: make(map[string]int),
-		continuations:         make(map[string]sessiondiagnostics.ContinuationState),
-	}
+	r.resetLocked()
 	r.mu.Unlock()
 }
 
