@@ -95,13 +95,24 @@ def source_provenance() -> dict:
     revision = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
     ).stdout.strip()
-    status = subprocess.run(
+    status_result = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=all"],
         cwd=ROOT,
         check=True,
         capture_output=True,
         text=True,
-    ).stdout
+    )
+    evidence_prefix = str(EVIDENCE.relative_to(ROOT)) + "/"
+    status = []
+    ignored_evidence_changes = []
+    for line in status_result.stdout.splitlines():
+        path = line[3:] if len(line) >= 3 else line
+        if " -> " in path:
+            path = path.rsplit(" -> ", 1)[-1]
+        if path.startswith(evidence_prefix):
+            ignored_evidence_changes.append(line)
+        else:
+            status.append(line)
     tracked = subprocess.run(
         ["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True
     ).stdout.split(b"\0")
@@ -135,7 +146,8 @@ def source_provenance() -> dict:
     ).stdout.strip()
     return {
         "revision": revision,
-        "status": status,
+        "status": "\n".join(status),
+        "ignored_evidence_changes": ignored_evidence_changes,
         "tracked_input_count": input_count,
         "tracked_input_sha256": digest.hexdigest(),
         "tracked_non_file_paths": non_file_paths,
