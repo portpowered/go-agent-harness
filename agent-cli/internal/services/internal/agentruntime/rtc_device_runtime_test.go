@@ -223,9 +223,7 @@ type runtimeRTCSession struct {
 	doneOnce   sync.Once
 	closeCalls atomic.Int32
 }
-type failingRTCOutboundMedia struct {
-	err error
-}
+type failingRTCOutboundMedia struct{ err error }
 
 func (m failingRTCOutboundMedia) WriteFrame(context.Context, audio.PCMFrame) error { return m.err }
 func (m failingRTCOutboundMedia) Close() error                                     { return nil }
@@ -247,7 +245,7 @@ func (s *runtimeRTCSession) Close() error {
 	s.doneOnce.Do(func() { close(s.done) })
 	return nil
 }
-func (s *runtimeRTCSession) finish()                                  { _ = s.Close() }
+func (s *runtimeRTCSession) finish()                                  { _ = s.Close() } //nolint:errcheck // The test session close is infallible.
 func (s *runtimeRTCSession) RTCMedia() agentruntime.RTCMediaEndpoints { return s.media }
 func (s *runtimeRTCSession) sentMessages() []messages.StreamMessage {
 	s.mu.Lock()
@@ -323,7 +321,7 @@ func newTerminalDrainExternalScenario(t *testing.T) *terminalDrainExternalScenar
 		Registry: registry, OutputPresent: true, OutputDevice: "", OutputSampleRate: terminalDrainProviderRate,
 		HoldToneConfig: &holdTone, PlaybackSamplesObserver: func(_ context.Context, _ int, samples []int16) error {
 			s.record(samples)
-			return registry.Advance(1)
+			return registry.Advance(1) //nolint:contextcheck // Simulated callback advancement is synchronous and has no context-aware API.
 		},
 	}
 	s.providerMedia = audio.NewSessionMediaAtRate(nil, terminalDrainProviderRate)
@@ -577,7 +575,7 @@ func (s *terminalDrainExternalSession) Close() error {
 		close(s.closeStarted)
 		<-s.releaseClose
 		mediaErr = errors.Join(s.media.Inbound.Close(), s.media.Outbound.Close())
-		_ = s.runtimeRTCSession.Close()
+		mediaErr = errors.Join(mediaErr, s.runtimeRTCSession.Close())
 	})
 	return mediaErr
 }
