@@ -5,7 +5,6 @@ import (
 	tools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"sort"
 	"strings"
-	"unicode"
 )
 
 type toolContinuationState struct {
@@ -59,21 +58,6 @@ func normalizeContinuationStatus(status string) string {
 	return strings.ToLower(strings.TrimSpace(status))
 }
 
-func sanitizeContinuationDetail(detail string) string {
-	detail = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return -1
-		}
-		return r
-	}, detail)
-	detail = strings.Join(strings.Fields(detail), " ")
-	const maxDetailBytes = 256
-	if len(detail) > maxDetailBytes {
-		return detail[:maxDetailBytes]
-	}
-	return detail
-}
-
 // continuationCanCompleteLocked is deliberately stricter than a provider
 // terminal boundary. A continuation is successful only when the provider
 // reports completed (or a legacy provider omits status) and the assistant
@@ -90,22 +74,6 @@ func continuationCanCompleteLocked(state *toolContinuationState) bool {
 		return false
 	}
 	return state.continuationOutputObserved
-}
-
-// continuationSupersededByServerTurnLocked identifies OpenAI's normal
-// server-VAD handoff. A new user turn intentionally cancels the in-flight
-// assistant response; that cancellation retires this continuation obligation
-// instead of terminating the interactive session as a provider failure.
-func continuationSupersededByServerTurnLocked(state *toolContinuationState) bool {
-	if state == nil || (normalizeContinuationStatus(state.continuationStatus) != "cancelled" && normalizeContinuationStatus(state.continuationStatus) != "canceled") {
-		return false
-	}
-	for _, field := range strings.FieldsFunc(state.continuationStatusDetails, func(r rune) bool { return r == ',' || r == ';' }) {
-		if strings.TrimSpace(field) == "reason=turn_detected" {
-			return true
-		}
-	}
-	return false
 }
 
 func continuationTerminalFailureLocked(state *toolContinuationState) bool {

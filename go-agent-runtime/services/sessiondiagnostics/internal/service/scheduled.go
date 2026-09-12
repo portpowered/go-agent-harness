@@ -253,24 +253,24 @@ func (r *reducer) rememberRetryLocked(responseID, lifecycleID string, terminal *
 	return sessiondiagnostics.Observation{Accepted: true, ScheduledIndex: index, HasScheduledIndex: true, Retry: sessiondiagnostics.RetryRequest{Delay: delay}}
 }
 
-func (r *reducer) claimRetryLocked(rawID string, terminal *sessiondiagnostics.Terminal) (sessiondiagnostics.Observation, error, time.Duration, bool) {
+func (r *reducer) claimRetryLocked(rawID string, terminal *sessiondiagnostics.Terminal) (sessiondiagnostics.Observation, time.Duration, bool, error) {
 	delay, eligible := retryDecision(terminal)
 	if !eligible {
-		return sessiondiagnostics.Observation{}, nil, 0, false
+		return sessiondiagnostics.Observation{}, 0, false, nil
 	}
 	index, ok := r.scheduledIndexForLocked(rawID)
 	if !ok && r.retryCandidateSet && strings.TrimSpace(rawID) == r.retryCandidateID {
 		index, ok = r.retryCandidateIndex, true
 	}
 	if !ok || index < 0 || index >= len(r.scheduled) {
-		return sessiondiagnostics.Observation{}, nil, 0, false
+		return sessiondiagnostics.Observation{}, 0, false, nil
 	}
 	lifecycle := &r.scheduled[index]
 	if !lifecycle.Bound || lifecycle.Disposition != sessiondiagnostics.DispositionPending {
-		return sessiondiagnostics.Observation{}, nil, 0, false
+		return sessiondiagnostics.Observation{}, 0, false, nil
 	}
 	if lifecycle.RetryUsed {
-		return sessiondiagnostics.Observation{ScheduledIndex: index, HasScheduledIndex: true, Retry: sessiondiagnostics.RetryRequest{Exhausted: true}}, sessiondiagnostics.ErrRetryExhausted, 0, false
+		return sessiondiagnostics.Observation{ScheduledIndex: index, HasScheduledIndex: true, Retry: sessiondiagnostics.RetryRequest{Exhausted: true}}, 0, false, sessiondiagnostics.ErrRetryExhausted
 	}
 	lifecycle.RetryUsed = true
 	lifecycle.RetryPending = true
@@ -286,7 +286,7 @@ func (r *reducer) claimRetryLocked(rawID string, terminal *sessiondiagnostics.Te
 			r.continuations[callID] = state
 		}
 	}
-	return sessiondiagnostics.Observation{Accepted: true, ScheduledIndex: index, HasScheduledIndex: true, Retry: sessiondiagnostics.RetryRequest{Accepted: true, Delay: delay}}, nil, delay, true
+	return sessiondiagnostics.Observation{Accepted: true, ScheduledIndex: index, HasScheduledIndex: true, Retry: sessiondiagnostics.RetryRequest{Accepted: true, Delay: delay}}, delay, true, nil
 }
 
 func (r *reducer) noteDispositionLocked(rawID string, disposition sessiondiagnostics.Disposition) sessiondiagnostics.Observation {

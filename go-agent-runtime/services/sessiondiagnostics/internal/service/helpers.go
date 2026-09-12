@@ -11,6 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 )
 
+const continuationCompletedStatus = "completed"
+
 func recordContinuationTerminal(state *sessiondiagnostics.ContinuationState, terminal *sessiondiagnostics.Terminal, output bool) bool {
 	if state == nil || !state.ToolResponseComplete {
 		return false
@@ -46,7 +48,7 @@ func applyContinuationTerminalMetadata(state *sessiondiagnostics.ContinuationSta
 
 func markContinuationFailure(state *sessiondiagnostics.ContinuationState) {
 	status := normalize(state.ContinuationStatus)
-	failed := !state.ContinuationOutput || (status != "" && status != "completed") || (state.ContinuationReason != "" && state.ContinuationReason != "provider_authored_completion" && state.ContinuationReason != "loop_synthesized_completion")
+	failed := !state.ContinuationOutput || (status != "" && status != continuationCompletedStatus) || (state.ContinuationReason != "" && state.ContinuationReason != "provider_authored_completion" && state.ContinuationReason != "loop_synthesized_completion")
 	if failed && state.ContinuationStatusDetails == "" && state.ContinuationReason != "" && !state.ContinuationOutput {
 		state.ContinuationStatusDetails = "assistant continuation produced no observable output"
 	}
@@ -60,7 +62,7 @@ func continuationCanComplete(state sessiondiagnostics.ContinuationState) bool {
 		return false
 	}
 	status := normalize(state.ContinuationStatus)
-	if state.ContinuationFailure || (status != "" && status != "completed") {
+	if state.ContinuationFailure || (status != "" && status != continuationCompletedStatus) {
 		return false
 	}
 	if state.ContinuationReason != "" && state.ContinuationReason != "provider_authored_completion" && state.ContinuationReason != "loop_synthesized_completion" {
@@ -102,7 +104,7 @@ func providerFailure(terminal *sessiondiagnostics.Terminal) bool {
 	}
 	status := normalize(terminal.Status)
 	switch status {
-	case "", "completed":
+	case "", continuationCompletedStatus:
 		return normalize(terminal.Reason) == "terminal_failure"
 	case "cancelled", "canceled":
 		return false

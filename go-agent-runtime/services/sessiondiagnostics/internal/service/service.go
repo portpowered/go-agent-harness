@@ -70,7 +70,7 @@ func (r *reducer) Apply(ctx context.Context, event sessiondiagnostics.Event) (se
 		r.mu.Unlock()
 		return sessiondiagnostics.Observation{}, sessiondiagnostics.ErrClosed
 	}
-	observation, err, retryDelay, retryScheduled := r.applyLocked(event)
+	observation, retryDelay, retryScheduled, err := r.applyLocked(event)
 	scheduler := r.scheduler
 	r.mu.Unlock()
 	if err != nil || !retryScheduled || scheduler == nil {

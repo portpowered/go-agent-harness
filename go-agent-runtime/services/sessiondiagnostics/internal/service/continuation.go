@@ -39,7 +39,7 @@ func (r *reducer) toolResultAcceptedLocked(callID string) sessiondiagnostics.Obs
 	return sessiondiagnostics.Observation{Accepted: true}
 }
 
-func (r *reducer) continuationRequestedLocked(callID string) (sessiondiagnostics.Observation, error, time.Duration, bool) {
+func (r *reducer) continuationRequestedLocked(callID string) (sessiondiagnostics.Observation, time.Duration, bool, error) {
 	requested := 0
 	for id, state := range r.continuations {
 		if strings.TrimSpace(callID) != "" && id != strings.TrimSpace(callID) {
@@ -53,9 +53,9 @@ func (r *reducer) continuationRequestedLocked(callID string) (sessiondiagnostics
 		requested++
 	}
 	if requested == 0 {
-		return sessiondiagnostics.Observation{}, sessiondiagnostics.ErrMalformedSequence, 0, false
+		return sessiondiagnostics.Observation{}, 0, false, sessiondiagnostics.ErrMalformedSequence
 	}
-	return sessiondiagnostics.Observation{Accepted: true, PendingContinuations: r.pendingContinuationCountLocked()}, nil, 0, false
+	return sessiondiagnostics.Observation{Accepted: true, PendingContinuations: r.pendingContinuationCountLocked()}, 0, false, nil
 }
 
 func (r *reducer) syncLegacyLocked(legacy *sessiondiagnostics.LegacyState) sessiondiagnostics.Observation {
@@ -126,11 +126,11 @@ func (r *reducer) restoreLegacyContinuationsLocked(legacy *sessiondiagnostics.Le
 	}
 }
 
-func (r *reducer) endResponseLocked(event sessiondiagnostics.Event) (sessiondiagnostics.Observation, error, time.Duration, bool) {
+func (r *reducer) endResponseLocked(event sessiondiagnostics.Event) (sessiondiagnostics.Observation, time.Duration, bool, error) {
 	id := strings.TrimSpace(event.ResponseID)
 	effectiveID, early, admitted := r.admitResponseEndLocked(id)
 	if !admitted {
-		return early, nil, 0, false
+		return early, 0, false, nil
 	}
 	duplicateEnd := r.messageEndSeen
 	r.messageEndSeen = true
@@ -154,7 +154,7 @@ func (r *reducer) endResponseLocked(event sessiondiagnostics.Event) (sessiondiag
 		ResponseID:           effectiveID,
 		ContinuationChanged:  changed,
 		PendingContinuations: pending,
-	}, nil, 0, false
+	}, 0, false, nil
 }
 
 func (r *reducer) admitResponseEndLocked(id string) (string, sessiondiagnostics.Observation, bool) {

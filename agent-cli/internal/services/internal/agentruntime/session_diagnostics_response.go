@@ -211,7 +211,10 @@ func (o *sessionProgressObserver) activeResponsePurpose() messages.ResponsePurpo
 	return messages.ResponsePurpose(o.lifecycle.Snapshot().ActivePurpose)
 }
 func (o *sessionProgressObserver) lifecycleEvent(event sd.Event) sd.Observation {
-	observation, _ := o.applyLifecycle(context.Background(), event)
+	observation, err := o.applyLifecycle(context.Background(), event)
+	if err != nil {
+		return sd.Observation{}
+	}
 	return observation
 }
 func (o *sessionProgressObserver) plainEvent(kind sd.EventKind, id string) sd.Observation {
@@ -333,10 +336,6 @@ func (o *sessionProgressObserver) observeProviderToolCallStartForResponse(callID
 	}
 	o.toolStateMu.Lock()
 	enabled := o.toolResultsEnabled
-	accepted := false
-	if enabled {
-		_, accepted = o.acceptedToolCalls[callID]
-	}
 	o.toolStateMu.Unlock()
 	if !enabled {
 		return
@@ -345,7 +344,14 @@ func (o *sessionProgressObserver) observeProviderToolCallStartForResponse(callID
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
 	o.providerToolCallSeen = true
-	if !accepted {
+	// The provider-facing tool-result send may complete while the shared
+	// lifecycle reducer is applying the tool-call event. Re-read acceptance
+	// under the lock before creating an unresolved obligation so that a result
+	// accepted during that handoff cannot be reintroduced as pending.
+	_, accepted := o.acceptedToolCalls[callID]
+	if accepted {
+		delete(o.unresolvedToolCalls, callID)
+	} else {
 		o.unresolvedToolCalls[callID] = struct{}{}
 	}
 	o.toolStateMu.Unlock()
