@@ -1,5 +1,5 @@
 {
-  "candidate": "a1e534e8416ece6623fc40fa7efdf1600c356ae7",
+  "candidate": "2a8205065c1906384390bc51681137b37fdd9aba",
   "mode": "mutation-remove-continuation-owner",
   "payload": {
     "anchor": "if index, ok := r.pendingContinuationIndexLocked(); ok {",
@@ -10,17 +10,17 @@
         "go",
         "test",
         "-overlay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-mutation-_n4ojw68/overlay.json",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-mutation-evq025ag/overlay.json",
         "./go-agent-runtime/services/sessiondiagnostics/wire",
         "-run",
         "TestToolContinuationRemainsOneScheduledLifecycle",
         "-count=1",
         "-timeout=120s"
       ],
-      "elapsed_seconds": 0.46,
+      "elapsed_seconds": 0.395,
       "returncode": 1,
       "stderr": "",
-      "stdout": "--- FAIL: TestToolContinuationRemainsOneScheduledLifecycle (0.00s)\n    wire_test.go:226: continuation consumed wrong scheduled slot: {Accepted:false NewResponse:false OwnsResponse:false Candidate:false Admitted:false ContinuationChanged:false ResponseID:response-continuation ScheduledIndex:0 HasScheduledIndex:false Disposition: PendingContinuations:0 Retry:{Accepted:false Delay:0s Exhausted:false}}\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.203s\nFAIL\n"
+      "stdout": "--- FAIL: TestToolContinuationRemainsOneScheduledLifecycle (0.00s)\n    wire_test.go:226: continuation consumed wrong scheduled slot: {Accepted:false NewResponse:false OwnsResponse:false Candidate:false Admitted:false ContinuationChanged:false ResponseID:response-continuation ScheduledIndex:0 HasScheduledIndex:false Disposition: PendingContinuations:0 Retry:{Accepted:false Delay:0s Exhausted:false}}\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.169s\nFAIL\n"
     }
   },
   "schema": "audio-runtime-c79-evidence/v1"
