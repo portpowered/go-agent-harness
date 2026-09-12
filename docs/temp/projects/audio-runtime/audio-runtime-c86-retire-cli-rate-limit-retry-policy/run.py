@@ -39,8 +39,11 @@ class EvidenceFailure(RuntimeError):
 
 
 class Budget:
-    def __init__(self, seconds: float = AGGREGATE_TIMEOUT) -> None:
+    def __init__(self, seconds: float = AGGREGATE_TIMEOUT, child_timeout: float = CHILD_TIMEOUT) -> None:
+        require(seconds > 0, "aggregate timeout must be positive")
+        require(child_timeout > 0, "child timeout must be positive")
         self.deadline = time.monotonic() + seconds
+        self.child_timeout = child_timeout
 
     def remaining(self, label: str) -> float:
         remaining = self.deadline - time.monotonic()
@@ -110,7 +113,7 @@ def run_child(label: str, command: Sequence[str | Path], cwd: Path, budget: Budg
     timed_out = False
     try:
         try:
-            stdout, stderr = process.communicate(timeout=min(CHILD_TIMEOUT, budget.remaining(label)))
+            stdout, stderr = process.communicate(timeout=min(budget.child_timeout, budget.remaining(label)))
         except subprocess.TimeoutExpired:
             timed_out = True
             stop_group(process)
@@ -264,28 +267,48 @@ def shipped_replay(budget: Budget) -> dict[str, Any]:
         return {"status": "accepted", "help": help_result, "replay": replay, "pcm": {"bytes": pcm.stat().st_size, "sha256": sha256_file(pcm)}}
 
 
+def help_process_smoke(budget: Budget) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="audio-runtime-c86-help-") as temp_name:
+        temp = Path(temp_name)
+        yui = temp / "yui"
+        run_child("yui-build", ["rtk", "proxy", "go", "build", "-tags=nomicrophone", "-trimpath", "-o", yui, "./cmd/yui"], ROOT / "agent-cli", budget)
+        help_result = run_child("yui-help", [yui, "--help"], temp, budget)
+        require("session" in help_result["stdout"].lower(), "yui help did not expose the session workflow")
+        return {"status": "accepted", "help": help_result}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("inventory", "consumer", "mutations", "retirement-and-scope", "credential-free-audio-tool-replay", "all"))
+    parser.add_argument("mode", nargs="?", choices=("inventory", "consumer", "mutations", "retirement-and-scope", "credential-free-audio-tool-replay", "all"))
+    parser.add_argument("--case", choices=("credential-free-audio-tool-replay", "help-process-smoke"))
+    parser.add_argument("--child-timeout", type=float, default=CHILD_TIMEOUT)
+    parser.add_argument("--aggregate-timeout", type=float, default=AGGREGATE_TIMEOUT)
     args = parser.parse_args()
-    budget = Budget()
+    if args.mode is not None and args.case is not None:
+        parser.error("mode and --case cannot be used together")
+    mode = args.case or args.mode
+    if mode is None:
+        parser.error("provide a mode or --case")
+    budget = Budget(args.aggregate_timeout, args.child_timeout)
     try:
-        if args.mode == "inventory":
+        if mode == "inventory":
             report = inventory()
-        elif args.mode == "consumer":
+        elif mode == "consumer":
             report = consumer_mode(budget)
-        elif args.mode == "mutations":
+        elif mode == "mutations":
             report = mutation_controls(budget)
-        elif args.mode == "retirement-and-scope":
+        elif mode == "retirement-and-scope":
             report = retirement_and_scope()
-        elif args.mode == "credential-free-audio-tool-replay":
+        elif mode == "credential-free-audio-tool-replay":
             report = shipped_replay(budget)
+        elif mode == "help-process-smoke":
+            report = help_process_smoke(budget)
         else:
-            report = {"status": "accepted", "inventory": inventory(), "consumer": consumer_mode(budget), "mutations": mutation_controls(budget), "retirement": retirement_and_scope(), "replay": shipped_replay(budget)}
-        print(json.dumps(write_report(args.mode, report), indent=2, sort_keys=True))
+            report = {"status": "accepted", "inventory": inventory(), "consumer": consumer_mode(budget), "mutations": mutation_controls(budget), "retirement": retirement_and_scope(), "replay": shipped_replay(budget), "help": help_process_smoke(budget)}
+        print(json.dumps(write_report(mode, report), indent=2, sort_keys=True))
         return 0
     except (EvidenceFailure, OSError, subprocess.SubprocessError) as error:
-        print(json.dumps({"status": "failed", "mode": args.mode, "error": str(error)}, indent=2), file=sys.stderr)
+        print(json.dumps({"status": "failed", "mode": mode, "error": str(error)}, indent=2), file=sys.stderr)
         return 1
 
 
