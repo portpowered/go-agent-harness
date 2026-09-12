@@ -575,24 +575,6 @@ func shouldStopSessionLoop(msg messages.StreamMessage, opts sessionLoopOptions) 
 	}
 }
 
-// flushBufferedSessionLoopMessages renders only messages already buffered.
-// It never waits for a future provider message; the terminal boundary invokes
-// it only after owned resources have been stopped.
-func flushBufferedSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, obs *sessionProgressObserver) error {
-	for {
-		msg, ok := loop.Deltas().Read()
-		if !ok {
-			return nil
-		}
-		if obs != nil {
-			obs.observe(msg)
-		}
-		if err := writeSessionReplayMessage(out, msg); err != nil {
-			return err
-		}
-	}
-}
-
 func sendSessionClose(ctx context.Context, loop *agentloop.AgentLoop) error {
 	msg := messages.Message{
 		Role: messages.RoleUser,

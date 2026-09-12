@@ -25,7 +25,12 @@ ALLOWED_PREFIXES = (
     "coverage-manifest/go-agent-runtime/services/sessionlive/",
     "docs/temp/projects/audio-runtime/audio-runtime-c82-retire-cli-live-session-orchestration/",
 )
-ALLOWED_FILES = CLI_FILES | {"docs/architecture/architecture-policy.json"}
+# The implementation handoff explicitly authorizes deleting the now-unreferenced
+# legacy buffered-drain helper after proving that C82's service owns its work.
+ALLOWED_FILES = CLI_FILES | {
+    "agent-cli/internal/services/internal/agentruntime/session_drain.go",
+    "docs/architecture/architecture-policy.json",
+}
 EXCLUDED = (
     "session_runtime_plan.go",
     "session_room_coordinator.go",

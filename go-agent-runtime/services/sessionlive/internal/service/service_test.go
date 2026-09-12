@@ -98,8 +98,7 @@ func TestRunDrainsFinalOutputAndJoinsCleanup(t *testing.T) {
 		},
 		WaitForStragglers: func(context.Context) error { return nil },
 		StopOwnedResources: func(context.Context) error {
-			_ = session.Close()
-			return providerErr
+			return errors.Join(providerErr, session.Close())
 		},
 	})
 	if !errors.Is(err, providerErr) {
@@ -137,9 +136,21 @@ func TestNewLoopCopiesSessionConfigAndToolDefinitions(t *testing.T) {
 	config.Instructions = "mutated"
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+	runResult := make(chan error, 1)
+	closeResult := make(chan error, 1)
 	go func() {
-		_, _ = loop.Run(ctx), session.Close()
+		runResult <- loop.Run(ctx)
+		closeResult <- session.Close()
 	}()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-runResult; !isCancellation(err) {
+			t.Errorf("loop.Run: %v", err)
+		}
+		if err := <-closeResult; err != nil {
+			t.Errorf("session.Close: %v", err)
+		}
+	})
 	deadline := time.After(time.Second)
 	for len(session.sentMessages()) == 0 {
 		select {
@@ -232,12 +243,61 @@ func TestRunJoinsProviderAndCleanupErrors(t *testing.T) {
 		Errors:            providerErrors,
 		WaitForStragglers: func(context.Context) error { return nil },
 		StopOwnedResources: func(context.Context) error {
-			_ = session.Close()
-			return cleanupErr
+			return errors.Join(cleanupErr, session.Close())
 		},
 	})
 	if !errors.Is(err, providerErr) || !errors.Is(err, cleanupErr) {
 		t.Fatalf("Run error = %v, want provider and cleanup identities", err)
+	}
+}
+
+func TestRunCancelsInputAfterStragglerWait(t *testing.T) {
+	session := newScriptedSession()
+	inferencer := &scriptedInferencer{
+		session: session,
+		events: []messages.StreamMessage{
+			{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("ordered", "test")},
+		},
+	}
+	loop, err := New().NewLoop(sessionlive.LoopOptions{Inferencer: inferencer})
+	if err != nil {
+		t.Fatalf("NewLoop: %v", err)
+	}
+	done := make(chan struct{})
+	var inputCtx context.Context
+	waitErr := errors.New("input was cancelled before straggler drain")
+	stopErr := errors.New("input was not cancelled before owned cleanup")
+	err = New().Run(context.Background(), sessionlive.RunOptions{
+		Loop: loop,
+		Handler: func(context.Context, *sessionlive.Loop, messages.StreamMessage, sessionlive.MessageContext) (sessionlive.MessageResult, error) {
+			return sessionlive.MessageResult{}, nil
+		},
+		StartInput: func(ctx context.Context, _ *sessionlive.Loop) (<-chan error, error) {
+			inputCtx = ctx
+			inputErr := make(chan error, 1)
+			go func() {
+				<-ctx.Done()
+				inputErr <- nil
+			}()
+			close(done)
+			return inputErr, nil
+		},
+		Done: done,
+		WaitForStragglers: func(context.Context) error {
+			if inputCtx.Err() != nil {
+				return waitErr
+			}
+			return nil
+		},
+		StopOwnedResources: func(context.Context) error {
+			if inputCtx.Err() == nil {
+				return stopErr
+			}
+			return session.Close()
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run error = %v, want ordered input cancellation", err)
 	}
 }
 

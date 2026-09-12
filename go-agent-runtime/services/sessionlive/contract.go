@@ -50,6 +50,7 @@ const (
 	StreamTypeSessionUpdated = messages.StreamTypeSessionUpdated
 	StreamTypeTextDelta      = messages.StreamTypeTextDelta
 	StreamTypeMessageEnd     = messages.StreamTypeMessageEnd
+	defaultFirstTurnTimeout  = 30 * time.Second
 )
 
 // StreamBuffers is the host-neutral factory for typed stream buffers. A
@@ -83,7 +84,7 @@ func (SessionCapabilities) SupportsResponseRequests(session Session) bool {
 
 func (SessionCapabilities) WaitForFirstTurn(ctx context.Context, ack <-chan error, source platformclock.Source, timeout time.Duration) error {
 	if timeout <= 0 {
-		timeout = 30 * time.Second
+		timeout = defaultFirstTurnTimeout
 	}
 	if source == nil {
 		source = platformclock.Real{}
@@ -202,6 +203,9 @@ type RunOptions struct {
 	Errors            <-chan error
 
 	OnAdmissionClosed func()
+	// QuiesceUpstream runs before input cancellation and the bounded provider
+	// straggler wait. Hosts may use it to stop a process-owned producer early;
+	// caller-owned finite producers remain live until the service joins them.
 	QuiesceUpstream   func() error
 	WaitForStragglers func(context.Context) error
 	// StopOwnedResources runs after input cancellation, optional playback

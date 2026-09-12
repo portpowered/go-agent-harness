@@ -11,7 +11,6 @@ import (
 func (r *runState) terminate(primary error, drainPlayback bool) error {
 	r.terminateOnce.Do(func() {
 		var quiesceErr, waitErr, stopErr, flushErr error
-		r.cancelInput()
 		if r.opts.QuiesceUpstream != nil {
 			quiesceErr = r.opts.QuiesceUpstream()
 		}
@@ -20,6 +19,12 @@ func (r *runState) terminate(primary error, drainPlayback bool) error {
 		} else {
 			waitErr = r.opts.WaitForStragglers(r.ctx)
 		}
+		// Keep caller-owned finite producers alive through the bounded provider
+		// drain. An admitted audio frame or end-of-turn signal may still be
+		// completing while the provider's terminal signal is being observed.
+		// Process-owned producers that cannot safely remain active can be
+		// quiesced by the host callback above.
+		r.cancelInput()
 		var playbackErr error
 		if drainPlayback && r.opts.Lifecycle.DrainPlayback != nil {
 			playbackErr = r.opts.Lifecycle.DrainPlayback(r.ctx)
