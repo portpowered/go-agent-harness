@@ -1,15 +1,15 @@
 {
   "schema": "audio-runtime-c79-evidence/v1",
   "mode": "static-repair",
-  "candidate": "724a2e0b3788920d481fec1e927e4228d7640468",
-  "parent": "66211b7bba2b8af4fdd3599dbcf9f34ebf450e47",
+  "candidate": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
+  "parent": "a5d26045b7e39f21a0b5d663826db0394af87b6a",
   "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
   "origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
   "source_provenance": {
-    "tested_revision": "724a2e0b3788920d481fec1e927e4228d7640468",
+    "tested_revision": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
     "tracked_input_count": 10482,
-    "tracked_input_sha256": "8c85eb963c2c2dfd606b071b8fa3e97713e0e63288686a38e8397cce5b7944a9",
-    "replay_artifact_sha256": "1ff1d25c4fdc7854f7ccce6fe44957d1957feddfb37ea84aa00870b227f33181"
+    "tracked_input_sha256": "94a061e14f492c7889259172de1b7542a492f26c9e1d7bf1e532b672c120ba21",
+    "replay_artifact_sha256": "f222823d925b149878073bf501f68db3147bfa8224c887eed9654e7b72ea8e24"
   },
   "changes": {
     "wire_registry": "go-agent-runtime/services/sessiondiagnostics/wire",
@@ -36,12 +36,13 @@
     "session_open_repair": "SESSION.OPEN dispatches lifecycle.reset before clearing the adapter projection so an untagged response cannot finish a prior response",
     "foreign_response_open_repair": "unmatched response opens are rejected until an explicit boundary; active scheduled dispatch uses a private pending-boundary check",
     "finish_state_reset": "matching response finish clears purpose, terminal boundary, content, and tool-turn state before the next response",
-    "duplicate_response_end_repair": "duplicate model response ends are rejected before finish while the active response remains owned"
+    "duplicate_response_end_repair": "duplicate model response ends are rejected before finish while the active response remains owned",
+    "response_content_ownership_ordering": "responseEventBelongsToActive validates the response envelope before applying the untagged content boundary; TestSessionProgressObserver_ForeignContentCannotClearTerminalBoundary preserves the terminal marker"
   },
   "gates": {
     "fmt": "pass: affected Go files gofmt-clean",
     "wire_check": "pass: all registered Wire injectors regenerated without drift",
-    "architecture_size": "pass: 189 packages, 1906 files, 28152 functions",
+    "architecture_size": "pass: 189 packages, 1906 files, 28153 functions",
     "coverage_registration": "pass: 179 packages across 6 modules",
     "vet": "pass: current workspace target",
     "lint": "pass: pinned golangci-lint 2.9.0 current workspace target",
@@ -51,7 +52,7 @@
   },
   "causal_regressions": {
     "response_matrix": "pass: reducer, adapter, and GOWORK=off consumer matrix",
-    "service_race": "pass: focused wire and adapter race checks",
+    "service_race": "pass: focused service race 24 invocations and adapter race 442 invocations (COUNT=2)",
     "external_consumer": "pass: GOWORK=off",
     "mutation_remove_continuation_owner": "expected failure",
     "mutation_duplicate_scheduled_disposition": "expected failure",
@@ -68,7 +69,14 @@
     "job": "independent review",
     "old_head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
     "code_findings": "foreign response-open replacement, stale finish purpose/terminal boundary, and duplicate response-end admission",
-    "remaining_findings": "all three findings repaired in 66211b7b and the lint-clean test repair in 724a2e0b; refreshed evidence is source-pinned to 724a2e0b; script CI remains authoritative"
+    "remaining_findings": "the historical three findings were repaired in 66211b7b and the lint-clean test repair in 724a2e0b; this candidate adds the work-review-239 ownership-ordering repair and is source-pinned to ecf09f5a; script CI remains authoritative"
+  },
+  "latest_review_repair": {
+    "review": "work-review-239",
+    "reviewed_head": "a5d26045b7e39f21a0b5d663826db0394af87b6a",
+    "defect": "an untagged content boundary was applied before response ownership validation, allowing a duplicate end for the prior response to be admitted after foreign content",
+    "repair_revision": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
+    "regression": "TestSessionProgressObserver_ForeignContentCannotClearTerminalBoundary fails before the reorder and passes after it; duplicate end remains neither Accepted, Candidate, nor Admitted"
   },
   "known_scope_helper_limitation": "none; the retirement-and-scope verifier records the handoff-released Wire and architecture leases explicitly",
   "acceptance": "executor evidence only; no script-CI success, review, merge, vertical probe or project acceptance claimed"
