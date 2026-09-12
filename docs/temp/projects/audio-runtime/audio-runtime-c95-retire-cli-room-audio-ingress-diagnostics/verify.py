@@ -28,6 +28,7 @@ PUBLIC_ROOT = RUNTIME_ROOT / "services" / "roomaudiodiagnostics"
 INTERNAL_SOURCE = PUBLIC_ROOT / "internal" / "service" / "service.go"
 LEGACY_SOURCE = REPO_ROOT / "agent-cli/internal/services/internal/agentruntime/session_room_audio_diagnostics.go"
 BASELINE = "3d3e72786ac6fc1fd47c7e029589e5117674b035"
+CURRENT_MAIN = "origin/main"
 STARTUP = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 MANIFEST_BASELINE = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 LEGACY_PATH = "agent-cli/internal/services/internal/agentruntime/session_room_audio_diagnostics.go"
@@ -75,6 +76,7 @@ def verify_scope() -> dict[str, object]:
     require(branch == prd["branchName"], f"branch mismatch: {branch!r} != {prd['branchName']!r}")
     require(branch == "codex/audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics", "unexpected admitted branch")
     candidate = git("rev-parse", "HEAD")
+    require(run(["rtk", "proxy", "git", "merge-base", "--is-ancestor", CURRENT_MAIN, candidate], REPO_ROOT, expected=0) == "", "current origin/main ancestry missing")
     require(run(["rtk", "proxy", "git", "merge-base", "--is-ancestor", STARTUP, candidate], REPO_ROOT, expected=0) == "", "startup ancestry missing")
     require(run(["rtk", "proxy", "git", "merge-base", "--is-ancestor", BASELINE, candidate], REPO_ROOT, expected=0) == "", "planning-main ancestry missing")
     baseline = run(["rtk", "proxy", "git", "show", f"{BASELINE}:{LEGACY_PATH}"], REPO_ROOT)
@@ -96,7 +98,10 @@ def verify_scope() -> dict[str, object]:
     public_sources = [path for path in PUBLIC_ROOT.rglob("*.go") if "_test.go" not in path.name]
     public_text = "\n".join(path.read_text(encoding="utf-8") for path in public_sources)
     require("agent-cli/internal" not in public_text and "internal/room" not in public_text, "public package imports CLI or mixer internals")
-    changed = [path for path in git("diff", f"{BASELINE}..{candidate}", "--name-only").splitlines() if path]
+    # The task must include the fetched main, but the ownership audit should
+    # inspect only the task delta after that merge rather than replaying all
+    # unrelated paths introduced by main since the planning snapshot.
+    changed = [path for path in git("diff", f"{CURRENT_MAIN}...{candidate}", "--name-only").splitlines() if path]
     owned = {
         LEGACY_PATH,
         "agent-cli/internal/services/internal/agentruntime/session_room_audio_diagnostics_test.go",
