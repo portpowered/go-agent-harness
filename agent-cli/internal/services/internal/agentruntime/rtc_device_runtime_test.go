@@ -7,6 +7,7 @@ import (
 	"errors"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 	"io"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -15,6 +16,9 @@ import (
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
 // TestRunSessionRTCDeviceBindingStartsRuntimePumps proves the production
@@ -287,3 +291,261 @@ var (
 	_ messages.Session             = (*runtimeRTCSession)(nil)
 	_ agentruntime.RTCMediaSession = (*runtimeRTCSession)(nil)
 )
+
+const (
+	terminalDrainProviderRate    = 24000
+	terminalDrainProviderSamples = 9600
+	terminalDrainDeviceSamples   = 6400
+)
+
+func TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio(t *testing.T) {
+	scenario := newTerminalDrainExternalScenario(t)
+	samples := terminalDrainExternalSamples()
+	scenario.push(t, samples)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
+			ModelCatalog: testModelCatalog(), ReplayPath: "synthetic.json", WaitForClose: true,
+			SessionInferencer: &terminalDrainExternalInferencer{session: scenario.provider},
+			RTCDeviceBinding:  scenario.request,
+		})
+	}()
+	phase := scenario.releaseRun(t, runErr)
+	select {
+	case err := <-runErr:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatalf("run session (%s): %v", phase, err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("run session (%s) did not complete", phase)
+	}
+	scenario.assertOutput(t, phase, samples)
+}
+
+type terminalDrainExternalScenario struct {
+	registry        *devicegw.SimulatedDuplexRegistry
+	request         agentruntime.RTCDeviceBindingRequest
+	providerMedia   *audio.SessionMedia
+	barrierInbound  *terminalDrainExternalInbound
+	provider        *terminalDrainExternalSession
+	gate            *terminalDrainExternalGate
+	admittedMu      sync.Mutex
+	admittedSamples int
+	admittedPCM     []int16
+}
+
+func newTerminalDrainExternalScenario(t *testing.T) *terminalDrainExternalScenario {
+	t.Helper()
+	scenario := &terminalDrainExternalScenario{}
+	registry, err := devicegw.NewSimulatedDuplexRegistry(devicegw.DuplexScenario{
+		Seed:    53,
+		Render:  devicegw.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+		Capture: devicegw.ClockSpec{NominalRate: audio.SampleRate, Quanta: []int{audio.FrameSize}},
+	})
+	if err != nil {
+		t.Fatalf("new callback-clocked registry: %v", err)
+	}
+	scenario.registry = registry
+	scenario.gate = &terminalDrainExternalGate{
+		started: make(chan struct{}), release: make(chan struct{}),
+		record:  func(samples []int16) { scenario.record(samples) },
+		advance: func() error { return registry.Advance(1) },
+	}
+	holdTone := audio.DefaultHoldToneConfig()
+	holdTone.GapThreshold = time.Hour
+	scenario.request = agentruntime.RTCDeviceBindingRequest{
+		Registry: registry, OutputPresent: true, OutputDevice: "",
+		OutputSampleRate: terminalDrainProviderRate, HoldToneConfig: &holdTone,
+		PlaybackSamplesObserver: scenario.gate.observe,
+	}
+	scenario.providerMedia = audio.NewSessionMediaAtRate(nil, terminalDrainProviderRate)
+	scenario.barrierInbound = &terminalDrainExternalInbound{
+		InboundMedia: scenario.providerMedia.Endpoints().Inbound,
+		drainStarted: make(chan struct{}),
+	}
+	scenario.provider = &terminalDrainExternalSession{
+		receive: messages.NewTypedBuffer[messages.StreamMessage](4), done: make(chan struct{}),
+		media: audio.MediaEndpoints{
+			Inbound: scenario.barrierInbound, Outbound: scenario.providerMedia.Endpoints().Outbound,
+		},
+		closeStarted: make(chan struct{}), releaseClose: make(chan struct{}),
+	}
+	if !scenario.provider.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionClose}) {
+		t.Fatal("provider terminal did not enter receive buffer")
+	}
+	t.Cleanup(func() { scenario.cleanup(t) })
+	return scenario
+}
+
+func terminalDrainExternalSamples() []int16 {
+	samples := make([]int16, terminalDrainProviderSamples)
+	for index := range samples {
+		samples[index] = int16(index%257 - 128)
+	}
+	return samples
+}
+
+func (s *terminalDrainExternalScenario) record(samples []int16) {
+	s.admittedMu.Lock()
+	s.admittedSamples += len(samples)
+	s.admittedPCM = append(s.admittedPCM, samples...)
+	s.admittedMu.Unlock()
+}
+
+func (s *terminalDrainExternalScenario) push(t *testing.T, samples []int16) {
+	t.Helper()
+	if err := s.providerMedia.PushInbound(samples); err != nil {
+		t.Fatalf("push provider response: %v", err)
+	}
+	if err := s.providerMedia.FlushInbound(); err != nil {
+		t.Fatalf("flush provider response: %v", err)
+	}
+}
+
+func (s *terminalDrainExternalScenario) releaseRun(t *testing.T, runErr <-chan error) string {
+	t.Helper()
+	select {
+	case <-s.provider.closeStarted:
+		s.provider.releaseOnce.Do(func() { close(s.provider.releaseClose) })
+		return "provider-close-before-drain"
+	case <-s.barrierInbound.drainStarted:
+		close(s.gate.release)
+		select {
+		case <-s.provider.closeStarted:
+		case <-time.After(time.Second):
+			t.Fatal("provider close did not follow sink drain")
+		}
+		s.provider.releaseOnce.Do(func() { close(s.provider.releaseClose) })
+		return "drain-before-provider-close"
+	case err := <-runErr:
+		t.Fatalf("run session completed before either lifecycle barrier: %v", err)
+	}
+	return ""
+}
+
+func (s *terminalDrainExternalScenario) assertOutput(t *testing.T, phase string, samples []int16) {
+	t.Helper()
+	s.admittedMu.Lock()
+	got := s.admittedSamples
+	gotPCM := append([]int16(nil), s.admittedPCM...)
+	s.admittedMu.Unlock()
+	if phase != "drain-before-provider-close" {
+		t.Fatalf("terminal drain phase = %s, want drain-before-provider-close", phase)
+	}
+	if got != terminalDrainDeviceSamples {
+		t.Fatalf("terminal drain phase %s admitted %d device samples, want exact %d", phase, got, terminalDrainDeviceSamples)
+	}
+	reference, err := wavio.NewPCM16Resampler(terminalDrainProviderRate, audio.SampleRate)
+	if err != nil {
+		t.Fatalf("create exact resampler: %v", err)
+	}
+	wantPCM, err := reference.Process(samples, true)
+	if err != nil {
+		t.Fatalf("resample exact provider block: %v", err)
+	}
+	if !reflect.DeepEqual(gotPCM, wantPCM) {
+		t.Fatalf("terminal drain phase %s changed admitted PCM: got %d samples, want exact resampled block", phase, len(gotPCM))
+	}
+	stats := s.registry.PlaybackStats()
+	if stats.DroppedSamples != 0 || stats.OverflowEvents != 0 || stats.DiscardedSamples != 0 {
+		t.Fatalf("terminal drain phase %s reported playback loss: %+v", phase, stats)
+	}
+}
+
+func (s *terminalDrainExternalScenario) cleanup(t *testing.T) {
+	t.Helper()
+	s.provider.releaseOnce.Do(func() { close(s.provider.releaseClose) })
+	if err := s.providerMedia.Close(); err != nil {
+		t.Errorf("cleanup provider media: %v", err)
+	}
+}
+
+type terminalDrainExternalGate struct {
+	started   chan struct{}
+	release   chan struct{}
+	record    func([]int16)
+	advance   func() error
+	startOnce sync.Once
+}
+
+func (g *terminalDrainExternalGate) observe(ctx context.Context, _ int, samples []int16) error {
+	g.record(samples)
+	g.startOnce.Do(func() { close(g.started) })
+	select {
+	case <-g.release:
+		return g.advance()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+type terminalDrainExternalInbound struct {
+	audio.InboundMedia
+	drainStarted chan struct{}
+	closeOnce    sync.Once
+}
+
+func (m *terminalDrainExternalInbound) Close() error {
+	m.closeOnce.Do(func() { close(m.drainStarted) })
+	return m.InboundMedia.Close()
+}
+
+type terminalDrainExternalInferencer struct {
+	session messages.Session
+}
+
+func (i *terminalDrainExternalInferencer) Request() inference.SessionRequest {
+	return inference.SessionRequest{Config: models.SessionConfig{
+		InputAudioSampleRate: models.SampleRate(terminalDrainProviderRate), OutputAudioSampleRate: models.SampleRate(terminalDrainProviderRate),
+	}}
+}
+
+func (i *terminalDrainExternalInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	return i.session, nil
+}
+
+type terminalDrainExternalSession struct {
+	receive *messages.TypedBuffer[messages.StreamMessage]
+	done    chan struct{}
+	media   audio.MediaEndpoints
+
+	closeStarted chan struct{}
+	releaseClose chan struct{}
+	closeOnce    sync.Once
+	releaseOnce  sync.Once
+	doneOnce     sync.Once
+}
+
+func (s *terminalDrainExternalSession) Send(ctx context.Context, _ messages.StreamMessage) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	default:
+		return true
+	}
+}
+
+func (s *terminalDrainExternalSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.receive
+}
+
+func (s *terminalDrainExternalSession) Done() <-chan struct{} { return s.done }
+
+func (s *terminalDrainExternalSession) RTCMedia() agentruntime.RTCMediaEndpoints { return s.media }
+
+func (s *terminalDrainExternalSession) Close() error {
+	var mediaErr error
+	s.closeOnce.Do(func() {
+		close(s.closeStarted)
+		<-s.releaseClose
+		mediaErr = errors.Join(s.media.Inbound.Close(), s.media.Outbound.Close())
+		s.doneOnce.Do(func() { close(s.done) })
+	})
+	return mediaErr
+}
+
+var _ messages.SessionInferencer = (*terminalDrainExternalInferencer)(nil)
+var _ messages.Session = (*terminalDrainExternalSession)(nil)
+var _ agentruntime.RTCMediaSession = (*terminalDrainExternalSession)(nil)

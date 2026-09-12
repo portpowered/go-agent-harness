@@ -1,0 +1,68 @@
+{
+  "schema": "audio-runtime.c64.negative-evidence.v1",
+  "project": "audio-runtime",
+  "task": "audio-runtime-c64-provider-audio-terminal-drain-repair",
+  "source_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "historical_negative": {
+    "ci_run": "34638493032",
+    "trials": [
+      {
+        "trial": "06",
+        "compared_samples": 174391,
+        "actual_samples": 167991,
+        "missing_samples": 6400,
+        "dropped_samples": 0,
+        "overflow_events": 0,
+        "discarded_samples": 0,
+        "discard_events": 0,
+        "underflow_events": 65,
+        "underflow_samples": 31200
+      },
+      {
+        "trial": "12",
+        "compared_samples": 174391,
+        "actual_samples": 167991,
+        "missing_samples": 6400,
+        "dropped_samples": 0,
+        "overflow_events": 0,
+        "discarded_samples": 0,
+        "discard_events": 0,
+        "underflow_events": 74,
+        "underflow_samples": 35040
+      }
+    ],
+    "preservation": "Historical PR439 observations and inherited occurrences are immutable references; this artifact does not replace them with a later green execution."
+  },
+  "inherited_occurrences": [
+    {
+      "ci_run": "34624302582",
+      "trial": "06",
+      "compared_samples": 174391,
+      "actual_samples": 167991,
+      "missing_samples": 6400,
+      "drop_overflow_discard_accounting": "all zero"
+    },
+    {
+      "ci_run": "34631305649",
+      "trial": "14",
+      "compared_samples": 174391,
+      "actual_samples": 167991,
+      "missing_samples": 6400,
+      "drop_overflow_discard_accounting": "all zero"
+    }
+  ],
+  "accepted_source_first_failure": {
+    "command": "go test ./agent-cli/internal/services/internal/agentruntime -run ^TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio$ -count=1 -timeout=60s",
+    "execution": "first failing execution before the production repair",
+    "returncode": 1,
+    "interleaving": "provider-close-before-drain",
+    "provider_samples": 9600,
+    "admitted_device_samples": 0,
+    "expected_device_samples": 6400,
+    "missing_samples": 6400,
+    "boundary": "provider Close entered before the provider inbound media had been sealed and the sink pump had completed",
+    "failure_output": "terminal drain phase provider-close-before-drain admitted 0 device samples, want exact 6400",
+    "candidate_derived_expectation": false
+  }
+}
