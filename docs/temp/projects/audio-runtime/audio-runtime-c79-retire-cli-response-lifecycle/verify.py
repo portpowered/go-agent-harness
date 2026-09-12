@@ -38,7 +38,13 @@ RELEASED_SHARED_PATHS = (
     "docs/architecture/architecture-policy.json",
     "docs/architecture/architecture-size-baseline.json",
 )
+# This pre-existing identity regression is kept as an exact, test-only
+# compatibility repair: disposed reducer slots cannot be rebound, so the
+# replacement scenario must use a distinct slot. No production adapter path is
+# broadened by this allowance.
+COMPATIBILITY_REGRESSION_TEST = "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_test.go"
 ALLOWED_PREFIXES += RELEASED_SHARED_PATHS
+ALLOWED_PREFIXES += (COMPATIBILITY_REGRESSION_TEST,)
 
 
 def command(argv: list[str], *, cwd: Path = ROOT, timeout: int = 240, env: dict[str, str] | None = None) -> dict:
