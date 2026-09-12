@@ -2,7 +2,10 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -38,7 +41,26 @@ func (s *Service) Load(bundle string) (RoomReplayPlan, error) {
 }
 
 func (s *Service) ValidateOutput(plan RoomReplayPlan, destination string) error {
-	return roomreplaybundle.ValidateRoomReplayOutput(plan, destination)
+	raw := strings.TrimSpace(destination)
+	if raw == "" {
+		return errors.New("room replay output directory is required")
+	}
+	root, err := filepath.Abs(filepath.Clean(plan.BundlePath))
+	if err != nil {
+		return fmt.Errorf("resolve room replay bundle path: %w", err)
+	}
+	output, err := filepath.Abs(filepath.Clean(raw))
+	if err != nil {
+		return fmt.Errorf("resolve room replay output path: %w", err)
+	}
+	relative, err := filepath.Rel(root, output)
+	if err != nil {
+		return fmt.Errorf("compare room replay source and output paths: %w", err)
+	}
+	if relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))) {
+		return fmt.Errorf("room replay output directory %q must be outside source bundle %q", destination, plan.BundlePath)
+	}
+	return nil
 }
 
 func newRoomReplayBundleError(kind RoomReplayBundleErrorKind, field, artifact, expected, actual string, cause error) error {

@@ -2,7 +2,6 @@ package roomreplaybundle_test
 
 import (
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplaybundle"
@@ -35,16 +34,5 @@ func TestRoomReplayBundleErrorClassificationAndProjection(t *testing.T) {
 	manifest := plan.Manifest()
 	if manifest.Participants[1].Provider != "" || manifest.Participants[1].Model != "" {
 		t.Fatalf("human projection retained provider metadata: %+v", manifest.Participants[1])
-	}
-}
-
-func TestValidateRoomReplayOutputRejectsSourceAndAllowsExternalDestination(t *testing.T) {
-	source := t.TempDir()
-	plan := roomreplaybundle.RoomReplayPlan{BundlePath: source}
-	if err := roomreplaybundle.ValidateRoomReplayOutput(plan, filepath.Join(source, "output")); err == nil {
-		t.Fatal("source child was accepted as replay output")
-	}
-	if err := roomreplaybundle.ValidateRoomReplayOutput(plan, filepath.Join(t.TempDir(), "output")); err != nil {
-		t.Fatalf("external replay output rejected: %v", err)
 	}
 }

@@ -56,11 +56,12 @@ func TestLoadRoomReplayPlanAcceptsInventoryBackedParticipantArtifacts(t *testing
 	bundle, manifest := writeRoomReplayBundle(t)
 	participants := manifest["participants"].(map[string]any)
 	legacyArtifacts := manifest["artifacts"].(map[string]any)
-	inventory := make([]any, 0, len(participants)*len(roomReplayRequiredParticipantArtifactRoles)+len(participants)+2)
+	requiredRoles := roomReplayRequiredParticipantArtifactRoles()
+	inventory := make([]any, 0, len(participants)*len(requiredRoles)+len(participants)+2)
 	for _, participantID := range []string{"alpha", "beta"} {
 		participant := participants[participantID].(map[string]any)
 		participantArtifacts := participant["artifacts"].(map[string]any)
-		for _, role := range append(append([]string(nil), roomReplayRequiredParticipantArtifactRoles...), roomReplayArtifactRoleCapture) {
+		for _, role := range append(append([]string(nil), requiredRoles...), roomReplayArtifactRoleCapture) {
 			original := participantArtifacts[role].(map[string]any)
 			copy := make(map[string]any, len(original)+1)
 			for key, value := range original {
@@ -88,8 +89,8 @@ func TestLoadRoomReplayPlanAcceptsInventoryBackedParticipantArtifacts(t *testing
 		t.Fatalf("LoadRoomReplayPlan with inventory-backed artifacts: %v", err)
 	}
 	for _, participant := range plan.Participants {
-		if len(participant.Artifacts) != len(roomReplayRequiredParticipantArtifactRoles)+1 {
-			t.Fatalf("participant %q has %d artifacts, want %d", participant.ID, len(participant.Artifacts), len(roomReplayRequiredParticipantArtifactRoles)+1)
+		if len(participant.Artifacts) != len(requiredRoles)+1 {
+			t.Fatalf("participant %q has %d artifacts, want %d", participant.ID, len(participant.Artifacts), len(requiredRoles)+1)
 		}
 	}
 }

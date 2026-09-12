@@ -35,12 +35,14 @@ const (
 	RoomReplayBundleIncomplete = roomreplaybundle.RoomReplayBundleIncomplete
 )
 
-var roomReplayBundleService = roomReplayWire.NewService()
+func newRoomReplayBundleService() roomreplaybundle.Service {
+	return roomReplayWire.NewService()
+}
 
 // Deprecated: use roomreplaybundle/wire.NewService from a host composition
 // root. This adapter is retained for unchanged CLI room callers.
 func LoadRoomReplayPlan(bundle string) (RoomReplayPlan, error) {
-	return roomReplayBundleService.Load(bundle)
+	return newRoomReplayBundleService().Load(bundle)
 }
 
 // Deprecated: use the injected roomreplaybundle.Service admission contract.
@@ -51,7 +53,7 @@ func ValidateRoomReplayBundle(bundle string) error {
 
 // Deprecated: output exclusion is owned by the roomreplaybundle service.
 func ValidateRoomReplayOutput(plan RoomReplayPlan, destination string) error {
-	return roomReplayBundleService.ValidateOutput(plan, destination)
+	return newRoomReplayBundleService().ValidateOutput(plan, destination)
 }
 
 // Deprecated: this helper only keeps the audio-bundle compatibility parser's

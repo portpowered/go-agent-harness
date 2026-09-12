@@ -17,7 +17,7 @@ const (
 	RoomReplayBundleIncomplete    = roomreplaybundle.RoomReplayBundleIncomplete
 )
 
-var (
+const (
 	ErrInvalidRoomReplayBundle    = roomreplaybundle.ErrInvalidRoomReplayBundle
 	ErrRoomReplayBundleIncomplete = roomreplaybundle.ErrRoomReplayBundleIncomplete
 )

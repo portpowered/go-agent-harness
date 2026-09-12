@@ -5,10 +5,7 @@ package roomreplaybundle
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
@@ -27,17 +24,18 @@ const (
 	RoomReplayBundleManifestPath = runtimeRooms.RoomReplayBundleManifestPath
 )
 
-var (
+type roomReplaySentinel string
+
+func (e roomReplaySentinel) Error() string { return string(e) }
+
+const (
 	// ErrInvalidRoomReplayBundle identifies a bundle that cannot be used as a
-	// replay plan. It is deliberately distinct from live room configuration
-	// errors so callers can report an offline admission failure.
-	ErrInvalidRoomReplayBundle = errors.New("invalid room replay bundle")
-	// ErrRoomReplayBundleIncomplete identifies a missing or truncated part of
-	// an otherwise recognizable replay bundle.
-	ErrRoomReplayBundleIncomplete = errors.New("room replay bundle incomplete")
-	// ErrRoomReplaySourceConflict identifies a room command that mixes a
-	// finalized replay bundle with a live/configured room source.
-	ErrRoomReplaySourceConflict = errors.New("room replay bundle cannot be combined with room config or manifest")
+	// replay plan.
+	ErrInvalidRoomReplayBundle roomReplaySentinel = "invalid room replay bundle"
+	// ErrRoomReplayBundleIncomplete identifies missing or truncated bundle data.
+	ErrRoomReplayBundleIncomplete roomReplaySentinel = "room replay bundle incomplete"
+	// ErrRoomReplaySourceConflict identifies a mixed live/configured replay.
+	ErrRoomReplaySourceConflict roomReplaySentinel = "room replay bundle cannot be combined with room config or manifest"
 )
 
 // RoomReplayBundleErrorKind is the stable classification of an admission
@@ -248,31 +246,4 @@ type Service interface {
 
 func cloneRoomReplayArtifact(artifact RoomReplayArtifact) RoomReplayArtifact {
 	return artifact
-}
-
-// ValidateRoomReplayOutput rejects an evidence destination inside the source
-// bundle. The replay source is immutable for the whole run; even creating a
-// new output child would change the bundle's directory tree while it is being
-// consumed.
-func ValidateRoomReplayOutput(plan RoomReplayPlan, destination string) error {
-	raw := strings.TrimSpace(destination)
-	if raw == "" {
-		return errors.New("room replay output directory is required")
-	}
-	root, err := filepath.Abs(filepath.Clean(plan.BundlePath))
-	if err != nil {
-		return fmt.Errorf("resolve room replay bundle path: %w", err)
-	}
-	output, err := filepath.Abs(filepath.Clean(raw))
-	if err != nil {
-		return fmt.Errorf("resolve room replay output path: %w", err)
-	}
-	relative, err := filepath.Rel(root, output)
-	if err != nil {
-		return fmt.Errorf("compare room replay source and output paths: %w", err)
-	}
-	if relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))) {
-		return fmt.Errorf("room replay output directory %q must be outside source bundle %q", destination, plan.BundlePath)
-	}
-	return nil
 }
