@@ -45,7 +45,7 @@ func buildRoomParticipantPlansAdapter(ctx context.Context, opts RoomRunOptions, 
 		return nil, nil, err
 	}
 	opts.FilesystemPolicy, opts.WorkDir, opts.AllowPaths = policy, policy.PrimaryRoot(), policy.AdditionalRoots()
-	state, err := newRoomPlanningAdapterState(ctx, opts, validation, policy, evidences...)
+	state, err := newRoomPlanningAdapterState(opts, validation, policy, evidences...)
 	if err != nil {
 		return nil, roomSecretsInManifest(opts.Manifest, stateCredentialValues(state)), err
 	}
@@ -74,7 +74,7 @@ func resolveRoomPlanningPolicy(opts RoomRunOptions) (*tools.FilesystemPolicy, er
 	}
 	return policy, nil
 }
-func newRoomPlanningAdapterState(ctx context.Context, opts RoomRunOptions, validation room.ValidationOptions, policy *tools.FilesystemPolicy, evidences ...*roomEvidence) (*roomPlanningAdapterState, error) {
+func newRoomPlanningAdapterState(opts RoomRunOptions, validation room.ValidationOptions, policy *tools.FilesystemPolicy, evidences ...*roomEvidence) (*roomPlanningAdapterState, error) {
 	credentials := newRoomCredentialLookup(opts, validation)
 	if opts.ReplayPlan == nil {
 		credentials.prime(opts.Manifest)
@@ -91,7 +91,7 @@ func newRoomPlanningAdapterState(ctx context.Context, opts RoomRunOptions, valid
 	state := &roomPlanningAdapterState{options: opts, policy: policy, credentials: credentials, evidence: evidence, sessionFactory: sessionFactory, usesProductionFactory: opts.SessionFactory == nil && opts.WebSocketDialerFactory == nil}
 	if toolFactory == nil && roomManifestHasTools(opts.Manifest) {
 		var err error
-		toolFactory, err = newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(ctx, opts.ConfigDir, policy)
+		toolFactory, err = newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(opts.ConfigDir, policy)
 		if err != nil {
 			return state, fmt.Errorf("%w: %w", ErrRoomParticipantToolsUnavailable, err)
 		}

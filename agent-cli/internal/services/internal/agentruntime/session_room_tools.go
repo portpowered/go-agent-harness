@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
@@ -51,7 +52,7 @@ func roomManifestHasTools(manifest room.Manifest) bool {
 // participant. The participant allowlist is converted into explicit runtime
 // selections so each capability owns only the tools named by its manifest;
 // the old CLI registry is not used as a second implementation.
-func newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(ctx context.Context, configDir string, policy *tools.FilesystemPolicy) (RoomParticipantToolCapabilitiesFactory, error) {
+func newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(configDir string, policy *tools.FilesystemPolicy) (RoomParticipantToolCapabilitiesFactory, error) {
 	if policy == nil {
 		return nil, fmt.Errorf("resolve filesystem scope: policy is nil")
 	}
@@ -67,7 +68,7 @@ func newDefaultRoomParticipantToolCapabilitiesFactoryWithPolicy(ctx context.Cont
 	skillRoots := roomRuntimeSkillRoots(storage, policy)
 
 	return func(participant room.Participant) (RoomParticipantToolCapabilities, error) {
-		capability, err := service.Resolve(ctx, runtimeTools.Request{
+		capability, err := service.Resolve(context.Background(), runtimeTools.Request{
 			WorkDir:          policy.PrimaryRoot(),
 			AllowPaths:       policy.AdditionalRoots(),
 			SkillRoots:       skillRoots,
@@ -145,4 +146,38 @@ func cloneRoomToolDefinitions(definitions []messages.ToolDefinition) []messages.
 func cloneRoomToolDefinition(definition messages.ToolDefinition) messages.ToolDefinition {
 	definition.Parameters = append([]messages.ToolParameter(nil), definition.Parameters...)
 	return definition
+}
+
+func validateRoomParticipantToolCapabilities(participant room.Participant, capabilities RoomParticipantToolCapabilities) error {
+	if len(participant.Tools) == 0 {
+		// An explicit empty list is the no-tools contract. Ignore any accidental
+		// factory value rather than allowing a participant to gain capabilities
+		// that were not requested by its manifest.
+		return nil
+	}
+	if capabilities.Executor == nil {
+		return fmt.Errorf("%w: participant %q has no executor for requested tools %s", ErrRoomParticipantToolsUnavailable, participant.ID, strings.Join(participant.Tools, ", "))
+	}
+	seen := make(map[string]struct{}, len(capabilities.Definitions))
+	requested := make(map[string]struct{}, len(participant.Tools))
+	for _, name := range participant.Tools {
+		requested[name] = struct{}{}
+	}
+	for _, definition := range capabilities.Definitions {
+		if _, ok := requested[definition.Name]; !ok {
+			return fmt.Errorf("%w: participant %q received unrequested tool %q", ErrRoomParticipantToolMismatch, participant.ID, definition.Name)
+		}
+		if _, duplicate := seen[definition.Name]; duplicate {
+			return fmt.Errorf("%w: participant %q received duplicate tool %q", ErrRoomParticipantToolMismatch, participant.ID, definition.Name)
+		}
+		seen[definition.Name] = struct{}{}
+	}
+	if len(seen) != len(requested) {
+		for _, name := range participant.Tools {
+			if _, ok := seen[name]; !ok {
+				return fmt.Errorf("%w: participant %q is missing definition for requested tool %q", ErrRoomParticipantToolMismatch, participant.ID, name)
+			}
+		}
+	}
+	return nil
 }
