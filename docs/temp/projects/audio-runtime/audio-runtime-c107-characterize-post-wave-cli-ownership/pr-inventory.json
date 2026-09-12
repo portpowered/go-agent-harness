@@ -14,7 +14,7 @@
       "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
     ]
   ],
-  "observed_at": "2026-09-12T19:56:02Z",
+  "observed_at": "2026-09-12T20:09:09Z",
   "prs": [
     {
       "accepted_main_changed_production_paths": [],
@@ -1852,7 +1852,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c79-retire-cli-response-lifecycle",
       "task_state": {
-        "name": "ci-pending",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-114",
@@ -2941,9 +2941,10 @@
         "go-agent-runtime/services/rooms/internal/lifecycle/result.go",
         "go-agent-runtime/services/rooms/participant_lifecycle.go",
         "go-agent-runtime/services/rooms/wire/participant_lifecycle.go",
-        "go-agent-runtime/services/rooms/wire/wire_gen.go"
+        "go-agent-runtime/services/rooms/wire/wire_gen.go",
+        "progress.txt"
       ],
-      "head": "6fa9d041d501ce475745490f0e2fe71b94b74bff",
+      "head": "8b732e6ea127cfca1ea971dfd014f4ffbb527d07",
       "head_branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
       "is_retirement_checkpoint": true,
       "number": 486,
@@ -3198,8 +3199,8 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c101-retire-cli-provider-session-runtime",
       "task_state": {
-        "name": "init",
-        "type": "PROCESSING"
+        "name": "failed",
+        "type": "FAILED"
       },
       "task_work_id": "work-task-194",
       "title": "refactor(audio): retire CLI provider session runtime",
@@ -3267,8 +3268,8 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c103-retire-cli-rtc-session-runtime",
       "task_state": {
-        "name": "init",
-        "type": "PROCESSING"
+        "name": "failed",
+        "type": "FAILED"
       },
       "task_work_id": "work-task-200",
       "title": "Retire CLI RTC session runtime into shared service",

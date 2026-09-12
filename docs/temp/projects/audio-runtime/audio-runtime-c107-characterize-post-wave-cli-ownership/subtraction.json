@@ -2,50 +2,6 @@
   "active_tasks": [
     {
       "accepted_main_changed_paths": [
-        "agent-cli/internal/services/internal/agentruntime/session_replay.go",
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go",
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go"
-      ],
-      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
-      "checkpoint_sha": "a6f1eea5f4dd4a8abbc49f9730b83d6861243139",
-      "head": "a6f1eea5f4dd4a8abbc49f9730b83d6861243139",
-      "lease_paths": [
-        "agent-cli/internal/services/internal/agentruntime/session_replay.go",
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go",
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go"
-      ],
-      "name": "audio-runtime-c101-retire-cli-provider-session-runtime",
-      "observation_command": "canonical board row + gh pr view --json files",
-      "pr_number": 489,
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "work_id": "work-task-194"
-    },
-    {
-      "accepted_main_changed_paths": [
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go"
-      ],
-      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "branch": "codex/audio-runtime-c103-retire-cli-rtc-session-runtime",
-      "checkpoint_sha": "14cd34966115e97998dafa19e207f86049d06342",
-      "head": "14cd34966115e97998dafa19e207f86049d06342",
-      "lease_paths": [
-        "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go"
-      ],
-      "name": "audio-runtime-c103-retire-cli-rtc-session-runtime",
-      "observation_command": "canonical board row + gh pr view --json files",
-      "pr_number": 490,
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "work_id": "work-task-200"
-    },
-    {
-      "accepted_main_changed_paths": [
         "agent-cli/internal/services/internal/agentruntime/session_cancellation.go",
         "agent-cli/internal/services/internal/agentruntime/session_finalizer.go",
         "agent-cli/internal/services/internal/agentruntime/session_termination.go"
@@ -66,55 +22,59 @@
         "name": "init",
         "type": "PROCESSING"
       },
-      "work_id": "work-task-202"
+      "work_id": "work-task-202",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary"
     },
     {
       "accepted_main_changed_paths": [],
       "base": "NONE",
       "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "checkpoint_sha": "NONE",
+      "checkpoint_sha": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "head": "NONE",
       "lease_paths": [],
       "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "observation_command": "canonical board row; no unmerged PR",
+      "observation_command": "canonical board row content/tags; no unmerged PR",
       "pr_number": "NONE",
       "state": {
         "name": "init",
         "type": "PROCESSING"
       },
-      "work_id": "work-task-218"
+      "work_id": "work-task-218",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership"
     },
     {
       "accepted_main_changed_paths": [],
       "base": "NONE",
       "branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
-      "checkpoint_sha": "NONE",
+      "checkpoint_sha": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "head": "NONE",
       "lease_paths": [],
       "name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
-      "observation_command": "canonical board row; no unmerged PR",
+      "observation_command": "canonical board row content/tags; no unmerged PR",
       "pr_number": "NONE",
       "state": {
         "name": "init",
         "type": "PROCESSING"
       },
-      "work_id": "work-task-222"
+      "work_id": "work-task-222",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps"
     },
     {
       "accepted_main_changed_paths": [],
       "base": "NONE",
       "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
-      "checkpoint_sha": "NONE",
+      "checkpoint_sha": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "head": "NONE",
       "lease_paths": [],
       "name": "audio-runtime-c109-characterize-browser-retirement-integration",
-      "observation_command": "canonical board row; no unmerged PR",
+      "observation_command": "canonical board row content/tags; no unmerged PR",
       "pr_number": "NONE",
       "state": {
         "name": "init",
         "type": "PROCESSING"
       },
-      "work_id": "work-task-224"
+      "work_id": "work-task-224",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration"
     },
     {
       "accepted_main_changed_paths": [
@@ -147,10 +107,11 @@
       "observation_command": "canonical board row + gh pr view --json files",
       "pr_number": 470,
       "state": {
-        "name": "ci-pending",
+        "name": "in-review",
         "type": "PROCESSING"
       },
-      "work_id": "work-task-114"
+      "work_id": "work-task-114",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle"
     },
     {
       "accepted_main_changed_paths": [
@@ -159,8 +120,8 @@
       ],
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
-      "checkpoint_sha": "6fa9d041d501ce475745490f0e2fe71b94b74bff",
-      "head": "6fa9d041d501ce475745490f0e2fe71b94b74bff",
+      "checkpoint_sha": "8b732e6ea127cfca1ea971dfd014f4ffbb527d07",
+      "head": "8b732e6ea127cfca1ea971dfd014f4ffbb527d07",
       "lease_paths": [
         "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
         "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go"
@@ -172,7 +133,8 @@
         "name": "init",
         "type": "PROCESSING"
       },
-      "work_id": "work-task-136"
+      "work_id": "work-task-136",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c84-retire-cli-room-participant-lifecycle"
     }
   ],
   "all_open_retirement_pr_numbers": [
@@ -224,10 +186,10 @@
     492
   ],
   "candidate_rule": "a candidate path must be an accepted-main production path with zero path_owners and must not be a shared path dependency",
-  "canonical_board_sha256": "d12171c816dadaf664f8afa75abe5efbdb5eca66cc11e6969a9ace1ffa97f168",
-  "captured_at": "2026-09-12T19:56:02Z",
+  "canonical_board_sha256": "4279e5f6dead81cc349f2e386225bbb1a7e434d7da6c4d46c1e8233a4cb6c1c6",
+  "captured_at": "2026-09-12T20:09:09Z",
   "contract_revision": "audio-runtime-v1",
-  "open_pr_inventory_sha256": "bcd89ff1c4f8103d6da1a3894d57602403f7f1ae01093bf87ff0f4c8a3e57b25",
+  "open_pr_inventory_sha256": "41eda9e84abf729327db8bd135db9c2eef778bae1c9fcf5ba37dd6e37ad9259e",
   "path_owners": {
     "agent-cli/internal/services/internal/agentruntime/capability_alias.go": [],
     "agent-cli/internal/services/internal/agentruntime/metrics_collector.go": [
@@ -2517,7 +2479,7 @@
         "owner": "audio-runtime-c101-retire-cli-provider-session-runtime",
         "pr_number": 489,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-194"
       },
       {
@@ -2996,7 +2958,7 @@
         ],
         "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
-        "head": "6fa9d041d501ce475745490f0e2fe71b94b74bff",
+        "head": "8b732e6ea127cfca1ea971dfd014f4ffbb527d07",
         "observation_commands": [
           [
             "gh",
@@ -3405,7 +3367,7 @@
         ],
         "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
-        "head": "6fa9d041d501ce475745490f0e2fe71b94b74bff",
+        "head": "8b732e6ea127cfca1ea971dfd014f4ffbb527d07",
         "observation_commands": [
           [
             "gh",
@@ -3476,7 +3438,7 @@
         "owner": "audio-runtime-c101-retire-cli-provider-session-runtime",
         "pr_number": 489,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-194"
       }
     ],
@@ -3559,7 +3521,7 @@
         "owner": "audio-runtime-c101-retire-cli-provider-session-runtime",
         "pr_number": 489,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-194"
       }
     ],
@@ -3641,7 +3603,7 @@
         "owner": "audio-runtime-c103-retire-cli-rtc-session-runtime",
         "pr_number": 490,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-200"
       }
     ],
@@ -5315,7 +5277,7 @@
       ],
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
-      "head": "6fa9d041d501ce475745490f0e2fe71b94b74bff",
+      "head": "8b732e6ea127cfca1ea971dfd014f4ffbb527d07",
       "observation_commands": [
         [
           "gh",
@@ -5461,7 +5423,7 @@
       "owner": "audio-runtime-c101-retire-cli-provider-session-runtime",
       "pr_number": 489,
       "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "state": "active-task",
+      "state": "preserved-unmerged-pr",
       "work_id": "work-task-194"
     },
     {
@@ -5499,7 +5461,7 @@
       "owner": "audio-runtime-c103-retire-cli-rtc-session-runtime",
       "pr_number": 490,
       "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "state": "active-task",
+      "state": "preserved-unmerged-pr",
       "work_id": "work-task-200"
     },
     {

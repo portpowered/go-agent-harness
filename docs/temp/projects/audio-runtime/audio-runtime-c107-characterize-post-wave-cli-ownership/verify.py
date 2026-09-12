@@ -386,6 +386,14 @@ def verify_work() -> Any:
     return result
 
 
+def admitted_prd_identity() -> dict[str, Any]:
+    document = read_json(PRD)
+    identity = {"project": document.get("project"), "branchName": document.get("branchName")}
+    if identity != {"project": PROJECT, "branchName": BRANCH}:
+        raise EvidenceFailure(f"prd.json project/branch identity mismatch: {identity!r}")
+    return identity
+
+
 def capture_board() -> tuple[dict[str, Any], pathlib.Path]:
     if not FACTORY_SERVER:
         raise EvidenceFailure("FACTORY_SERVER_URL is unavailable; cannot capture canonical board")
@@ -476,6 +484,28 @@ def review_findings(board_results: list[dict[str, Any]]) -> dict[str, Any]:
     return {"schema_version": "c107-previous-review-findings-v1", "observed_at": now(), "findings": sorted(rows, key=lambda row: (str(row.get("name")), str(row.get("work_id"))))}
 
 
+def board_checkpoint(row: dict[str, Any]) -> dict[str, str]:
+    candidates = []
+    tags = row.get("tags") if isinstance(row.get("tags"), dict) else {}
+    if isinstance(tags.get("_last_output"), str):
+        candidates.append(tags["_last_output"])
+    for item in row.get("content", []):
+        if isinstance(item, dict) and isinstance(item.get("text"), str):
+            candidates.append(item["text"])
+    for value in candidates:
+        try:
+            payload = json.loads(value)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and payload.get("branch"):
+            return {
+                "worktree": str(payload.get("worktree", "NONE")),
+                "branch": str(payload.get("branch")),
+                "baseRevision": str(payload.get("baseRevision", "NONE")),
+            }
+    return {"worktree": "NONE", "branch": "NONE", "baseRevision": "NONE"}
+
+
 def build_subtraction(board: dict[str, Any], prs: dict[str, Any], source_paths: set[str]) -> dict[str, Any]:
     board_results = board["results"]
     tasks = active_task_rows(board_results)
@@ -533,6 +563,7 @@ def build_subtraction(board: dict[str, Any], prs: dict[str, Any], source_paths: 
     for row in tasks:
         name = row.get("name")
         pr = pr_by_name.get(name)
+        checkpoint = board_checkpoint(row)
         changed = sorted(pr.get("accepted_main_changed_production_paths", [])) if pr else []
         leases = list(changed)
         if name == "audio-runtime-c79-retire-cli-response-lifecycle":
@@ -542,12 +573,13 @@ def build_subtraction(board: dict[str, Any], prs: dict[str, Any], source_paths: 
                 "name": name,
                 "work_id": row.get("workId"),
                 "state": row.get("state"),
-                "branch": pr.get("head_branch") if pr else f"codex/{name}",
+                "branch": pr.get("head_branch") if pr else checkpoint["branch"] if checkpoint["branch"] != "NONE" else f"codex/{name}",
                 "pr_number": pr.get("number") if pr else "NONE",
                 "head": pr.get("head") if pr else "NONE",
                 "base": pr.get("base") if pr else "NONE",
-                "checkpoint_sha": pr.get("head") if pr else "NONE",
-                "observation_command": "canonical board row + gh pr view --json files" if pr else "canonical board row; no unmerged PR",
+                "checkpoint_sha": pr.get("head") if pr else checkpoint["baseRevision"],
+                "observation_command": "canonical board row + gh pr view --json files" if pr else "canonical board row content/tags; no unmerged PR",
+                "worktree": checkpoint["worktree"],
                 "accepted_main_changed_paths": changed,
                 "lease_paths": sorted(set(leases)),
             }
@@ -599,6 +631,9 @@ def capture_state() -> dict[str, Any]:
         "active_task_count": len(active_task_rows(board["results"])),
         "open_pr_count": len(prs["prs"]),
         "open_retirement_pr_count": len([pr for pr in prs["prs"] if pr.get("is_retirement_checkpoint")]),
+        "candidate_head": str(git("rev-parse", "HEAD")),
+        "candidate_branch": str(git("branch", "--show-current")),
+        "prd_identity": admitted_prd_identity(),
     }
     write_json(HERE / "state-capture.json", capture)
     return capture
@@ -642,6 +677,7 @@ def provenance() -> dict[str, Any]:
         "factory_session": "~default",
         "factory_server": FACTORY_SERVER,
         "admission": verify_work(),
+        "prd_identity": admitted_prd_identity(),
         "branch": branch,
         "candidate_revision": candidate,
         "accepted_source_revision": SOURCE_REVISION,
