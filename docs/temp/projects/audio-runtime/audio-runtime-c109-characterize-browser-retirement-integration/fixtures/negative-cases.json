@@ -1,12 +1,20 @@
 {
-  "schema": "audio-runtime-c109-negative-fixtures-v1",
+  "schema": "audio-runtime-c109-negative-fixtures-v2",
   "purpose": "fail-closed verifier mutations; no candidate or shared source mutation",
   "cases": [
     {"name": "changed-sha", "mutation": "replace the admitted C61 commit with a non-admitted SHA", "expected": "reject"},
     {"name": "reversed-order", "mutation": "reverse the required rehearsal order", "expected": "reject"},
     {"name": "wrong-owner", "mutation": "attribute a candidate path to C109", "expected": "reject"},
     {"name": "forbidden-claim", "mutation": "claim C61 is merged", "expected": "reject"},
-    {"name": "missing-conflict", "mutation": "remove a required conflicted_paths field", "expected": "reject"}
+    {"name": "missing-conflict", "mutation": "remove a required conflicted_paths field", "expected": "reject"},
+    {"name": "missing-preserved", "mutation": "remove an actual preserved predecessor worktree", "expected": "reject"},
+    {"name": "truncated-ref", "mutation": "mark structured worktree inventory incomplete", "expected": "reject"},
+    {"name": "heuristic-ledger", "mutation": "remove exact caller/hunk evidence from the source ledger", "expected": "reject"},
+    {"name": "incomplete-sequence", "mutation": "remove a bounded step observable", "expected": "reject"},
+    {"name": "non-manifest-gate", "mutation": "replace the exact nine manifest gates with a non-manifest gate", "expected": "reject"},
+    {"name": "public-unbound-tree", "mutation": "detach the public report tree hash from its exact binding", "expected": "reject"},
+    {"name": "cleanup-failure", "mutation": "mark public temporary-tree cleanup failed", "expected": "reject"},
+    {"name": "zero-test-discovery", "mutation": "erase discovered Go tests from a passing check", "expected": "reject"}
   ],
   "execution": "verify.py --mode all",
   "result": "see ../runs/final/verification.json"

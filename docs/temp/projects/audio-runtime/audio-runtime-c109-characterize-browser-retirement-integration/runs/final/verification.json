@@ -15,14 +15,44 @@
       "fixture": "changed-sha",
       "status": "rejected-as-required"
     },
+    "cleanup-failure": {
+      "diagnostic": "public temporary-tree cleanup is incomplete",
+      "fixture": "cleanup-failure",
+      "status": "rejected-as-required"
+    },
     "forbidden-claim": {
       "diagnostic": "C61 acceptance claim is forbidden",
       "fixture": "forbidden-claim",
       "status": "rejected-as-required"
     },
+    "heuristic-ledger": {
+      "diagnostic": "caller edges missing: c61-hunk-128b1b1976-001-symbol-01",
+      "fixture": "heuristic-ledger",
+      "status": "rejected-as-required"
+    },
+    "incomplete-sequence": {
+      "diagnostic": "sequence expected_observables is missing at step 2",
+      "fixture": "incomplete-sequence",
+      "status": "rejected-as-required"
+    },
     "missing-conflict": {
-      "diagnostic": "conflict evidence is missing",
+      "diagnostic": "complete conflict path evidence is missing",
       "fixture": "missing-conflict",
+      "status": "rejected-as-required"
+    },
+    "missing-preserved": {
+      "diagnostic": "preserved predecessor before/after identities differ",
+      "fixture": "missing-preserved",
+      "status": "rejected-as-required"
+    },
+    "non-manifest-gate": {
+      "diagnostic": "manifest gate set was silently changed or closed",
+      "fixture": "non-manifest-gate",
+      "status": "rejected-as-required"
+    },
+    "public-unbound-tree": {
+      "diagnostic": "public tree hash is detached from its binding",
+      "fixture": "public-unbound-tree",
       "status": "rejected-as-required"
     },
     "reversed-order": {
@@ -30,10 +60,21 @@
       "fixture": "reversed-order",
       "status": "rejected-as-required"
     },
+    "truncated-ref": {
+      "diagnostic": "worktree porcelain inventory is incomplete",
+      "fixture": "truncated-ref",
+      "status": "rejected-as-required"
+    },
     "wrong-owner": {
       "diagnostic": "candidate path was incorrectly attributed to C109: agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
       "fixture": "wrong-owner",
       "status": "rejected-as-required"
+    },
+    "zero-test-discovery": {
+      "diagnostic": "zero-test discovery accepted: browserrunner+browserscenario normal",
+      "fixture": "zero-test-discovery",
+      "status": "rejected-as-required"
     }
-  }
+  },
+  "status": "passed"
 }

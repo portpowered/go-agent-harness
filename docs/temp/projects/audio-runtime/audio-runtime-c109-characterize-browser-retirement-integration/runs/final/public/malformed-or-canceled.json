@@ -1,74 +1,140 @@
 {
   "bounded": {
-    "aggregate_timeout_seconds": 300,
-    "child_timeout_seconds": 90,
-    "elapsed_seconds": 27.706,
+    "aggregate_timeout_seconds": 900,
+    "child_timeout_seconds": 480,
+    "elapsed_seconds": 32.191,
     "process_groups_clean": true
   },
   "case": "malformed-or-canceled",
   "checks": [
     {
+      "cleanup": {
+        "drain_status": "not-needed",
+        "kill_sent": false,
+        "term_sent": false,
+        "wait_status": "not-needed"
+      },
       "command": "go run docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/verify.go --mode malformed-credential-overflow-timeout-cleanup",
       "credential_environment_scrubbed": true,
       "credential_output_markers_absent": true,
-      "elapsed_seconds": 1.401,
+      "elapsed_seconds": 1.662,
       "exit_code": 0,
       "label": "malformed credential overflow timeout cleanup",
       "output": "{\"candidate_revision\":\"bb18860cfae386fef93b1ea2717075e3570d4c35\",\"mode\":\"malformed-credential-overflow-timeout-cleanup\",\"status\":\"passed\"}\n",
+      "output_bytes": 139,
+      "output_capped": false,
+      "output_sha256": "271a770d91f74209c7649046e5b05acdd9d38c656b6e8ad7b366979e06f42e6c",
       "process_group_gone": true,
       "removed_credential_environment_names": [
         "NPM_TOKEN",
         "groq_key"
       ],
       "status": "passed",
+      "test_discovery": {
+        "package_ok_lines": 0,
+        "pass_lines": 0,
+        "required": false,
+        "tests_discovered": null
+      },
       "timed_out": false,
-      "timeout_seconds": 90,
+      "timeout_seconds": 180,
       "working_tree": "synthetic-required-merge-tree"
     },
     {
+      "cleanup": {
+        "drain_status": "not-needed",
+        "kill_sent": false,
+        "term_sent": false,
+        "wait_status": "not-needed"
+      },
       "command": "go test ./internal/services/internal/agentruntime -run TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation -count=3 -timeout=180s",
       "credential_environment_scrubbed": true,
       "credential_output_markers_absent": true,
-      "elapsed_seconds": 9.693,
+      "elapsed_seconds": 9.452,
       "exit_code": 0,
       "label": "canceled browser scenario normal",
-      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.550s\n",
+      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.459s\n",
+      "output_bytes": 102,
+      "output_capped": false,
+      "output_sha256": "0dcde70bcf43d254dd620c5721230f09f1883d46a8f8bb056ff50cda5206477a",
       "process_group_gone": true,
       "removed_credential_environment_names": [
         "NPM_TOKEN",
         "groq_key"
       ],
       "status": "passed",
+      "test_discovery": {
+        "no_test_packages": 0,
+        "package_ok_lines": 1,
+        "pass_lines": 0,
+        "required": true,
+        "tests_discovered": 1
+      },
       "timed_out": false,
-      "timeout_seconds": 90,
+      "timeout_seconds": 180,
       "working_tree": "synthetic-required-merge-tree"
     },
     {
+      "cleanup": {
+        "drain_status": "not-needed",
+        "kill_sent": false,
+        "term_sent": false,
+        "wait_status": "not-needed"
+      },
       "command": "go test -race ./internal/services/internal/agentruntime -run TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation -count=3 -timeout=240s",
       "credential_environment_scrubbed": true,
       "credential_output_markers_absent": true,
-      "elapsed_seconds": 16.54,
+      "elapsed_seconds": 15.217,
       "exit_code": 0,
       "label": "canceled browser scenario race",
-      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.881s\n",
+      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.873s\n",
+      "output_bytes": 102,
+      "output_capped": false,
+      "output_sha256": "bcc3419a9d052651a0d981380c94b7f1924e6d9ce97fb0e904b68fcccd5ef1dc",
       "process_group_gone": true,
       "removed_credential_environment_names": [
         "NPM_TOKEN",
         "groq_key"
       ],
       "status": "passed",
+      "test_discovery": {
+        "no_test_packages": 0,
+        "package_ok_lines": 1,
+        "pass_lines": 0,
+        "required": true,
+        "tests_discovered": 1
+      },
       "timed_out": false,
-      "timeout_seconds": 90,
+      "timeout_seconds": 240,
       "working_tree": "synthetic-required-merge-tree"
     }
   ],
+  "cleanup": {
+    "attempted": true,
+    "mode": "task-owned-temporary-tree",
+    "remove_command": "git worktree remove --force <temporary-worktree>",
+    "remove_exit_code": 0,
+    "status": "passed",
+    "temporary_root_removed": true,
+    "tree_preserved": false,
+    "worktree_removed": true
+  },
   "credential_free": true,
   "effects": {
+    "artifacts": [
+      {
+        "classification": "SOFTWARE_LOCAL_PROCESS_ONLY",
+        "kind": "negative-control-output",
+        "sha256": "5785094729f94d7bee355d6e7c6ff5fd48ce5ca887d5155d7de65e69b4081804"
+      }
+    ],
     "cleanup_claim": true,
     "external_browser_or_microphone": false,
+    "negative_control": true,
+    "observable_output": [],
     "workflow": "local synthetic fixture/process only"
   },
-  "schema": "audio-runtime-c109-public-checks-v1",
+  "schema": "audio-runtime-c109-public-checks-v2",
   "status": "passed",
   "synthetic": {
     "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
@@ -79,6 +145,37 @@
     ],
     "software_only": true,
     "status": [],
-    "tree": "4d8e93ae0e74db403fdb02c70db9cf849c590156"
+    "tree": "4d8e93ae0e74db403fdb02c70db9cf849c590156",
+    "tree_binding": {
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "candidate_commits": [
+        "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+        "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      ],
+      "final_tree": "4d8e93ae0e74db403fdb02c70db9cf849c590156",
+      "first_parent_order": [
+        "main",
+        "c61",
+        "c83"
+      ],
+      "head": "bb18860cfae386fef93b1ea2717075e3570d4c35",
+      "merge_commits": [
+        "7ffc24ad76b49b7261667ce0a1e9f6e62cdc8c91",
+        "bb18860cfae386fef93b1ea2717075e3570d4c35"
+      ],
+      "parents": {
+        "c61_merge": [
+          "7ffc24ad76b49b7261667ce0a1e9f6e62cdc8c91",
+          "d4766c3dbbf2c198142047ead4449d58dd47d485",
+          "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+        ],
+        "c83_merge": [
+          "bb18860cfae386fef93b1ea2717075e3570d4c35",
+          "7ffc24ad76b49b7261667ce0a1e9f6e62cdc8c91",
+          "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+        ]
+      },
+      "valid": true
+    }
   }
 }

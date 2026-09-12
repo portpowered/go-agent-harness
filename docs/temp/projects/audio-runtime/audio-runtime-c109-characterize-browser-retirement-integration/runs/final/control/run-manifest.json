@@ -5,10 +5,16 @@
     "verification": "verify.py --mode all"
   },
   "outputSha256": {
-    "ledger.json": "cc4a83ba2ec402e39a65de32c7b604a4acdbdde54986c839d82dced3dae8f519",
-    "merge-orders.json": "57dcfe7e92b5e8def318d76cdebaa0d7d4574f9661e715ede4d4c48caefa5c14",
-    "provenance.json": "b81b006d3cd0e6532ce92e054fde102c4b8f6bd86ccf062891a3268f1bddcfec",
-    "report.json": "3356e8f1c855f0c1813888eb5f3114b35ac26830ac4640b07056af52d4de7867",
-    "sequence.json": "cc543fd6838d49a9ebda831aee92b11b59ce227ca9274ad25472bf39566b5879"
+    "ledger.json": "55fbe2c8081c1a72168b718432ace9b145014a8c01b70c2a4f9b595c84e7083f",
+    "merge-orders.json": "774be9b078a622fb82ccd0652685034f5638894ebdeddc1bc2c8b5a269fe071a",
+    "provenance.json": "bfa414a411684341c54ec1e9bb82e3cd9aa7eb86cd90b9c9d80d7b90fc7abd40",
+    "report.json": "9d7a8aaee7fbb6d367f9e32a41b57448b144f27a495580d5444462b1b9bb0817",
+    "sequence.json": "5ff0b283d1d138e29f031eb3cca96d0743be27077950981bab2768c175cd4aad"
+  },
+  "schema": "audio-runtime-c109-run-manifest-v2",
+  "source": {
+    "c61": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+    "c83": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+    "main": "d4766c3dbbf2c198142047ead4449d58dd47d485"
   }
 }

@@ -1,4 +1,5 @@
 {
+  "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
   "candidateTrees": {
     "c61": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2",
     "c83": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048",
@@ -6,6 +7,8 @@
   },
   "candidates": {
     "c61": {
+      "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+      "branch_ref": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
       "commit": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
       "name": "C61/work-task-34",
       "parent_commits": [
@@ -13,10 +16,13 @@
         "8cb47a099bae93cb0f7915675eb321b8633a5a6b"
       ],
       "ref": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "remote_ref": "refs/remotes/origin/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
       "status": "preserved-readonly-ref",
       "tree": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2"
     },
     "c83": {
+      "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+      "branch_ref": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
       "commit": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
       "name": "C83/work-task-125",
       "parent_commits": [
@@ -24,6 +30,7 @@
         "6a884e1aa009aa28cf3c5f7718c5212f8268eb38"
       ],
       "ref": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "remote_ref": "refs/remotes/origin/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
       "status": "preserved-readonly-ref",
       "tree": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048"
     }
@@ -34,574 +41,183 @@
   "fetch": {
     "command": "git fetch origin main",
     "exit_code": 0,
-    "output": "From https://github.com/portpowered/go-agent-harness\n * branch              main       -> FETCH_HEAD\nAuto packing the repository in background for optimum performance.\nSee \"git help gc\" for manual housekeeping.\nwarning: The last gc run reported the following. Please correct the root cause\nand remove /Users/abdifamily/work/harness/go-agent-harness/.git/worktrees/audio-runtime-c109-characterize-browser-retirement-integration/gc.log\nAutomatic cleanup will not be performed until the file is removed.\n\nwarning: There are too many unreachable loose objects; run 'git prune' to remove them.\n\n",
+    "output_retained": false,
+    "reason": "fetch transport output is mutable; commit/ref identity is retained instead",
+    "resolved_origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
     "status": "passed"
   },
   "fetchedOriginMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
   "hostCheckout": {
-    "afterStatus": [],
-    "beforeStatus": [],
+    "afterStatus": [
+      "M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/analyze.py",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py"
+    ],
+    "beforeStatus": [
+      "M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/analyze.py",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py"
+    ],
     "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
     "changedStatusLines": [],
-    "head": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "head": "e0af439b2075e14cca1b814dc853fe5e4743b36c",
     "scopeClean": true
   },
   "newerMainFetchedAndIntegrated": false,
   "preservedWorktrees": {
     "after": {
-      "refs": [
-        "ations",
-        "a6263cc63376c3a21aecd043ee875bf2ed82c26f refs/remotes/origin/s2s-room-participant-tool-selection-collides",
-        "e2d69c0d687cff61d3998063d814771cd45ffbee refs/remotes/origin/s2s-room-participants-deaf-while-speaking",
-        "c8a4a51b39624dd773f46bdcc81e177d9a3feb83 refs/remotes/origin/s2s-room-pcm-mixer-input-buffer-overflow",
-        "d4e3f44ee37d82605a1689cc28507bd5635d4a32 refs/remotes/origin/s2s-room-realtime-replay-harness",
-        "d4c405028a9ef825383ce096a78ecf393080d527 refs/remotes/origin/s2s-room-record-replay",
-        "649f0cd61dbc354562f998109986e2ed92324f73 refs/remotes/origin/s2s-room-recording-completeness",
-        "6aefe8249f79e3acbde08cc3803491cf7aa16be9 refs/remotes/origin/s2s-room-replay-recorder-emits-events-and-capture",
-        "c15b27ff66a985dafca8dfbfb14386a85f0c9c3e refs/remotes/origin/s2s-room-run-replay-roundtrip-schema-mismatch",
-        "548977ed4fdad0f871f650129182cfa633e6d2bd refs/remotes/origin/s2s-room-tool-wielding-participants",
-        "984f5d6b0fd22effadbf69b2683e2d652d66e71a refs/remotes/origin/s2s-room-vision-tool",
-        "ab9bab57ece7b33ce64148f45af528ec10cf5335 refs/remotes/origin/s2s-room-voice-configuration",
-        "718bb1d053b137f3c8181474f1a35253bfc780a2 refs/remotes/origin/s2s-scheduled-turn-continuation-crediting",
-        "b862e95b04b5df7e3416f4de9786594c7e54da77 refs/remotes/origin/s2s-scheduled-turns-cannot-express-barge-in",
-        "a9025af435a656068dbdc1f3e45e6b127d559ed2 refs/remotes/origin/s2s-screen-permission-preflight",
-        "9c693c6ada7df9fcb5ddb372aeecf6c17abdd965 refs/remotes/origin/s2s-screen-show-actually-works",
-        "bd2d50e9c8f2b0baf9e5b7a00cf5fd34f54ac2e2 refs/remotes/origin/s2s-screenshot-backend-split-and-operator-instruction-leaks-into-customer-speech",
-        "5a38fb7dad2b3b5dd2e0ecc6bd1752db60c3bfbd refs/remotes/origin/s2s-session-browser-tools-minimal-invocation-silently-opens-and-closes-with-no-output",
-        "e3020f9d5138fdcf5532a32b7794fe6f8cbe9aad refs/remotes/origin/s2s-session-provider-default-inherits-wrong-openrouter-default-for-realtime-paths",
-        "336f9eac4a8e7d31c837e9ffdb62c06ae9e7ec14 refs/remotes/origin/s2s-session-silent-stop-and-prompt-path-fixes",
-        "3fc42107fcc9f8dfc176febdaedfe1b69728ca2c refs/remotes/origin/s2s-show-always-advertised-preflight-at-invoke",
-        "251bb73712681d245d0c7b9e2ae4df91dc1cd6ef refs/remotes/origin/s2s-sigint-clean-cancel-during-tool-work",
-        "69fb53c5d87c9e33f0842a87a36f172f4546e206 refs/remotes/origin/s2s-silent-all-agent-room-reports-false-success",
-        "beb8915c9a7915c987455b3006076f5af126d784 refs/remotes/origin/s2s-split-high-churn-session-files",
-        "280ec6a12fc5b12a0130f99d2b87da1a53c03861 refs/remotes/origin/s2s-stabilize-agent-cli-integration-ci-budget",
-        "1689ea4b7f4340f30bb5f256cab4372d7877b92c refs/remotes/origin/s2s-stabilize-room-mesh-done-close-ordering",
-        "508e8f09d86d72b05c702da1962573e3db48c3ee refs/remotes/origin/s2s-stabilize-room-startup-and-terminal-ordering",
-        "db2df1f5344315d4b3d2391eb871b862e75dd920 refs/remotes/origin/s2s-stabilize-selfplay-turn-target-counting",
-        "478e5b5271482b586cc690afeb87e0a954780acc refs/remotes/origin/s2s-terminal-announcement-regressions-from-the-drain-fix",
-        "c5fd73e8b355c3c4045879dec2b45e8a71358f34 refs/remotes/origin/s2s-terminal-display-honesty",
-        "9d3fac3d0a8651857886af519ac410076998f950 refs/remotes/origin/s2s-terminal-exit-drain-policy-is-unwritten-and-applied-unevenly",
-        "702d1566dcdc31b05d8330c6eecc8ab94ef25a03 refs/remotes/origin/s2s-tilde-config-path-silently-writes-to-a-bogus-literal-directory",
-        "3c75614de45179f7973923e12e51f3cf1236e633 refs/remotes/origin/s2s-tool-path-confinement-and-cwd-semantics",
-        "cd7d545bd1e4d92ee57767a1b032271d43c117b9 refs/remotes/origin/s2s-tool-results-computed-but-never-delivered-to-model",
-        "2e55019977930d3a57af8e9c37b2aed4d2fb722a refs/remotes/origin/s2s-turn-to-turn-dead-air",
-        "dd9741d490b41cda9b85ae556b7c06ed6b73e951 refs/remotes/origin/s2s-two-agent-selfplay-harness-phase1",
-        "afe75d9e54e4c91adcc61cf180ba647a4993c92a refs/remotes/origin/s2s-v1-text-in-audio-out",
-        "c46bfe86b30f9fff4a71493887b906c28ca1684d refs/remotes/origin/s2s-v10-webrtc-external-source",
-        "7f9c49f439e83c63ebdc00421fa4b0e0884b919e refs/remotes/origin/s2s-v2a-audio-in-basic",
-        "1f533eb7a8248380bcac968ef22e8ba7fac1c99f refs/remotes/origin/s2s-v2b-audio-in-long",
-        "266f220f6561e5fa9603ae04b22bfef75cfa7ff6 refs/remotes/origin/s2s-v2c-audio-in-silence",
-        "22adb89e93b737fa69e84e9d347be219990d16a6 refs/remotes/origin/s2s-v2c-audio-in-silence-recut",
-        "2090fbda32772c5fb918859a3fb29d90ecfa5eeb refs/remotes/origin/s2s-v2d-audio-in-multi-utterance",
-        "0dc32b6810a9789d20330da48933f31e39dc8b0d refs/remotes/origin/s2s-v2d-multi-utterance-recut",
-        "79a54e5790a417bfaaf0807a05f668426b94c9ad refs/remotes/origin/s2s-v2e-audio-in-truncated",
-        "7a4c433a131a0bba0d23661bf014cafea88a7489 refs/remotes/origin/s2s-v2e-audio-in-truncated-recut",
-        "d6c0e2ecbfc3df067023c686a2ed2e045167910a refs/remotes/origin/s2s-v3a-barge-in-basic",
-        "7600fe7f84fa421531293befc90e05ee09e19e51 refs/remotes/origin/s2s-v3b-barge-in-during-tool-call",
-        "f82ef1603ab2e17014789f40a04e162d26ed8c17 refs/remotes/origin/s2s-v3c-barge-in-repeated",
-        "92baf6b24c372f535edb3fa93b5d80afae697cdf refs/remotes/origin/s2s-v4a-tool-single-call",
-        "b0a76bfc6374dc2ecb493a3b918720d7663243e9 refs/remotes/origin/s2s-v4b-tool-parallel-calls",
-        "9dc82f1f72b597d13b4ab9ba55619e5bfaa5a11c refs/remotes/origin/s2s-v4c-tool-error",
-        "f79cacd56188d5af778bbc06e0f55d7d785311d6 refs/remotes/origin/s2s-v4d-tool-timeout",
-        "c8cc56cf89c3134fc1f236d609f42e8ff91f8ac3 refs/remotes/origin/s2s-v4e-tool-unknown",
-        "a4cffd03697d2ae82471137e1a103d4044d2a59d refs/remotes/origin/s2s-v4f-tool-during-audio",
-        "f63f3b754c582d7cab907c6c47dc86f857b2b264 refs/remotes/origin/s2s-v5a-default-toolset-active",
-        "2dcf8e1cc339de18887c9a1672373302f6b04a3d refs/remotes/origin/s2s-v5b-toolset-subset",
-        "e4d54c02ba82571ea7c8d7814f0bb5bcee43fa3c refs/remotes/origin/s2s-v5c-toolset-none",
-        "3c1ee3e8c4b7cbee3ef67c5b931213722097eabd refs/remotes/origin/s2s-v6a-error-auth",
-        "5362e9de098828c7b41b0df92a0fa5ddc95c3280 refs/remotes/origin/s2s-v6b-error-disconnect",
-        "a79954cc727a5ef8490f21a889134c5b8182c497 refs/remotes/origin/s2s-v6c-error-rate-limit",
-        "d7e559665d664c0cf91663a18c63a7328ab5767c refs/remotes/origin/s2s-v6d-error-malformed-recut",
-        "c61abdda5c8f02adfc74529ce20d286c90cb86b3 refs/remotes/origin/s2s-v6d-error-malformed-response",
-        "99843ba7e61ef46d5a370aaaacf6059c147c6b95 refs/remotes/origin/s2s-v7a-metrics-modality",
-        "aa00f131b8eb8ecefa19ead47d4033243fb5ba1c refs/remotes/origin/s2s-v7b-buffer-logs",
-        "d1eef115c02c062f3ade4829507737fe59a0cf08 refs/remotes/origin/s2s-v7c-metrics-reconcile",
-        "fec8d3dbdcc00833451ca730d74a4914c85b0b78 refs/remotes/origin/s2s-v8-duplex-overlap",
-        "b21d4f66c111ab285ea88d7cec17afc8106a9302 refs/remotes/origin/s2s-v9-webrtc-device-roundtrip",
-        "76ea6d1685aff19981ab9a652f1f197235b43442 refs/remotes/origin/s2s-validate-async-tool-result-interrupts-speech",
-        "8883c759bf74e8bebd92ed3b2e8c58e7146b5f9b refs/remotes/origin/s2s-validate-live-shaped-barge-in-v2",
-        "29a2d9a89ec1492a532619f34e745bdca2f5eaa8 refs/remotes/origin/s2s-validate-multiturn-duplex-multiplex",
-        "90f67f4b762d538671bb97f8ec748f92d874a138 refs/remotes/origin/s2s-vertical-pr-disposition-triage",
-        "6c4014bbfd04c5acfb9469b405eb602d0e91c223 refs/remotes/origin/s2s-vision-tool-continuation-token-overflow",
-        "b150f8b4557d6aa8a914e9293393113ede04e40d refs/remotes/origin/s2s-voice-honest-failure-grounding",
-        "a0256d61d51dc9064586881b6b5acd9645e8d2bc refs/remotes/origin/s2s-voice-tool-grounding-v2",
-        "bc4ce4a870283afb8bfde03de3f905c03945f2b0 refs/remotes/origin/s2s-webmcp-select-is-blocked-by-the-very-stale-selection-it-exists-to-replace",
-        "75fb0cfc1b9d047e67a6ca13d2265f35c49bd5d5 refs/remotes/origin/s2s-webrtc-customer-audio-path",
-        "725a5e00528babaa13299e10c9665e7892ba78df refs/remotes/origin/s2s-write-file-temp-rename-shrinks-filename-limit-with-a-confusing-error",
-        "9a2041c3fee6229c0eab97707f47284bc8536674 refs/remotes/origin/virtual-device-loopback-harness",
-        "c3572c39ecc54b4e30a2a2af4da40033b81783eb refs/remotes/origin/webmcp-ambiguous-tab-exact-id-rejected-and-silent",
-        "cf62356263866d6fe517ed54e1407964bd7fd1a6 refs/remotes/origin/webmcp-ambiguous-tab-hides-page-tools-agent-fabricates",
-        "85cfd7e4106dbaeb5e548a92d3e96a4b3b0618c1 refs/remotes/origin/webmcp-c0-contract-freeze",
-        "27e5cb90938209a4c448d5e62aa2cf03f366b888 refs/remotes/origin/webmcp-classification-contract-conformance",
-        "13bebf16784313ae6fb9ce913a756ded1e1f537f refs/remotes/origin/webmcp-conversational-customer-sim",
-        "8cc3d69b6e6a7519595d01d3f9f7086b5b682799 refs/remotes/origin/webmcp-cross-process-cancel-real-chrome",
-        "2fe8dc948e2f7e05c1b01d2f25b0a06c387353b0 refs/remotes/origin/webmcp-diagnostics-honesty",
-        "7041ac7ddfd1e3afa8b7f35af002f72f285ffbea refs/remotes/origin/webmcp-i1-production-wiring",
-        "ba14f586658c3eb5508398154ec4a6308ed68135 refs/remotes/origin/webmcp-in-session-attach",
-        "a21079f6c2aa7527542de48822d3f91da1db0eb9 refs/remotes/origin/webmcp-invoke-error-envelope-and-cancel-ux",
-        "045baaffbccf58fb7d3b384f949a3fb04905080b refs/remotes/origin/webmcp-lane-a-go126-workspace-upgrade",
-        "b92813be28f21c1bbfcc990272f2175bc20e4c79 refs/remotes/origin/webmcp-lane-b-discovery-selection",
-        "abeae3fcfa33a943051aa64fa391f13f81d21fe5 refs/remotes/origin/webmcp-lane-c-broker-core",
-        "10ebf59ecffc5867f497bc4f7d201bc378a72ce3 refs/remotes/origin/webmcp-lane-d-chrome-adapter",
-        "7055e8ea074d5bcb18099e012b72655d242072a9 refs/remotes/origin/webmcp-lane-f-testkit-fixture-replay",
-        "9a1c0d93df9c16fae2334b161956a4e6fd747ede refs/remotes/origin/webmcp-lane-g-cli-config-composition",
-        "2764f628e6b52f97c968413591ed6b0f9455b4e0 refs/remotes/origin/webmcp-lane-h-topology-recovery",
-        "e846f25f36da9a7fbe0ed353d82290f57bfe0725 refs/remotes/origin/webmcp-lane-i-realtime-session-integration",
-        "7c6e6aeb0f4f53b1af82ff35536dd80726899dfb refs/remotes/origin/webmcp-lane-k-probe-evidence",
-        "849d2000edf1a202d908ba17b10f76d5d7cd3cad refs/remotes/origin/webmcp-late-catalog-reevaluation",
-        "fdebb1bff7487181756dee9b719c8b6193bdf5df refs/remotes/origin/webmcp-live-session-tool-invocation-returns-stale-empty-result",
-        "2e2e2d9a5cfa17bb1844ea97da8e173c26a9273f refs/remotes/origin/webmcp-managed-default-browser",
-        "4c10a241ddbed065e20233b8ff9cbfb234a6dbc8 refs/remotes/origin/webmcp-mid-session-tab-switch",
-        "630f2314650afecf756f018b75303c15fd9e4780 refs/remotes/origin/webmcp-o0-toolchain-gate",
-        "dc35eb488b5ec885e54c0c7bb318ac78933fa76c refs/remotes/origin/webmcp-page-tools-first-class",
-        "f0dd50f2dd03d4dfa933a6966763e6d198fd8554 refs/remotes/origin/webmcp-pagetool-timeout-cold-attach",
-        "66c3ff8ef53ea6a3ad179320440455988d1ebb23 refs/remotes/origin/webmcp-prereq-go126-vet-slice-format",
-        "f3f96fc734af24f26ce110552db19811b8eb6afa refs/remotes/origin/webmcp-residual-stub-paths",
-        "899a7bf6fc03066853d609949282d99344229ff9 refs/remotes/origin/webmcp-select-hang-on-browser-death",
-        "f9bcca992efb4e4d00bad08355e02b024565161c refs/remotes/origin/webmcp-selection-connectivity-voice-path",
-        "342a1ebcdc29971305ed8b31fd43362245e139cd refs/remotes/origin/webmcp-session-update-missing-session-type",
-        "fdc998a026666ab6aefcc4ceb5a555957a37f43a refs/remotes/origin/webmcp-stale-persisted-selection-hides-page-tools",
-        "2a2b068b464d04059378089cd4c751aeaccc7b88 refs/remotes/origin/webmcp-watch-cross-process-events",
-        "0dd22fe93df40fa8ae7b16095bcd01693ad598da refs/stash",
-        "421277bfb77c326433c7d92b3a16366bcf35e67a refs/tags/agent-cli/v0.0.1",
-        "3437f1b8b4f87133517a83b6591c44507e90fa83 refs/tags/agent-cli/v0.0.2",
-        "b31afc8ad7b66ebf73592cfcb2e75e35d60fd821 refs/tags/agent-cli/v0.0.3",
-        "49ec080e04b827c1b208a6df90f604e8c3f01107 refs/tags/agent-cli/v0.0.4",
-        "1333429306e9811b56f20f95e62fe956f36d6ced refs/tags/go-agent-loop/v0.0.1",
-        "1e8551f2d3c447b53b2321f1198c1ca14522453b refs/tags/go-agent-loop/v0.0.2",
-        "3c44e9b91531dd170f56ecfec3813ea980b74e9a refs/tags/go-agent-loop/v0.0.3",
-        "c3e552e981a7e1c9e701d85c8424cbb1c8189e7d refs/tags/go-agent-loop/v0.0.4",
-        "a2777c033e780c9497819c51e46d39f7f5c4fbb2 refs/tags/go-llm-gateway/v0.0.1",
-        "d913cd7c8e5acbd636b33aa4bf984d11b4db96d7 refs/tags/go-llm-gateway/v0.0.2",
-        "96ce8bf64547a6c2068996662e8bea34c1dee424 refs/tags/go-llm-gateway/v0.0.3",
-        "5b8f481bdd7da128a1fd7862129bf9b177728a9f refs/tags/go-llm-gateway/v0.0.4",
-        "9168f7e8980bc6ab9a11a3d1a00d4fc872566e60 refs/tags/v0.0.1",
-        "89df72d9b47c0cff880f78c0168ee50864bc3cc8 refs/tags/v0.0.2",
-        "1d78d8be0554dd45250bfeb9be6534d748296d9d refs/tags/v0.0.3",
-        "cfbb63a31337b6b3ca38518b59f7a02c9d147654 refs/tags/v0.0.4"
-      ],
+      "complete": true,
       "worktrees": {
         "c61": {
+          "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+          "branch_ref": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+          "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
           "path": ".claude/worktrees/audio-runtime-c61-retire-cli-browser-scenario-contract",
-          "present": false
+          "present": true,
+          "registered": true,
+          "status": [],
+          "tree": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2"
         },
         "c83": {
+          "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+          "branch_ref": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+          "head": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
           "path": ".claude/worktrees/audio-runtime-c83-retire-cli-browser-scenario-runner",
-          "present": false
+          "present": true,
+          "registered": true,
+          "status": [],
+          "tree": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048"
         }
       }
     },
     "before": {
-      "refs": [
-        "ations",
-        "a6263cc63376c3a21aecd043ee875bf2ed82c26f refs/remotes/origin/s2s-room-participant-tool-selection-collides",
-        "e2d69c0d687cff61d3998063d814771cd45ffbee refs/remotes/origin/s2s-room-participants-deaf-while-speaking",
-        "c8a4a51b39624dd773f46bdcc81e177d9a3feb83 refs/remotes/origin/s2s-room-pcm-mixer-input-buffer-overflow",
-        "d4e3f44ee37d82605a1689cc28507bd5635d4a32 refs/remotes/origin/s2s-room-realtime-replay-harness",
-        "d4c405028a9ef825383ce096a78ecf393080d527 refs/remotes/origin/s2s-room-record-replay",
-        "649f0cd61dbc354562f998109986e2ed92324f73 refs/remotes/origin/s2s-room-recording-completeness",
-        "6aefe8249f79e3acbde08cc3803491cf7aa16be9 refs/remotes/origin/s2s-room-replay-recorder-emits-events-and-capture",
-        "c15b27ff66a985dafca8dfbfb14386a85f0c9c3e refs/remotes/origin/s2s-room-run-replay-roundtrip-schema-mismatch",
-        "548977ed4fdad0f871f650129182cfa633e6d2bd refs/remotes/origin/s2s-room-tool-wielding-participants",
-        "984f5d6b0fd22effadbf69b2683e2d652d66e71a refs/remotes/origin/s2s-room-vision-tool",
-        "ab9bab57ece7b33ce64148f45af528ec10cf5335 refs/remotes/origin/s2s-room-voice-configuration",
-        "718bb1d053b137f3c8181474f1a35253bfc780a2 refs/remotes/origin/s2s-scheduled-turn-continuation-crediting",
-        "b862e95b04b5df7e3416f4de9786594c7e54da77 refs/remotes/origin/s2s-scheduled-turns-cannot-express-barge-in",
-        "a9025af435a656068dbdc1f3e45e6b127d559ed2 refs/remotes/origin/s2s-screen-permission-preflight",
-        "9c693c6ada7df9fcb5ddb372aeecf6c17abdd965 refs/remotes/origin/s2s-screen-show-actually-works",
-        "bd2d50e9c8f2b0baf9e5b7a00cf5fd34f54ac2e2 refs/remotes/origin/s2s-screenshot-backend-split-and-operator-instruction-leaks-into-customer-speech",
-        "5a38fb7dad2b3b5dd2e0ecc6bd1752db60c3bfbd refs/remotes/origin/s2s-session-browser-tools-minimal-invocation-silently-opens-and-closes-with-no-output",
-        "e3020f9d5138fdcf5532a32b7794fe6f8cbe9aad refs/remotes/origin/s2s-session-provider-default-inherits-wrong-openrouter-default-for-realtime-paths",
-        "336f9eac4a8e7d31c837e9ffdb62c06ae9e7ec14 refs/remotes/origin/s2s-session-silent-stop-and-prompt-path-fixes",
-        "3fc42107fcc9f8dfc176febdaedfe1b69728ca2c refs/remotes/origin/s2s-show-always-advertised-preflight-at-invoke",
-        "251bb73712681d245d0c7b9e2ae4df91dc1cd6ef refs/remotes/origin/s2s-sigint-clean-cancel-during-tool-work",
-        "69fb53c5d87c9e33f0842a87a36f172f4546e206 refs/remotes/origin/s2s-silent-all-agent-room-reports-false-success",
-        "beb8915c9a7915c987455b3006076f5af126d784 refs/remotes/origin/s2s-split-high-churn-session-files",
-        "280ec6a12fc5b12a0130f99d2b87da1a53c03861 refs/remotes/origin/s2s-stabilize-agent-cli-integration-ci-budget",
-        "1689ea4b7f4340f30bb5f256cab4372d7877b92c refs/remotes/origin/s2s-stabilize-room-mesh-done-close-ordering",
-        "508e8f09d86d72b05c702da1962573e3db48c3ee refs/remotes/origin/s2s-stabilize-room-startup-and-terminal-ordering",
-        "db2df1f5344315d4b3d2391eb871b862e75dd920 refs/remotes/origin/s2s-stabilize-selfplay-turn-target-counting",
-        "478e5b5271482b586cc690afeb87e0a954780acc refs/remotes/origin/s2s-terminal-announcement-regressions-from-the-drain-fix",
-        "c5fd73e8b355c3c4045879dec2b45e8a71358f34 refs/remotes/origin/s2s-terminal-display-honesty",
-        "9d3fac3d0a8651857886af519ac410076998f950 refs/remotes/origin/s2s-terminal-exit-drain-policy-is-unwritten-and-applied-unevenly",
-        "702d1566dcdc31b05d8330c6eecc8ab94ef25a03 refs/remotes/origin/s2s-tilde-config-path-silently-writes-to-a-bogus-literal-directory",
-        "3c75614de45179f7973923e12e51f3cf1236e633 refs/remotes/origin/s2s-tool-path-confinement-and-cwd-semantics",
-        "cd7d545bd1e4d92ee57767a1b032271d43c117b9 refs/remotes/origin/s2s-tool-results-computed-but-never-delivered-to-model",
-        "2e55019977930d3a57af8e9c37b2aed4d2fb722a refs/remotes/origin/s2s-turn-to-turn-dead-air",
-        "dd9741d490b41cda9b85ae556b7c06ed6b73e951 refs/remotes/origin/s2s-two-agent-selfplay-harness-phase1",
-        "afe75d9e54e4c91adcc61cf180ba647a4993c92a refs/remotes/origin/s2s-v1-text-in-audio-out",
-        "c46bfe86b30f9fff4a71493887b906c28ca1684d refs/remotes/origin/s2s-v10-webrtc-external-source",
-        "7f9c49f439e83c63ebdc00421fa4b0e0884b919e refs/remotes/origin/s2s-v2a-audio-in-basic",
-        "1f533eb7a8248380bcac968ef22e8ba7fac1c99f refs/remotes/origin/s2s-v2b-audio-in-long",
-        "266f220f6561e5fa9603ae04b22bfef75cfa7ff6 refs/remotes/origin/s2s-v2c-audio-in-silence",
-        "22adb89e93b737fa69e84e9d347be219990d16a6 refs/remotes/origin/s2s-v2c-audio-in-silence-recut",
-        "2090fbda32772c5fb918859a3fb29d90ecfa5eeb refs/remotes/origin/s2s-v2d-audio-in-multi-utterance",
-        "0dc32b6810a9789d20330da48933f31e39dc8b0d refs/remotes/origin/s2s-v2d-multi-utterance-recut",
-        "79a54e5790a417bfaaf0807a05f668426b94c9ad refs/remotes/origin/s2s-v2e-audio-in-truncated",
-        "7a4c433a131a0bba0d23661bf014cafea88a7489 refs/remotes/origin/s2s-v2e-audio-in-truncated-recut",
-        "d6c0e2ecbfc3df067023c686a2ed2e045167910a refs/remotes/origin/s2s-v3a-barge-in-basic",
-        "7600fe7f84fa421531293befc90e05ee09e19e51 refs/remotes/origin/s2s-v3b-barge-in-during-tool-call",
-        "f82ef1603ab2e17014789f40a04e162d26ed8c17 refs/remotes/origin/s2s-v3c-barge-in-repeated",
-        "92baf6b24c372f535edb3fa93b5d80afae697cdf refs/remotes/origin/s2s-v4a-tool-single-call",
-        "b0a76bfc6374dc2ecb493a3b918720d7663243e9 refs/remotes/origin/s2s-v4b-tool-parallel-calls",
-        "9dc82f1f72b597d13b4ab9ba55619e5bfaa5a11c refs/remotes/origin/s2s-v4c-tool-error",
-        "f79cacd56188d5af778bbc06e0f55d7d785311d6 refs/remotes/origin/s2s-v4d-tool-timeout",
-        "c8cc56cf89c3134fc1f236d609f42e8ff91f8ac3 refs/remotes/origin/s2s-v4e-tool-unknown",
-        "a4cffd03697d2ae82471137e1a103d4044d2a59d refs/remotes/origin/s2s-v4f-tool-during-audio",
-        "f63f3b754c582d7cab907c6c47dc86f857b2b264 refs/remotes/origin/s2s-v5a-default-toolset-active",
-        "2dcf8e1cc339de18887c9a1672373302f6b04a3d refs/remotes/origin/s2s-v5b-toolset-subset",
-        "e4d54c02ba82571ea7c8d7814f0bb5bcee43fa3c refs/remotes/origin/s2s-v5c-toolset-none",
-        "3c1ee3e8c4b7cbee3ef67c5b931213722097eabd refs/remotes/origin/s2s-v6a-error-auth",
-        "5362e9de098828c7b41b0df92a0fa5ddc95c3280 refs/remotes/origin/s2s-v6b-error-disconnect",
-        "a79954cc727a5ef8490f21a889134c5b8182c497 refs/remotes/origin/s2s-v6c-error-rate-limit",
-        "d7e559665d664c0cf91663a18c63a7328ab5767c refs/remotes/origin/s2s-v6d-error-malformed-recut",
-        "c61abdda5c8f02adfc74529ce20d286c90cb86b3 refs/remotes/origin/s2s-v6d-error-malformed-response",
-        "99843ba7e61ef46d5a370aaaacf6059c147c6b95 refs/remotes/origin/s2s-v7a-metrics-modality",
-        "aa00f131b8eb8ecefa19ead47d4033243fb5ba1c refs/remotes/origin/s2s-v7b-buffer-logs",
-        "d1eef115c02c062f3ade4829507737fe59a0cf08 refs/remotes/origin/s2s-v7c-metrics-reconcile",
-        "fec8d3dbdcc00833451ca730d74a4914c85b0b78 refs/remotes/origin/s2s-v8-duplex-overlap",
-        "b21d4f66c111ab285ea88d7cec17afc8106a9302 refs/remotes/origin/s2s-v9-webrtc-device-roundtrip",
-        "76ea6d1685aff19981ab9a652f1f197235b43442 refs/remotes/origin/s2s-validate-async-tool-result-interrupts-speech",
-        "8883c759bf74e8bebd92ed3b2e8c58e7146b5f9b refs/remotes/origin/s2s-validate-live-shaped-barge-in-v2",
-        "29a2d9a89ec1492a532619f34e745bdca2f5eaa8 refs/remotes/origin/s2s-validate-multiturn-duplex-multiplex",
-        "90f67f4b762d538671bb97f8ec748f92d874a138 refs/remotes/origin/s2s-vertical-pr-disposition-triage",
-        "6c4014bbfd04c5acfb9469b405eb602d0e91c223 refs/remotes/origin/s2s-vision-tool-continuation-token-overflow",
-        "b150f8b4557d6aa8a914e9293393113ede04e40d refs/remotes/origin/s2s-voice-honest-failure-grounding",
-        "a0256d61d51dc9064586881b6b5acd9645e8d2bc refs/remotes/origin/s2s-voice-tool-grounding-v2",
-        "bc4ce4a870283afb8bfde03de3f905c03945f2b0 refs/remotes/origin/s2s-webmcp-select-is-blocked-by-the-very-stale-selection-it-exists-to-replace",
-        "75fb0cfc1b9d047e67a6ca13d2265f35c49bd5d5 refs/remotes/origin/s2s-webrtc-customer-audio-path",
-        "725a5e00528babaa13299e10c9665e7892ba78df refs/remotes/origin/s2s-write-file-temp-rename-shrinks-filename-limit-with-a-confusing-error",
-        "9a2041c3fee6229c0eab97707f47284bc8536674 refs/remotes/origin/virtual-device-loopback-harness",
-        "c3572c39ecc54b4e30a2a2af4da40033b81783eb refs/remotes/origin/webmcp-ambiguous-tab-exact-id-rejected-and-silent",
-        "cf62356263866d6fe517ed54e1407964bd7fd1a6 refs/remotes/origin/webmcp-ambiguous-tab-hides-page-tools-agent-fabricates",
-        "85cfd7e4106dbaeb5e548a92d3e96a4b3b0618c1 refs/remotes/origin/webmcp-c0-contract-freeze",
-        "27e5cb90938209a4c448d5e62aa2cf03f366b888 refs/remotes/origin/webmcp-classification-contract-conformance",
-        "13bebf16784313ae6fb9ce913a756ded1e1f537f refs/remotes/origin/webmcp-conversational-customer-sim",
-        "8cc3d69b6e6a7519595d01d3f9f7086b5b682799 refs/remotes/origin/webmcp-cross-process-cancel-real-chrome",
-        "2fe8dc948e2f7e05c1b01d2f25b0a06c387353b0 refs/remotes/origin/webmcp-diagnostics-honesty",
-        "7041ac7ddfd1e3afa8b7f35af002f72f285ffbea refs/remotes/origin/webmcp-i1-production-wiring",
-        "ba14f586658c3eb5508398154ec4a6308ed68135 refs/remotes/origin/webmcp-in-session-attach",
-        "a21079f6c2aa7527542de48822d3f91da1db0eb9 refs/remotes/origin/webmcp-invoke-error-envelope-and-cancel-ux",
-        "045baaffbccf58fb7d3b384f949a3fb04905080b refs/remotes/origin/webmcp-lane-a-go126-workspace-upgrade",
-        "b92813be28f21c1bbfcc990272f2175bc20e4c79 refs/remotes/origin/webmcp-lane-b-discovery-selection",
-        "abeae3fcfa33a943051aa64fa391f13f81d21fe5 refs/remotes/origin/webmcp-lane-c-broker-core",
-        "10ebf59ecffc5867f497bc4f7d201bc378a72ce3 refs/remotes/origin/webmcp-lane-d-chrome-adapter",
-        "7055e8ea074d5bcb18099e012b72655d242072a9 refs/remotes/origin/webmcp-lane-f-testkit-fixture-replay",
-        "9a1c0d93df9c16fae2334b161956a4e6fd747ede refs/remotes/origin/webmcp-lane-g-cli-config-composition",
-        "2764f628e6b52f97c968413591ed6b0f9455b4e0 refs/remotes/origin/webmcp-lane-h-topology-recovery",
-        "e846f25f36da9a7fbe0ed353d82290f57bfe0725 refs/remotes/origin/webmcp-lane-i-realtime-session-integration",
-        "7c6e6aeb0f4f53b1af82ff35536dd80726899dfb refs/remotes/origin/webmcp-lane-k-probe-evidence",
-        "849d2000edf1a202d908ba17b10f76d5d7cd3cad refs/remotes/origin/webmcp-late-catalog-reevaluation",
-        "fdebb1bff7487181756dee9b719c8b6193bdf5df refs/remotes/origin/webmcp-live-session-tool-invocation-returns-stale-empty-result",
-        "2e2e2d9a5cfa17bb1844ea97da8e173c26a9273f refs/remotes/origin/webmcp-managed-default-browser",
-        "4c10a241ddbed065e20233b8ff9cbfb234a6dbc8 refs/remotes/origin/webmcp-mid-session-tab-switch",
-        "630f2314650afecf756f018b75303c15fd9e4780 refs/remotes/origin/webmcp-o0-toolchain-gate",
-        "dc35eb488b5ec885e54c0c7bb318ac78933fa76c refs/remotes/origin/webmcp-page-tools-first-class",
-        "f0dd50f2dd03d4dfa933a6966763e6d198fd8554 refs/remotes/origin/webmcp-pagetool-timeout-cold-attach",
-        "66c3ff8ef53ea6a3ad179320440455988d1ebb23 refs/remotes/origin/webmcp-prereq-go126-vet-slice-format",
-        "f3f96fc734af24f26ce110552db19811b8eb6afa refs/remotes/origin/webmcp-residual-stub-paths",
-        "899a7bf6fc03066853d609949282d99344229ff9 refs/remotes/origin/webmcp-select-hang-on-browser-death",
-        "f9bcca992efb4e4d00bad08355e02b024565161c refs/remotes/origin/webmcp-selection-connectivity-voice-path",
-        "342a1ebcdc29971305ed8b31fd43362245e139cd refs/remotes/origin/webmcp-session-update-missing-session-type",
-        "fdc998a026666ab6aefcc4ceb5a555957a37f43a refs/remotes/origin/webmcp-stale-persisted-selection-hides-page-tools",
-        "2a2b068b464d04059378089cd4c751aeaccc7b88 refs/remotes/origin/webmcp-watch-cross-process-events",
-        "0dd22fe93df40fa8ae7b16095bcd01693ad598da refs/stash",
-        "421277bfb77c326433c7d92b3a16366bcf35e67a refs/tags/agent-cli/v0.0.1",
-        "3437f1b8b4f87133517a83b6591c44507e90fa83 refs/tags/agent-cli/v0.0.2",
-        "b31afc8ad7b66ebf73592cfcb2e75e35d60fd821 refs/tags/agent-cli/v0.0.3",
-        "49ec080e04b827c1b208a6df90f604e8c3f01107 refs/tags/agent-cli/v0.0.4",
-        "1333429306e9811b56f20f95e62fe956f36d6ced refs/tags/go-agent-loop/v0.0.1",
-        "1e8551f2d3c447b53b2321f1198c1ca14522453b refs/tags/go-agent-loop/v0.0.2",
-        "3c44e9b91531dd170f56ecfec3813ea980b74e9a refs/tags/go-agent-loop/v0.0.3",
-        "c3e552e981a7e1c9e701d85c8424cbb1c8189e7d refs/tags/go-agent-loop/v0.0.4",
-        "a2777c033e780c9497819c51e46d39f7f5c4fbb2 refs/tags/go-llm-gateway/v0.0.1",
-        "d913cd7c8e5acbd636b33aa4bf984d11b4db96d7 refs/tags/go-llm-gateway/v0.0.2",
-        "96ce8bf64547a6c2068996662e8bea34c1dee424 refs/tags/go-llm-gateway/v0.0.3",
-        "5b8f481bdd7da128a1fd7862129bf9b177728a9f refs/tags/go-llm-gateway/v0.0.4",
-        "9168f7e8980bc6ab9a11a3d1a00d4fc872566e60 refs/tags/v0.0.1",
-        "89df72d9b47c0cff880f78c0168ee50864bc3cc8 refs/tags/v0.0.2",
-        "1d78d8be0554dd45250bfeb9be6534d748296d9d refs/tags/v0.0.3",
-        "cfbb63a31337b6b3ca38518b59f7a02c9d147654 refs/tags/v0.0.4"
-      ],
+      "complete": true,
       "worktrees": {
         "c61": {
+          "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+          "branch_ref": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+          "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
           "path": ".claude/worktrees/audio-runtime-c61-retire-cli-browser-scenario-contract",
-          "present": false
+          "present": true,
+          "registered": true,
+          "status": [],
+          "tree": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2"
         },
         "c83": {
+          "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+          "branch_ref": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+          "head": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
           "path": ".claude/worktrees/audio-runtime-c83-retire-cli-browser-scenario-runner",
-          "present": false
+          "present": true,
+          "registered": true,
+          "status": [],
+          "tree": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048"
         }
       }
     },
     "unchanged": true
   },
   "project": "audio-runtime",
+  "refs": {
+    "after": [
+      {
+        "name": "refs/heads/c109-c61-readonly",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/heads/c109-c83-readonly",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/remotes/origin/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/remotes/origin/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/remotes/origin/main",
+        "object": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+      }
+    ],
+    "before": [
+      {
+        "name": "refs/heads/c109-c61-readonly",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/heads/c109-c83-readonly",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/remotes/origin/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/remotes/origin/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/remotes/origin/main",
+        "object": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+      }
+    ],
+    "candidateRefsUnchanged": true
+  },
   "refsUnchanged": true,
   "requestedAcceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
   "reviewMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "schema": "audio-runtime-c109-provenance-v2",
   "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "task": "audio-runtime-c109-characterize-browser-retirement-integration",
-  "worktreeInventory": [
-    {
-      "branch": "refs/heads/s2s-live-read-image-tool-result-empty-and-default-lifecycle-cuts-off",
-      "head": "c529f31e95624db9a3b58568b1eaf70e84eb1a56",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-live-read-image-tool-result-empty-and-default-lifecycle-cuts-off"
-    },
-    {
-      "branch": "refs/heads/s2s-live-session-audio-plays-back-at-16khz-while-the-provider-emits-24khz",
-      "head": "894b6e8ee09b76da03932ac6c12bd0afe6771765",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-live-session-audio-plays-back-at-16khz-while-the-provider-emits-24khz"
-    },
-    {
-      "branch": "refs/heads/s2s-mask-tool-latency-with-acoustic-signal",
-      "head": "9cb1ed2692185beedf6566534c9c58e649960a4e",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-mask-tool-latency-with-acoustic-signal"
-    },
-    {
-      "branch": "refs/heads/s2s-mixed-modality-residual-plumbing",
-      "head": "50a378e3749f6c0c1d4abbae06cdea9bf887a634",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-mixed-modality-residual-plumbing"
-    },
-    {
-      "branch": "refs/heads/s2s-no-silent-success-exit-zero",
-      "head": "c147d7bccf9a351a1c2a31eabc455435e178b983",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-no-silent-success-exit-zero"
-    },
-    {
-      "branch": "refs/heads/s2s-normalize-loudness-across-voices",
-      "head": "10e8a82b34571122541c66cd3f64bb4690f8c021",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-normalize-loudness-across-voices"
-    },
-    {
-      "branch": "refs/heads/s2s-overlapping-response-kills-live-call",
-      "head": "71df6dead01072b41d971482f5a6ee29c7317525",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-overlapping-response-kills-live-call"
-    },
-    {
-      "branch": "refs/heads/s2s-peer-audio-still-auto-cancels-ordinary-responses-suppressing-ai-to-ai-overlap",
-      "head": "b7cc93db0479a4566361b596477a6b0e9d335993",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-peer-audio-still-auto-cancels-ordinary-responses-suppressing-ai-to-ai-overlap"
-    },
-    {
-      "branch": "refs/heads/s2s-prereq-media-root-look-contract",
-      "head": "2a4e145566f6b3f37997e0c8d61829fc46660788",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-prereq-media-root-look-contract"
-    },
-    {
-      "branch": "refs/heads/s2s-provider-wire-tool-result-delivery",
-      "head": "f854acf285a28c63f12af075e8c4588a4bad1245",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-provider-wire-tool-result-delivery"
-    },
-    {
-      "branch": "refs/heads/s2s-real-capture-golden-fixtures",
-      "head": "71df6dead01072b41d971482f5a6ee29c7317525",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-real-capture-golden-fixtures"
-    },
-    {
-      "branch": "refs/heads/s2s-record-dir-loses-paid-conversation-on-conflict-and-on-any-unclean-exit",
-      "head": "95790466195e885fa683fd8e26a62ecfe5ec1e48",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-record-dir-loses-paid-conversation-on-conflict-and-on-any-unclean-exit"
-    },
-    {
-      "branch": "refs/heads/s2s-recut-tool-executor-wiring-pr83",
-      "head": "e56614e4fc430346dd2ca8f02879ea467f0e197a",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-recut-tool-executor-wiring-pr83"
-    },
-    {
-      "branch": "refs/heads/s2s-regression-fixtures-from-real-failures",
-      "head": "b1c59ebab2a67d0b7a8b46ef1fae6a277a751409",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-regression-fixtures-from-real-failures"
-    },
-    {
-      "branch": "refs/heads/s2s-replay-selfdriving-wire-order-mismatch",
-      "head": "777fb7772a5945c4e577df263426b59991bee6b9",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-replay-selfdriving-wire-order-mismatch"
-    },
-    {
-      "branch": "refs/heads/s2s-replay-turn-boundary-reconstruction",
-      "head": "5c371825ed5d5b156da37a955ecd790c5f2f2973",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-replay-turn-boundary-reconstruction"
-    },
-    {
-      "branch": "refs/heads/s2s-restart-land-devices-list-command",
-      "head": "268dc898749c39ad5e4ab7a656226a33cd25c324",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-restart-land-devices-list-command"
-    },
-    {
-      "branch": "refs/heads/s2s-restart-land-hermetic-test-target",
-      "head": "732a91ece53b4708eed0a33077962ce8d42daaa3",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-restart-land-hermetic-test-target"
-    },
-    {
-      "branch": "refs/heads/s2s-restart-realtime-client-lib-decision",
-      "head": "065c54e04e3d6171c7468b28f2cc4c1a968704eb",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-restart-realtime-client-lib-decision"
-    },
-    {
-      "branch": "refs/heads/s2s-room-burns-money-and-cannot-be-scripted",
-      "head": "28fb57336ea986a518da564590702c4186cf4739",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-room-burns-money-and-cannot-be-scripted"
-    },
-    {
-      "branch": "refs/heads/s2s-room-participant-tool-selection-collides",
-      "head": "a6263cc63376c3a21aecd043ee875bf2ed82c26f",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-room-participant-tool-selection-collides"
-    },
-    {
-      "branch": "refs/heads/s2s-room-pcm-mixer-input-buffer-overflow",
-      "head": "c8a4a51b39624dd773f46bdcc81e177d9a3feb83",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-room-pcm-mixer-input-buffer-overflow"
-    },
-    {
-      "branch": "refs/heads/s2s-session-browser-tools-minimal-invocation-silently-opens-and-closes-with-no-output",
-      "head": "5a38fb7dad2b3b5dd2e0ecc6bd1752db60c3bfbd",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-session-browser-tools-minimal-invocation-silently-opens-and-closes-with-no-output"
-    },
-    {
-      "branch": "refs/heads/s2s-session-provider-default-inherits-wrong-openrouter-default-for-realtime-paths",
-      "head": "e3020f9d5138fdcf5532a32b7794fe6f8cbe9aad",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-session-provider-default-inherits-wrong-openrouter-default-for-realtime-paths"
-    },
-    {
-      "branch": "refs/heads/s2s-session-record-or-replay-required-for-any-non-bare-live-invocation",
-      "head": "c23f958d7eebc477810fae40b83a1bd269a32218",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-session-record-or-replay-required-for-any-non-bare-live-invocation"
-    },
-    {
-      "branch": "refs/heads/s2s-sigint-clean-cancel-during-tool-work",
-      "head": "8e61684f51a68c0a12873ca135d16caec5388afc",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-sigint-clean-cancel-during-tool-work"
-    },
-    {
-      "branch": "refs/heads/s2s-silent-target-attach-failure-and-lost-tool-ack",
-      "head": "71df6dead01072b41d971482f5a6ee29c7317525",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-silent-target-attach-failure-and-lost-tool-ack"
-    },
-    {
-      "branch": "refs/heads/s2s-terminal-announcement-regressions-from-the-drain-fix",
-      "head": "478e5b5271482b586cc690afeb87e0a954780acc",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-terminal-announcement-regressions-from-the-drain-fix"
-    },
-    {
-      "branch": "refs/heads/s2s-tool-path-confinement-and-cwd-semantics",
-      "head": "51e362e728e37f77a3955900a181840bb1b18212",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-tool-path-confinement-and-cwd-semantics"
-    },
-    {
-      "branch": "refs/heads/s2s-turn-to-turn-dead-air",
-      "head": "3bde8e8e6111f65e748adcdc13c2b42d0bb981fb",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-turn-to-turn-dead-air"
-    },
-    {
-      "branch": "refs/heads/s2s-two-agent-selfplay-harness-phase1",
-      "head": "dd9741d490b41cda9b85ae556b7c06ed6b73e951",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-two-agent-selfplay-harness-phase1"
-    },
-    {
-      "branch": "refs/heads/s2s-typod-optional-config-keys-are-silently-ignored",
-      "head": "3f788075d076366a569df86100699cc00b7efc7a",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-typod-optional-config-keys-are-silently-ignored"
-    },
-    {
-      "branch": "refs/heads/s2s-v2c-audio-in-silence",
-      "head": "eeff872e64361acc2644512465eb760477544c30",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-v2c-audio-in-silence"
-    },
-    {
-      "branch": "refs/heads/s2s-v2d-audio-in-multi-utterance",
-      "head": "2090fbda32772c5fb918859a3fb29d90ecfa5eeb",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-v2d-audio-in-multi-utterance"
-    },
-    {
-      "branch": "refs/heads/s2s-v2e-audio-in-truncated",
-      "head": "79a54e5790a417bfaaf0807a05f668426b94c9ad",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-v2e-audio-in-truncated"
-    },
-    {
-      "branch": "refs/heads/s2s-v3a-barge-in-basic",
-      "head": "d6c0e2ecbfc3df067023c686a2ed2e045167910a",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-v3a-barge-in-basic"
-    },
-    {
-      "branch": "refs/heads/s2s-v3b-barge-in-during-tool-call",
-      "head": "63840d8ee7c135c4ee7e731d26b52ad69008aceb",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-v3b-barge-in-during-tool-call"
-    },
-    {
-      "branch": "refs/heads/s2s-v4e-tool-unknown",
-      "head": "c8cc56cf89c3134fc1f236d609f42e8ff91f8ac3",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-v4e-tool-unknown"
-    },
-    {
-      "branch": "refs/heads/s2s-v6d-error-malformed-response",
-      "head": "c61abdda5c8f02adfc74529ce20d286c90cb86b3",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-v6d-error-malformed-response"
-    },
-    {
-      "branch": "refs/heads/s2s-validate-interrupt-during-active-speech-live-shaped",
-      "head": "b3cbae3eb43d8a758cb6672b08264c61e26e0356",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-validate-interrupt-during-active-speech-live-shaped"
-    },
-    {
-      "branch": "refs/heads/s2s-validate-live-shaped-barge-in-v2",
-      "head": "8883c759bf74e8bebd92ed3b2e8c58e7146b5f9b",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-validate-live-shaped-barge-in-v2"
-    },
-    {
-      "branch": "refs/heads/s2s-voice-honest-failure-grounding",
-      "head": "b150f8b4557d6aa8a914e9293393113ede04e40d",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-voice-honest-failure-grounding"
-    },
-    {
-      "branch": "refs/heads/s2s-write-file-temp-rename-shrinks-filename-limit-with-a-confusing-error",
-      "head": "725a5e00528babaa13299e10c9665e7892ba78df",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/s2s-write-file-temp-rename-shrinks-filename-limit-with-a-confusing-error"
-    },
-    {
-      "branch": "refs/heads/webmcp-agent-manufactures-success-with-unrequested-writes",
-      "head": "04977e6c2fbe07e06aa536ec24a1f5cc72063b73",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/webmcp-agent-manufactures-success-with-unrequested-writes"
-    },
-    {
-      "branch": "refs/heads/webmcp-connection-fragile-across-repeat-invocations",
-      "head": "85960764c601d3518eeb034130e86cb8ad13f7ab",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/webmcp-connection-fragile-across-repeat-invocations"
-    },
-    {
-      "branch": "refs/heads/webmcp-lane-i-realtime-session-integration",
-      "head": "b36cecb2ccf33144df02360d1a5a12890cbf24c3",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/webmcp-lane-i-realtime-session-integration"
-    },
-    {
-      "branch": "refs/heads/webmcp-managed-browser-must-actually-launch",
-      "head": "a6c3913c0ecb4d1a6ee771c3e9bfccd6efebc0d3",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/webmcp-managed-browser-must-actually-launch"
-    },
-    {
-      "branch": "refs/heads/webmcp-managed-default-browser",
-      "head": "2e2e2d9a5cfa17bb1844ea97da8e173c26a9273f",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/webmcp-managed-default-browser"
-    },
-    {
-      "branch": "refs/heads/webmcp-page-claims-require-completed-tool-call",
-      "head": "7508b28c8e320ff19b277d0f9b6383c6f2739184",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/webmcp-page-claims-require-completed-tool-call"
-    },
-    {
-      "branch": "refs/heads/webmcp-selflaunched-browser-left-orphaned",
-      "head": "e53f732ae69776de9d3fad48ed8d1dbd8f0a219d",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/webmcp-selflaunched-browser-left-orphaned"
-    },
-    {
-      "branch": "refs/heads/webmcp-session-update-missing-session-type",
-      "head": "342a1ebcdc29971305ed8b31fd43362245e139cd",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/webmcp-session-update-missing-session-type"
-    },
-    {
-      "branch": "refs/heads/webmcp-wrong-grounding-tool-and-filler-loop",
-      "head": "3f771fb1f1262c8a441005026530569877f5c5f1",
-      "path": "/Users/abdifamily/work/harness/go-agent-harness/.claude/worktrees/webmcp-wrong-grounding-tool-and-filler-loop"
-    }
-  ]
+  "worktreeInventory": {
+    "complete": true,
+    "normalization": "complete porcelain was parsed; unrelated mutable worktrees are omitted from deterministic evidence",
+    "records": [
+      {
+        "branch": "refs/heads/codex/audio-runtime-c109-characterize-browser-retirement-integration",
+        "detached": false,
+        "head": "e0af439b2075e14cca1b814dc853fe5e4743b36c",
+        "locked": false,
+        "path": ".claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration",
+        "prunable": "",
+        "scope": "current"
+      },
+      {
+        "branch": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "detached": false,
+        "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+        "locked": false,
+        "path": ".claude/worktrees/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "prunable": "",
+        "scope": "preserved-c61"
+      },
+      {
+        "branch": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "detached": false,
+        "head": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+        "locked": false,
+        "path": ".claude/worktrees/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "prunable": "",
+        "scope": "preserved-c83"
+      }
+    ]
+  }
 }
