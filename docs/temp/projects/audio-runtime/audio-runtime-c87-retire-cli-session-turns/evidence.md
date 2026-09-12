@@ -57,3 +57,48 @@ script CI gate because C79's reviewed guarded merge has not released the shared
 registry and architecture-baseline lease. After that release, fetch accepted
 main, apply only the C87 Wire registration and demonstrated downward/deletion
 baseline edits, rerun the bounded gates, and submit the changed same-task PR.
+
+## Exact-head CI rejection and bounded recovery
+
+At `2026-09-12T10:42:58Z`, PR `#476` was still at clean head
+`3e7da39c8e7173a59167bb0976a80248da0f387b`. Script CI run `34687481090`
+evaluated that exact head. Unit, race, coverage, hermetic, WebMCP Chrome, macOS
+audio release, and Windows portable software passed. The two failures were
+preserved without relabeling:
+
+- Static job `103536897303` reported the unregistered generated file
+  `go-agent-runtime/services/sessionturns/wire/wire_gen.go` and exactly twelve
+  stale downward-only architecture entries: `ErrEmptyTurn`,
+  `ErrInvalidTurnDirection`, `ErrInvalidTurnTick`, `ErrMissingTurnInferencer`,
+  `ErrSessionClosed`, `ErrSessionEndedWithActiveTurn`, `ErrTurnAlreadyActive`,
+  `ErrTurnEndWithoutStart`, `ErrTurnMismatch`, `readTurnResponse`,
+  `TestSessionTurns_FiveTurnsUseOnePersistentSessionAndExactLifecycle`, and
+  `noTurnSetup`. These are the shared C79 registration/baseline lease, so C87
+  made no shared-file edit. C79 remains `ci-pending` on open PR `#470` with no
+  guarded merge/release.
+- Integration job `103536897232` failed only the known C64-owned
+  `TestAgentBinaryTest46HighRateToolAudioRegression/trial_13`: the remote
+  device rendered `167991/174391` compared samples, losing exactly `6400`
+  (`96.3%` retained), while reporting zero dropped samples, overflow events,
+  discarded samples, or discard events. C87 did not edit C64 transport/device
+  or drain paths.
+
+The bounded same-head recovery checks passed: sessionturns normal and race
+matrices each ran `48` tests; deprecated CLI compatibility normal and race each
+ran `6` tests; the separate `GOWORK=off` consumer passed; all three verifier
+modes passed; the credential-free consumer test and program passed with
+`connections=1`, `history=2`, `second_connections=1`, `second_history=1`,
+`audio_copied=true`, `snapshot_copied=true`, `invalid_transition_preserved=true`,
+`isolated=true`, and `closed=true`; coverage registration checked `179` packages;
+and `COUNT=1 scripts/test-session-ci-regressions.sh all` passed normal,
+coverage, and race modes. Its local high-rate test46 control passed all `20`
+trials. These checks do not claim script-CI green, independent review, merge,
+vertical acceptance, or project acceptance.
+
+Exact next action: after C79's reviewed guarded merge releases the shared lease,
+fetch accepted main, apply only the sessionturns Wire registration and the
+demonstrated twelve downward baseline deletions, rerun the bounded Wire,
+architecture, focused causal, and accumulated regression checks, commit and
+push the same PR `#476`, and submit the changed head to script CI without
+polling. Preserve the C64 high-rate failure as dependency evidence and retain
+C87 ownership for any actionable same-task rejection.
