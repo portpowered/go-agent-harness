@@ -16,20 +16,11 @@ type sessionToolLifecycleObserver interface {
 	observeToolResult(messages.ToolCall, messages.ToolCallResponse, bool)
 }
 
-// Deprecated: use conversationlog.TurnInput.
-type sessionConversationTurnInput = conversationlog.TurnInput
-
 // Deprecated: use conversationlog.TurnTiming.
 type sessionConversationTurnTiming = conversationlog.TurnTiming
 
-// Deprecated: use conversationlog.TurnResponse.
-type sessionConversationTurnResponse = conversationlog.TurnResponse
-
 // Deprecated: use conversationlog.LogEntry.
 type sessionConversationLogEntry = conversationlog.LogEntry
-
-// Deprecated: use conversationlog.ToolEvent.
-type sessionConversationToolEvent = conversationlog.ToolEvent
 
 // Deprecated: use conversationlog.ImageEvidence.
 type sessionConversationImageEvidence = conversationlog.ImageEvidence

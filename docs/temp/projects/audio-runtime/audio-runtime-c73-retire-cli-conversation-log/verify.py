@@ -185,7 +185,12 @@ def cli_retirement(args: argparse.Namespace) -> dict[str, Any]:
     baseline_lines = len(baseline.stdout.splitlines()) if baseline.returncode == 0 else -1
     retired = baseline_lines - current_lines
     source = CLI_SOURCE.read_text(encoding="utf-8")
-    aliases = source.count("type sessionConversation")
+    required_aliases = (
+        "type sessionConversationTurnTiming = conversationlog.TurnTiming",
+        "type sessionConversationLogEntry = conversationlog.LogEntry",
+        "type sessionConversationImageEvidence = conversationlog.ImageEvidence",
+    )
+    aliases = sum(declaration in source for declaration in required_aliases)
     forbidden_policy = [
         "encoding/json",
         "strings.Builder",
@@ -198,7 +203,7 @@ def cli_retirement(args: argparse.Namespace) -> dict[str, Any]:
         baseline_lines == args.baseline_lines
         and current_lines <= args.max_lines
         and retired >= args.min_retired_lines
-        and aliases >= 6
+        and aliases == len(required_aliases)
         and not forbidden_hits
     )
     return {
