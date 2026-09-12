@@ -1,3 +1,3 @@
-ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/audio	0.855s
-ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/clock	0.322s
-ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/mixer	1.112s
+ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/audio	1.026s
+ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/clock	0.166s
+ok  	github.com/portpowered/go-agent-harness/go-audio/pkg/mixer	1.140s
