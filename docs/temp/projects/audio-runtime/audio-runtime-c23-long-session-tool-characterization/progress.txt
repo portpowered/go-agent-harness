@@ -761,3 +761,29 @@ C23 fresh C53/current-main characterization checkpoint — 2026-09-12T00:10Z
   matrix, shipped-regressions, self-check, and report sequence plus the C21
   regressions, and update/push the same PR #415 only after the candidate is
   green so it can be sent to script CI without polling.
+
+C23 executor visit: admission and accumulated regression recheck — 2026-09-12
+
+- The canonical `~default` all/500 Work response was read. It retains
+  `work-task-21` for this exact task and the separate C56 `work-task-25` owner;
+  C56 remains at unreviewed PR #448 head `9f089bfa` and is not in `origin/main`.
+  `project-control.py verify-work --type task --name
+  audio-runtime-c23-long-session-tool-characterization` returned `admitted`.
+- The isolated branch exactly matches `prd.json.branchName`, `origin/main`
+  remains `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`, and startup/project
+  baseline ancestry remains present. The worktree was clean at pushed head
+  `bba20c5c19a2174d78745ff8e31db41e60cde116`; PR #415 is open at that same
+  head. No production, peer, shared, or host-checkout path changed.
+- Non-duplicative owned checks passed: Python compilation, driver help
+  including `probe`, process-control normal case, and `git diff --check`.
+  Accumulated C21 `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls`
+  passed normal `-count=5` (15/15, 35.836s) and race `-count=1` (3/3,
+  34.362s). The known C23 recording-on/16 failure was not retried.
+- Disposition remains `CONTINUE`: the preserved first failure still records
+  provider/public PCM and clean completion but zero semantic recording audio
+  and no `audio/out-000.pcm`. After a reviewed recording/media repair reaches
+  `origin/main` or primary supplies an ownership decision, fetch that exact
+  main, rebuild/rebind provenance, rerun the complete bounded sequence and C21
+  regressions, then update and submit this same PR to script CI without
+  polling. No CI-green, review, merge, vertical, device, acoustic, or project
+  completion claim is made.
