@@ -1,4 +1,4 @@
-package agentruntime
+package service
 
 import (
 	"crypto/sha256"
@@ -214,6 +214,127 @@ func TestLoadRoomReplayPlanRejectsUndeclaredTimelineArtifact(t *testing.T) {
 	_, err := LoadRoomReplayPlan(bundle)
 	if err == nil || !errors.Is(err, gateway.ErrReplayMismatch) || !strings.Contains(err.Error(), "undeclared") {
 		t.Fatalf("undeclared timeline reference error = %v, want diff-bearing mismatch", err)
+	}
+}
+
+func TestLoadRoomReplayPlanRejectsOversizedManifestWithTypedMismatch(t *testing.T) {
+	bundle, _ := writeRoomReplayBundle(t)
+	data := make([]byte, roomReplayMaxManifestBytes+1)
+	for index := range data {
+		data[index] = 'x'
+	}
+	if err := os.WriteFile(filepath.Join(bundle, RoomReplayBundleManifestPath), data, 0o600); err != nil {
+		t.Fatalf("write oversized manifest: %v", err)
+	}
+
+	_, err := LoadRoomReplayPlan(bundle)
+	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatalf("oversized manifest error = %v, want typed mismatch", err)
+	}
+	var bundleErr *RoomReplayBundleError
+	if !errors.As(err, &bundleErr) || bundleErr.Field != "run-manifest.json" || !strings.Contains(bundleErr.Actual, "maximum") {
+		t.Fatalf("oversized manifest error = %+v, want bounded manifest context", bundleErr)
+	}
+}
+
+func TestLoadRoomReplayPlanRejectsOversizedTimelineLineWithTypedMismatch(t *testing.T) {
+	bundle, manifest := writeRoomReplayBundle(t)
+	line := strings.Repeat("x", int(roomReplayMaxTimelineLineBytes)) + "\n"
+	if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), []byte(line), 0o600); err != nil {
+		t.Fatalf("write oversized timeline: %v", err)
+	}
+	updateArtifactDigest(t, manifest, "room_timeline", []byte(line))
+	writeManifestValue(t, bundle, manifest)
+
+	_, err := LoadRoomReplayPlan(bundle)
+	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !errors.Is(err, gateway.ErrReplayMismatch) {
+		t.Fatalf("oversized timeline error = %v, want typed mismatch", err)
+	}
+	var bundleErr *RoomReplayBundleError
+	if !errors.As(err, &bundleErr) || bundleErr.Field != "room_timeline" || !strings.Contains(bundleErr.Expected, "JSONL lines") {
+		t.Fatalf("oversized timeline error = %+v, want bounded line context", bundleErr)
+	}
+}
+
+func TestLoadRoomReplayPlanReturnsDeterministicProjectionCopies(t *testing.T) {
+	bundle, _ := writeRoomReplayBundle(t)
+	first, err := LoadRoomReplayPlan(bundle)
+	if err != nil {
+		t.Fatalf("first LoadRoomReplayPlan: %v", err)
+	}
+	second, err := LoadRoomReplayPlan(bundle)
+	if err != nil {
+		t.Fatalf("second LoadRoomReplayPlan: %v", err)
+	}
+	if got, want := fmt.Sprintf("%v", first.Participants), fmt.Sprintf("%v", second.Participants); got != want {
+		t.Fatalf("participant projection changed between loads: first=%s second=%s", got, want)
+	}
+	if len(first.Artifacts) != len(second.Artifacts) {
+		t.Fatalf("artifact projection lengths = %d and %d", len(first.Artifacts), len(second.Artifacts))
+	}
+	for index := range first.Artifacts {
+		if first.Artifacts[index].Path != second.Artifacts[index].Path || first.Artifacts[index].Owner != second.Artifacts[index].Owner {
+			t.Fatalf("artifact %d changed between loads: first=%+v second=%+v", index, first.Artifacts[index], second.Artifacts[index])
+		}
+	}
+}
+
+func TestLoadRoomReplayPlanAcceptsSchemaV1AndRejectsMalformedManifest(t *testing.T) {
+	t.Run("schema v1", func(t *testing.T) {
+		bundle, manifest := writeRoomReplayBundle(t)
+		manifest["schema_version"] = 1
+		writeManifestValue(t, bundle, manifest)
+		plan, err := LoadRoomReplayPlan(bundle)
+		if err != nil || plan.SchemaVersion != 1 {
+			t.Fatalf("schema v1 LoadRoomReplayPlan = plan:%+v err:%v", plan, err)
+		}
+	})
+	t.Run("malformed json", func(t *testing.T) {
+		bundle, _ := writeRoomReplayBundle(t)
+		if err := os.WriteFile(filepath.Join(bundle, RoomReplayBundleManifestPath), []byte("{"), 0o600); err != nil {
+			t.Fatalf("write malformed manifest: %v", err)
+		}
+		_, err := LoadRoomReplayPlan(bundle)
+		if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !errors.Is(err, gateway.ErrReplayMismatch) {
+			t.Fatalf("malformed manifest error = %v, want typed mismatch", err)
+		}
+	})
+	t.Run("malformed timestamp", func(t *testing.T) {
+		bundle, manifest := writeRoomReplayBundle(t)
+		manifest["clock_base"] = "not-a-timestamp"
+		writeManifestValue(t, bundle, manifest)
+		_, err := LoadRoomReplayPlan(bundle)
+		if err == nil || !errors.Is(err, ErrRoomReplayBundleIncomplete) || !strings.Contains(err.Error(), "clock_base") {
+			t.Fatalf("malformed timestamp error = %v, want incomplete clock_base", err)
+		}
+	})
+}
+
+func TestLoadRoomReplayPlanRejectsCaptureProviderMismatch(t *testing.T) {
+	bundle, manifest := writeRoomReplayBundle(t)
+	participant := manifest["participants"].(map[string]any)["alpha"].(map[string]any)
+	captureRef := participant["artifacts"].(map[string]any)[roomReplayArtifactRoleCapture].(map[string]any)
+	capturePath := filepath.Join(bundle, filepath.FromSlash(captureRef["path"].(string)))
+	capture, err := gwtesting.LoadSessionCapture(capturePath)
+	if err != nil {
+		t.Fatalf("load fixture capture: %v", err)
+	}
+	capture.Provider.Model = "different-model"
+	data, err := json.Marshal(capture)
+	if err != nil {
+		t.Fatalf("marshal mismatched capture: %v", err)
+	}
+	if err := os.WriteFile(capturePath, data, 0o600); err != nil {
+		t.Fatalf("write mismatched capture: %v", err)
+	}
+	captureRef["size"] = len(data)
+	digest := sha256.Sum256(data)
+	captureRef["sha256"] = hex.EncodeToString(digest[:])
+	writeManifestValue(t, bundle, manifest)
+
+	_, err = LoadRoomReplayPlan(bundle)
+	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !strings.Contains(err.Error(), "participants[alpha].model") {
+		t.Fatalf("capture provider mismatch error = %v, want typed participant model mismatch", err)
 	}
 }
 

@@ -4074,3 +4074,37 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+
+## C75 checkpoint — room replay bundle retirement
+
+- Admission was verified for `audio-runtime-c75-retire-cli-room-replay-bundle`
+  on `codex/audio-runtime-c75-retire-cli-room-replay-bundle` from accepted
+  main `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`; required startup and
+  predecessor ancestry remain intact, and no running host checkout was merged
+  or reset.
+- The three admitted CLI production files moved their reusable contract and
+  admission implementation behind `go-agent-runtime/services/roomreplaybundle`
+  plus private service/Wire construction. CLI files are now deprecated aliases,
+  compatibility JSON helpers for the separately owned audio projection, or
+  package markers; scheduler/recording source was not changed. The original
+  `337 + 1,158 + 404 = 1,899` production-line baseline is reduced to
+  `88 + 219 + 6 = 313` lines in those named CLI files (`1,586` lines retired).
+- Runtime behavior now covers schema v1/current admission, deterministic
+  participant/artifact projections, inventory metadata, digest/size mismatch,
+  missing and duplicate artifacts, traversal/absolute/symlink rejection,
+  capture/provider mismatch, malformed JSON/timestamps, timeline references,
+  bounded manifest/artifact/capture/timeline reads, typed errors, and output
+  exclusion. The separate GOWORK=off consumer prints
+  `C75_ROOMREPLAYBUNDLE_CONSUMER PASS` and rejects same-length corruption via
+  the public error identity.
+- Evidence so far: runtime normal/race `21` tests in `3` packages; CLI full
+  compatibility/regression package `1057` tests; CLI focused race `8`; focused
+  `go vet`, staticcheck `2026.1`, coverage registration (`179` packages / `6`
+  modules), and `git diff --check` pass. Wire-check and architecture-size are
+  intentionally pending the exact shared `scripts/wire-packages.txt` and
+  `docs/architecture/architecture-size-baseline.json` leases held by C57/C61;
+  neither shared file was edited.
+- Exact next action: record the candidate/evidence artifacts, checkpoint the
+  disjoint implementation, then request only the demonstrated downward shared
+  Wire/baseline registrations after those owners release. Do not claim script
+  CI, independent review, guarded merge, or green CI before those gates run.
