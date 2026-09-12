@@ -45,7 +45,7 @@ model:
 	var gotCfg config.OpenAIConfig
 	var gotDialer transport.Dialer
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath: filepath.Join(t.TempDir(), "openai.session.json"),
 		Provider:   config.ProviderOpenAI,
 		Model:      "gpt-realtime",
@@ -187,7 +187,7 @@ model:
 	var gotCfg config.GrokConfig
 	var gotDialer transport.Dialer
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:      filepath.Join(t.TempDir(), "grok.session.json"),
 		Provider:        config.ProviderGrok,
 		Model:           "grok-override-model",
@@ -240,7 +240,7 @@ model:
     api_key: xai-config-key
 `)
 
-	_, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath: filepath.Join(t.TempDir(), "grok.session.json"),
 		Provider:   config.ProviderGrok,
 		ConfigDir:  configDir,
@@ -265,7 +265,7 @@ func TestPlanSessionRuntime_OpenAIReplayRoutesThroughOpenAIRuntimeSeam(t *testin
 		done:              make(chan struct{}),
 	}
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath: filepath.Join("..", "..", "..", "..", "test", "integration", "testdata", "openai_realtime_text.session.json"),
 		Prompt:     "hello realtime",
 		Voice:      "cedar",
@@ -346,7 +346,7 @@ func TestPlanSessionRuntime_OpenAIReplayUsesCapturedHandshakeAndKeepsLoopToolDef
 				done:              make(chan struct{}),
 			}
 			var gotProviderDefinitions []messages.ToolDefinition
-			plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				ReplayPath:      path,
 				ToolDefinitions: []messages.ToolDefinition{definition},
 			}, sessionRuntimeFactory{
@@ -1390,7 +1390,7 @@ func TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation(t *testing.T) 
 		capturedStreamEvent(gwtesting.DirectionServerToClient, 2, 200, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("after cancel")),
 	})
 
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath: capturePath,
 	}, sessionRuntimeFactory{
 		newReplayInferencer: func(path string) messages.SessionInferencer {

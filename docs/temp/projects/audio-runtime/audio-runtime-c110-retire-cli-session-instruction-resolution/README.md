@@ -18,9 +18,15 @@ The committed verification command is:
 
 ```text
 ./verify.py --mode positive-and-guard-mutations
+./verify.py --mode retirement-and-owned-paths --report
+./run.py
 ```
 
 It runs the consumer with `GOWORK=off`, checks direct imports and the thin CLI
 adapter, and records bounded JSON reports under `reports/` when reports are
-requested. These artifacts are implementation evidence only; they do not claim
-CI, review, merge, or project-wide acceptance.
+requested. `run.py` builds the `nomicrophone` YUI artifact, runs the source-pinned
+instruction matrix, replays the accepted C16 audio/tool fixture with and without
+the text seed, and records the malformed/oversized pre-provider regression. Its
+child processes are process-group bounded and credential environment variables
+are removed. These artifacts are implementation evidence only; they do not
+claim CI, review, merge, or project-wide acceptance.

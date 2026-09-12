@@ -94,6 +94,9 @@ func appendSkillsSummary(ctx context.Context, instructions, workspaceDir string,
 		return "", err
 	}
 	summary, summaryErr := skillsSummary(ctx, loader)
+	if err := checkContext(ctx, sessioninstructions.PhaseSkillsSummary, workspaceDir); err != nil {
+		return "", err
+	}
 	if summaryErr != nil {
 		return "", resolutionError(sessioninstructions.PhaseSkillsSummary, workspaceDir, fmt.Errorf("load skills summary: %w", summaryErr))
 	}
@@ -170,6 +173,9 @@ func resolveExplicitPrompt(ctx context.Context, value string, loader sessioninst
 		return "", err
 	}
 	statErr := loaderStat(ctx, loader, value)
+	if err := checkContext(ctx, sessioninstructions.PhasePromptStat, value); err != nil {
+		return "", err
+	}
 	if statErr != nil {
 		if errors.Is(statErr, context.Canceled) || errors.Is(statErr, context.DeadlineExceeded) {
 			return "", resolutionError(sessioninstructions.PhasePromptStat, value, statErr)
@@ -182,6 +188,9 @@ func resolveExplicitPrompt(ctx context.Context, value string, loader sessioninst
 		return "", err
 	}
 	data, readErr := loaderReadFile(ctx, loader, value)
+	if err := checkContext(ctx, sessioninstructions.PhasePromptRead, value); err != nil {
+		return "", err
+	}
 	if readErr != nil {
 		return "", resolutionError(sessioninstructions.PhasePromptRead, value, fmt.Errorf("read system prompt %s: %w", value, readErr))
 	}
@@ -207,6 +216,9 @@ func resolveWorkspacePrompt(ctx context.Context, workspaceDir string, loader ses
 	}
 	agentsPath := filepath.Join(workspaceDir, "AGENTS.md")
 	data, readErr := loaderReadFile(ctx, loader, agentsPath)
+	if err := checkContext(ctx, sessioninstructions.PhaseWorkspaceRead, agentsPath); err != nil {
+		return "", err
+	}
 	if readErr != nil {
 		if errors.Is(readErr, context.Canceled) || errors.Is(readErr, context.DeadlineExceeded) {
 			return "", resolutionError(sessioninstructions.PhaseWorkspaceRead, agentsPath, readErr)

@@ -23,7 +23,7 @@ func TestPlanOpenAIRecordPromptAudioOutputWithoutInputUsesRealtimeDuplexRate(t *
 			Model:  DefaultOpenAIRealtimeModel,
 		},
 	}}
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		Prompt:               "What is the current state of the cube? Then turn the top face once.",
 		PromptProvided:       true,
 		RecordPath:           recordPath,

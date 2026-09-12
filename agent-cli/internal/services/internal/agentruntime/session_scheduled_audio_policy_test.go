@@ -3,7 +3,6 @@ package agentruntime
 import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 
 import (
-	"context"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -26,7 +25,7 @@ func TestPlanSessionRuntimeScheduledAudioDispatchPolicy(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				Provider:          sessionProviderOpenAI,
 				Model:             "gpt-realtime",
 				APIKey:            "test-key",

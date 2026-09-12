@@ -2,72 +2,85 @@ package agentruntime
 
 import (
 	"context"
-	"fmt"
-
+	"errors"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions"
+	si "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions"
 	sessioninstructionswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire"
+	"io"
+	"os"
+	"time"
 )
 
-// resolveSessionInstructions is a compatibility adapter around the reusable
-// session instruction service. Filesystem policy normalization remains at the
-// CLI host edge; prompt selection, skills ordering, scope formatting and all
-// model-facing policy decisions live behind the runtime contract.
-// Deprecated: this adapter remains only for the CLI compatibility surface.
+func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts SessionRunOptions, systemPrompt string) error {
+	return runWithResolvedInstructions(ctx, opts, systemPrompt, func(opts SessionRunOptions) error { return RunSession(ctx, out, opts) })
+}
+func RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration(ctx context.Context, out io.Writer, opts SessionRunOptions, audioPath string, maxDuration time.Duration, seed SessionTextSeed, systemPrompt string) error {
+	return runWithResolvedInstructions(ctx, opts, systemPrompt, func(opts SessionRunOptions) error {
+		return RunSessionWithAudioOutAndTextSeedAndMaxDuration(ctx, out, opts, audioPath, maxDuration, seed)
+	})
+}
+func runWithResolvedInstructions(ctx context.Context, opts SessionRunOptions, systemPrompt string, run func(SessionRunOptions) error) error {
+	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
+		return run(opts)
+	}
+	instructions, err := resolveInstructions(ctx, opts, systemPrompt)
+	if err != nil {
+		return err
+	}
+	return run(withResolvedSessionInstructions(opts, instructions))
+}
 func resolveSessionInstructions(opts SessionRunOptions, systemPrompt string) (string, error) {
-	return resolveSessionInstructionsWithContext(context.Background(), opts, systemPrompt)
+	return resolveInstructions(context.Background(), opts, systemPrompt)
 }
-
-func resolveSessionInstructionsWithContext(ctx context.Context, opts SessionRunOptions, systemPrompt string) (string, error) {
-	request, err := newSessionInstructionRequest(opts, systemPrompt)
-	if err != nil {
-		return "", err
-	}
-	result, err := sessioninstructionswire.NewInstructionService().Resolve(ctx, request)
-	if err != nil {
-		return "", err
-	}
-	return result.Instructions, nil
+func resolveInstructions(ctx context.Context, opts SessionRunOptions, systemPrompt string) (string, error) {
+	request := newSessionInstructionRequest(opts, systemPrompt)
+	result, resolveErr := sessioninstructionswire.NewInstructionService().Resolve(ctx, request)
+	return result.Instructions, resolveErr
 }
-
-func newSessionInstructionRequest(opts SessionRunOptions, systemPrompt string) (sessioninstructions.InstructionRequest, error) {
+func newSessionInstructionRequest(opts SessionRunOptions, systemPrompt string) si.InstructionRequest {
 	workDir := opts.WorkDir
-	if workDir == "" && opts.FilesystemPolicy == nil {
-		// Preserve the direct service API's historical workspace behavior. CLI
-		// sessions always supply the launch-captured policy explicitly.
+	if workDir == "" {
 		workDir = opts.ConfigDir
 	}
-	if workDir != "" && opts.FilesystemPolicy == nil {
-		// Validate the host-selected workspace before attempting prompt
-		// discovery. A missing workspace is a startup/configuration error, not
-		// an empty prompt, and must prevent provider/session admission.
-		policy, policyErr := cliTools.ResolveFilesystemPolicy(workDir, opts.AllowPaths...)
-		if policyErr != nil {
-			return sessioninstructions.InstructionRequest{}, fmt.Errorf("resolve filesystem scope: %w", policyErr)
+	return si.InstructionRequest{Prompt: systemPrompt, WorkspaceDir: workDir, Loader: loader{w: workDir, c: opts.ConfigDir}, FilesystemScopeSet: opts.FilesystemPolicy != nil, FilesystemScopeDescription: opts.FilesystemPolicy.ScopeDescription()}
+}
+func withResolvedSessionInstructions(opts SessionRunOptions, instructions string) SessionRunOptions {
+	instructions = composeSessionInstructions(opts, instructions)
+	if opts.SessionInferencer != nil {
+		if instructions != "" || len(opts.ToolDefinitions) > 0 {
+			opts.SessionInferencer = newSessionInstructionsInferencer(opts.SessionInferencer, instructions, opts.ToolDefinitions)
 		}
-		workDir = policy.PrimaryRoot()
+		return opts
 	}
-	request := sessioninstructions.InstructionRequest{
-		Prompt:       systemPrompt,
-		WorkspaceDir: workDir,
-		Loader:       sessionInstructionLoader{workspaceDir: workDir, configDir: opts.ConfigDir},
+	if instructions != "" {
+		factory := opts.runtimeFactory
+		if !factory.configured() {
+			factory = newDefaultSessionRuntimeFactory()
+		}
+		opts.runtimeFactory = sessionRuntimeFactoryWithInstructions(factory, instructions)
 	}
-	if opts.FilesystemPolicy != nil {
-		request.FilesystemScopeSet = true
-		request.FilesystemScopeDescription = opts.FilesystemPolicy.ScopeDescription()
-	}
-	return request, nil
+	return opts
 }
 
-// composeSessionInstructions is a compatibility adapter around the runtime
-// service. The CLI keeps this planner seam but retains no policy copy.
+type loader struct{ w, c string }
+type filesystemScopeError struct{ error }
+
+func (e filesystemScopeError) As(target any) bool { return errors.As(e.error, target) }
+
+func (l loader) Stat(path string) error { _, err := os.Stat(path); return err }
+func (l loader) ReadFile(path string) ([]byte, error) {
+	if _, err := cliTools.ResolveFilesystemPolicy(l.w); err != nil {
+		return nil, filesystemScopeError{err}
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	return io.ReadAll(io.LimitReader(file, si.MaxInstructionBytes+1))
+}
+func (l loader) SkillsSummary() (string, error) { return skills.NewLoader(l.w, l.c).BuildSummary() }
 func composeSessionInstructions(opts SessionRunOptions, instructions string) string {
-	return sessioninstructionswire.NewInstructionService().Compose(sessioninstructions.InstructionComposition{
-		Instructions:           instructions,
-		ToolDefinitions:        append([]messages.ToolDefinition(nil), opts.ToolDefinitions...),
-		BrowserCapabilityState: sessioninstructions.BrowserCapabilityState(string(opts.BrowserCapabilityState)),
-		BrowserToolsEnabled:    opts.BrowserToolsEnabled,
-		PageSightToolID:        cliTools.PageSightToolID,
-	})
+	return sessioninstructionswire.NewInstructionService().Compose(si.InstructionComposition{Instructions: instructions, ToolDefinitions: opts.ToolDefinitions, BrowserCapabilityState: si.BrowserCapabilityState(string(opts.BrowserCapabilityState)), BrowserToolsEnabled: opts.BrowserToolsEnabled, PageSightToolID: cliTools.PageSightToolID})
 }

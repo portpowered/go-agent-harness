@@ -48,7 +48,7 @@ func TestSessionRecordingClaimConcurrentPlansHaveOneProviderBuilder(t *testing.T
 		go func() {
 			defer wait.Done()
 			<-start
-			plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+			plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 				RecordPath:   path,
 				Provider:     config.ProviderGrok,
 				LoadedConfig: loaded,
@@ -161,7 +161,7 @@ func TestSessionRecordingClaimReleasesAfterPreDialAndWriteFailure(t *testing.T) 
 		Provider: config.ProviderGrok,
 		Grok:     &config.GrokConfig{Model: "grok-pre-dial-test", APIKey: "test-key"},
 	}}
-	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
 		RecordPath:   path,
 		Provider:     config.ProviderGrok,
 		LoadedConfig: loaded,

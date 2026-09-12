@@ -14,6 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
 	session2 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/service"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -36,6 +37,13 @@ func NewFileStoreFactory() session.FileStoreFactory {
 	return factory
 }
 
+// NewInstructionService preserves the session package's exported constructor
+// while delegating policy ownership to the dedicated sessioninstructions graph.
+func NewInstructionService() session.InstructionService {
+	v := newInstructionService()
+	return v
+}
+
 // providers.go:
 
 // Dependencies contains the provider-neutral edges for a text session.
@@ -52,6 +60,10 @@ type Dependencies struct {
 	ProviderService providers.Service
 	ToolService     tools.Service
 	Logger          logging.Logger
+}
+
+func newInstructionService() session.InstructionService {
+	return wire.NewInstructionService()
 }
 
 func newFileStoreFactory() *session2.Factory { return session2.NewFactory() }

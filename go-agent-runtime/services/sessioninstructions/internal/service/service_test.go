@@ -166,6 +166,36 @@ func TestResolveHonorsContextAwareCancellation(t *testing.T) {
 	assertResolutionError(t, err, sessioninstructions.PhaseWorkspaceRead, context.Canceled)
 }
 
+func TestResolveChecksCancellationAfterLegacyLoaderCalls(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		phase legacyLoaderPhase
+		want  sessioninstructions.ResolutionPhase
+	}{
+		{name: "stat", phase: legacyStatPhase, want: sessioninstructions.PhasePromptStat},
+		{name: "read", phase: legacyReadPhase, want: sessioninstructions.PhasePromptRead},
+		{name: "skills", phase: legacySkillsPhase, want: sessioninstructions.PhaseSkillsSummary},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			loader := &legacyCancellationLoader{phase: testCase.phase, entered: make(chan struct{}), release: make(chan struct{})}
+			ctx, cancel := context.WithCancel(context.Background())
+			resultCh := make(chan error, 1)
+			go func() {
+				request := sessioninstructions.InstructionRequest{Loader: loader, WorkspaceDir: "/workspace"}
+				if testCase.phase != legacySkillsPhase {
+					request.Prompt = "prompt.md"
+				}
+				_, err := New().Resolve(ctx, request)
+				resultCh <- err
+			}()
+			<-loader.entered
+			cancel()
+			close(loader.release)
+			assertResolutionError(t, <-resultCh, testCase.want, context.Canceled)
+		})
+	}
+}
+
 func TestComposePreservesPolicyOrderAndIsIdempotent(t *testing.T) {
 	service := New()
 	if got := service.Compose(sessioninstructions.InstructionComposition{Instructions: "customer"}); got != "customer" {
@@ -303,3 +333,49 @@ func (l *contextAwareLoader) SkillsSummaryContext(context.Context) (string, erro
 
 var _ sessioninstructions.InstructionLoader = (*recordingLoader)(nil)
 var _ sessioninstructions.ContextAwareInstructionLoader = (*contextAwareLoader)(nil)
+
+type legacyLoaderPhase string
+
+const (
+	legacyStatPhase   legacyLoaderPhase = "stat"
+	legacyReadPhase   legacyLoaderPhase = "read"
+	legacySkillsPhase legacyLoaderPhase = "skills"
+)
+
+type legacyCancellationLoader struct {
+	phase   legacyLoaderPhase
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (l *legacyCancellationLoader) Stat(string) error {
+	if l.phase == legacyStatPhase {
+		close(l.entered)
+		<-l.release
+		return fs.ErrNotExist
+	}
+	return nil
+}
+
+func (l *legacyCancellationLoader) ReadFile(path string) ([]byte, error) {
+	if l.phase == legacyReadPhase {
+		close(l.entered)
+		<-l.release
+		return nil, errors.New("read completed after cancellation")
+	}
+	if path == "/workspace/AGENTS.md" {
+		return []byte("agents"), nil
+	}
+	return nil, fs.ErrNotExist
+}
+
+func (l *legacyCancellationLoader) SkillsSummary() (string, error) {
+	if l.phase == legacySkillsPhase {
+		close(l.entered)
+		<-l.release
+		return "summary", errors.New("summary completed after cancellation")
+	}
+	return "", nil
+}
+
+var _ sessioninstructions.InstructionLoader = (*legacyCancellationLoader)(nil)

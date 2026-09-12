@@ -1,7 +1,6 @@
 package agentruntime
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -213,10 +212,6 @@ func planLiveSessionRuntime(opts SessionRunOptions, factory sessionRuntimeFactor
 }
 
 func planSessionWithResolvedInstructions(opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
-	return planSessionWithResolvedInstructionsWithContext(context.Background(), opts, instructions)
-}
-
-func planSessionWithResolvedInstructionsWithContext(ctx context.Context, opts SessionRunOptions, instructions string) (sessionRuntimePlan, error) {
 	// This is the single service-owned boundary between prompt resolution and
 	// provider construction. The tool definitions in opts are the same snapshot
 	// that the runtime planner passes to the provider, so the grounding contract
@@ -231,7 +226,7 @@ func planSessionWithResolvedInstructionsWithContext(ctx context.Context, opts Se
 	if useInitialProviderInstructions {
 		planFactory = sessionRuntimeFactoryWithInstructions(planFactory, instructions)
 	}
-	plan, err := planSessionRuntimeWithFactory(ctx, opts, planFactory)
+	plan, err := planSessionRuntimeWithFactory(opts, planFactory)
 	if err != nil {
 		return sessionRuntimePlan{}, err
 	}

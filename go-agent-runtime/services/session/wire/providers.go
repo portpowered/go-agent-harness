@@ -16,6 +16,7 @@ import (
 	agent "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
 	persistence "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/service"
+	sessioninstructionswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -49,6 +50,17 @@ func NewService(deps Dependencies) session.Service {
 func NewFileStoreFactory() session.FileStoreFactory {
 	wire.Build(newFileStoreFactory, wire.Bind(new(session.FileStoreFactory), new(*persistence.Factory)))
 	return nil
+}
+
+// NewInstructionService preserves the session package's exported constructor
+// while delegating policy ownership to the dedicated sessioninstructions graph.
+func NewInstructionService() session.InstructionService {
+	wire.Build(newInstructionService)
+	return nil
+}
+
+func newInstructionService() session.InstructionService {
+	return sessioninstructionswire.NewInstructionService()
 }
 
 func newFileStoreFactory() *persistence.Factory { return persistence.NewFactory() }
