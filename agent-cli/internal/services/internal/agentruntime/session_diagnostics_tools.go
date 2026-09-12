@@ -132,11 +132,9 @@ func (o *sessionProgressObserver) observeProviderToolCall(v *messages.ToolCallEn
 	}
 	o.observeProviderToolCallWithID(v.ToolCallID, v.Name)
 }
-
 func (o *sessionProgressObserver) observeProviderToolCallWithID(callID, name string) {
 	o.observeProviderToolCallWithIDForResponse(callID, name, "")
 }
-
 // noteToolResultAccepted resolves exactly one provider call after the
 // provider-facing session send boundary reports success. Execution completion,
 // queueing, and rejected sends do not reach this method.
@@ -170,7 +168,6 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 	default:
 	}
 }
-
 // noteToolContinuationRequested advances every accepted result in the
 // current provider batch at the explicit response.create send boundary. The
 // control event carries no call ID because one provider response may continue
@@ -212,7 +209,6 @@ func (o *sessionProgressObserver) noteToolContinuationRequested() {
 		}
 	}
 }
-
 // noteToolContinuationRequestedFor is used by complete-message providers.
 // SendMessage may represent a whole rich batch, so the exact call is marked
 // first and any already accepted sibling is advanced by the batch-level
