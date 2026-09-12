@@ -9,7 +9,6 @@ import (
 	"io"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -478,23 +477,6 @@ func replayCaptureRecordPayload(record gwtesting.CapturedSessionEvent) []byte {
 	return record.Data
 }
 
-func replayLoopMaxDuration(path, timing string) time.Duration {
-	const completionGrace = 3 * time.Second
-	if normalizedSessionReplayTiming(timing) != sessionReplayTimingRecorded {
-		return completionGrace
-	}
-	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
-	if err != nil || len(loaded.Capture.Records) < 2 {
-		return completionGrace
-	}
-	first := loaded.Capture.Records[0].TimestampMs
-	last := loaded.Capture.Records[len(loaded.Capture.Records)-1].TimestampMs
-	if last <= first {
-		return completionGrace
-	}
-	return time.Duration(last-first)*time.Millisecond + completionGrace
-}
-
 // replayInitialSessionUpdateDialer lets the provider keep its normal session
 // implementation while replacing only the first generated handshake with the
 // capture's raw configuration. The wrapped replay dialer still strictly
@@ -618,20 +600,6 @@ func drainSessionReplayMessages(out io.Writer, replayer *gwtesting.SessionReplay
 	}
 }
 
-func grokReplayCaptureHasSessionClose(path string) bool {
-	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
-	if err != nil {
-		return false
-	}
-	capture := loaded.Capture
-	for _, record := range capture.Records {
-		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "session.closed" {
-			return true
-		}
-	}
-	return false
-}
-
 func usesWebSocketCapture(path string) bool {
 	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
 	if err != nil {
@@ -653,18 +621,4 @@ func usesOpenAIWebSocketCapture(path string) bool {
 	}
 	capture := loaded.Capture
 	return strings.EqualFold(capture.Provider.Name, sessionProviderOpenAI)
-}
-
-func captureHasEvent(path string, eventType string) bool {
-	loaded, err := gwtesting.LoadSessionCaptureForReplay(path)
-	if err != nil {
-		return false
-	}
-	capture := loaded.Capture
-	for _, record := range capture.Records {
-		if record.Type == eventType {
-			return true
-		}
-	}
-	return false
 }
