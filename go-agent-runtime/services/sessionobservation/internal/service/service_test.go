@@ -35,8 +35,8 @@ func (o *recordingObserver) snapshot() []sessionobservation.SessionRuntimeObserv
 
 type optedInObserver struct{ recordingObserver }
 
-func (optedInObserver) ObserveProviderBoundaries() bool { return true }
-func (optedInObserver) RetainCommitPayload() bool       { return false }
+func (*optedInObserver) ObserveProviderBoundaries() bool { return true }
+func (*optedInObserver) RetainCommitPayload() bool       { return false }
 
 func TestServicePreservesBoundariesIdentityAndPayloadCopies(t *testing.T) {
 	source := platformclock.NewDeterministic(time.Unix(1700000000, 0).UTC(), time.Second)
