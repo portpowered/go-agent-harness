@@ -1,0 +1,20 @@
+## Summary
+
+- Extract the room-media contract and private service implementation into `go-agent-runtime/services/roommedia`.
+- Keep the CLI room helpers as thin host adapters and retire 220 physical lines from `session_room_run.go` (1,192 -> 972).
+- Add Wire construction, an external `GOWORK=off` consumer, focused causal tests, and bounded executable replay evidence.
+
+## Evidence
+
+- Admission: `project-control.py verify-work --type task --name audio-runtime-c93-retire-cli-room-media-io` -> admitted.
+- Retirement verifier: passed; branch, startup/planning/current-main ancestry, source census, owned paths, and public boundary all passed.
+- `go test ./services/roommedia/... -count=1` and `-race`: passed.
+- External consumer with `GOWORK=off`: passed.
+- Focused CLI normal/race regressions and full `agentruntime` suite: passed.
+- Pinned lint, staticcheck, vet, coverage registration, and architecture-gate unit tests: passed.
+- Focused roommedia coverage: 84.8%.
+- Bounded room-media executable and audio-tool replay: passed; no credentials or physical/acoustic claim.
+
+## Ownership note
+
+The candidate is based on `origin/main` at `d4766c3dbbf2c198142047ead4449d58dd47d485`. The only remaining repository gate findings are shared files owned by active C79: `scripts/wire-packages.txt` must register the generated Wire file, and `docs/architecture/architecture-size-baseline.json` needs the reduced baseline/stale-entry cleanup. This task does not edit those shared paths; after that lease is released, apply the minimal registry/baseline update on this same task, rerun the two gates, and submit to SCRIPT CI.
