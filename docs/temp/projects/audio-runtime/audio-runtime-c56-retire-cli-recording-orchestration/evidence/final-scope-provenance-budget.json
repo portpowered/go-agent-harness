@@ -1,15 +1,13 @@
 {
   "baseline_manifest_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
-  "head": "a37fb83c5f9351f16b929a06cfc7a9ad8752e642",
+  "head": "cf088cf6013ca881b046e0054070d29e1d460db3",
   "origin_main": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
   "passed": true,
   "planning_revision": "904e1f4c3be6c1e629138632573bd2fb55d50938",
   "schema": "audio-runtime.c56.final-scope-provenance-budget.v1",
   "startup_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "status_paths": [
-    "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/evidence/lifecycle-projections-failures.json"
-  ],
+  "status_paths": [],
   "task": "audio-runtime-c56-retire-cli-recording-orchestration",
   "toolchain": "go version go1.26.7 darwin/arm64",
   "unexpected_paths": []
