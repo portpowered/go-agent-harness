@@ -198,7 +198,6 @@ func TestSessionRTCRuntime_CleansPartialStartupAndPreservesCause(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct RTC runtime: %v", err)
 	}
-
 	if _, err := runtime.Start(context.Background()); err == nil {
 		t.Fatal("start RTC runtime unexpectedly succeeded")
 	} else {
@@ -220,7 +219,6 @@ func TestSessionRTCRuntime_CleansPartialStartupAndPreservesCause(t *testing.T) {
 		t.Fatalf("partial lifecycle events = %v, want %v", events, want)
 	}
 }
-
 func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) {
 	const (
 		signaling = " loopback://plan/sentinel "
@@ -265,7 +263,6 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 		t.Fatalf("cleanup test runtime: %v", err)
 	}
 }
-
 func TestSessionRTCRuntimeInferencerStartsBeforeProviderAndUsesRTCDataPlane(t *testing.T) {
 	var order []string
 	dataPlane := &testRTCDataPlane{
@@ -301,7 +298,6 @@ func TestSessionRTCRuntimeInferencerStartsBeforeProviderAndUsesRTCDataPlane(t *t
 		t.Fatalf("provider/runtime order = %v, want %v", order, want)
 	}
 }
-
 func TestSessionRTCRuntimeSessionForwardsProviderCapabilities(t *testing.T) {
 	wantSendErr := errors.New("provider send rejected")
 	media := RTCMediaEndpoints{
@@ -324,7 +320,11 @@ func TestSessionRTCRuntimeSessionForwardsProviderCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect wrapped capability session: %v", err)
 	}
-	t.Cleanup(func() { _ = wrapper.Close() })
+	t.Cleanup(func() {
+		if err := wrapper.Close(); err != nil {
+			t.Errorf("close wrapped capability session: %v", err)
+		}
+	})
 
 	gotMedia, ok := rtcMediaFromSession(wrapper)
 	if !ok {

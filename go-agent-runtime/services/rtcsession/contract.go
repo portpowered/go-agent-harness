@@ -25,6 +25,8 @@ type sessionRTCError string
 
 func (e sessionRTCError) Error() string { return string(e) }
 
+const nilErrorText = "<nil>"
+
 const (
 	// ErrSessionRTCRuntimeUnavailable identifies an incomplete RTC composition.
 	ErrSessionRTCRuntimeUnavailable sessionRTCError = "WebRTC session runtime is unavailable"
@@ -43,7 +45,7 @@ type SessionRTCRuntimeError struct {
 
 func (e *SessionRTCRuntimeError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Phase == "" {
 		return "WebRTC session runtime: " + errorText(e.Err)
@@ -63,7 +65,7 @@ func (e *SessionRTCRuntimeError) Unwrap() error {
 
 func errorText(err error) string {
 	if err == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return err.Error()
 }

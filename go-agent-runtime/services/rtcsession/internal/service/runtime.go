@@ -56,17 +56,17 @@ func (r *runtime) Start(ctx context.Context) (rtcsession.SessionRTCDataPlane, er
 	defer r.finishStart(startDone)
 	resources := startResources{cancel: cancel}
 	if phase, err := r.acquire(runCtx, &resources); err != nil {
-		return r.failStart(resources, phase, err)
+		return r.failStart(runCtx, resources, phase, err)
 	}
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
-		return r.failStart(resources, "start", rtcsession.ErrSessionRTCRuntimeClosed)
+		return r.failStart(runCtx, resources, "start", rtcsession.ErrSessionRTCRuntimeClosed)
 	}
 	r.signaling, r.dataPlane, r.media = resources.signaling, resources.dataPlane, resources.media
 	r.started, r.cancel = true, cancel
 	r.mu.Unlock()
-	r.observe("started", "attach media source", "info")
+	r.observe(runCtx, "started", "attach media source", "info")
 	return resources.dataPlane, nil
 }
 
@@ -137,8 +137,9 @@ func (r *runtime) acquire(ctx context.Context, resources *startResources) (strin
 	return "", nil
 }
 
-func (r *runtime) failStart(resources startResources, phase string, err error) (rtcsession.SessionRTCDataPlane, error) {
+func (r *runtime) failStart(ctx context.Context, resources startResources, phase string, err error) (rtcsession.SessionRTCDataPlane, error) {
 	wrapped := wrapError(phase, err)
+	observationCtx := context.WithoutCancel(ctx)
 	if resources.cancel != nil {
 		resources.cancel()
 	}
@@ -149,7 +150,7 @@ func (r *runtime) failStart(resources startResources, phase string, err error) (
 	r.mu.Lock()
 	r.failed, r.startErr, r.startCloseErr, r.cancel = true, wrapped, cleanupErr, nil
 	r.mu.Unlock()
-	r.observe("start_failed", phase, "error")
+	r.observe(observationCtx, "start_failed", phase, "error")
 	return nil, wrapped
 }
 
@@ -178,20 +179,20 @@ func (r *runtime) Close() error {
 		if r.closeErr != nil {
 			level = "error"
 		}
-		r.observe("closed", "close", level)
+		r.observe(context.Background(), "closed", "close", level)
 	})
 	return r.closeErr
 }
 
-func (r *runtime) observe(event, phase, level string) {
+func (r *runtime) observe(ctx context.Context, event, phase, level string) {
 	if r == nil {
 		return
 	}
 	fields := observability.Fields{"transport": r.selection.Transport, "phase": phase, "event": event}
-	_ = observability.TrySample(context.Background(), r.metricSampler, observability.MetricSample{
+	_ = observability.TrySample(ctx, r.metricSampler, observability.MetricSample{ //nolint:errcheck // observer failures are diagnostic-only by contract.
 		Name: "session.rtc.lifecycle", Kind: "counter", Value: 1, Unit: "events", Fields: fields,
 	})
-	_ = observability.TryLog(context.Background(), r.logger, observability.LogRecord{
+	_ = observability.TryLog(ctx, r.logger, observability.LogRecord{ //nolint:errcheck // observer failures are diagnostic-only by contract.
 		Level: level, Message: "session RTC runtime " + event, Fields: fields,
 	})
 }
@@ -219,7 +220,7 @@ func isNilResource(resource any) bool {
 		return true
 	}
 	value := reflect.ValueOf(resource)
-	switch value.Kind() {
+	switch value.Kind() { //nolint:exhaustive // non-nilable kinds intentionally share the false path.
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
 		return value.IsNil()
 	default:

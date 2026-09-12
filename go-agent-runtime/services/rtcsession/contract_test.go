@@ -21,7 +21,7 @@ func TestSessionRTCRuntimeErrorPreservesCauseAndPhase(t *testing.T) {
 	if got := (&SessionRTCRuntimeError{}).Error(); got != "WebRTC session runtime: <nil>" {
 		t.Fatalf("empty runtime error text = %q", got)
 	}
-	if got := (*SessionRTCRuntimeError)(nil).Error(); got != "<nil>" {
+	if got := (*SessionRTCRuntimeError)(nil).Error(); got != nilErrorText {
 		t.Fatalf("nil runtime error text = %q", got)
 	}
 	if got := (&SessionRTCRuntimeError{Err: cause}).Error(); got != "WebRTC session runtime: signaling failed" {

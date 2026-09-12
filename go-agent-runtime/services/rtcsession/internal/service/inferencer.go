@@ -53,8 +53,8 @@ func (i *inferencer) ConnectSession(ctx context.Context) (messages.Session, erro
 		return nil, err
 	}
 	if i.inner == nil {
-		_ = i.runtime.Close()
-		return nil, wrapError("connect provider session", rtcsession.ErrSessionRTCRuntimeUnavailable)
+		closeErr := i.runtime.Close()
+		return nil, errors.Join(wrapError("connect provider session", rtcsession.ErrSessionRTCRuntimeUnavailable), closeErr)
 	}
 	sessionValue, err := i.inner.ConnectSession(ctx)
 	if err != nil {

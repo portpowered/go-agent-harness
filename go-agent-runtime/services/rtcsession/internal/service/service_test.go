@@ -32,7 +32,11 @@ func TestRuntimeSuccessRepeatedStartCloseReverseOrderAndIndependent(t *testing.T
 			}}, nil
 		},
 		NewDataPlane: func(_ context.Context, signaling rtc.Signaling) (rtcsession.SessionRTCDataPlane, error) {
-			id := signaling.(*testSignaling).id
+			fixture, ok := signaling.(*testSignaling)
+			if !ok {
+				return nil, errors.New("unexpected signaling fixture type")
+			}
+			id := fixture.id
 			return &testDataPlane{id: id, attachFn: func(context.Context, sharedaudio.InboundMedia) error {
 				mu.Lock()
 				events = append(events, id+" attach")
@@ -63,7 +67,6 @@ func TestRuntimeSuccessRepeatedStartCloseReverseOrderAndIndependent(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	firstPlane, err := first.Start(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +90,6 @@ func TestRuntimeSuccessRepeatedStartCloseReverseOrderAndIndependent(t *testing.T
 	if err := second.Close(); err != nil {
 		t.Fatal(err)
 	}
-
 	mu.Lock()
 	got := append([]string(nil), events...)
 	mu.Unlock()
@@ -108,12 +110,10 @@ func TestRuntimeSuccessRepeatedStartCloseReverseOrderAndIndependent(t *testing.T
 		t.Fatalf("start after close = %v, want closed identity", err)
 	}
 }
-
 func TestRuntimeNilDependenciesAndReturns(t *testing.T) {
 	if _, err := New(rtcsession.SessionRTCComponents{}, nil, nil).NewRuntime(rtcsession.SessionRuntimeSelection{}); !errors.Is(err, rtcsession.ErrSessionRTCRuntimeUnavailable) {
 		t.Fatalf("nil components error = %v, want unavailable identity", err)
 	}
-
 	base := rtcsession.SessionRTCComponents{
 		ResolveSignaling: func(context.Context, string) (rtc.Signaling, error) {
 			return &testSignaling{}, nil
@@ -160,7 +160,6 @@ func TestRuntimeNilDependenciesAndReturns(t *testing.T) {
 		})
 	}
 }
-
 func TestRuntimeTypedNilReturnsAreUnavailable(t *testing.T) {
 	var signaling *testSignaling
 	components := testComponents()
@@ -175,14 +174,12 @@ func TestRuntimeTypedNilReturnsAreUnavailable(t *testing.T) {
 		t.Fatalf("typed nil signaling error = %v, want unavailable identity", err)
 	}
 }
-
 func TestRuntimePartialStartResolveFailureRetainsCause(t *testing.T) {
 	cause := errors.New("signaling offline")
 	components := testComponents()
 	components.ResolveSignaling = func(context.Context, string) (rtc.Signaling, error) { return nil, cause }
 	assertPartialStartFailure(t, components, cause, nil, nil, "resolve signaling")
 }
-
 func TestRuntimePartialStartDataFailureCleansSignaling(t *testing.T) {
 	cause := errors.New("peer allocation failed")
 	var events []string
@@ -195,7 +192,6 @@ func TestRuntimePartialStartDataFailureCleansSignaling(t *testing.T) {
 	}
 	assertPartialStartFailure(t, components, cause, &events, []string{"signaling close"}, "create RTC peer/data path")
 }
-
 func TestRuntimePartialStartMediaFailureCleansDataAndSignaling(t *testing.T) {
 	cause := errors.New("media unavailable")
 	var events []string
@@ -209,7 +205,6 @@ func TestRuntimePartialStartMediaFailureCleansDataAndSignaling(t *testing.T) {
 	components.OpenMediaSource = func(context.Context, string) (sharedaudio.InboundMedia, error) { return nil, cause }
 	assertPartialStartFailure(t, components, cause, &events, []string{"data close", "signaling close"}, "open media source")
 }
-
 func TestRuntimePartialStartAttachFailureCleansAllResources(t *testing.T) {
 	cause := errors.New("media attach rejected")
 	var events []string
@@ -228,7 +223,6 @@ func TestRuntimePartialStartAttachFailureCleansAllResources(t *testing.T) {
 	}
 	assertPartialStartFailure(t, components, cause, &events, []string{"media close", "data close", "signaling close"}, "attach media source")
 }
-
 func assertPartialStartFailure(t *testing.T, components rtcsession.SessionRTCComponents, cause error, gotEvents *[]string, wantEvents []string, wantPhase string) {
 	t.Helper()
 	runtime, err := New(components, nil, nil).NewRuntime(rtcsession.SessionRuntimeSelection{})
