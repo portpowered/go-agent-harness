@@ -1,0 +1,21 @@
+{
+  "project": "audio-runtime",
+  "task": "audio-runtime-c65-agentloop-delta-publication-barrier-repair",
+  "session": "~default",
+  "factoryRoot": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+  "verifyCommand": "python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work --type task --name audio-runtime-c65-agentloop-delta-publication-barrier-repair",
+  "verifyOutput": {
+    "status": "admitted",
+    "project": "audio-runtime",
+    "name": "audio-runtime-c65-agentloop-delta-publication-barrier-repair"
+  },
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c65-agentloop-delta-publication-barrier-repair",
+  "prdBranchName": "codex/audio-runtime-c65-agentloop-delta-publication-barrier-repair",
+  "worktreeBranch": "codex/audio-runtime-c65-agentloop-delta-publication-barrier-repair",
+  "candidateRevision": "86aa7f1c4120ee3921fc556378f9a03277700b2b",
+  "planningMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "originMainAtAdmission": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "startupAncestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "manifestBaselineAncestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "ancestryChecks": "all passed before candidate changes"
+}
