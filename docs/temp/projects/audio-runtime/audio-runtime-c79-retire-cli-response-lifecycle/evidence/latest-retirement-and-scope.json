@@ -1,0 +1,55 @@
+{
+  "candidate": "89de52379b12f80096f4cf203ef84522bbf46c5c",
+  "mode": "retirement-and-scope",
+  "payload": {
+    "diff_check": {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "elapsed_seconds": 0.063,
+      "returncode": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "lines": {
+      "baseline": 1387,
+      "files": {
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": 389,
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 390
+      },
+      "maximum": 787,
+      "minimum_retired": 600,
+      "retired": 608,
+      "total": 779
+    },
+    "scope": {
+      "forbidden_shared_paths": [],
+      "outside_owned_paths": [],
+      "paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+        "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/internal/service/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/wire/package.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/main_test.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/run.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/verify.py",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/continuation.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/events.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/helpers.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/response.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/scheduled.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/service.go",
+        "go-agent-runtime/services/sessiondiagnostics/service.go",
+        "go-agent-runtime/services/sessiondiagnostics/wire/providers.go",
+        "go-agent-runtime/services/sessiondiagnostics/wire/wire_gen.go",
+        "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go"
+      ]
+    },
+    "service_forbidden_token_scan": "pass"
+  },
+  "schema": "audio-runtime-c79-evidence/v1"
+}

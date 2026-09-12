@@ -1,0 +1,88 @@
+{
+  "candidate": "89de52379b12f80096f4cf203ef84522bbf46c5c",
+  "mode": "response-matrix",
+  "payload": {
+    "checks": [
+      {
+        "argv": [
+          "go",
+          "test",
+          "./go-agent-runtime/services/sessiondiagnostics/...",
+          "-run",
+          "Open|Adopt|End|Missing|Duplicate|Wrong|Purpose|Terminal|Scheduled|Tool|Continuation|Retry|Failure|Cancel|Close|Order|Reset",
+          "-count=1",
+          "-timeout=180s"
+        ],
+        "elapsed_seconds": 0.462,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t[no test files]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.165s\n"
+      },
+      {
+        "argv": [
+          "go",
+          "test",
+          "./agent-cli/internal/services/internal/agentruntime",
+          "-run",
+          "Session(ProgressObserver|Diagnostics)|Scheduled|Continuation|Terminal|Cancellation",
+          "-count=1",
+          "-timeout=210s"
+        ],
+        "elapsed_seconds": 7.278,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.343s\n"
+      },
+      {
+        "argv": [
+          "go",
+          "test",
+          "./...",
+          "-count=1",
+          "-timeout=90s"
+        ],
+        "elapsed_seconds": 0.317,
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "ok  \texample.com/audio-runtime-c79-sessiondiagnostics-consumer\t0.159s\n"
+      }
+    ],
+    "lines": {
+      "baseline": 1387,
+      "files": {
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": 389,
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 390
+      },
+      "maximum": 787,
+      "minimum_retired": 600,
+      "retired": 608,
+      "total": 779
+    },
+    "scope": {
+      "forbidden_shared_paths": [],
+      "outside_owned_paths": [],
+      "paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+        "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/internal/service/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/wire/package.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/main_test.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/run.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/verify.py",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/continuation.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/events.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/helpers.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/response.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/scheduled.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/service.go",
+        "go-agent-runtime/services/sessiondiagnostics/service.go",
+        "go-agent-runtime/services/sessiondiagnostics/wire/providers.go",
+        "go-agent-runtime/services/sessiondiagnostics/wire/wire_gen.go",
+        "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go"
+      ]
+    }
+  },
+  "schema": "audio-runtime-c79-evidence/v1"
+}

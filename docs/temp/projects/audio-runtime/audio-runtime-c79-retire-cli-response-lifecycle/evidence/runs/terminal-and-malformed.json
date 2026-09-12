@@ -1,0 +1,65 @@
+{
+  "aggregate_timeout_seconds": 180,
+  "case": "terminal-and-malformed",
+  "checks": [
+    {
+      "argv": [
+        "go",
+        "build",
+        "-o",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-w9fdah3u/yui",
+        "./agent-cli/cmd/yui"
+      ],
+      "elapsed_seconds": 4.747,
+      "returncode": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "argv": [
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-w9fdah3u/yui",
+        "interaction",
+        "--help"
+      ],
+      "elapsed_seconds": 0.974,
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "Inspect provider-neutral gateway interactions.\n\nUse the replay subcommand to stream normalized PNIG fixture events as one JSON object per line without provider credentials or live network calls.\n\nUsage:\n  yui interaction [flags]\n  yui interaction [command]\n\nExamples:\n  yui interaction replay ./fixtures/example.interaction.json\n\nAvailable Commands:\n  replay      Replay a normalized interaction fixture as NDJSON\n\nFlags:\n  -h, --help   help for interaction\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui interaction [command] --help\" for more information about a command.\n"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./go-agent-runtime/services/sessiondiagnostics/wire",
+        "-run",
+        "Test(Response|Malformed|Duplicate|Wrong|Terminal|Close|Order|Reset)",
+        "-count=1",
+        "-timeout=25s"
+      ],
+      "elapsed_seconds": 0.783,
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.552s\n"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./agent-cli/internal/services/internal/agentruntime",
+        "-run",
+        "Session(Diagnostics|Terminal|Cancellation)|SessionDiagnostics",
+        "-count=1",
+        "-timeout=25s"
+      ],
+      "elapsed_seconds": 4.542,
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t2.667s\n"
+    }
+  ],
+  "child_timeout_seconds": 30,
+  "credential_free": true,
+  "elapsed_seconds": 11.05,
+  "schema": "audio-runtime-c79-replay/v1",
+  "software_replay_only": true
+}
