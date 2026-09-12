@@ -291,7 +291,7 @@ def validate_ledger(ledger: dict[str, Any]) -> None:
         source_span = edge.get("source_span", {})
         require(isinstance(source_span.get("start_line"), int) and isinstance(source_span.get("start_column"), int), "API edge span is missing")
         caller = edge.get("caller", {})
-        require(caller.get("symbol") and caller.get("kind") in {"function", "package"}, "API edge caller symbol is missing")
+        require(caller.get("symbol") and caller.get("kind") in {"function", "package", "type"}, "API edge caller symbol is missing")
         caller_span = caller.get("span", {})
         require(isinstance(caller_span.get("start_line"), int) and isinstance(caller_span.get("end_line"), int), "API edge caller span is missing")
         caller_declaration = caller.get("declaration", {})
