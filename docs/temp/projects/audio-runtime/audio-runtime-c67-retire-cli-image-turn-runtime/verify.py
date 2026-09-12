@@ -54,6 +54,9 @@ FORBIDDEN_IMPORT_PATTERN = r"agent-cli|internal/config|internal/input|pflag|cobr
 OUTPUT_CAP = 1 << 20
 CHILD_TIMEOUT = 240
 TOTAL_TIMEOUT = 900
+ACCEPTED_BASELINE_LINES = 703
+MAX_FINAL_LINES = 453
+MIN_RETIRED_LINES = 250
 
 
 class EvidenceFailure(RuntimeError):
@@ -257,7 +260,18 @@ def inventory_declarations(source: bytes) -> list[dict[str, Any]]:
     return declarations
 
 
-def baseline_inventory(runner: Runner) -> dict[str, Any]:
+def baseline_inventory(
+    runner: Runner,
+    *,
+    baseline_lines: int = ACCEPTED_BASELINE_LINES,
+    max_final_lines: int = MAX_FINAL_LINES,
+) -> dict[str, Any]:
+    if baseline_lines != ACCEPTED_BASELINE_LINES or max_final_lines != MAX_FINAL_LINES:
+        raise EvidenceFailure(
+            "C67 line limits are immutable: "
+            f"expected baseline={ACCEPTED_BASELINE_LINES}, max_final={MAX_FINAL_LINES}; "
+            f"got baseline={baseline_lines}, max_final={max_final_lines}"
+        )
     current_branch = git("branch", "--show-current")
     if current_branch != BRANCH:
         raise EvidenceFailure(f"branch {current_branch!r} does not match prd.branchName {BRANCH!r}")
@@ -265,9 +279,9 @@ def baseline_inventory(runner: Runner) -> dict[str, Any]:
     after = (ROOT / LEGACY_PATH).read_bytes()
     before_lines = line_count(before)
     after_lines = line_count(after)
-    if before_lines != 703:
-        raise EvidenceFailure(f"accepted-main legacy baseline is {before_lines} lines, not 703")
-    if after_lines > 453 or before_lines - after_lines < 250:
+    if before_lines != baseline_lines:
+        raise EvidenceFailure(f"accepted-main legacy baseline is {before_lines} lines, not {baseline_lines}")
+    if after_lines > max_final_lines or before_lines - after_lines < MIN_RETIRED_LINES:
         raise EvidenceFailure(f"legacy retirement floor failed: {before_lines} -> {after_lines}")
     callers = {
         path: {
@@ -357,7 +371,7 @@ def verify_admission(runner: Runner) -> dict[str, Any]:
     return value
 
 
-def mode_baseline(runner: Runner) -> dict[str, Any]:
+def mode_baseline(runner: Runner, baseline_lines: int, max_final_lines: int) -> dict[str, Any]:
     admission = verify_admission(runner)
     board = runner.command(
         "canonical-board",
@@ -381,7 +395,12 @@ def mode_baseline(runner: Runner) -> dict[str, Any]:
     board_text = Path(board["stdout_path"]).read_text(encoding="utf-8")
     if TASK not in board_text or BRANCH not in board_text:
         raise EvidenceFailure("canonical board capture did not include the admitted C67 task and branch")
-    return {"admission": admission, "canonical_board": board, "ancestry": ancestry_report(), "inventory": baseline_inventory(runner)}
+    return {
+        "admission": admission,
+        "canonical_board": board,
+        "ancestry": ancestry_report(),
+        "inventory": baseline_inventory(runner, baseline_lines=baseline_lines, max_final_lines=max_final_lines),
+    }
 
 
 def mode_publication(runner: Runner) -> dict[str, Any]:
@@ -405,8 +424,8 @@ def mode_publication(runner: Runner) -> dict[str, Any]:
     return {"focused_and_consumer": steps, "wrong_oracle": wrong, "forbidden_import_scan": forbidden, "wire_generation": generated, "wire_drift": drift}
 
 
-def mode_adapter(runner: Runner) -> dict[str, Any]:
-    baseline = baseline_inventory(runner)
+def mode_adapter(runner: Runner, baseline_lines: int, max_final_lines: int) -> dict[str, Any]:
+    baseline = baseline_inventory(runner, baseline_lines=baseline_lines, max_final_lines=max_final_lines)
     runtime_env = {"GOWORK": "off"}
     selected = [
         LEGACY_PATH,
@@ -429,6 +448,23 @@ def mode_adapter(runner: Runner) -> dict[str, Any]:
         "coverage_registration": runner.command("coverage-registration", ["make", "coverage-registration"], ROOT, extra_env=runtime_env),
     }
     return {"baseline": baseline, "quality_commands": commands}
+
+
+def mode_runner_negative_cleanup(runner: Runner) -> dict[str, Any]:
+    record = runner.command(
+        "runner-negative-cleanup-controls",
+        [sys.executable, str(HERE / "run.py"), "--case", "invalid-image-negative"],
+        ROOT,
+        extra_env={"GOWORK": "off"},
+    )
+    output = Path(record["stdout_path"]).read_text(encoding="utf-8")
+    try:
+        result = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise EvidenceFailure(f"runner cleanup control did not return JSON: {output!r}") from exc
+    if result.get("decision") != "PASS":
+        raise EvidenceFailure(f"runner cleanup control did not pass: {result}")
+    return {"runner": record, "runner_result": result}
 
 
 def scope_report() -> dict[str, Any]:
@@ -474,16 +510,30 @@ def mode_final(runner: Runner) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=("baseline-inventory-oracles", "publication-negative-mutations", "adapter-retirement-scope", "final-scope-provenance"), required=True)
+    parser.add_argument(
+        "--mode",
+        choices=(
+            "baseline-inventory-oracles",
+            "publication-negative-mutations",
+            "adapter-retirement-scope",
+            "runner-negative-cleanup-controls",
+            "final-scope-provenance",
+        ),
+        required=True,
+    )
+    parser.add_argument("--baseline-lines", type=int, default=ACCEPTED_BASELINE_LINES)
+    parser.add_argument("--max-final-lines", type=int, default=MAX_FINAL_LINES)
     args = parser.parse_args()
     runner = Runner(args.mode)
     try:
         if args.mode == "baseline-inventory-oracles":
-            outcome = mode_baseline(runner)
+            outcome = mode_baseline(runner, args.baseline_lines, args.max_final_lines)
         elif args.mode == "publication-negative-mutations":
             outcome = mode_publication(runner)
         elif args.mode == "adapter-retirement-scope":
-            outcome = mode_adapter(runner)
+            outcome = mode_adapter(runner, args.baseline_lines, args.max_final_lines)
+        elif args.mode == "runner-negative-cleanup-controls":
+            outcome = mode_runner_negative_cleanup(runner)
         else:
             outcome = mode_final(runner)
         path = runner.save({"decision": "PASS" if args.mode != "final-scope-provenance" else "CONTINUE", **outcome})
