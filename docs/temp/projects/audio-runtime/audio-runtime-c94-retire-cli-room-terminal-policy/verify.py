@@ -56,9 +56,16 @@ def changed_paths() -> set[str]:
     return paths
 
 
+def integrated_main_paths() -> set[str]:
+    """Return accepted-main files already present in the candidate ancestry."""
+    return set(filter(None, git("diff", "--name-only", BASELINE, "origin/main").splitlines()))
+
+
 def verify_admission_and_scope() -> None:
     require(git("branch", "--show-current") == BRANCH, "candidate branch does not match prd.branchName")
-    allowed = {path for path in changed_paths() if path in ALLOWED_FILES or path.startswith(ALLOWED_PREFIXES)}
+    allowed = integrated_main_paths() | {
+        path for path in changed_paths() if path in ALLOWED_FILES or path.startswith(ALLOWED_PREFIXES)
+    }
     unexpected = changed_paths() - allowed
     require(not unexpected, f"candidate changed an unowned path: {sorted(unexpected)}")
     baseline = subprocess.run(["git", "-C", str(ROOT), "show", f"{BASELINE}:{LEGACY}"], capture_output=True, check=False)
