@@ -11,18 +11,19 @@ import (
 	runtimesession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
-// These sentinels give continuation consumers a focused package to depend on
-// while retaining identity with the live runtime's existing error contract.
-const (
-	ErrUnresolvedToolResults        = runtimesession.ErrLiveUnresolvedToolResults
-	ErrSessionUnresolvedToolResults = ErrUnresolvedToolResults
-)
+type lifecycleSentinel string
 
-var (
-	ErrImageContinuationIncomplete        = runtimesession.ErrLiveImageContinuationIncomplete
-	ErrSessionImageContinuationIncomplete = ErrImageContinuationIncomplete
-	ErrToolContinuationIncomplete         = runtimesession.ErrLiveToolContinuationIncomplete
-	ErrSessionToolContinuationIncomplete  = ErrToolContinuationIncomplete
+func (e lifecycleSentinel) Error() string { return string(e) }
+
+// These sentinels give continuation consumers a focused package to depend on
+// while the typed errors retain compatibility with the live runtime contract.
+const (
+	ErrUnresolvedToolResults                                = runtimesession.ErrLiveUnresolvedToolResults
+	ErrSessionUnresolvedToolResults                         = ErrUnresolvedToolResults
+	ErrImageContinuationIncomplete        lifecycleSentinel = "session ended before the image tool continuation"
+	ErrSessionImageContinuationIncomplete                   = ErrImageContinuationIncomplete
+	ErrToolContinuationIncomplete         lifecycleSentinel = "session ended before the tool continuation"
+	ErrSessionToolContinuationIncomplete                    = ErrToolContinuationIncomplete
 )
 
 // ErrAudioResponseIncomplete is a compatibility alias for the finite audio

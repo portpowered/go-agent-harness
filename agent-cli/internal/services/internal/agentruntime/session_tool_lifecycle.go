@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"errors"
 	sessionpublic "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	sessioncontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sc "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioncontinuation"
 	w "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioncontinuation/wire"
 )
@@ -16,8 +17,7 @@ const (
 )
 
 var ErrSessionUnresolvedToolResults = sessionpublic.ErrSessionUnresolvedToolResults
-var ErrSessionImageContinuationIncomplete = sc.ErrImageContinuationIncomplete
-var ErrSessionToolContinuationIncomplete = sc.ErrToolContinuationIncomplete
+var ErrSessionImageContinuationIncomplete, ErrSessionToolContinuationIncomplete = sessioncontract.ErrLiveImageContinuationIncomplete, sessioncontract.ErrLiveToolContinuationIncomplete
 
 // Deprecated: use sessioncontinuation.UnresolvedToolResultsError.
 type SessionUnresolvedToolResultsError = sessionpublic.SessionUnresolvedToolResultsError

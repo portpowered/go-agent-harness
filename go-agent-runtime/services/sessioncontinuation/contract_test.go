@@ -42,13 +42,13 @@ func TestContinuationSentinelsRetainLiveRuntimeIdentity(t *testing.T) {
 	}{
 		{
 			name:   "image",
-			err:    &runtimesession.LiveImageContinuationError{CallIDs: []string{"image-call"}},
-			target: sessioncontinuation.ErrImageContinuationIncomplete,
+			err:    &sessioncontinuation.ImageContinuationError{CallIDs: []string{"image-call"}},
+			target: runtimesession.ErrLiveImageContinuationIncomplete,
 		},
 		{
 			name:   "tool",
-			err:    &runtimesession.LiveToolContinuationError{CallIDs: []string{"tool-call"}},
-			target: sessioncontinuation.ErrToolContinuationIncomplete,
+			err:    &sessioncontinuation.ToolContinuationError{CallIDs: []string{"tool-call"}},
+			target: runtimesession.ErrLiveToolContinuationIncomplete,
 		},
 	}
 	for _, test := range tests {
