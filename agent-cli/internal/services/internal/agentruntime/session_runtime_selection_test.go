@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -18,6 +19,17 @@ func TestResolveSessionRuntimeSelection_DefaultsToWebSocket(t *testing.T) {
 	}
 	if selection != (SessionRuntimeSelection{Transport: SessionTransportWebSocket}) {
 		t.Fatalf("selection = %#v, want the WebSocket default", selection)
+	}
+}
+
+func TestEffectiveSessionProviderHonorsExplicitEmptyProvider(t *testing.T) {
+	loaded := &config.Config{
+		Session: &config.SessionConfig{Provider: config.ProviderGrok},
+		Model:   config.ModelConfig{Provider: config.ProviderGrok},
+	}
+	got := effectiveSessionProvider(SessionRunOptions{ProviderProvided: true, LoadedConfig: loaded})
+	if got != "" {
+		t.Fatalf("effectiveSessionProvider() = %q, want explicit empty provider", got)
 	}
 }
 
