@@ -100,6 +100,22 @@ type BrowserConversationBrokerCall struct {
 	ToolRefs           []webmcp.ToolRef                   `json:"tool_refs,omitempty"`
 }
 
+const (
+	browserConversationCancelObservation             = "cancel"
+	browserConversationWaitInvocationObservation     = "wait_invocation"
+	browserConversationRecordCancellationObservation = "record_cancellation"
+)
+
+// BrowserConversationInvocationObservation records a cancellation-related
+// invocation state at a broker or run publication boundary.
+type BrowserConversationInvocationObservation struct {
+	Sequence     uint64                 `json:"sequence"`
+	Source       string                 `json:"source"`
+	InvocationID webmcp.InvocationID    `json:"invocation_id"`
+	State        webmcp.InvocationState `json:"state,omitempty"`
+	Terminal     bool                   `json:"terminal"`
+}
+
 // BrowserConversationInputJSONAttempt is the immutable validity observation
 // for one recorded webmcp_invoke call. InputJSON remains the exact model
 // string; ValidObject is derived from it and never replaces it.
@@ -253,19 +269,20 @@ type BrowserConversationMechanicalEvaluation struct {
 // independent oracle snapshots, cancellation, lifecycle, mechanical checks,
 // and validator output.
 type BrowserConversationResult struct {
-	ScenarioID        string                                  `json:"scenario_id"`
-	ScenarioName      string                                  `json:"scenario_name"`
-	Finalized         bool                                    `json:"finalized"`
-	Turns             []BrowserConversationTurn               `json:"turns,omitempty"`
-	BrokerCalls       []BrowserConversationBrokerCall         `json:"broker_calls,omitempty"`
-	InputJSONValidity BrowserConversationInputJSONValidity    `json:"input_json_validity"`
-	Oracles           []BrowserConversationOracleSnapshot     `json:"oracle_snapshots,omitempty"`
-	Corrections       []BrowserConversationCorrectionEvidence `json:"corrections,omitempty"`
-	Recovery          []BrowserConversationRecoveryEvidence   `json:"recovery,omitempty"`
-	Cancellation      BrowserConversationCancellationEvidence `json:"cancellation"`
-	Lifecycle         BrowserConversationLifecycleEvidence    `json:"lifecycle"`
-	Mechanical        BrowserConversationMechanicalEvaluation `json:"mechanical"`
-	Validator         BrowserConversationValidatorVerdict     `json:"validator"`
+	ScenarioID             string                                     `json:"scenario_id"`
+	ScenarioName           string                                     `json:"scenario_name"`
+	Finalized              bool                                       `json:"finalized"`
+	Turns                  []BrowserConversationTurn                  `json:"turns,omitempty"`
+	BrokerCalls            []BrowserConversationBrokerCall            `json:"broker_calls,omitempty"`
+	InvocationObservations []BrowserConversationInvocationObservation `json:"invocation_observations,omitempty"`
+	InputJSONValidity      BrowserConversationInputJSONValidity       `json:"input_json_validity"`
+	Oracles                []BrowserConversationOracleSnapshot        `json:"oracle_snapshots,omitempty"`
+	Corrections            []BrowserConversationCorrectionEvidence    `json:"corrections,omitempty"`
+	Recovery               []BrowserConversationRecoveryEvidence      `json:"recovery,omitempty"`
+	Cancellation           BrowserConversationCancellationEvidence    `json:"cancellation"`
+	Lifecycle              BrowserConversationLifecycleEvidence       `json:"lifecycle"`
+	Mechanical             BrowserConversationMechanicalEvaluation    `json:"mechanical"`
+	Validator              BrowserConversationValidatorVerdict        `json:"validator"`
 }
 
 // BrowserScenarioResult and BrowserScenarioRun are descriptive aliases for
@@ -527,6 +544,25 @@ func (r *BrowserConversationRun) ObserveBrokerCall(call BrowserConversationBroke
 	return nil
 }
 
+func (r *BrowserConversationRun) observeInvocationObservation(source string, invocationID webmcp.InvocationID, state webmcp.InvocationState, terminal bool) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.finalized {
+		return
+	}
+	r.appendInvocationObservationLocked(source, invocationID, state, terminal)
+}
+
+func (r *BrowserConversationRun) appendInvocationObservationLocked(source string, invocationID webmcp.InvocationID, state webmcp.InvocationState, terminal bool) {
+	if invocationID == "" {
+		return
+	}
+	r.result.InvocationObservations = append(r.result.InvocationObservations, BrowserConversationInvocationObservation{Sequence: r.takeSequenceLocked(), Source: source, InvocationID: invocationID, State: state, Terminal: terminal})
+}
+
 // RecordRecovery records the derived stale-reference recovery evidence once.
 // The underlying ordered broker calls remain the source of truth.
 func (r *BrowserConversationRun) RecordRecovery(evidence []BrowserConversationRecoveryEvidence) error {
@@ -690,10 +726,12 @@ func (r *BrowserConversationRun) RecordCancellation(evidence BrowserConversation
 			current.LateEventsSuppressed += evidence.LateEventsSuppressed
 		}
 		r.result.Cancellation = current
+		r.appendInvocationObservationLocked(browserConversationRecordCancellationObservation, evidence.InvocationID, evidence.FinalState, browserConversationInvocationStateTerminal(evidence.FinalState))
 		return nil
 	}
 	r.hasCancellation = true
 	r.result.Cancellation = evidence
+	r.appendInvocationObservationLocked(browserConversationRecordCancellationObservation, evidence.InvocationID, evidence.FinalState, browserConversationInvocationStateTerminal(evidence.FinalState))
 	return nil
 }
 
@@ -887,6 +925,7 @@ func cloneBrowserConversationResult(result BrowserConversationResult) BrowserCon
 	for index, call := range result.BrokerCalls {
 		clone.BrokerCalls[index] = cloneBrowserConversationBrokerCall(call)
 	}
+	clone.InvocationObservations = append([]BrowserConversationInvocationObservation(nil), result.InvocationObservations...)
 	clone.InputJSONValidity = computeBrowserConversationInputJSONValidity(clone.BrokerCalls)
 	clone.Oracles = make([]BrowserConversationOracleSnapshot, len(result.Oracles))
 	for index, snapshot := range result.Oracles {
