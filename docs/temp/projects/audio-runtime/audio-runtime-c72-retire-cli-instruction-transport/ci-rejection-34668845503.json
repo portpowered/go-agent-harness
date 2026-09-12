@@ -1,0 +1,56 @@
+{
+  "run": 34668845503,
+  "head": "63cdee380fe39461d22b313dedabbf2493cbd2a9",
+  "pullRequest": 463,
+  "status": "completed",
+  "conclusion": "failure",
+  "failedJobs": [
+    {
+      "job": 103486183415,
+      "name": "CI (static)",
+      "steps": [
+        {
+          "name": "Verify generated service composition",
+          "log": "wire-check: Wire registry mismatch: unregistered=['go-agent-runtime/services/sessionupdate/wire/wire_gen.go'], outside modules=[]"
+        },
+        {
+          "name": "Verify service architecture and size budgets",
+          "log": "architecture gate found 1 issue(s) across 189 package(s): generated-file-spoof services/sessionupdate/wire/wire_gen.go: generated header is not registered with a reproducible generator"
+        }
+      ]
+    },
+    {
+      "job": 103486183484,
+      "name": "CI (integration)",
+      "step": "Run production-binary audio-device replay integration",
+      "log": "TestAgentBinaryTest46HighRateToolAudioRegression/trial_09: remote device rendered 167991/174391 compared samples (lost 6400, 96.3% retained); playback DroppedSamples=0 OverflowEvents=0 DiscardedSamples=0 DiscardEvents=0; provider responsesSent=9 responseCreates=7 toolResults=7 protocolError=",
+      "owner": "C64 work-task-63"
+    }
+  ],
+  "passedChecks": [
+    "CI (race)",
+    "CI (WebMCP Chrome)",
+    "CI (Windows audio portable)",
+    "CI (macOS audio release)",
+    "CI (unit)",
+    "CI (coverage)",
+    "CI (hermetic)"
+  ],
+  "ownership": {
+    "wireRegistry": {
+      "path": "scripts/wire-packages.txt",
+      "owner": "C57 work-task-26",
+      "status": "lease retained by canonical implementation handoff"
+    },
+    "architectureBaseline": {
+      "path": "docs/architecture/architecture-size-baseline.json",
+      "owner": "C61 work-task-34",
+      "status": "lease retained by canonical implementation handoff"
+    },
+    "audioLoss": {
+      "owner": "C64 work-task-63",
+      "status": "separate actionable repair"
+    }
+  },
+  "nextAction": "Wait for the exact shared-file leases and C64 repair to release; integrate fresh accepted main, apply only owner-mediated C72 registry/baseline changes, rerun focused/shared gates, then push a changed head and resubmit this same task without polling CI."
+}

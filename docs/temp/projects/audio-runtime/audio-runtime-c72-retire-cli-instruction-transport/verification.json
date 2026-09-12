@@ -27,6 +27,26 @@
     "drainMutation": "pass: mutation status=1, restored service-session sha256=859f775ceb8ef9e6e9b0949a760aee8331f8c3de2ffd984163aff942943253a5",
     "wireAndArchitecture": "pending shared lease: C57 owns scripts/wire-packages.txt and C61 owns docs/architecture/architecture-size-baseline.json"
   },
+  "lastScriptCi": {
+    "run": 34668845503,
+    "head": "63cdee380fe39461d22b313dedabbf2493cbd2a9",
+    "status": "rejected",
+    "failedJobs": [
+      "CI (static): generated Wire registry and architecture checks report the unregistered sessionupdate/wire/wire_gen.go",
+      "CI (integration): C64-owned TestAgentBinaryTest46HighRateToolAudioRegression/trial_09 rendered 167991/174391 compared samples with zero drop, overflow, discard, or protocol errors"
+    ],
+    "disposition": "No C72-owned implementation defect was reported. The Wire registry and architecture baseline remain under the exact C57/C61 shared-file leases; the test46 audio loss remains under C64 ownership. No unchanged retry is authorized."
+  },
+  "postRejectionValidation": {
+    "serviceNormalCount3": "pass",
+    "serviceRaceFocusedCount3": "pass",
+    "consumerGOWORKOffNormalRaceCount3": "pass",
+    "cliFocusedNormalRace": "pass",
+    "accumulatedRegressionsNormalRaceCount1": "pass",
+    "coverageRegistration": "pass: 179 workspace packages",
+    "wireCheck": "blocked: unregistered go-agent-runtime/services/sessionupdate/wire/wire_gen.go",
+    "architectureSizeCheck": "blocked: one generated-file-spoof finding for sessionupdate/wire/wire_gen.go"
+  },
   "scriptCiSubmitted": false,
   "nextAction": "After both shared leases release, register the new Wire package and reconcile only the downward C72 size entries, rerun Wire/architecture and submit this same head to script CI."
 }
