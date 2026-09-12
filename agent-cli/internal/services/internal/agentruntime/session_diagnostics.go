@@ -200,10 +200,16 @@ type sessionProgressObserver struct {
 	// scheduler and tests; they do not make lifecycle decisions.
 	lifecycle             sessiondiagnostics.Service
 	lifecycleProjectionMu sync.Mutex
-	sink                  SessionDiagnosticSink
-	recorder              metrics.Recorder
-	productionSink        *metrics.InMemorySink
-	streamObserver        SessionStreamObserver
+	// providerBoundaryMu orders provider-send acceptance with inbound stream
+	// observation. A synchronous transport may publish response.create output
+	// before its Send call returns; holding this boundary prevents the observer
+	// from consuming that output before the lifecycle adapter records the
+	// accepted continuation request.
+	providerBoundaryMu sync.Mutex
+	sink               SessionDiagnosticSink
+	recorder           metrics.Recorder
+	productionSink     *metrics.InMemorySink
+	streamObserver     SessionStreamObserver
 	// admittedTurnObserver runs after this observer has admitted one provider
 	// response as a completed turn. Room accounting uses this boundary instead
 	// of counting raw MESSAGE.END events.
@@ -374,10 +380,21 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		livenessWakeCh:        make(chan struct{}, 1),
 	}
 }
+
+func (o *sessionProgressObserver) lockProviderBoundary() func() {
+	if o == nil {
+		return func() {}
+	}
+	o.providerBoundaryMu.Lock()
+	return o.providerBoundaryMu.Unlock
+}
+
 func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInput) {
 	if o == nil {
 		return
 	}
+	o.lifecycleProjectionMu.Lock()
+	defer o.lifecycleProjectionMu.Unlock()
 	o.pendingInputs = append(o.pendingInputs, inputs...)
 	o.scheduledInputs += len(inputs)
 }

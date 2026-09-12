@@ -49,6 +49,9 @@ ALLOWED_PREFIXES += (COMPATIBILITY_REGRESSION_TEST,)
 # part of the same thin-adapter repair. They contain no second lifecycle
 # implementation; they now query the admitted reducer service instead.
 REVIEW_REPAIR_PATHS = (
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+    "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
     "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
     "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go",
     "agent-cli/internal/services/internal/agentruntime/session_response_admission.go",

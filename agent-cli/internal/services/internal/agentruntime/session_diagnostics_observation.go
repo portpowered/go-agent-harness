@@ -10,6 +10,8 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o == nil {
 		return
 	}
+	unlockProviderBoundary := o.lockProviderBoundary()
+	defer unlockProviderBoundary()
 	// Server-VAD providers own these boundaries and report them inbound. Emit
 	// the runtime observations before the general stream callback so room
 	// evidence and package-level test gates see the same accepted boundary.
@@ -46,6 +48,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	responseLifecycleID := msgResponseID
 	acknowledgementResponse := msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement
 	newResponseBoundary := false
+	activeResponse, activeResponseID := o.observedResponseProjection()
 	switch msg.Type {
 	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
 		// The normalized provider boundary is active from response creation
@@ -66,22 +69,23 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		if !o.ownsObservedResponseEnd(msgResponseID) {
 			return
 		}
-		if msgResponseID != "" && o.activeResponse && o.activeResponseID == "" && !o.adoptObservedResponseID(msgResponseID) {
+		activeResponse, activeResponseID = o.observedResponseProjection()
+		if msgResponseID != "" && activeResponse && activeResponseID == "" && !o.adoptObservedResponseID(msgResponseID) {
 			return
 		}
-		if !o.activeResponse && msgResponseID != "" {
+		if !activeResponse && msgResponseID != "" {
 			newResponseBoundary = o.beginObservedResponseForPurpose(msgResponseID, msg.ResponsePurpose)
 			if newResponseBoundary && !acknowledgementResponse {
 				o.bindScheduledResponseBoundary(msgResponseID)
 			}
-		} else if !o.activeResponse && !acknowledgementResponse {
+		} else if !activeResponse && !acknowledgementResponse {
 			// A legacy provider may expose only the terminal boundary. Bind it to
 			// the next dispatched scheduled input when one is available; an
 			// unrelated prompt/session terminal has no slot to consume.
 			o.bindScheduledTerminalOnly("")
 		}
 		if responseLifecycleID == "" {
-			responseLifecycleID = o.activeResponseID
+			_, responseLifecycleID = o.observedResponseProjection()
 		}
 	case messages.StreamTypeSessionClose:
 		// Keep the active response owner while draining already-queued provider
@@ -94,16 +98,18 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		}
 	}
 	if responseLifecycleID == "" {
-		responseLifecycleID = o.activeResponseID
+		_, responseLifecycleID = o.observedResponseProjection()
 	}
 	switch msg.Type {
 	case messages.StreamTypeSessionOpen:
 		o.sawSessionOpen = true
 		o.sessionID = ""
+		o.lifecycleProjectionMu.Lock()
 		o.activeResponse = false
 		o.activeResponseID = ""
 		o.completedResponseIDs = make(map[string]struct{})
 		o.retiredResponseIDs = make(map[string]struct{})
+		o.lifecycleProjectionMu.Unlock()
 		o.resetObservedResponseState()
 		if v, ok := msg.Value.(*messages.SessionOpenValue); ok && v != nil {
 			o.sessionID = v.SessionID

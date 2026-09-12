@@ -134,6 +134,16 @@ func (o *sessionProgressObserver) lifecycleEvent(event sd.Event) sd.Observation 
 	}
 	return observation
 }
+
+func (o *sessionProgressObserver) observedResponseProjection() (active bool, id string) {
+	if o == nil {
+		return false, ""
+	}
+	o.lifecycleProjectionMu.Lock()
+	defer o.lifecycleProjectionMu.Unlock()
+	return o.activeResponse, o.activeResponseID
+}
+
 func (o *sessionProgressObserver) plainEvent(kind sd.EventKind, id string) sd.Observation {
 	return o.lifecycleEvent(sd.Event{Kind: kind, ResponseID: id})
 }
@@ -208,7 +218,10 @@ func (o *sessionProgressObserver) resetObservedResponseState() {
 	if o == nil {
 		return
 	}
-	if !o.activeResponse && !o.hasPendingLifecycleContinuation() {
+	o.lifecycleProjectionMu.Lock()
+	activeResponse := o.activeResponse
+	o.lifecycleProjectionMu.Unlock()
+	if !activeResponse && !o.hasPendingLifecycleContinuation() {
 		o.lifecycleEvent(sd.Event{Kind: sd.EventReset})
 	}
 	o.toolStateMu.Lock()
@@ -249,7 +262,13 @@ func (o *sessionProgressObserver) beginObservedResponseForPurpose(id string, pur
 	return o.lifecycleEvent(sd.Event{Kind: sd.EventResponseOpen, ResponseID: id, Purpose: sd.ResponsePurpose(purpose)}).NewResponse
 }
 func (o *sessionProgressObserver) adoptObservedResponseID(id string) bool {
-	if o == nil || !o.activeResponse || o.activeResponseID != "" {
+	if o == nil {
+		return true
+	}
+	o.lifecycleProjectionMu.Lock()
+	activeResponse, activeResponseID := o.activeResponse, o.activeResponseID
+	o.lifecycleProjectionMu.Unlock()
+	if !activeResponse || activeResponseID != "" {
 		return true
 	}
 	return o.lifecycleEvent(sd.Event{Kind: sd.EventResponseAdopt, ResponseID: id}).Accepted
