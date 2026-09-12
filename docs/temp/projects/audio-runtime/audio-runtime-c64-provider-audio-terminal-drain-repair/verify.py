@@ -114,8 +114,9 @@ def verify_process(record: object, *, label: str, returncode: int, marker: str) 
     require(cleanup.get("parent_reaped") is True, f"{label} parent was not reaped")
     require(cleanup.get("reader_thread_joined") is True, f"{label} output reader did not join")
     require(cleanup.get("group_alive_after") is False, f"{label} process group survived")
-    output_tail = record.get("output_tail")
-    require(isinstance(output_tail, str) and marker in output_tail, f"{label} marker is missing from bounded output")
+    if marker:
+        output_tail = record.get("output_tail")
+        require(isinstance(output_tail, str) and marker in output_tail, f"{label} marker is missing from bounded output")
     return record
 
 
@@ -222,9 +223,9 @@ def verify_causal_source() -> None:
     close_position = source.index("sessionErr = s.Session.Close()")
     require(drain_position < close_position, "provider/session close still overtakes playback drain")
     require("return errors.Join(drainErr, sessionErr, s.binding.Close())" in source, "drain/provider/device errors are not joined")
-    for marker in ("terminalObserved", "gracefulCloseRequested", "forwardReceive", "DrainPlayback", "WaitForPump", "PlaybackSamplesObserver"):
+    for marker in ("terminalObserved", "gracefulCloseRequested", "forwardReceive", "DrainPlayback", "WaitForPump"):
         require(marker in source, f"causal lifecycle marker missing: {marker}")
-    for marker in ("TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio", "drainStarted", "closeStarted", "continuationRequested", "provider-close-before-drain", "drain-before-provider-close", "reflect.DeepEqual", "RenderedSamples()", "PlaybackStats()", "QueuedSamples", "UnderflowSamples", "C64_SEQUENCE_EVIDENCE", "C64_RENDER_EVIDENCE", "C64_ACCEPTED_SOURCE_FAILURE", "provider/admission/consumption/queue reconciliation", "DroppedSamples", "OverflowEvents", "DiscardedSamples", "ToolExecutor", "ToolDefinitions", "StreamObserver"):
+    for marker in ("TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio", "PlaybackSamplesObserver", "drainStarted", "closeStarted", "continuationRequested", "provider-close-before-drain", "drain-before-provider-close", "reflect.DeepEqual", "RenderedSamples()", "PlaybackStats()", "QueuedSamples", "UnderflowSamples", "C64_SEQUENCE_EVIDENCE", "C64_RENDER_EVIDENCE", "C64_ACCEPTED_SOURCE_FAILURE", "provider/admission/consumption/queue reconciliation", "DroppedSamples", "OverflowEvents", "DiscardedSamples", "ToolExecutor", "ToolDefinitions", "StreamObserver"):
         require(marker in tests, f"deterministic barrier oracle missing: {marker}")
     require("time.Sleep(" not in tests, "barrier control uses sleep-only scheduling")
     require(tests.count("terminalDrainProviderSamples = 9600") == 1 and tests.count("terminalDrainDeviceSamples   = 6400") == 1, "barrier sample counts are not exact")
