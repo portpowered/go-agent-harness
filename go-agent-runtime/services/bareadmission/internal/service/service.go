@@ -15,6 +15,11 @@ type Service struct{}
 
 var _ public.Service = (*Service)(nil)
 
+const (
+	semanticVADType = "semantic_vad"
+	serverVADType   = "server_vad"
+)
+
 func New() *Service { return &Service{} }
 
 func (s *Service) Resolve(ctx context.Context, request public.Request) (public.Result, error) {
@@ -198,9 +203,9 @@ func resolveTransport(request public.Request) (string, error) {
 }
 
 func resolveVAD(provider string, config *public.SessionConfig) (*public.TurnDetection, error) {
-	defaultType := "server_vad"
+	defaultType := serverVADType
 	if provider == public.ProviderOpenAI {
-		defaultType = "semantic_vad"
+		defaultType = semanticVADType
 	}
 	turnDetection := &public.TurnDetection{Type: defaultType}
 	if config == nil || config.VAD == nil {
@@ -213,7 +218,7 @@ func resolveVAD(provider string, config *public.SessionConfig) (*public.TurnDete
 	if err := applyVADType(turnDetection, provider, vad.Type); err != nil {
 		return nil, err
 	}
-	if turnDetection.Type == "semantic_vad" {
+	if turnDetection.Type == semanticVADType {
 		if err := applySemanticVAD(turnDetection, vad); err != nil {
 			return nil, err
 		}
@@ -232,7 +237,7 @@ func applyVADType(turnDetection *public.TurnDetection, provider, configured stri
 	if configured == "" {
 		return nil
 	}
-	if configured != "server_vad" && (provider != public.ProviderOpenAI || configured != "semantic_vad") {
+	if configured != serverVADType && (provider != public.ProviderOpenAI || configured != semanticVADType) {
 		return fmt.Errorf("bare live session VAD type %q is unsupported for %s", configured, provider)
 	}
 	turnDetection.Type = configured

@@ -11,6 +11,11 @@ import (
 	serviceimpl "github.com/portpowered/go-agent-harness/go-agent-runtime/services/bareadmission/internal/service"
 )
 
+const (
+	testSemanticVADType = "semantic_vad"
+	testServerVADType   = "server_vad"
+)
+
 func testService() bareadmission.Service { return serviceimpl.New() }
 
 func testCatalog() *bareadmission.ModelCatalog {
@@ -160,13 +165,13 @@ func TestResolveServerVADAndCopiedBooleans(t *testing.T) {
 	request := baseRequest()
 	request.Config.Session = &bareadmission.SessionConfig{
 		Transport: "webrtc",
-		VAD:       &bareadmission.VADConfig{Type: "server_vad", Threshold: 0.72, PrefixPaddingMs: 120, SilenceDurationMs: 640, CreateResponse: &createResponse, InterruptResponse: &interruptResponse},
+		VAD:       &bareadmission.VADConfig{Type: testServerVADType, Threshold: 0.72, PrefixPaddingMs: 120, SilenceDurationMs: 640, CreateResponse: &createResponse, InterruptResponse: &interruptResponse},
 	}
 	result, err := testService().Resolve(context.Background(), request)
 	if err != nil {
 		t.Fatalf("server VAD Resolve() error = %v", err)
 	}
-	if result.Transport != bareadmission.TransportWebRTC || result.TurnDetection == nil || result.TurnDetection.Type != "server_vad" || result.TurnDetection.Threshold != 0.72 || result.TurnDetection.PrefixPaddingMs != 120 || result.TurnDetection.SilenceDurationMs != 640 || result.TurnDetection.CreateResponse == nil || *result.TurnDetection.CreateResponse || result.TurnDetection.InterruptResponse == nil || !*result.TurnDetection.InterruptResponse {
+	if result.Transport != bareadmission.TransportWebRTC || result.TurnDetection == nil || result.TurnDetection.Type != testServerVADType || result.TurnDetection.Threshold != 0.72 || result.TurnDetection.PrefixPaddingMs != 120 || result.TurnDetection.SilenceDurationMs != 640 || result.TurnDetection.CreateResponse == nil || *result.TurnDetection.CreateResponse || result.TurnDetection.InterruptResponse == nil || !*result.TurnDetection.InterruptResponse {
 		t.Fatalf("server VAD result = %+v, want copied policy", result)
 	}
 	*result.TurnDetection.CreateResponse = true
@@ -179,17 +184,17 @@ func TestResolveSemanticVADValidation(t *testing.T) {
 	request := baseRequest()
 	request.Transport = "ws"
 	request.TransportProvided = true
-	request.Config.Session = &bareadmission.SessionConfig{VAD: &bareadmission.VADConfig{Type: "semantic_vad", Eagerness: " LOW "}}
+	request.Config.Session = &bareadmission.SessionConfig{VAD: &bareadmission.VADConfig{Type: testSemanticVADType, Eagerness: " LOW "}}
 	result, err := testService().Resolve(context.Background(), request)
-	if err != nil || result.Transport != bareadmission.TransportWebSocket || result.TurnDetection == nil || result.TurnDetection.Type != "semantic_vad" || result.TurnDetection.Eagerness != "low" {
+	if err != nil || result.Transport != bareadmission.TransportWebSocket || result.TurnDetection == nil || result.TurnDetection.Type != testSemanticVADType || result.TurnDetection.Eagerness != "low" {
 		t.Fatalf("semantic VAD result/error = %+v/%v", result, err)
 	}
 
-	request.Config.Session.VAD = &bareadmission.VADConfig{Type: "semantic_vad", SilenceDurationMs: 1}
+	request.Config.Session.VAD = &bareadmission.VADConfig{Type: testSemanticVADType, SilenceDurationMs: 1}
 	if _, err = testService().Resolve(context.Background(), request); err == nil || !strings.Contains(err.Error(), "does not support") {
 		t.Fatalf("semantic incompatible VAD error = %v", err)
 	}
-	request.Config.Session.VAD = &bareadmission.VADConfig{Type: "semantic_vad", Eagerness: "instant"}
+	request.Config.Session.VAD = &bareadmission.VADConfig{Type: testSemanticVADType, Eagerness: "instant"}
 	if _, err = testService().Resolve(context.Background(), request); err == nil || !strings.Contains(err.Error(), "eagerness") {
 		t.Fatalf("semantic eagerness error = %v", err)
 	}
@@ -197,12 +202,12 @@ func TestResolveSemanticVADValidation(t *testing.T) {
 
 func TestResolveDisabledVADAndInvalidTransport(t *testing.T) {
 	request := baseRequest()
-	request.Config.Session = &bareadmission.SessionConfig{VAD: &bareadmission.VADConfig{Type: "server_vad", Eagerness: "low"}}
+	request.Config.Session = &bareadmission.SessionConfig{VAD: &bareadmission.VADConfig{Type: testServerVADType, Eagerness: "low"}}
 	if _, err := testService().Resolve(context.Background(), request); err == nil || !strings.Contains(err.Error(), "server_vad does not support eagerness") {
 		t.Fatalf("server eagerness error = %v", err)
 	}
 
-	request.Config.Session.VAD = &bareadmission.VADConfig{Enabled: func() *bool { value := false; return &value }(), Type: "semantic_vad", SilenceDurationMs: 1}
+	request.Config.Session.VAD = &bareadmission.VADConfig{Enabled: func() *bool { value := false; return &value }(), Type: testSemanticVADType, SilenceDurationMs: 1}
 	result, err := testService().Resolve(context.Background(), request)
 	if err != nil || result.TurnDetection != nil {
 		t.Fatalf("disabled VAD result/error = %+v/%v, want nil VAD", result.TurnDetection, err)
@@ -232,7 +237,7 @@ func TestResolveGrokDefaultsTranscriptionAndDevices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Grok Resolve() error = %v", err)
 	}
-	if result.Model != "grok-voice" || result.APIKey != "grok-key" || result.TurnDetection == nil || result.TurnDetection.Type != "server_vad" || result.InputAudioTranscription == nil || result.InputAudioTranscription.Enabled || result.InputAudioTranscription.Model != "custom-transcriber" {
+	if result.Model != "grok-voice" || result.APIKey != "grok-key" || result.TurnDetection == nil || result.TurnDetection.Type != testServerVADType || result.InputAudioTranscription == nil || result.InputAudioTranscription.Enabled || result.InputAudioTranscription.Model != "custom-transcriber" {
 		t.Fatalf("Grok result = %+v, want server VAD and persisted transcription", result)
 	}
 	if result.Device.InputDevice != "cli:mic" || result.Device.OutputDevice != "" || !result.Device.InputPresent || !result.Device.OutputPresent {
@@ -251,7 +256,7 @@ func TestResolveGrokDefaultsTranscriptionAndDevices(t *testing.T) {
 	request.Config = nil
 	request.APIKey = "grok-key"
 	result, err = testService().Resolve(context.Background(), request)
-	if err != nil || result.TurnDetection == nil || result.TurnDetection.Type != "server_vad" {
+	if err != nil || result.TurnDetection == nil || result.TurnDetection.Type != testServerVADType {
 		t.Fatalf("nil config Grok result/error = %+v/%v, want built-in default", result, err)
 	}
 }
@@ -261,7 +266,7 @@ func TestResolveCopiesInputsAndIsDeterministic(t *testing.T) {
 	createResponse := false
 	request := baseRequest()
 	request.Config.Session = &bareadmission.SessionConfig{
-		VAD:                &bareadmission.VADConfig{Enabled: &enabled, Type: "server_vad", CreateResponse: &createResponse},
+		VAD:                &bareadmission.VADConfig{Enabled: &enabled, Type: testServerVADType, CreateResponse: &createResponse},
 		InputTranscription: &bareadmission.TranscriptionConfig{Enabled: &enabled, Model: " custom "},
 	}
 	first, err := testService().Resolve(context.Background(), request)
