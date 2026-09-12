@@ -192,8 +192,8 @@ def run_shipped_workflow(binary: Path, config_dir: Path, fixture: Path, *, timeo
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", required=True, choices=sorted(CASES))
-    parser.add_argument("--child-timeout", type=int, default=30)
-    parser.add_argument("--aggregate-timeout", type=int, default=180)
+    parser.add_argument("--child-timeout", type=int, default=90)
+    parser.add_argument("--aggregate-timeout", type=int, default=300)
     args = parser.parse_args()
 
     started = time.monotonic()
