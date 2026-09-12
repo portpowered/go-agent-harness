@@ -44,3 +44,9 @@ assertion, timeout or oracle was changed. The failure is retained as
 ci-race-reproduction.json and is not attributed to C68. After this changed
 evidence checkpoint, push PR457 and submit the same task to script CI without
 polling; retain ownership for any exact new rejection.
+
+2026-09-11: Checkpoint 277a120198a0a7b320b0c03bb355d71d0a53f591 was committed
+and pushed to the preserved PR457 branch. The final clean-head verifier passed
+all C68 modes, the branch remains based on accepted origin/main d5d6f843, and
+the diff remains evidence-only. This exact changed head is ready for the
+script-CI gate; CI terminal status is intentionally not polled or claimed.
