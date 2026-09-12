@@ -1,6 +1,7 @@
 package agentruntime
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providersession"
 	providersessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providersession/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -95,6 +97,58 @@ func TestProviderSessionRuntimeService_ReplayUsesCapturedHandshakeAndBarePrompt(
 	}
 	if len(conn.writes) != 1 || string(conn.writes[0]) != string(capturedPayload) {
 		t.Fatalf("replay handshake writes = %q, want captured payload", conn.writes)
+	}
+}
+
+func TestProviderSessionRuntimeService_ReplayPreservesCausalCredentialHandshakeAndBareAudio(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "openai-audio.session.json")
+	initial := `{"type":"session.update","session":{"model":"captured-audio-model"}}`
+	pcm := []byte{1, 2, 3, 4}
+	writeSessionCapture(t, path, gwtesting.SessionCapture{
+		Version:  gwtesting.SessionCaptureVersion,
+		Provider: gwtesting.SessionProviderMetadata{Name: "openai", Model: "metadata-model"},
+		Records: []gwtesting.CapturedSessionEvent{
+			{Sequence: 1, Direction: gwtesting.DirectionClientToServer, Type: "session.update", PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(initial)},
+			{Sequence: 2, Direction: gwtesting.DirectionClientToServer, Type: "input_audio_buffer.append", PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"input_audio_buffer.append","audio":"` + codec.EncodeBase64(pcm) + `"}`)},
+			{Sequence: 3, Direction: gwtesting.DirectionClientToServer, Type: "input_audio_buffer.commit", PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"input_audio_buffer.commit"}`)},
+			{Sequence: 4, Direction: gwtesting.DirectionClientToServer, Type: "response.create", PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"response.create"}`)},
+		},
+	})
+	raw := &providerSessionRuntimeReplayDialer{
+		replayHandshakeRecordingDialer: replayHandshakeRecordingDialer{conn: &replayHandshakeRecordingConn{}},
+		model:                          "dialer-model", done: make(chan struct{}),
+	}
+	var capturedBuild providersession.BuildRequest
+	service := providersessionwire.NewService(providersession.Dependencies{
+		NewReplayDialer: func(string, string) (providersession.ReplayDialer, error) { return raw, nil },
+		NewInferencer: func(build providersession.BuildRequest) (messages.SessionInferencer, error) {
+			capturedBuild = build
+			return nil, nil
+		},
+	})
+
+	plan, err := service.PlanReplay(context.Background(), providersession.ReplayRequest{Provider: "openai", ReplayPath: path})
+	if err != nil {
+		t.Fatalf("PlanReplay: %v", err)
+	}
+	if capturedBuild.APIKey != "replay" {
+		t.Fatalf("replay build API key = %q, want synthetic replay credential", capturedBuild.APIKey)
+	}
+	var gotInitial, wantInitial bytes.Buffer
+	if err := json.Compact(&gotInitial, capturedBuild.InitialSessionUpdate); err != nil {
+		t.Fatalf("compact replay build initial session.update: %v", err)
+	}
+	if err := json.Compact(&wantInitial, []byte(initial)); err != nil {
+		t.Fatalf("compact captured initial session.update: %v", err)
+	}
+	if gotInitial.String() != wantInitial.String() {
+		t.Fatalf("replay build initial session.update = %s, want captured payload %s", capturedBuild.InitialSessionUpdate, initial)
+	}
+	if !capturedBuild.ClientOwnsAudioTurnBoundaries {
+		t.Fatal("bare audio replay did not transfer turn-boundary ownership to the scheduled plan")
+	}
+	if len(plan.AudioInputs) != 1 || string(plan.AudioInputs[0].PCM) != string(pcm) || !plan.AudioInputs[0].EndOfTurn {
+		t.Fatalf("bare audio replay inputs = %#v, want one complete captured PCM turn", plan.AudioInputs)
 	}
 }
 

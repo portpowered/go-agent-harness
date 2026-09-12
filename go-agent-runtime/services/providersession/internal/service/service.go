@@ -160,6 +160,9 @@ func (s *Service) BuildOpenAI(ctx context.Context, req providersession.BuildRequ
 		inference.WithSessionModel(model),
 		inference.WithSessionInputAudioTranscription(req.InputAudioTranscription),
 	}
+	if strings.TrimSpace(req.ReasoningEffort) != "" {
+		inferenceOpts = append(inferenceOpts, inference.WithSessionReasoningEffort(req.ReasoningEffort))
+	}
 	if req.Voice != "" {
 		inferenceOpts = append(inferenceOpts, inference.WithSessionVoice(req.Voice))
 	}
