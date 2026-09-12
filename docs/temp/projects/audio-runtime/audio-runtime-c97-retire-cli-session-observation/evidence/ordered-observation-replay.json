@@ -1,5 +1,5 @@
 {
-  "aggregate_elapsed_ms": 1104,
+  "aggregate_elapsed_ms": 1136,
   "audio_output": {
     "bytes": 9120,
     "path": "artifacts/ordered-observation-replay/healthy-tail.pcm",
@@ -28,7 +28,7 @@
       "cwd": ".",
       "disk_bounded": true,
       "disk_bytes": 0,
-      "elapsed_ms": 302,
+      "elapsed_ms": 355,
       "label": "build-source-pinned-yui",
       "output_bounded": true,
       "returncode": 0,
@@ -40,7 +40,7 @@
     },
     "sha256": "8099d07cb1a21b71032016c8b8d82814115285f0c6fc8750ff89f7643a37a463"
   },
-  "candidate_revision": "11c6ad3ceceb43705d7bffc234fd3730da2a6f32",
+  "candidate_revision": "6ceda15c07f984aff249e7fb1548b092e65808c7",
   "classification": {
     "acoustic": "not_attempted",
     "audio_tool_interruption_order": "proved",
@@ -75,7 +75,7 @@
     "cwd": ".",
     "disk_bounded": true,
     "disk_bytes": 619,
-    "elapsed_ms": 597,
+    "elapsed_ms": 552,
     "label": "ordered-observation-replay",
     "output_bounded": true,
     "returncode": 0,
