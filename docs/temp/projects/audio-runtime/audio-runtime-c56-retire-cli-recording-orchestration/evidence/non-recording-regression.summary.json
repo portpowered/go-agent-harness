@@ -1,6 +1,6 @@
 {
   "aggregate_timeout_seconds": 600.0,
-  "elapsed_ms": 829,
+  "elapsed_ms": 331,
   "execution": {
     "cleanup": {
       "group_alive_after": false,
@@ -12,28 +12,28 @@
       "term_sent": false
     },
     "command": [
-      "/private/tmp/audio-runtime-c56-yui-56f0679b",
+      "/private/tmp/audio-runtime-c56-yui-a39",
       "session",
       "--replay",
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_text_reply.session.json",
       "--no-terminal-tools"
     ],
-    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/non-recording-ptfe0hvl/work",
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/non-recording-rwsyyn41/work",
     "disk_bounded": true,
-    "elapsed_ms": 827,
+    "elapsed_ms": 330,
     "label": "non-recording-replay",
     "output_bounded": true,
     "retained_process_output_bytes": 791,
     "returncode": 0,
-    "stderr": "runs/non-recording-ptfe0hvl/process/stderr.log",
+    "stderr": "runs/non-recording-rwsyyn41/process/stderr.log",
     "stderr_bytes_observed": 0,
-    "stdout": "runs/non-recording-ptfe0hvl/process/stdout.log",
+    "stdout": "runs/non-recording-rwsyyn41/process/stdout.log",
     "stdout_bytes_observed": 791,
     "timed_out": false
   },
   "passed": true,
   "recording_side_effects": false,
   "schema": "audio-runtime.c56.non-recording-regression.v1",
-  "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/non-recording-ptfe0hvl/work; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: Hello! How can I help you today?\n[session closed: fixture_complete]\n[session terminal: classification=session_close terminal_reason=session_close terminal_provenance=session output_state=complete]\n",
+  "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/non-recording-rwsyyn41/work; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: Hello! How can I help you today?\n[session closed: fixture_complete]\n[session terminal: classification=session_close terminal_reason=session_close terminal_provenance=session output_state=complete]\n",
   "work_files": []
 }

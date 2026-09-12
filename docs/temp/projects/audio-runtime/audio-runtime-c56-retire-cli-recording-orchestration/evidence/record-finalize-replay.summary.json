@@ -1,18 +1,18 @@
 {
   "aggregate_timeout_seconds": 600.0,
   "binary": {
-    "path": "/tmp/audio-runtime-c56-yui-56f0679b",
-    "sha256": "6adc75e610d89db74f4507778a26a4d0fb28900bfffaf207445d3501311da41f"
+    "path": "/tmp/audio-runtime-c56-yui-a39",
+    "sha256": "a47316490357d0e6ad8a3cddadcd28ddffe2b6098e37ec7c49b8f97d52fc225c"
   },
   "bounds": {
     "aggregate_timeout_seconds": 600,
     "child_timeout_seconds": 60.0,
     "max_child_output_bytes": 65536,
     "max_retained_disk_bytes": 8388608,
-    "retained_run_bytes": 146808
+    "retained_run_bytes": 146820
   },
   "credential_free": true,
-  "elapsed_ms": 752,
+  "elapsed_ms": 715,
   "immutable_replay_source": {
     "expected_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
     "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/public/replay/tool-record/provider.json",
@@ -33,28 +33,28 @@
         "term_sent": false
       },
       "command": [
-        "/private/tmp/audio-runtime-c56-yui-56f0679b",
+        "/private/tmp/audio-runtime-c56-yui-a39",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/runs/public/replay/tool-record/provider.json",
         "--record-dir",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/record-finalize-replay-9dnfoqvk/recording",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/record-finalize-replay-41bowusb/recording",
         "--trace-audio",
         "--provider",
         "openai",
         "--model",
         "gpt-realtime"
       ],
-      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/record-finalize-replay-9dnfoqvk/work",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/record-finalize-replay-41bowusb/work",
       "disk_bounded": true,
-      "elapsed_ms": 638,
+      "elapsed_ms": 613,
       "label": "record-fresh-directory",
       "output_bounded": true,
       "retained_process_output_bytes": 841,
       "returncode": 0,
-      "stderr": "runs/record-finalize-replay-9dnfoqvk/record/process/stderr.log",
+      "stderr": "runs/record-finalize-replay-41bowusb/record/process/stderr.log",
       "stderr_bytes_observed": 0,
-      "stdout": "runs/record-finalize-replay-9dnfoqvk/record/process/stdout.log",
+      "stdout": "runs/record-finalize-replay-41bowusb/record/process/stdout.log",
       "stdout_bytes_observed": 841,
       "timed_out": false
     },
@@ -62,11 +62,11 @@
       "artifacts": [
         {
           "path": "client.transcript.jsonl",
-          "sha256": "68293c078a17271158996673c463137328a77f38e26c2f570d09d1f32e801feb"
+          "sha256": "dd52ffb84329c75db900f9bb2fa8e6fad29dd8c01c85e21f54358dc7b7f0104f"
         },
         {
           "path": "agent.transcript.jsonl",
-          "sha256": "b964e1462a12693c4b52480929dfe2b50bfe4ee9ad9c88c1af9ae9bc436690d8"
+          "sha256": "483d47002c5a7bca1a9442d2179979938128879f5f2529b9f57bcd541f05b38b"
         },
         {
           "path": "session-log.jsonl",
@@ -81,7 +81,7 @@
           "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
         }
       ],
-      "clock_base": "2026-09-11T23:12:49.304039Z",
+      "clock_base": "2026-09-12T00:29:54.274155Z",
       "configuration": {
         "observation_boundary": "session-port",
         "participant_id": "cli",
@@ -101,9 +101,9 @@
         "terminal_reason": "provider_close"
       },
       "transport": "runtime",
-      "wall_clock_start": "2026-09-11T23:12:49.304039Z"
+      "wall_clock_start": "2026-09-12T00:29:54.274155Z"
     },
-    "path": "runs/record-finalize-replay-9dnfoqvk/recording",
+    "path": "runs/record-finalize-replay-41bowusb/recording",
     "session_log": [
       {
         "input": {
@@ -154,26 +154,26 @@
         "term_sent": false
       },
       "command": [
-        "/private/tmp/audio-runtime-c56-yui-56f0679b",
+        "/private/tmp/audio-runtime-c56-yui-a39",
         "session",
         "replay",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/record-finalize-replay-9dnfoqvk/recording"
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/record-finalize-replay-41bowusb/recording"
       ],
-      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/record-finalize-replay-9dnfoqvk/work",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration/docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/runs/record-finalize-replay-41bowusb/work",
       "disk_bounded": true,
-      "elapsed_ms": 65,
+      "elapsed_ms": 56,
       "label": "replay-finalized-directory",
       "output_bounded": true,
       "retained_process_output_bytes": 134,
       "returncode": 0,
-      "stderr": "runs/record-finalize-replay-9dnfoqvk/replay/process/stderr.log",
+      "stderr": "runs/record-finalize-replay-41bowusb/replay/process/stderr.log",
       "stderr_bytes_observed": 108,
-      "stdout": "runs/record-finalize-replay-9dnfoqvk/replay/process/stdout.log",
+      "stdout": "runs/record-finalize-replay-41bowusb/replay/process/stdout.log",
       "stdout_bytes_observed": 26,
       "timed_out": false
     },
     "stdout": "strict replay continuationReplay verified: 18 wire events, 1 tool calls. Recorded render audio: false; render tap unavailable: false.\n"
   },
   "schema": "audio-runtime.c56.record-finalize-replay.v1",
-  "source_revision": "56f0679be4b602e79e4438ae6e8833e9af6af9fa"
+  "source_revision": "9d91349a65dc329f4f37f4bec49967da1b5c2478"
 }
