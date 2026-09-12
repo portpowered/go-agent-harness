@@ -112,7 +112,10 @@ def check_scope() -> None:
         "go-agent-runtime/services/devices/internal/observability/service_test.go",
         "coverage-manifest/go-agent-runtime/services/devices/internal/observability/package.json",
     }
-    changed = [path for path in git("diff", f"{PLANNING}...{head}", "--name-only").splitlines() if path]
+    # The candidate contains a required merge of the then-current mainline;
+    # scope is measured from that mainline parent, not from the older planning
+    # anchor whose history also contains unrelated peer evidence.
+    changed = [path for path in git("diff", "origin/main...HEAD", "--name-only").splitlines() if path]
     evidence_prefix = "docs/temp/projects/audio-runtime/audio-runtime-c76-retire-cli-playback-observability/"
     require(changed, "candidate diff is empty")
     require(all(path in allowed or path.startswith(evidence_prefix) for path in changed), f"diff escaped admitted scope: {changed}")

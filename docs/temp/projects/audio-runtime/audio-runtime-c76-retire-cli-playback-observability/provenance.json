@@ -1,0 +1,81 @@
+{
+  "schema": "audio-runtime.c76.provenance.v1",
+  "project": "audio-runtime",
+  "contract_revision": "audio-runtime-v1",
+  "task": "audio-runtime-c76-retire-cli-playback-observability",
+  "branch": "codex/audio-runtime-c76-retire-cli-playback-observability",
+  "source_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "planning_origin_main_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "fresh_execution_origin_main_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "tested_candidate_revision": "538531faebc07f2725ee8a93f06bc33f5b1cb46d",
+  "ancestry": {
+    "startup_integration": true,
+    "planning_origin_main": true,
+    "manifest_baseline": true,
+    "fresh_execution_origin_main": true
+  },
+  "source_tree_status_before_evidence_commit": "",
+  "legacy_lines": {
+    "accepted_main": 275,
+    "candidate": 132,
+    "maximum_compatibility": 137,
+    "retired": 143,
+    "file": "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go"
+  },
+  "retained_adapters": [
+    {"symbol": "sessionDiagnosticSinkAdapter", "purpose": "maps the public device diagnostic record to the CLI sink"},
+    {"symbol": "sessionPlaybackDiagnosticObserver", "purpose": "constructs the registered devices observer and adapts the gateway callback"},
+    {"symbol": "sessionPlaybackObservabilityObserver", "purpose": "adapts the public playback projection to the gateway callback"},
+    {"symbol": "sessionCaptureObservabilityObserver", "purpose": "adapts the public capture projection to the gateway callback"},
+    {"symbol": "combineRTCDevicePlaybackObservers", "purpose": "converts legacy callback values into the public fan-out contract"},
+    {"symbol": "combineRTCDeviceCaptureObservers", "purpose": "converts legacy callback values into the public fan-out contract"},
+    {"symbol": "combineRTCDevicePlaybackReceiptObservers", "purpose": "converts receipt callbacks into the public fan-out contract"},
+    {"symbol": "emitRoomParticipantPlaybackOverflowDiagnostic", "purpose": "Deprecated compatibility name delegating to the public room report"}
+  ],
+  "candidate_scope": {
+    "shared_architecture_baseline_edited": false,
+    "shared_wire_registry_edited": false,
+    "integration_callers": [
+      "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
+      "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go"
+    ],
+    "generated_devices_wire_reproducible": true,
+    "coverage_registration": "177 workspace packages across 6 modules"
+  },
+  "artifacts": {
+    "yui_sha256": "3717e2ffcd642e00ca9ef5144c86f81de41cbe486f311726cb485a5c3b25bbbe",
+    "audio_device_server_sha256": "0e043936bb14aca6e4b425ec4e53d0592b8ed3be1feb25818b224b81c454913b",
+    "existing_audio_tool_fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+    "existing_audio_tool_pcm_bytes": 4800,
+    "existing_audio_tool_pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+    "existing_interruption_pcm_bytes": 3840,
+    "existing_interruption_pcm_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
+    "existing_interruption_healthy_tail_sha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf"
+  },
+  "bounded_runs": {
+    "consumer": {"label": "external-consumer", "elapsed_ms": 923, "returncode": 0, "timed_out": false, "output_bounded": true},
+    "focused": {"labels": ["devices-observability", "cli-playback-observability"], "elapsed_ms": 8788, "returncode": 0, "timed_out": false, "output_bounded": true},
+    "room_overflow": {"label": "room-participant-overflow", "elapsed_ms": 3659, "returncode": 0, "timed_out": false, "output_bounded": true},
+    "shipped_loopback": {"label": "shipped-agent-audio-device-server", "elapsed_ms": 20956, "returncode": 0, "timed_out": false, "output_bounded": true},
+    "existing_audio_tool_replay": {"label": "existing-c16-audio-tool-replay", "elapsed_ms": 4962, "returncode": 0, "timed_out": false, "output_bounded": true}
+  },
+  "gates": {
+    "focused_normal": "pass: 8 private observer tests and 10 CLI tests",
+    "focused_race": "pass: 24 private observer tests and 10 CLI tests",
+    "devices_full_normal": "pass: 41 tests in 7 packages",
+    "private_observability_coverage": "93.5%",
+    "wire_check": "pass",
+    "coverage_registration": "pass",
+    "vet": "pass",
+    "staticcheck_2026_1": "pass",
+    "golangci_lint_2_9_0": "pass",
+    "architecture_size": "deferred: exactly two stale C76 legacy entries remain while C61 owns the shared baseline"
+  },
+  "external_state": {
+    "script_ci": "not submitted",
+    "independent_review": "not requested",
+    "guarded_merge": "not completed",
+    "vertical_probe": "not authorized"
+  }
+}
