@@ -22,6 +22,8 @@
 - `make fmt`, `make vet`, pinned golangci-lint v2.9.0, pinned staticcheck 2026.1: pass
 - Coverage registration: 179 packages across 6 modules
 - Full `coverage-changed` target including the 80% bare-admission floor: pass
+- Accumulated `COUNT=1` session regressions: normal, coverage and race pass,
+  including the retained negative controls
 
 ## Handoff state
 
@@ -36,3 +38,11 @@ submit the same head to script CI without polling.
 
 This PR does not claim green CI, independent review, guarded merge, or whole-
 project acceptance.
+
+## Latest executor checkpoint
+
+The same admitted task is pushed at `4c1070d4a16dd6828f32c11c81e9301130b9118f`.
+The latest source/evidence checkpoint is documentation-only after the tested
+implementation; no executable inputs changed. The exact Wire registry and
+architecture-baseline leases remain with C57 and C61. No unchanged script-CI
+submission was made while those two exact findings remain.
