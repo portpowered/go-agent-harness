@@ -1,0 +1,390 @@
+{
+  "schema": "c23.v1",
+  "scenario": "tool-matrix",
+  "turns": 1,
+  "source_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+  "fixture_sha256": "7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e",
+  "consumer_surface": "public-live-service+public-recording-wire",
+  "responses": [
+    {
+      "id": "final-resp-000",
+      "kind": "final",
+      "turn": 0,
+      "pcm_bytes": 128,
+      "pcm_sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588"
+    },
+    {
+      "id": "tool-resp-000",
+      "kind": "tool_response",
+      "turn": 0,
+      "pcm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "call-000-alpha",
+      "name": "lookup_alpha",
+      "arguments": "{\"key\":\"alpha\",\"turn\":0}",
+      "turn": 0
+    },
+    {
+      "id": "call-000-beta",
+      "name": "lookup_beta",
+      "arguments": "{\"key\":\"beta\",\"turn\":0}",
+      "turn": 0
+    }
+  ],
+  "tool_results": [
+    {
+      "id": "call-000-alpha",
+      "name": "lookup_alpha",
+      "content": "result:lookup_alpha:000",
+      "turn": 0
+    },
+    {
+      "id": "call-000-beta",
+      "name": "lookup_beta",
+      "content": "result:lookup_beta:000",
+      "turn": 0
+    }
+  ],
+  "trace": [
+    {
+      "sequence": 0,
+      "kind": "started",
+      "turn": -1
+    },
+    {
+      "sequence": 1,
+      "kind": "SESSION.OPEN",
+      "turn": -1
+    },
+    {
+      "sequence": 2,
+      "kind": "MESSAGE.START",
+      "response_id": "tool-resp-000",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 3,
+      "kind": "TOOLCALL.START",
+      "response_id": "tool-resp-000",
+      "tool_call_id": "call-000-alpha",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 4,
+      "kind": "TOOLCALL.END",
+      "response_id": "tool-resp-000",
+      "tool_call_id": "call-000-alpha",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 5,
+      "kind": "TOOLCALL.START",
+      "response_id": "tool-resp-000",
+      "tool_call_id": "call-000-beta",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 6,
+      "kind": "TOOLCALL.END",
+      "response_id": "tool-resp-000",
+      "tool_call_id": "call-000-beta",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 7,
+      "kind": "MESSAGE.END",
+      "response_id": "tool-resp-000",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 8,
+      "kind": "MESSAGE.START",
+      "turn": -1,
+      "role": "tool"
+    },
+    {
+      "sequence": 9,
+      "kind": "TEXT.START",
+      "tool_call_id": "call-000-alpha",
+      "turn": -1,
+      "role": "tool"
+    },
+    {
+      "sequence": 10,
+      "kind": "TEXT.DELTA",
+      "tool_call_id": "call-000-alpha",
+      "turn": -1,
+      "role": "tool"
+    },
+    {
+      "sequence": 11,
+      "kind": "TEXT.END",
+      "tool_call_id": "call-000-alpha",
+      "turn": -1,
+      "role": "tool"
+    },
+    {
+      "sequence": 12,
+      "kind": "TEXT.START",
+      "tool_call_id": "call-000-beta",
+      "turn": -1,
+      "role": "tool"
+    },
+    {
+      "sequence": 13,
+      "kind": "TEXT.DELTA",
+      "tool_call_id": "call-000-beta",
+      "turn": -1,
+      "role": "tool"
+    },
+    {
+      "sequence": 14,
+      "kind": "TEXT.END",
+      "tool_call_id": "call-000-beta",
+      "turn": -1,
+      "role": "tool"
+    },
+    {
+      "sequence": 15,
+      "kind": "MESSAGE.END",
+      "turn": -1,
+      "role": "tool"
+    },
+    {
+      "sequence": 16,
+      "kind": "MESSAGE.START",
+      "response_id": "final-resp-000",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 17,
+      "kind": "TEXT.START",
+      "response_id": "final-resp-000",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 18,
+      "kind": "TEXT.DELTA",
+      "response_id": "final-resp-000",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 19,
+      "kind": "TEXT.END",
+      "response_id": "final-resp-000",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 20,
+      "kind": "AUDIO.START",
+      "response_id": "final-resp-000",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 21,
+      "kind": "AUDIO.DELTA",
+      "response_id": "final-resp-000",
+      "turn": 0,
+      "role": "assistant",
+      "pcm_bytes": 128
+    },
+    {
+      "sequence": 22,
+      "kind": "AUDIO.END",
+      "response_id": "final-resp-000",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 23,
+      "kind": "MESSAGE.END",
+      "response_id": "final-resp-000",
+      "turn": 0,
+      "role": "assistant"
+    },
+    {
+      "sequence": 24,
+      "kind": "terminal",
+      "turn": -1
+    }
+  ],
+  "pcm": {
+    "format": "pcm16-le",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "bytes": 128,
+    "sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588",
+    "frame_samples": 64
+  },
+  "events": {
+    "count": 25,
+    "by_kind": {
+      "AUDIO.DELTA": 1,
+      "AUDIO.END": 1,
+      "AUDIO.START": 1,
+      "MESSAGE.END": 3,
+      "MESSAGE.START": 3,
+      "SESSION.OPEN": 1,
+      "TEXT.END": 3,
+      "TEXT.START": 3,
+      "TOOLCALL.END": 2,
+      "TOOLCALL.START": 2,
+      "started": 1,
+      "terminal": 1,
+      "text": 3
+    },
+    "overflow_drops": 0,
+    "trace_bytes": 2400
+  },
+  "latency": [
+    {
+      "turn": 0,
+      "clock_domain": "injected_deterministic_event_timestamp",
+      "request_to_first_pcm_ns": 8000000,
+      "request_to_terminal_ns": 8000000,
+      "missing_request": false,
+      "missing_first_pcm": false,
+      "missing_terminal": false
+    }
+  ],
+  "runtime": {
+    "elapsed_ms": 13,
+    "heap_live_bytes": 9904824,
+    "heap_allocated_bytes": 6766176,
+    "heap_objects": 2990,
+    "goroutines": 1,
+    "rss_bytes": 0,
+    "rss_availability": "unavailable_in_public_consumer",
+    "cpu_availability": "unavailable_in_public_consumer",
+    "baseline": {
+      "heap_live_bytes": 3233648,
+      "total_allocated_bytes": 3233648,
+      "heap_objects": 1578,
+      "goroutines": 2
+    },
+    "after": {
+      "heap_live_bytes": 9904824,
+      "total_allocated_bytes": 9999824,
+      "heap_objects": 2990,
+      "goroutines": 1
+    },
+    "delta": {
+      "heap_live_bytes": 6671176,
+      "total_allocated_bytes": 6766176,
+      "heap_objects": 1412,
+      "goroutines": -1
+    },
+    "state": {
+      "conversation_items_observed": 2,
+      "tool_calls_observed": 2,
+      "tool_results_observed": 2,
+      "availability": {
+        "conversation_items": "available_public_event_count",
+        "recording_items": "not_enabled",
+        "tool_calls": "available_public_event_count",
+        "tool_results": "available_public_event_count"
+      },
+      "scope": "publicly observed events; private retained state is unavailable"
+    },
+    "measurement": {
+      "gc": "no forced GC; runtime.ReadMemStats sampled before and after the public run",
+      "observer": "event collector, recording usage reporter and two runtime.ReadMemStats samples; observer overhead is not subtracted",
+      "clock": "request-to-PCM and request-to-terminal use injected deterministic event timestamps; process elapsed uses monotonic wall time"
+    }
+  },
+  "terminal": {
+    "kind": "terminal",
+    "reason": "provider_authored_completion",
+    "classification": "provider_authored_completion",
+    "provenance": "provider",
+    "output_state": "complete"
+  },
+  "clean_shutdown": true,
+  "trace_complete": true,
+  "lifecycle": {
+    "opened": false,
+    "started": false,
+    "close_called": false,
+    "wait_called": false
+  },
+  "artifacts": {
+    "provider_capture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/runs/20260912T012758Z-708619000-c56-off/provider.session.json",
+    "semantic_root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/runs/20260912T012758Z-708619000-c56-off/semantic"
+  },
+  "recording_usage": {
+    "enabled": false,
+    "available": false,
+    "limits": {
+      "audio_bytes": 4194304,
+      "audio_items": 8192,
+      "metadata_bytes": 262144,
+      "metadata_items": 1024,
+      "provider_bytes": 4194304,
+      "provider_items": 8192,
+      "sidecar_bytes": 262144,
+      "sidecar_items": 64,
+      "terminal_bytes": 131072,
+      "terminal_items": 16,
+      "transcript_bytes": 33554432,
+      "transcript_items": 32768
+    },
+    "provider_capture_available": true,
+    "provider_capture_usage": {
+      "accepted_audio": 0,
+      "accepted_events": 0,
+      "accepted_items": 20,
+      "accepted_messages": 0,
+      "audio_bytes": 0,
+      "audio_items": 0,
+      "metadata_bytes": 0,
+      "metadata_items": 0,
+      "peak_provider_bytes": 6498,
+      "peak_provider_items": 21,
+      "peak_provider_queue_bytes": 2039,
+      "peak_provider_queue_items": 7,
+      "peak_queue_bytes": 2039,
+      "peak_queue_items": 7,
+      "peak_summary_bytes": 0,
+      "peak_summary_items": 0,
+      "processed_items": 40,
+      "provider_accepted_items": 20,
+      "provider_bytes": 6045,
+      "provider_items": 20,
+      "provider_queue_bytes": 0,
+      "provider_queue_items": 0,
+      "queue_bytes": 0,
+      "queue_items": 0,
+      "sidecar_bytes": 0,
+      "sidecar_items": 0,
+      "summary_bytes": 0,
+      "summary_items": 0,
+      "terminal_bytes": 0,
+      "terminal_items": 0,
+      "transcript_bytes": 0,
+      "transcript_items": 0
+    },
+    "drops": {
+      "live_event_overflow": 0
+    }
+  },
+  "overlap": {
+    "prefetch_before_first_tool_result": false,
+    "cross_routing_verified": true,
+    "exactly_once_tool_results_verified": true
+  }
+}

@@ -1,0 +1,3696 @@
+{
+  "builds": {
+    "c23": {
+      "binary": {
+        "bytes": 10432034,
+        "path": "scratch/build/c23-consumer",
+        "sha256": "5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17"
+      },
+      "build_inputs": [
+        {
+          "bytes": 69933,
+          "path": "__c68_input__/c23/main.go",
+          "sha256": "0a8e8239614e5d8f87596e238153f44ddbe30f9d7e1cf123e37c084f2b69c3ec"
+        },
+        {
+          "bytes": 5117,
+          "path": "agent-cli/go.mod",
+          "sha256": "3546c664ee476c1726701292b5aa9db20b532af010ca74b610e81681b9e3b845"
+        },
+        {
+          "bytes": 23034,
+          "path": "agent-cli/go.sum",
+          "sha256": "b3d017ad5561d38878513c6ebc87054ba5ea4031bddf70420f9054a7c25281c1"
+        },
+        {
+          "bytes": 739,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/consumer/go.mod",
+          "sha256": "2dcf1afeea0794f5f08546c07a73f56d6ea99d7b6ea74043106a2dae768e693e"
+        },
+        {
+          "bytes": 1173,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/go.mod",
+          "sha256": "2fb77900f9904a3383f779995808ed82a7ca023d68f2cf02c154f4c77b0740b7"
+        },
+        {
+          "bytes": 5445,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/go.sum",
+          "sha256": "5ded9a9857ffd5aaaa75eda06420cb8baf0f6503df8a304d6c7de19c07c75d3a"
+        },
+        {
+          "bytes": 328,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/consumer/go.mod",
+          "sha256": "5ea71077ade9ef97a00666347af21a9ac1928ae3ecd2531e44657531230ed060"
+        },
+        {
+          "bytes": 219,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/consumer/go.sum",
+          "sha256": "2ab5bab01b0637952a659bcdf79ca2e54754d2fce4fd743305f8ca9e792e419d"
+        },
+        {
+          "bytes": 259,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/consumer/go.mod",
+          "sha256": "1420f5a88d27432e99bfedaa4c92459429daadcd87bf46568ec5df831e4bb02c"
+        },
+        {
+          "bytes": 315,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/go.mod",
+          "sha256": "986e9f96e27c2093769b38318091838aabf32c4c191199e3f65112affcb09904"
+        },
+        {
+          "bytes": 893,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/go.sum",
+          "sha256": "0eb084ae04738236d00d96d849c231482df0549e2456fcf8637f4bceb96c6857"
+        },
+        {
+          "bytes": 1049,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/go.mod",
+          "sha256": "965e2dc2c2692d9ec370297af9f6775295b79145591d0afcfeb2e311f61b31ae"
+        },
+        {
+          "bytes": 8734,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/go.sum",
+          "sha256": "cd3625865c88fd42e3877ae028315ecf38fc1d5a513c0b14ae8ffbd4f3695a82"
+        },
+        {
+          "bytes": 328,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/consumer/go.mod",
+          "sha256": "5ea71077ade9ef97a00666347af21a9ac1928ae3ecd2531e44657531230ed060"
+        },
+        {
+          "bytes": 219,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/consumer/go.sum",
+          "sha256": "2ab5bab01b0637952a659bcdf79ca2e54754d2fce4fd743305f8ca9e792e419d"
+        },
+        {
+          "bytes": 779,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-interactive-tool-policy/consumer/go.mod",
+          "sha256": "a5d983db4b2d4bd828bbe514af3fbb9467f31a7045b4e7f679086dcd0d04f826"
+        },
+        {
+          "bytes": 1422,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-interactive-tool-policy/consumer/go.sum",
+          "sha256": "ecb2b82b5075dda82a179e6505ce5dfe6309b4d1fcce349525f209afcfd8215d"
+        },
+        {
+          "bytes": 1183,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/consumer/go.mod",
+          "sha256": "7dda45757f7b7cc01dbe334663d51d3dac18a48a8e8209a59aabbb070c0f526a"
+        },
+        {
+          "bytes": 5445,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/consumer/go.sum",
+          "sha256": "5ded9a9857ffd5aaaa75eda06420cb8baf0f6503df8a304d6c7de19c07c75d3a"
+        },
+        {
+          "bytes": 304,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/consumer/go.mod",
+          "sha256": "88e449a23418fbcff4871745b81324a6c68066ba3930dd21e5195b71a4d3fa6c"
+        },
+        {
+          "bytes": 893,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/consumer/go.sum",
+          "sha256": "0eb084ae04738236d00d96d849c231482df0549e2456fcf8637f4bceb96c6857"
+        },
+        {
+          "bytes": 822,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/consumer/go.mod",
+          "sha256": "74818e32b3ebd9f099968c48889abc7a39e40edc0fe53fafc6fc43c5514288a3"
+        },
+        {
+          "bytes": 1597,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/consumer/go.sum",
+          "sha256": "5d7ccfed4060443eba555645f2e3f494bc8b3f1c7991d1d8d4204b7c82c1f94a"
+        },
+        {
+          "bytes": 1094,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/consumer/go.mod",
+          "sha256": "ec39d15053b0c247fbf0cc3bcde7b2a7a6f589cd0c7a773fe95bcfbcc6b2ea58"
+        },
+        {
+          "bytes": 5093,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/consumer/go.sum",
+          "sha256": "300a2c432b65a891ff450112e48e510b74c9450f5a7821e23a1e6a6554910e19"
+        },
+        {
+          "bytes": 2170,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/consumer/go.mod",
+          "sha256": "0a9db8eb483494b28c83fe1835e1886490c96ed6a55331fa8aecbf9e488f30b7"
+        },
+        {
+          "bytes": 5368,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/consumer/go.sum",
+          "sha256": "c40462d718201b5b14fdbcba7a88fcec6b005975d00d04d65cdf0024879151b6"
+        },
+        {
+          "bytes": 1098,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/go.mod",
+          "sha256": "bd8827d52643e6e3ab18cfec128c1210ffe57d54f2d34adc934f4d9372e6fa58"
+        },
+        {
+          "bytes": 858,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/go.sum",
+          "sha256": "3f10bf5b2fa1152297f1ce621e1d49c3610392f9e950a90f267475fb7ad4e24a"
+        },
+        {
+          "bytes": 1236,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/consumer/go.mod",
+          "sha256": "bf055db97a8de4cfc637a58807c57c874e9268bb788a5b13086732addba2ae43"
+        },
+        {
+          "bytes": 5969,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/consumer/go.sum",
+          "sha256": "6d23fab671bf0e3ff790dcbc5bef50d8b54271ba7a34a11a6ebae4895e896434"
+        },
+        {
+          "bytes": 1123,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/go.mod",
+          "sha256": "0f02eca7c0ee05fbb55e5b91b6b0323bd9d63ee901789457b4d0a09659e44007"
+        },
+        {
+          "bytes": 1009,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/go.sum",
+          "sha256": "f3ce007522e789ffb699ea5fe3fba64402a26e31c99958f0b744bd32ba01a926"
+        },
+        {
+          "bytes": 289,
+          "path": "go-agent-loop/go.mod",
+          "sha256": "a1b13c5848187066d2aedfa0bc6a2d8bfc26e501c687160de6669691eac274f6"
+        },
+        {
+          "bytes": 893,
+          "path": "go-agent-loop/go.sum",
+          "sha256": "0eb084ae04738236d00d96d849c231482df0549e2456fcf8637f4bceb96c6857"
+        },
+        {
+          "bytes": 25108,
+          "path": "go-agent-loop/pkg/agentloop/agent_loop.go",
+          "sha256": "3c8bc75979832c82ddc195ab9357b0138d080b26f465f769aea9c961466bd038"
+        },
+        {
+          "bytes": 3808,
+          "path": "go-agent-loop/pkg/agentloop/execute_input.go",
+          "sha256": "2bc8760fb6b8c0ec91203e3b5313656852fb34f9478005459d543cabb86222f9"
+        },
+        {
+          "bytes": 11132,
+          "path": "go-agent-loop/pkg/agentloop/execute_result.go",
+          "sha256": "eb9e23395466893e4613e292ae896b157af6c6999fea15f2a292327a29960027"
+        },
+        {
+          "bytes": 4834,
+          "path": "go-agent-loop/pkg/agentloop/interfaces.go",
+          "sha256": "ada6d907b2adc9bd52c41f890b2f9f39af1f24d87c24bc12784e457889e7758a"
+        },
+        {
+          "bytes": 5459,
+          "path": "go-agent-loop/pkg/agentloop/iterative_loop.go",
+          "sha256": "00a0a014926680746939f8a15e6ba441bd14d1634931272eee6e1efab37f6a18"
+        },
+        {
+          "bytes": 10253,
+          "path": "go-agent-loop/pkg/agentloop/options.go",
+          "sha256": "20d6777fdae00413dd0aa91a3f29bd7d9ec99ed2668dfef7973ddd92f23d859e"
+        },
+        {
+          "bytes": 13458,
+          "path": "go-agent-loop/pkg/engine/engine.go",
+          "sha256": "85febc544052ca064c8bf83942300accbd0e8bfe8db0541ae897e78d3eec2a08"
+        },
+        {
+          "bytes": 878,
+          "path": "go-agent-loop/pkg/engine/mode.go",
+          "sha256": "ec531debf5b91687786091072d477d59ab51df882aaf67559e214d0269adae99"
+        },
+        {
+          "bytes": 14486,
+          "path": "go-agent-loop/pkg/engine/ordering.go",
+          "sha256": "e76b7c8a4c619437e7fd1c902f3f66dd82b033e55f0b23112a92527c7d359c86"
+        },
+        {
+          "bytes": 4517,
+          "path": "go-agent-loop/pkg/engine/ordering_history.go",
+          "sha256": "eb43b41df946d18e35f96304ac9cd0f2fd4828c6b8590d584aa7092a42ef6624"
+        },
+        {
+          "bytes": 1815,
+          "path": "go-agent-loop/pkg/engine/state.go",
+          "sha256": "e89ff91a9fba5e2c00bb6458b01295077d0506e9e785fd3dbcd4847a5b7b4959"
+        },
+        {
+          "bytes": 1052,
+          "path": "go-agent-loop/pkg/engine/tick.go",
+          "sha256": "1293c08009033ecc41a28cdd1969baa69311f58aa8964b60e326f3acac8aa598"
+        },
+        {
+          "bytes": 8396,
+          "path": "go-agent-loop/pkg/logging/logger.go",
+          "sha256": "27848cd3e7e61ce93451065bfd28b59bba82fb29bbe6ebe8f3fff015838872c1"
+        },
+        {
+          "bytes": 7939,
+          "path": "go-agent-loop/pkg/messages/agent_messages.go",
+          "sha256": "32f7cd58c1dc739edd2547152b3b3265b249433db12ae7f7fd48f900e8e88ab9"
+        },
+        {
+          "bytes": 5720,
+          "path": "go-agent-loop/pkg/messages/audio_values.go",
+          "sha256": "49e330e8427636b990434ac3090e3d40f422bd8c910ea74ae32d0f88fcd2342f"
+        },
+        {
+          "bytes": 7217,
+          "path": "go-agent-loop/pkg/messages/buffers.go",
+          "sha256": "83cf1b2804bd1586cbd7d8a192d160466d291baa55206cec7bdf09255bae1776"
+        },
+        {
+          "bytes": 747,
+          "path": "go-agent-loop/pkg/messages/doc.go",
+          "sha256": "7d3e32ad05678fa342db7236366a09a20848e0b26de45536db53258c59e42115"
+        },
+        {
+          "bytes": 3285,
+          "path": "go-agent-loop/pkg/messages/interaction_events.go",
+          "sha256": "4016e13214a6563930ca7d4af16b73543b2ed8255a4b7c15065c338576105cb3"
+        },
+        {
+          "bytes": 278,
+          "path": "go-agent-loop/pkg/messages/participant_ids.go",
+          "sha256": "148b546d0e4dc635dc484cd3509bfc4e3597278c333dd44980ad50c6f99b6e20"
+        },
+        {
+          "bytes": 4380,
+          "path": "go-agent-loop/pkg/messages/participant_messages.go",
+          "sha256": "8b579840638f049042bd498585b93a60a94a9ec98eb5e82f6736cbd752e6a477"
+        },
+        {
+          "bytes": 9639,
+          "path": "go-agent-loop/pkg/messages/reconstruction.go",
+          "sha256": "cb86e4b4c46b3d22f45c8071a1699305e733a062516dfc23fb1729704469510b"
+        },
+        {
+          "bytes": 6496,
+          "path": "go-agent-loop/pkg/messages/session.go",
+          "sha256": "835ba730d368003dfb2bf593bce6292b29dc0a75ad174d45338652af109f1855"
+        },
+        {
+          "bytes": 1585,
+          "path": "go-agent-loop/pkg/messages/session_audio_input.go",
+          "sha256": "02537b30a1cbe043423f7e317634452e354c9a6c55e3c6b0342c6e72e35916cd"
+        },
+        {
+          "bytes": 3221,
+          "path": "go-agent-loop/pkg/messages/session_drops.go",
+          "sha256": "90875c46c22b0fda8acf6f5b13cb1494e0c51bc320051841f6787b2a641909ad"
+        },
+        {
+          "bytes": 8131,
+          "path": "go-agent-loop/pkg/messages/session_values.go",
+          "sha256": "ec698839f66ab4897bbb4b9695d39c8e95003f26bd5cf252326d2e8ae1cf0c88"
+        },
+        {
+          "bytes": 17567,
+          "path": "go-agent-loop/pkg/messages/stream_types.go",
+          "sha256": "5d3f0a3bdaa31f905ea03220e812314216958690b31105665316079e627bcaf3"
+        },
+        {
+          "bytes": 12442,
+          "path": "go-agent-loop/pkg/messages/terminal_values.go",
+          "sha256": "66fd17da110c5d7eb7c8cb05bc058d028d44fee1eee31b7fa4600a13fd34a663"
+        },
+        {
+          "bytes": 1304,
+          "path": "go-agent-loop/pkg/messages/tool_order.go",
+          "sha256": "00df9c9d79f202afb65e77133a5c1a0bce74dda0a45e6a36b3107cb96fb611bc"
+        },
+        {
+          "bytes": 2938,
+          "path": "go-agent-loop/pkg/messages/tool_values.go",
+          "sha256": "5c722811b1d072b6bb2aee36e8f059adb74f99d0d70f877059ef8a99a618f320"
+        },
+        {
+          "bytes": 1003,
+          "path": "go-agent-loop/pkg/participants/interaction_runner.go",
+          "sha256": "30743cf972dfdde0b8e41b4751a464aefe6ffb2d9ccb0d0fc3d153797eb99dc3"
+        },
+        {
+          "bytes": 8651,
+          "path": "go-agent-loop/pkg/participants/kernel_runner.go",
+          "sha256": "9850da780b0571a252fcf288e88491f8da89a43001876f932788685b91a9bfb8"
+        },
+        {
+          "bytes": 24658,
+          "path": "go-agent-loop/pkg/participants/model_runner.go",
+          "sha256": "1d9ecdedd4b4fbd14224b31cb011dbc6face78c74358d3c7d1308a21dfc2cefc"
+        },
+        {
+          "bytes": 4583,
+          "path": "go-agent-loop/pkg/participants/model_runner_failure.go",
+          "sha256": "8f0ee5ec36123798dc52698e6d961ef6d1b928ec96be2f8d80444a01411bf47f"
+        },
+        {
+          "bytes": 12191,
+          "path": "go-agent-loop/pkg/participants/model_runner_inference.go",
+          "sha256": "92c831c688caf81abb271cc2abedd61671480f526ee46998e0c496adc1d6da47"
+        },
+        {
+          "bytes": 17094,
+          "path": "go-agent-loop/pkg/participants/model_runner_session.go",
+          "sha256": "7f39cd7d538fd705fe45a512d868a675338e0db5a0cdd16bb90d2402cddfd7a7"
+        },
+        {
+          "bytes": 12284,
+          "path": "go-agent-loop/pkg/participants/model_runner_session_tools.go",
+          "sha256": "cf66e693dadaba3e4db6c32614e698227b4c6237e099fe9e9fed5e358be574e4"
+        },
+        {
+          "bytes": 1532,
+          "path": "go-agent-loop/pkg/participants/runner.go",
+          "sha256": "3302894011b1fac66094df0f209c180445fecfa5c78285b4d1af5113bb951f47"
+        },
+        {
+          "bytes": 14800,
+          "path": "go-agent-loop/pkg/participants/tool_runner.go",
+          "sha256": "c6fce6f1ae3c6137dd92484572a52bc49fa1076f543591c7c3731bc647e4a3d1"
+        },
+        {
+          "bytes": 2963,
+          "path": "go-agent-loop/pkg/participants/user_runner.go",
+          "sha256": "7e514aa3cba72bf55caa3785ef39e9afcf582766e9d2821a41d33fe0c4c5e760"
+        },
+        {
+          "bytes": 6694,
+          "path": "go-agent-loop/pkg/probe/acceptance.go",
+          "sha256": "1aeb2c3e4afde9156de04c2f964bda135ff1e92b98dc9c93e14074446b25de96"
+        },
+        {
+          "bytes": 38512,
+          "path": "go-agent-loop/pkg/probe/barge_in_oracle.go",
+          "sha256": "49e5353776f78affc7ce687ee14aa2dd5a8e204a74546141a770311c15f9d2ec"
+        },
+        {
+          "bytes": 30184,
+          "path": "go-agent-loop/pkg/probe/deadguard.go",
+          "sha256": "ad5f3e8ff81ac316a06c5f498c9cceef699c59dfe286e06443b87890c6f3fc4d"
+        },
+        {
+          "bytes": 26440,
+          "path": "go-agent-loop/pkg/probe/expect.go",
+          "sha256": "ca126edfa6a6ecc632a1767a873ebe481a9dabddb54c3582333587871d4701e7"
+        },
+        {
+          "bytes": 7194,
+          "path": "go-agent-loop/pkg/probe/fleetgate.go",
+          "sha256": "e1f0946f5c3ed3aef042df1e7a8e0b9fae91a7bb2eb0c7dd9ccd0876fbdb7465"
+        },
+        {
+          "bytes": 15270,
+          "path": "go-agent-loop/pkg/probe/friction_report.go",
+          "sha256": "2a3802b16a1c4da965a34f7f9798175d1e9ee52c31646a4e926f3caa0a9c7b5e"
+        },
+        {
+          "bytes": 13257,
+          "path": "go-agent-loop/pkg/probe/goal_catalog.go",
+          "sha256": "ad2b1ab143db5dabd76d77f93b98675a7bd2123cf1afcf63dbd03c0d7c47bfe8"
+        },
+        {
+          "bytes": 1312,
+          "path": "go-agent-loop/pkg/probe/goal_run_input.go",
+          "sha256": "2d9b9a873d0ec8369612bfac4191acea321a9571530227cf3b64e15edec26bea"
+        },
+        {
+          "bytes": 7621,
+          "path": "go-agent-loop/pkg/probe/runner.go",
+          "sha256": "f91cb6a665634c5a6c558e90d60cded8fd609f1c96ce6f12ee4b76edc5dc9786"
+        },
+        {
+          "bytes": 7845,
+          "path": "go-agent-loop/pkg/probe/scenario.go",
+          "sha256": "64d2360e216f48a11475fe7f9f5cbb3f971d49bd8a1a264b426d5ac55d11b4f5"
+        },
+        {
+          "bytes": 12459,
+          "path": "go-agent-loop/pkg/probe/scenario_decode.go",
+          "sha256": "1436acdc28f851eea8c55a0a3fef8621bb184d9a8cac3218c8979969398ac753"
+        },
+        {
+          "bytes": 2457,
+          "path": "go-agent-loop/pkg/probe/scenario_error_auth.go",
+          "sha256": "4b234893a2b82b993be68e1aba18f5419098490c257f84b815b0cd1c869f10df"
+        },
+        {
+          "bytes": 3213,
+          "path": "go-agent-loop/pkg/probe/scenario_error_disconnect.go",
+          "sha256": "a1dd27ba2465a6ea48a3df66739e42517fd3749974e9a8b56d305cb5eed59a02"
+        },
+        {
+          "bytes": 2918,
+          "path": "go-agent-loop/pkg/probe/scenario_error_malformed_response.go",
+          "sha256": "106f8db03eec9438b7cc36e9964034a8240dd9e6249ace7b8caca95e9baabd76"
+        },
+        {
+          "bytes": 2382,
+          "path": "go-agent-loop/pkg/probe/scenario_error_rate_limit.go",
+          "sha256": "f502310da8fb6b8216408436be7283b7c100c7672609127e198a50c1ae3f02e1"
+        },
+        {
+          "bytes": 1293,
+          "path": "go-agent-loop/pkg/probe/scenario_expectation_fields.go",
+          "sha256": "eafe9765267ed8a1b43803fcc71546c867568ecd32240baa8b9d3a48fb1d38e7"
+        },
+        {
+          "bytes": 10010,
+          "path": "go-agent-loop/pkg/probe/scenario_expectations.go",
+          "sha256": "94af024227aa7c2e781d9ebaa80252968e07f7be00d33fd75b1c8c46b5089ca2"
+        },
+        {
+          "bytes": 942,
+          "path": "go-agent-loop/pkg/probe/scenario_measurable.go",
+          "sha256": "e25b8654546fa0dc454fce4027c5e0f38f18670061967269fa94fa09089b3718"
+        },
+        {
+          "bytes": 647,
+          "path": "go-agent-loop/pkg/probe/scenario_s2s_v1_text_in_audio_out.go",
+          "sha256": "baeda1bf2dab65c031a197a1609d830d512c4e318e2e2d73fe961369bd23a23a"
+        },
+        {
+          "bytes": 4539,
+          "path": "go-agent-loop/pkg/probe/scenario_s2s_v3a_barge_in_basic.go",
+          "sha256": "e8cd89502f8a49b1b2b9bc93f6c73254bd5ea3173148758612b6d8c86a8ff542"
+        },
+        {
+          "bytes": 3763,
+          "path": "go-agent-loop/pkg/probe/scenario_s2s_v3b_barge_in_tool_result.go",
+          "sha256": "cffdfa93b977f0814f3cbbc5838fb3a3743c692dc1c1caa1308032de9eb19a98"
+        },
+        {
+          "bytes": 6028,
+          "path": "go-agent-loop/pkg/probe/scenario_s2s_v3c_barge_in_repeated.go",
+          "sha256": "cf4990e9bb1f847d5e7e9ff704ad432c6356196e6f59b8ab505fb75e001e01c8"
+        },
+        {
+          "bytes": 2432,
+          "path": "go-agent-loop/pkg/probe/scenario_s2s_v7a_metrics_modality.go",
+          "sha256": "883702e4f3f35e7ab757cb0d540418d3b65765359d97b3cf57aad8e42313af63"
+        },
+        {
+          "bytes": 18169,
+          "path": "go-agent-loop/pkg/probe/scenario_v2.go",
+          "sha256": "af5770f96e1b951298f7e4116cd0b74e9a02e4e174ef9b2a77486ee9dcaa2f67"
+        },
+        {
+          "bytes": 9678,
+          "path": "go-agent-loop/pkg/probe/scenario_v2_decode.go",
+          "sha256": "e2e88ca7ffe8df3eb958e77ab691523866e083ee9952824f732a8fb9f6f8e0c1"
+        },
+        {
+          "bytes": 11458,
+          "path": "go-agent-loop/pkg/probe/scenario_v2_loading.go",
+          "sha256": "11c5e83a2da7f0bceda5f92d3dc6d864a321bba264ab4e440ab6a42e0eaaf193"
+        },
+        {
+          "bytes": 4370,
+          "path": "go-agent-loop/pkg/probe/scenario_v2_paths.go",
+          "sha256": "2ecf8f58ca60f24537af9d1eeb8bb09a40dd0b793dc366fe54be97616be75711"
+        },
+        {
+          "bytes": 11551,
+          "path": "go-agent-loop/pkg/probe/scenario_v2_validation.go",
+          "sha256": "79cb33ca0e32e04fd9dac7e95198eb9a1fb96b26b3b5b975b1b2186b9f0a59c6"
+        },
+        {
+          "bytes": 12463,
+          "path": "go-agent-loop/pkg/probe/scenario_validation.go",
+          "sha256": "a163482e7e36b79444e38f573b101f6d02da2123d4aaf4aa070e54d8e46050d7"
+        },
+        {
+          "bytes": 8884,
+          "path": "go-agent-loop/pkg/probe/sequencing.go",
+          "sha256": "d4da0cf4eb1f08b68c499a48262794afd8647caa4bf912baba8f20cfa5884f6b"
+        },
+        {
+          "bytes": 2006,
+          "path": "go-agent-loop/pkg/probe/testdata/goal_catalog.json",
+          "sha256": "f0a9f9607d9961a8e0c1191a5236c100be1d7f125710dd75c952fe2108f4ecad"
+        },
+        {
+          "bytes": 5367,
+          "path": "go-agent-loop/pkg/state/state_loop.go",
+          "sha256": "7bb5af3ca85709b07bd5423f8fe51d8613c7ed2bc0440b4efb2fc9d2a9e54623"
+        },
+        {
+          "bytes": 703,
+          "path": "go-agent-loop/pkg/state/todo_queue.go",
+          "sha256": "cd16f8f38cb2721350a0e184d66f24f19be89e4487b74f7e92e4c6e968494979"
+        },
+        {
+          "bytes": 3879,
+          "path": "go-agent-loop/pkg/subsystems/audio/audio.go",
+          "sha256": "8dc6b8e65d590d27fad4ab8565619b78da76090f3d31a57c698dfa17862c0f85"
+        },
+        {
+          "bytes": 3857,
+          "path": "go-agent-loop/pkg/subsystems/context_pressure_notifier.go",
+          "sha256": "0d63f58a44f1d4a54c54dcc8623726a5233e0949df772aa6394ba0eb44dc4d96"
+        },
+        {
+          "bytes": 14969,
+          "path": "go-agent-loop/pkg/subsystems/coordinator.go",
+          "sha256": "f92646d25c980e6b78d7dbdff37d9e83ea52bda44fdae20e4bc886c7dd030309"
+        },
+        {
+          "bytes": 7538,
+          "path": "go-agent-loop/pkg/subsystems/coordinator_delta.go",
+          "sha256": "ba9f4c1aa58ac1d22fbe91506fa117de35527f414bd9eaeae02f0bb6db72bd1a"
+        },
+        {
+          "bytes": 6215,
+          "path": "go-agent-loop/pkg/subsystems/interaction_events.go",
+          "sha256": "0031d51ae39b55e136c9fb246cc25492a67b029d543717c33ae4dba509af3a4d"
+        },
+        {
+          "bytes": 1397,
+          "path": "go-agent-loop/pkg/subsystems/interfaces.go",
+          "sha256": "8533e14fbc3de9f7614cc6b9f9536a41ea2140835170a7b23ad4fbe8e18ebeba"
+        },
+        {
+          "bytes": 6459,
+          "path": "go-agent-loop/pkg/subsystems/interrupt_handler.go",
+          "sha256": "09d941fb4759d48adbdc431654449202b83de9a2052bfbf2103dd73a98b99caf"
+        },
+        {
+          "bytes": 2571,
+          "path": "go-agent-loop/pkg/subsystems/ping_pong.go",
+          "sha256": "e3dea358704901442a508d2442dd753a3185e0997f29c0d53903fc4775d31760"
+        },
+        {
+          "bytes": 1139,
+          "path": "go-agent-loop/pkg/subsystems/recorder.go",
+          "sha256": "ab93dde2c41b4b1328c0004788fa90bf125a1f815ae463db8bde850e6b4bdaaf"
+        },
+        {
+          "bytes": 1591,
+          "path": "go-agent-loop/pkg/subsystems/token_counter.go",
+          "sha256": "1420b3fa70ad96d6ac69dcdd39925b95830eee90a90c893be3ba8dfe0656d88e"
+        },
+        {
+          "bytes": 7331,
+          "path": "go-agent-loop/pkg/subsystems/tool_result_forwarder.go",
+          "sha256": "0f7fdcec06c99dc62fc111d7e8d64a555e798476e0a11c2a24c4046c3611cc6c"
+        },
+        {
+          "bytes": 8566,
+          "path": "go-agent-loop/pkg/transcript/agent.go",
+          "sha256": "4b8c1eed49cd6dd7c2ff7d91d0b86bb3e5e7e51f1ec15ae352d5571986c98914"
+        },
+        {
+          "bytes": 25240,
+          "path": "go-agent-loop/pkg/transcript/browser_manifest.go",
+          "sha256": "9649db4c6d376a9e8b0bfb978aadc710963444fac7d0f1856fa339dfbb513bf9"
+        },
+        {
+          "bytes": 5497,
+          "path": "go-agent-loop/pkg/transcript/client.go",
+          "sha256": "d6e986cfde54baa1b5cb8f0074212cf546e963705ab92922ee4a545e5fd8f184"
+        },
+        {
+          "bytes": 6099,
+          "path": "go-agent-loop/pkg/transcript/frame.go",
+          "sha256": "0444a61759c5f50195481237b5000d2332a048471fa0a79d4e6df7f96c2e08f0"
+        },
+        {
+          "bytes": 46747,
+          "path": "go-agent-loop/pkg/transcript/manifest.go",
+          "sha256": "83e0642c91f219cd84b96626d1bf7163f9803e27e8e5c4f82fe74cb0e6ada48e"
+        },
+        {
+          "bytes": 6227,
+          "path": "go-agent-loop/pkg/transcript/manifest_stream.go",
+          "sha256": "4d1e236df0b8a92200547dcde64b386d41164cb0fff66352410debc6b94afac4"
+        },
+        {
+          "bytes": 5195,
+          "path": "go-agent-loop/pkg/transcript/tee.go",
+          "sha256": "6fac408bdff8b77a3cb287742df9e3e57e37e5a061d1655640f66908ca0ff676"
+        },
+        {
+          "bytes": 14566,
+          "path": "go-agent-loop/pkg/transcript/writer.go",
+          "sha256": "7c17c0d25a02620ff3f83a7405d41b20ca1bdd6b195fc6692d990d9f19adbc84"
+        },
+        {
+          "bytes": 7302,
+          "path": "go-agent-loop/test/functional/timeharness/harness.go",
+          "sha256": "abdfead6391db6bb97a098356933b65ed7922f5d7e238b0a5d1a39059a9f7b27"
+        },
+        {
+          "bytes": 4970,
+          "path": "go-agent-runtime/go.mod",
+          "sha256": "b58a34441c4d35a0bccc2f46b1e1e84d20afb8bde8da147e9415601d94623150"
+        },
+        {
+          "bytes": 23034,
+          "path": "go-agent-runtime/go.sum",
+          "sha256": "b3d017ad5561d38878513c6ebc87054ba5ea4031bddf70420f9054a7c25281c1"
+        },
+        {
+          "bytes": 7973,
+          "path": "go-agent-runtime/services/devices/contract.go",
+          "sha256": "ef9ad3f05190eae0031a32a229bd7f50bbe183e74b6016dee3d3db8766e00ac4"
+        },
+        {
+          "bytes": 856,
+          "path": "go-agent-runtime/services/providers/model_admission.go",
+          "sha256": "6a90f5d82c30f0535832c98a1a0c114dc494c90679270c6efd1a2bf3f08ed0f6"
+        },
+        {
+          "bytes": 2337,
+          "path": "go-agent-runtime/services/providers/models.go",
+          "sha256": "53f5a4126f63237cc0324e0ca9544ba8c344e05f1d4d6687250a9120cac1120e"
+        },
+        {
+          "bytes": 3839,
+          "path": "go-agent-runtime/services/providers/service.go",
+          "sha256": "a2a1e3acaee4af6fb25fa6c9f10ea8eb6bec97ecfc7cd6e6dc01950d9b81ea27"
+        },
+        {
+          "bytes": 11437,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory.go",
+          "sha256": "3bdec26ea51c3e2ca91af99b79e786ac4b8003dd83f58724eeedcd6ed1cfa9ba"
+        },
+        {
+          "bytes": 12989,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_capture.go",
+          "sha256": "84e8d188be22a04108c0e130535e7b6986c586a4c5e05260e60690a8c4e52350"
+        },
+        {
+          "bytes": 10147,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_conversation.go",
+          "sha256": "36cbbcde466fd306f3e4d91f333e0fcfaa62ebbb54a41f6b179a1d383359b435"
+        },
+        {
+          "bytes": 10861,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_conversation_projection.go",
+          "sha256": "36b05b77f95982ae253fbde6a96cdeb7e45f4f362779961fe40e620c0c0b85f7"
+        },
+        {
+          "bytes": 10224,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_destination.go",
+          "sha256": "e59b9d0ee0a61d7e212bdc3525a9696a0c71319d6a37360c2d4f637d604d9074"
+        },
+        {
+          "bytes": 14889,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_finalize.go",
+          "sha256": "8c4a17dcf3881f717b43be1d19f1980d9b60245626612b39b8dd6070f9762566"
+        },
+        {
+          "bytes": 3713,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_provider.go",
+          "sha256": "f60f68e6e0bfe5a27ac66f923c7d6cb47c121b7d98710d3292381dc81a5c88cd"
+        },
+        {
+          "bytes": 1736,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_response_audio.go",
+          "sha256": "23923261e401e962af67658e6a810ba36c24f1b6e18f7c797f1ed3a8198004dc"
+        },
+        {
+          "bytes": 7432,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_sidecar.go",
+          "sha256": "6e7aaa5be000b4bebe017cecbd1c64ab0ba0840c38feb4620650a49852d50970"
+        },
+        {
+          "bytes": 12066,
+          "path": "go-agent-runtime/services/recording/internal/evidence/provider_spool.go",
+          "sha256": "64d0431da95e6dc27eb7a346666f402a68a4877ba12e7b42e33252e67cbd4d9c"
+        },
+        {
+          "bytes": 9579,
+          "path": "go-agent-runtime/services/recording/internal/evidence/provider_spool_io.go",
+          "sha256": "0dbf573796aa38eb5eb63a406ea1960308058ba9c77fee905d4bcd83f3c0c042"
+        },
+        {
+          "bytes": 1583,
+          "path": "go-agent-runtime/services/recording/internal/service/service.go",
+          "sha256": "99061bf17b58f72268628a0f6d9ad72262755b1594c3329135c9affcce942a6f"
+        },
+        {
+          "bytes": 2861,
+          "path": "go-agent-runtime/services/recording/internal/service/session.go",
+          "sha256": "fbf911dbeca624055f5d6f9749a3940485c702eecfa9b3e2e81b2f6a8ce4348b"
+        },
+        {
+          "bytes": 7619,
+          "path": "go-agent-runtime/services/recording/service.go",
+          "sha256": "97ec6478cb62e075a80ddceb2531cd452da6f6845da6f7d4f1e27c9a0bf30c96"
+        },
+        {
+          "bytes": 718,
+          "path": "go-agent-runtime/services/recording/wire/wire_gen.go",
+          "sha256": "b7d80eef2267bdb2e39ef2a492a6b3c941324e595ea6d6e4a6ee1bd432e49035"
+        },
+        {
+          "bytes": 3420,
+          "path": "go-agent-runtime/services/session/instructions.go",
+          "sha256": "e4e18a756f87005c7631c333a9c82c9f68ab983e34a4f8e6e98b87eb482caedb"
+        },
+        {
+          "bytes": 4613,
+          "path": "go-agent-runtime/services/session/internal/execution/config.go",
+          "sha256": "60b2b1a741adb965045c7be28f55eeb2dd93c383a0c8a31ce7a398351e857837"
+        },
+        {
+          "bytes": 8370,
+          "path": "go-agent-runtime/services/session/internal/execution/executor.go",
+          "sha256": "641c68e9b5d58c0e10b328c10d6e730804ea3d98eb0296414e0b3e0dac86bafc"
+        },
+        {
+          "bytes": 6348,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_build.go",
+          "sha256": "f03c0387fded6cd0f030d547769abfd8452ac60636fedbc1663f81ef24d9f542"
+        },
+        {
+          "bytes": 2320,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_errors.go",
+          "sha256": "91a60adf10a6704843116bdb875b921477b32742714bee09fb886a661e4d1f88"
+        },
+        {
+          "bytes": 4184,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_iteration_state.go",
+          "sha256": "d9d8749ffe5b18265577347962e0376068b476c3b80b59436eb374325064b56f"
+        },
+        {
+          "bytes": 14350,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_iterative.go",
+          "sha256": "4f37f07b161e0f875e22056517035b6e8183c26f5a50137ce19c03999380f89a"
+        },
+        {
+          "bytes": 3999,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_request.go",
+          "sha256": "59be0d52f5be519f61c6a1a4e5d1e3c0bb325daf4bff119c89409f890bcbce47"
+        },
+        {
+          "bytes": 2413,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_result.go",
+          "sha256": "9335c5d65db75e22f13c53370b3a323bfd9d0d3260e254681af9646896f4afcd"
+        },
+        {
+          "bytes": 7184,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_run.go",
+          "sha256": "2e1a26a900851bcd85ee935baccad74ff1bab6733550daa0822bdd43a4721458"
+        },
+        {
+          "bytes": 2931,
+          "path": "go-agent-runtime/services/session/internal/input/request.go",
+          "sha256": "4d1a0a4edf265b0a5267ead1df182d3e440e6f6b7132911bf6ddb0f8544d29e8"
+        },
+        {
+          "bytes": 3152,
+          "path": "go-agent-runtime/services/session/internal/input/validate.go",
+          "sha256": "bb0e9f06cb92bb180a5f2f4bdac64a0567958e6fa876b9f95a2a303ff8162bcf"
+        },
+        {
+          "bytes": 12419,
+          "path": "go-agent-runtime/services/session/internal/instructions/service.go",
+          "sha256": "15b134651b2edcc6ce2cb2df5a06e938fb7eb026a910e68ea8aefab7bd781b19"
+        },
+        {
+          "bytes": 11748,
+          "path": "go-agent-runtime/services/session/internal/live/continuation.go",
+          "sha256": "c9c5ce0257bf5e60c65b119c66b336009dc6c8ee9eeaf2c4d287de77669b0e2b"
+        },
+        {
+          "bytes": 11852,
+          "path": "go-agent-runtime/services/session/internal/live/control.go",
+          "sha256": "a8f0137b8ec94dfdb92138dced92a4ef5960e37045898b05333008a992c0fe28"
+        },
+        {
+          "bytes": 5389,
+          "path": "go-agent-runtime/services/session/internal/live/eventcodec/codec.go",
+          "sha256": "66839780dc66e15e2994c1ef08ba0775a6d9f7dc8f068cb5c95eb8b6a947534b"
+        },
+        {
+          "bytes": 12645,
+          "path": "go-agent-runtime/services/session/internal/live/invoke.go",
+          "sha256": "f8cfb9048a405f374b55180d0fd1ac676f7a6a95d84a265d834933162fbbc493"
+        },
+        {
+          "bytes": 12097,
+          "path": "go-agent-runtime/services/session/internal/live/lifecycle.go",
+          "sha256": "dec3ea49fb1ade21fdbb18317d66a0a22f6f21ae42f9c9f9da36f6751c0e8bfb"
+        },
+        {
+          "bytes": 12086,
+          "path": "go-agent-runtime/services/session/internal/live/liveness.go",
+          "sha256": "b8c24d0f62a7a2c5a469b9986d0d9b0429ac0da613406fc9e5e313e7df43f516"
+        },
+        {
+          "bytes": 4314,
+          "path": "go-agent-runtime/services/session/internal/live/mediagate/ack.go",
+          "sha256": "7a3e9f6e9ed9703483ee985b1800d7f1a4ba8c324122fca501735420c21892e3"
+        },
+        {
+          "bytes": 9125,
+          "path": "go-agent-runtime/services/session/internal/live/mediagate/gate.go",
+          "sha256": "40edcfd75f630d13dda8eb209916845fa22adc29db5885ba5c77acdb5dfb85da"
+        },
+        {
+          "bytes": 9233,
+          "path": "go-agent-runtime/services/session/internal/live/mediagate/ordering.go",
+          "sha256": "89174eb306df7607de5073ff370db271942ec0ffde555eb8626cbf88bf7a3d55"
+        },
+        {
+          "bytes": 8520,
+          "path": "go-agent-runtime/services/session/internal/live/mediagate/ports.go",
+          "sha256": "93a3df7caece8a72bdc9b15094b502067b3dce21ea1907f3ea6574168395ae1d"
+        },
+        {
+          "bytes": 13681,
+          "path": "go-agent-runtime/services/session/internal/live/observation.go",
+          "sha256": "18bea7cc896099a2beec4fc0b3ffe69c0df6a640c8a8bcd9bc43a7962ca2726b"
+        },
+        {
+          "bytes": 5407,
+          "path": "go-agent-runtime/services/session/internal/live/observations/observer.go",
+          "sha256": "934e1149514ac6ca46eb6a1c7d1c3352505371764882f7940d568d76968153f8"
+        },
+        {
+          "bytes": 10755,
+          "path": "go-agent-runtime/services/session/internal/live/policies.go",
+          "sha256": "65754d27a0c5e9ede83655400aa8e9a235a8511448eb1c8e8048e3fcafd37cc4"
+        },
+        {
+          "bytes": 12249,
+          "path": "go-agent-runtime/services/session/internal/live/replay.go",
+          "sha256": "c4cd96ae49fcd9a213fbcf4e83495c93154e411578291ca58c27e301e473e805"
+        },
+        {
+          "bytes": 16268,
+          "path": "go-agent-runtime/services/session/internal/live/service.go",
+          "sha256": "2bcf28fbc8c99606bbd3faf6509d566dec33c6a446366a63a0748364c2e2fef9"
+        },
+        {
+          "bytes": 12511,
+          "path": "go-agent-runtime/services/session/internal/live/session_adapter.go",
+          "sha256": "0e80b6d72de0ae6f5d1140e52217b2258f5960a047c9bd6e2fbe2a3adcd86b49"
+        },
+        {
+          "bytes": 13165,
+          "path": "go-agent-runtime/services/session/internal/live/start.go",
+          "sha256": "77a2cc549a013bdea3ee94b9f061821e004b23d262325693146116e7f5d62479"
+        },
+        {
+          "bytes": 12457,
+          "path": "go-agent-runtime/services/session/internal/live/start_support.go",
+          "sha256": "49349b795b2654a9b299c747f5a21803c6c943fe5264c11c21b3e5d3fc2f4a7e"
+        },
+        {
+          "bytes": 4220,
+          "path": "go-agent-runtime/services/session/internal/persistence/adapter.go",
+          "sha256": "b9810ad6d26b502562917c0e5abeb639403c6532eb0e61d55ff52ec8f3f2ca61"
+        },
+        {
+          "bytes": 2721,
+          "path": "go-agent-runtime/services/session/internal/persistence/listing.go",
+          "sha256": "a0f3481398a644dfa7df8eb4b2be7611191b227bbd04961f6ca43eeced73815c"
+        },
+        {
+          "bytes": 13192,
+          "path": "go-agent-runtime/services/session/internal/persistence/storage.go",
+          "sha256": "fc524ac76aad52fe66c4f20918f82896c8ad2d2f0c1e72f8844496c89e52cdf7"
+        },
+        {
+          "bytes": 1785,
+          "path": "go-agent-runtime/services/session/internal/persistence/trace.go",
+          "sha256": "85dfe5538728b3c4b72e3f2368d08343cddb5a99a518e499fd24418e814451fe"
+        },
+        {
+          "bytes": 5534,
+          "path": "go-agent-runtime/services/session/internal/service/lifecycle.go",
+          "sha256": "2b3efae7048c8a0b77517c39184cc688cf782ade195d27d519f9b105a1b0a091"
+        },
+        {
+          "bytes": 2291,
+          "path": "go-agent-runtime/services/session/internal/service/memory.go",
+          "sha256": "e20335b061b864115644248b198a2ab306c6de89998aff2be93f25798a8cf4ea"
+        },
+        {
+          "bytes": 4926,
+          "path": "go-agent-runtime/services/session/internal/service/resolution.go",
+          "sha256": "cbff9dd766a894970a254765bb231cca547e30d02e11bcc1dc72599523db2b05"
+        },
+        {
+          "bytes": 7074,
+          "path": "go-agent-runtime/services/session/internal/service/service.go",
+          "sha256": "0da615cdef1d6da48d3483b2a4fc634a93f53f06e1f9ee8898420254d4a96ea1"
+        },
+        {
+          "bytes": 4840,
+          "path": "go-agent-runtime/services/session/internal/service/storage.go",
+          "sha256": "f1b5f5f8f072421c6b8f674a8f0cb158df8b342e99902620935695d2c70b9fc5"
+        },
+        {
+          "bytes": 89,
+          "path": "go-agent-runtime/services/session/live.go",
+          "sha256": "98f9ed88569a7eb4a25a17a3db0f1f9c9ff290ae9fc0152579eb7d517b8ca568"
+        },
+        {
+          "bytes": 4945,
+          "path": "go-agent-runtime/services/session/live_capabilities.go",
+          "sha256": "18c3aa53cfeb0d198bc12c249ee02c0ae43a4a849c2e7892ee2eda9765bb92a8"
+        },
+        {
+          "bytes": 10637,
+          "path": "go-agent-runtime/services/session/live_errors.go",
+          "sha256": "48db2d7e7dbb03b8f518290f48eda927712bfb437978e623ef0bc79a3a0a016a"
+        },
+        {
+          "bytes": 4695,
+          "path": "go-agent-runtime/services/session/live_events.go",
+          "sha256": "c327498075f4849485f91fdf7623a6b02bd820cac05f14db5b30ecba56b42f29"
+        },
+        {
+          "bytes": 549,
+          "path": "go-agent-runtime/services/session/live_kinds.go",
+          "sha256": "a8613409c3aa09801c48f39552573b58bbebcb4103a16b92e7bdd06126bd0614"
+        },
+        {
+          "bytes": 2583,
+          "path": "go-agent-runtime/services/session/live_recording.go",
+          "sha256": "92262134e231dfa77ec07ba0e28cead2bc64d531a1daa3cac06cf301560dc539"
+        },
+        {
+          "bytes": 4252,
+          "path": "go-agent-runtime/services/session/live_replay.go",
+          "sha256": "f632c86c7ebf06b22c9064176cbe2cabe37e8a9efa791724e33300c295b9eb8a"
+        },
+        {
+          "bytes": 5867,
+          "path": "go-agent-runtime/services/session/live_request.go",
+          "sha256": "7f2f6465ff71d052e779e6d147c1e8003c3574ee472eeace1b1a74eea9b221dc"
+        },
+        {
+          "bytes": 4200,
+          "path": "go-agent-runtime/services/session/live_runner.go",
+          "sha256": "11e73af5e0ec7dba634ac545fcca754b71638bd2f2337990a092718bbc42f3c1"
+        },
+        {
+          "bytes": 5443,
+          "path": "go-agent-runtime/services/session/ports.go",
+          "sha256": "a3baa20268a7e2fd8ba594bf578b139dd7f08ef3ce17f98020be3eb63b136c92"
+        },
+        {
+          "bytes": 5061,
+          "path": "go-agent-runtime/services/session/service.go",
+          "sha256": "19a3ee63998df376f35f526793cc9a61ade348f903140b0c63b84ffbaff9fc01"
+        },
+        {
+          "bytes": 1090,
+          "path": "go-agent-runtime/services/session/storage.go",
+          "sha256": "a151b5a5d187b414e9cc27086c07782a284dbe1f41953db4c5483e0bcacc3a01"
+        },
+        {
+          "bytes": 1528,
+          "path": "go-agent-runtime/services/session/wire/live.go",
+          "sha256": "6bdee877ef9091a9cdd86ccb6065b5c415772fde873f881946592b08d32a757e"
+        },
+        {
+          "bytes": 3076,
+          "path": "go-agent-runtime/services/session/wire/wire_gen.go",
+          "sha256": "1deabf0aaae1296989c61650264ce448d8296c29994908ff69b53c61be7c964d"
+        },
+        {
+          "bytes": 6165,
+          "path": "go-agent-runtime/services/tools/browser_contract_types.go",
+          "sha256": "490fb4b5111ec14c8b4658d994996cbf14f16b8daffc1e24546cbb922dbb3e67"
+        },
+        {
+          "bytes": 625,
+          "path": "go-agent-runtime/services/tools/browser_error_types.go",
+          "sha256": "29b10592ca7a8dcee41741d23a5d5b40244c943936c17e14032f719ecf2d623c"
+        },
+        {
+          "bytes": 7561,
+          "path": "go-agent-runtime/services/tools/browser_result_types.go",
+          "sha256": "1d678da70ee4826b2b8b6cbe9c0e4f8004a1253b9989e56b887a83704ff8ffd2"
+        },
+        {
+          "bytes": 473,
+          "path": "go-agent-runtime/services/tools/display_contracts.go",
+          "sha256": "48b2b33531cfca7e238445ce0ebc204c2e090843b5d83af8458b729db0e1b906"
+        },
+        {
+          "bytes": 873,
+          "path": "go-agent-runtime/services/tools/image.go",
+          "sha256": "f17770020f99f201f19369977f5d6e6f1a98065a2a4e95ccdd77a7ba79ad7fc1"
+        },
+        {
+          "bytes": 1775,
+          "path": "go-agent-runtime/services/tools/image_staging.go",
+          "sha256": "40eb29fbfd80bee8c1a02c405b26c8eb8ab021e7173c1b28bb8de5ee822f7620"
+        },
+        {
+          "bytes": 3421,
+          "path": "go-agent-runtime/services/tools/interactive_policy.go",
+          "sha256": "6fe69e2899182be23368efbc3c9e60c38c571d48d0bd1b841c23eaa498992423"
+        },
+        {
+          "bytes": 1549,
+          "path": "go-agent-runtime/services/tools/read_image_contract.go",
+          "sha256": "252332557a87ae1afa750c3ed205f60d904f8bb720d0e9c8045edfa1b4aec5f4"
+        },
+        {
+          "bytes": 12627,
+          "path": "go-agent-runtime/services/tools/service.go",
+          "sha256": "afad30a04bcd57be2cf9f962a92fc07c527a16aa746162ca856cba0749d932ad"
+        },
+        {
+          "bytes": 578,
+          "path": "go-agent-runtime/services/tools/skills.go",
+          "sha256": "c7934edaf421d4e4c5070d0013de64c5237f3cf694adddb9271d234ab7ba9235"
+        },
+        {
+          "bytes": 134,
+          "path": "go-audio/go.mod",
+          "sha256": "0b959f3a6a23c827c8f1a89323a760637b3ff001f4b70f75aa423c9c053d88d7"
+        },
+        {
+          "bytes": 893,
+          "path": "go-audio/go.sum",
+          "sha256": "0eb084ae04738236d00d96d849c231482df0549e2456fcf8637f4bceb96c6857"
+        },
+        {
+          "bytes": 2588,
+          "path": "go-audio/pkg/analysis/selfhearing/self_hearing_buffer.go",
+          "sha256": "898e815e95adc4b8ac45cfbc3f50bebaaf8e17f14a512afa2121e336ba2b255a"
+        },
+        {
+          "bytes": 13797,
+          "path": "go-audio/pkg/analysis/selfhearing/self_hearing_classifier.go",
+          "sha256": "ce7a4f67745e056cbbaf8896afddde7f36424a6fabeb64833e8f3ca93b39cc1c"
+        },
+        {
+          "bytes": 9551,
+          "path": "go-audio/pkg/analysis/selfhearing/self_hearing_detector.go",
+          "sha256": "863199a0f0b78cc160145f30c74f67d44832913741a79ef3ce5e6cda246fbc7c"
+        },
+        {
+          "bytes": 9466,
+          "path": "go-audio/pkg/analysis/selfhearing/self_hearing_types.go",
+          "sha256": "c9b08222ae2d8350d1f2ebfd1c5f5018cedcffc796f1cd70190f27b99b472600"
+        },
+        {
+          "bytes": 5298,
+          "path": "go-audio/pkg/analysis/selfhearing/self_hearing_validation.go",
+          "sha256": "d426df8c2aeed83dcc2560c09bb6fcefb3fdb8d8ce9c1eaf5096091b7e92435d"
+        },
+        {
+          "bytes": 1539,
+          "path": "go-audio/pkg/analysis/selfhearing/stream_primitives.go",
+          "sha256": "e062d5275517178ec946dd5c45e87e528edb97e761f06491c7a3256cc551501a"
+        },
+        {
+          "bytes": 8133,
+          "path": "go-audio/pkg/analysis/stream/analysis_pipeline.go",
+          "sha256": "86d55fcac2ca7f78f277b99b4008a4e29033a15e7e82c8b2859a4d6d1c141d25"
+        },
+        {
+          "bytes": 1540,
+          "path": "go-audio/pkg/analysis/stream/stream_analyzer.go",
+          "sha256": "6c6a135876aff60f115289250d1e28ec5f9d2e61db4d8c00f04b2ad38351eb72"
+        },
+        {
+          "bytes": 5603,
+          "path": "go-audio/pkg/analysis/stream/stream_metrics.go",
+          "sha256": "c1c26fc5ff77d2b37d755e5fb9412ceb2026e6d5305dc839824e19faf4268cd1"
+        },
+        {
+          "bytes": 12330,
+          "path": "go-audio/pkg/analysis/stream/stream_types.go",
+          "sha256": "67e2cfdca52b5f4eb40150c23425a5caaa35b2305391d391450daddb1f299621"
+        },
+        {
+          "bytes": 10142,
+          "path": "go-audio/pkg/analysis/stream/stream_validation.go",
+          "sha256": "b369b74dfae598cdf98910d1fefc2730da14bae6f209ca6bcdaa2c5b3df84db5"
+        },
+        {
+          "bytes": 8139,
+          "path": "go-audio/pkg/analysis/stream/timeline.go",
+          "sha256": "f1420e3199c4e22c7b6adbb0956945af7c26b5517cfc27021c04425e0a28ce17"
+        },
+        {
+          "bytes": 6517,
+          "path": "go-audio/pkg/audio/buffer.go",
+          "sha256": "9257dbba4086d849a2167821ab412fac71aac2b120c12872e6df95246ac90934"
+        },
+        {
+          "bytes": 482,
+          "path": "go-audio/pkg/audio/buffer_endpoints.go",
+          "sha256": "bf8a4e84f93f2ab921ecce6eb93deaca4e7d32c27129c712e39c1b35960a39ce"
+        },
+        {
+          "bytes": 243,
+          "path": "go-audio/pkg/audio/capture.go",
+          "sha256": "29afb2bc0b82a6b1da74c59c6e8f02fd02821c9953b206caeac086916e7be354"
+        },
+        {
+          "bytes": 2064,
+          "path": "go-audio/pkg/audio/control.go",
+          "sha256": "35bfaa49e3db8cd7b7d172aeafc5e0c8b094d98e556ee2fd82de3402e4eb0806"
+        },
+        {
+          "bytes": 13680,
+          "path": "go-audio/pkg/audio/device_playback.go",
+          "sha256": "863cdb9411dab4c5d608f08e98b874b58823afd15559ba688e6cbf63a800e14b"
+        },
+        {
+          "bytes": 4516,
+          "path": "go-audio/pkg/audio/engine.go",
+          "sha256": "cb1bf5b1893b4368b5816e1e660858eafa12ecb00fb4269a9475ce051d550b03"
+        },
+        {
+          "bytes": 22431,
+          "path": "go-audio/pkg/audio/feedback_gate.go",
+          "sha256": "d31d99ca619dcd6ef73b840611d5e36e98e26377c042d1f011dc2cb89fa2f406"
+        },
+        {
+          "bytes": 1072,
+          "path": "go-audio/pkg/audio/feedback_gate_timing.go",
+          "sha256": "3029dc6bcf5a31228a30be918d747e7f4d5db28929b7b7773855ad9e59da4fc5"
+        },
+        {
+          "bytes": 4104,
+          "path": "go-audio/pkg/audio/format.go",
+          "sha256": "48b3dc8038d9ea2cb9542ecfa88a5b11be9f6ce8f1b5c92e7e872d2bea5d653a"
+        },
+        {
+          "bytes": 3627,
+          "path": "go-audio/pkg/audio/hold_tone.go",
+          "sha256": "7dbf42725943728c761e8735abfd09165816344db49ce33d898a89a594a27fca"
+        },
+        {
+          "bytes": 5539,
+          "path": "go-audio/pkg/audio/hold_tone_filler.go",
+          "sha256": "9d51bec6194f6acba318fcbc1b4925ad1e912ea03459bfa5cb9cda23cc9bc725"
+        },
+        {
+          "bytes": 329,
+          "path": "go-audio/pkg/audio/lifecycle_errors.go",
+          "sha256": "7313babb0e8368b1962feb5f58b628150f9eef20acd88747cf5fba8c3f6f8d1a"
+        },
+        {
+          "bytes": 7048,
+          "path": "go-audio/pkg/audio/loudness.go",
+          "sha256": "95f3e6fdc56a07a7e60a9be27eeaf4f891e09354c22d549b3a34ab9218695f27"
+        },
+        {
+          "bytes": 7156,
+          "path": "go-audio/pkg/audio/media_contract.go",
+          "sha256": "fe016849e95408be71394824b55f36f06b60c1654e394da54891bb057ca3e1f3"
+        },
+        {
+          "bytes": 9565,
+          "path": "go-audio/pkg/audio/pcm16_convert.go",
+          "sha256": "faf4cb655c6d6e35584682682c19e366aa8529fb83d9a45fd10e03a1f03945be"
+        },
+        {
+          "bytes": 7784,
+          "path": "go-audio/pkg/audio/pcm16_frame_size.go",
+          "sha256": "374e5b2b6a7ce8f426e5a03d9e967fd5bab33599545a557eac80b0b82cbf6387"
+        },
+        {
+          "bytes": 2669,
+          "path": "go-audio/pkg/audio/pipeline.go",
+          "sha256": "f0e313fcd04ca7fb7ba19fd33ddc6b485b2b51a5d5d840259e00f693a87ffe95"
+        },
+        {
+          "bytes": 7330,
+          "path": "go-audio/pkg/audio/playback_commands.go",
+          "sha256": "eba61f6538ae956be7e196673f121abb2aa975c0ea04c40ee69ec8970a0b4541"
+        },
+        {
+          "bytes": 1502,
+          "path": "go-audio/pkg/audio/playback_processor.go",
+          "sha256": "c250ef14e50e302f87d764f35e6c1dd60e0afac129e550eb47a20512b7d327f0"
+        },
+        {
+          "bytes": 12424,
+          "path": "go-audio/pkg/audio/processor.go",
+          "sha256": "7ab620404051a3e1d141fc80827a8abe5d1469b981c3731bb87af5f31c3f8854"
+        },
+        {
+          "bytes": 16407,
+          "path": "go-audio/pkg/audio/session_media.go",
+          "sha256": "61ffe922cbcc2a7387cb75b529b2512019d4f5f18f8340329ddab7e005f95b08"
+        },
+        {
+          "bytes": 666,
+          "path": "go-audio/pkg/audio/sink.go",
+          "sha256": "d02237aa4a5bdc8b3a686a3b260f358165d9a63b3fe170fc5e88769610aaefc1"
+        },
+        {
+          "bytes": 5655,
+          "path": "go-audio/pkg/audio/sink_file.go",
+          "sha256": "8186dd4e3a24e37406da986127c6dd3f20a58ded8a08f6646eb96430386e11ba"
+        },
+        {
+          "bytes": 2523,
+          "path": "go-audio/pkg/audio/source.go",
+          "sha256": "7af75893cd00544aab3d6ec0365755464831f864d85d035c230ff36e4901802e"
+        },
+        {
+          "bytes": 10086,
+          "path": "go-audio/pkg/audio/source_file.go",
+          "sha256": "b87077c3682716b7c47106177789896f2cd37b10e4de38f355876acc132c8e25"
+        },
+        {
+          "bytes": 4408,
+          "path": "go-audio/pkg/audio/source_wav.go",
+          "sha256": "773afcdfe3dea82e9110062e7cb47a42b30450f307f91b6539beba95379206d4"
+        },
+        {
+          "bytes": 2972,
+          "path": "go-audio/pkg/audio/vad.go",
+          "sha256": "eadce86333d5f5b0e736b567613347f929a8fb64dbfbfcaf2c2c1e53c376237e"
+        },
+        {
+          "bytes": 635,
+          "path": "go-audio/pkg/audio/voice_loudness.go",
+          "sha256": "7a155cb23bfc16abfe102b9f9f068ded29145198271f0317a0fd06d534d8e0bf"
+        },
+        {
+          "bytes": 16468,
+          "path": "go-audio/pkg/clock/clock.go",
+          "sha256": "ac634d24039d6b7ca78f1a27c10600684ff29ffd9156e512619350aed5ea00ce"
+        },
+        {
+          "bytes": 10910,
+          "path": "go-audio/pkg/codec/opus.go",
+          "sha256": "d8fd4a9cb16eb0da9cd31a79a2561b8d8a3bdd25f07f0091ddf85fad804bf9cf"
+        },
+        {
+          "bytes": 8407,
+          "path": "go-audio/pkg/codec/pcm16.go",
+          "sha256": "88c71d08aa45c65450a9d33d01f52086b515d84d97d93434278692f1c3fe6d52"
+        },
+        {
+          "bytes": 1818,
+          "path": "go-audio/pkg/codec/rtp_audio.go",
+          "sha256": "9f0afde84d5f96bebfeab52a0688e70fc1d27d9f962cf8630773874f8c3684c1"
+        },
+        {
+          "bytes": 10112,
+          "path": "go-audio/pkg/codec/sample_value.go",
+          "sha256": "4fc9b6b85bb1162b42fbacb60cc24326f4bbe312c5ec7109185320172aaac49a"
+        },
+        {
+          "bytes": 425,
+          "path": "go-audio/pkg/contract/errors.go",
+          "sha256": "aa5ff0b86fa128266bbabaaf2415438146b6d3d2a5c803e0244223e6e40b0f76"
+        },
+        {
+          "bytes": 3751,
+          "path": "go-audio/pkg/observability/observability.go",
+          "sha256": "46c1dd76acf8f10f20622ac5dd303466a2776ec5dc6b5ff8bd5942cd1f09675e"
+        },
+        {
+          "bytes": 438,
+          "path": "go-audio/pkg/wavio/doc.go",
+          "sha256": "95a7c2699e9a073e0834b432270d44d9d390378b6fca5099e95a400c3d78089b"
+        },
+        {
+          "bytes": 3960,
+          "path": "go-audio/pkg/wavio/errors.go",
+          "sha256": "ec06794a25470be0d18b0c67e07c83c53f7b691cee6c872890963a7422abd5f3"
+        },
+        {
+          "bytes": 3341,
+          "path": "go-audio/pkg/wavio/layout.go",
+          "sha256": "6ca54d00c7518327b54e070b1ec06856da09d41484f1b00cd35aed43ec4ff60d"
+        },
+        {
+          "bytes": 6537,
+          "path": "go-audio/pkg/wavio/resample.go",
+          "sha256": "de8a0bcc8de3261365f9e7763df6944366bcb0f48afd4f466d18c8070fb6746b"
+        },
+        {
+          "bytes": 4191,
+          "path": "go-audio/pkg/wavio/stream_writer.go",
+          "sha256": "221992cc8373748291593d61f5f1430c1d77c7875a5554e985c301ecefbd6c86"
+        },
+        {
+          "bytes": 4574,
+          "path": "go-audio/pkg/wavio/streaming_resample.go",
+          "sha256": "166a167182f96a425211f5cbcaf4e945b823917d9afaf486feb81d6320d8d424"
+        },
+        {
+          "bytes": 11305,
+          "path": "go-audio/pkg/wavio/wavio.go",
+          "sha256": "0379182aa3c3aedce86628a4c6e95983ab22ca8fd53568f47974d8ed81f32661"
+        },
+        {
+          "bytes": 695,
+          "path": "go-device-gateway/go.mod",
+          "sha256": "662a1b74be04ebe5a98cb5a67c39e2b7cb9bf15e3b903c77bb16caebdee69b84"
+        },
+        {
+          "bytes": 1849,
+          "path": "go-device-gateway/go.sum",
+          "sha256": "db5dada37b219e2303eb898032fc5be0dfa68075f20040260466a5301d446bba"
+        },
+        {
+          "bytes": 16129,
+          "path": "go-device-gateway/pkg/devices/device.go",
+          "sha256": "2e57a2ed2dd7e7e3692de4e45de6b66b0fe9e95034287dbe403354f3a93be599"
+        },
+        {
+          "bytes": 17763,
+          "path": "go-device-gateway/pkg/devices/device_darwin.go",
+          "sha256": "6bdb390f72228e3674bcbda46ed4d00becb8f79698d01c17caf54187f9e2ff8a"
+        },
+        {
+          "bytes": 6268,
+          "path": "go-device-gateway/pkg/devices/device_errors.go",
+          "sha256": "08d283b666160cb9383cbe8b6735767d0b4e08450550ec1850a0bcd63d694690"
+        },
+        {
+          "bytes": 8272,
+          "path": "go-device-gateway/pkg/devices/device_failure_capsule.go",
+          "sha256": "1ea2ef001a604ca7044c85f4a9e62805938aac16e9d98bbd7455e6b8ef55d9cf"
+        },
+        {
+          "bytes": 2394,
+          "path": "go-device-gateway/pkg/devices/device_format.go",
+          "sha256": "a2fcfb619588c8a1179a0000410e22215d608b18635364a2fc886bb267457e39"
+        },
+        {
+          "bytes": 5434,
+          "path": "go-device-gateway/pkg/devices/device_open.go",
+          "sha256": "07960ee6414d5183768d9df358a301bc498de131396612341a48398bd41e07c5"
+        },
+        {
+          "bytes": 329,
+          "path": "go-device-gateway/pkg/devices/device_platform_darwin.go",
+          "sha256": "09b04cf74e893091d28a61ae63d8d39c59ea7862058fb75dc6967a6e36f13705"
+        },
+        {
+          "bytes": 4353,
+          "path": "go-device-gateway/pkg/devices/device_probe.go",
+          "sha256": "d48986281301c70a4ed40330e90581e1cdbe10def0728624c97caa23b135b1ab"
+        },
+        {
+          "bytes": 218,
+          "path": "go-device-gateway/pkg/devices/device_registry_darwin.go",
+          "sha256": "1de9485f1bebaf7ad1b9ddb9ca2d31f5eb0ada4fc53a0a663a824344639b9dc5"
+        },
+        {
+          "bytes": 7789,
+          "path": "go-device-gateway/pkg/devices/device_select.go",
+          "sha256": "806177e0c95e5cc8db220c2fed79487303ba49f6a710ef59e602122d1f840fd1"
+        },
+        {
+          "bytes": 26853,
+          "path": "go-device-gateway/pkg/devices/device_server.go",
+          "sha256": "59445cf68313cdcc625b8ba631220445ac6430828016c26ef15daf112eb56024"
+        },
+        {
+          "bytes": 27214,
+          "path": "go-device-gateway/pkg/devices/device_simulated.go",
+          "sha256": "fdf8549c4b4adaeab8b61f728a45d775733affe956c07acd652907cebde42c20"
+        },
+        {
+          "bytes": 21665,
+          "path": "go-device-gateway/pkg/devices/device_virtual.go",
+          "sha256": "f300667a0be7cabf75df819056e6ed0f304ba1cf8e66da13c86cf3ef6d6b0777"
+        },
+        {
+          "bytes": 17443,
+          "path": "go-device-gateway/pkg/devices/device_voice_processing_darwin.go",
+          "sha256": "4ef5abe2f5e079871017082de1a79fb9c8aa7cb82e86c4e3d2b18830ff517a8c"
+        },
+        {
+          "bytes": 916,
+          "path": "go-device-gateway/pkg/devices/interruptible_input.go",
+          "sha256": "1b64ac40348d784f61c0fc531c67d596b98a76b219970b1f17f8a6c642f8a721"
+        },
+        {
+          "bytes": 1304,
+          "path": "go-device-gateway/pkg/devices/interruptible_input_unix.go",
+          "sha256": "15d962b1d1aacb511c1f2b3388fa73709ef146e1a8939d7bc59932837dfe6be2"
+        },
+        {
+          "bytes": 4424,
+          "path": "go-device-gateway/pkg/devices/microphone.go",
+          "sha256": "e37bc6ecf67ab200d7ca588c4c18845502549657abe1fbf952a059313662a425"
+        },
+        {
+          "bytes": 7681,
+          "path": "go-device-gateway/pkg/devices/sink_device.go",
+          "sha256": "0c42a746fcc250e059fbef519ed8280d3dedc4b3c959ee9e3c9b35db7c9ed1d0"
+        },
+        {
+          "bytes": 7758,
+          "path": "go-device-gateway/pkg/devices/source_device.go",
+          "sha256": "737789f7cb026d470697f022c2073f9c8fbfe40d3f432d5060ab3ea75b6fd6f9"
+        },
+        {
+          "bytes": 13006,
+          "path": "go-device-gateway/pkg/runtime/contracts.go",
+          "sha256": "ec09c55f7fc41880f58c574feec3a094082fa362ee8fe8d7a8e535a527a5ef8d"
+        },
+        {
+          "bytes": 12986,
+          "path": "go-device-gateway/pkg/runtime/rtc_device.go",
+          "sha256": "e09b3379771021779f5fbde405e4a2264c0e4f226a504eb6ae7818b7f0d3b832"
+        },
+        {
+          "bytes": 15336,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_audio_ports.go",
+          "sha256": "46d2ffb714d2e44fc3b27a14acfdc834a820ab0bc84d96743fd2c141397ddc81"
+        },
+        {
+          "bytes": 4081,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_capture_buffer.go",
+          "sha256": "9fccbc4b8da8c5fbb3929205d994fa9c187490c7cd3cd9e24009555f7818adfb"
+        },
+        {
+          "bytes": 11423,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_commands.go",
+          "sha256": "85d745fe7db99a0ef6313d25ca81fba1ecaa57075fa87a6fa44cbd09b92c7177"
+        },
+        {
+          "bytes": 10717,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_hold_tone.go",
+          "sha256": "b7c7c94dda24007c196ca35d7b48aed0b7c43679e56a207a11993adafdcd246b"
+        },
+        {
+          "bytes": 26842,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_sink.go",
+          "sha256": "6ac74e0f662c96a16461302f6974db7cfd87c6b5e37c9fa9b746730554d45b6f"
+        },
+        {
+          "bytes": 2863,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_sink_rate.go",
+          "sha256": "bc0d8097e7d25e50433d9e6e538aff376f38ddecb924801319603b1953426e2b"
+        },
+        {
+          "bytes": 2367,
+          "path": "go-llm-gateway/go.mod",
+          "sha256": "0f4f45cf37aa17a8db3648c289874c806e52da32aa1fcdb3baf80122235af802"
+        },
+        {
+          "bytes": 17761,
+          "path": "go-llm-gateway/go.sum",
+          "sha256": "567306b32d2105ff24d3a7f61afd1c137efa0b1f2d9bdf45bc4ad551456befe9"
+        },
+        {
+          "bytes": 6366,
+          "path": "go-llm-gateway/pkg/capabilities/capabilities.go",
+          "sha256": "16f5d6f126937f5c4e9c559f9cdf6b98141093aa345f23c2d5a40b41c6e3002c"
+        },
+        {
+          "bytes": 594,
+          "path": "go-llm-gateway/pkg/gateway/capabilities.go",
+          "sha256": "4ceaa2d5be06b8ec02649a112068b1c44cd10fe55bfcb2865afe1c8f7f09fe26"
+        },
+        {
+          "bytes": 11290,
+          "path": "go-llm-gateway/pkg/gateway/errors.go",
+          "sha256": "4b44d3d01a46a145cbf568dc3824d6cf7b3cf2a330871855c9b087b87fa42734"
+        },
+        {
+          "bytes": 2807,
+          "path": "go-llm-gateway/pkg/gateway/gateway.go",
+          "sha256": "cd610201a44e7a4aa4ea83c6441faf0c7d89a8d1bbbbca8c0a5c214576932e4b"
+        },
+        {
+          "bytes": 7834,
+          "path": "go-llm-gateway/pkg/gateway/interaction_fixture.go",
+          "sha256": "f8b35cc9abf09d088863e50da5b784390efc152be48fab8b7c673558e170ded8"
+        },
+        {
+          "bytes": 16822,
+          "path": "go-llm-gateway/pkg/gateway/interaction_gateway.go",
+          "sha256": "f9f96217a5dba59d568ca4617ad87d74087007e2796f62952ca4335c7d3b1b12"
+        },
+        {
+          "bytes": 7618,
+          "path": "go-llm-gateway/pkg/gateway/interaction_types.go",
+          "sha256": "6aa8574cd9abe9c1b37f116ecf94046f49880ebe2c0784a9f142bb4d74030e93"
+        },
+        {
+          "bytes": 3198,
+          "path": "go-llm-gateway/pkg/gateway/interfaces.go",
+          "sha256": "89b271cb4ae8c20b0032f16ffa9dade7293108dbd2aa3415f9969920b0bcf047"
+        },
+        {
+          "bytes": 2604,
+          "path": "go-llm-gateway/pkg/gateway/session_gateway.go",
+          "sha256": "db79db8f0330e60acbd401f7371aa7c6b001903df1d86a328a82bd462f839f6e"
+        },
+        {
+          "bytes": 3882,
+          "path": "go-llm-gateway/pkg/gateway/session_types.go",
+          "sha256": "d8067cc01f46bf422b3e1d4858ae17c602c58aab2bb413d7fa0653afe01f1fc4"
+        },
+        {
+          "bytes": 5277,
+          "path": "go-llm-gateway/pkg/gateway/validation.go",
+          "sha256": "bac20226d8c007544e208307d3da46ce58c80b87a8faca2f42733ada9122adfb"
+        },
+        {
+          "bytes": 619,
+          "path": "go-llm-gateway/pkg/inference/doc.go",
+          "sha256": "ee6825211d09ba60da8a156e221c609bb5cd77efc1b28d0fcf97988d4aecdc53"
+        },
+        {
+          "bytes": 3347,
+          "path": "go-llm-gateway/pkg/inference/interaction_bridge.go",
+          "sha256": "f87912d182634a796ed7020ae26c54d75f9fbc4b02ca5667879138a62ca3c78b"
+        },
+        {
+          "bytes": 3334,
+          "path": "go-llm-gateway/pkg/inference/main_inferencer.go",
+          "sha256": "014b5f615efc307bd50e6ab7af98d1ef9d19c421d3a3862ed54ff1f891b8fde9"
+        },
+        {
+          "bytes": 7953,
+          "path": "go-llm-gateway/pkg/inference/session_inferencer.go",
+          "sha256": "66898d76d0da8da8c4c14a3904d95c2d9064e559d74c61f4fd50639867f9d17e"
+        },
+        {
+          "bytes": 1057,
+          "path": "go-llm-gateway/pkg/logging/logger.go",
+          "sha256": "99ff618da512871c1bbaa52d0423ccd123fdb2d8386f59e830fd0f7d60ff85c0"
+        },
+        {
+          "bytes": 717,
+          "path": "go-llm-gateway/pkg/models/doc.go",
+          "sha256": "0154db12418b7d44a6be64fd1e4086bd0f5d40a52d70edc687290faca42eec5e"
+        },
+        {
+          "bytes": 1118,
+          "path": "go-llm-gateway/pkg/models/message.go",
+          "sha256": "12a7cc6e4a70830b33b9018e50411b76fe5e5219b0a7164ffcae3189abf17c15"
+        },
+        {
+          "bytes": 12224,
+          "path": "go-llm-gateway/pkg/models/session.go",
+          "sha256": "0037a2198e52ada28043e0a3f81b2fde4042ef04c691f45ebecedb2f354bcbeb"
+        },
+        {
+          "bytes": 1923,
+          "path": "go-llm-gateway/pkg/providers/droplog.go",
+          "sha256": "b09dafab1f5cac00b0cbc518bb2acc926a630d1e4bb439b22cefb07e2f0a7b31"
+        },
+        {
+          "bytes": 9538,
+          "path": "go-llm-gateway/pkg/providers/errors.go",
+          "sha256": "ce6d470a8ef362ca7f6a26e0f3fad44e0f84f2cf793103261300619c4b061868"
+        },
+        {
+          "bytes": 2449,
+          "path": "go-llm-gateway/pkg/providers/outbound_drain.go",
+          "sha256": "69de77c709fccb55cae1092aae7349999b06f1e9d02eeb7e747ff350b40a545e"
+        },
+        {
+          "bytes": 6029,
+          "path": "go-llm-gateway/pkg/providers/provider.go",
+          "sha256": "c1bc01e11f778c388595010b8d8b609f859fafe63d43d921c9d9905530f1dde1"
+        },
+        {
+          "bytes": 1078,
+          "path": "go-llm-gateway/pkg/providers/session_provider.go",
+          "sha256": "1ee3ea4ce53778b26a3068ac925a6bc80a36cc00e2bb5a160a3c769e65a2893e"
+        },
+        {
+          "bytes": 1263,
+          "path": "go-llm-gateway/pkg/testing/capture.go",
+          "sha256": "ad3c8828b0d6e3d897e343fe93be567829c7cb7323ea609d1b5194f04c68e42b"
+        },
+        {
+          "bytes": 5371,
+          "path": "go-llm-gateway/pkg/testing/record.go",
+          "sha256": "c2416bfa39d00235027b1756ddf3aa2f4e0038089e978ce5eec3d1208e490e4e"
+        },
+        {
+          "bytes": 2850,
+          "path": "go-llm-gateway/pkg/testing/replay.go",
+          "sha256": "4d0570d1e3fc01123e5f7f8920cb571e17dedce119feb435ec2dfb7163bb50bc"
+        },
+        {
+          "bytes": 7124,
+          "path": "go-llm-gateway/pkg/testing/replay_diagnostic.go",
+          "sha256": "e1f8f01719c7a2446f3a38b570f22d5587e47ada768b91b539ff8e52ca764ae4"
+        },
+        {
+          "bytes": 22133,
+          "path": "go-llm-gateway/pkg/testing/session_capture.go",
+          "sha256": "1691f35db23b5b958396867e918244cc8e5bb8c999346bbdf4ba22906711d9eb"
+        },
+        {
+          "bytes": 12631,
+          "path": "go-llm-gateway/pkg/testing/session_capture_stream.go",
+          "sha256": "733e9a7e19387916e00bd699e45078be7d2f7dbf78ea487b1d9162f68c67fbe0"
+        },
+        {
+          "bytes": 1994,
+          "path": "go-llm-gateway/pkg/testing/session_fixture_contract.go",
+          "sha256": "e5e87fcfa63fb7643dfaae802448f595fcc85e8e51c837feb81b1790cce2d25b"
+        },
+        {
+          "bytes": 8426,
+          "path": "go-llm-gateway/pkg/testing/session_fixture_validator.go",
+          "sha256": "34d37831dc745d576a9322d2316835821a85f0af750d37edd0a5a9c523328e9c"
+        },
+        {
+          "bytes": 4254,
+          "path": "go-llm-gateway/pkg/testing/session_inferencer.go",
+          "sha256": "e1e5094a358fda7e0e24e14307a9b262edce718eab25d678978f78106a4ecc3e"
+        },
+        {
+          "bytes": 8343,
+          "path": "go-llm-gateway/pkg/testing/session_message.go",
+          "sha256": "baf0f0180faef1536251b5d453a45d9977c7dafdfb9c368ec1a367be67bbbd4a"
+        },
+        {
+          "bytes": 13543,
+          "path": "go-llm-gateway/pkg/testing/session_record.go",
+          "sha256": "42af47c9d9e178171a7165ef8a285a385a197e6ff2038515f607706a610786c8"
+        },
+        {
+          "bytes": 18502,
+          "path": "go-llm-gateway/pkg/testing/session_replay.go",
+          "sha256": "b96331f59c435142556e1e870c19ad9d2f4e68d37453050bac8582a21190bf61"
+        },
+        {
+          "bytes": 4987,
+          "path": "go-llm-gateway/pkg/testing/session_replay_probe.go",
+          "sha256": "60fd2b2d352b151d71b98d3e3c318deddfcbbeacf9bc91b81aa8c344f93370a0"
+        },
+        {
+          "bytes": 17283,
+          "path": "go-llm-gateway/pkg/testing/session_websocket_dialer.go",
+          "sha256": "b9007bc217ae9a8dbb2f6db9f5a8d7b45d8e8ffdb96b731e74331a2928b97a29"
+        },
+        {
+          "bytes": 2699,
+          "path": "go-llm-gateway/pkg/testing/shape.go",
+          "sha256": "4d4060b57350c899927725f99b56f8a816dfd861faa075ee5a4598e1b8b31a4e"
+        },
+        {
+          "bytes": 1117,
+          "path": "go-llm-gateway/pkg/transport/doc.go",
+          "sha256": "1835b6e9e49af277d213a71267c220e328ea9b158ea191b916021e9600d33f6c"
+        },
+        {
+          "bytes": 1421,
+          "path": "go-llm-gateway/pkg/transport/observation.go",
+          "sha256": "f8c2784033f7f32dd5f024d10de04ba0b0841c8f1c821115056d525d90777653"
+        },
+        {
+          "bytes": 1461,
+          "path": "go-llm-gateway/pkg/transport/transport.go",
+          "sha256": "38bd3fa4e981007b2dd41df85e79ee7eccb8a01cbe96d41e3437c9b114cc98b2"
+        },
+        {
+          "bytes": 120,
+          "path": "go.work",
+          "sha256": "bb93b21299499bd9d9264ccdc956e17ec3364e1f132f58f43282b0ff8a7c40bc"
+        },
+        {
+          "bytes": 13858,
+          "path": "go.work.sum",
+          "sha256": "771f6df0e159ddaf47d81d40b551fe555317fd56aeb3d97f904498dcf92b8307"
+        },
+        {
+          "bytes": 504,
+          "path": "scripts/webmcp-o0/go.mod",
+          "sha256": "71d723a3acb5ca533db3eee250ce3dcf3310a75639637833caae370cec16740a"
+        },
+        {
+          "bytes": 2005,
+          "path": "scripts/webmcp-o0/go.sum",
+          "sha256": "04eb870ca24e58c6411d792fba75ddeee070efde311f8614ce7052e767fc3809"
+        },
+        {
+          "bytes": 116,
+          "path": "test/localai/go.mod",
+          "sha256": "6067cbbeabc0bc516e5b705cfca561a5cdb5f73eff03809816a55664b60828d0"
+        },
+        {
+          "bytes": 175,
+          "path": "test/localai/go.sum",
+          "sha256": "1737d5523b7264df09b253e86e29f96af295a7bd18e0aaa4373c6099317e065f"
+        },
+        {
+          "bytes": 2179,
+          "path": "tests/embedding/go.mod",
+          "sha256": "2a79bc120e88defed4f7471828b787e41df7b03f19ca3cfcefc86e8fd513a9da"
+        },
+        {
+          "bytes": 9553,
+          "path": "tests/embedding/go.sum",
+          "sha256": "b9df060e0243716d25dddf722cd3e37dddb60eed33b9ad10905583d66af97918"
+        },
+        {
+          "bytes": 77,
+          "path": "tools/analyzergate/go.mod",
+          "sha256": "ef5e01554b12f59ef98098e7bf3e66b8471737043ee305d9bc9bdc3198585d54"
+        },
+        {
+          "bytes": 281,
+          "path": "tools/architecturegate/go.mod",
+          "sha256": "a4c6dfdb8d771c248916873b30474b440b1bc7b1f632057e6b75d3aa01ac8b38"
+        },
+        {
+          "bytes": 972,
+          "path": "tools/architecturegate/go.sum",
+          "sha256": "8dca124c637f103567b5c138761bde98edd4a950376626944d211755d64ff5d2"
+        },
+        {
+          "bytes": 77,
+          "path": "tools/coveragegate/go.mod",
+          "sha256": "aa4e046cc2276d9b4d23fb3a985f57cd7dfedc069a311e88929cc7f20891df07"
+        },
+        {
+          "bytes": 78,
+          "path": "tools/rtc-race-gate/go.mod",
+          "sha256": "6cc3a011fc42cb89e9a5c6acf6f19111847a6aefc9e2937c3d194cf2999fce10"
+        },
+        {
+          "bytes": 82,
+          "path": "tools/session-race-gate/go.mod",
+          "sha256": "2c7d1318f6958c05ed8e8915c43eb5ed9cb4ee20fd7f6debd34d4a814370904a"
+        },
+        {
+          "bytes": 74,
+          "path": "tools/timingate/go.mod",
+          "sha256": "e78570590bf4698e04e3d4fabe57abd1f53473510c6fd86341fb3ad43654dbc5"
+        }
+      ],
+      "build_inputs_sha256": "682150ed90a74ad7cf4570ded541d83329003a10cb2eec248971ab22a22dfd6a",
+      "command": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/build/c23-consumer",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/sources/c23/__c68_input__/c23/main.go"
+      ],
+      "consumer_source": "scratch/sources/c23/__c68_input__/c23/main.go",
+      "consumer_source_sha256": "0a8e8239614e5d8f87596e238153f44ddbe30f9d7e1cf123e37c084f2b69c3ec",
+      "revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+      "source_root": "scratch/sources/c23"
+    },
+    "c56": {
+      "binary": {
+        "bytes": 10608162,
+        "path": "scratch/build/c56-consumer",
+        "sha256": "a7bdbe354eb03b81bf3c60fa6d904750b3023bbda237255650d12b57487b7b1f"
+      },
+      "build_inputs": [
+        {
+          "bytes": 69933,
+          "path": "__c68_input__/c56/main.go",
+          "sha256": "0a8e8239614e5d8f87596e238153f44ddbe30f9d7e1cf123e37c084f2b69c3ec"
+        },
+        {
+          "bytes": 5117,
+          "path": "agent-cli/go.mod",
+          "sha256": "3546c664ee476c1726701292b5aa9db20b532af010ca74b610e81681b9e3b845"
+        },
+        {
+          "bytes": 23034,
+          "path": "agent-cli/go.sum",
+          "sha256": "b3d017ad5561d38878513c6ebc87054ba5ea4031bddf70420f9054a7c25281c1"
+        },
+        {
+          "bytes": 739,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c19-bounded-conversation-summary/consumer/go.mod",
+          "sha256": "2dcf1afeea0794f5f08546c07a73f56d6ea99d7b6ea74043106a2dae768e693e"
+        },
+        {
+          "bytes": 1173,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/go.mod",
+          "sha256": "2fb77900f9904a3383f779995808ed82a7ca023d68f2cf02c154f4c77b0740b7"
+        },
+        {
+          "bytes": 5445,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c27-headless-session-consumer/go.sum",
+          "sha256": "5ded9a9857ffd5aaaa75eda06420cb8baf0f6503df8a304d6c7de19c07c75d3a"
+        },
+        {
+          "bytes": 328,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/consumer/go.mod",
+          "sha256": "5ea71077ade9ef97a00666347af21a9ac1928ae3ecd2531e44657531230ed060"
+        },
+        {
+          "bytes": 219,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c30-frame-dimension-safety/consumer/go.sum",
+          "sha256": "2ab5bab01b0637952a659bcdf79ca2e54754d2fce4fd743305f8ca9e792e419d"
+        },
+        {
+          "bytes": 259,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c31-streaming-wav-source/consumer/go.mod",
+          "sha256": "1420f5a88d27432e99bfedaa4c92459429daadcd87bf46568ec5df831e4bb02c"
+        },
+        {
+          "bytes": 315,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/go.mod",
+          "sha256": "986e9f96e27c2093769b38318091838aabf32c4c191199e3f65112affcb09904"
+        },
+        {
+          "bytes": 893,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c35-canonical-pcm-byte-mixing/consumer/go.sum",
+          "sha256": "0eb084ae04738236d00d96d849c231482df0549e2456fcf8637f4bceb96c6857"
+        },
+        {
+          "bytes": 1049,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/go.mod",
+          "sha256": "965e2dc2c2692d9ec370297af9f6775295b79145591d0afcfeb2e311f61b31ae"
+        },
+        {
+          "bytes": 8734,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c36-room-media-epoch-consumer/go.sum",
+          "sha256": "cd3625865c88fd42e3877ae028315ecf38fc1d5a513c0b14ae8ffbd4f3695a82"
+        },
+        {
+          "bytes": 328,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/consumer/go.mod",
+          "sha256": "5ea71077ade9ef97a00666347af21a9ac1928ae3ecd2531e44657531230ed060"
+        },
+        {
+          "bytes": 219,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/consumer/go.sum",
+          "sha256": "2ab5bab01b0637952a659bcdf79ca2e54754d2fce4fd743305f8ca9e792e419d"
+        },
+        {
+          "bytes": 779,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-interactive-tool-policy/consumer/go.mod",
+          "sha256": "a5d983db4b2d4bd828bbe514af3fbb9467f31a7045b4e7f679086dcd0d04f826"
+        },
+        {
+          "bytes": 1422,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c40-retire-cli-interactive-tool-policy/consumer/go.sum",
+          "sha256": "ecb2b82b5075dda82a179e6505ce5dfe6309b4d1fcce349525f209afcfd8215d"
+        },
+        {
+          "bytes": 1183,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/consumer/go.mod",
+          "sha256": "7dda45757f7b7cc01dbe334663d51d3dac18a48a8e8209a59aabbb070c0f526a"
+        },
+        {
+          "bytes": 5445,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c41-retire-cli-instruction-composition/consumer/go.sum",
+          "sha256": "5ded9a9857ffd5aaaa75eda06420cb8baf0f6503df8a304d6c7de19c07c75d3a"
+        },
+        {
+          "bytes": 304,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/consumer/go.mod",
+          "sha256": "88e449a23418fbcff4871745b81324a6c68066ba3930dd21e5195b71a4d3fa6c"
+        },
+        {
+          "bytes": 893,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c42-capture-energy-software-coverage/consumer/go.sum",
+          "sha256": "0eb084ae04738236d00d96d849c231482df0549e2456fcf8637f4bceb96c6857"
+        },
+        {
+          "bytes": 822,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/consumer/go.mod",
+          "sha256": "74818e32b3ebd9f099968c48889abc7a39e40edc0fe53fafc6fc43c5514288a3"
+        },
+        {
+          "bytes": 1597,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c43-retire-cli-image-staging/consumer/go.sum",
+          "sha256": "5d7ccfed4060443eba555645f2e3f494bc8b3f1c7991d1d8d4204b7c82c1f94a"
+        },
+        {
+          "bytes": 1094,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/consumer/go.mod",
+          "sha256": "ec39d15053b0c247fbf0cc3bcde7b2a7a6f589cd0c7a773fe95bcfbcc6b2ea58"
+        },
+        {
+          "bytes": 5093,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c44-retire-cli-model-admission/consumer/go.sum",
+          "sha256": "300a2c432b65a891ff450112e48e510b74c9450f5a7821e23a1e6a6554910e19"
+        },
+        {
+          "bytes": 2170,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/consumer/go.mod",
+          "sha256": "0a9db8eb483494b28c83fe1835e1886490c96ed6a55331fa8aecbf9e488f30b7"
+        },
+        {
+          "bytes": 5368,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c51-audio-device-boundary-characterization/consumer/go.sum",
+          "sha256": "c40462d718201b5b14fdbcba7a88fcec6b005975d00d04d65cdf0024879151b6"
+        },
+        {
+          "bytes": 1098,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/go.mod",
+          "sha256": "bd8827d52643e6e3ab18cfec128c1210ffe57d54f2d34adc934f4d9372e6fa58"
+        },
+        {
+          "bytes": 858,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c53-provider-close-terminal-drain/go.sum",
+          "sha256": "3f10bf5b2fa1152297f1ce621e1d49c3610392f9e950a90f267475fb7ad4e24a"
+        },
+        {
+          "bytes": 1236,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/consumer/go.mod",
+          "sha256": "bf055db97a8de4cfc637a58807c57c874e9268bb788a5b13086732addba2ae43"
+        },
+        {
+          "bytes": 5969,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c54-room-document-admission/consumer/go.sum",
+          "sha256": "6d23fab671bf0e3ff790dcbc5bef50d8b54271ba7a34a11a6ebae4895e896434"
+        },
+        {
+          "bytes": 1123,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/go.mod",
+          "sha256": "0f02eca7c0ee05fbb55e5b91b6b0323bd9d63ee901789457b4d0a09659e44007"
+        },
+        {
+          "bytes": 1009,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c55-room-participant-mesh/go.sum",
+          "sha256": "f3ce007522e789ffb699ea5fe3fba64402a26e31c99958f0b744bd32ba01a926"
+        },
+        {
+          "bytes": 992,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/consumer/go.mod",
+          "sha256": "38da0ac8388c05068cfdef412a8d03af27d262b799d936acdd62ba06f535aa99"
+        },
+        {
+          "bytes": 5093,
+          "path": "docs/temp/projects/audio-runtime/audio-runtime-c56-retire-cli-recording-orchestration/consumer/go.sum",
+          "sha256": "300a2c432b65a891ff450112e48e510b74c9450f5a7821e23a1e6a6554910e19"
+        },
+        {
+          "bytes": 289,
+          "path": "go-agent-loop/go.mod",
+          "sha256": "a1b13c5848187066d2aedfa0bc6a2d8bfc26e501c687160de6669691eac274f6"
+        },
+        {
+          "bytes": 893,
+          "path": "go-agent-loop/go.sum",
+          "sha256": "0eb084ae04738236d00d96d849c231482df0549e2456fcf8637f4bceb96c6857"
+        },
+        {
+          "bytes": 25108,
+          "path": "go-agent-loop/pkg/agentloop/agent_loop.go",
+          "sha256": "3c8bc75979832c82ddc195ab9357b0138d080b26f465f769aea9c961466bd038"
+        },
+        {
+          "bytes": 3808,
+          "path": "go-agent-loop/pkg/agentloop/execute_input.go",
+          "sha256": "2bc8760fb6b8c0ec91203e3b5313656852fb34f9478005459d543cabb86222f9"
+        },
+        {
+          "bytes": 11132,
+          "path": "go-agent-loop/pkg/agentloop/execute_result.go",
+          "sha256": "eb9e23395466893e4613e292ae896b157af6c6999fea15f2a292327a29960027"
+        },
+        {
+          "bytes": 4834,
+          "path": "go-agent-loop/pkg/agentloop/interfaces.go",
+          "sha256": "ada6d907b2adc9bd52c41f890b2f9f39af1f24d87c24bc12784e457889e7758a"
+        },
+        {
+          "bytes": 5459,
+          "path": "go-agent-loop/pkg/agentloop/iterative_loop.go",
+          "sha256": "00a0a014926680746939f8a15e6ba441bd14d1634931272eee6e1efab37f6a18"
+        },
+        {
+          "bytes": 10253,
+          "path": "go-agent-loop/pkg/agentloop/options.go",
+          "sha256": "20d6777fdae00413dd0aa91a3f29bd7d9ec99ed2668dfef7973ddd92f23d859e"
+        },
+        {
+          "bytes": 13458,
+          "path": "go-agent-loop/pkg/engine/engine.go",
+          "sha256": "85febc544052ca064c8bf83942300accbd0e8bfe8db0541ae897e78d3eec2a08"
+        },
+        {
+          "bytes": 878,
+          "path": "go-agent-loop/pkg/engine/mode.go",
+          "sha256": "ec531debf5b91687786091072d477d59ab51df882aaf67559e214d0269adae99"
+        },
+        {
+          "bytes": 14486,
+          "path": "go-agent-loop/pkg/engine/ordering.go",
+          "sha256": "e76b7c8a4c619437e7fd1c902f3f66dd82b033e55f0b23112a92527c7d359c86"
+        },
+        {
+          "bytes": 4517,
+          "path": "go-agent-loop/pkg/engine/ordering_history.go",
+          "sha256": "eb43b41df946d18e35f96304ac9cd0f2fd4828c6b8590d584aa7092a42ef6624"
+        },
+        {
+          "bytes": 1815,
+          "path": "go-agent-loop/pkg/engine/state.go",
+          "sha256": "e89ff91a9fba5e2c00bb6458b01295077d0506e9e785fd3dbcd4847a5b7b4959"
+        },
+        {
+          "bytes": 1052,
+          "path": "go-agent-loop/pkg/engine/tick.go",
+          "sha256": "1293c08009033ecc41a28cdd1969baa69311f58aa8964b60e326f3acac8aa598"
+        },
+        {
+          "bytes": 8396,
+          "path": "go-agent-loop/pkg/logging/logger.go",
+          "sha256": "27848cd3e7e61ce93451065bfd28b59bba82fb29bbe6ebe8f3fff015838872c1"
+        },
+        {
+          "bytes": 7939,
+          "path": "go-agent-loop/pkg/messages/agent_messages.go",
+          "sha256": "32f7cd58c1dc739edd2547152b3b3265b249433db12ae7f7fd48f900e8e88ab9"
+        },
+        {
+          "bytes": 5720,
+          "path": "go-agent-loop/pkg/messages/audio_values.go",
+          "sha256": "49e330e8427636b990434ac3090e3d40f422bd8c910ea74ae32d0f88fcd2342f"
+        },
+        {
+          "bytes": 7217,
+          "path": "go-agent-loop/pkg/messages/buffers.go",
+          "sha256": "83cf1b2804bd1586cbd7d8a192d160466d291baa55206cec7bdf09255bae1776"
+        },
+        {
+          "bytes": 747,
+          "path": "go-agent-loop/pkg/messages/doc.go",
+          "sha256": "7d3e32ad05678fa342db7236366a09a20848e0b26de45536db53258c59e42115"
+        },
+        {
+          "bytes": 3285,
+          "path": "go-agent-loop/pkg/messages/interaction_events.go",
+          "sha256": "4016e13214a6563930ca7d4af16b73543b2ed8255a4b7c15065c338576105cb3"
+        },
+        {
+          "bytes": 278,
+          "path": "go-agent-loop/pkg/messages/participant_ids.go",
+          "sha256": "148b546d0e4dc635dc484cd3509bfc4e3597278c333dd44980ad50c6f99b6e20"
+        },
+        {
+          "bytes": 4380,
+          "path": "go-agent-loop/pkg/messages/participant_messages.go",
+          "sha256": "8b579840638f049042bd498585b93a60a94a9ec98eb5e82f6736cbd752e6a477"
+        },
+        {
+          "bytes": 9639,
+          "path": "go-agent-loop/pkg/messages/reconstruction.go",
+          "sha256": "cb86e4b4c46b3d22f45c8071a1699305e733a062516dfc23fb1729704469510b"
+        },
+        {
+          "bytes": 6496,
+          "path": "go-agent-loop/pkg/messages/session.go",
+          "sha256": "835ba730d368003dfb2bf593bce6292b29dc0a75ad174d45338652af109f1855"
+        },
+        {
+          "bytes": 1585,
+          "path": "go-agent-loop/pkg/messages/session_audio_input.go",
+          "sha256": "02537b30a1cbe043423f7e317634452e354c9a6c55e3c6b0342c6e72e35916cd"
+        },
+        {
+          "bytes": 3221,
+          "path": "go-agent-loop/pkg/messages/session_drops.go",
+          "sha256": "90875c46c22b0fda8acf6f5b13cb1494e0c51bc320051841f6787b2a641909ad"
+        },
+        {
+          "bytes": 8131,
+          "path": "go-agent-loop/pkg/messages/session_values.go",
+          "sha256": "ec698839f66ab4897bbb4b9695d39c8e95003f26bd5cf252326d2e8ae1cf0c88"
+        },
+        {
+          "bytes": 17567,
+          "path": "go-agent-loop/pkg/messages/stream_types.go",
+          "sha256": "5d3f0a3bdaa31f905ea03220e812314216958690b31105665316079e627bcaf3"
+        },
+        {
+          "bytes": 12442,
+          "path": "go-agent-loop/pkg/messages/terminal_values.go",
+          "sha256": "66fd17da110c5d7eb7c8cb05bc058d028d44fee1eee31b7fa4600a13fd34a663"
+        },
+        {
+          "bytes": 1304,
+          "path": "go-agent-loop/pkg/messages/tool_order.go",
+          "sha256": "00df9c9d79f202afb65e77133a5c1a0bce74dda0a45e6a36b3107cb96fb611bc"
+        },
+        {
+          "bytes": 2938,
+          "path": "go-agent-loop/pkg/messages/tool_values.go",
+          "sha256": "5c722811b1d072b6bb2aee36e8f059adb74f99d0d70f877059ef8a99a618f320"
+        },
+        {
+          "bytes": 1003,
+          "path": "go-agent-loop/pkg/participants/interaction_runner.go",
+          "sha256": "30743cf972dfdde0b8e41b4751a464aefe6ffb2d9ccb0d0fc3d153797eb99dc3"
+        },
+        {
+          "bytes": 8651,
+          "path": "go-agent-loop/pkg/participants/kernel_runner.go",
+          "sha256": "9850da780b0571a252fcf288e88491f8da89a43001876f932788685b91a9bfb8"
+        },
+        {
+          "bytes": 24658,
+          "path": "go-agent-loop/pkg/participants/model_runner.go",
+          "sha256": "1d9ecdedd4b4fbd14224b31cb011dbc6face78c74358d3c7d1308a21dfc2cefc"
+        },
+        {
+          "bytes": 4583,
+          "path": "go-agent-loop/pkg/participants/model_runner_failure.go",
+          "sha256": "8f0ee5ec36123798dc52698e6d961ef6d1b928ec96be2f8d80444a01411bf47f"
+        },
+        {
+          "bytes": 12191,
+          "path": "go-agent-loop/pkg/participants/model_runner_inference.go",
+          "sha256": "92c831c688caf81abb271cc2abedd61671480f526ee46998e0c496adc1d6da47"
+        },
+        {
+          "bytes": 17094,
+          "path": "go-agent-loop/pkg/participants/model_runner_session.go",
+          "sha256": "7f39cd7d538fd705fe45a512d868a675338e0db5a0cdd16bb90d2402cddfd7a7"
+        },
+        {
+          "bytes": 12284,
+          "path": "go-agent-loop/pkg/participants/model_runner_session_tools.go",
+          "sha256": "cf66e693dadaba3e4db6c32614e698227b4c6237e099fe9e9fed5e358be574e4"
+        },
+        {
+          "bytes": 1532,
+          "path": "go-agent-loop/pkg/participants/runner.go",
+          "sha256": "3302894011b1fac66094df0f209c180445fecfa5c78285b4d1af5113bb951f47"
+        },
+        {
+          "bytes": 14800,
+          "path": "go-agent-loop/pkg/participants/tool_runner.go",
+          "sha256": "c6fce6f1ae3c6137dd92484572a52bc49fa1076f543591c7c3731bc647e4a3d1"
+        },
+        {
+          "bytes": 2963,
+          "path": "go-agent-loop/pkg/participants/user_runner.go",
+          "sha256": "7e514aa3cba72bf55caa3785ef39e9afcf582766e9d2821a41d33fe0c4c5e760"
+        },
+        {
+          "bytes": 6694,
+          "path": "go-agent-loop/pkg/probe/acceptance.go",
+          "sha256": "1aeb2c3e4afde9156de04c2f964bda135ff1e92b98dc9c93e14074446b25de96"
+        },
+        {
+          "bytes": 38512,
+          "path": "go-agent-loop/pkg/probe/barge_in_oracle.go",
+          "sha256": "49e5353776f78affc7ce687ee14aa2dd5a8e204a74546141a770311c15f9d2ec"
+        },
+        {
+          "bytes": 30184,
+          "path": "go-agent-loop/pkg/probe/deadguard.go",
+          "sha256": "ad5f3e8ff81ac316a06c5f498c9cceef699c59dfe286e06443b87890c6f3fc4d"
+        },
+        {
+          "bytes": 26440,
+          "path": "go-agent-loop/pkg/probe/expect.go",
+          "sha256": "ca126edfa6a6ecc632a1767a873ebe481a9dabddb54c3582333587871d4701e7"
+        },
+        {
+          "bytes": 7194,
+          "path": "go-agent-loop/pkg/probe/fleetgate.go",
+          "sha256": "e1f0946f5c3ed3aef042df1e7a8e0b9fae91a7bb2eb0c7dd9ccd0876fbdb7465"
+        },
+        {
+          "bytes": 15270,
+          "path": "go-agent-loop/pkg/probe/friction_report.go",
+          "sha256": "2a3802b16a1c4da965a34f7f9798175d1e9ee52c31646a4e926f3caa0a9c7b5e"
+        },
+        {
+          "bytes": 13257,
+          "path": "go-agent-loop/pkg/probe/goal_catalog.go",
+          "sha256": "ad2b1ab143db5dabd76d77f93b98675a7bd2123cf1afcf63dbd03c0d7c47bfe8"
+        },
+        {
+          "bytes": 1312,
+          "path": "go-agent-loop/pkg/probe/goal_run_input.go",
+          "sha256": "2d9b9a873d0ec8369612bfac4191acea321a9571530227cf3b64e15edec26bea"
+        },
+        {
+          "bytes": 7621,
+          "path": "go-agent-loop/pkg/probe/runner.go",
+          "sha256": "f91cb6a665634c5a6c558e90d60cded8fd609f1c96ce6f12ee4b76edc5dc9786"
+        },
+        {
+          "bytes": 7845,
+          "path": "go-agent-loop/pkg/probe/scenario.go",
+          "sha256": "64d2360e216f48a11475fe7f9f5cbb3f971d49bd8a1a264b426d5ac55d11b4f5"
+        },
+        {
+          "bytes": 12459,
+          "path": "go-agent-loop/pkg/probe/scenario_decode.go",
+          "sha256": "1436acdc28f851eea8c55a0a3fef8621bb184d9a8cac3218c8979969398ac753"
+        },
+        {
+          "bytes": 2457,
+          "path": "go-agent-loop/pkg/probe/scenario_error_auth.go",
+          "sha256": "4b234893a2b82b993be68e1aba18f5419098490c257f84b815b0cd1c869f10df"
+        },
+        {
+          "bytes": 3213,
+          "path": "go-agent-loop/pkg/probe/scenario_error_disconnect.go",
+          "sha256": "a1dd27ba2465a6ea48a3df66739e42517fd3749974e9a8b56d305cb5eed59a02"
+        },
+        {
+          "bytes": 2918,
+          "path": "go-agent-loop/pkg/probe/scenario_error_malformed_response.go",
+          "sha256": "106f8db03eec9438b7cc36e9964034a8240dd9e6249ace7b8caca95e9baabd76"
+        },
+        {
+          "bytes": 2382,
+          "path": "go-agent-loop/pkg/probe/scenario_error_rate_limit.go",
+          "sha256": "f502310da8fb6b8216408436be7283b7c100c7672609127e198a50c1ae3f02e1"
+        },
+        {
+          "bytes": 1293,
+          "path": "go-agent-loop/pkg/probe/scenario_expectation_fields.go",
+          "sha256": "eafe9765267ed8a1b43803fcc71546c867568ecd32240baa8b9d3a48fb1d38e7"
+        },
+        {
+          "bytes": 10010,
+          "path": "go-agent-loop/pkg/probe/scenario_expectations.go",
+          "sha256": "94af024227aa7c2e781d9ebaa80252968e07f7be00d33fd75b1c8c46b5089ca2"
+        },
+        {
+          "bytes": 942,
+          "path": "go-agent-loop/pkg/probe/scenario_measurable.go",
+          "sha256": "e25b8654546fa0dc454fce4027c5e0f38f18670061967269fa94fa09089b3718"
+        },
+        {
+          "bytes": 647,
+          "path": "go-agent-loop/pkg/probe/scenario_s2s_v1_text_in_audio_out.go",
+          "sha256": "baeda1bf2dab65c031a197a1609d830d512c4e318e2e2d73fe961369bd23a23a"
+        },
+        {
+          "bytes": 4539,
+          "path": "go-agent-loop/pkg/probe/scenario_s2s_v3a_barge_in_basic.go",
+          "sha256": "e8cd89502f8a49b1b2b9bc93f6c73254bd5ea3173148758612b6d8c86a8ff542"
+        },
+        {
+          "bytes": 3763,
+          "path": "go-agent-loop/pkg/probe/scenario_s2s_v3b_barge_in_tool_result.go",
+          "sha256": "cffdfa93b977f0814f3cbbc5838fb3a3743c692dc1c1caa1308032de9eb19a98"
+        },
+        {
+          "bytes": 6028,
+          "path": "go-agent-loop/pkg/probe/scenario_s2s_v3c_barge_in_repeated.go",
+          "sha256": "cf4990e9bb1f847d5e7e9ff704ad432c6356196e6f59b8ab505fb75e001e01c8"
+        },
+        {
+          "bytes": 2432,
+          "path": "go-agent-loop/pkg/probe/scenario_s2s_v7a_metrics_modality.go",
+          "sha256": "883702e4f3f35e7ab757cb0d540418d3b65765359d97b3cf57aad8e42313af63"
+        },
+        {
+          "bytes": 18169,
+          "path": "go-agent-loop/pkg/probe/scenario_v2.go",
+          "sha256": "af5770f96e1b951298f7e4116cd0b74e9a02e4e174ef9b2a77486ee9dcaa2f67"
+        },
+        {
+          "bytes": 9678,
+          "path": "go-agent-loop/pkg/probe/scenario_v2_decode.go",
+          "sha256": "e2e88ca7ffe8df3eb958e77ab691523866e083ee9952824f732a8fb9f6f8e0c1"
+        },
+        {
+          "bytes": 11458,
+          "path": "go-agent-loop/pkg/probe/scenario_v2_loading.go",
+          "sha256": "11c5e83a2da7f0bceda5f92d3dc6d864a321bba264ab4e440ab6a42e0eaaf193"
+        },
+        {
+          "bytes": 4370,
+          "path": "go-agent-loop/pkg/probe/scenario_v2_paths.go",
+          "sha256": "2ecf8f58ca60f24537af9d1eeb8bb09a40dd0b793dc366fe54be97616be75711"
+        },
+        {
+          "bytes": 11551,
+          "path": "go-agent-loop/pkg/probe/scenario_v2_validation.go",
+          "sha256": "79cb33ca0e32e04fd9dac7e95198eb9a1fb96b26b3b5b975b1b2186b9f0a59c6"
+        },
+        {
+          "bytes": 12463,
+          "path": "go-agent-loop/pkg/probe/scenario_validation.go",
+          "sha256": "a163482e7e36b79444e38f573b101f6d02da2123d4aaf4aa070e54d8e46050d7"
+        },
+        {
+          "bytes": 8884,
+          "path": "go-agent-loop/pkg/probe/sequencing.go",
+          "sha256": "d4da0cf4eb1f08b68c499a48262794afd8647caa4bf912baba8f20cfa5884f6b"
+        },
+        {
+          "bytes": 2006,
+          "path": "go-agent-loop/pkg/probe/testdata/goal_catalog.json",
+          "sha256": "f0a9f9607d9961a8e0c1191a5236c100be1d7f125710dd75c952fe2108f4ecad"
+        },
+        {
+          "bytes": 5367,
+          "path": "go-agent-loop/pkg/state/state_loop.go",
+          "sha256": "7bb5af3ca85709b07bd5423f8fe51d8613c7ed2bc0440b4efb2fc9d2a9e54623"
+        },
+        {
+          "bytes": 703,
+          "path": "go-agent-loop/pkg/state/todo_queue.go",
+          "sha256": "cd16f8f38cb2721350a0e184d66f24f19be89e4487b74f7e92e4c6e968494979"
+        },
+        {
+          "bytes": 3879,
+          "path": "go-agent-loop/pkg/subsystems/audio/audio.go",
+          "sha256": "8dc6b8e65d590d27fad4ab8565619b78da76090f3d31a57c698dfa17862c0f85"
+        },
+        {
+          "bytes": 3857,
+          "path": "go-agent-loop/pkg/subsystems/context_pressure_notifier.go",
+          "sha256": "0d63f58a44f1d4a54c54dcc8623726a5233e0949df772aa6394ba0eb44dc4d96"
+        },
+        {
+          "bytes": 14969,
+          "path": "go-agent-loop/pkg/subsystems/coordinator.go",
+          "sha256": "f92646d25c980e6b78d7dbdff37d9e83ea52bda44fdae20e4bc886c7dd030309"
+        },
+        {
+          "bytes": 7538,
+          "path": "go-agent-loop/pkg/subsystems/coordinator_delta.go",
+          "sha256": "ba9f4c1aa58ac1d22fbe91506fa117de35527f414bd9eaeae02f0bb6db72bd1a"
+        },
+        {
+          "bytes": 6215,
+          "path": "go-agent-loop/pkg/subsystems/interaction_events.go",
+          "sha256": "0031d51ae39b55e136c9fb246cc25492a67b029d543717c33ae4dba509af3a4d"
+        },
+        {
+          "bytes": 1397,
+          "path": "go-agent-loop/pkg/subsystems/interfaces.go",
+          "sha256": "8533e14fbc3de9f7614cc6b9f9536a41ea2140835170a7b23ad4fbe8e18ebeba"
+        },
+        {
+          "bytes": 6459,
+          "path": "go-agent-loop/pkg/subsystems/interrupt_handler.go",
+          "sha256": "09d941fb4759d48adbdc431654449202b83de9a2052bfbf2103dd73a98b99caf"
+        },
+        {
+          "bytes": 2571,
+          "path": "go-agent-loop/pkg/subsystems/ping_pong.go",
+          "sha256": "e3dea358704901442a508d2442dd753a3185e0997f29c0d53903fc4775d31760"
+        },
+        {
+          "bytes": 1139,
+          "path": "go-agent-loop/pkg/subsystems/recorder.go",
+          "sha256": "ab93dde2c41b4b1328c0004788fa90bf125a1f815ae463db8bde850e6b4bdaaf"
+        },
+        {
+          "bytes": 1591,
+          "path": "go-agent-loop/pkg/subsystems/token_counter.go",
+          "sha256": "1420b3fa70ad96d6ac69dcdd39925b95830eee90a90c893be3ba8dfe0656d88e"
+        },
+        {
+          "bytes": 7331,
+          "path": "go-agent-loop/pkg/subsystems/tool_result_forwarder.go",
+          "sha256": "0f7fdcec06c99dc62fc111d7e8d64a555e798476e0a11c2a24c4046c3611cc6c"
+        },
+        {
+          "bytes": 8566,
+          "path": "go-agent-loop/pkg/transcript/agent.go",
+          "sha256": "4b8c1eed49cd6dd7c2ff7d91d0b86bb3e5e7e51f1ec15ae352d5571986c98914"
+        },
+        {
+          "bytes": 25240,
+          "path": "go-agent-loop/pkg/transcript/browser_manifest.go",
+          "sha256": "9649db4c6d376a9e8b0bfb978aadc710963444fac7d0f1856fa339dfbb513bf9"
+        },
+        {
+          "bytes": 5497,
+          "path": "go-agent-loop/pkg/transcript/client.go",
+          "sha256": "d6e986cfde54baa1b5cb8f0074212cf546e963705ab92922ee4a545e5fd8f184"
+        },
+        {
+          "bytes": 6099,
+          "path": "go-agent-loop/pkg/transcript/frame.go",
+          "sha256": "0444a61759c5f50195481237b5000d2332a048471fa0a79d4e6df7f96c2e08f0"
+        },
+        {
+          "bytes": 46747,
+          "path": "go-agent-loop/pkg/transcript/manifest.go",
+          "sha256": "83e0642c91f219cd84b96626d1bf7163f9803e27e8e5c4f82fe74cb0e6ada48e"
+        },
+        {
+          "bytes": 6227,
+          "path": "go-agent-loop/pkg/transcript/manifest_stream.go",
+          "sha256": "4d1e236df0b8a92200547dcde64b386d41164cb0fff66352410debc6b94afac4"
+        },
+        {
+          "bytes": 5195,
+          "path": "go-agent-loop/pkg/transcript/tee.go",
+          "sha256": "6fac408bdff8b77a3cb287742df9e3e57e37e5a061d1655640f66908ca0ff676"
+        },
+        {
+          "bytes": 14566,
+          "path": "go-agent-loop/pkg/transcript/writer.go",
+          "sha256": "7c17c0d25a02620ff3f83a7405d41b20ca1bdd6b195fc6692d990d9f19adbc84"
+        },
+        {
+          "bytes": 7302,
+          "path": "go-agent-loop/test/functional/timeharness/harness.go",
+          "sha256": "abdfead6391db6bb97a098356933b65ed7922f5d7e238b0a5d1a39059a9f7b27"
+        },
+        {
+          "bytes": 4970,
+          "path": "go-agent-runtime/go.mod",
+          "sha256": "b58a34441c4d35a0bccc2f46b1e1e84d20afb8bde8da147e9415601d94623150"
+        },
+        {
+          "bytes": 23034,
+          "path": "go-agent-runtime/go.sum",
+          "sha256": "b3d017ad5561d38878513c6ebc87054ba5ea4031bddf70420f9054a7c25281c1"
+        },
+        {
+          "bytes": 7973,
+          "path": "go-agent-runtime/services/devices/contract.go",
+          "sha256": "ef9ad3f05190eae0031a32a229bd7f50bbe183e74b6016dee3d3db8766e00ac4"
+        },
+        {
+          "bytes": 856,
+          "path": "go-agent-runtime/services/providers/model_admission.go",
+          "sha256": "6a90f5d82c30f0535832c98a1a0c114dc494c90679270c6efd1a2bf3f08ed0f6"
+        },
+        {
+          "bytes": 2337,
+          "path": "go-agent-runtime/services/providers/models.go",
+          "sha256": "53f5a4126f63237cc0324e0ca9544ba8c344e05f1d4d6687250a9120cac1120e"
+        },
+        {
+          "bytes": 3839,
+          "path": "go-agent-runtime/services/providers/service.go",
+          "sha256": "a2a1e3acaee4af6fb25fa6c9f10ea8eb6bec97ecfc7cd6e6dc01950d9b81ea27"
+        },
+        {
+          "bytes": 11437,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory.go",
+          "sha256": "3bdec26ea51c3e2ca91af99b79e786ac4b8003dd83f58724eeedcd6ed1cfa9ba"
+        },
+        {
+          "bytes": 12989,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_capture.go",
+          "sha256": "84e8d188be22a04108c0e130535e7b6986c586a4c5e05260e60690a8c4e52350"
+        },
+        {
+          "bytes": 10147,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_conversation.go",
+          "sha256": "36cbbcde466fd306f3e4d91f333e0fcfaa62ebbb54a41f6b179a1d383359b435"
+        },
+        {
+          "bytes": 10861,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_conversation_projection.go",
+          "sha256": "36b05b77f95982ae253fbde6a96cdeb7e45f4f362779961fe40e620c0c0b85f7"
+        },
+        {
+          "bytes": 10224,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_destination.go",
+          "sha256": "e59b9d0ee0a61d7e212bdc3525a9696a0c71319d6a37360c2d4f637d604d9074"
+        },
+        {
+          "bytes": 14889,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_finalize.go",
+          "sha256": "8c4a17dcf3881f717b43be1d19f1980d9b60245626612b39b8dd6070f9762566"
+        },
+        {
+          "bytes": 3713,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_provider.go",
+          "sha256": "f60f68e6e0bfe5a27ac66f923c7d6cb47c121b7d98710d3292381dc81a5c88cd"
+        },
+        {
+          "bytes": 1736,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_response_audio.go",
+          "sha256": "23923261e401e962af67658e6a810ba36c24f1b6e18f7c797f1ed3a8198004dc"
+        },
+        {
+          "bytes": 7432,
+          "path": "go-agent-runtime/services/recording/internal/evidence/directory_sidecar.go",
+          "sha256": "6e7aaa5be000b4bebe017cecbd1c64ab0ba0840c38feb4620650a49852d50970"
+        },
+        {
+          "bytes": 12066,
+          "path": "go-agent-runtime/services/recording/internal/evidence/provider_spool.go",
+          "sha256": "64d0431da95e6dc27eb7a346666f402a68a4877ba12e7b42e33252e67cbd4d9c"
+        },
+        {
+          "bytes": 9579,
+          "path": "go-agent-runtime/services/recording/internal/evidence/provider_spool_io.go",
+          "sha256": "0dbf573796aa38eb5eb63a406ea1960308058ba9c77fee905d4bcd83f3c0c042"
+        },
+        {
+          "bytes": 1583,
+          "path": "go-agent-runtime/services/recording/internal/service/service.go",
+          "sha256": "99061bf17b58f72268628a0f6d9ad72262755b1594c3329135c9affcce942a6f"
+        },
+        {
+          "bytes": 2861,
+          "path": "go-agent-runtime/services/recording/internal/service/session.go",
+          "sha256": "fbf911dbeca624055f5d6f9749a3940485c702eecfa9b3e2e81b2f6a8ce4348b"
+        },
+        {
+          "bytes": 15392,
+          "path": "go-agent-runtime/services/recording/internal/session/augment.go",
+          "sha256": "5a104f24001b82080a5f0463ce5353d7e7755a70060df6e848c4b1b14d3630b9"
+        },
+        {
+          "bytes": 3607,
+          "path": "go-agent-runtime/services/recording/internal/session/augment_log.go",
+          "sha256": "cb0f022eef5adcd94777c6b0858e85850172f388d9f8430ba66579e4b1276743"
+        },
+        {
+          "bytes": 6590,
+          "path": "go-agent-runtime/services/recording/internal/session/browser.go",
+          "sha256": "cc6649bace72f83fab070e7eecbf865d4fef6bffd241a159f5b9c2b559f069b7"
+        },
+        {
+          "bytes": 8211,
+          "path": "go-agent-runtime/services/recording/internal/session/browser_events.go",
+          "sha256": "9a8cbf8e9d516702de57323cede5c057d49f677322ad5023a18f6ed50e7038b8"
+        },
+        {
+          "bytes": 3847,
+          "path": "go-agent-runtime/services/recording/internal/session/browser_redaction.go",
+          "sha256": "bbc23916de9ad8f9ee3e3ae8d29b69b7c508518f3c3862044242ff070e6f9822"
+        },
+        {
+          "bytes": 7357,
+          "path": "go-agent-runtime/services/recording/internal/session/image.go",
+          "sha256": "b57edd0bcc4b842c02f85a95a8f5f18ff196c438522a820d126c974cb93b8c03"
+        },
+        {
+          "bytes": 6630,
+          "path": "go-agent-runtime/services/recording/internal/session/projection.go",
+          "sha256": "61b1842994ce014ba622b887e4c14abe7113b7a3f2c5b1a48909a88f0951b6ad"
+        },
+        {
+          "bytes": 6729,
+          "path": "go-agent-runtime/services/recording/internal/session/recorded_session.go",
+          "sha256": "69031a11419dba37e57b4a00ea4fa1d3b82cf41ef17893bc4cc7ecd8b2bdc346"
+        },
+        {
+          "bytes": 2989,
+          "path": "go-agent-runtime/services/recording/internal/session/recorder_finalize.go",
+          "sha256": "a51fec25bd4362c6d2ef30198a33143661d7abb638250687db98a388156597a8"
+        },
+        {
+          "bytes": 7771,
+          "path": "go-agent-runtime/services/recording/internal/session/recorder_observe.go",
+          "sha256": "00d2086db653df9722dbb17be4dd0187fff0ec49bd0b4fd4110db121aa442ea1"
+        },
+        {
+          "bytes": 3528,
+          "path": "go-agent-runtime/services/recording/internal/session/service.go",
+          "sha256": "d9df1f351fb75fc145907bae4219f7a3ca6f4d7482383707a1a1a666419c86bb"
+        },
+        {
+          "bytes": 7619,
+          "path": "go-agent-runtime/services/recording/service.go",
+          "sha256": "97ec6478cb62e075a80ddceb2531cd452da6f6845da6f7d4f1e27c9a0bf30c96"
+        },
+        {
+          "bytes": 4427,
+          "path": "go-agent-runtime/services/recording/session.go",
+          "sha256": "522b8ebfda23edde8bc41713aa32a483406c187928a163067e2aaecfb78decc7"
+        },
+        {
+          "bytes": 291,
+          "path": "go-agent-runtime/services/recording/wire/session.go",
+          "sha256": "51218ea2195eaf3dd5f96c62538f1bad61462d4b1bf6115abc5c3cf10ff4bb31"
+        },
+        {
+          "bytes": 863,
+          "path": "go-agent-runtime/services/recording/wire/session_gen.go",
+          "sha256": "b4f4c9fc1dd0f306b9489df68806590cad5b1955746bf24684027f5e290f41c2"
+        },
+        {
+          "bytes": 718,
+          "path": "go-agent-runtime/services/recording/wire/wire_gen.go",
+          "sha256": "b7d80eef2267bdb2e39ef2a492a6b3c941324e595ea6d6e4a6ee1bd432e49035"
+        },
+        {
+          "bytes": 3420,
+          "path": "go-agent-runtime/services/session/instructions.go",
+          "sha256": "e4e18a756f87005c7631c333a9c82c9f68ab983e34a4f8e6e98b87eb482caedb"
+        },
+        {
+          "bytes": 4613,
+          "path": "go-agent-runtime/services/session/internal/execution/config.go",
+          "sha256": "60b2b1a741adb965045c7be28f55eeb2dd93c383a0c8a31ce7a398351e857837"
+        },
+        {
+          "bytes": 8370,
+          "path": "go-agent-runtime/services/session/internal/execution/executor.go",
+          "sha256": "641c68e9b5d58c0e10b328c10d6e730804ea3d98eb0296414e0b3e0dac86bafc"
+        },
+        {
+          "bytes": 6348,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_build.go",
+          "sha256": "f03c0387fded6cd0f030d547769abfd8452ac60636fedbc1663f81ef24d9f542"
+        },
+        {
+          "bytes": 2320,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_errors.go",
+          "sha256": "91a60adf10a6704843116bdb875b921477b32742714bee09fb886a661e4d1f88"
+        },
+        {
+          "bytes": 4184,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_iteration_state.go",
+          "sha256": "d9d8749ffe5b18265577347962e0376068b476c3b80b59436eb374325064b56f"
+        },
+        {
+          "bytes": 14350,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_iterative.go",
+          "sha256": "4f37f07b161e0f875e22056517035b6e8183c26f5a50137ce19c03999380f89a"
+        },
+        {
+          "bytes": 3999,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_request.go",
+          "sha256": "59be0d52f5be519f61c6a1a4e5d1e3c0bb325daf4bff119c89409f890bcbce47"
+        },
+        {
+          "bytes": 2413,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_result.go",
+          "sha256": "9335c5d65db75e22f13c53370b3a323bfd9d0d3260e254681af9646896f4afcd"
+        },
+        {
+          "bytes": 7184,
+          "path": "go-agent-runtime/services/session/internal/execution/executor_run.go",
+          "sha256": "2e1a26a900851bcd85ee935baccad74ff1bab6733550daa0822bdd43a4721458"
+        },
+        {
+          "bytes": 2931,
+          "path": "go-agent-runtime/services/session/internal/input/request.go",
+          "sha256": "4d1a0a4edf265b0a5267ead1df182d3e440e6f6b7132911bf6ddb0f8544d29e8"
+        },
+        {
+          "bytes": 3152,
+          "path": "go-agent-runtime/services/session/internal/input/validate.go",
+          "sha256": "bb0e9f06cb92bb180a5f2f4bdac64a0567958e6fa876b9f95a2a303ff8162bcf"
+        },
+        {
+          "bytes": 12419,
+          "path": "go-agent-runtime/services/session/internal/instructions/service.go",
+          "sha256": "15b134651b2edcc6ce2cb2df5a06e938fb7eb026a910e68ea8aefab7bd781b19"
+        },
+        {
+          "bytes": 11748,
+          "path": "go-agent-runtime/services/session/internal/live/continuation.go",
+          "sha256": "c9c5ce0257bf5e60c65b119c66b336009dc6c8ee9eeaf2c4d287de77669b0e2b"
+        },
+        {
+          "bytes": 11852,
+          "path": "go-agent-runtime/services/session/internal/live/control.go",
+          "sha256": "a8f0137b8ec94dfdb92138dced92a4ef5960e37045898b05333008a992c0fe28"
+        },
+        {
+          "bytes": 5389,
+          "path": "go-agent-runtime/services/session/internal/live/eventcodec/codec.go",
+          "sha256": "66839780dc66e15e2994c1ef08ba0775a6d9f7dc8f068cb5c95eb8b6a947534b"
+        },
+        {
+          "bytes": 12645,
+          "path": "go-agent-runtime/services/session/internal/live/invoke.go",
+          "sha256": "f8cfb9048a405f374b55180d0fd1ac676f7a6a95d84a265d834933162fbbc493"
+        },
+        {
+          "bytes": 12097,
+          "path": "go-agent-runtime/services/session/internal/live/lifecycle.go",
+          "sha256": "dec3ea49fb1ade21fdbb18317d66a0a22f6f21ae42f9c9f9da36f6751c0e8bfb"
+        },
+        {
+          "bytes": 12086,
+          "path": "go-agent-runtime/services/session/internal/live/liveness.go",
+          "sha256": "b8c24d0f62a7a2c5a469b9986d0d9b0429ac0da613406fc9e5e313e7df43f516"
+        },
+        {
+          "bytes": 4314,
+          "path": "go-agent-runtime/services/session/internal/live/mediagate/ack.go",
+          "sha256": "7a3e9f6e9ed9703483ee985b1800d7f1a4ba8c324122fca501735420c21892e3"
+        },
+        {
+          "bytes": 9125,
+          "path": "go-agent-runtime/services/session/internal/live/mediagate/gate.go",
+          "sha256": "40edcfd75f630d13dda8eb209916845fa22adc29db5885ba5c77acdb5dfb85da"
+        },
+        {
+          "bytes": 9233,
+          "path": "go-agent-runtime/services/session/internal/live/mediagate/ordering.go",
+          "sha256": "89174eb306df7607de5073ff370db271942ec0ffde555eb8626cbf88bf7a3d55"
+        },
+        {
+          "bytes": 8520,
+          "path": "go-agent-runtime/services/session/internal/live/mediagate/ports.go",
+          "sha256": "93a3df7caece8a72bdc9b15094b502067b3dce21ea1907f3ea6574168395ae1d"
+        },
+        {
+          "bytes": 13681,
+          "path": "go-agent-runtime/services/session/internal/live/observation.go",
+          "sha256": "18bea7cc896099a2beec4fc0b3ffe69c0df6a640c8a8bcd9bc43a7962ca2726b"
+        },
+        {
+          "bytes": 5407,
+          "path": "go-agent-runtime/services/session/internal/live/observations/observer.go",
+          "sha256": "934e1149514ac6ca46eb6a1c7d1c3352505371764882f7940d568d76968153f8"
+        },
+        {
+          "bytes": 10755,
+          "path": "go-agent-runtime/services/session/internal/live/policies.go",
+          "sha256": "65754d27a0c5e9ede83655400aa8e9a235a8511448eb1c8e8048e3fcafd37cc4"
+        },
+        {
+          "bytes": 12249,
+          "path": "go-agent-runtime/services/session/internal/live/replay.go",
+          "sha256": "c4cd96ae49fcd9a213fbcf4e83495c93154e411578291ca58c27e301e473e805"
+        },
+        {
+          "bytes": 16268,
+          "path": "go-agent-runtime/services/session/internal/live/service.go",
+          "sha256": "2bcf28fbc8c99606bbd3faf6509d566dec33c6a446366a63a0748364c2e2fef9"
+        },
+        {
+          "bytes": 12511,
+          "path": "go-agent-runtime/services/session/internal/live/session_adapter.go",
+          "sha256": "0e80b6d72de0ae6f5d1140e52217b2258f5960a047c9bd6e2fbe2a3adcd86b49"
+        },
+        {
+          "bytes": 13165,
+          "path": "go-agent-runtime/services/session/internal/live/start.go",
+          "sha256": "77a2cc549a013bdea3ee94b9f061821e004b23d262325693146116e7f5d62479"
+        },
+        {
+          "bytes": 12457,
+          "path": "go-agent-runtime/services/session/internal/live/start_support.go",
+          "sha256": "49349b795b2654a9b299c747f5a21803c6c943fe5264c11c21b3e5d3fc2f4a7e"
+        },
+        {
+          "bytes": 4220,
+          "path": "go-agent-runtime/services/session/internal/persistence/adapter.go",
+          "sha256": "b9810ad6d26b502562917c0e5abeb639403c6532eb0e61d55ff52ec8f3f2ca61"
+        },
+        {
+          "bytes": 2721,
+          "path": "go-agent-runtime/services/session/internal/persistence/listing.go",
+          "sha256": "a0f3481398a644dfa7df8eb4b2be7611191b227bbd04961f6ca43eeced73815c"
+        },
+        {
+          "bytes": 13192,
+          "path": "go-agent-runtime/services/session/internal/persistence/storage.go",
+          "sha256": "fc524ac76aad52fe66c4f20918f82896c8ad2d2f0c1e72f8844496c89e52cdf7"
+        },
+        {
+          "bytes": 1785,
+          "path": "go-agent-runtime/services/session/internal/persistence/trace.go",
+          "sha256": "85dfe5538728b3c4b72e3f2368d08343cddb5a99a518e499fd24418e814451fe"
+        },
+        {
+          "bytes": 5534,
+          "path": "go-agent-runtime/services/session/internal/service/lifecycle.go",
+          "sha256": "2b3efae7048c8a0b77517c39184cc688cf782ade195d27d519f9b105a1b0a091"
+        },
+        {
+          "bytes": 2291,
+          "path": "go-agent-runtime/services/session/internal/service/memory.go",
+          "sha256": "e20335b061b864115644248b198a2ab306c6de89998aff2be93f25798a8cf4ea"
+        },
+        {
+          "bytes": 4926,
+          "path": "go-agent-runtime/services/session/internal/service/resolution.go",
+          "sha256": "cbff9dd766a894970a254765bb231cca547e30d02e11bcc1dc72599523db2b05"
+        },
+        {
+          "bytes": 7074,
+          "path": "go-agent-runtime/services/session/internal/service/service.go",
+          "sha256": "0da615cdef1d6da48d3483b2a4fc634a93f53f06e1f9ee8898420254d4a96ea1"
+        },
+        {
+          "bytes": 4840,
+          "path": "go-agent-runtime/services/session/internal/service/storage.go",
+          "sha256": "f1b5f5f8f072421c6b8f674a8f0cb158df8b342e99902620935695d2c70b9fc5"
+        },
+        {
+          "bytes": 89,
+          "path": "go-agent-runtime/services/session/live.go",
+          "sha256": "98f9ed88569a7eb4a25a17a3db0f1f9c9ff290ae9fc0152579eb7d517b8ca568"
+        },
+        {
+          "bytes": 4945,
+          "path": "go-agent-runtime/services/session/live_capabilities.go",
+          "sha256": "18c3aa53cfeb0d198bc12c249ee02c0ae43a4a849c2e7892ee2eda9765bb92a8"
+        },
+        {
+          "bytes": 10637,
+          "path": "go-agent-runtime/services/session/live_errors.go",
+          "sha256": "48db2d7e7dbb03b8f518290f48eda927712bfb437978e623ef0bc79a3a0a016a"
+        },
+        {
+          "bytes": 4695,
+          "path": "go-agent-runtime/services/session/live_events.go",
+          "sha256": "c327498075f4849485f91fdf7623a6b02bd820cac05f14db5b30ecba56b42f29"
+        },
+        {
+          "bytes": 549,
+          "path": "go-agent-runtime/services/session/live_kinds.go",
+          "sha256": "a8613409c3aa09801c48f39552573b58bbebcb4103a16b92e7bdd06126bd0614"
+        },
+        {
+          "bytes": 2583,
+          "path": "go-agent-runtime/services/session/live_recording.go",
+          "sha256": "92262134e231dfa77ec07ba0e28cead2bc64d531a1daa3cac06cf301560dc539"
+        },
+        {
+          "bytes": 4252,
+          "path": "go-agent-runtime/services/session/live_replay.go",
+          "sha256": "f632c86c7ebf06b22c9064176cbe2cabe37e8a9efa791724e33300c295b9eb8a"
+        },
+        {
+          "bytes": 5867,
+          "path": "go-agent-runtime/services/session/live_request.go",
+          "sha256": "7f2f6465ff71d052e779e6d147c1e8003c3574ee472eeace1b1a74eea9b221dc"
+        },
+        {
+          "bytes": 4200,
+          "path": "go-agent-runtime/services/session/live_runner.go",
+          "sha256": "11e73af5e0ec7dba634ac545fcca754b71638bd2f2337990a092718bbc42f3c1"
+        },
+        {
+          "bytes": 5443,
+          "path": "go-agent-runtime/services/session/ports.go",
+          "sha256": "a3baa20268a7e2fd8ba594bf578b139dd7f08ef3ce17f98020be3eb63b136c92"
+        },
+        {
+          "bytes": 5061,
+          "path": "go-agent-runtime/services/session/service.go",
+          "sha256": "19a3ee63998df376f35f526793cc9a61ade348f903140b0c63b84ffbaff9fc01"
+        },
+        {
+          "bytes": 1090,
+          "path": "go-agent-runtime/services/session/storage.go",
+          "sha256": "a151b5a5d187b414e9cc27086c07782a284dbe1f41953db4c5483e0bcacc3a01"
+        },
+        {
+          "bytes": 1528,
+          "path": "go-agent-runtime/services/session/wire/live.go",
+          "sha256": "6bdee877ef9091a9cdd86ccb6065b5c415772fde873f881946592b08d32a757e"
+        },
+        {
+          "bytes": 3076,
+          "path": "go-agent-runtime/services/session/wire/wire_gen.go",
+          "sha256": "1deabf0aaae1296989c61650264ce448d8296c29994908ff69b53c61be7c964d"
+        },
+        {
+          "bytes": 6165,
+          "path": "go-agent-runtime/services/tools/browser_contract_types.go",
+          "sha256": "490fb4b5111ec14c8b4658d994996cbf14f16b8daffc1e24546cbb922dbb3e67"
+        },
+        {
+          "bytes": 625,
+          "path": "go-agent-runtime/services/tools/browser_error_types.go",
+          "sha256": "29b10592ca7a8dcee41741d23a5d5b40244c943936c17e14032f719ecf2d623c"
+        },
+        {
+          "bytes": 7561,
+          "path": "go-agent-runtime/services/tools/browser_result_types.go",
+          "sha256": "1d678da70ee4826b2b8b6cbe9c0e4f8004a1253b9989e56b887a83704ff8ffd2"
+        },
+        {
+          "bytes": 473,
+          "path": "go-agent-runtime/services/tools/display_contracts.go",
+          "sha256": "48b2b33531cfca7e238445ce0ebc204c2e090843b5d83af8458b729db0e1b906"
+        },
+        {
+          "bytes": 873,
+          "path": "go-agent-runtime/services/tools/image.go",
+          "sha256": "f17770020f99f201f19369977f5d6e6f1a98065a2a4e95ccdd77a7ba79ad7fc1"
+        },
+        {
+          "bytes": 1775,
+          "path": "go-agent-runtime/services/tools/image_staging.go",
+          "sha256": "40eb29fbfd80bee8c1a02c405b26c8eb8ab021e7173c1b28bb8de5ee822f7620"
+        },
+        {
+          "bytes": 3421,
+          "path": "go-agent-runtime/services/tools/interactive_policy.go",
+          "sha256": "6fe69e2899182be23368efbc3c9e60c38c571d48d0bd1b841c23eaa498992423"
+        },
+        {
+          "bytes": 1549,
+          "path": "go-agent-runtime/services/tools/read_image_contract.go",
+          "sha256": "252332557a87ae1afa750c3ed205f60d904f8bb720d0e9c8045edfa1b4aec5f4"
+        },
+        {
+          "bytes": 12627,
+          "path": "go-agent-runtime/services/tools/service.go",
+          "sha256": "afad30a04bcd57be2cf9f962a92fc07c527a16aa746162ca856cba0749d932ad"
+        },
+        {
+          "bytes": 578,
+          "path": "go-agent-runtime/services/tools/skills.go",
+          "sha256": "c7934edaf421d4e4c5070d0013de64c5237f3cf694adddb9271d234ab7ba9235"
+        },
+        {
+          "bytes": 134,
+          "path": "go-audio/go.mod",
+          "sha256": "0b959f3a6a23c827c8f1a89323a760637b3ff001f4b70f75aa423c9c053d88d7"
+        },
+        {
+          "bytes": 893,
+          "path": "go-audio/go.sum",
+          "sha256": "0eb084ae04738236d00d96d849c231482df0549e2456fcf8637f4bceb96c6857"
+        },
+        {
+          "bytes": 2588,
+          "path": "go-audio/pkg/analysis/selfhearing/self_hearing_buffer.go",
+          "sha256": "898e815e95adc4b8ac45cfbc3f50bebaaf8e17f14a512afa2121e336ba2b255a"
+        },
+        {
+          "bytes": 13797,
+          "path": "go-audio/pkg/analysis/selfhearing/self_hearing_classifier.go",
+          "sha256": "ce7a4f67745e056cbbaf8896afddde7f36424a6fabeb64833e8f3ca93b39cc1c"
+        },
+        {
+          "bytes": 9551,
+          "path": "go-audio/pkg/analysis/selfhearing/self_hearing_detector.go",
+          "sha256": "863199a0f0b78cc160145f30c74f67d44832913741a79ef3ce5e6cda246fbc7c"
+        },
+        {
+          "bytes": 9466,
+          "path": "go-audio/pkg/analysis/selfhearing/self_hearing_types.go",
+          "sha256": "c9b08222ae2d8350d1f2ebfd1c5f5018cedcffc796f1cd70190f27b99b472600"
+        },
+        {
+          "bytes": 5298,
+          "path": "go-audio/pkg/analysis/selfhearing/self_hearing_validation.go",
+          "sha256": "d426df8c2aeed83dcc2560c09bb6fcefb3fdb8d8ce9c1eaf5096091b7e92435d"
+        },
+        {
+          "bytes": 1539,
+          "path": "go-audio/pkg/analysis/selfhearing/stream_primitives.go",
+          "sha256": "e062d5275517178ec946dd5c45e87e528edb97e761f06491c7a3256cc551501a"
+        },
+        {
+          "bytes": 8133,
+          "path": "go-audio/pkg/analysis/stream/analysis_pipeline.go",
+          "sha256": "86d55fcac2ca7f78f277b99b4008a4e29033a15e7e82c8b2859a4d6d1c141d25"
+        },
+        {
+          "bytes": 1540,
+          "path": "go-audio/pkg/analysis/stream/stream_analyzer.go",
+          "sha256": "6c6a135876aff60f115289250d1e28ec5f9d2e61db4d8c00f04b2ad38351eb72"
+        },
+        {
+          "bytes": 5603,
+          "path": "go-audio/pkg/analysis/stream/stream_metrics.go",
+          "sha256": "c1c26fc5ff77d2b37d755e5fb9412ceb2026e6d5305dc839824e19faf4268cd1"
+        },
+        {
+          "bytes": 12330,
+          "path": "go-audio/pkg/analysis/stream/stream_types.go",
+          "sha256": "67e2cfdca52b5f4eb40150c23425a5caaa35b2305391d391450daddb1f299621"
+        },
+        {
+          "bytes": 10142,
+          "path": "go-audio/pkg/analysis/stream/stream_validation.go",
+          "sha256": "b369b74dfae598cdf98910d1fefc2730da14bae6f209ca6bcdaa2c5b3df84db5"
+        },
+        {
+          "bytes": 8139,
+          "path": "go-audio/pkg/analysis/stream/timeline.go",
+          "sha256": "f1420e3199c4e22c7b6adbb0956945af7c26b5517cfc27021c04425e0a28ce17"
+        },
+        {
+          "bytes": 6517,
+          "path": "go-audio/pkg/audio/buffer.go",
+          "sha256": "9257dbba4086d849a2167821ab412fac71aac2b120c12872e6df95246ac90934"
+        },
+        {
+          "bytes": 482,
+          "path": "go-audio/pkg/audio/buffer_endpoints.go",
+          "sha256": "bf8a4e84f93f2ab921ecce6eb93deaca4e7d32c27129c712e39c1b35960a39ce"
+        },
+        {
+          "bytes": 243,
+          "path": "go-audio/pkg/audio/capture.go",
+          "sha256": "29afb2bc0b82a6b1da74c59c6e8f02fd02821c9953b206caeac086916e7be354"
+        },
+        {
+          "bytes": 2064,
+          "path": "go-audio/pkg/audio/control.go",
+          "sha256": "35bfaa49e3db8cd7b7d172aeafc5e0c8b094d98e556ee2fd82de3402e4eb0806"
+        },
+        {
+          "bytes": 13680,
+          "path": "go-audio/pkg/audio/device_playback.go",
+          "sha256": "863cdb9411dab4c5d608f08e98b874b58823afd15559ba688e6cbf63a800e14b"
+        },
+        {
+          "bytes": 4516,
+          "path": "go-audio/pkg/audio/engine.go",
+          "sha256": "cb1bf5b1893b4368b5816e1e660858eafa12ecb00fb4269a9475ce051d550b03"
+        },
+        {
+          "bytes": 22431,
+          "path": "go-audio/pkg/audio/feedback_gate.go",
+          "sha256": "d31d99ca619dcd6ef73b840611d5e36e98e26377c042d1f011dc2cb89fa2f406"
+        },
+        {
+          "bytes": 1072,
+          "path": "go-audio/pkg/audio/feedback_gate_timing.go",
+          "sha256": "3029dc6bcf5a31228a30be918d747e7f4d5db28929b7b7773855ad9e59da4fc5"
+        },
+        {
+          "bytes": 4104,
+          "path": "go-audio/pkg/audio/format.go",
+          "sha256": "48b3dc8038d9ea2cb9542ecfa88a5b11be9f6ce8f1b5c92e7e872d2bea5d653a"
+        },
+        {
+          "bytes": 3627,
+          "path": "go-audio/pkg/audio/hold_tone.go",
+          "sha256": "7dbf42725943728c761e8735abfd09165816344db49ce33d898a89a594a27fca"
+        },
+        {
+          "bytes": 5539,
+          "path": "go-audio/pkg/audio/hold_tone_filler.go",
+          "sha256": "9d51bec6194f6acba318fcbc1b4925ad1e912ea03459bfa5cb9cda23cc9bc725"
+        },
+        {
+          "bytes": 329,
+          "path": "go-audio/pkg/audio/lifecycle_errors.go",
+          "sha256": "7313babb0e8368b1962feb5f58b628150f9eef20acd88747cf5fba8c3f6f8d1a"
+        },
+        {
+          "bytes": 7048,
+          "path": "go-audio/pkg/audio/loudness.go",
+          "sha256": "95f3e6fdc56a07a7e60a9be27eeaf4f891e09354c22d549b3a34ab9218695f27"
+        },
+        {
+          "bytes": 7156,
+          "path": "go-audio/pkg/audio/media_contract.go",
+          "sha256": "fe016849e95408be71394824b55f36f06b60c1654e394da54891bb057ca3e1f3"
+        },
+        {
+          "bytes": 9565,
+          "path": "go-audio/pkg/audio/pcm16_convert.go",
+          "sha256": "faf4cb655c6d6e35584682682c19e366aa8529fb83d9a45fd10e03a1f03945be"
+        },
+        {
+          "bytes": 7784,
+          "path": "go-audio/pkg/audio/pcm16_frame_size.go",
+          "sha256": "374e5b2b6a7ce8f426e5a03d9e967fd5bab33599545a557eac80b0b82cbf6387"
+        },
+        {
+          "bytes": 2669,
+          "path": "go-audio/pkg/audio/pipeline.go",
+          "sha256": "f0e313fcd04ca7fb7ba19fd33ddc6b485b2b51a5d5d840259e00f693a87ffe95"
+        },
+        {
+          "bytes": 7330,
+          "path": "go-audio/pkg/audio/playback_commands.go",
+          "sha256": "eba61f6538ae956be7e196673f121abb2aa975c0ea04c40ee69ec8970a0b4541"
+        },
+        {
+          "bytes": 1502,
+          "path": "go-audio/pkg/audio/playback_processor.go",
+          "sha256": "c250ef14e50e302f87d764f35e6c1dd60e0afac129e550eb47a20512b7d327f0"
+        },
+        {
+          "bytes": 12424,
+          "path": "go-audio/pkg/audio/processor.go",
+          "sha256": "7ab620404051a3e1d141fc80827a8abe5d1469b981c3731bb87af5f31c3f8854"
+        },
+        {
+          "bytes": 16407,
+          "path": "go-audio/pkg/audio/session_media.go",
+          "sha256": "61ffe922cbcc2a7387cb75b529b2512019d4f5f18f8340329ddab7e005f95b08"
+        },
+        {
+          "bytes": 666,
+          "path": "go-audio/pkg/audio/sink.go",
+          "sha256": "d02237aa4a5bdc8b3a686a3b260f358165d9a63b3fe170fc5e88769610aaefc1"
+        },
+        {
+          "bytes": 5655,
+          "path": "go-audio/pkg/audio/sink_file.go",
+          "sha256": "8186dd4e3a24e37406da986127c6dd3f20a58ded8a08f6646eb96430386e11ba"
+        },
+        {
+          "bytes": 2523,
+          "path": "go-audio/pkg/audio/source.go",
+          "sha256": "7af75893cd00544aab3d6ec0365755464831f864d85d035c230ff36e4901802e"
+        },
+        {
+          "bytes": 10086,
+          "path": "go-audio/pkg/audio/source_file.go",
+          "sha256": "b87077c3682716b7c47106177789896f2cd37b10e4de38f355876acc132c8e25"
+        },
+        {
+          "bytes": 4408,
+          "path": "go-audio/pkg/audio/source_wav.go",
+          "sha256": "773afcdfe3dea82e9110062e7cb47a42b30450f307f91b6539beba95379206d4"
+        },
+        {
+          "bytes": 2972,
+          "path": "go-audio/pkg/audio/vad.go",
+          "sha256": "eadce86333d5f5b0e736b567613347f929a8fb64dbfbfcaf2c2c1e53c376237e"
+        },
+        {
+          "bytes": 635,
+          "path": "go-audio/pkg/audio/voice_loudness.go",
+          "sha256": "7a155cb23bfc16abfe102b9f9f068ded29145198271f0317a0fd06d534d8e0bf"
+        },
+        {
+          "bytes": 16468,
+          "path": "go-audio/pkg/clock/clock.go",
+          "sha256": "ac634d24039d6b7ca78f1a27c10600684ff29ffd9156e512619350aed5ea00ce"
+        },
+        {
+          "bytes": 10910,
+          "path": "go-audio/pkg/codec/opus.go",
+          "sha256": "d8fd4a9cb16eb0da9cd31a79a2561b8d8a3bdd25f07f0091ddf85fad804bf9cf"
+        },
+        {
+          "bytes": 8407,
+          "path": "go-audio/pkg/codec/pcm16.go",
+          "sha256": "88c71d08aa45c65450a9d33d01f52086b515d84d97d93434278692f1c3fe6d52"
+        },
+        {
+          "bytes": 1818,
+          "path": "go-audio/pkg/codec/rtp_audio.go",
+          "sha256": "9f0afde84d5f96bebfeab52a0688e70fc1d27d9f962cf8630773874f8c3684c1"
+        },
+        {
+          "bytes": 10112,
+          "path": "go-audio/pkg/codec/sample_value.go",
+          "sha256": "4fc9b6b85bb1162b42fbacb60cc24326f4bbe312c5ec7109185320172aaac49a"
+        },
+        {
+          "bytes": 425,
+          "path": "go-audio/pkg/contract/errors.go",
+          "sha256": "aa5ff0b86fa128266bbabaaf2415438146b6d3d2a5c803e0244223e6e40b0f76"
+        },
+        {
+          "bytes": 3751,
+          "path": "go-audio/pkg/observability/observability.go",
+          "sha256": "46c1dd76acf8f10f20622ac5dd303466a2776ec5dc6b5ff8bd5942cd1f09675e"
+        },
+        {
+          "bytes": 438,
+          "path": "go-audio/pkg/wavio/doc.go",
+          "sha256": "95a7c2699e9a073e0834b432270d44d9d390378b6fca5099e95a400c3d78089b"
+        },
+        {
+          "bytes": 3960,
+          "path": "go-audio/pkg/wavio/errors.go",
+          "sha256": "ec06794a25470be0d18b0c67e07c83c53f7b691cee6c872890963a7422abd5f3"
+        },
+        {
+          "bytes": 3341,
+          "path": "go-audio/pkg/wavio/layout.go",
+          "sha256": "6ca54d00c7518327b54e070b1ec06856da09d41484f1b00cd35aed43ec4ff60d"
+        },
+        {
+          "bytes": 6537,
+          "path": "go-audio/pkg/wavio/resample.go",
+          "sha256": "de8a0bcc8de3261365f9e7763df6944366bcb0f48afd4f466d18c8070fb6746b"
+        },
+        {
+          "bytes": 4191,
+          "path": "go-audio/pkg/wavio/stream_writer.go",
+          "sha256": "221992cc8373748291593d61f5f1430c1d77c7875a5554e985c301ecefbd6c86"
+        },
+        {
+          "bytes": 4574,
+          "path": "go-audio/pkg/wavio/streaming_resample.go",
+          "sha256": "166a167182f96a425211f5cbcaf4e945b823917d9afaf486feb81d6320d8d424"
+        },
+        {
+          "bytes": 11305,
+          "path": "go-audio/pkg/wavio/wavio.go",
+          "sha256": "0379182aa3c3aedce86628a4c6e95983ab22ca8fd53568f47974d8ed81f32661"
+        },
+        {
+          "bytes": 695,
+          "path": "go-device-gateway/go.mod",
+          "sha256": "662a1b74be04ebe5a98cb5a67c39e2b7cb9bf15e3b903c77bb16caebdee69b84"
+        },
+        {
+          "bytes": 1849,
+          "path": "go-device-gateway/go.sum",
+          "sha256": "db5dada37b219e2303eb898032fc5be0dfa68075f20040260466a5301d446bba"
+        },
+        {
+          "bytes": 16129,
+          "path": "go-device-gateway/pkg/devices/device.go",
+          "sha256": "2e57a2ed2dd7e7e3692de4e45de6b66b0fe9e95034287dbe403354f3a93be599"
+        },
+        {
+          "bytes": 17763,
+          "path": "go-device-gateway/pkg/devices/device_darwin.go",
+          "sha256": "6bdb390f72228e3674bcbda46ed4d00becb8f79698d01c17caf54187f9e2ff8a"
+        },
+        {
+          "bytes": 6268,
+          "path": "go-device-gateway/pkg/devices/device_errors.go",
+          "sha256": "08d283b666160cb9383cbe8b6735767d0b4e08450550ec1850a0bcd63d694690"
+        },
+        {
+          "bytes": 8272,
+          "path": "go-device-gateway/pkg/devices/device_failure_capsule.go",
+          "sha256": "1ea2ef001a604ca7044c85f4a9e62805938aac16e9d98bbd7455e6b8ef55d9cf"
+        },
+        {
+          "bytes": 2394,
+          "path": "go-device-gateway/pkg/devices/device_format.go",
+          "sha256": "a2fcfb619588c8a1179a0000410e22215d608b18635364a2fc886bb267457e39"
+        },
+        {
+          "bytes": 5434,
+          "path": "go-device-gateway/pkg/devices/device_open.go",
+          "sha256": "07960ee6414d5183768d9df358a301bc498de131396612341a48398bd41e07c5"
+        },
+        {
+          "bytes": 329,
+          "path": "go-device-gateway/pkg/devices/device_platform_darwin.go",
+          "sha256": "09b04cf74e893091d28a61ae63d8d39c59ea7862058fb75dc6967a6e36f13705"
+        },
+        {
+          "bytes": 4353,
+          "path": "go-device-gateway/pkg/devices/device_probe.go",
+          "sha256": "d48986281301c70a4ed40330e90581e1cdbe10def0728624c97caa23b135b1ab"
+        },
+        {
+          "bytes": 218,
+          "path": "go-device-gateway/pkg/devices/device_registry_darwin.go",
+          "sha256": "1de9485f1bebaf7ad1b9ddb9ca2d31f5eb0ada4fc53a0a663a824344639b9dc5"
+        },
+        {
+          "bytes": 7789,
+          "path": "go-device-gateway/pkg/devices/device_select.go",
+          "sha256": "806177e0c95e5cc8db220c2fed79487303ba49f6a710ef59e602122d1f840fd1"
+        },
+        {
+          "bytes": 26853,
+          "path": "go-device-gateway/pkg/devices/device_server.go",
+          "sha256": "59445cf68313cdcc625b8ba631220445ac6430828016c26ef15daf112eb56024"
+        },
+        {
+          "bytes": 27214,
+          "path": "go-device-gateway/pkg/devices/device_simulated.go",
+          "sha256": "fdf8549c4b4adaeab8b61f728a45d775733affe956c07acd652907cebde42c20"
+        },
+        {
+          "bytes": 21665,
+          "path": "go-device-gateway/pkg/devices/device_virtual.go",
+          "sha256": "f300667a0be7cabf75df819056e6ed0f304ba1cf8e66da13c86cf3ef6d6b0777"
+        },
+        {
+          "bytes": 17443,
+          "path": "go-device-gateway/pkg/devices/device_voice_processing_darwin.go",
+          "sha256": "4ef5abe2f5e079871017082de1a79fb9c8aa7cb82e86c4e3d2b18830ff517a8c"
+        },
+        {
+          "bytes": 916,
+          "path": "go-device-gateway/pkg/devices/interruptible_input.go",
+          "sha256": "1b64ac40348d784f61c0fc531c67d596b98a76b219970b1f17f8a6c642f8a721"
+        },
+        {
+          "bytes": 1304,
+          "path": "go-device-gateway/pkg/devices/interruptible_input_unix.go",
+          "sha256": "15d962b1d1aacb511c1f2b3388fa73709ef146e1a8939d7bc59932837dfe6be2"
+        },
+        {
+          "bytes": 4424,
+          "path": "go-device-gateway/pkg/devices/microphone.go",
+          "sha256": "e37bc6ecf67ab200d7ca588c4c18845502549657abe1fbf952a059313662a425"
+        },
+        {
+          "bytes": 7681,
+          "path": "go-device-gateway/pkg/devices/sink_device.go",
+          "sha256": "0c42a746fcc250e059fbef519ed8280d3dedc4b3c959ee9e3c9b35db7c9ed1d0"
+        },
+        {
+          "bytes": 7758,
+          "path": "go-device-gateway/pkg/devices/source_device.go",
+          "sha256": "737789f7cb026d470697f022c2073f9c8fbfe40d3f432d5060ab3ea75b6fd6f9"
+        },
+        {
+          "bytes": 13006,
+          "path": "go-device-gateway/pkg/runtime/contracts.go",
+          "sha256": "ec09c55f7fc41880f58c574feec3a094082fa362ee8fe8d7a8e535a527a5ef8d"
+        },
+        {
+          "bytes": 12986,
+          "path": "go-device-gateway/pkg/runtime/rtc_device.go",
+          "sha256": "e09b3379771021779f5fbde405e4a2264c0e4f226a504eb6ae7818b7f0d3b832"
+        },
+        {
+          "bytes": 15336,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_audio_ports.go",
+          "sha256": "46d2ffb714d2e44fc3b27a14acfdc834a820ab0bc84d96743fd2c141397ddc81"
+        },
+        {
+          "bytes": 4081,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_capture_buffer.go",
+          "sha256": "9fccbc4b8da8c5fbb3929205d994fa9c187490c7cd3cd9e24009555f7818adfb"
+        },
+        {
+          "bytes": 11423,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_commands.go",
+          "sha256": "85d745fe7db99a0ef6313d25ca81fba1ecaa57075fa87a6fa44cbd09b92c7177"
+        },
+        {
+          "bytes": 10717,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_hold_tone.go",
+          "sha256": "b7c7c94dda24007c196ca35d7b48aed0b7c43679e56a207a11993adafdcd246b"
+        },
+        {
+          "bytes": 26842,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_sink.go",
+          "sha256": "6ac74e0f662c96a16461302f6974db7cfd87c6b5e37c9fa9b746730554d45b6f"
+        },
+        {
+          "bytes": 2863,
+          "path": "go-device-gateway/pkg/runtime/rtc_device_sink_rate.go",
+          "sha256": "bc0d8097e7d25e50433d9e6e538aff376f38ddecb924801319603b1953426e2b"
+        },
+        {
+          "bytes": 2367,
+          "path": "go-llm-gateway/go.mod",
+          "sha256": "0f4f45cf37aa17a8db3648c289874c806e52da32aa1fcdb3baf80122235af802"
+        },
+        {
+          "bytes": 17761,
+          "path": "go-llm-gateway/go.sum",
+          "sha256": "567306b32d2105ff24d3a7f61afd1c137efa0b1f2d9bdf45bc4ad551456befe9"
+        },
+        {
+          "bytes": 6366,
+          "path": "go-llm-gateway/pkg/capabilities/capabilities.go",
+          "sha256": "16f5d6f126937f5c4e9c559f9cdf6b98141093aa345f23c2d5a40b41c6e3002c"
+        },
+        {
+          "bytes": 594,
+          "path": "go-llm-gateway/pkg/gateway/capabilities.go",
+          "sha256": "4ceaa2d5be06b8ec02649a112068b1c44cd10fe55bfcb2865afe1c8f7f09fe26"
+        },
+        {
+          "bytes": 11290,
+          "path": "go-llm-gateway/pkg/gateway/errors.go",
+          "sha256": "4b44d3d01a46a145cbf568dc3824d6cf7b3cf2a330871855c9b087b87fa42734"
+        },
+        {
+          "bytes": 2807,
+          "path": "go-llm-gateway/pkg/gateway/gateway.go",
+          "sha256": "cd610201a44e7a4aa4ea83c6441faf0c7d89a8d1bbbbca8c0a5c214576932e4b"
+        },
+        {
+          "bytes": 7834,
+          "path": "go-llm-gateway/pkg/gateway/interaction_fixture.go",
+          "sha256": "f8b35cc9abf09d088863e50da5b784390efc152be48fab8b7c673558e170ded8"
+        },
+        {
+          "bytes": 16822,
+          "path": "go-llm-gateway/pkg/gateway/interaction_gateway.go",
+          "sha256": "f9f96217a5dba59d568ca4617ad87d74087007e2796f62952ca4335c7d3b1b12"
+        },
+        {
+          "bytes": 7618,
+          "path": "go-llm-gateway/pkg/gateway/interaction_types.go",
+          "sha256": "6aa8574cd9abe9c1b37f116ecf94046f49880ebe2c0784a9f142bb4d74030e93"
+        },
+        {
+          "bytes": 3198,
+          "path": "go-llm-gateway/pkg/gateway/interfaces.go",
+          "sha256": "89b271cb4ae8c20b0032f16ffa9dade7293108dbd2aa3415f9969920b0bcf047"
+        },
+        {
+          "bytes": 2604,
+          "path": "go-llm-gateway/pkg/gateway/session_gateway.go",
+          "sha256": "db79db8f0330e60acbd401f7371aa7c6b001903df1d86a328a82bd462f839f6e"
+        },
+        {
+          "bytes": 3882,
+          "path": "go-llm-gateway/pkg/gateway/session_types.go",
+          "sha256": "d8067cc01f46bf422b3e1d4858ae17c602c58aab2bb413d7fa0653afe01f1fc4"
+        },
+        {
+          "bytes": 5277,
+          "path": "go-llm-gateway/pkg/gateway/validation.go",
+          "sha256": "bac20226d8c007544e208307d3da46ce58c80b87a8faca2f42733ada9122adfb"
+        },
+        {
+          "bytes": 619,
+          "path": "go-llm-gateway/pkg/inference/doc.go",
+          "sha256": "ee6825211d09ba60da8a156e221c609bb5cd77efc1b28d0fcf97988d4aecdc53"
+        },
+        {
+          "bytes": 3347,
+          "path": "go-llm-gateway/pkg/inference/interaction_bridge.go",
+          "sha256": "f87912d182634a796ed7020ae26c54d75f9fbc4b02ca5667879138a62ca3c78b"
+        },
+        {
+          "bytes": 3334,
+          "path": "go-llm-gateway/pkg/inference/main_inferencer.go",
+          "sha256": "014b5f615efc307bd50e6ab7af98d1ef9d19c421d3a3862ed54ff1f891b8fde9"
+        },
+        {
+          "bytes": 7953,
+          "path": "go-llm-gateway/pkg/inference/session_inferencer.go",
+          "sha256": "66898d76d0da8da8c4c14a3904d95c2d9064e559d74c61f4fd50639867f9d17e"
+        },
+        {
+          "bytes": 1057,
+          "path": "go-llm-gateway/pkg/logging/logger.go",
+          "sha256": "99ff618da512871c1bbaa52d0423ccd123fdb2d8386f59e830fd0f7d60ff85c0"
+        },
+        {
+          "bytes": 717,
+          "path": "go-llm-gateway/pkg/models/doc.go",
+          "sha256": "0154db12418b7d44a6be64fd1e4086bd0f5d40a52d70edc687290faca42eec5e"
+        },
+        {
+          "bytes": 1118,
+          "path": "go-llm-gateway/pkg/models/message.go",
+          "sha256": "12a7cc6e4a70830b33b9018e50411b76fe5e5219b0a7164ffcae3189abf17c15"
+        },
+        {
+          "bytes": 12224,
+          "path": "go-llm-gateway/pkg/models/session.go",
+          "sha256": "0037a2198e52ada28043e0a3f81b2fde4042ef04c691f45ebecedb2f354bcbeb"
+        },
+        {
+          "bytes": 1923,
+          "path": "go-llm-gateway/pkg/providers/droplog.go",
+          "sha256": "b09dafab1f5cac00b0cbc518bb2acc926a630d1e4bb439b22cefb07e2f0a7b31"
+        },
+        {
+          "bytes": 9538,
+          "path": "go-llm-gateway/pkg/providers/errors.go",
+          "sha256": "ce6d470a8ef362ca7f6a26e0f3fad44e0f84f2cf793103261300619c4b061868"
+        },
+        {
+          "bytes": 2449,
+          "path": "go-llm-gateway/pkg/providers/outbound_drain.go",
+          "sha256": "69de77c709fccb55cae1092aae7349999b06f1e9d02eeb7e747ff350b40a545e"
+        },
+        {
+          "bytes": 6029,
+          "path": "go-llm-gateway/pkg/providers/provider.go",
+          "sha256": "c1bc01e11f778c388595010b8d8b609f859fafe63d43d921c9d9905530f1dde1"
+        },
+        {
+          "bytes": 1078,
+          "path": "go-llm-gateway/pkg/providers/session_provider.go",
+          "sha256": "1ee3ea4ce53778b26a3068ac925a6bc80a36cc00e2bb5a160a3c769e65a2893e"
+        },
+        {
+          "bytes": 1263,
+          "path": "go-llm-gateway/pkg/testing/capture.go",
+          "sha256": "ad3c8828b0d6e3d897e343fe93be567829c7cb7323ea609d1b5194f04c68e42b"
+        },
+        {
+          "bytes": 5371,
+          "path": "go-llm-gateway/pkg/testing/record.go",
+          "sha256": "c2416bfa39d00235027b1756ddf3aa2f4e0038089e978ce5eec3d1208e490e4e"
+        },
+        {
+          "bytes": 2850,
+          "path": "go-llm-gateway/pkg/testing/replay.go",
+          "sha256": "4d0570d1e3fc01123e5f7f8920cb571e17dedce119feb435ec2dfb7163bb50bc"
+        },
+        {
+          "bytes": 7124,
+          "path": "go-llm-gateway/pkg/testing/replay_diagnostic.go",
+          "sha256": "e1f8f01719c7a2446f3a38b570f22d5587e47ada768b91b539ff8e52ca764ae4"
+        },
+        {
+          "bytes": 22133,
+          "path": "go-llm-gateway/pkg/testing/session_capture.go",
+          "sha256": "1691f35db23b5b958396867e918244cc8e5bb8c999346bbdf4ba22906711d9eb"
+        },
+        {
+          "bytes": 12631,
+          "path": "go-llm-gateway/pkg/testing/session_capture_stream.go",
+          "sha256": "733e9a7e19387916e00bd699e45078be7d2f7dbf78ea487b1d9162f68c67fbe0"
+        },
+        {
+          "bytes": 1994,
+          "path": "go-llm-gateway/pkg/testing/session_fixture_contract.go",
+          "sha256": "e5e87fcfa63fb7643dfaae802448f595fcc85e8e51c837feb81b1790cce2d25b"
+        },
+        {
+          "bytes": 8426,
+          "path": "go-llm-gateway/pkg/testing/session_fixture_validator.go",
+          "sha256": "34d37831dc745d576a9322d2316835821a85f0af750d37edd0a5a9c523328e9c"
+        },
+        {
+          "bytes": 4254,
+          "path": "go-llm-gateway/pkg/testing/session_inferencer.go",
+          "sha256": "e1e5094a358fda7e0e24e14307a9b262edce718eab25d678978f78106a4ecc3e"
+        },
+        {
+          "bytes": 8343,
+          "path": "go-llm-gateway/pkg/testing/session_message.go",
+          "sha256": "baf0f0180faef1536251b5d453a45d9977c7dafdfb9c368ec1a367be67bbbd4a"
+        },
+        {
+          "bytes": 13543,
+          "path": "go-llm-gateway/pkg/testing/session_record.go",
+          "sha256": "42af47c9d9e178171a7165ef8a285a385a197e6ff2038515f607706a610786c8"
+        },
+        {
+          "bytes": 18502,
+          "path": "go-llm-gateway/pkg/testing/session_replay.go",
+          "sha256": "b96331f59c435142556e1e870c19ad9d2f4e68d37453050bac8582a21190bf61"
+        },
+        {
+          "bytes": 4987,
+          "path": "go-llm-gateway/pkg/testing/session_replay_probe.go",
+          "sha256": "60fd2b2d352b151d71b98d3e3c318deddfcbbeacf9bc91b81aa8c344f93370a0"
+        },
+        {
+          "bytes": 17283,
+          "path": "go-llm-gateway/pkg/testing/session_websocket_dialer.go",
+          "sha256": "b9007bc217ae9a8dbb2f6db9f5a8d7b45d8e8ffdb96b731e74331a2928b97a29"
+        },
+        {
+          "bytes": 2699,
+          "path": "go-llm-gateway/pkg/testing/shape.go",
+          "sha256": "4d4060b57350c899927725f99b56f8a816dfd861faa075ee5a4598e1b8b31a4e"
+        },
+        {
+          "bytes": 1117,
+          "path": "go-llm-gateway/pkg/transport/doc.go",
+          "sha256": "1835b6e9e49af277d213a71267c220e328ea9b158ea191b916021e9600d33f6c"
+        },
+        {
+          "bytes": 1421,
+          "path": "go-llm-gateway/pkg/transport/observation.go",
+          "sha256": "f8c2784033f7f32dd5f024d10de04ba0b0841c8f1c821115056d525d90777653"
+        },
+        {
+          "bytes": 1461,
+          "path": "go-llm-gateway/pkg/transport/transport.go",
+          "sha256": "38bd3fa4e981007b2dd41df85e79ee7eccb8a01cbe96d41e3437c9b114cc98b2"
+        },
+        {
+          "bytes": 120,
+          "path": "go.work",
+          "sha256": "bb93b21299499bd9d9264ccdc956e17ec3364e1f132f58f43282b0ff8a7c40bc"
+        },
+        {
+          "bytes": 13858,
+          "path": "go.work.sum",
+          "sha256": "771f6df0e159ddaf47d81d40b551fe555317fd56aeb3d97f904498dcf92b8307"
+        },
+        {
+          "bytes": 504,
+          "path": "scripts/webmcp-o0/go.mod",
+          "sha256": "71d723a3acb5ca533db3eee250ce3dcf3310a75639637833caae370cec16740a"
+        },
+        {
+          "bytes": 2005,
+          "path": "scripts/webmcp-o0/go.sum",
+          "sha256": "04eb870ca24e58c6411d792fba75ddeee070efde311f8614ce7052e767fc3809"
+        },
+        {
+          "bytes": 116,
+          "path": "test/localai/go.mod",
+          "sha256": "6067cbbeabc0bc516e5b705cfca561a5cdb5f73eff03809816a55664b60828d0"
+        },
+        {
+          "bytes": 175,
+          "path": "test/localai/go.sum",
+          "sha256": "1737d5523b7264df09b253e86e29f96af295a7bd18e0aaa4373c6099317e065f"
+        },
+        {
+          "bytes": 2179,
+          "path": "tests/embedding/go.mod",
+          "sha256": "2a79bc120e88defed4f7471828b787e41df7b03f19ca3cfcefc86e8fd513a9da"
+        },
+        {
+          "bytes": 9553,
+          "path": "tests/embedding/go.sum",
+          "sha256": "b9df060e0243716d25dddf722cd3e37dddb60eed33b9ad10905583d66af97918"
+        },
+        {
+          "bytes": 77,
+          "path": "tools/analyzergate/go.mod",
+          "sha256": "ef5e01554b12f59ef98098e7bf3e66b8471737043ee305d9bc9bdc3198585d54"
+        },
+        {
+          "bytes": 281,
+          "path": "tools/architecturegate/go.mod",
+          "sha256": "a4c6dfdb8d771c248916873b30474b440b1bc7b1f632057e6b75d3aa01ac8b38"
+        },
+        {
+          "bytes": 972,
+          "path": "tools/architecturegate/go.sum",
+          "sha256": "8dca124c637f103567b5c138761bde98edd4a950376626944d211755d64ff5d2"
+        },
+        {
+          "bytes": 77,
+          "path": "tools/coveragegate/go.mod",
+          "sha256": "aa4e046cc2276d9b4d23fb3a985f57cd7dfedc069a311e88929cc7f20891df07"
+        },
+        {
+          "bytes": 78,
+          "path": "tools/rtc-race-gate/go.mod",
+          "sha256": "6cc3a011fc42cb89e9a5c6acf6f19111847a6aefc9e2937c3d194cf2999fce10"
+        },
+        {
+          "bytes": 82,
+          "path": "tools/session-race-gate/go.mod",
+          "sha256": "2c7d1318f6958c05ed8e8915c43eb5ed9cb4ee20fd7f6debd34d4a814370904a"
+        },
+        {
+          "bytes": 74,
+          "path": "tools/timingate/go.mod",
+          "sha256": "e78570590bf4698e04e3d4fabe57abd1f53473510c6fd86341fb3ad43654dbc5"
+        }
+      ],
+      "build_inputs_sha256": "dcbbe2cc7ef81171ef97bc313ae857e9176fd6d7dcd933e397433f38fa75362f",
+      "command": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/build/c56-consumer",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/sources/c56/__c68_input__/c56/main.go"
+      ],
+      "consumer_source": "scratch/sources/c56/__c68_input__/c56/main.go",
+      "consumer_source_sha256": "0a8e8239614e5d8f87596e238153f44ddbe30f9d7e1cf123e37c084f2b69c3ec",
+      "revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+      "source_root": "scratch/sources/c56"
+    }
+  },
+  "consumer_source_sha256": "0a8e8239614e5d8f87596e238153f44ddbe30f9d7e1cf123e37c084f2b69c3ec",
+  "fixture_sha256": "7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e",
+  "flags": [
+    "-trimpath"
+  ],
+  "go_version": "go version go1.26.7 darwin/arm64",
+  "schema": "audio-runtime.c68.zero-audio-attribution.build.v1",
+  "task": "audio-runtime-c68-c23-zero-audio-attribution"
+}

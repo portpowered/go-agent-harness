@@ -1,0 +1,66 @@
+{
+  "binary": {
+    "bytes": 10608162,
+    "path": "scratch/build/c56-negative-consumer",
+    "sha256": "7eb1fd2c7d93d929d482b9b7bde1bb5b845afddf7beaa99ec96acfb98fc21383"
+  },
+  "classification": "oracle_control_rejects_malformed_first_provider_audio",
+  "execution": {
+    "cleanup": {
+      "errors": [],
+      "group_alive_after": false,
+      "group_alive_before": false,
+      "kill_sent": false,
+      "parent_reaped": true,
+      "term_sent": false
+    },
+    "command": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/build/c56-negative-consumer",
+      "-scenario=tool-matrix",
+      "-fixture=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/inputs/c23-task/fixtures.json",
+      "-turns=1",
+      "-recording=false",
+      "-artifact-root=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/negative-control/20260912T012010Z",
+      "-output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/negative-control/20260912T012010Z/report.json"
+    ],
+    "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/sources/c56",
+    "elapsed_ms": 265,
+    "label": "negative-first-provider-audio",
+    "output_bounded": true,
+    "output_overflow": false,
+    "returncode": 1,
+    "source_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+    "stderr": "artifacts/negative-control/20260912T012010Z/process/stderr.log",
+    "stderr_bytes": 98,
+    "stderr_observed_bytes": 98,
+    "stdout": "artifacts/negative-control/20260912T012010Z/process/stdout.log",
+    "stdout_bytes": 0,
+    "stdout_observed_bytes": 0,
+    "timed_out": false
+  },
+  "mutated_consumer_sha256": "f97f134e27401d5b57297ecaba7a50f3e60a493c0f466ad684ef92ba79ef6b15",
+  "mutated_source": "consumer-negative/main.go",
+  "mutation": "first-provider-audio",
+  "original_consumer_sha256": "0a8e8239614e5d8f87596e238153f44ddbe30f9d7e1cf123e37c084f2b69c3ec",
+  "passed": true,
+  "positive_fixture_sha256": "7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e",
+  "provider_capture": {
+    "audio_delta_records": 1,
+    "bytes": 0,
+    "nonempty": false,
+    "nonempty_records": 0,
+    "path": "artifacts/negative-control/20260912T012010Z/provider.session.json",
+    "recorded_bytes": [
+      0
+    ],
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "public_pcm": {
+    "bytes": 0,
+    "expected_rejection": true,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "report": "artifacts/negative-control/20260912T012010Z/report.json",
+  "schema": "audio-runtime.c68.zero-audio-attribution.negative.v1",
+  "task": "audio-runtime-c68-c23-zero-audio-attribution"
+}

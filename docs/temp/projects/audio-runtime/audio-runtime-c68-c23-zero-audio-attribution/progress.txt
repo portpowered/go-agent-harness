@@ -1,0 +1,30 @@
+C68 zero-audio attribution checkpoint ledger
+
+2026-09-11: Admission verified with project-control.py for the single
+audio-runtime task. The isolated branch matches prd.branchName and started at
+the fetched origin/main d5d6f84363d8569d5dc1a59985f8d45cf50e1d06. Startup
+8bdafc7f947a3a2c9856220abdc539437035bd21 and recording baseline ancestry are
+preserved.
+
+2026-09-11: Exact C23 and C56 predecessor task inputs were copied into the
+owned inputs/ path and byte-checked against b2fb41401cd0934378b9ff1bc131532fdc19f614
+and 85710a53a2e9449884fb81f979df0599269ef3b3. Both complete source archives
+were prepared and the unchanged C23 consumer built with -trimpath against
+each source.
+
+2026-09-11: Four canonical positive cases completed: one recording-off and
+one recording-on turn for each source. Provider capture and public PCM each
+contain one non-empty 128-byte frame with SHA
+1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588. Recording
+on remains accepted_audio=0/audio_bytes=0 with a clean drain and missing
+audio/out-000.pcm for both sources. First failure is preserved at
+artifacts/first-failures/recording-observer-admission.json.
+
+2026-09-11: The first-provider-audio negative control was rejected at the
+provider/public audio oracle boundary. C21 normal count=5 and race count=1
+focused regressions passed.
+
+2026-09-11: verify.py --mode all passed provenance, oracle controls, four
+boundaries, attribution, cleanup, and the C21 evidence. Classification is
+C56_RECORDING_DEFECT; no C23 runner/oracle repair is indicated. Next action
+after commit/push/PR is external script CI submission without polling.

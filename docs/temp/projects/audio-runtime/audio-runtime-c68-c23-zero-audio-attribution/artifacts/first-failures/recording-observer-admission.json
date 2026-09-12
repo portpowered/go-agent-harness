@@ -1,0 +1,87 @@
+{
+  "boundary": "recording_observer_admission",
+  "classification": "C56_RECORDING_DEFECT",
+  "evidence": {
+    "finalization": {
+      "audio_present": false,
+      "clean_shutdown": true,
+      "manifest_present": true,
+      "ok": true,
+      "terminal": {
+        "classification": "provider_authored_completion",
+        "kind": "terminal",
+        "output_state": "complete",
+        "provenance": "provider",
+        "reason": "provider_authored_completion"
+      }
+    },
+    "provider_capture": {
+      "audio_delta_records": 1,
+      "bytes": 128,
+      "expected_bytes": 128,
+      "nonempty": true,
+      "nonempty_records": 1,
+      "ok": true,
+      "path": "artifacts/runs/20260912T012758Z-708619000-c23-on/provider.session.json",
+      "recorded_bytes": [
+        128
+      ],
+      "sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588"
+    },
+    "public_pcm": {
+      "bytes": 128,
+      "expected_bytes": 128,
+      "expected_sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588",
+      "format": "pcm16-le",
+      "ok": true,
+      "sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588"
+    },
+    "recording_usage": {
+      "accepted_audio": 0,
+      "accepted_events": 25,
+      "accepted_items": 53,
+      "accepted_messages": 28,
+      "audio_bytes": 0,
+      "available": true,
+      "drops": {
+        "live_event_overflow": 0
+      },
+      "drops_zero": true,
+      "enabled": true,
+      "ok": true,
+      "processed_items": 53,
+      "queue_bytes_final": 0,
+      "queue_items_final": 0
+    },
+    "semantic_artifacts": {
+      "audio_path": {
+        "bytes": 0,
+        "exists": false,
+        "path": "artifacts/runs/20260912T012758Z-708619000-c23-on/semantic/audio/out-000.pcm",
+        "sha256": null
+      },
+      "declared_artifacts": [
+        "client.transcript.jsonl",
+        "agent.transcript.jsonl",
+        "session-log.jsonl",
+        "provider.json"
+      ],
+      "enabled": true,
+      "manifest": "artifacts/runs/20260912T012758Z-708619000-c23-on/semantic/manifest.json",
+      "root": "artifacts/runs/20260912T012758Z-708619000-c23-on/semantic",
+      "terminal": {
+        "classification": "provider_authored_completion",
+        "output_state": "complete",
+        "reason": "provider_authored_completion",
+        "terminal_provenance": "provider",
+        "terminal_reason": "provider_authored_completion"
+      }
+    }
+  },
+  "preserved": true,
+  "report": "artifacts/runs/20260912T012758Z-708619000-c23-on/report.json",
+  "run": "artifacts/runs/20260912T012758Z-708619000-c23-on",
+  "schema": "audio-runtime.c68.zero-audio-attribution.first-failure.v1",
+  "source": "c23",
+  "source_revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614"
+}
