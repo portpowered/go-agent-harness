@@ -12,6 +12,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[5]
 BASELINE = "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f"
+RELEASED_MAIN = "origin/main"
 BRANCH = "codex/audio-runtime-c85-retire-cli-room-replay-scheduler"
 SCHEDULER = "agent-cli/internal/services/internal/agentruntime/session_room_replay_scheduler.go"
 TEST = "agent-cli/internal/services/internal/agentruntime/session_room_replay_scheduler_test.go"
@@ -76,7 +77,12 @@ def verify_retirement() -> dict[str, object]:
 
 def verify_scope() -> dict[str, object]:
     require(git("branch", "--show-current").strip() == BRANCH, "candidate branch does not match the admitted branch")
-    changed = [path for path in git("diff", f"{BASELINE}...HEAD", "--name-only").splitlines() if path]
+    released_main = git("rev-parse", RELEASED_MAIN).strip()
+    try:
+        git("merge-base", "--is-ancestor", RELEASED_MAIN, "HEAD")
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError("released origin/main is not an ancestor of the candidate") from exc
+    changed = [path for path in git("diff", f"{RELEASED_MAIN}...HEAD", "--name-only").splitlines() if path]
     require(changed, "candidate diff is empty")
     require(
         all(path in OWNED_EXACT or path.startswith(OWNED_PREFIXES) for path in changed),
@@ -93,7 +99,12 @@ def verify_scope() -> dict[str, object]:
         },
         f"external consumer imports outside the public scheduler boundary: {sorted(imports)}",
     )
-    return {"changed_paths": changed, "excluded_paths_changed": forbidden, "external_imports": sorted(imports)}
+    return {
+        "scope_base": released_main,
+        "changed_paths": changed,
+        "excluded_paths_changed": forbidden,
+        "external_imports": sorted(imports),
+    }
 
 
 def main() -> int:
