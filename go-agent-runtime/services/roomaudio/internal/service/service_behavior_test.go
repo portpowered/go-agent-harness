@@ -84,7 +84,8 @@ func TestLoadRoomReplayAudioBundleRejectsMissingHashTimelineAndFormatEvidence(t 
 
 	t.Run("PCM format mismatch", func(t *testing.T) {
 		bundle, manifest, _ := writeRoomReplayAudioBundle(t)
-		manifest["pcm_format"].(map[string]any)["sample_rate_hz"] = 16000
+		format := mustRoomReplayObject(t, manifest["pcm_format"], "fixture pcm_format")
+		format["sample_rate_hz"] = 16000
 		writeRoomReplayAudioManifest(t, bundle, manifest)
 		_, err := loadTestRoomReplayAudioBundle(bundle)
 		assertRoomReplayAudioError(t, err, ErrInvalidRoomReplayBundle, "pcm_format")
@@ -95,9 +96,11 @@ func TestLoadRoomReplayAudioBundleRejectsMissingHashTimelineAndFormatEvidence(t 
 
 	t.Run("duplicate stream identity", func(t *testing.T) {
 		bundle, manifest, _ := writeRoomReplayAudioBundle(t)
-		participants := manifest["participants"].(map[string]any)
-		betaStreams := participants["beta"].(map[string]any)["streams"].(map[string]any)
-		betaStreams["sent"].(map[string]any)["stream_id"] = "alpha:sent"
+		participants := mustRoomReplayObject(t, manifest["participants"], "fixture participants")
+		beta := mustRoomReplayObject(t, participants["beta"], "fixture beta participant")
+		betaStreams := mustRoomReplayObject(t, beta["streams"], "fixture beta streams")
+		betaSent := mustRoomReplayObject(t, betaStreams["sent"], "fixture beta sent stream")
+		betaSent["stream_id"] = "alpha:sent"
 		writeRoomReplayAudioManifest(t, bundle, manifest)
 		_, err := loadTestRoomReplayAudioBundle(bundle)
 		assertRoomReplayAudioError(t, err, ErrInvalidRoomReplayBundle, "streams.alpha:sent")
@@ -128,7 +131,11 @@ func TestLoadRoomReplayAudioBundleRejectsEveryDeltaReconstructionMutation(t *tes
 		{
 			name: "altered delta",
 			mutate: func(lines []map[string]any) {
-				decoded, err := base64.StdEncoding.DecodeString(lines[0]["delta"].(string))
+				delta, ok := lines[0]["delta"].(string)
+				if !ok {
+					panic("fixture delta is not a string")
+				}
+				decoded, err := base64.StdEncoding.DecodeString(delta)
 				if err != nil {
 					panic(err)
 				}
@@ -199,11 +206,14 @@ func TestLoadRoomReplayAudioBundleEnforcesAnnotationIdentityAndToleranceBounds(t
 		clock := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
 		// Keep the declared stream interval inside the room while making the
 		// four-sample payload (about 167us at 24kHz) exceed the room by 67us.
-		manifest["timing"].(map[string]any)["ended_at"] = clock.Add(100 * time.Microsecond).Format(time.RFC3339Nano)
-		participants := manifest["participants"].(map[string]any)
+		timing := mustRoomReplayObject(t, manifest["timing"], "fixture timing")
+		timing["ended_at"] = clock.Add(100 * time.Microsecond).Format(time.RFC3339Nano)
+		participants := mustRoomReplayObject(t, manifest["participants"], "fixture participants")
 		for _, participantID := range []string{"alpha", "beta"} {
-			streams := participants[participantID].(map[string]any)["streams"].(map[string]any)
-			streams["wav"].(map[string]any)["timeline_end_ms"] = "100us"
+			participant := mustRoomReplayObject(t, participants[participantID], "fixture participant "+participantID)
+			streams := mustRoomReplayObject(t, participant["streams"], "fixture participant "+participantID+" streams")
+			wav := mustRoomReplayObject(t, streams["wav"], "fixture participant "+participantID+" wav stream")
+			wav["timeline_end_ms"] = "100us"
 		}
 		timeline := []byte(fmt.Sprintf(`{"sequence":0,"monotonic_offset_ms":0,"unix_ms":%d,"type":"speech_start","participant_id":"alpha"}`+"\n"+`{"sequence":1,"monotonic_offset_ms":0,"unix_ms":%d,"type":"speech_start","participant_id":"beta"}`+"\n", clock.UnixMilli(), clock.UnixMilli()))
 		if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), timeline, 0o600); err != nil {
@@ -223,6 +233,15 @@ func assertRoomReplayAudioError(t *testing.T, err, target error, context string)
 	if err == nil || !errors.Is(err, target) || !strings.Contains(err.Error(), context) {
 		t.Fatalf("error = %v, want %v with %q", err, target, context)
 	}
+}
+
+func mustRoomReplayObject(t *testing.T, value any, label string) map[string]any {
+	t.Helper()
+	object, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("%s is not an object", label)
+	}
+	return object
 }
 
 func writeRoomReplayAudioBundle(t *testing.T) (string, map[string]any, map[string][]int16) {
@@ -282,7 +301,10 @@ func writeRoomReplayAudioBundle(t *testing.T) (string, map[string]any, map[strin
 		"artifacts":    map[string]any{"room_timeline": roomReplayAudioArtifactValue(paths["room-timeline.jsonl"], "room-timeline.jsonl"), "room_mix": roomReplayAudioArtifactValue(paths["room-mix.wav"], "room-mix.wav")},
 		"annotations":  map[string]any{"overlaps": []any{map[string]any{"kind": "overlap", "id": "overlap-1", "start_ms": 10, "end_ms": 90, "participants": []any{"alpha", "beta"}}}},
 	}
-	participants := manifest["participants"].(map[string]any)
+	participants, ok := manifest["participants"].(map[string]any)
+	if !ok {
+		t.Fatal("fixture participants is not an object")
+	}
 	for _, participantID := range []string{"alpha", "beta"} {
 		artifactValues := map[string]any{}
 		for role, name := range map[string]string{
@@ -320,8 +342,14 @@ func writeRoomReplayAudioManifest(t *testing.T, bundle string, manifest map[stri
 
 func updateRoomReplayArtifact(t *testing.T, manifest map[string]any, role string, data []byte) {
 	t.Helper()
-	artifacts := manifest["artifacts"].(map[string]any)
-	value := artifacts[role].(map[string]any)
+	artifacts, ok := manifest["artifacts"].(map[string]any)
+	if !ok {
+		t.Fatal("fixture artifacts is not an object")
+	}
+	value, ok := artifacts[role].(map[string]any)
+	if !ok {
+		t.Fatalf("fixture artifact %q is not an object", role)
+	}
 	value["size"] = len(data)
 	digest := sha256.Sum256(data)
 	value["sha256"] = hex.EncodeToString(digest[:])
@@ -329,10 +357,22 @@ func updateRoomReplayArtifact(t *testing.T, manifest map[string]any, role string
 
 func updateRoomReplayParticipantArtifact(t *testing.T, manifest map[string]any, participantID, role string, data []byte) {
 	t.Helper()
-	participants := manifest["participants"].(map[string]any)
-	participant := participants[participantID].(map[string]any)
-	artifacts := participant["artifacts"].(map[string]any)
-	value := artifacts[role].(map[string]any)
+	participants, ok := manifest["participants"].(map[string]any)
+	if !ok {
+		t.Fatal("fixture participants is not an object")
+	}
+	participant, ok := participants[participantID].(map[string]any)
+	if !ok {
+		t.Fatalf("fixture participant %q is not an object", participantID)
+	}
+	artifacts, ok := participant["artifacts"].(map[string]any)
+	if !ok {
+		t.Fatalf("fixture participant %q artifacts is not an object", participantID)
+	}
+	value, ok := artifacts[role].(map[string]any)
+	if !ok {
+		t.Fatalf("fixture artifact %q for participant %q is not an object", role, participantID)
+	}
 	value["size"] = len(data)
 	digest := sha256.Sum256(data)
 	value["sha256"] = hex.EncodeToString(digest[:])
@@ -391,8 +431,16 @@ func testRoomReplayPlan(bundle string) (RoomReplayPlan, error) {
 	if err != nil {
 		return RoomReplayPlan{}, err
 	}
-	plan.Participants = testRoomReplayParticipants(resolvedBundle, manifest["participants"].(map[string]any))
-	plan.Artifacts = testRoomReplayGlobalArtifacts(resolvedBundle, manifest["artifacts"].(map[string]any))
+	participants, ok := manifest["participants"].(map[string]any)
+	if !ok {
+		return RoomReplayPlan{}, errors.New("test manifest participants must be an object")
+	}
+	artifacts, ok := manifest["artifacts"].(map[string]any)
+	if !ok {
+		return RoomReplayPlan{}, errors.New("test manifest artifacts must be an object")
+	}
+	plan.Participants = testRoomReplayParticipants(resolvedBundle, participants)
+	plan.Artifacts = testRoomReplayGlobalArtifacts(resolvedBundle, artifacts)
 	if err := validateTestRoomReplayArtifacts(plan); err != nil {
 		return RoomReplayPlan{}, err
 	}
@@ -408,11 +456,22 @@ func testRoomReplayPlan(bundle string) (RoomReplayPlan, error) {
 }
 
 func testRoomReplayArtifact(bundle string, value map[string]any, role, owner string) RoomReplayArtifact {
-	path := value["path"].(string)
+	path, ok := value["path"].(string)
+	if !ok {
+		panic("fixture artifact path is not a string")
+	}
+	size, ok := value["size"].(float64)
+	if !ok {
+		panic("fixture artifact size is not a number")
+	}
+	sha256Value, ok := value["sha256"].(string)
+	if !ok {
+		panic("fixture artifact sha256 is not a string")
+	}
 	return RoomReplayArtifact{
 		Name: role, Role: role, Owner: owner, Path: path,
 		AbsolutePath: filepath.Join(bundle, filepath.FromSlash(path)),
-		Size:         int64(value["size"].(float64)), SHA256: value["sha256"].(string),
+		Size:         int64(size), SHA256: sha256Value,
 	}
 }
 

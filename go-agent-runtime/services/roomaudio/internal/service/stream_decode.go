@@ -49,7 +49,7 @@ func loadRoomReplayJSONL(artifact RoomReplayArtifact, field string) ([]json.RawM
 		return nil, err
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+	scanner.Buffer(make([]byte, roomReplayJSONLScannerInitialBufferBytes), roomReplayJSONLScannerMaxTokenBytes)
 	lines := make([]json.RawMessage, 0)
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		line := bytes.TrimSpace(scanner.Bytes())

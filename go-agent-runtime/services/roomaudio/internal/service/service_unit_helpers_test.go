@@ -8,10 +8,15 @@ import (
 	"time"
 )
 
+const (
+	roomReplayTestSentRole     = "sent"
+	roomReplayTestReceivedRole = "received"
+)
+
 func assertRoomReplayStreamMetadataObjects(t *testing.T) {
 	t.Helper()
 	metadata := parseRoomReplayStreamMetadataObject(json.RawMessage(`{"stream_id":"sent","timeline_start_ms":5,"timeline_end":"20ms","duration_ms":30,"chunk_boundaries":[{"id":"first","sample_index":2},{"sample_index":4}],"expected_speech":[{"label":"turn","start_ms":2,"end_ms":10},{"start_ms":4,"end_ms":3}]}`))
-	if metadata.StreamID != "sent" || metadata.TimelineStart != 5*time.Millisecond || metadata.TimelineEnd != 20*time.Millisecond || metadata.Duration != 30*time.Millisecond || len(metadata.ChunkBoundaries) != 2 || len(metadata.ExpectedSpeech) != 1 {
+	if metadata.StreamID != roomReplayTestSentRole || metadata.TimelineStart != 5*time.Millisecond || metadata.TimelineEnd != 20*time.Millisecond || metadata.Duration != 30*time.Millisecond || len(metadata.ChunkBoundaries) != 2 || len(metadata.ExpectedSpeech) != 1 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	parsed := parseRoomReplayStreamMetadata(roomReplayJSONObject{"streams": json.RawMessage(`{"sent_pcm":{"stream_id":"uplink"}}`), "sent": json.RawMessage(`{"timeline_start_ms":1}`)}, "sent")
@@ -21,7 +26,7 @@ func assertRoomReplayStreamMetadataObjects(t *testing.T) {
 	var destination roomReplayAudioStreamMetadata
 	mergeRoomReplayAudioStreamMetadata(&destination, metadata)
 	mergeRoomReplayAudioStreamMetadata(nil, metadata)
-	if destination.StreamID != "sent" {
+	if destination.StreamID != roomReplayTestSentRole {
 		t.Fatalf("merged metadata = %+v", destination)
 	}
 	mergeRoomReplaySidecarMetadata(map[string]roomReplayAudioStreamMetadata{}, []json.RawMessage{json.RawMessage(`{"role":"unknown"}`), json.RawMessage(`not-json`)})
@@ -29,7 +34,7 @@ func assertRoomReplayStreamMetadataObjects(t *testing.T) {
 
 func assertRoomReplayStreamMetadataDurations(t *testing.T) {
 	t.Helper()
-	if normalizeRoomReplayAudioRole("output-stream") != "wav" || normalizeRoomReplayAudioRole("downlink") != "received" || normalizeRoomReplayAudioRole("other") != "" {
+	if normalizeRoomReplayAudioRole("output-stream") != "wav" || normalizeRoomReplayAudioRole("downlink") != roomReplayTestReceivedRole || normalizeRoomReplayAudioRole("other") != "" {
 		t.Fatal("audio role normalization lost an alias")
 	}
 	if value, err := roomReplayDurationValue(json.RawMessage(`"5"`), true); err != nil || value != 5*time.Millisecond {
@@ -137,8 +142,8 @@ func assertRoomReplayPCMStreams(t *testing.T) {
 	}
 	artifact := RoomReplayArtifact{Path: "stream.wav", AbsolutePath: path}
 	plan := RoomReplayPlan{PCMFormat: RoomReplayPCMFormat{SampleRate: 24000, Channels: 1, SampleWidthBit: 16, ByteOrder: "little", Encoding: "signed_pcm16"}}
-	stream, err := loadRoomReplayPCMStream(plan, artifact, "sent", "alpha", "sent")
-	if err != nil || stream.SampleCount != 3 || stream.StreamID != "sent" {
+	stream, err := loadRoomReplayPCMStream(plan, artifact, roomReplayTestSentRole, "alpha", roomReplayTestSentRole)
+	if err != nil || stream.SampleCount != 3 || stream.StreamID != roomReplayTestSentRole {
 		t.Fatalf("WAV-backed PCM stream = %+v err=%v", stream, err)
 	}
 	if err := validateRoomReplayWAVFormat(roomReplayWAVPayload{SampleRate: 24000, Channels: 1, Bits: 16}, plan.PCMFormat, "stream.wav"); err != nil {
@@ -154,7 +159,7 @@ func assertRoomReplayRawPCMAndJSONL(t *testing.T, directory string, plan RoomRep
 		t.Fatal(err)
 	}
 	rawArtifact := RoomReplayArtifact{Path: "stream.pcm", AbsolutePath: rawPath}
-	if stream, err := loadRoomReplayPCMStream(plan, rawArtifact, "received", "alpha", "received"); err != nil || stream.SampleCount != 2 {
+	if stream, err := loadRoomReplayPCMStream(plan, rawArtifact, roomReplayTestReceivedRole, "alpha", roomReplayTestReceivedRole); err != nil || stream.SampleCount != 2 {
 		t.Fatalf("raw PCM stream = %+v err=%v", stream, err)
 	}
 	jsonlPath := filepath.Join(directory, "events.jsonl")

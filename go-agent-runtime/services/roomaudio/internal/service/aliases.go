@@ -28,6 +28,8 @@ const (
 	RoomReplayBundleManifestPath = roomaudio.RoomReplayBundleManifestPath
 	RoomReplayBundleMismatch     = roomaudio.RoomReplayBundleMismatch
 	RoomReplayBundleIncomplete   = roomaudio.RoomReplayBundleIncomplete
+	roomReplayAudioRoleSent      = "sent"
+	roomReplayAudioRoleReceived  = "received"
 
 	roomReplayArtifactRoleWAV         = roomaudio.RoomReplayAudioRoleWAV
 	roomReplayArtifactRoleDiagnostics = roomaudio.RoomReplayAudioRoleDiagnostics

@@ -84,10 +84,10 @@ func roomReplayStreamRoleAliases(role string) []string {
 	switch role {
 	case "wav":
 		return []string{"wav", "output", "audio", "output_stream", "wav_stream"}
-	case "sent":
-		return []string{"sent", "sent_pcm", "sent_stream", "uplink"}
-	case "received":
-		return []string{"received", "received_pcm", "received_stream", "downlink"}
+	case roomReplayAudioRoleSent:
+		return []string{roomReplayAudioRoleSent, "sent_pcm", "sent_stream", "uplink"}
+	case roomReplayAudioRoleReceived:
+		return []string{roomReplayAudioRoleReceived, "received_pcm", "received_stream", "downlink"}
 	default:
 		return []string{role}
 	}
@@ -99,7 +99,9 @@ func parseRoomReplayStreamMetadataObject(raw json.RawMessage) roomReplayAudioStr
 	if err != nil {
 		return metadata
 	}
-	metadata.StreamID, _, _ = firstRoomReplayStringField(object, nil, "stream_id", "id", "identity")
+	if value, _, err := firstRoomReplayStringField(object, nil, "stream_id", "id", "identity"); err == nil {
+		metadata.StreamID = value
+	}
 	if value, present, err := roomReplayFirstDurationField(object, "timeline_start_ms", "start_ms", "start_offset_ms", "timeline_start", "start"); err == nil && present {
 		metadata.TimelineStart, metadata.HasStart = value, true
 	}
@@ -148,7 +150,10 @@ func mergeRoomReplaySidecarMetadata(metadata map[string]roomReplayAudioStreamMet
 		if err != nil {
 			continue
 		}
-		role, _, _ := firstRoomReplayStringField(object, nil, "stream_role", "audio_role", "role")
+		role, _, roleErr := firstRoomReplayStringField(object, nil, "stream_role", "audio_role", "role")
+		if roleErr != nil {
+			continue
+		}
 		role = normalizeRoomReplayAudioRole(role)
 		if role == "" {
 			continue
@@ -169,10 +174,10 @@ func normalizeRoomReplayAudioRole(value string) string {
 	switch normalized {
 	case "output", "wav", "audio", "output_stream", "wav_stream":
 		return "wav"
-	case "sent", "sent_pcm", "sent_stream", "uplink":
-		return "sent"
-	case "received", "received_pcm", "received_stream", "downlink":
-		return "received"
+	case roomReplayAudioRoleSent, "sent_pcm", "sent_stream", "uplink":
+		return roomReplayAudioRoleSent
+	case roomReplayAudioRoleReceived, "received_pcm", "received_stream", "downlink":
+		return roomReplayAudioRoleReceived
 	default:
 		return ""
 	}
@@ -252,7 +257,10 @@ func parseRoomReplayChunkBoundaries(raw json.RawMessage) []streamanalysis.ChunkB
 		if err != nil {
 			continue
 		}
-		id, _, _ := firstRoomReplayStringField(object, nil, "id", "chunk_id", "name")
+		id, _, idErr := firstRoomReplayStringField(object, nil, "id", "chunk_id", "name")
+		if idErr != nil {
+			continue
+		}
 		if strings.TrimSpace(id) == "" {
 			id = fmt.Sprintf("chunk-%d", index)
 		}
@@ -279,7 +287,10 @@ func parseRoomReplaySpeechAnnotations(raw json.RawMessage) []streamanalysis.Spee
 		if startErr != nil || endErr != nil || !startPresent || !endPresent || end <= start {
 			continue
 		}
-		label, _, _ := firstRoomReplayStringField(object, nil, "label", "id", "name")
+		label, _, labelErr := firstRoomReplayStringField(object, nil, "label", "id", "name")
+		if labelErr != nil {
+			continue
+		}
 		annotations = append(annotations, streamanalysis.SpeechAnnotation{Label: label, Start: start, End: end})
 	}
 	return annotations

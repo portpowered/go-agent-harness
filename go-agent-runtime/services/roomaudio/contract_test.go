@@ -20,7 +20,7 @@ func TestRoomReplayErrorsRetainStableClassifications(t *testing.T) {
 	if !errors.Is(incomplete, ErrRoomReplayBundleIncomplete) || !errors.Is(incomplete, providers.ErrReplayIncomplete) || !errors.Is(incomplete, gateway.ErrReplayIncomplete) {
 		t.Fatalf("incomplete classification failed: %v", incomplete)
 	}
-	if (&RoomReplayBundleError{}).Error() == "" || (*RoomReplayBundleError)(nil).Error() != "<nil>" {
+	if (&RoomReplayBundleError{}).Error() == "" || (*RoomReplayBundleError)(nil).Error() != roomReplayNilString {
 		t.Fatal("bundle error formatting lost its nil/empty contract")
 	}
 	detail := &RoomReplayDeltaReconstructionError{ParticipantID: "alpha", StreamID: "alpha:output", DeltaID: "d0", DeltaIndex: 0, ByteOffset: 2, ExpectedByte: -1, ActualByte: 1, ExpectedLength: 4, ActualLength: 2, ExpectedSampleCount: 2, ActualSampleCount: 1, Cause: ErrRoomReplayDeltaReconstruction}

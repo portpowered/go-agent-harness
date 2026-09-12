@@ -28,3 +28,11 @@ plus registration of the new generated Wire file in the shared architecture
 policy. `make wire-check` likewise reports only the unregistered
 `go-agent-runtime/services/roomaudio/wire/wire_gen.go`. Those shared files are
 held by predecessor leases and were not edited in this task.
+
+Repair checkpoint after the current-head static rejection:
+
+- Pinned `make lint`, `make staticcheck`, `make fmt`, and targeted `go vet` are clean.
+- Focused roomaudio/CLI tests pass: 33 normal roomaudio, 19 focused CLI, 99 roomaudio race, 19 focused CLI race; the isolated `GOWORK=off` consumer passes.
+- `make coverage-registration` passes with 179 workspace packages across 6 modules.
+- `make coverage-changed COVERAGE_BASE=84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f` reached the existing WebMCP cross-process test, which failed only under coverage because its child emitted a receipt on stderr; the exact test passes standalone.
+- `make architecture-size-check` now reports only the 32 shared baseline/generated-file issues, and `make wire-check` reports only the unregistered generated Wire file. No shared inventory was edited.

@@ -13,6 +13,12 @@ import (
 	"time"
 )
 
+const (
+	roomReplayTestAlphaParticipant  = "alpha"
+	roomReplayTestAlphaOutputStream = "alpha:output"
+	roomReplayTestAlphaSentStream   = "alpha:sent"
+)
+
 func assertRoomReplayBundleMetadata(t *testing.T, got RoomReplayAudioBundle, resolvedBundle string) {
 	t.Helper()
 	if got.Plan.BundlePath != resolvedBundle || got.Format.SampleRate != 24000 || got.Format.Channels != 1 || got.Format.SampleWidthBits != 16 {
@@ -22,24 +28,24 @@ func assertRoomReplayBundleMetadata(t *testing.T, got RoomReplayAudioBundle, res
 	if got.Tolerances.StreamConfig != defaults.StreamConfig || got.Tolerances.RoomConfig != defaults.RoomConfig {
 		t.Fatalf("default tolerance profile = %+v, want suite defaults", got.Tolerances)
 	}
-	if len(got.Participants) != 2 || got.Participants[0].ID != "alpha" || got.Participants[1].ID != "beta" {
+	if len(got.Participants) != 2 || got.Participants[0].ID != roomReplayTestAlphaParticipant || got.Participants[1].ID != "beta" {
 		t.Fatalf("participants = %+v, want stable manifest identities", got.Participants)
 	}
 }
 
 func assertRoomReplayBundleParticipant(t *testing.T, got RoomReplayAudioBundle, want map[string][]int16) {
 	t.Helper()
-	alpha, ok := got.Participant("alpha")
+	alpha, ok := got.Participant(roomReplayTestAlphaParticipant)
 	if !ok {
 		t.Fatal("alpha participant missing")
 	}
-	if alpha.WAV.StreamID != "alpha:output" || alpha.Sent.StreamID != "alpha:sent" || alpha.Received.StreamID != "alpha:received" {
+	if alpha.WAV.StreamID != roomReplayTestAlphaOutputStream || alpha.Sent.StreamID != roomReplayTestAlphaSentStream || alpha.Received.StreamID != "alpha:received" {
 		t.Fatalf("alpha stream identities = %q/%q/%q", alpha.WAV.StreamID, alpha.Sent.StreamID, alpha.Received.StreamID)
 	}
 	if !bytes.Equal(alpha.WAV.PCM, roomReplayAudioPCM16Bytes(want["alpha:wav"])) || len(alpha.WAV.Deltas) != 2 || alpha.WAV.SampleCount != len(want["alpha:wav"]) {
 		t.Fatalf("alpha WAV evidence = bytes:%v deltas:%d samples:%d", alpha.WAV.PCM, len(alpha.WAV.Deltas), alpha.WAV.SampleCount)
 	}
-	if !bytes.Equal(alpha.Sent.PCM, roomReplayAudioPCM16Bytes(want["alpha:sent"])) || !bytes.Equal(alpha.Received.PCM, roomReplayAudioPCM16Bytes(want["alpha:received"])) {
+	if !bytes.Equal(alpha.Sent.PCM, roomReplayAudioPCM16Bytes(want[roomReplayTestAlphaSentStream])) || !bytes.Equal(alpha.Received.PCM, roomReplayAudioPCM16Bytes(want["alpha:received"])) {
 		t.Fatal("alpha sent/received PCM was not resolved exactly")
 	}
 	if len(alpha.Events) != 2 || len(alpha.Diagnostics) != 1 {
@@ -63,7 +69,7 @@ func assertRoomReplayBundleRoomEvidence(t *testing.T, got RoomReplayAudioBundle,
 func assertRoomReplayBundleAnalysis(t *testing.T, got RoomReplayAudioBundle) {
 	t.Helper()
 	input := got.AnalysisInput()
-	if len(input.Streams) != 7 || len(input.Overlaps) != 1 || input.Streams[0].StreamID != "alpha:output" {
+	if len(input.Streams) != 7 || len(input.Overlaps) != 1 || input.Streams[0].StreamID != roomReplayTestAlphaOutputStream {
 		t.Fatalf("analysis input = streams:%d overlaps:%d first:%q, want all resolved streams", len(input.Streams), len(input.Overlaps), input.Streams[0].StreamID)
 	}
 }
@@ -71,7 +77,7 @@ func assertRoomReplayBundleAnalysis(t *testing.T, got RoomReplayAudioBundle) {
 func runRoomReplayDeltaMutationTest(t *testing.T, name string, mutate func([]map[string]any)) {
 	t.Helper()
 	bundle, manifest, _ := writeRoomReplayAudioBundle(t)
-	path := filepath.Join(bundle, "participants", "alpha", "deltas.jsonl")
+	path := filepath.Join(bundle, "participants", roomReplayTestAlphaParticipant, "deltas.jsonl")
 	lines := roomReplayDeltaMutationLines()
 	if name == "dropped delta" {
 		lines = lines[1:]
@@ -82,7 +88,7 @@ func runRoomReplayDeltaMutationTest(t *testing.T, name string, mutate func([]map
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatalf("rewrite deltas: %v", err)
 	}
-	updateRoomReplayParticipantArtifact(t, manifest, "alpha", "deltas", data)
+	updateRoomReplayParticipantArtifact(t, manifest, roomReplayTestAlphaParticipant, "deltas", data)
 	writeRoomReplayAudioManifest(t, bundle, manifest)
 	assertRoomReplayDeltaReconstruction(t, name, bundle)
 }
@@ -104,7 +110,7 @@ func assertRoomReplayDeltaReconstruction(t *testing.T, name, bundle string) {
 	if !errors.As(err, &reconstruction) {
 		t.Fatalf("%s error = %v, want first-divergence details", name, err)
 	}
-	if reconstruction.ParticipantID != "alpha" || reconstruction.StreamID != "alpha:output" || reconstruction.DeltaID == "" {
+	if reconstruction.ParticipantID != roomReplayTestAlphaParticipant || reconstruction.StreamID != roomReplayTestAlphaOutputStream || reconstruction.DeltaID == "" {
 		t.Fatalf("reconstruction = %+v, want stable participant/stream/delta identity", reconstruction)
 	}
 	if !strings.Contains(err.Error(), "first divergent byte") || !strings.Contains(err.Error(), "expected") || !strings.Contains(err.Error(), "reconstructed") {
@@ -133,7 +139,10 @@ func testRoomReplayPlanHeader(bundle string, manifest map[string]any) (RoomRepla
 	if err != nil {
 		return RoomReplayPlan{}, err
 	}
-	timing := manifest["timing"].(map[string]any)
+	timing, ok := manifest["timing"].(map[string]any)
+	if !ok {
+		return RoomReplayPlan{}, errors.New("test manifest timing must be an object")
+	}
 	startedAt, err := parseTestRoomReplayTime(timing["started_at"])
 	if err != nil {
 		return RoomReplayPlan{}, err
@@ -142,17 +151,68 @@ func testRoomReplayPlanHeader(bundle string, manifest map[string]any) (RoomRepla
 	if err != nil {
 		return RoomReplayPlan{}, err
 	}
-	formatObject := manifest["pcm_format"].(map[string]any)
+	formatObject, ok := manifest["pcm_format"].(map[string]any)
+	if !ok {
+		return RoomReplayPlan{}, errors.New("test manifest pcm_format must be an object")
+	}
+	schemaVersion, err := testRoomReplayNumber(manifest, "schema_version")
+	if err != nil {
+		return RoomReplayPlan{}, err
+	}
+	finalized, ok := manifest["finalized"].(bool)
+	if !ok {
+		return RoomReplayPlan{}, errors.New("test manifest finalized must be a boolean")
+	}
+	sampleRate, err := testRoomReplayNumber(formatObject, "sample_rate_hz")
+	if err != nil {
+		return RoomReplayPlan{}, err
+	}
+	channels, err := testRoomReplayNumber(formatObject, "channels")
+	if err != nil {
+		return RoomReplayPlan{}, err
+	}
+	sampleWidthBits, err := testRoomReplayNumber(formatObject, "sample_width_bits")
+	if err != nil {
+		return RoomReplayPlan{}, err
+	}
+	byteOrder, err := testRoomReplayString(formatObject, "byte_order")
+	if err != nil {
+		return RoomReplayPlan{}, err
+	}
+	encoding, err := testRoomReplayString(formatObject, "encoding")
+	if err != nil {
+		return RoomReplayPlan{}, err
+	}
 	return RoomReplayPlan{
-		BundlePath: bundle, ManifestPath: filepath.Join(bundle, RoomReplayBundleManifestPath), SchemaVersion: int(manifest["schema_version"].(float64)), Finalized: manifest["finalized"].(bool),
+		BundlePath: bundle, ManifestPath: filepath.Join(bundle, RoomReplayBundleManifestPath), SchemaVersion: int(schemaVersion), Finalized: finalized,
 		ClockBase: clockBase, StartedAt: startedAt, EndedAt: endedAt,
-		PCMFormat:    RoomReplayPCMFormat{SampleRate: int(formatObject["sample_rate_hz"].(float64)), Channels: int(formatObject["channels"].(float64)), SampleWidthBits: int(formatObject["sample_width_bits"].(float64)), ByteOrder: formatObject["byte_order"].(string), Encoding: formatObject["encoding"].(string)},
+		PCMFormat:    RoomReplayPCMFormat{SampleRate: int(sampleRate), Channels: int(channels), SampleWidthBits: int(sampleWidthBits), ByteOrder: byteOrder, Encoding: encoding},
 		TimelinePath: filepath.Join(bundle, "room-timeline.jsonl"), RoomMixPath: filepath.Join(bundle, "room-mix.wav"),
 	}, nil
 }
 
 func parseTestRoomReplayTime(value any) (time.Time, error) {
-	return time.Parse(time.RFC3339Nano, value.(string))
+	text, ok := value.(string)
+	if !ok {
+		return time.Time{}, errors.New("test manifest time must be a string")
+	}
+	return time.Parse(time.RFC3339Nano, text)
+}
+
+func testRoomReplayNumber(object map[string]any, field string) (float64, error) {
+	value, ok := object[field].(float64)
+	if !ok {
+		return 0, errors.New("test manifest field must be a number: " + field)
+	}
+	return value, nil
+}
+
+func testRoomReplayString(object map[string]any, field string) (string, error) {
+	value, ok := object[field].(string)
+	if !ok {
+		return "", errors.New("test manifest field must be a string: " + field)
+	}
+	return value, nil
 }
 
 func testRoomReplayParticipants(bundle string, values map[string]any) []RoomReplayParticipant {
@@ -163,10 +223,21 @@ func testRoomReplayParticipants(bundle string, values map[string]any) []RoomRepl
 	sort.Strings(ids)
 	participants := make([]RoomReplayParticipant, 0, len(ids))
 	for _, participantID := range ids {
-		object := values[participantID].(map[string]any)
+		object, ok := values[participantID].(map[string]any)
+		if !ok {
+			continue
+		}
 		participant := RoomReplayParticipant{ID: participantID, Kind: ParticipantKind("human")}
-		for role, value := range object["artifacts"].(map[string]any) {
-			participant.Artifacts = append(participant.Artifacts, testRoomReplayArtifact(bundle, value.(map[string]any), role, participantID+":"+role))
+		artifacts, ok := object["artifacts"].(map[string]any)
+		if !ok {
+			continue
+		}
+		for role, value := range artifacts {
+			artifact, ok := value.(map[string]any)
+			if !ok {
+				continue
+			}
+			participant.Artifacts = append(participant.Artifacts, testRoomReplayArtifact(bundle, artifact, role, participantID+":"+role))
 		}
 		participants = append(participants, participant)
 	}
@@ -180,7 +251,11 @@ func testRoomReplayGlobalArtifacts(bundle string, values map[string]any) []RoomR
 		if role == "room_mix" {
 			owner = "room:mix"
 		}
-		artifacts = append(artifacts, testRoomReplayArtifact(bundle, value.(map[string]any), role, owner))
+		artifact, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		artifacts = append(artifacts, testRoomReplayArtifact(bundle, artifact, role, owner))
 	}
 	return artifacts
 }
@@ -198,15 +273,33 @@ func parseTestRoomReplayTimeline(data []byte) ([]RoomReplayTimelineEvent, error)
 		if err := json.Unmarshal(line, &row); err != nil {
 			return nil, err
 		}
-		sequence, offset := int64(row["sequence"].(float64)), int64(row["monotonic_offset_ms"].(float64))
+		sequenceValue, err := testRoomReplayNumber(row, "sequence")
+		if err != nil {
+			return nil, err
+		}
+		offsetValue, err := testRoomReplayNumber(row, "monotonic_offset_ms")
+		if err != nil {
+			return nil, err
+		}
+		unixValue, err := testRoomReplayNumber(row, "unix_ms")
+		if err != nil {
+			return nil, err
+		}
+		sequence, offset, unixMS := int64(sequenceValue), int64(offsetValue), int64(unixValue)
 		if !first && (sequence <= previousSequence || offset < previousOffset) {
 			return nil, roomReplayAudioMismatch("room_timeline", "room-timeline.jsonl", "ordered timeline", "out of order", nil)
 		}
 		first = false
 		previousSequence, previousOffset = sequence, offset
-		participantID, _ := row["participant_id"].(string)
-		rowType, _ := row["type"].(string)
-		events = append(events, RoomReplayTimelineEvent{Sequence: sequence, OffsetMS: offset, UnixMS: int64(row["unix_ms"].(float64)), Type: rowType, ParticipantID: participantID, Raw: append(json.RawMessage(nil), line...)})
+		participantID, err := testRoomReplayString(row, "participant_id")
+		if err != nil {
+			return nil, err
+		}
+		rowType, err := testRoomReplayString(row, "type")
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, RoomReplayTimelineEvent{Sequence: sequence, OffsetMS: offset, UnixMS: unixMS, Type: rowType, ParticipantID: participantID, Raw: append(json.RawMessage(nil), line...)})
 	}
 	return events, nil
 }

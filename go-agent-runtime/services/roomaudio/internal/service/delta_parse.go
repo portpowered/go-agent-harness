@@ -26,7 +26,7 @@ func loadRoomReplayAudioDeltas(artifact RoomReplayArtifact, participantID, strea
 		return nil, err
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+	scanner.Buffer(make([]byte, roomReplayJSONLScannerInitialBufferBytes), roomReplayJSONLScannerMaxTokenBytes)
 	state := roomReplayDeltaParseState{deltas: make([]RoomReplayAudioDelta, 0), seenDeltaIDs: make(map[string]int)}
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		line := bytes.TrimSpace(scanner.Bytes())
@@ -70,7 +70,10 @@ func parseRoomReplayAudioDeltaLine(line []byte, lineNumber int, artifact RoomRep
 	if err != nil {
 		return RoomReplayAudioDelta{}, false, err
 	}
-	turnID, _, _ := firstRoomReplayStringField(object, nil, "turn_id", "turn", "response_id")
+	turnID, _, turnErr := firstRoomReplayStringField(object, nil, "turn_id", "turn", "response_id")
+	if turnErr != nil {
+		return RoomReplayAudioDelta{}, false, roomReplayAudioMismatch(roomReplayDeltaLineField(participantID, lineNumber, "turn_id"), artifact.Path, "string turn identity", "invalid", turnErr)
+	}
 	return RoomReplayAudioDelta{ID: id, Sequence: sequence, HasSequence: hasSequence, Offset: offset, HasOffset: hasOffset, TurnID: strings.TrimSpace(turnID), LineNumber: lineNumber, PCM: append([]byte(nil), payload...)}, true, nil
 }
 
@@ -221,7 +224,7 @@ func roomReplayNestedAudioPayload(object roomReplayJSONObject, kind string) ([]b
 			continue
 		}
 		nestedKind := kind
-		if value, present, _ := firstRoomReplayStringField(nested, nil, "type", "event_type", "kind"); present {
+		if value, present, err := firstRoomReplayStringField(nested, nil, "type", "event_type", "kind"); err == nil && present {
 			nestedKind = value
 		}
 		payload, found, payloadErr := roomReplayAudioPayload(nested, nestedKind)
@@ -250,39 +253,38 @@ func decodeRoomReplayAudioRaw(raw json.RawMessage) ([]byte, bool, error) {
 
 func decodeRoomReplayAudioString(raw json.RawMessage) ([]byte, bool, error) {
 	var encoded string
-	if json.Unmarshal(raw, &encoded) != nil {
-		return nil, false, nil
+	if err := json.Unmarshal(raw, &encoded); err == nil {
+		if encoded == "" {
+			return []byte{}, true, nil
+		}
+		decoded, err := codec.DecodeLegacyBase64(encoded)
+		return decoded, true, err
 	}
-	if encoded == "" {
-		return []byte{}, true, nil
-	}
-	decoded, err := codec.DecodeLegacyBase64(encoded)
-	return decoded, true, err
+	return nil, false, nil
 }
 
 func decodeRoomReplayAudioByteArray(raw json.RawMessage) ([]byte, bool, error) {
 	var numbers []int
-	if json.Unmarshal(raw, &numbers) != nil {
-		return nil, false, nil
-	}
-	payload := make([]byte, len(numbers))
-	for index, value := range numbers {
-		if value < 0 || value > 255 {
-			return nil, true, fmt.Errorf("audio byte %d is outside 0..255", value)
+	if err := json.Unmarshal(raw, &numbers); err == nil {
+		payload := make([]byte, len(numbers))
+		for index, value := range numbers {
+			if value < 0 || value > 255 {
+				return nil, true, fmt.Errorf("audio byte %d is outside 0..255", value)
+			}
+			payload[index] = byte(value)
 		}
-		payload[index] = byte(value)
+		return payload, true, nil
 	}
-	return payload, true, nil
+	return nil, false, nil
 }
 
 func decodeRoomReplayAudioObject(raw json.RawMessage) ([]byte, bool, error) {
 	object, err := roomReplayObject(raw)
-	if err != nil {
-		return nil, false, nil
-	}
-	for _, key := range []string{"base64", "data", "content", "pcm", "delta"} {
-		if nested, ok := object[key]; ok {
-			return decodeRoomReplayAudioRaw(nested)
+	if err == nil {
+		for _, key := range []string{"base64", "data", "content", "pcm", "delta"} {
+			if nested, ok := object[key]; ok {
+				return decodeRoomReplayAudioRaw(nested)
+			}
 		}
 	}
 	return nil, false, nil

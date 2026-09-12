@@ -68,6 +68,7 @@ type RoomReplayBundleErrorKind string
 const (
 	RoomReplayBundleMismatch   RoomReplayBundleErrorKind = "mismatch"
 	RoomReplayBundleIncomplete RoomReplayBundleErrorKind = "incomplete"
+	roomReplayNilString                                  = "<nil>"
 )
 
 // RoomReplayBundleError carries bounded, non-secret context for an admission
@@ -84,7 +85,7 @@ type RoomReplayBundleError struct {
 
 func (e *RoomReplayBundleError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return roomReplayNilString
 	}
 	label := string(e.Kind)
 	if label == "" {
@@ -170,7 +171,7 @@ type RoomReplayDeltaReconstructionError struct {
 
 func (e *RoomReplayDeltaReconstructionError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return roomReplayNilString
 	}
 	expectedByte := "<missing>"
 	if e.ExpectedByte >= 0 {

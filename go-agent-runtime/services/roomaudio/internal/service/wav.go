@@ -15,6 +15,8 @@ import (
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 )
 
+const roomReplayPCM16Bits = 16
+
 func roomReplaySampleDuration(samples, sampleRate int) time.Duration {
 	if samples <= 0 || sampleRate <= 0 {
 		return 0
@@ -51,7 +53,7 @@ func decodeRoomReplayWAV(data []byte, artifact string) (roomReplayWAVPayload, er
 	}
 	start := int(layout.DataOffset)
 	end := start + int(layout.DataBytes)
-	return roomReplayWAVPayload{SampleRate: layout.SampleRate, Channels: 1, Bits: 16, PCM: append([]byte(nil), data[start:end]...)}, nil
+	return roomReplayWAVPayload{SampleRate: layout.SampleRate, Channels: 1, Bits: roomReplayPCM16Bits, PCM: append([]byte(nil), data[start:end]...)}, nil
 }
 
 func validateRoomReplayWAVFormat(wav roomReplayWAVPayload, declared RoomReplayPCMFormat, artifact string) error {

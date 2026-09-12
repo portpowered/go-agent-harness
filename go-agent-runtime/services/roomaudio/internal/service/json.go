@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	maxRoomReplayManifestBytes = 8 << 20
-	maxRoomReplayArtifactBytes = 64 << 20
+	maxRoomReplayManifestBytes               = 8 << 20
+	maxRoomReplayArtifactBytes               = 64 << 20
+	roomReplayJSONLScannerInitialBufferBytes = 64 << 10
+	roomReplayJSONLScannerMaxTokenBytes      = 4 << 20
 )
 
 func newRoomReplayBundleError(kind roomReplayBundleErrorKind, field, artifact, expected, actual string, cause error) error {
@@ -108,7 +110,7 @@ func findRoomReplayArtifact(artifacts []RoomReplayArtifact, owner string) (RoomR
 	return RoomReplayArtifact{}, false
 }
 
-func readRoomReplayPath(path string, maxBytes int64, field string) ([]byte, error) {
+func readRoomReplayPath(path string, maxBytes int64, field string) (data []byte, retErr error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, roomReplayAudioIncomplete(field, "", "readable bounded file", "missing path", ErrRoomReplayBundleIncomplete)
 	}
@@ -116,7 +118,12 @@ func readRoomReplayPath(path string, maxBytes int64, field string) ([]byte, erro
 	if err != nil {
 		return nil, roomReplayAudioIncomplete(field, path, "readable bounded file", err.Error(), err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil && retErr == nil {
+			data = nil
+			retErr = roomReplayAudioIncomplete(field, path, "closable bounded file", err.Error(), err)
+		}
+	}()
 	info, err := file.Stat()
 	if err != nil {
 		return nil, roomReplayAudioIncomplete(field, path, "stat-able bounded file", err.Error(), err)
@@ -124,7 +131,7 @@ func readRoomReplayPath(path string, maxBytes int64, field string) ([]byte, erro
 	if info.Size() < 0 || info.Size() > maxBytes {
 		return nil, roomReplayAudioMismatch(field, path, fmt.Sprintf("file no larger than %d bytes", maxBytes), fmt.Sprintf("%d bytes", info.Size()), nil)
 	}
-	data, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
+	data, err = io.ReadAll(io.LimitReader(file, maxBytes+1))
 	if err != nil {
 		return nil, roomReplayAudioIncomplete(field, path, "readable bounded file", err.Error(), err)
 	}

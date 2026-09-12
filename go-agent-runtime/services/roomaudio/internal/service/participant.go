@@ -6,6 +6,8 @@ import (
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 )
 
+const roomReplayParticipantStreamRoleCount = 3
+
 type roomReplayParticipantArtifacts struct {
 	wav, deltas, sent, received, events, diagnostics RoomReplayArtifact
 }
@@ -84,7 +86,7 @@ func loadRoomReplayParticipantSidecars(artifacts roomReplayParticipantArtifacts,
 }
 
 func roomReplayParticipantMetadata(object roomReplayJSONObject, events, diagnostics []json.RawMessage, participantID string) map[string]roomReplayAudioStreamMetadata {
-	metadata := make(map[string]roomReplayAudioStreamMetadata, 3)
+	metadata := make(map[string]roomReplayAudioStreamMetadata, roomReplayParticipantStreamRoleCount)
 	for _, role := range []string{"wav", "sent", "received"} {
 		metadata[role] = parseRoomReplayStreamMetadata(object, role)
 	}
