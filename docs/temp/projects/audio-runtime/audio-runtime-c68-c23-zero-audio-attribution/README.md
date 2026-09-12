@@ -64,3 +64,10 @@ The prior PR457 integration rejection is preserved in
 6,400 high-rate rendered samples while reporting zero dropped samples. This is
 the existing C47/C64 audio-stability residual, outside the C68 evidence-only
 lease, and is not claimed as repaired here.
+
+The latest PR457 rejection is preserved in
+`ci-integration-rejection-34671293029.json`: run `34671293029`, job
+`103493004872`, failed the same high-rate production-binary oracle in trials
+03 and 20, losing exactly 6,400 rendered samples while reporting zero dropped
+samples. The full job log is bound by its byte count and SHA-256 in that
+record. No C68 production repair or acceptance waiver is implied.

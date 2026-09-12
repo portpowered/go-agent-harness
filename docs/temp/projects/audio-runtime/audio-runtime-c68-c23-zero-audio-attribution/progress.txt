@@ -116,3 +116,26 @@ accounts for every retained positive root and binds the current attempt to
 the normalized artifact inventory. Next action is force-add the generated
 owned evidence, commit, push/update PR457, and return ACCEPTED to the external
 script-CI gate without polling; retain C68 ownership for any exact rejection.
+
+2026-09-12: The canonical current-head rejection for PR457 at candidate
+0efdb49b53cb4bb0edf925f2d3ba1c35d3866760 is preserved in
+ci-integration-rejection-34671293029.json. Full run 34671293029/job
+103493004872 was read; all checks passed except CI (integration), whose
+production-binary TestAgentBinaryTest45HighRateToolAudioRegression trial 03
+and trial 20 each rendered 171191 of 177591 compared samples, losing exactly
+6400 while reporting zero dropped/discarded samples. Playback reported
+underflow/zero-fill, and provider protocol errors were empty. This is the
+existing C47/C64 production owner boundary, outside C68's evidence-only lease;
+no production repair, assertion waiver or timeout change was made. The raw
+job-log capture is bound by 36997 bytes and SHA-256
+89ca4ece5192fd6e9f0b6b5405032315ae1ef9bacf82aaba39c732a397adf167.
+
+2026-09-12: At current head 0efdb49, the task-local verify.py modes
+provenance, oracle-controls, boundaries, attribution, cleanup and all passed.
+The C68 comparison remains exactly four positive one-turn cases and the
+classification remains C56_RECORDING_DEFECT with the existing C56 executor as
+owner. The new rejection record is evidence-only and does not change the
+comparison, executable inputs or C21 evidence. Next action: commit and push
+this changed owned evidence, update PR457, and return ACCEPTED to the
+script-owned CI gate without polling; retain the same task for any exact new
+rejection.
