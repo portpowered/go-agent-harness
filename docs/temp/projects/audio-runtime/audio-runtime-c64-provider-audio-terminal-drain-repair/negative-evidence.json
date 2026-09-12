@@ -5,9 +5,9 @@
   "source_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
   "current_main_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "candidate_revision": "c57b749c62c2ff0d6b1cdbbe4d6221183d421d55",
-  "fixture_revision": "c57b749c62c2ff0d6b1cdbbe4d6221183d421d55",
-  "candidate_diff_sha256": "92c80dcf51210227afc882daafdd9efe82dfc8bf03f85b8178874ddc7b855fed",
+  "candidate_revision": "9742efc208dac9612bb1f3178263fc9e2535b3ac",
+  "fixture_revision": "9742efc208dac9612bb1f3178263fc9e2535b3ac",
+  "candidate_diff_sha256": "25aa18beffb67aa22e82ebcf032af6a5417a121b519f639a0aee3a0648cac88b",
   "fixture_test_hashes": {
     "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "2f5b60313f5c7a062de63efb0d482c0f7278436368cad046c6c369a9afc16ce9"
   },
@@ -80,7 +80,7 @@
         "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "2f5b60313f5c7a062de63efb0d482c0f7278436368cad046c6c369a9afc16ce9"
       }
     },
-    "artifact_sha256": "41ded59d72dea3088b52984b3f99cba597b38e92220c933ff6671afed6d1f6fd",
+    "artifact_sha256": "9fc87403d0bf3306dc1879cb18b20a14f596849ea15a64b031e770afd299cccc",
     "failure_evidence": {
       "provider_samples": 9600,
       "admitted_samples": 0,
@@ -97,7 +97,7 @@
       "timed_out": false,
       "output_bounded": true,
       "cleanup": {"parent_reaped": true, "reader_thread_joined": true, "group_alive_after": false},
-      "artifact_sha256": "41ded59d72dea3088b52984b3f99cba597b38e92220c933ff6671afed6d1f6fd"
+      "artifact_sha256": "9fc87403d0bf3306dc1879cb18b20a14f596849ea15a64b031e770afd299cccc"
     },
     "result": {
       "command": ["<isolated-accepted-source-artifact>", "-test.run", "^TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio$", "-test.v", "-test.count=1", "-test.timeout=60s"],
