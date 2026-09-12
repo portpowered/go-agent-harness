@@ -1,0 +1,62 @@
+{
+  "add_command": "git worktree add --detach <temporary-worktree> <base>",
+  "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "base_tree": "dded566273b27f7146c4e630a0f23fb9402198da",
+  "cleanup": {
+    "temporary_root_removed": true,
+    "worktree_remove_command": "git worktree remove --force <temporary-worktree>",
+    "worktree_remove_status": "passed",
+    "worktree_removed": true
+  },
+  "final_head": "72431f5b7b53101073d27e1883338799cd58ddb3",
+  "final_status": [],
+  "final_tree": "4d8e93ae0e74db403fdb02c70db9cf849c590156",
+  "merges": [
+    {
+      "command": "git merge --no-ff --no-commit 8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "commit": "c343bfdc67c94afcd106188076094eb931a91389",
+      "commit_command": "git commit --no-verify -m C109 required merge c61",
+      "conflict_resolution": "not-needed",
+      "conflicted_paths": [],
+      "exit_code": 0,
+      "expected_commit": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "label": "c61",
+      "output": "Automatic merge went well; stopped before committing as requested\n",
+      "parents": [
+        "c343bfdc67c94afcd106188076094eb931a91389",
+        "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      ],
+      "post_status": [],
+      "ref": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "status": "passed",
+      "tree": "6af4741839ceefd208ce8893f623ae42d33b5cef"
+    },
+    {
+      "command": "git merge --no-ff --no-commit 22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "commit": "72431f5b7b53101073d27e1883338799cd58ddb3",
+      "commit_command": "git commit --no-verify -m C109 required merge c83",
+      "conflict_resolution": "not-needed",
+      "conflicted_paths": [],
+      "exit_code": 0,
+      "expected_commit": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "label": "c83",
+      "output": "Auto-merging agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go\nAutomatic merge went well; stopped before committing as requested\n",
+      "parents": [
+        "72431f5b7b53101073d27e1883338799cd58ddb3",
+        "c343bfdc67c94afcd106188076094eb931a91389",
+        "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      ],
+      "post_status": [],
+      "ref": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "status": "passed",
+      "tree": "4d8e93ae0e74db403fdb02c70db9cf849c590156"
+    }
+  ],
+  "order": [
+    "c61",
+    "c83"
+  ],
+  "role": "required",
+  "worktree_path_recorded": "temporary path intentionally omitted from normalized evidence"
+}

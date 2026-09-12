@@ -1,0 +1,835 @@
+{
+  "apiConclusion": {
+    "c83_requires_c61_api": false,
+    "delivery_order_reason": "C61 and C83 are separate admitted tasks and C79 owns the shared registry/baseline lease; merge-order evidence is characterization, not authorization to merge either candidate.",
+    "delivery_order_required_procedurally": true,
+    "order_independent_mechanically": true,
+    "reason": "C83 imports browserrunner and instruments the existing internal runner; it does not import the C61 public browserscenario package or any C61-only symbol."
+  },
+  "base": {
+    "candidateIntersection": [
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go"
+    ],
+    "candidateUnionCount": 70,
+    "reviewMain": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+  },
+  "failClosedRules": [
+    "exact admitted SHAs are required",
+    "both merge orders are required",
+    "candidate refs and preserved worktrees must remain unchanged",
+    "C109 owned paths are evidence-only",
+    "unsupported acceptance/fix/probe claims are rejected"
+  ],
+  "files": [
+    {
+      "base_blob": "a28158cc588be2ed75d5eecb8a0e85acc2e2e4bb",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "a28158cc588be2ed75d5eecb8a0e85acc2e2e4bb",
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "05a080efb6fbbab59a110586269752ec591fe6bd",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_compat.go"
+    },
+    {
+      "base_blob": "5d230bd78b39382d24b076591e593654b23285b3",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "5d230bd78b39382d24b076591e593654b23285b3",
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "d4a2fec2875a07a4ace18365361f71b3a6d4ae0f",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_derivation_compat.go"
+    },
+    {
+      "base_blob": "3dc28c13cdbfdb253577e3d60753e81f824c0964",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "3dc28c13cdbfdb253577e3d60753e81f824c0964",
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go"
+    },
+    {
+      "base_blob": "bf2549cbf992788f148679c68e5f871adb0020a9",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "bf2549cbf992788f148679c68e5f871adb0020a9",
+      "c83_blob": "8a4aa1f9612b4bdc8b87e5799fa4b6f23ea64caf",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go"
+    },
+    {
+      "base_blob": "cd35847b1d6cc26ae46a35afe555d532aae71ea0",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "cd35847b1d6cc26ae46a35afe555d532aae71ea0",
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_recovery.go"
+    },
+    {
+      "base_blob": "a3b08376d6d59cd03f3d6c346ddc147006221088",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "a3b08376d6d59cd03f3d6c346ddc147006221088",
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "e6a6364170f4c14405e5cdc5e6190e964965efb7",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report_compat.go"
+    },
+    {
+      "base_blob": "b5b5f4c71020852014823badae4a9fa10e504879",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "3efd224433bf73250be6dc40eec3ff08d0f51ac6",
+      "c83_blob": "b5b5f4c71020852014823badae4a9fa10e504879",
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report_test.go"
+    },
+    {
+      "base_blob": "63d7d9570942c015d04d28db65d6430b6b197b11",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "63d7d9570942c015d04d28db65d6430b6b197b11",
+      "c83_blob": "3af0b336dfc8ce0fdc30633acac6c96b85f1b599",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go"
+    },
+    {
+      "base_blob": "2c4c76c4ce3577940112a3e742c8507c0ee59a7a",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "80717f2241b302ad0be23bd21157b9301b667392",
+      "c83_blob": "e848d80555cb6d848feccb7e1d3134b9fbb6e6e4",
+      "changed_by_c61": true,
+      "changed_by_c83": true,
+      "owner": "C61/C83-separate-hunks; C109 owns characterization only",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go"
+    },
+    {
+      "base_blob": "325dabbaa6e2e9634eb5bf503513c59af46fe725",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "325dabbaa6e2e9634eb5bf503513c59af46fe725",
+      "c83_blob": "5bd2baf6c8b74465ba1a3c23861a571357021b5f",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go"
+    },
+    {
+      "base_blob": "2d4800feb20a2a0435cc124d862d80f74ff9dc24",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "fac61d7356cd73417341c3a5d62ea918f4763e66",
+      "c83_blob": "2d4800feb20a2a0435cc124d862d80f74ff9dc24",
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "agent-cli/internal/services/servicetest/runtime.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "55bbd76087c7a6db8fd0cde096da9720e476f809",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "coverage-manifest/go-agent-runtime/services/browserrunner/internal/service/package.json"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "300d60827683cc9483f08227b3843c351d59f05a",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "coverage-manifest/go-agent-runtime/services/browserrunner/package.json"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "2f615b53c12a2d61cfcde63c12f8a53c73f252af",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "coverage-manifest/go-agent-runtime/services/browserrunner/wire/package.json"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "779bfbe57d33b81d3995e4a296cdae195f237622",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "coverage-manifest/go-agent-runtime/services/browserscenario/internal/service/package.json"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "b1af2f42f449638da5d6c3ee445bd88688cee589",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "coverage-manifest/go-agent-runtime/services/browserscenario/package.json"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "d094ccbfcf65b8ed672c35e84c73c41a9c9d98c4",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "coverage-manifest/go-agent-runtime/services/browserscenario/wire/package.json"
+    },
+    {
+      "base_blob": "8dec36466fbd141c3599d46dd6663c599d21891c",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "8dec36466fbd141c3599d46dd6663c599d21891c",
+      "c83_blob": "2a9b68dd0fbdca0422a8340b1e12e220684ab534",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "docs/architecture/architecture-policy.json"
+    },
+    {
+      "base_blob": "3220815a37b468ada808235063441e55bc841d0b",
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "face3e133133e4e74cc0e72b6f2ce3cde645dc2e",
+      "c83_blob": "3220815a37b468ada808235063441e55bc841d0b",
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C79/shared-registry-owner",
+      "path": "docs/architecture/architecture-size-baseline.json"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "b316fc03b9d391a770fd8c4d66f12629a08e181f",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/consumer/consumer_test.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "05e5e4d2f3830cf26cba0ea09842092ab444254d",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/consumer/go.mod"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "ab854d02f35c38a90b9c4dad86c0036e920562a7",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/run.py"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "51009b626cd5096fa5cf3302df0e430dbad63ec5",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/verify.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "8477937baab156bf6e0d2cc5ca8f125ee17d1a44",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c83-retire-cli-browser-scenario-runner/checkpoint-tracker-interruption.md"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "88f4dc1b7b2da2561cdce3bdadd72b00733b7196",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c83-retire-cli-browser-scenario-runner/external-consumer/go.mod"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "ee73b2a5231f53368e80926501c0eec70ee45ca7",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c83-retire-cli-browser-scenario-runner/external-consumer/main_test.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "9d7e5d8c03f3bd337590fd2f8c42dbf7d2cb9e17",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "go-agent-runtime/services/browserrunner/internal/service/interruption.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "71d3d2da5832f6c3a4ae19fc6549c60814844839",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "go-agent-runtime/services/browserrunner/internal/service/partition.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "511791d5b58cca2882ce9b0a1637ae08e784c379",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "go-agent-runtime/services/browserrunner/internal/service/service.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "cf11648b8bec9a882139fb7b60a9bd700df60c27",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "go-agent-runtime/services/browserrunner/internal/service/service_test.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "a368e16ab5f151f83ce5a6e90dc030fe5a628152",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "go-agent-runtime/services/browserrunner/internal/service/tracker.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "469a8da40c0072538121e84c5a3cdbf27f4969d6",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "go-agent-runtime/services/browserrunner/internal/service/tracker_observe.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "c2b256fbbb63b4f3938ab0900c0b75af821e69ba",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "go-agent-runtime/services/browserrunner/service.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "68f0a52164078e9721043df5035af31c61e7bc53",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "go-agent-runtime/services/browserrunner/wire/providers.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "6d1c5345fb38f3f1d3b4a9e9c0d28ea1f5ea906c",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "go-agent-runtime/services/browserrunner/wire/wire_gen.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": null,
+      "c83_blob": "bb1a2262ef0cbb0ebaa76e26bc96cbbac5b1408d",
+      "changed_by_c61": false,
+      "changed_by_c83": true,
+      "owner": "C83/work-task-125",
+      "path": "go-agent-runtime/services/browserrunner/wire/wire_test.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "12b55da33e4eddac7a45a00e2df64ca54fb7d6c5",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/compat_test.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "4d2fb8970efe5c4ee804e77e50ab1038a9f602b9",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/correction.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "bdcbe86dd006a8630821baf5f01f38c5dfb66dbf",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/derivation_evaluation_test.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "d3fedfde22483b59c838cfa61e88bd3557fc8cd8",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/evaluation.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "148ef935911d36399ffdad4b3a0194e09939dc9f",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/observation.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "c6e744db728181ceb01a43405c6d9a260847be11",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/opaque.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "9964b08fabbd2780c2e8ee9004e94f51389616a8",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/recovery.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "1e0b9f6fa529e7e1cd2b863f54bcbfe79e18470c",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/report_test.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "19519835797bd91867249cba08079ef1f1d5a09a",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/scenario_test.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "cb50ab2697aa33561da75c40ce38c319607a75d0",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/service.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "713a342f1852c72be86b24ca6196306da929e863",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/validator.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "a13f86d331424d8ebd77f7de0ae18ae88c8e6051",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/validator_process.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "9b6160d94e42b4cb68a4d959ebbf2f1a2aee9593",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/validator_process_other.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "90a0edd65561f5adc330688734ae34f49fd560aa",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/validator_process_test.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "d4fe8cee7829d87c1f9f7bbf99a3d2574fb06551",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/internal/service/validator_process_unix.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "4b803987876547ec29d7ea8dded0a620c8a6d580",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/opaque.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "d4cd273cc586ca0ca16cd618c010648f59f975f3",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/report_contract.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "c2320564fed2cfdd80512b0f903a5c0d15a07f92",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/report_render.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "dd9d4515ee3bcab102bb3249cebfd475726f7126",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/report_sanitize.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "13f738c54ef0430fcf80502b08799966fe908b27",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/report_validity.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "98c310d39552fdbdb37a16f77bdfa16fab11df4a",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/result_clone.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "5a9e1cb148770508a524f14057a28f9bd8c86d16",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/result_contract.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "262b56455e8d0ed8826e7e0b40188743a524959d",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/result_validation.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "6f19001d3c3d2bca5f21be4fb0e78ba55fa4de16",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/run.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "363b8b03cf300f5e441baf1977751bf2ba99d1e5",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/run_finalize.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "80281e7925ed4550ef09fc52c879381373e757a4",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/run_observations.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "0c4ccf13cc54b77bb43f7a795deaf44baff97ef3",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/scenario_contract.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "387cef7562030a54e1a17868e8929160c08bb588",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/scenario_json.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "197469fd23e576f6522e9f26a393c0489994268c",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/scenario_validation.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "36df996a954f160492bc016df74d863fa9afd261",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/service.go"
+    },
+    {
+      "base_blob": null,
+      "base_commit": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "c61_blob": "6087ca9ec21f493ccf0b5edaefacafc8cf55287a",
+      "c83_blob": null,
+      "changed_by_c61": true,
+      "changed_by_c83": false,
+      "owner": "C61/work-task-34",
+      "path": "go-agent-runtime/services/browserscenario/wire/wire.go"
+    },
+    {
+      "api_relationship": {
+        "c83_requires_c61_api": false,
+        "delivery_order_reason": "C61 and C83 are separate admitted tasks and C79 owns the shared registry/baseline lease; merge-order evidence is characterization, not authorization to merge either candidate.",
+        "delivery_order_required_procedurally": true,
+        "order_independent_mechanically": true,
+        "reason": "C83 imports browserrunner and instruments the existing internal runner; it does not import the C61 public browserscenario package or any C61-only symbol."
+      },
+      "base_blob": "2c4c76c4ce3577940112a3e742c8507c0ee59a7a",
+      "c61_blob": "80717f2241b302ad0be23bd21157b9301b667392",
+      "c61_patch_unified_zero": "diff --git a/agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go b/agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go\nindex 2c4c76c4..80717f22 100644\n--- a/agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go\n+++ b/agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go\n@@ -4 +3,0 @@ import (\n-\t\"bytes\"\n@@ -10 +8,0 @@ import (\n-\t\"reflect\"\n@@ -1214,67 +1211,0 @@ func sanitizeBrowserConversationVerdict(verdict BrowserConversationValidatorVerd\n-\n-func browserConversationTurnsForStep(turns []BrowserConversationTurn, stepID string) (*BrowserConversationTurn, *BrowserConversationTurn) {\n-\tvar customer, assistant *BrowserConversationTurn\n-\tfor index := range turns {\n-\t\tif turns[index].StepID != stepID {\n-\t\t\tcontinue\n-\t\t}\n-\t\tswitch turns[index].Direction {\n-\t\tcase BrowserConversationCustomerTurn:\n-\t\t\tif customer == nil {\n-\t\t\t\tcustomer = &turns[index]\n-\t\t\t}\n-\t\tcase BrowserConversationAssistantTurn:\n-\t\t\tif assistant == nil {\n-\t\t\t\tassistant = &turns[index]\n-\t\t\t}\n-\t\t}\n-\t}\n-\treturn customer, assistant\n-}\n-\n-func browserConversationOracleForStep(oracles []BrowserConversationOracleSnapshot, stepID string, phase BrowserConversationOraclePhase) *BrowserConversationOracleSnapshot {\n-\tvar match *BrowserConversationOracleSnapshot\n-\tfor index := range oracles {\n-\t\tif oracles[index].StepID == stepID && oracles[index].Phase == phase {\n-\t\t\tmatch = &oracles[index]\n-\t\t}\n-\t}\n-\treturn match\n-}\n-\n-func browserConversationTerminalInvokeForStep(calls []BrowserConversationBrokerCall, stepID string) *BrowserConversationBrokerCall {\n-\tfor _, call := range calls {\n-\t\tif call.StepID == stepID &&\n-\t\t\tcall.Operation == BrowserConversationInvoke &&\n-\t\t\tcall.Terminal &&\n-\t\t\tcall.State == webmcp.InvocationCompleted &&\n-\t\t\tcall.ErrorCode == \"\" {\n-\t\t\tcandidate := call\n-\t\t\treturn &candidate\n-\t\t}\n-\t}\n-\treturn nil\n-}\n-\n-func browserConversationJSONEqual(left, right json.RawMessage) bool {\n-\tleftValue, leftOK := decodeBrowserConversationJSON(left)\n-\trightValue, rightOK := decodeBrowserConversationJSON(right)\n-\treturn leftOK && rightOK && reflect.DeepEqual(leftValue, rightValue)\n-}\n-\n-func decodeBrowserConversationJSON(raw json.RawMessage) (any, bool) {\n-\tif len(bytes.TrimSpace(raw)) == 0 {\n-\t\treturn nil, false\n-\t}\n-\tdecoder := json.NewDecoder(bytes.NewReader(raw))\n-\tdecoder.UseNumber()\n-\tvar value any\n-\tif err := decoder.Decode(&value); err != nil {\n-\t\treturn nil, false\n-\t}\n-\tvar extra any\n-\tif err := decoder.Decode(&extra); err != io.EOF {\n-\t\treturn nil, false\n-\t}\n-\treturn value, true\n-}",
+      "c83_blob": "e848d80555cb6d848feccb7e1d3134b9fbb6e6e4",
+      "c83_patch_unified_zero": "diff --git a/agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go b/agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go\nindex 2c4c76c4..e848d805 100644\n--- a/agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go\n+++ b/agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go\n@@ -888,0 +889 @@ func (b *browserConversationBroker) Invoke(ctx context.Context, request webmcp.I\n+\t\t\t\tb.run.observeInvocationObservation(browserConversationWaitInvocationObservation, result.InvocationID, result.State, browserConversationInvocationStateTerminal(result.State))\n@@ -900,5 +901,8 @@ func (b *browserConversationBroker) Invoke(ctx context.Context, request webmcp.I\n-\t\t\t} else if b.tracker != nil {\n-\t\t\t\tb.tracker.setError(errors.Join(\n-\t\t\t\t\tErrBrowserConversationEvidence,\n-\t\t\t\t\tfmt.Errorf(\"terminal invocation result unavailable: %w\", waitErr),\n-\t\t\t\t))\n+\t\t\t} else {\n+\t\t\t\tb.run.observeInvocationObservation(browserConversationWaitInvocationObservation, result.InvocationID, result.State, false)\n+\t\t\t\tif b.tracker != nil {\n+\t\t\t\t\tb.tracker.setError(errors.Join(\n+\t\t\t\t\t\tErrBrowserConversationEvidence,\n+\t\t\t\t\t\tfmt.Errorf(\"terminal invocation result unavailable: %w\", waitErr),\n+\t\t\t\t\t))\n+\t\t\t\t}\n@@ -924,0 +929 @@ func (b *browserConversationBroker) Cancel(ctx context.Context, request webmcp.C\n+\tb.run.observeInvocationObservation(browserConversationCancelObservation, request.InvocationID, webmcp.InvocationCanceled, false)",
+      "owner": "C61/C83 separate hunk owners; no C109 source ownership",
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+      "symbols": [
+        {
+          "declarations": [
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48260:      \"signature\": \"func browserConversationTurnsForStep(turns []BrowserConversationTurn, stepID string) (*BrowserConversationTurn, *BrowserConversationTurn) {\\n\\tvar customer, assistant *BrowserConversationTurn\\n\\tfor index := range turns {\\n\\t\\tif turns[index].StepID != stepID {\\n\\t\\t\\tcontinue\\n\\t\\t}\\n\\t\\tswitch turns[index].Direction {\\n\\t\\tcase BrowserConversationCustomerTurn:\\n\\t\\t\\tif customer == nil {\\n\\t\\t\\t\\tcustomer = \\u0026turns[index]\\n\\t\\t\\t}\\n\\t\\tcase BrowserConversationAssistantTurn:\\n\\t\\t\\tif assistant == nil {\\n\\t\\t\\t\\tassistant = \\u0026turns[index]\\n\\t\\t\\t}\\n\\t\\t}\\n\\t}\\n\\treturn customer, assistant\\n}\","
+          ],
+          "effect": "deleted dead helper; absent from C61 commit",
+          "owner": "C61/work-task-34",
+          "references": [
+            "/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:38704:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go:33:35 `browserConversationTurnsForStep` (same-package AST CallExpr)\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:38705:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go:39:26 `browserConversationTurnsForStep` (same-package AST CallExpr)\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:38706:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go:107:37 `browserConversationTurnsForStep` (same-package AST CallExpr)\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:38707:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go:108:45 `browserConversationTurnsForStep` (same-package AST CallExpr)\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:38708:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go:56:26 `browserConversationTurnsForStep` (same-package AST CallExpr)\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:2189:        \"agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go:1215:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.browserConversationTurnsForStep\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48250:      \"id\": \"agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go:1215:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.browserConversationTurnsForStep\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48251:      \"name\": \"browserConversationTurnsForStep\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48252:      \"qualified_name\": \"github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.browserConversationTurnsForStep\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48260:      \"signature\": \"func browserConversationTurnsForStep(turns []BrowserConversationTurn, stepID string) (*BrowserConversationTurn, *BrowserConversationTurn) {\\n\\tvar customer, assistant *BrowserConversationTurn\\n\\tfor index := range turns {\\n\\t\\tif turns[index].StepID != stepID {\\n\\t\\t\\tcontinue\\n\\t\\t}\\n\\t\\tswitch turns[index].Direction {\\n\\t\\tcase BrowserConversationCustomerTurn:\\n\\t\\t\\tif customer == nil {\\n\\t\\t\\t\\tcustomer = \\u0026turns[index]\\n\\t\\t\\t}\\n\\t\\tcase BrowserConversationAssistantTurn:\\n\\t\\t\\tif assistant == nil {\\n\\t\\t\\t\\tassistant = \\u0026turns[index]\\n\\t\\t\\t}\\n\\t\\t}\\n\\t}\\n\\treturn customer, assistant\\n}\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48286:          \"expression\": \"browserConversationTurnsForStep\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48297:          \"expression\": \"browserConversationTurnsForStep\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48308:          \"expression\": \"browserConversationTurnsForStep\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48319:          \"expression\": \"browserConversationTurnsForStep\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48330:          \"expression\": \"browserConversationTurnsForStep\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48338:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go:33:35 `browserConversationTurnsForStep` (same-package AST CallExpr)\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48339:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go:39:26 `browserConversationTurnsForStep` (same-package AST CallExpr)\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48340:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go:107:37 `browserConversationTurnsForStep` (same-package AST CallExpr)\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48341:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go:108:45 `browserConversationTurnsForStep` (same-package AST CallExpr)\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48342:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go:56:26 `browserConversationTurnsForStep` (same-package AST CallExpr)\","
+          ],
+          "symbol": "browserConversationTurnsForStep"
+        },
+        {
+          "declarations": [
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:38944:      \"signature\": \"func browserConversationJSONEqual(left, right json.RawMessage) bool {\\n\\tleftValue, leftOK := decodeBrowserConversationJSON(left)\\n\\trightValue, rightOK := decodeBrowserConversationJSON(right)\\n\\treturn leftOK \\u0026\\u0026 rightOK \\u0026\\u0026 reflect.DeepEqual(leftValue, rightValue)\\n}\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:39138:      \"signature\": \"func decodeBrowserConversationJSON(raw json.RawMessage) (any, bool) {\\n\\tif len(bytes.TrimSpace(raw)) == 0 {\\n\\t\\treturn nil, false\\n\\t}\\n\\tdecoder := json.NewDecoder(bytes.NewReader(raw))\\n\\tdecoder.UseNumber()\\n\\tvar value any\\n\\tif err := decoder.Decode(\\u0026value); err != nil {\\n\\t\\treturn nil, false\\n\\t}\\n\\tvar extra any\\n\\tif err := decoder.Decode(\\u0026extra); err != io.EOF {\\n\\t\\treturn nil, false\\n\\t}\\n\\treturn value, true\\n}\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48578:      \"signature\": \"func browserConversationJSONEqual(left, right json.RawMessage) bool {\\n\\tleftValue, leftOK := decodeBrowserConversationJSON(left)\\n\\trightValue, rightOK := decodeBrowserConversationJSON(right)\\n\\treturn leftOK \\u0026\\u0026 rightOK \\u0026\\u0026 reflect.DeepEqual(leftValue, rightValue)\\n}\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48772:      \"signature\": \"func decodeBrowserConversationJSON(raw json.RawMessage) (any, bool) {\\n\\tif len(bytes.TrimSpace(raw)) == 0 {\\n\\t\\treturn nil, false\\n\\t}\\n\\tdecoder := json.NewDecoder(bytes.NewReader(raw))\\n\\tdecoder.UseNumber()\\n\\tvar value any\\n\\tif err := decoder.Decode(\\u0026value); err != nil {\\n\\t\\treturn nil, false\\n\\t}\\n\\tvar extra any\\n\\tif err := decoder.Decode(\\u0026extra); err != io.EOF {\\n\\t\\treturn nil, false\\n\\t}\\n\\treturn value, true\\n}\","
+          ],
+          "effect": "deleted dead helper; absent from C61 commit",
+          "owner": "C61/work-task-34",
+          "references": [
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/call-paths.json:14325:      \"callee\": \"agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go:1265:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/call-paths.json:14333:        \"expression\": \"decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/call-paths.json:14340:      \"callee\": \"agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go:1265:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/call-paths.json:14348:        \"expression\": \"decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:38944:      \"signature\": \"func browserConversationJSONEqual(left, right json.RawMessage) bool {\\n\\tleftValue, leftOK := decodeBrowserConversationJSON(left)\\n\\trightValue, rightOK := decodeBrowserConversationJSON(right)\\n\\treturn leftOK \\u0026\\u0026 rightOK \\u0026\\u0026 reflect.DeepEqual(leftValue, rightValue)\\n}\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:39128:      \"id\": \"agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go:1265:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:39129:      \"name\": \"decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:39130:      \"qualified_name\": \"github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:39138:      \"signature\": \"func decodeBrowserConversationJSON(raw json.RawMessage) (any, bool) {\\n\\tif len(bytes.TrimSpace(raw)) == 0 {\\n\\t\\treturn nil, false\\n\\t}\\n\\tdecoder := json.NewDecoder(bytes.NewReader(raw))\\n\\tdecoder.UseNumber()\\n\\tvar value any\\n\\tif err := decoder.Decode(\\u0026value); err != nil {\\n\\t\\treturn nil, false\\n\\t}\\n\\tvar extra any\\n\\tif err := decoder.Decode(\\u0026extra); err != io.EOF {\\n\\t\\treturn nil, false\\n\\t}\\n\\treturn value, true\\n}\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:39164:          \"expression\": \"decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:39175:          \"expression\": \"decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:39183:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go:1260:23 `decodeBrowserConversationJSON` (same-package AST CallExpr)\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/classifications.json:39184:        \"exact production CallExpr agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go:1261:25 `decodeBrowserConversationJSON` (same-package AST CallExpr)\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:2193:        \"agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go:1265:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.decodeBrowserConversationJSON\"",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48578:      \"signature\": \"func browserConversationJSONEqual(left, right json.RawMessage) bool {\\n\\tleftValue, leftOK := decodeBrowserConversationJSON(left)\\n\\trightValue, rightOK := decodeBrowserConversationJSON(right)\\n\\treturn leftOK \\u0026\\u0026 rightOK \\u0026\\u0026 reflect.DeepEqual(leftValue, rightValue)\\n}\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48762:      \"id\": \"agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go:1265:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48763:      \"name\": \"decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48764:      \"qualified_name\": \"github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.decodeBrowserConversationJSON\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48772:      \"signature\": \"func decodeBrowserConversationJSON(raw json.RawMessage) (any, bool) {\\n\\tif len(bytes.TrimSpace(raw)) == 0 {\\n\\t\\treturn nil, false\\n\\t}\\n\\tdecoder := json.NewDecoder(bytes.NewReader(raw))\\n\\tdecoder.UseNumber()\\n\\tvar value any\\n\\tif err := decoder.Decode(\\u0026value); err != nil {\\n\\t\\treturn nil, false\\n\\t}\\n\\tvar extra any\\n\\tif err := decoder.Decode(\\u0026extra); err != io.EOF {\\n\\t\\treturn nil, false\\n\\t}\\n\\treturn value, true\\n}\",",
+            "docs/temp/projects/audio-runtime/audio-runtime-c50-remaining-cli-service-inventory/analysis/inventory.json:48798:          \"expression\": \"decodeBrowserConversationJSON\","
+          ],
+          "symbol": "decodeBrowserConversationJSON"
+        },
+        {
+          "declarations": [],
+          "effect": "records ordered wait-invocation observation",
+          "owner": "C83/work-task-125",
+          "references": [
+            "docs/architecture/architecture-size-baseline.json:1490:      \"symbol\": \"*browserConversationBroker.Invoke\",",
+            "docs/architecture/architecture-size-baseline.json:11450:      \"symbol\": \"*browserConversationBroker.Invoke\","
+          ],
+          "symbol": "browserConversationBroker.Invoke"
+        },
+        {
+          "declarations": [],
+          "effect": "records cancellation observation and preserves cancellation ordering",
+          "owner": "C83/work-task-125",
+          "references": [],
+          "symbol": "browserConversationBroker.Cancel"
+        },
+        {
+          "declarations": [],
+          "effect": "records cancellation evidence in the shared runner",
+          "owner": "C83/work-task-125",
+          "references": [
+            "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go:106:\tbrowserConversationRecordCancellationObservation = \"record_cancellation\"",
+            "docs/temp/projects/audio-runtime/audio-runtime-c83-retire-cli-browser-scenario-runner/checkpoint-tracker-interruption.md:65:  `record_cancellation`. It does not alter the existing runner or evaluation",
+            "docs/temp/projects/audio-runtime/audio-runtime-c83-retire-cli-browser-scenario-runner/checkpoint-tracker-interruption.md:74:  `record_cancellation`; a few coverage trials varied the relative publication"
+          ],
+          "symbol": "record_cancellation"
+        }
+      ]
+    }
+  ],
+  "unownedCandidatePaths": []
+}

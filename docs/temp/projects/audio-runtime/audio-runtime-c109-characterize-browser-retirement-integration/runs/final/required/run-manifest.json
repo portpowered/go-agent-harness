@@ -1,0 +1,14 @@
+{
+  "commands": {
+    "control": "analyze.py --order c83-c61 --expect-control",
+    "required": "analyze.py --order c61-c83",
+    "verification": "verify.py --mode all"
+  },
+  "outputSha256": {
+    "ledger.json": "cc4a83ba2ec402e39a65de32c7b604a4acdbdde54986c839d82dced3dae8f519",
+    "merge-orders.json": "349e244982460c5d3d94bcbfb2e8f606b43fd95c34b5efb5df3df91ca50c5532",
+    "provenance.json": "b81b006d3cd0e6532ce92e054fde102c4b8f6bd86ccf062891a3268f1bddcfec",
+    "report.json": "c7bb004346ffb4e444f7794b9ea6c5c0ffdc359be46c956aec590112e5224b62",
+    "sequence.json": "cc543fd6838d49a9ebda831aee92b11b59ce227ca9274ad25472bf39566b5879"
+  }
+}

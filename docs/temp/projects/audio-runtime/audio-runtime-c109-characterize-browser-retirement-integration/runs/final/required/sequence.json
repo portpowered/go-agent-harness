@@ -1,0 +1,36 @@
+{
+  "prohibited": [
+    "merge either candidate from C109",
+    "repair candidate source or shared C79 files",
+    "claim C61/C83/project acceptance",
+    "claim hardware, microphone, acoustic, or vertical-probe coverage",
+    "relabel the 6400-sample provider-audio loss"
+  ],
+  "status": "bounded-and-procedural",
+  "steps": [
+    {
+      "action": "Resolve shared scripts/wire-packages.txt registration, architecture-size-baseline.json stale entries, and the provider-audio integration-loss ownership under the existing C79 lease.",
+      "gate": "C79 evidence/review/CI decision; C109 does not edit or relabel these findings.",
+      "number": 1,
+      "owner": "C79/work-task-114"
+    },
+    {
+      "action": "Return the same C61 task on its existing PR #452, reconcile the historical hermetic delta-barrier finding against accepted main 3d3e7278 and the rewritten focused test, then run its own task/review/CI gates.",
+      "gate": "independent review and script CI; no C109 acceptance claim",
+      "number": 2,
+      "owner": "C61/work-task-34"
+    },
+    {
+      "action": "After C79 shared resolution and C61 dependency disposition, return the same C83 task on PR #473, reconcile Wire/static findings and run its own task/review/CI gates.",
+      "gate": "independent review and script CI; no C109 acceptance claim",
+      "number": 3,
+      "owner": "C83/work-task-125"
+    },
+    {
+      "action": "Keep this immutable analyzer/report/source/fixture evidence available for review-time main integration and later fresh-scope vertical-probe staging.",
+      "gate": "C109 handoff only; no C61/C83/project acceptance or hardware/acoustic claim",
+      "number": 4,
+      "owner": "C109/work-task-224"
+    }
+  ]
+}

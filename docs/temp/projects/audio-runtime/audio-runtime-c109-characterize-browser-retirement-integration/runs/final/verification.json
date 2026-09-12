@@ -1,0 +1,39 @@
+{
+  "checks": [
+    "provenance-and-scope",
+    "merge-orders",
+    "behavior-and-attribution",
+    "handoff-sequence",
+    "determinism",
+    "negative-fixtures",
+    "public-checks"
+  ],
+  "mode": "all",
+  "negative": {
+    "changed-sha": {
+      "diagnostic": "changed C61 SHA",
+      "fixture": "changed-sha",
+      "status": "rejected-as-required"
+    },
+    "forbidden-claim": {
+      "diagnostic": "C61 acceptance claim is forbidden",
+      "fixture": "forbidden-claim",
+      "status": "rejected-as-required"
+    },
+    "missing-conflict": {
+      "diagnostic": "conflict evidence is missing",
+      "fixture": "missing-conflict",
+      "status": "rejected-as-required"
+    },
+    "reversed-order": {
+      "diagnostic": "rehearsal order is reversed or missing",
+      "fixture": "reversed-order",
+      "status": "rejected-as-required"
+    },
+    "wrong-owner": {
+      "diagnostic": "candidate path was incorrectly attributed to C109: agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
+      "fixture": "wrong-owner",
+      "status": "rejected-as-required"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "schema": "audio-runtime-c109-negative-fixtures-v1",
+  "purpose": "fail-closed verifier mutations; no candidate or shared source mutation",
+  "cases": [
+    {"name": "changed-sha", "mutation": "replace the admitted C61 commit with a non-admitted SHA", "expected": "reject"},
+    {"name": "reversed-order", "mutation": "reverse the required rehearsal order", "expected": "reject"},
+    {"name": "wrong-owner", "mutation": "attribute a candidate path to C109", "expected": "reject"},
+    {"name": "forbidden-claim", "mutation": "claim C61 is merged", "expected": "reject"},
+    {"name": "missing-conflict", "mutation": "remove a required conflicted_paths field", "expected": "reject"}
+  ],
+  "execution": "verify.py --mode all",
+  "result": "see ../runs/final/verification.json"
+}

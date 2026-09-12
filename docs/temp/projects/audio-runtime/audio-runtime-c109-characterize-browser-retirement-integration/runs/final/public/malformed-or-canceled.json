@@ -1,0 +1,84 @@
+{
+  "bounded": {
+    "aggregate_timeout_seconds": 300,
+    "child_timeout_seconds": 90,
+    "elapsed_seconds": 27.706,
+    "process_groups_clean": true
+  },
+  "case": "malformed-or-canceled",
+  "checks": [
+    {
+      "command": "go run docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/verify.go --mode malformed-credential-overflow-timeout-cleanup",
+      "credential_environment_scrubbed": true,
+      "credential_output_markers_absent": true,
+      "elapsed_seconds": 1.401,
+      "exit_code": 0,
+      "label": "malformed credential overflow timeout cleanup",
+      "output": "{\"candidate_revision\":\"bb18860cfae386fef93b1ea2717075e3570d4c35\",\"mode\":\"malformed-credential-overflow-timeout-cleanup\",\"status\":\"passed\"}\n",
+      "process_group_gone": true,
+      "removed_credential_environment_names": [
+        "NPM_TOKEN",
+        "groq_key"
+      ],
+      "status": "passed",
+      "timed_out": false,
+      "timeout_seconds": 90,
+      "working_tree": "synthetic-required-merge-tree"
+    },
+    {
+      "command": "go test ./internal/services/internal/agentruntime -run TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation -count=3 -timeout=180s",
+      "credential_environment_scrubbed": true,
+      "credential_output_markers_absent": true,
+      "elapsed_seconds": 9.693,
+      "exit_code": 0,
+      "label": "canceled browser scenario normal",
+      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.550s\n",
+      "process_group_gone": true,
+      "removed_credential_environment_names": [
+        "NPM_TOKEN",
+        "groq_key"
+      ],
+      "status": "passed",
+      "timed_out": false,
+      "timeout_seconds": 90,
+      "working_tree": "synthetic-required-merge-tree"
+    },
+    {
+      "command": "go test -race ./internal/services/internal/agentruntime -run TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation -count=3 -timeout=240s",
+      "credential_environment_scrubbed": true,
+      "credential_output_markers_absent": true,
+      "elapsed_seconds": 16.54,
+      "exit_code": 0,
+      "label": "canceled browser scenario race",
+      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.881s\n",
+      "process_group_gone": true,
+      "removed_credential_environment_names": [
+        "NPM_TOKEN",
+        "groq_key"
+      ],
+      "status": "passed",
+      "timed_out": false,
+      "timeout_seconds": 90,
+      "working_tree": "synthetic-required-merge-tree"
+    }
+  ],
+  "credential_free": true,
+  "effects": {
+    "cleanup_claim": true,
+    "external_browser_or_microphone": false,
+    "workflow": "local synthetic fixture/process only"
+  },
+  "schema": "audio-runtime-c109-public-checks-v1",
+  "status": "passed",
+  "synthetic": {
+    "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "hardware_or_acoustic_claim": false,
+    "order": [
+      "c61",
+      "c83"
+    ],
+    "software_only": true,
+    "status": [],
+    "tree": "4d8e93ae0e74db403fdb02c70db9cf849c590156"
+  }
+}
