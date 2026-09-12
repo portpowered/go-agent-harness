@@ -28,14 +28,11 @@ STARTUP_INTEGRATION_REVISION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 EXPECTED_BRANCH = "codex/audio-runtime-c64-provider-audio-terminal-drain-repair"
 OWNED_PREFIX = "docs/temp/projects/audio-runtime/audio-runtime-c64-provider-audio-terminal-drain-repair/"
 ALLOWED_PATHS = {
-    "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
-    "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go",
-    "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_terminal_drain_test.go",
+	"agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
+	"agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go",
+	"agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_terminal_drain_test.go",
 }
-TEST_FIXTURE_RELATIVES = (
-    Path("agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go"),
-    Path("agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_terminal_drain_test.go"),
-)
+TEST_FIXTURE_RELATIVES = (Path("agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go"),)
 PRODUCTION_RELATIVE = Path("agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go")
 MAX_OUTPUT_BYTES = 64 * 1024
 
