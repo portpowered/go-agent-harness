@@ -56,6 +56,39 @@ func TestPrepareNormalizesAndClonesImageInput(t *testing.T) {
 	}
 }
 
+func TestPrepareAcceptsJPEGAndCanonicalizesMIME(t *testing.T) {
+	loader := &contentLoader{parts: map[string]messages.ContentPart{
+		"input.jpeg": messages.ImagePart{Bytes: testJPEG(t), MediaType: " IMAGE/JPEG "},
+	}}
+	parts, err := New(loader).Prepare(context.Background(), []string{"input.jpeg"}, imageinput.Capabilities{
+		SupportsImageInput:      true,
+		SupportedInputMIMETypes: []string{"image/png", " IMAGE/JPEG "},
+	})
+	if err != nil {
+		t.Fatalf("Prepare JPEG: %v", err)
+	}
+	if len(parts) != 1 || parts[0].MediaType != "image/jpeg" || len(parts[0].Bytes) == 0 {
+		t.Fatalf("JPEG parts = %#v, want one canonical non-empty JPEG", parts)
+	}
+}
+
+func TestPrepareRejectsMIMEThatDoesNotMatchDecodedImage(t *testing.T) {
+	loader := &contentLoader{parts: map[string]messages.ContentPart{
+		"mismatch": messages.ImagePart{Bytes: testJPEG(t), MediaType: "image/png"},
+	}}
+	_, err := New(loader).Prepare(context.Background(), []string{"mismatch"}, imageinput.Capabilities{
+		SupportsImageInput:      true,
+		SupportedInputMIMETypes: []string{"image/png", "image/jpeg"},
+	})
+	if !errors.Is(err, imageinput.ErrInvalidContent) {
+		t.Fatalf("mismatch error = %v, want invalid-content identity", err)
+	}
+	var typed *imageinput.InvalidContentError
+	if !errors.As(err, &typed) || typed.DetectedMIME != "image/png" {
+		t.Fatalf("mismatch error = %#v, want typed PNG declaration", err)
+	}
+}
+
 func TestPrepareReturnsTypedCausalFailures(t *testing.T) {
 	decodeCause := errors.New("decoder cause")
 	loader := &contentLoader{

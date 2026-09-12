@@ -109,6 +109,37 @@ func TestAttachFailureKeepsSendAndCancellationIdentity(t *testing.T) {
 	}
 }
 
+func TestAttachMalformedFirstDeltaFailsClosedAndSignalsOnce(t *testing.T) {
+	provider := newFakeSession()
+	provider.complete = true
+	attachment, err := New(nil).Attach(&fakeInferencer{session: provider}, []messages.ImagePart{{Bytes: testPNG(t), MediaType: "image/png"}}, imageinput.TurnOptions{})
+	if err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+	session, err := attachment.Inferencer.ConnectSession(context.Background())
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	if session.Send(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta}) {
+		t.Fatal("malformed first delta unexpectedly succeeded")
+	}
+	if got := len(provider.messagesCopy()); got != 0 {
+		t.Fatalf("provider messages = %d, want no partial image message", got)
+	}
+	first := <-attachment.FirstTurn
+	if !errors.Is(first, imageinput.ErrSend) {
+		t.Fatalf("first-turn error = %v, want send identity", first)
+	}
+	if session.Send(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("later")}) == false {
+		t.Fatal("later delta was not forwarded after the failed first turn")
+	}
+	select {
+	case extra := <-attachment.FirstTurn:
+		t.Fatalf("unexpected second first-turn signal: %v", extra)
+	default:
+	}
+}
+
 func TestAttachShutdownSignalsPendingFirstTurn(t *testing.T) {
 	provider := newFakeSession()
 	attachment, err := New(nil).Attach(&fakeInferencer{session: provider}, []messages.ImagePart{{Bytes: testPNG(t), MediaType: "image/png"}}, imageinput.TurnOptions{})

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"image"
+	"image/jpeg"
 	"image/png"
 	"io"
 	"sync"
@@ -15,6 +16,15 @@ func testPNG(t testingT) []byte {
 	var buffer bytesBuffer
 	if err := png.Encode(&buffer, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
 		t.Fatalf("encode PNG: %v", err)
+	}
+	return buffer.Bytes()
+}
+
+func testJPEG(t testingT) []byte {
+	t.Helper()
+	var buffer bytesBuffer
+	if err := jpeg.Encode(&buffer, image.NewRGBA(image.Rect(0, 0, 1, 1)), nil); err != nil {
+		t.Fatalf("encode JPEG: %v", err)
 	}
 	return buffer.Bytes()
 }
