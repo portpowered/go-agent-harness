@@ -886,6 +886,7 @@ func (b *browserConversationBroker) Invoke(ctx context.Context, request webmcp.I
 			if waitErr == nil {
 				result = terminal
 				b.recordOperation(b.callFromInvoke(stepID, request, result))
+				b.run.observeInvocationObservation(browserConversationWaitInvocationObservation, result.InvocationID, result.State, browserConversationInvocationStateTerminal(result.State))
 				if result.State == webmcp.InvocationCanceled && b.run != nil {
 					current := b.run.Snapshot().Cancellation
 					if current.Interrupted || current.Requested {
@@ -897,11 +898,14 @@ func (b *browserConversationBroker) Invoke(ctx context.Context, request webmcp.I
 						}
 					}
 				}
-			} else if b.tracker != nil {
-				b.tracker.setError(errors.Join(
-					ErrBrowserConversationEvidence,
-					fmt.Errorf("terminal invocation result unavailable: %w", waitErr),
-				))
+			} else {
+				b.run.observeInvocationObservation(browserConversationWaitInvocationObservation, result.InvocationID, result.State, false)
+				if b.tracker != nil {
+					b.tracker.setError(errors.Join(
+						ErrBrowserConversationEvidence,
+						fmt.Errorf("terminal invocation result unavailable: %w", waitErr),
+					))
+				}
 			}
 		}
 	}
@@ -922,6 +926,7 @@ func (b *browserConversationBroker) Cancel(ctx context.Context, request webmcp.C
 		ErrorCode:    browserConversationErrorCode(err),
 		InvocationID: request.InvocationID,
 	})
+	b.run.observeInvocationObservation(browserConversationCancelObservation, request.InvocationID, webmcp.InvocationCanceled, false)
 	if err == nil && b.run != nil {
 		if cancellationErr := b.run.RecordCancellation(BrowserConversationCancellationEvidence{
 			Requested:    true,
