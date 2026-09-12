@@ -219,14 +219,15 @@ func (p *publisher) commitSuccessfulPublication(event publicationEvent, hasEvent
 		p.state.LastSuccessfulDefinitions = append([]messages.ToolDefinition(nil), definitions...)
 		p.state.LastSuccessfulDigest = digest
 		p.state.PublicationCount++
-		if hasEvent {
-			p.state.LastSuccessfulBrowserID = event.browserID
-			p.state.LastSuccessfulTargetID = event.targetID
-			p.state.LastSuccessfulGeneration = event.generation
-			p.state.LastSuccessfulEventSequence = event.sequence
-		}
 	}
 	if hasEvent && p.hasPending && p.pending == event {
+		// A no-op refresh reconciles the event just as successfully as a
+		// delivered update. Retain its identity for stale-generation
+		// rejection, but do not count it as a provider publication.
+		p.state.LastSuccessfulBrowserID = event.browserID
+		p.state.LastSuccessfulTargetID = event.targetID
+		p.state.LastSuccessfulGeneration = event.generation
+		p.state.LastSuccessfulEventSequence = event.sequence
 		p.hasPending = false
 	}
 }
