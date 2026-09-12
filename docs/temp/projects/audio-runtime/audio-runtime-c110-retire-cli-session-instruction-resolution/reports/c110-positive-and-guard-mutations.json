@@ -1,0 +1,97 @@
+{
+  "boundary": {
+    "forbidden_new_package_tokens": [],
+    "legacy_lines": 86
+  },
+  "consumer": {
+    "imports": {
+      "forbidden": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "flag",
+        "fmt",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire",
+        "io/fs",
+        "os",
+        "strings"
+      ],
+      "package": "audio-runtime-c110-sessioninstructions-consumer"
+    },
+    "invalid": {
+      "cancellation": "context.Canceled",
+      "cli_imports": false,
+      "credentials": false,
+      "hidden_global_io": false,
+      "invalid_loader_phase": "validation",
+      "mode": "invalid",
+      "private_imports": false,
+      "status": "accepted"
+    },
+    "positive": {
+      "cli_imports": false,
+      "composition": "consumer AGENTS instructions\n\n---\n\nconsumer skill summary\n\nWebMCP browser selection:\n- A browser endpoint is connected, but no page is selected.\n- Before any page work, call webmcp_list_tabs.\n- If multiple eligible tabs are returned, first match them against the current requested page by title, paraphrase, purpose, or category; only ask the customer which page to use when multiple tabs still match that current step. The mere presence of unrelated eligible tabs is not ambiguity.\n- If the customer explicitly requests work on multiple pages in an order, the first unfinished page is the current requested page. Select and finish it, then list and select the next named page; never ask which page comes first when the customer already supplied the order.\n- After the customer chooses, call webmcp_select_tab with the exact browser_id and target_id returned by webmcp_list_tabs.\n- Until exact selection succeeds, do not invoke page tools, say that browser access is unavailable, or suggest uploads, links, manual page descriptions, shell commands, or other workarounds.\n\nTool-grounding requirements:\n- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.\n- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.\n- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.\n- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.\n- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.\n\nWebMCP tab selection calibration:\n- Distinguish tab selection from navigation. When the customer asks to switch to or select an already-open tab or page, call webmcp_list_tabs (or use the most recently returned tab catalog) before answering. When the customer asks to open a new tab, call webmcp_open_tab. When the customer asks to change, redirect, or navigate the currently selected tab to an absolute website URL, call webmcp_navigate_tab directly; do not open or select another tab first. This preserves the selected target and any active cast of that target.\n- A customer request to switch or select an already-open browser tab or page is real page work, even when a page is already selected. Selection ambiguity is never a reason to say that switching tabs, or browsing generally, is unavailable -- either resolve the one clear match or ask the customer; do not deny the capability.\n- Treat a listed tab as an eligible match for the request when it matches by exact title, by an obvious paraphrase of that title, or by the page's stated purpose or category (for example, a request for \"the document editor\" matches a writing app and not a game). Do not require the customer's wording to be a literal, word-for-word match of the tab's title.\n- For an explicit ordered request spanning multiple pages, resolve only the first unfinished page when deciding the current match. Complete that page, then list and select the next named page in the customer's order; do not treat the ordered set itself as selection ambiguity.\n- Exactly one eligible tab: call webmcp_select_tab with its exact browser_id and target_id immediately. Do not ask a clarifying or confirmation question first, and do not list eligible tabs the customer did not ask about. Confirm only after the switch succeeds, for example \"Okay, you're on <title> now.\"\n- Two or more tabs matching the same current step: ask exactly one concise question naming every matching candidate by its title before calling webmcp_select_tab. Do not guess and do not select by list order.\n\nWebMCP ambiguity recovery:\n- A failed WebMCP result with error.code \"ambiguous_browser\" or error.code \"ambiguous_tab\" and details.recovery.action \"ask_customer\" is a pending customer choice, not permission to retry the same call.\n- Ask exactly one concise spoken/text question before any additional browser tool call. For ambiguous_tab, name every candidate in details.candidate_choices with its safe title and origin; if a label is unavailable, name its exact candidate ID. For ambiguous_browser, name every exact ID in details.candidate_browser_ids. Do not claim that a page was selected.\n- Until the customer answers, do not repeat webmcp_get_context, webmcp_list_tabs, or webmcp_select_tab, and do not invoke a page tool. Never retry with an omitted, unchanged, title-based, URL-based, or inferred selector, and never request multiple continuations for the same ambiguity result.\n- After the customer answers, map the answer to one advertised exact candidate ID. For a page selection, pass the exact browser_id and target_id from that candidate once; for a browser selection, pass its exact browser_id once. Do not substitute by list order or act on an unchosen page.\n\nSight routing requirements:\n- For questions about the rendered visual appearance of the selected browser page, use show_page. Its result is the authoritative page sight for broad visual requests and literal visual follow-up questions.\n- When a discovered page tool returns structured state that directly answers the request, use that state as authoritative and do not call show_page merely to restate, verify, or translate it. For example, a board-state tool is authoritative for positions, pieces, alignment, and solved status; show_page is still required if the customer asks how the board visually looks on screen.\n- Never use host-display sight as a fallback for a browser-page request. If page sight is unavailable or fails, report that page sight is unavailable.\n- Use show_screen only when the customer explicitly asks about the computer's physical display; it is a separate capability and does not answer browser-page questions.",
+      "credentials": false,
+      "hidden_global_io": false,
+      "mode": "positive",
+      "private_imports": false,
+      "resolved": "consumer AGENTS instructions\n\n---\n\nconsumer skill summary",
+      "status": "accepted"
+    },
+    "print": {
+      "cli_imports": false,
+      "composition": "customer instructions\n\nTool-grounding requirements:\n- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.\n- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.\n- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.\n- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.\n- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.",
+      "credentials": false,
+      "hidden_global_io": false,
+      "mode": "print",
+      "private_imports": false,
+      "status": "accepted"
+    }
+  },
+  "guard_mutations": {
+    "none_literal_guard": {
+      "killed": true,
+      "mutant": "if false && value == \"none\"",
+      "result": {
+        "argv": [
+          "go",
+          "run",
+          ".",
+          "--mode",
+          "positive"
+        ],
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c110-guard-mutants-cfhzcp6c/repo/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer",
+        "elapsed_seconds": 0.488586,
+        "exit_code": 1,
+        "stderr": "exit status 1\n",
+        "stdout": "{\"cli_imports\":false,\"credentials\":false,\"error\":\"none resolution = \\\"none\\\", err=\\u003cnil\\u003e\",\"hidden_global_io\":false,\"mode\":\"positive\",\"private_imports\":false,\"status\":\"rejected\"}\n",
+        "timed_out": false
+      }
+    },
+    "post_legacy_skills_cancellation_guard": {
+      "killed": true,
+      "mutant": "removed post-skills checkContext guard",
+      "result": {
+        "argv": [
+          "go",
+          "test",
+          "./services/sessioninstructions/internal/service",
+          "-run",
+          "TestResolveChecksCancellationAfterLegacyLoaderCalls/skills$"
+        ],
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c110-guard-mutants-cfhzcp6c/repo/go-agent-runtime",
+        "elapsed_seconds": 0.443199,
+        "exit_code": 1,
+        "stderr": "",
+        "stdout": "--- FAIL: TestResolveChecksCancellationAfterLegacyLoaderCalls (0.00s)\n    --- FAIL: TestResolveChecksCancellationAfterLegacyLoaderCalls/skills (0.00s)\n        service_test.go:194: error instruction resolution skills-summary /workspace: load skills summary: summary completed after cancellation does not unwrap context canceled\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/internal/service\t0.172s\nFAIL\n",
+        "timed_out": false
+      }
+    },
+    "status": "accepted"
+  },
+  "mode": "positive-and-guard-mutations",
+  "status": "accepted"
+}

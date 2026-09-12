@@ -1,0 +1,224 @@
+{
+  "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
+  "claims": {
+    "bounded_aggregate_deadline_seconds": 600.0,
+    "bounded_child_deadline_seconds": 120.0,
+    "ci_green": false,
+    "clean_shutdown_is_process_reap_only": true,
+    "credential_free": true,
+    "independent_review": false,
+    "merge": false,
+    "project_acceptance": false
+  },
+  "evidence_results": {
+    "audio_tool_replay": {
+      "clean_shutdown": true,
+      "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+      "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "label": "audio-tool-replay",
+      "manifest": "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/audio-tool-replay/tool-record/manifest.json",
+      "manifest_sha256": "eeb1784b41e60498330d3a93d0455e73b801f0dd75771978bde9c6fec1d8e573",
+      "pcm_bytes": 4800,
+      "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+      "process": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/artifacts/yui",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/audio-tool-replay/rendered.wav",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/audio-tool-replay/tool-record",
+          "--trace-audio",
+          "--workdir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/audio-tool-replay",
+          "--allow-path",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/audio-tool-replay"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/audio-tool-replay",
+        "elapsed_seconds": 0.428786,
+        "exit_code": 0,
+        "label": "audio-tool-replay",
+        "output_exceeded": false,
+        "reaped": true,
+        "removed_credential_env": [],
+        "stderr": "",
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/audio-tool-replay; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+        "termination_signals": [],
+        "timed_out": false,
+        "timeout_seconds": 120.0
+      },
+      "provider_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "terminal": {
+        "classification": "provider_close",
+        "output_state": "not_applicable",
+        "reason": "fixture_complete",
+        "terminal_provenance": "provider",
+        "terminal_reason": "provider_close"
+      }
+    },
+    "cli_instruction_positive": {
+      "process": {
+        "argv": [
+          "go",
+          "test",
+          "./agent-cli/internal/services/internal/agentruntime",
+          "-run",
+          "^TestRunSessionWithInstructions_SourceMatrix$",
+          "-count=1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution",
+        "elapsed_seconds": 2.868256,
+        "exit_code": 0,
+        "label": "cli-instruction-positive",
+        "output_exceeded": false,
+        "reaped": true,
+        "removed_credential_env": [],
+        "stderr": "",
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.632s\n",
+        "termination_signals": [],
+        "timed_out": false,
+        "timeout_seconds": 120.0
+      },
+      "source_pinned": true,
+      "test": "TestRunSessionWithInstructions_SourceMatrix"
+    },
+    "instruction_text_seed": {
+      "clean_shutdown": true,
+      "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+      "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "label": "instruction-text-seed",
+      "manifest": "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/instruction-text-seed/tool-record/manifest.json",
+      "manifest_sha256": "cd0fd66a520b232fc80a9eecfd1c0238d4677ec19238e804f16d5e22244c4e3c",
+      "pcm_bytes": 4800,
+      "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+      "process": {
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/artifacts/yui",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/instruction-text-seed/rendered.wav",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/instruction-text-seed/tool-record",
+          "--trace-audio",
+          "--workdir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/instruction-text-seed",
+          "--allow-path",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/instruction-text-seed",
+          "--prompt",
+          "probe PROBE_TOOL_MARKER_9182"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/instruction-text-seed",
+        "elapsed_seconds": 0.067547,
+        "exit_code": 0,
+        "label": "instruction-text-seed",
+        "output_exceeded": false,
+        "reaped": true,
+        "removed_credential_env": [],
+        "stderr": "",
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260912T235045Z-36468/instruction-text-seed; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+        "termination_signals": [],
+        "timed_out": false,
+        "timeout_seconds": 120.0
+      },
+      "provider_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "terminal": {
+        "classification": "provider_close",
+        "output_state": "not_applicable",
+        "reason": "fixture_complete",
+        "terminal_provenance": "provider",
+        "terminal_reason": "provider_close"
+      }
+    },
+    "invalid_instruction": {
+      "cases": [
+        "malformed NUL",
+        "oversized"
+      ],
+      "clean_shutdown": true,
+      "label": "invalid-instruction",
+      "process": {
+        "argv": [
+          "go",
+          "test",
+          "./agent-cli/internal/services/internal/agentruntime",
+          "-run",
+          "^TestC110InstructionResolutionRejectsMalformedAndOversizedFilesBeforePlan$",
+          "-count=1"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution",
+        "elapsed_seconds": 2.548806,
+        "exit_code": 0,
+        "label": "invalid-instruction",
+        "output_exceeded": false,
+        "reaped": true,
+        "removed_credential_env": [],
+        "stderr": "",
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.469s\n",
+        "termination_signals": [],
+        "timed_out": false,
+        "timeout_seconds": 120.0
+      },
+      "rejected_before_provider": true,
+      "rejected_before_session_plan": true
+    }
+  },
+  "fixture": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+    "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+  },
+  "origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "schema": "audio-runtime-c110-source-provenance.v1",
+  "source_hashes": {
+    "agent-cli/internal/services/internal/agentruntime/session_instructions.go": "b28a8d757eae6275f78278700bebcf85286be719f4213f27c684d45f50e95843",
+    "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go": "770e091bae217ae31257dff869950285663d36f4b7d479feb151634ecebcf1c5",
+    "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/admission.json": "dea0c56cd9f9fec2e7e9832831204055d4086cb198778bd093282aabd36a4295",
+    "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/baseline.json": "e0846749e7a121dde1ffc0a24aa16c4ec2c037f026ee25d2604e82da818564a2",
+    "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/go.mod": "f58b738310524b7e934d80a2ead7c44bf3c24f64af3e3f37f09b059870ef89cb",
+    "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/main.go": "e95e708e473380dc3776210e5c75e345b303bc446fd3c80b570243f22f4a7093",
+    "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py": "967e4856c495d90ab45076cc0955cca88b0937aad82a9fabfadf8d7476668e87",
+    "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py": "b422aca60cfd3be1c91bff0a7aff77550d9962c46aab69d5d1baeb35c17d19b5",
+    "go-agent-runtime/services/session/wire/providers.go": "7911582030c7e9563d4c689b4af96050a86a9e96f9372d8b41ad39f24d11effd",
+    "go-agent-runtime/services/session/wire/wire_gen.go": "67dc756d847f74918fbbb9e1d9ec1996ed4c285a5258ce62ceb9c20b3e65aacb",
+    "go-agent-runtime/services/sessioninstructions/contract.go": "6be7bda79d80db665fe5e88aaa6f23fb02515e297149db7d8169046fc78f44ef",
+    "go-agent-runtime/services/sessioninstructions/contract_test.go": "24ed6e21fc26d3ad1c4865d298de6afad0c76cd6b05aa1c908b3a0ce7976a538",
+    "go-agent-runtime/services/sessioninstructions/internal/service/service.go": "17016faf4083ba763004a93cf5510223bb6e0df4e37f9cc5e75c5791864158a7",
+    "go-agent-runtime/services/sessioninstructions/internal/service/service_test.go": "2d93578f9027ee90fb3573d70604a0b40145e88d00f07ff57c97521aaf60eb4f",
+    "go-agent-runtime/services/sessioninstructions/wire/wire.go": "972c2eb190a3502827045ac713efe85d2cf6d3b45e54eead7e5de8d0095bf19b",
+    "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go": "57932eaa71541273c1cd3777e3dbcf5307acc783c68e882c1b845c637f232b6d"
+  },
+  "source_revision": "1625a57a139d913cc9f63ce8a0bad04fb3b95e01",
+  "yui_artifact": {
+    "bytes": 50958994,
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/artifacts/yui",
+    "process": {
+      "argv": [
+        "go",
+        "build",
+        "-tags=nomicrophone",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/artifacts/yui",
+        "./agent-cli/cmd/yui"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution",
+      "elapsed_seconds": 0.311667,
+      "exit_code": 0,
+      "label": "yui-build",
+      "output_exceeded": false,
+      "reaped": true,
+      "removed_credential_env": [],
+      "stderr": "",
+      "stdout": "",
+      "termination_signals": [],
+      "timed_out": false,
+      "timeout_seconds": 120.0
+    },
+    "sha256": "eeb9eab3a5df19dc0814894de1edf2da4f602559c76c595ea8508aa7d0d64f26",
+    "source_revision": "1625a57a139d913cc9f63ce8a0bad04fb3b95e01",
+    "source_tree_scope": "C110 evidence build; no CI/review/merge claim"
+  }
+}
