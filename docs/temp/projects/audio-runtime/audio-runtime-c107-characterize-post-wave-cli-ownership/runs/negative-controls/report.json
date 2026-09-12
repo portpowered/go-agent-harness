@@ -1,0 +1,22 @@
+{
+  "pr_head_mutation": {
+    "diagnostic": "{\"error\": \"subtraction PR head mismatch: PR 462\", \"mode\": \"validate-copy\", \"status\": \"failed\"}",
+    "exit_code": 1,
+    "mutated_from": "3fa60e0b652b9fabdf08fc840bafe7fce466c389",
+    "mutated_to": "0000000000000000000000000000000000000000"
+  },
+  "pristine_validation": {
+    "active_tasks": 8,
+    "owned_source_paths": 80,
+    "preserved_checkpoints": 41,
+    "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "unsubtracted_source_paths": 27
+  },
+  "schema_version": "c107-negative-controls-v1",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "symbol_classification_deletion": {
+    "deleted_symbol_id": "agent-cli/internal/services/internal/agentruntime/capability_alias.go:14:type:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.SessionCapabilityCoordinator",
+    "diagnostic": "{\"error\": \"symbol classification missing or invalid: agent-cli/internal/services/internal/agentruntime/capability_alias.go:14:type:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.SessionCapabilityCoordinator\", \"mode\": \"validate-copy\", \"status\": \"failed\"}",
+    "exit_code": 1
+  }
+}

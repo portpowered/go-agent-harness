@@ -1,0 +1,68 @@
+{
+  "acceptance_waiver": "none",
+  "accepted_source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "admission": {
+    "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+    "project": "audio-runtime",
+    "status": "admitted"
+  },
+  "ancestry": {
+    "accepted_source": {
+      "ancestor": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "descendant": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "exit_code": 0,
+      "passed": true
+    },
+    "baseline": {
+      "ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+      "descendant": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "exit_code": 0,
+      "passed": true
+    },
+    "current_origin_main": {
+      "ancestor": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "descendant": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "exit_code": 0,
+      "passed": true
+    },
+    "startup_integration": {
+      "ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+      "descendant": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "exit_code": 0,
+      "passed": true
+    }
+  },
+  "authority_file_sha256": {
+    "factory/factory/projects/audio-runtime/acceptance.md": "edd1f5cbca1de8b49f96cdf8f039732d28a0082ef3718015e10535ff2e6a441a",
+    "factory/factory/projects/audio-runtime/manifest.json": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
+    "factory/factory/projects/audio-runtime/request.md": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
+    "factory/factory/projects/audio-runtime/source-plan.md": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
+    "worktree/prd.json": "47fdb4a9516cfd200aa6f3dbfed3017c7bf541cf1a343f85b5d172eb41860eca"
+  },
+  "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
+  "candidate_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "contract_revision": "audio-runtime-v1",
+  "credentials": "not used; command environment for public replay removes credential variables",
+  "current_origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "factory_server": "http://127.0.0.1:7439",
+  "factory_session": "~default",
+  "fetch": {
+    "command": [
+      "git",
+      "fetch",
+      "origin",
+      "main"
+    ],
+    "exit_code": 0,
+    "stderr_sha256": "a922cb9586ca44a11c45a63129bfd850f866c22439f81510c60903ff7b1ed666",
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "observed_at": "2026-09-12T19:56:07Z",
+  "project": "audio-runtime",
+  "project_completion": "not claimed; C107 is scoped characterization only",
+  "realtime": "not used",
+  "schema_version": "c107-provenance-v1",
+  "source_archive_sha256": "d3d02949213d8822047a7d723a487e692f153c6bfe8ca5eb6b927823ee90dbf4",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
+}

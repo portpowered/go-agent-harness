@@ -1,0 +1,136 @@
+{
+  "findings": [
+    {
+      "last_output": "",
+      "name": "audio-runtime-c62-validation-contract-anchor-repair",
+      "rejection_feedback": "Independent tests pass, and PR #453 head dc3e4fbc has all nine checks green. Delivery is stale: origin/main is 3d3e7278, while the branch/evidence integrate only 59af6325; evidence also records revision 5323b76e and old SCRIPT CI run 34660505714. Additionally, test_prepare_validation.py:459 mutates DEVICE (criteria[1]), not strengthened SERVICE (criteria[3]), so required SERVICE negatives for C47/C54/C55 are unproven. Executor: integrate origin/main, add/run per-packet SERVICE-rubric mutation negatives through production preflight with no staging, refresh evidence to the post-integration head and checks, push, and submit to SCRIPT CI without polling. Preserve prior C47/C64 audio-loss rejections and the exit-75 no-merge-SHA checkpoint; do not merge this head.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-165"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c62-validation-contract-anchor-repair",
+      "rejection_feedback": "PR #453 is green at head 3d26878e2602dbf8a8a67e62d31b72ca79a88e7b, but has actionable defects. At project_scope_amendment.py:986, prepare-validation writes successor authority edd1f5cb while amended-report validation expects original authority e08b64af; an isolated end-to-end run prepares then rejects with report does not match the staged amended mission. Repair the authority lifecycle and add a successor completion regression. test_prepare_validation.py:19,57-105 depends on ignored running-root inputs; with FACTORY_ROOT unset, all five tests fail, while Makefile:38 omits this module, so green CI does not exercise it. Make the required focused tests clean-checkout runnable and run the mandated selector/direct modules. Refresh submission-evidence.json for the actual reviewed head and dependent evidence, then push the repaired head and resubmit to SCRIPT CI; do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-56"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c62-validation-contract-anchor-repair",
+      "rejection_feedback": "Independent successor contract/preflight and legacy amendment proofs pass; PR #453 checks are green at 05f4c86bae78d5c14fa05a5d5b3e0dca828bee61. However submission-evidence.json still records candidate/revalidation revision de85685cdffe02c986e78d45e8a50dcff19ab521 and no current run. Update evidence to the actual head, record run 34660505714 and required-check results, commit/push the same PR, and resubmit to SCRIPT CI without polling.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-69"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c64-provider-audio-terminal-drain-repair",
+      "rejection_feedback": "Independent focused, race, and 20-trial Test45/Test46 process-boundary runs pass with exact 6400-sample accounting. PR459's nine checks are green at f13c1b7d, but this head is stale: origin/main is 84c91ee1 while the candidate contains only d5d6f843 ancestry; the verifier fails immediately. run.py also ignores --expect accepted-source-failure, runs only the repaired candidate, and merely copies static negative JSON without binding a pre-repair hash/log. The barrier test preloads only SESSION_CLOSE and one media block (rtc_device_runtime_test.go:375-405), so it does not prove the required multi-tool continuation/final-response ordering. Executor: integrate current origin/main into the same C64 branch while retaining d5 as the accepted-source baseline, update the runner/verifier to record both revisions and execute/capture a real pre-repair failure with source/test/artifact hashes, extend the barrier to the exact continuation/final-response sequence, rerun evidence and scoped checks, push the changed head, and resubmit to SCRIPT CI. Do not merge this head.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-117"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c64-provider-audio-terminal-drain-repair",
+      "rejection_feedback": "Independent runtime checks passed, including C64 normal/race paths and 20-trial Test45/Test46 regressions. However, checked-in negative-evidence.json is stale: candidate/fixture revision 9742efc and diff SHA 25aa18be, while reviewed HEAD is bfc25d2b and current diff SHA is f6c5bca5. verify.py only accepts an ancestor and any 64-hex diff, so it does not enforce current-head provenance. Regenerate both source-control and repaired evidence at bfc25d2b, record current head/diff plus complete executable-input/toolchain/flag/artifact hashes, or add explicit hash-bound evidence-only descendant proof; strengthen verification accordingly, rerun focused evidence/tests, commit and push, then resubmit through script CI. Do not merge this head.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-141"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c64-provider-audio-terminal-drain-repair",
+      "rejection_feedback": "PR #459 head 996f69fcb2b1ddb002ff449d810f984b6ac46643 has green required checks, and independent focused, race, 20-repeat, package, gateway, and public integration runs pass. However, C64 evidence is insufficient: rtc_device_runtime_test.go:361 uses PlaybackSamplesObserver, which proves post-enqueue admission, while lines 390-453 only compare admittedPCM and zero drop/overflow/discard counters. It never asserts SimulatedDuplexRegistry.RenderedSamples(), consumed samples, final queue state, or rendered/underflow accounting, so an admitted-but-not-rendered block could pass. Extend the deterministic test/evidence to assert the actual simulated render boundary and reconciled provider/admitted/consumed/queued counters plus shutdown, retain the negative control, then rerun focused normal/race checks and submit a changed head through SCRIPT CI before returning to review.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-91"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c68-c23-zero-audio-attribution",
+      "rejection_feedback": "PR #457 head f734127904290bfa47f0ca78f37c54d358c0069d has green required checks, and independent exact C23/C56 runs reproduce nonempty provider/public PCM with recording accepted_audio=0 and no audio output. Evidence is not acceptance-ready: required attribution.json is missing; source/archive/build-input/executable binding is not fail-closed because C23_SOURCE_REVISION is injected and trusted (verified by running a C56-built binary while reporting C23); c21-regressions.json is bound to base d5d6f843, not final head f7341279; stop_group can leave surviving grandchildren, and negative control accepts arbitrary nonzero exit or absent provider capture. Additional ignored positive-run artifacts show no duplicate-run guard. Executor action: update the C68 harness/evidence, add canonical attribution.json with required provenance and owner action, validate immutable source/build/executable hashes and final-head C21 evidence, make cleanup/negative/disk/duplicate checks fail closed, rerun the bounded four-case comparison once in a clean output, then submit the changed head to script CI. Preserve prior race finding: run 34665087212, TestVirtualPlaybackCapacityAdversarial/08_waiter_remains_blocked_above_low_watermark.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-86"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c74-retire-cli-session-config",
+      "rejection_feedback": "Reviewed PR #467 at head 41edd2b4de2ca603f66b93519140c2f692519481. Independent service, race, consumer, runner, and Wire checks pass, but actionable gaps remain: verify.py:175-211 does not perform either mutation; the transport control tests quic instead of conflicting aliases, and the turn-detection control repeats the same test. Implement isolated fail-closed mutations whose independent oracles fail, restore a clean tree, and record both results. Also, contract.go:168-176 promises omitted/explicit distinction, but service.go:238-253 ignores ProviderProvided and service.go:320-335 ignores ModelProvided for Grok, so explicit empty values can fall back to configured defaults. Enforce those distinctions and add literal regression rows. Commit/push the repairs, rerun the frozen matrix and relevant behavior checks, then submit the changed head to script-owned CI without polling. No merge performed. implementation-handoff.md and a prior-finding file are absent under FACTORY_ROOT; no evidence was fabricated, so the policy/handoff documents, PR body, evidence ledger, and GitHub review state were used.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-132"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head c4bd115b has all nine CI checks green, and independent normal/race service, GOWORK=off consumer, CLI, and scheduled-continuation tests passed. Code defect: public EventResponseFinish dispatches to internal/service/response.go:129-142 without ownership validation; an independent probe opened response-a, finished response-b, and observed active=false, violating wrong-ID protection. Fix ownership validation, add a regression test, push a new head, and rerun CI. Boundary defect: service.go:60 and 163-185 export EventSyncLegacy/LegacyState, while continuation.go:61-81 restores caller-supplied maps, ledgers, and ownership, violating private-state requirements; remove this public escape hatch or isolate it behind a private adapter bridge. Evidence is stale: latest matrix/retirement/mutation evidence cites af2657ea and static evidence cites 2f6713d, not c4bd115b; run.py only executes the built binary for --help and runs tests, without executable lifecycle output or artifact/source hashes. Refresh all evidence on the repaired final head with real executable observations and provenance, then resubmit for review.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-152"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head 0f25f076 is independently behavior-tested and all nine GitHub checks pass, but freshly fetched origin/main is 3d3e7278 (parent 59af6325) and is not an ancestor of the candidate. C79 evidence is also stale: replay, mutation, retirement, and response-matrix records cite 7ba0ba97; static repair cites be237ef2. Executor must integrate origin/main, reconcile C65 changes while preserving C79, rebuild yui, regenerate all affected evidence on the resulting SHA with fresh provenance and mutation controls, push PR #470, and run the script-owned current-head CI gate without polling. Return for review; do not merge this head.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-167"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head 5ea7aec83731 has all nine required checks green, but independent proof found defects: service.go:85-99 Reset replaces a locked mutex and panics with sync: unlock of unlocked mutex; observation.go:100-111 resets only CLI projections, so SESSION.OPEN followed by an untagged response can complete stale response-old; scheduled.go:296-327 accepts bogus dispositions and counts them completed; scheduled.go:49-92 permits rebinding disposed slots. Repair these with regressions, rerun focused normal/race/external and shipped replay, regenerate evidence from the repaired pushed head, then submit one new head to SCRIPT CI without polling. Preserve prior ownership, escape-hatch, and ancestry regressions.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-176"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 is not merge-eligible: reviewed HEAD d3c4db3427d035b0b9ba7be48084b5843ed1037d does not contain freshly fetched origin/main d4766c3dbbf2c198142047ead4449d58dd47d485. C79 evidence is also stale (matrix/mutation at 5ea7aec8; replay source at 32e9a739; artifact provenance differs). Independent normal, race, GOWORK=off consumer, healthy replay, and malformed replay checks passed; GitHub run 34695798923 has all required checks green, but cannot waive ancestry or evidence requirements. Executor action: integrate current origin/main into the same branch without reset, preserve C79 and peer/C62 work, resolve conflicts, rebuild the shipped artifact, rerun focused verification and replay controls, refresh all evidence to the final head/artifact identity, then submit changed-head script CI without polling and request fresh review. Do not merge now.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-185"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "Reviewed PR #470 at head c23acde29231bda381603c72c45cb04dd7e999d3. All nine required checks were SUCCESS on that exact head; independent normal/race service tests, GOWORK=off consumer, CLI compatibility, targeted integration, candidate-built yui healthy/malformed replay, and git diff --check passed. Code defects block merge: (1) sessiondiagnostics/internal/service/continuation.go:61-89 computes Candidate without consulting activePurpose, so a tool-acknowledgement response returns Candidate=true; Observation.Admitted is never set. Enforce purpose at terminal admission and add a public regression. (2) response.go:23-44 retires the active ID and accepts a different EventResponseOpen while the prior response is still active; reject foreign/out-of-order opens unless an explicit terminal/continuation boundary permits replacement. (3) service.go:144-159 clears retired IDs on Reset, and continuation.go reopens inactive IDs, so an old response end after Reset reclaims a new lifecycle; preserve generation/stale-ID ownership and add the reset-late-event regression. (4) The CLI still owns an independent toolContinuationState and completion/failure/obligation decisions in session_diagnostics_tools.go:12-30,78-120,138-237,322-501; session_diagnostics_response.go:130-147 rehydrates it with OR-merging, while session_response_admission.go:68-79 and session_liveness.go:125-139 consume it. This violates the thin-adapter boundary and permits reducer/adapter disagreement. Move lifecycle decisions and queries to the service, remove the local lifecycle map/projection, and test reset/overlap behavior. Executor must repair these findings, refresh affected evidence, commit/push the new head, and resubmit once to SCRIPT CI; do not merge current head. Preserve the prior peer-owned high-rate audio drain regression (6400 samples lost) separately as non-C79 cumulative context.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-211"
+    }
+  ],
+  "observed_at": "2026-09-12T19:56:02Z",
+  "schema_version": "c107-previous-review-findings-v1"
+}

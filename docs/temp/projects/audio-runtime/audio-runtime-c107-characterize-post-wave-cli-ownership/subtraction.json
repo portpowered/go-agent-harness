@@ -1,0 +1,5587 @@
+{
+  "active_tasks": [
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_replay.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
+      "checkpoint_sha": "a6f1eea5f4dd4a8abbc49f9730b83d6861243139",
+      "head": "a6f1eea5f4dd4a8abbc49f9730b83d6861243139",
+      "lease_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_replay.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go"
+      ],
+      "name": "audio-runtime-c101-retire-cli-provider-session-runtime",
+      "observation_command": "canonical board row + gh pr view --json files",
+      "pr_number": 489,
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-194"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c103-retire-cli-rtc-session-runtime",
+      "checkpoint_sha": "14cd34966115e97998dafa19e207f86049d06342",
+      "head": "14cd34966115e97998dafa19e207f86049d06342",
+      "lease_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go"
+      ],
+      "name": "audio-runtime-c103-retire-cli-rtc-session-runtime",
+      "observation_command": "canonical board row + gh pr view --json files",
+      "pr_number": 490,
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-200"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_cancellation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_finalizer.go",
+        "agent-cli/internal/services/internal/agentruntime/session_termination.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c104-retire-cli-session-finalization-boundary",
+      "checkpoint_sha": "d5734d2c05d681794806ed367e72d2b92466e36b",
+      "head": "d5734d2c05d681794806ed367e72d2b92466e36b",
+      "lease_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_cancellation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_finalizer.go",
+        "agent-cli/internal/services/internal/agentruntime/session_termination.go"
+      ],
+      "name": "audio-runtime-c104-retire-cli-session-finalization-boundary",
+      "observation_command": "canonical board row + gh pr view --json files",
+      "pr_number": 492,
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-202"
+    },
+    {
+      "accepted_main_changed_paths": [],
+      "base": "NONE",
+      "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "checkpoint_sha": "NONE",
+      "head": "NONE",
+      "lease_paths": [],
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "observation_command": "canonical board row; no unmerged PR",
+      "pr_number": "NONE",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-218"
+    },
+    {
+      "accepted_main_changed_paths": [],
+      "base": "NONE",
+      "branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
+      "checkpoint_sha": "NONE",
+      "head": "NONE",
+      "lease_paths": [],
+      "name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
+      "observation_command": "canonical board row; no unmerged PR",
+      "pr_number": "NONE",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-222"
+    },
+    {
+      "accepted_main_changed_paths": [],
+      "base": "NONE",
+      "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
+      "checkpoint_sha": "NONE",
+      "head": "NONE",
+      "lease_paths": [],
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "observation_command": "canonical board row; no unmerged PR",
+      "pr_number": "NONE",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-224"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+        "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+        "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+      "checkpoint_sha": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+      "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+      "lease_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+        "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+        "agent-cli/internal/services/internal/agentruntime/session_response_admission.go",
+        "docs/architecture/architecture-size-baseline.json",
+        "scripts/wire-packages.txt"
+      ],
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "observation_command": "canonical board row + gh pr view --json files",
+      "pr_number": 470,
+      "state": {
+        "name": "ci-pending",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-114"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
+      "checkpoint_sha": "6fa9d041d501ce475745490f0e2fe71b94b74bff",
+      "head": "6fa9d041d501ce475745490f0e2fe71b94b74bff",
+      "lease_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go"
+      ],
+      "name": "audio-runtime-c84-retire-cli-room-participant-lifecycle",
+      "observation_command": "canonical board row + gh pr view --json files",
+      "pr_number": 486,
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-136"
+    }
+  ],
+  "all_open_retirement_pr_numbers": [
+    365,
+    415,
+    438,
+    445,
+    447,
+    448,
+    449,
+    450,
+    451,
+    452,
+    454,
+    456,
+    458,
+    460,
+    461,
+    462,
+    463,
+    464,
+    465,
+    466,
+    467,
+    468,
+    469,
+    470,
+    471,
+    472,
+    473,
+    474,
+    475,
+    476,
+    477,
+    478,
+    479,
+    480,
+    481,
+    482,
+    483,
+    484,
+    485,
+    486,
+    487,
+    488,
+    489,
+    490,
+    491,
+    492
+  ],
+  "candidate_rule": "a candidate path must be an accepted-main production path with zero path_owners and must not be a shared path dependency",
+  "canonical_board_sha256": "d12171c816dadaf664f8afa75abe5efbdb5eca66cc11e6969a9ace1ffa97f168",
+  "captured_at": "2026-09-12T19:56:02Z",
+  "contract_revision": "audio-runtime-v1",
+  "open_pr_inventory_sha256": "bcd89ff1c4f8103d6da1a3894d57602403f7f1ae01093bf87ff0f4c8a3e57b25",
+  "path_owners": {
+    "agent-cli/internal/services/internal/agentruntime/capability_alias.go": [],
+    "agent-cli/internal/services/internal/agentruntime/metrics_collector.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/metrics_collector.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c70-retire-cli-metrics-replay",
+        "head": "3fa60e0b652b9fabdf08fc840bafe7fce466c389",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "462",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c70-retire-cli-metrics-replay",
+        "pr_number": 462,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-82"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/public_aliases.go": [],
+    "agent-cli/internal/services/internal/agentruntime/rtc_device_binding.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/rtc_device_binding.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c96-retire-cli-rtc-device-binding",
+        "head": "b8ec84176bd33b4d42289998bc5eedd3eb12e6d8",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "485",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c96-retire-cli-rtc-device-binding",
+        "pr_number": 485,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-180"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go": [],
+    "agent-cli/internal/services/internal/agentruntime/selfplay_service.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/selfplay_service.go",
+          "agent-cli/internal/services/internal/agentruntime/session_self_play.go",
+          "agent-cli/internal/services/internal/agentruntime/session_self_play_evidence.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c57-retire-cli-self-play-runtime",
+        "head": "af45bd3faee185d6ddc7b92d2432080d37a99c54",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "449",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c57-retire-cli-self-play-runtime",
+        "pr_number": 449,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-26"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/service.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c72-retire-cli-instruction-transport",
+        "head": "3da2442208736dce747f1ba3b46bf7644cd0c5d9",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "463",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c72-retire-cli-instruction-transport",
+        "pr_number": 463,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-89"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c59-retire-cli-audio-input-runtime",
+        "head": "78fcd2e623c661f9000e54b17becae8159a365cb",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "450",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c59-retire-cli-audio-input-runtime",
+        "pr_number": 450,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-3"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_audio_format.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c59-retire-cli-audio-input-runtime",
+        "head": "78fcd2e623c661f9000e54b17becae8159a365cb",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "450",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c59-retire-cli-audio-input-runtime",
+        "pr_number": 450,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-3"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_audio_in.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c59-retire-cli-audio-input-runtime",
+        "head": "78fcd2e623c661f9000e54b17becae8159a365cb",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "450",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c59-retire-cli-audio-input-runtime",
+        "pr_number": 450,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-3"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_audio_out.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
+        ],
+        "base": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+        "branch": "codex/audio-runtime-c92-retire-cli-audio-output-runtime",
+        "head": "aba3960ffde91b8e48c3f25a4b31e751e4d67605",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "480",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c92-retire-cli-audio-output-runtime",
+        "pr_number": 480,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-163"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c59-retire-cli-audio-input-runtime",
+        "head": "78fcd2e623c661f9000e54b17becae8159a365cb",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "450",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c59-retire-cli-audio-input-runtime",
+        "pr_number": 450,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-3"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c59-retire-cli-audio-input-runtime",
+        "head": "78fcd2e623c661f9000e54b17becae8159a365cb",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "450",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c59-retire-cli-audio-input-runtime",
+        "pr_number": 450,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-3"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_bare.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_bare.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c69-retire-cli-bare-session-admission",
+        "head": "f641d704223123151f96719bf96a692d3733c821",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "458",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c69-retire-cli-bare-session-admission",
+        "pr_number": 458,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-80"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_browser_recording.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
+        "head": "4f02c1e17c98a6666330adb62385d0585fce06e0",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "448",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c56-retire-cli-recording-orchestration",
+        "pr_number": 448,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-25"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "452",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "pr_number": 452,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-34"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "452",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "pr_number": 452,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-34"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "452",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "pr_number": 452,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-34"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_fixture_options.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "head": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "473",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "pr_number": 473,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-125"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_recovery.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "452",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "pr_number": 452,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-34"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "452",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "pr_number": 452,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-34"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "head": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "473",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "pr_number": 473,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-125"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "452",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "pr_number": 452,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-34"
+      },
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "head": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "473",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "pr_number": 473,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-125"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+          "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "head": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "473",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "pr_number": 473,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-125"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_cancellation.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_cancellation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_finalizer.go",
+          "agent-cli/internal/services/internal/agentruntime/session_termination.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c104-retire-cli-session-finalization-boundary",
+        "head": "d5734d2c05d681794806ed367e72d2b92466e36b",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "492",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c104-retire-cli-session-finalization-boundary",
+        "pr_number": 492,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-202"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c91-retire-cli-capture-claim-runtime",
+        "head": "055301c6c8b46f1bdf98cbfacb25a917ef85e05d",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "481",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c91-retire-cli-capture-claim-runtime",
+        "pr_number": 481,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-160"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
+        "head": "4f02c1e17c98a6666330adb62385d0585fce06e0",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "448",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c56-retire-cli-recording-orchestration",
+        "pr_number": 448,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-25"
+      },
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c73-retire-cli-conversation-log",
+        "head": "24670e72a558a9f309fc0badfb19051f9752d28c",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "464",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c73-retire-cli-conversation-log",
+        "pr_number": 464,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-95"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c59-retire-cli-audio-input-runtime",
+        "head": "78fcd2e623c661f9000e54b17becae8159a365cb",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "450",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c59-retire-cli-audio-input-runtime",
+        "pr_number": 450,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-3"
+      },
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+          "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+        "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "470",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "pr_number": 470,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-114"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+          "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+        "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "470",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "pr_number": 470,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-114"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+          "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+        "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "470",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "pr_number": 470,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-114"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+          "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+        "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "470",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "pr_number": 470,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-114"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+          "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+        "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "470",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "pr_number": 470,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-114"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_drain.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_drain.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_setup.go"
+        ],
+        "base": "59af6325614d80173447fe2018a0471e27b4e7b1",
+        "branch": "codex/audio-runtime-c82-retire-cli-live-session-orchestration",
+        "head": "662cfe566ed203806cf889a1c3b284c0e15d630d",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "474",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c82-retire-cli-live-session-orchestration",
+        "pr_number": 474,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-123"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_duration.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_duration.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_admission.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_artifacts.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go"
+        ],
+        "base": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+        "branch": "codex/audio-runtime-c58-retire-cli-duration-runtime",
+        "head": "4b792abeca365918b877031182920e9b4cbe122a",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "451",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c58-retire-cli-duration-runtime",
+        "pr_number": 451,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-27"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_duration_admission.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_duration.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_admission.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_artifacts.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go"
+        ],
+        "base": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+        "branch": "codex/audio-runtime-c58-retire-cli-duration-runtime",
+        "head": "4b792abeca365918b877031182920e9b4cbe122a",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "451",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c58-retire-cli-duration-runtime",
+        "pr_number": 451,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-27"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_duration_artifacts.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_duration.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_admission.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_artifacts.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go"
+        ],
+        "base": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+        "branch": "codex/audio-runtime-c58-retire-cli-duration-runtime",
+        "head": "4b792abeca365918b877031182920e9b4cbe122a",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "451",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c58-retire-cli-duration-runtime",
+        "pr_number": 451,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-27"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_duration.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_admission.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_artifacts.go",
+          "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go"
+        ],
+        "base": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+        "branch": "codex/audio-runtime-c58-retire-cli-duration-runtime",
+        "head": "4b792abeca365918b877031182920e9b4cbe122a",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "451",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c58-retire-cli-duration-runtime",
+        "pr_number": 451,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-27"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_duration_terminal.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_dynamic_tool_publisher.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_dynamic_tool_publisher.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c66-retire-cli-dynamic-tool-publication",
+        "head": "62a20b934860666aa8a3aa2f15b33869e21be827",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "456",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c66-retire-cli-dynamic-tool-publication",
+        "pr_number": 456,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-71"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_finalizer.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_cancellation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_finalizer.go",
+          "agent-cli/internal/services/internal/agentruntime/session_termination.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c104-retire-cli-session-finalization-boundary",
+        "head": "d5734d2c05d681794806ed367e72d2b92466e36b",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "492",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c104-retire-cli-session-finalization-boundary",
+        "pr_number": 492,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-202"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_image.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_image.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c67-retire-cli-image-turn-runtime",
+        "head": "274b693d1f1e3d83751c6ee4dcd7222358dc0c37",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "460",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c67-retire-cli-image-turn-runtime",
+        "pr_number": 460,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-74"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_image_staging.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_input_transcription.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_instructions.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_live.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_drain.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_setup.go"
+        ],
+        "base": "59af6325614d80173447fe2018a0471e27b4e7b1",
+        "branch": "codex/audio-runtime-c82-retire-cli-live-session-orchestration",
+        "head": "662cfe566ed203806cf889a1c3b284c0e15d630d",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "474",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c82-retire-cli-live-session-orchestration",
+        "pr_number": 474,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-123"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_live_observation.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+          "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+        "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "470",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "pr_number": 470,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-114"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_live_setup.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_drain.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_setup.go"
+        ],
+        "base": "59af6325614d80173447fe2018a0471e27b4e7b1",
+        "branch": "codex/audio-runtime-c82-retire-cli-live-session-orchestration",
+        "head": "662cfe566ed203806cf889a1c3b284c0e15d630d",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "474",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c82-retire-cli-live-session-orchestration",
+        "pr_number": 474,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-123"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_liveness.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+          "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+        "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "470",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "pr_number": 470,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-114"
+      },
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c89-retire-cli-provider-liveness",
+        "head": "c5e29d61e21d297714846d1e508881082da5c784",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "478",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c89-retire-cli-provider-liveness",
+        "pr_number": 478,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-151"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_models.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_options.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_options.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c74-retire-cli-session-config",
+        "head": "67f38e0e9aaaea7047ccedfe9bdc2636ea308fd8",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "467",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c74-retire-cli-session-config",
+        "pr_number": 467,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-98"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c76-retire-cli-playback-observability",
+        "head": "4a18210d938dab3b918991253fe64b5f64a3919b",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "466",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c76-retire-cli-playback-observability",
+        "pr_number": 466,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-105"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go"
+        ],
+        "base": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+        "branch": "codex/audio-runtime-c46-retire-cli-terminal-policy",
+        "head": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "438",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "PR#438",
+        "pr_number": 438,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "NONE"
+      },
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go"
+        ],
+        "base": "59af6325614d80173447fe2018a0471e27b4e7b1",
+        "branch": "codex/audio-runtime-c86-retire-cli-rate-limit-retry-policy",
+        "head": "a0578f246bee4164491a7aa4deb23a3ffdfa283c",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "475",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c86-retire-cli-rate-limit-retry-policy",
+        "pr_number": 475,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-144"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_recording.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
+        "head": "4f02c1e17c98a6666330adb62385d0585fce06e0",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "448",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c56-retire-cli-recording-orchestration",
+        "pr_number": 448,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-25"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
+        "head": "4f02c1e17c98a6666330adb62385d0585fce06e0",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "448",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c56-retire-cli-recording-orchestration",
+        "pr_number": 448,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-25"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_browser_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go",
+          "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
+        "head": "4f02c1e17c98a6666330adb62385d0585fce06e0",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "448",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c56-retire-cli-recording-orchestration",
+        "pr_number": 448,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-25"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_replay.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_replay.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
+        "head": "a6f1eea5f4dd4a8abbc49f9730b83d6861243139",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "489",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c101-retire-cli-provider-session-runtime",
+        "pr_number": 489,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-194"
+      },
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_replay.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c77-retire-cli-session-replay-runtime",
+        "head": "c475c6f2f89b5888043aaa27a4a45c428778e232",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "469",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c77-retire-cli-session-replay-runtime",
+        "pr_number": 469,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-107"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_replay_capability.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_response_admission.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+          "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+        "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "470",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "pr_number": 470,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-114"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_annotations.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_streams.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c81-retire-cli-room-audio-bundle",
+        "head": "e9a60db0a7b0b3652bf586c1477c45bb944635c0",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "471",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c81-retire-cli-room-audio-bundle",
+        "pr_number": 471,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-121"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_annotations.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_annotations.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_streams.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c81-retire-cli-room-audio-bundle",
+        "head": "e9a60db0a7b0b3652bf586c1477c45bb944635c0",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "471",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c81-retire-cli-room-audio-bundle",
+        "pr_number": 471,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-121"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_profile.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_streams.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_annotations.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_streams.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c81-retire-cli-room-audio-bundle",
+        "head": "e9a60db0a7b0b3652bf586c1477c45bb944635c0",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "471",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c81-retire-cli-room-audio-bundle",
+        "pr_number": 471,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-121"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_wav.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_room_audio_diagnostics.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_audio_diagnostics.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics",
+        "head": "4a02df68122400ff0b029624c309570f70a9fe50",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "482",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics",
+        "pr_number": 482,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-175"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_browser_capabilities.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_browser_capabilities.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_tools.go"
+        ],
+        "base": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+        "branch": "codex/audio-runtime-c88-retire-cli-room-tool-capabilities",
+        "head": "0ede26a70ec8a8c046e72b556e9c5ec110335690",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "479",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c88-retire-cli-room-tool-capabilities",
+        "pr_number": 479,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-148"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c76-retire-cli-playback-observability",
+        "head": "4a18210d938dab3b918991253fe64b5f64a3919b",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "466",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c76-retire-cli-playback-observability",
+        "pr_number": 466,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-105"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_errors.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_room_evidence.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence_capture.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence_integrity.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c80-retire-cli-room-evidence-runtime",
+        "head": "ae6ae2180aab7e65bf7a21bc96bb8c4ccf17e4ee",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "472",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c80-retire-cli-room-evidence-runtime",
+        "pr_number": 472,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-116"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_evidence_capture.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence_capture.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence_integrity.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c80-retire-cli-room-evidence-runtime",
+        "head": "ae6ae2180aab7e65bf7a21bc96bb8c4ccf17e4ee",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "472",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c80-retire-cli-room-evidence-runtime",
+        "pr_number": 472,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-116"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_evidence_integrity.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence_capture.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_evidence_integrity.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c80-retire-cli-room-evidence-runtime",
+        "head": "ae6ae2180aab7e65bf7a21bc96bb8c4ccf17e4ee",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "472",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c80-retire-cli-room-evidence-runtime",
+        "pr_number": 472,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-116"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_helpers.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_room_latency_adapter.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
+        "head": "6fa9d041d501ce475745490f0e2fe71b94b74bff",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "486",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c84-retire-cli-room-participant-lifecycle",
+        "pr_number": 486,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-136"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_room_planning.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_tools.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c99-retire-cli-room-participant-planning",
+        "head": "4235cff1a6b33e25b44b32b485d39f039e2cb397",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "488",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c99-retire-cli-room-participant-planning",
+        "pr_number": 488,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-192"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_replay_bundle.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_bundle.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_integrity.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_manifest.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c75-retire-cli-room-replay-bundle",
+        "head": "a1e721382197550caff45d6c318f9613091a3c2c",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "465",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c75-retire-cli-room-replay-bundle",
+        "pr_number": 465,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-100"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_replay_integrity.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_bundle.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_integrity.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_manifest.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c75-retire-cli-room-replay-bundle",
+        "head": "a1e721382197550caff45d6c318f9613091a3c2c",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "465",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c75-retire-cli-room-replay-bundle",
+        "pr_number": 465,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-100"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_replay_manifest.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_bundle.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_integrity.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_manifest.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c75-retire-cli-room-replay-bundle",
+        "head": "a1e721382197550caff45d6c318f9613091a3c2c",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "465",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c75-retire-cli-room-replay-bundle",
+        "pr_number": 465,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-100"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_replay_scheduler.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_replay_scheduler.go"
+        ],
+        "base": "59af6325614d80173447fe2018a0471e27b4e7b1",
+        "branch": "codex/audio-runtime-c85-retire-cli-room-replay-scheduler",
+        "head": "55d95c5b8ad4eb1d88aaeaefb0964eea877cfea8",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "477",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c85-retire-cli-room-replay-scheduler",
+        "pr_number": 477,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-140"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_run.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c93-retire-cli-room-media-io",
+        "head": "35b4752e578dff49744159012982fccfacfb9794",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "484",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c93-retire-cli-room-media-io",
+        "pr_number": 484,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-169"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_terminal.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_terminal.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c94-retire-cli-room-terminal-policy",
+        "head": "fbb02d417333a1421ca9d29191a35de902d8132e",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "483",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c94-retire-cli-room-terminal-policy",
+        "pr_number": 483,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-171"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_tools.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_browser_capabilities.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_tools.go"
+        ],
+        "base": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+        "branch": "codex/audio-runtime-c88-retire-cli-room-tool-capabilities",
+        "head": "0ede26a70ec8a8c046e72b556e9c5ec110335690",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "479",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c88-retire-cli-room-tool-capabilities",
+        "pr_number": 479,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-148"
+      },
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_tools.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c99-retire-cli-room-participant-planning",
+        "head": "4235cff1a6b33e25b44b32b485d39f039e2cb397",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "488",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c99-retire-cli-room-participant-planning",
+        "pr_number": 488,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-192"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
+        "head": "6fa9d041d501ce475745490f0e2fe71b94b74bff",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "486",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c84-retire-cli-room-participant-lifecycle",
+        "pr_number": 486,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-136"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_replay.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
+        "head": "a6f1eea5f4dd4a8abbc49f9730b83d6861243139",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "489",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c101-retire-cli-provider-session-runtime",
+        "pr_number": 489,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-194"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_runtime_live.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_runtime_observation.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_observation.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c97-retire-cli-session-observation",
+        "head": "0f1c03edf616761fc9ccaeccf6f29e9f88ca9e3c",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "487",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c97-retire-cli-session-observation",
+        "pr_number": 487,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-182"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_replay.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
+        "head": "a6f1eea5f4dd4a8abbc49f9730b83d6861243139",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "489",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c101-retire-cli-provider-session-runtime",
+        "pr_number": 489,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-194"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c76-retire-cli-playback-observability",
+        "head": "4a18210d938dab3b918991253fe64b5f64a3919b",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "466",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c76-retire-cli-playback-observability",
+        "pr_number": 466,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-105"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c103-retire-cli-rtc-session-runtime",
+        "head": "14cd34966115e97998dafa19e207f86049d06342",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "490",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c103-retire-cli-rtc-session-runtime",
+        "pr_number": 490,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-200"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_self_play.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/selfplay_service.go",
+          "agent-cli/internal/services/internal/agentruntime/session_self_play.go",
+          "agent-cli/internal/services/internal/agentruntime/session_self_play_evidence.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c57-retire-cli-self-play-runtime",
+        "head": "af45bd3faee185d6ddc7b92d2432080d37a99c54",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "449",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c57-retire-cli-self-play-runtime",
+        "pr_number": 449,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-26"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_self_play_evidence.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/selfplay_service.go",
+          "agent-cli/internal/services/internal/agentruntime/session_self_play.go",
+          "agent-cli/internal/services/internal/agentruntime/session_self_play_evidence.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c57-retire-cli-self-play-runtime",
+        "head": "af45bd3faee185d6ddc7b92d2432080d37a99c54",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "449",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c57-retire-cli-self-play-runtime",
+        "pr_number": 449,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-26"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_terminal_outcome.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_terminal_outcome.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c63-retire-cli-terminal-outcome",
+        "head": "29f9d9658dfdb8129d6a396bc10baf79bb02d9e8",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "454",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c63-retire-cli-terminal-outcome",
+        "pr_number": 454,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-60"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_termination.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_cancellation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_finalizer.go",
+          "agent-cli/internal/services/internal/agentruntime/session_termination.go"
+        ],
+        "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "branch": "codex/audio-runtime-c104-retire-cli-session-finalization-boundary",
+        "head": "d5734d2c05d681794806ed367e72d2b92466e36b",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "492",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c104-retire-cli-session-finalization-boundary",
+        "pr_number": 492,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "active-task",
+        "work_id": "work-task-202"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_text.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_text.go"
+        ],
+        "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+        "branch": "codex/audio-runtime-c71-retire-cli-text-seed-runtime",
+        "head": "3ca666191fa11c63e1abb1f6d26699f9d5e1fdb0",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "461",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c71-retire-cli-text-seed-runtime",
+        "pr_number": 461,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-87"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_timing.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_tools.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_tools.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c78-retire-cli-tool-execution-runtime",
+        "head": "34421e830b784edcfb6ff1a25011a2a76c39f987",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "468",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c78-retire-cli-tool-execution-runtime",
+        "pr_number": 468,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-109"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_turns.go": [
+      {
+        "accepted_main_changed_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_turns.go"
+        ],
+        "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+        "branch": "codex/audio-runtime-c87-retire-cli-session-turns",
+        "head": "28b5a9b18f67a4343ef9e12141ad5e5fc84ef18f",
+        "observation_commands": [
+          [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--state",
+            "open",
+            "--limit",
+            "500",
+            "--json",
+            "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+          ],
+          [
+            "gh",
+            "pr",
+            "view",
+            "476",
+            "--repo",
+            "portpowered/go-agent-harness",
+            "--json",
+            "files"
+          ]
+        ],
+        "owner": "audio-runtime-c87-retire-cli-session-turns",
+        "pr_number": 476,
+        "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "state": "preserved-unmerged-pr",
+        "work_id": "work-task-146"
+      }
+    ],
+    "agent-cli/internal/services/internal/agentruntime/session_voices.go": [],
+    "agent-cli/internal/services/internal/agentruntime/session_wire_observation.go": [],
+    "agent-cli/internal/services/internal/agentruntime/trace.go": []
+  },
+  "preserved_unmerged_checkpoints": [
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go"
+      ],
+      "base": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
+      "branch": "codex/audio-runtime-c46-retire-cli-terminal-policy",
+      "head": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "438",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "PR#438",
+      "pr_number": 438,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "NONE"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_browser_recording.go",
+        "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
+        "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+        "agent-cli/internal/services/internal/agentruntime/session_recording_directory_claim.go",
+        "agent-cli/internal/services/internal/agentruntime/session_recording_finalize.go"
+      ],
+      "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "branch": "codex/audio-runtime-c56-retire-cli-recording-orchestration",
+      "head": "4f02c1e17c98a6666330adb62385d0585fce06e0",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "448",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c56-retire-cli-recording-orchestration",
+      "pr_number": 448,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-25"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/selfplay_service.go",
+        "agent-cli/internal/services/internal/agentruntime/session_self_play.go",
+        "agent-cli/internal/services/internal/agentruntime/session_self_play_evidence.go"
+      ],
+      "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "branch": "codex/audio-runtime-c57-retire-cli-self-play-runtime",
+      "head": "af45bd3faee185d6ddc7b92d2432080d37a99c54",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "449",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c57-retire-cli-self-play-runtime",
+      "pr_number": 449,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-26"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go"
+      ],
+      "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "branch": "codex/audio-runtime-c59-retire-cli-audio-input-runtime",
+      "head": "78fcd2e623c661f9000e54b17becae8159a365cb",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "450",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c59-retire-cli-audio-input-runtime",
+      "pr_number": 450,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-3"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_duration.go",
+        "agent-cli/internal/services/internal/agentruntime/session_duration_admission.go",
+        "agent-cli/internal/services/internal/agentruntime/session_duration_artifacts.go",
+        "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go"
+      ],
+      "base": "904e1f4c3be6c1e629138632573bd2fb55d50938",
+      "branch": "codex/audio-runtime-c58-retire-cli-duration-runtime",
+      "head": "4b792abeca365918b877031182920e9b4cbe122a",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "451",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c58-retire-cli-duration-runtime",
+      "pr_number": 451,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-27"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go",
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report.go",
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go"
+      ],
+      "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+      "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "452",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c61-retire-cli-browser-scenario-contract",
+      "pr_number": 452,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-34"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_terminal_outcome.go"
+      ],
+      "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "branch": "codex/audio-runtime-c63-retire-cli-terminal-outcome",
+      "head": "29f9d9658dfdb8129d6a396bc10baf79bb02d9e8",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "454",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c63-retire-cli-terminal-outcome",
+      "pr_number": 454,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-60"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_dynamic_tool_publisher.go"
+      ],
+      "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "branch": "codex/audio-runtime-c66-retire-cli-dynamic-tool-publication",
+      "head": "62a20b934860666aa8a3aa2f15b33869e21be827",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "456",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c66-retire-cli-dynamic-tool-publication",
+      "pr_number": 456,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-71"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_bare.go"
+      ],
+      "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "branch": "codex/audio-runtime-c69-retire-cli-bare-session-admission",
+      "head": "f641d704223123151f96719bf96a692d3733c821",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "458",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c69-retire-cli-bare-session-admission",
+      "pr_number": 458,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-80"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_image.go"
+      ],
+      "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "branch": "codex/audio-runtime-c67-retire-cli-image-turn-runtime",
+      "head": "274b693d1f1e3d83751c6ee4dcd7222358dc0c37",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "460",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c67-retire-cli-image-turn-runtime",
+      "pr_number": 460,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-74"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_text.go"
+      ],
+      "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "branch": "codex/audio-runtime-c71-retire-cli-text-seed-runtime",
+      "head": "3ca666191fa11c63e1abb1f6d26699f9d5e1fdb0",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "461",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c71-retire-cli-text-seed-runtime",
+      "pr_number": 461,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-87"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/metrics_collector.go"
+      ],
+      "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "branch": "codex/audio-runtime-c70-retire-cli-metrics-replay",
+      "head": "3fa60e0b652b9fabdf08fc840bafe7fce466c389",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "462",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c70-retire-cli-metrics-replay",
+      "pr_number": 462,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-82"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session.go"
+      ],
+      "base": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "branch": "codex/audio-runtime-c72-retire-cli-instruction-transport",
+      "head": "3da2442208736dce747f1ba3b46bf7644cd0c5d9",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "463",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c72-retire-cli-instruction-transport",
+      "pr_number": 463,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-89"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go"
+      ],
+      "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+      "branch": "codex/audio-runtime-c73-retire-cli-conversation-log",
+      "head": "24670e72a558a9f309fc0badfb19051f9752d28c",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "464",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c73-retire-cli-conversation-log",
+      "pr_number": 464,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-95"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_replay_bundle.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_replay_integrity.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_replay_manifest.go"
+      ],
+      "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+      "branch": "codex/audio-runtime-c75-retire-cli-room-replay-bundle",
+      "head": "a1e721382197550caff45d6c318f9613091a3c2c",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "465",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c75-retire-cli-room-replay-bundle",
+      "pr_number": 465,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-100"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_playback_diagnostics.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go"
+      ],
+      "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+      "branch": "codex/audio-runtime-c76-retire-cli-playback-observability",
+      "head": "4a18210d938dab3b918991253fe64b5f64a3919b",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "466",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c76-retire-cli-playback-observability",
+      "pr_number": 466,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-105"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_options.go"
+      ],
+      "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+      "branch": "codex/audio-runtime-c74-retire-cli-session-config",
+      "head": "67f38e0e9aaaea7047ccedfe9bdc2636ea308fd8",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "467",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c74-retire-cli-session-config",
+      "pr_number": 467,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-98"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_tools.go"
+      ],
+      "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+      "branch": "codex/audio-runtime-c78-retire-cli-tool-execution-runtime",
+      "head": "34421e830b784edcfb6ff1a25011a2a76c39f987",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "468",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c78-retire-cli-tool-execution-runtime",
+      "pr_number": 468,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-109"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_replay.go"
+      ],
+      "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+      "branch": "codex/audio-runtime-c77-retire-cli-session-replay-runtime",
+      "head": "c475c6f2f89b5888043aaa27a4a45c428778e232",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "469",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c77-retire-cli-session-replay-runtime",
+      "pr_number": 469,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-107"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+        "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+        "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+      "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "470",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "pr_number": 470,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "active-task",
+      "work_id": "work-task-114"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_annotations.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_audio_bundle_streams.go"
+      ],
+      "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+      "branch": "codex/audio-runtime-c81-retire-cli-room-audio-bundle",
+      "head": "e9a60db0a7b0b3652bf586c1477c45bb944635c0",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "471",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c81-retire-cli-room-audio-bundle",
+      "pr_number": 471,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-121"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_evidence.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_evidence_capture.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_evidence_integrity.go"
+      ],
+      "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+      "branch": "codex/audio-runtime-c80-retire-cli-room-evidence-runtime",
+      "head": "ae6ae2180aab7e65bf7a21bc96bb8c4ccf17e4ee",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "472",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c80-retire-cli-room-evidence-runtime",
+      "pr_number": 472,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-116"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+        "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go"
+      ],
+      "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+      "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+      "head": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "473",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c83-retire-cli-browser-scenario-runner",
+      "pr_number": 473,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-125"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_drain.go",
+        "agent-cli/internal/services/internal/agentruntime/session_live.go",
+        "agent-cli/internal/services/internal/agentruntime/session_live_setup.go"
+      ],
+      "base": "59af6325614d80173447fe2018a0471e27b4e7b1",
+      "branch": "codex/audio-runtime-c82-retire-cli-live-session-orchestration",
+      "head": "662cfe566ed203806cf889a1c3b284c0e15d630d",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "474",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c82-retire-cli-live-session-orchestration",
+      "pr_number": 474,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-123"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry.go"
+      ],
+      "base": "59af6325614d80173447fe2018a0471e27b4e7b1",
+      "branch": "codex/audio-runtime-c86-retire-cli-rate-limit-retry-policy",
+      "head": "a0578f246bee4164491a7aa4deb23a3ffdfa283c",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "475",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c86-retire-cli-rate-limit-retry-policy",
+      "pr_number": 475,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-144"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_turns.go"
+      ],
+      "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+      "branch": "codex/audio-runtime-c87-retire-cli-session-turns",
+      "head": "28b5a9b18f67a4343ef9e12141ad5e5fc84ef18f",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "476",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c87-retire-cli-session-turns",
+      "pr_number": 476,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-146"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_replay_scheduler.go"
+      ],
+      "base": "59af6325614d80173447fe2018a0471e27b4e7b1",
+      "branch": "codex/audio-runtime-c85-retire-cli-room-replay-scheduler",
+      "head": "55d95c5b8ad4eb1d88aaeaefb0964eea877cfea8",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "477",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c85-retire-cli-room-replay-scheduler",
+      "pr_number": 477,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-140"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_liveness.go"
+      ],
+      "base": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+      "branch": "codex/audio-runtime-c89-retire-cli-provider-liveness",
+      "head": "c5e29d61e21d297714846d1e508881082da5c784",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "478",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c89-retire-cli-provider-liveness",
+      "pr_number": 478,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-151"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_browser_capabilities.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_tools.go"
+      ],
+      "base": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+      "branch": "codex/audio-runtime-c88-retire-cli-room-tool-capabilities",
+      "head": "0ede26a70ec8a8c046e72b556e9c5ec110335690",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "479",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c88-retire-cli-room-tool-capabilities",
+      "pr_number": 479,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-148"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
+      ],
+      "base": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+      "branch": "codex/audio-runtime-c92-retire-cli-audio-output-runtime",
+      "head": "aba3960ffde91b8e48c3f25a4b31e751e4d67605",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "480",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c92-retire-cli-audio-output-runtime",
+      "pr_number": 480,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-163"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c91-retire-cli-capture-claim-runtime",
+      "head": "055301c6c8b46f1bdf98cbfacb25a917ef85e05d",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "481",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c91-retire-cli-capture-claim-runtime",
+      "pr_number": 481,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-160"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_audio_diagnostics.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics",
+      "head": "4a02df68122400ff0b029624c309570f70a9fe50",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "482",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics",
+      "pr_number": 482,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-175"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_terminal.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c94-retire-cli-room-terminal-policy",
+      "head": "fbb02d417333a1421ca9d29191a35de902d8132e",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "483",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c94-retire-cli-room-terminal-policy",
+      "pr_number": 483,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-171"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c93-retire-cli-room-media-io",
+      "head": "35b4752e578dff49744159012982fccfacfb9794",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "484",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c93-retire-cli-room-media-io",
+      "pr_number": 484,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-169"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/rtc_device_binding.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c96-retire-cli-rtc-device-binding",
+      "head": "b8ec84176bd33b4d42289998bc5eedd3eb12e6d8",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "485",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c96-retire-cli-rtc-device-binding",
+      "pr_number": 485,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-180"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
+      "head": "6fa9d041d501ce475745490f0e2fe71b94b74bff",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "486",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c84-retire-cli-room-participant-lifecycle",
+      "pr_number": 486,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "active-task",
+      "work_id": "work-task-136"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_observation.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c97-retire-cli-session-observation",
+      "head": "0f1c03edf616761fc9ccaeccf6f29e9f88ca9e3c",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "487",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c97-retire-cli-session-observation",
+      "pr_number": 487,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-182"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+        "agent-cli/internal/services/internal/agentruntime/session_room_tools.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c99-retire-cli-room-participant-planning",
+      "head": "4235cff1a6b33e25b44b32b485d39f039e2cb397",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "488",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c99-retire-cli-room-participant-planning",
+      "pr_number": 488,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "preserved-unmerged-pr",
+      "work_id": "work-task-192"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_replay.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_grok.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_openai.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
+      "head": "a6f1eea5f4dd4a8abbc49f9730b83d6861243139",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "489",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c101-retire-cli-provider-session-runtime",
+      "pr_number": 489,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "active-task",
+      "work_id": "work-task-194"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c103-retire-cli-rtc-session-runtime",
+      "head": "14cd34966115e97998dafa19e207f86049d06342",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "490",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c103-retire-cli-rtc-session-runtime",
+      "pr_number": 490,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "active-task",
+      "work_id": "work-task-200"
+    },
+    {
+      "accepted_main_changed_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_cancellation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_finalizer.go",
+        "agent-cli/internal/services/internal/agentruntime/session_termination.go"
+      ],
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "branch": "codex/audio-runtime-c104-retire-cli-session-finalization-boundary",
+      "head": "d5734d2c05d681794806ed367e72d2b92466e36b",
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "492",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "owner": "audio-runtime-c104-retire-cli-session-finalization-boundary",
+      "pr_number": 492,
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "state": "active-task",
+      "work_id": "work-task-202"
+    }
+  ],
+  "project": "audio-runtime",
+  "required_active_task_names": [
+    "audio-runtime-c101-retire-cli-provider-session-runtime",
+    "audio-runtime-c103-retire-cli-rtc-session-runtime",
+    "audio-runtime-c104-retire-cli-session-finalization-boundary",
+    "audio-runtime-c79-retire-cli-response-lifecycle",
+    "audio-runtime-c83-retire-cli-browser-scenario-runner",
+    "audio-runtime-c84-retire-cli-room-participant-lifecycle",
+    "audio-runtime-c99-retire-cli-room-participant-planning"
+  ],
+  "required_checkpoint_names": [
+    "audio-runtime-c101-retire-cli-provider-session-runtime",
+    "audio-runtime-c103-retire-cli-rtc-session-runtime",
+    "audio-runtime-c104-retire-cli-session-finalization-boundary",
+    "audio-runtime-c79-retire-cli-response-lifecycle",
+    "audio-runtime-c83-retire-cli-browser-scenario-runner",
+    "audio-runtime-c84-retire-cli-room-participant-lifecycle",
+    "audio-runtime-c99-retire-cli-room-participant-planning"
+  ],
+  "schema_version": "c107-subtraction-v1",
+  "shared_path_dependencies": [
+    {
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+      "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "path": "docs/architecture/architecture-size-baseline.json",
+      "pr_number": 470,
+      "reason": "C79 exclusive architecture baseline lease; later dependency, never C107 ownership",
+      "work_id": "work-task-114"
+    },
+    {
+      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+      "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "path": "scripts/wire-packages.txt",
+      "pr_number": 470,
+      "reason": "C79 exclusive shared Wire registry lease; later dependency, never C107 ownership",
+      "work_id": "work-task-114"
+    }
+  ],
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+}
