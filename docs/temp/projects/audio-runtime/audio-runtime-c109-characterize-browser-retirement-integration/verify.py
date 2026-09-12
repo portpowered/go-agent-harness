@@ -240,7 +240,7 @@ def validate_ledger(ledger: dict[str, Any]) -> None:
                     target_declaration = target.get("declaration", {})
                     require(target_declaration.get("ref") and target_declaration.get("path") == path and target_declaration.get("text") is not None, f"caller target declaration is incomplete: {symbol_id}")
                     caller = edge.get("caller", {})
-                    require(caller.get("symbol") and caller.get("kind") in {"function", "package"}, f"containing caller symbol is missing: {symbol_id}")
+                    require(caller.get("symbol") and caller.get("kind") in {"function", "package", "type"}, f"containing caller symbol is missing: {symbol_id}")
                     caller_span = caller.get("span", {})
                     require(isinstance(caller_span.get("start_line"), int) and isinstance(caller_span.get("end_line"), int), f"containing caller span is missing: {symbol_id}")
                     caller_declaration = caller.get("declaration", {})
