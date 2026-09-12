@@ -5,13 +5,13 @@
   "source_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
   "current_main_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "candidate_revision": "45534fbc0bca431dd8c59769f49b87d2ab5555f9",
-  "fixture_revision": "45534fbc0bca431dd8c59769f49b87d2ab5555f9",
-  "candidate_diff_sha256": "fe3537482914d578acf201ef047d5abaa85d46cc20f1138a3f975be48067886d",
+  "candidate_revision": "29aeab99f6068db89fedce537b46967419400c28",
+  "fixture_revision": "29aeab99f6068db89fedce537b46967419400c28",
+  "candidate_diff_sha256": "92afcce4cf4f054e7689329908f6df0db293264b9d2bdc1adcbc24aa6e7e9e09",
   "evidence_only_descendant": true,
   "evidence_only_paths": ["docs/temp/projects/audio-runtime/audio-runtime-c64-provider-audio-terminal-drain-repair/negative-evidence.json"],
-  "verification_revision": "45534fbc0bca431dd8c59769f49b87d2ab5555f9",
-  "verification_diff_sha256": "fe3537482914d578acf201ef047d5abaa85d46cc20f1138a3f975be48067886d",
+  "verification_revision": "29aeab99f6068db89fedce537b46967419400c28",
+  "verification_diff_sha256": "92afcce4cf4f054e7689329908f6df0db293264b9d2bdc1adcbc24aa6e7e9e09",
   "fixture_test_hashes": {
     "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "38b232053d9d4f46de2060ee5482e9fe4701c852b278ee654863a365689d04f5"
   },
@@ -84,7 +84,7 @@
         "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "38b232053d9d4f46de2060ee5482e9fe4701c852b278ee654863a365689d04f5"
       }
     },
-    "artifact_sha256": "f167a1db2446ba19fc49c8f8f35b60640ae10791ab8987f503873f94e0089f2f",
+    "artifact_sha256": "e5fad26aad70006c15516d9eae2c203402970f179356ccaa2a5f3f50af9b1545",
     "failure_evidence": {
       "provider_samples": 9600,
       "admitted_samples": 0,
@@ -101,10 +101,10 @@
       "timed_out": false,
       "output_bounded": true,
       "cleanup": {"parent_reaped": true, "reader_thread_joined": true, "group_alive_after": false},
-      "artifact_sha256": "f167a1db2446ba19fc49c8f8f35b60640ae10791ab8987f503873f94e0089f2f",
+      "artifact_sha256": "e5fad26aad70006c15516d9eae2c203402970f179356ccaa2a5f3f50af9b1545",
       "provenance": {
         "tested_source_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
-        "fixture_revision": "45534fbc0bca431dd8c59769f49b87d2ab5555f9",
+        "fixture_revision": "29aeab99f6068db89fedce537b46967419400c28",
         "build_inputs": {
           "algorithm": "path-nul-content-nul-sha256-v1",
           "file_count": 2189,
@@ -121,7 +121,7 @@
           "test_package": "./agent-cli/internal/services/internal/agentruntime",
           "command": ["go", "test", "-tags=nomicrophone", "-c", "-o", "<isolated-accepted-source-artifact>", "./agent-cli/internal/services/internal/agentruntime"]
         },
-        "artifact": {"bytes": 54155970, "sha256": "f167a1db2446ba19fc49c8f8f35b60640ae10791ab8987f503873f94e0089f2f"}
+        "artifact": {"bytes": 54155970, "sha256": "e5fad26aad70006c15516d9eae2c203402970f179356ccaa2a5f3f50af9b1545"}
       }
     },
     "result": {
@@ -169,8 +169,8 @@
       "cleanup": {"parent_reaped": true, "reader_thread_joined": true, "group_alive_after": false},
       "artifact_sha256": "e92187acc391802f93e00be65297d7c073d37a92a536f5a903e9f2667162fd90",
       "provenance": {
-        "tested_source_revision": "45534fbc0bca431dd8c59769f49b87d2ab5555f9",
-        "fixture_revision": "45534fbc0bca431dd8c59769f49b87d2ab5555f9",
+        "tested_source_revision": "29aeab99f6068db89fedce537b46967419400c28",
+        "fixture_revision": "29aeab99f6068db89fedce537b46967419400c28",
         "build_inputs": {
           "algorithm": "path-nul-content-nul-sha256-v1",
           "file_count": 2189,
