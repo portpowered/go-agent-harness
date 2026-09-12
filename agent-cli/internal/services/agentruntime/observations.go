@@ -2,8 +2,8 @@ package agentruntime
 
 import sessionobservation "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionobservation"
 
-// Deprecated: use go-agent-runtime/services/sessionobservation. These aliases
-// keep the CLI observer vocabulary source-compatible during retirement.
+// Deprecated aliases: use go-agent-runtime/services/sessionobservation. These
+// aliases keep the CLI observer vocabulary source-compatible during retirement.
 type SessionRuntimeObservationKind = sessionobservation.SessionRuntimeObservationKind
 type SessionTokenUsageSemantics = sessionobservation.SessionTokenUsageSemantics
 type SessionFinalAccounting = sessionobservation.SessionFinalAccounting

@@ -120,7 +120,7 @@ func (s *Service) AudioPlaybackReceipt(receipt sessionobservation.PlaybackReceip
 		return
 	}
 	errorText := observationError(receipt.Err)
-	payload, _ := json.Marshal(struct {
+	payload, err := json.Marshal(struct {
 		CommandID  uint64 `json:"command_id"`
 		Epoch      uint64 `json:"epoch,omitempty"`
 		Applied    bool   `json:"applied"`
@@ -133,6 +133,10 @@ func (s *Service) AudioPlaybackReceipt(receipt sessionobservation.PlaybackReceip
 		AudioEndMS: receipt.AudioEndMS,
 		Error:      errorText,
 	})
+	if err != nil {
+		s.Observe(sessionobservation.SessionRuntimeObservationAudioPlaybackReceipt, nil, 0, false, err)
+		return
+	}
 	s.Observe(sessionobservation.SessionRuntimeObservationAudioPlaybackReceipt, payload, 0, false, receipt.Err)
 }
 
