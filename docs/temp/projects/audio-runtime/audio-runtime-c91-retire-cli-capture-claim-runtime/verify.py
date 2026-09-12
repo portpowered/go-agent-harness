@@ -105,6 +105,7 @@ def check_boundaries() -> None:
     require(prd.get("branchName") == BRANCH, "prd branchName does not match the isolated branch")
     require(ancestor(BASELINE, "HEAD"), "candidate does not preserve accepted main ancestry")
     require(ancestor(STARTUP_INTEGRATION, "HEAD"), "candidate does not preserve startup integration ancestry")
+    require(ancestor(SCOPE_BASE, "HEAD"), "candidate does not preserve current origin/main ancestry")
     require(ancestor(BASELINE, "origin/main"), "origin/main is not the admitted baseline descendant")
 
     baseline = subprocess.run(["git", "show", f"{BASELINE}:{LEGACY}"], cwd=ROOT, capture_output=True, check=True).stdout

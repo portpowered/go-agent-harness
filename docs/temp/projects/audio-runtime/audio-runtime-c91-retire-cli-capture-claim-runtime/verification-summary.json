@@ -5,8 +5,8 @@
   "branch": "codex/audio-runtime-c91-retire-cli-capture-claim-runtime",
   "source_revision": "59af6325614d80173447fe2018a0471e27b4e7b1",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "candidate_revision": "508adb5cff3d3f05002ee15f6bd948585b0709c1",
-  "fresh_origin_main_revision": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+  "candidate_revision": "00f37caac8eb85a01098f58342d1490a8ca244ce",
+  "fresh_origin_main_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
   "legacy_baseline": {
     "path": "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go",
     "lines": 317,
