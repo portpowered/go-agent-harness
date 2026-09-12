@@ -14,10 +14,10 @@ classified as a hermetic WebMCP adapter regression, not live customer or
 project acceptance; the audio case is offline replay evidence, not physical or
 acoustic proof.
 
-The disjoint candidate currently records two shared-gate dependencies. The
-architecture gate retains the exact downward/stale entries in the shared
-`docs/architecture/architecture-size-baseline.json` owned by C61, and Wire
-reports the new generated path as absent from the shared
-`scripts/wire-packages.txt` registry owned by C57. The candidate does not edit
-either file or add the required architecture-policy exceptions for the two
-public sentinel errors while those shared ownership decisions are unresolved.
+C66 also converts its two public failure identities to comparable typed
+constants, preserving `errors.Is` identity without mutable package state. The
+remaining architecture gate output is exactly 9 shared findings: 8
+downward/stale entries in `docs/architecture/architecture-size-baseline.json`
+owned by C61, plus the generated Wire path absent from the shared
+`scripts/wire-packages.txt` registry owned by C57. C66 does not edit either
+shared file; no architecture-policy exception is needed for the sentinels.

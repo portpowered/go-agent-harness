@@ -12,13 +12,19 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-var (
+// sentinelError gives public failure identities constant values. This keeps
+// errors.Is comparisons stable without exposing mutable package state.
+type sentinelError string
+
+func (e sentinelError) Error() string { return string(e) }
+
+const (
 	// ErrSessionDynamicToolPublication identifies a failed live page-tool
 	// refresh or session-update delivery. A successful surface is retained
 	// when this error is reported.
-	ErrSessionDynamicToolPublication = errors.New("session dynamic tool publication failed")
+	ErrSessionDynamicToolPublication sentinelError = "session dynamic tool publication failed"
 	// ErrInvalidOptions identifies a publisher that cannot be safely started.
-	ErrInvalidOptions = errors.New("invalid tool publication options")
+	ErrInvalidOptions sentinelError = "invalid tool publication options"
 )
 
 // SettleWindow is the bounded coalescing interval for one browser change.
