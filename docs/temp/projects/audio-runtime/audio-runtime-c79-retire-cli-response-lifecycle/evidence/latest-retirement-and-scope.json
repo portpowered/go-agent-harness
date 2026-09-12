@@ -1,5 +1,5 @@
 {
-  "candidate": "34816f5b0bce04cdff768322ba8bc0269ca63d32",
+  "candidate": "b930e1f843eb117fc9e99ba3c2eb829dbc56a7d3",
   "mode": "retirement-and-scope",
   "payload": {
     "diff_check": {
@@ -61,6 +61,7 @@
         "docs/architecture/architecture-policy.json",
         "docs/architecture/architecture-size-baseline.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720884934.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
