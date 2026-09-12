@@ -433,11 +433,11 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 	finish := func(err error, received bool) error {
 		// The engine has either completed naturally or is being cancelled by
 		// the caller. Wait for its participant shutdown to close the kernel
-		// delta reader, then join the forwarding worker before exposing the
-		// result to the caller.
+		// delta reader, then join the forwarding worker before exposing the result.
 		if !received {
 			err = <-errCh
 		}
+		cancel()
 		<-forwardDone
 		forwardCancel()
 		return err
