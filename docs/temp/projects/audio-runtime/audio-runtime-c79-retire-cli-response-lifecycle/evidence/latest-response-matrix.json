@@ -1,5 +1,5 @@
 {
-  "candidate": "c23acde29231bda381603c72c45cb04dd7e999d3",
+  "candidate": "a1e534e8416ece6623fc40fa7efdf1600c356ae7",
   "mode": "response-matrix",
   "payload": {
     "checks": [
@@ -13,10 +13,10 @@
           "-count=1",
           "-timeout=180s"
         ],
-        "elapsed_seconds": 0.842,
+        "elapsed_seconds": 0.857,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t0.159s [no tests to run]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.302s\n"
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t0.477s [no tests to run]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.611s\n"
       },
       {
         "argv": [
@@ -28,10 +28,10 @@
           "-count=1",
           "-timeout=210s"
         ],
-        "elapsed_seconds": 12.41,
+        "elapsed_seconds": 7.071,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.497s\n"
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.377s\n"
       },
       {
         "argv": [
@@ -41,10 +41,10 @@
           "-count=1",
           "-timeout=90s"
         ],
-        "elapsed_seconds": 0.448,
+        "elapsed_seconds": 0.339,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \texample.com/audio-runtime-c79-sessiondiagnostics-consumer\t0.173s\n"
+        "stdout": "ok  \texample.com/audio-runtime-c79-sessiondiagnostics-consumer\t0.161s\n"
       }
     ],
     "lines": {
@@ -65,6 +65,11 @@
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+        "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+        "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_response_admission.go",
+        "agent-cli/internal/services/internal/agentruntime/session_response_admission_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_regression_test.go",
         "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_test.go",
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/internal/service/package.json",
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/package.json",

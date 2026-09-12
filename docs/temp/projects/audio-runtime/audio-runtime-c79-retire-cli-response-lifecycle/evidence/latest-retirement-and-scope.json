@@ -1,5 +1,5 @@
 {
-  "candidate": "c23acde29231bda381603c72c45cb04dd7e999d3",
+  "candidate": "a1e534e8416ece6623fc40fa7efdf1600c356ae7",
   "mode": "retirement-and-scope",
   "payload": {
     "diff_check": {
@@ -8,7 +8,7 @@
         "diff",
         "--check"
       ],
-      "elapsed_seconds": 0.068,
+      "elapsed_seconds": 0.048,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
@@ -46,6 +46,11 @@
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+        "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+        "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_response_admission.go",
+        "agent-cli/internal/services/internal/agentruntime/session_response_admission_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_regression_test.go",
         "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_test.go",
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/internal/service/package.json",
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/package.json",
