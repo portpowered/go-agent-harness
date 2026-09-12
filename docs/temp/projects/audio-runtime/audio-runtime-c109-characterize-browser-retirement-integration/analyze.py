@@ -1557,12 +1557,14 @@ def main() -> int:
         path = root / relative
         head_blob = maybe_blob(root, "HEAD", relative)
         require(path.is_file() and head_blob is not None, f"C109 source script is unavailable: {relative}")
+        working_blob = git_output(root, ["hash-object", str(path)])
         working_sha256 = sha256_file(path)
-        require(working_sha256 == head_blob, f"C109 source script is dirty relative to committed HEAD: {relative}")
+        require(working_blob == head_blob, f"C109 source script is dirty relative to committed HEAD: {relative}")
         source_bindings.append(
             {
                 "path": relative,
                 "head_blob": head_blob,
+                "working_blob": working_blob,
                 "working_tree_sha256": working_sha256,
                 "matches_committed_head": True,
             }
