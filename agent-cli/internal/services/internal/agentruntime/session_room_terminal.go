@@ -1,234 +1,84 @@
 package agentruntime
 
 import (
-	"errors"
-	"strings"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+	rt "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomterminal"
+	rtw "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomterminal/wire"
 )
 
-// sessionTerminalObservation is the private bridge between the session
-// diagnostic observer and the room lifecycle. It contains only the bounded,
-// provider-neutral terminal fields that the room exposes in its result and
-// evidence; Err is retained in-process solely so a genuine failure can keep
-// its error identity until the existing room redaction boundary.
-type sessionTerminalObservation struct {
-	ResponseID         string
-	Classification     string
-	TerminalReason     string
-	TerminalProvenance string
-	OutputState        string
-	Err                error
-	Failure            bool
-	RoomBound          bool
-	Code               string
-	FailingEvent       string
-}
-
+type sessionTerminalObservation = rt.Observation // Deprecated: compatibility alias; terminal policy lives in roomterminal.
 type roomParticipantTerminalObservation struct {
-	terminationTrigger     string
-	terminationDisposition string
-	classification         string
-	terminalReason         string
-	terminalProvenance     string
-	outputState            string
-	err                    error
-	failure                bool
+	terminationTrigger, terminationDisposition, classification, terminalReason, terminalProvenance, outputState string
+	err                                                                                                         error
+	failure                                                                                                     bool
 }
 
-func defaultRoomTerminalProvenance(disposition, reason string) string {
-	if disposition == ParticipantTerminationDispositionCancelledAfterGrace {
-		return string(messages.TerminalProvenanceRoom)
+func s() rt.Service { return rtw.NewService() } // Deprecated: decision-free adapter; policy lives in roomterminal.
+func runtimeFailureFacts(f *failureFacts) *rt.FailureFacts {
+	if f == nil {
+		return nil
 	}
-	switch messages.TerminalReason(reason) {
-	case messages.TerminalReasonProviderAuthoredCompletion:
-		return string(messages.TerminalProvenanceProvider)
-	case messages.TerminalReasonLoopSynthesizedCompletion:
-		return string(messages.TerminalProvenanceLoop)
-	case messages.TerminalReasonProviderClose:
-		return string(messages.TerminalProvenanceSession)
-	case messages.TerminalReasonReplayComplete,
-		messages.TerminalReasonReplayDivergence,
-		messages.TerminalReasonReplayIncomplete:
-		return string(messages.TerminalProvenanceReplay)
-	case messages.TerminalReasonCancellation,
-		messages.TerminalReasonPartialOutput:
-		return string(messages.TerminalProvenanceLoop)
-	case messages.TerminalReasonTerminalFailure:
-		return string(messages.TerminalProvenanceSession)
-	}
-	switch disposition {
-	case ParticipantTerminationDispositionCancelledAfterGrace,
-		ParticipantTerminationDispositionStopped:
-		return string(messages.TerminalProvenanceLoop)
-	default:
-		return string(messages.TerminalProvenanceSession)
-	}
+	return &rt.FailureFacts{Classification: f.classification, TerminalReason: f.terminalReason, Provenance: f.provenance, OutputState: f.outputState, ErrorType: f.errorType, Code: f.code, FailingEvent: f.failingEvent}
 }
-
 func (o *sessionProgressObserver) notifyFinalTerminalObservation(err error) {
 	if o == nil || o.terminalObserver == nil {
 		return
 	}
-	if o.failure != nil {
-		o.notifyFailureObservation(sessionTerminalObservationFromFailure(o.failure, err))
+	facts := o.failure
+	if facts == nil && err != nil && !roomCancellationOnly(err) {
+		facts = factsFromSessionRunError(err)
+	}
+	observation, ok := s().FinalObservation(rt.FinalObservationRequest{
+		Failure: runtimeFailureFacts(facts), FailureError: err, RunError: err, CancellationOnly: roomCancellationOnly(err), RoomBoundCancellation: o.roomBoundCancellation,
+		UserCancelled: o.userCancelled, UserCancellationOutputState: o.userCancellationOutputState(), SawSessionOpen: o.sawSessionOpen, TurnsCompleted: o.turnsCompleted,
+		FallbackProvenance: string(messages.TerminalProvenanceCLI), FallbackFailingEvent: failingEventRun,
+	})
+	if !ok {
 		return
 	}
-	if o.roomBoundCancellation && roomCancellationOnly(err) {
-		o.notifyTerminalObservation(sessionTerminalObservationForCancellation(o.userCancellationOutputState(), true))
+	if observation.Failure {
+		o.notifyFailureObservation(observation)
 		return
 	}
-	if o.userCancelled {
-		o.notifyTerminalObservation(sessionTerminalObservationForCancellation(o.userCancellationOutputState(), false))
-		return
-	}
-	if err != nil && !roomCancellationOnly(err) {
-		facts := factsFromSessionRunError(err)
-		if facts == nil {
-			classification := providers.ErrorClassification(err)
-			if classification == "" {
-				classification = providers.ErrorClassUnknown
-			}
-			facts = &failureFacts{
-				classification: classification,
-				terminalReason: string(messages.TerminalReasonTerminalFailure),
-				provenance:     string(messages.TerminalProvenanceCLI),
-				outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
-				failingEvent:   failingEventRun,
-			}
-		}
-		o.acceptFailureObservation(facts, err)
-		return
-	}
-	if err == nil || strings.TrimSpace(err.Error()) == "" {
-		return
-	}
-	// A cancellation that did not carry a room-bound marker is still useful to
-	// the room result, where it becomes an intentional stopped disposition.
-	if roomCancellationOnly(err) {
-		o.notifyTerminalObservation(sessionTerminalObservationForCancellation(o.userCancellationOutputState(), false))
-	}
+	o.notifyTerminalObservation(observation)
 }
-
-func sessionTerminalObservationFromFailure(facts *failureFacts, err error) sessionTerminalObservation {
-	if facts == nil {
-		return sessionTerminalObservation{}
-	}
-	if err == nil && facts.errorType != "" {
-		err = errors.New(facts.errorType)
-	}
-	if err == nil {
-		err = errors.New("session stream error")
-	}
-	return sessionTerminalObservation{
-		Classification:     facts.classification,
-		TerminalReason:     facts.terminalReason,
-		TerminalProvenance: facts.provenance,
-		OutputState:        facts.outputState,
-		Err:                err,
-		Failure:            true,
-		Code:               facts.code,
-		FailingEvent:       facts.failingEvent,
-	}
+func sessionTerminalObservationFromFailure(f *failureFacts, e error) sessionTerminalObservation {
+	return s().FailureOptional(runtimeFailureFacts(f), e)
 }
-
-func sessionTerminalObservationFromMessageEnd(responseID string, value *messages.MessageEndValue) sessionTerminalObservation {
-	if value == nil {
-		return sessionTerminalObservation{}
-	}
-	reason := value.TerminalReason
-	if reason == "" {
-		reason = messages.TerminalReasonProviderAuthoredCompletion
-	}
-	provenance := value.TerminalProvenance
-	if provenance == "" {
-		provenance = messages.TerminalProvenanceProvider
-	}
-	outputState := value.OutputState
-	if outputState == "" {
-		outputState = messages.TerminalOutputComplete
-	}
-	return sessionTerminalObservation{
-		ResponseID:         responseID,
-		Classification:     "",
-		TerminalReason:     string(reason),
-		TerminalProvenance: string(provenance),
-		OutputState:        string(outputState),
-	}
+func sessionTerminalObservationFromMessageEnd(i string, v *messages.MessageEndValue) sessionTerminalObservation {
+	return s().MessageEnd(i, v)
 }
-
-func sessionTerminalObservationForCancellation(outputState messages.TerminalOutputState, roomBound bool) sessionTerminalObservation {
-	if outputState == "" {
-		outputState = messages.TerminalOutputNone
-	}
-	classification := providers.ErrorClassCancellation
-	provenance := messages.TerminalProvenanceCLI
-	if roomBound {
-		classification = RoomBoundCancelledClassification
-		provenance = messages.TerminalProvenanceRoom
-	}
-	return sessionTerminalObservation{
-		Classification:     classification,
-		TerminalReason:     string(messages.TerminalReasonCancellation),
-		TerminalProvenance: string(provenance),
-		OutputState:        string(outputState),
-		RoomBound:          roomBound,
-	}
+func sessionTerminalObservationForCancellation(o messages.TerminalOutputState, b bool) sessionTerminalObservation {
+	return s().Cancellation(o, b)
 }
-
-func roomBoundTerminationTrigger(reason RoomTerminationReason, midResponse bool) string {
-	switch reason {
-	case RoomTerminationMaxTurnsReached:
-		if midResponse {
-			return ParticipantTerminationTriggerMaxTurnsReachedMidResponse
-		}
-		return ParticipantTerminationTriggerMaxTurnsReached
-	case RoomTerminationMaxDurationReached:
-		if midResponse {
-			return ParticipantTerminationTriggerMaxDurationReachedMidResponse
-		}
-		return ParticipantTerminationTriggerMaxDurationReached
-	default:
-		return string(reason)
-	}
+func defaultRoomTerminalProvenance(d, r string) string { return s().Provenance(d, r) }
+func roomBoundTerminationTrigger(r RoomTerminationReason, m bool) string {
+	return s().BoundTrigger(string(r), m)
 }
-
-func participantTerminalFields(result RoomParticipantResult) map[string]string {
-	return map[string]string{
-		"termination_trigger":     result.TerminationTrigger,
-		"termination_disposition": result.TerminationDisposition,
-		"classification":          result.Classification,
-		"terminal_reason":         result.TerminalReason,
-		"terminal_provenance":     result.TerminalProvenance,
-		"output_state":            result.OutputState,
-		"reason":                  string(result.TerminationReason),
-	}
+func runtimeParticipantResult(r RoomParticipantResult) rt.ParticipantResult {
+	return rt.ParticipantResult{TerminationTrigger: r.TerminationTrigger, TerminationDisposition: r.TerminationDisposition, Classification: r.Classification, TerminalReason: r.TerminalReason, TerminalProvenance: r.TerminalProvenance, OutputState: r.OutputState, Reason: string(r.TerminationReason)}
 }
-
-func participantTerminationDiagnostic(result RoomParticipantResult) SessionDiagnosticRecord {
-	return SessionDiagnosticRecord{
-		Event:  SessionDiagnosticEventRoomBound,
-		Fields: participantTerminalFields(result),
-	}
+func participantTerminalFields(r RoomParticipantResult) map[string]string {
+	return s().Fields(runtimeParticipantResult(r))
 }
-
-func isRoomBoundParticipantTrigger(trigger string) bool {
-	return strings.HasPrefix(trigger, "max_duration_reached") || strings.HasPrefix(trigger, "max_turns_reached")
+func participantTerminationDiagnostic(r RoomParticipantResult) SessionDiagnosticRecord {
+	v := s().Diagnostic(runtimeParticipantResult(r))
+	return SessionDiagnosticRecord{Event: v.Event, Fields: v.Fields}
 }
-
+func isRoomBoundParticipantTrigger(t string) bool { return s().IsBoundTrigger(t) }
 func recordRoomParticipantBoundDiagnostic(opts RoomRunOptions, evidence *roomEvidence, result RoomParticipantResult) {
-	if !isRoomBoundParticipantTrigger(result.TerminationTrigger) {
-		return
-	}
-	record := participantTerminationDiagnostic(result)
-	if evidence != nil {
-		if participant := evidence.participant(result.ParticipantID); participant != nil {
-			participant.RecordSessionDiagnostic(record)
-		}
-		evidence.recordTimelineEvent("room_bound_shutdown", result.ParticipantID, record.Fields)
-	}
-	if opts.OnDiagnostic != nil {
-		opts.OnDiagnostic(result.ParticipantID, record)
-	}
+	s().RecordBound(rt.BoundDiagnosticRequest{
+		ParticipantID: result.ParticipantID, Result: runtimeParticipantResult(result),
+		RecordParticipant: func(id string, record rt.DiagnosticRecord) {
+			if participant := evidence.participant(id); participant != nil && isRoomBoundParticipantTrigger(result.TerminationTrigger) {
+				participant.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: record.Event, Fields: record.Fields})
+			}
+		},
+		RecordTimeline: func(event, id string, fields map[string]string) { evidence.recordTimelineEvent(event, id, fields) },
+		OnDiagnostic: func(id string, record rt.DiagnosticRecord) {
+			if opts.OnDiagnostic != nil {
+				opts.OnDiagnostic(id, participantTerminationDiagnostic(result))
+			}
+		},
+	})
 }
