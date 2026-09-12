@@ -86,7 +86,7 @@
     }
   ],
   "branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
-  "candidate_revision": "4aa32cf2b2266d19b8aa07300c023fe6bc473bfb",
+  "candidate_revision": "c47e39c143c199e3d4023604d6f30fee750126e1",
   "contract_revision": "audio-runtime-v1",
   "factory_server": "http://127.0.0.1:7439",
   "factory_session": "~default",
@@ -98,7 +98,7 @@
       "main"
     ],
     "cwd": ".",
-    "elapsed_seconds": 0.414,
+    "elapsed_seconds": 0.55,
     "exit_code": 0,
     "stderr": "From https://github.com/portpowered/go-agent-harness\n * branch              main       -> FETCH_HEAD\nAuto packing the repository in background for optimum performance.\nSee \"git help gc\" for manual housekeeping.\nwarning: The last gc run reported the following. Please correct the root cause\nand remove /Users/abdifamily/work/harness/go-agent-harness/.git/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/gc.log\nAutomatic cleanup will not be performed until the file is removed.\n\nwarning: There are too many unreachable loose objects; run 'git prune' to remove them.\n\n",
     "stdout": "",
