@@ -37,4 +37,10 @@ Go test: 1 passed in 1 packages
 $ rtk python3 docs/temp/projects/audio-runtime/audio-runtime-c106-repair-c68-cross-rate-probe-oracle/verify.py --mode vertical-report
 C106 verifier PASS mode=vertical-report task=audio-runtime-c106-repair-c68-cross-rate-probe-oracle
 
-Final diff/scope checks and the staged-artifact verifier run after the evidence is committed.
+$ rtk python3 docs/temp/projects/audio-runtime/audio-runtime-c106-repair-c68-cross-rate-probe-oracle/verify.py --mode all
+C106 verifier PASS mode=all task=audio-runtime-c106-repair-c68-cross-rate-probe-oracle
+
+$ rtk git status --porcelain --untracked-files=all
+ok
+
+Final staged-artifact scope: only the owned C106 regression test and evidence directory differ from d4766c3d; required startup and main ancestors are present.
