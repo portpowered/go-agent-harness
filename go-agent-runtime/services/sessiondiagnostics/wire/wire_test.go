@@ -1,4 +1,4 @@
-package sessiondiagnostics_test
+package wire
 
 import (
 	"context"
@@ -7,11 +7,10 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
 )
 
 func TestResponseIdentityRejectsWrongAndStaleTerminals(t *testing.T) {
-	service := wire.NewService(sessiondiagnostics.Options{})
+	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()
 	open, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-current"})
 	if err != nil || !open.NewResponse {
@@ -31,7 +30,7 @@ func TestResponseIdentityRejectsWrongAndStaleTerminals(t *testing.T) {
 }
 
 func TestToolContinuationRemainsOneScheduledLifecycle(t *testing.T) {
-	service := wire.NewService(sessiondiagnostics.Options{})
+	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()
 	apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
 		t.Helper()
@@ -63,14 +62,38 @@ func TestToolContinuationRemainsOneScheduledLifecycle(t *testing.T) {
 		t.Fatalf("completed scheduled = %d, want 1", got)
 	}
 	duplicate := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventScheduledDisposition, ResponseID: "response-continuation", Disposition: sessiondiagnostics.DispositionCompleted})
-	if duplicate.Accepted && service.Snapshot().CompletedScheduled != 1 {
-		t.Fatalf("duplicate disposition changed snapshot: %+v", duplicate)
+	if duplicate.Accepted || service.Snapshot().CompletedScheduled != 1 {
+		t.Fatalf("duplicate disposition was accepted or changed snapshot: %+v", duplicate)
+	}
+}
+
+func TestUnscheduledToolContinuationAdoptsResponseID(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
+		t.Helper()
+		observation, err := service.Apply(ctx, event)
+		if err != nil {
+			t.Fatalf("apply %s: %v", event.Kind, err)
+		}
+		return observation
+	}
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-tool"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolCall, ResponseID: "response-tool", CallID: "call-1", ToolName: "lookup"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, ResponseID: "response-tool", Output: true})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolResultAccepted, CallID: "call-1"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventContinuationRequested})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, Role: sessiondiagnostics.RoleTool, CallID: "call-1"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-continuation"})
+	end := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, ResponseID: "response-continuation", Output: true, Terminal: &sessiondiagnostics.Terminal{Status: "completed", Reason: "provider_authored_completion"}})
+	if !end.Candidate || end.PendingContinuations != 0 {
+		t.Fatalf("unscheduled continuation end = %+v", end)
 	}
 }
 
 func TestRateLimitRetryUsesInjectedSchedulerAndOneBudget(t *testing.T) {
 	var scheduled []time.Duration
-	service := wire.NewService(sessiondiagnostics.Options{RetryScheduler: func(_ context.Context, delay time.Duration) error {
+	service := NewService(sessiondiagnostics.Options{RetryScheduler: func(_ context.Context, delay time.Duration) error {
 		scheduled = append(scheduled, delay)
 		return nil
 	}})
@@ -103,7 +126,7 @@ func TestRateLimitRetryUsesInjectedSchedulerAndOneBudget(t *testing.T) {
 }
 
 func TestCloseIsIdempotentAndRejectsEvents(t *testing.T) {
-	service := wire.NewService(sessiondiagnostics.Options{})
+	service := NewService(sessiondiagnostics.Options{})
 	if err := service.Close(); err != nil {
 		t.Fatal(err)
 	}

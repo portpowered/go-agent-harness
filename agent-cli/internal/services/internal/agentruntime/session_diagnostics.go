@@ -6,12 +6,13 @@
 // docs/architecture/s2s-session-diagnostic-contract.md.
 package agentruntime
 
-import sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-
 import (
 	"context"
+	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	sessiondiagnostics "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	sessiondiagnosticswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
 	"sync"
 )
 
@@ -42,34 +43,30 @@ const (
 
 // Stable field keys for canonical diagnostic records.
 const (
-	fieldClassification     = "classification"
-	fieldTerminalReason     = "terminal_reason"
-	fieldTerminalProvenance = "terminal_provenance"
-	fieldOutputState        = "output_state"
-	fieldProvider           = "provider"
-	fieldModel              = "model"
-	fieldTurnsCompleted     = "turns_completed"
-	fieldFailingEvent       = "failing_event"
-	fieldProviderErrorType  = "provider_error_type"
-	fieldProviderErrorCode  = "provider_error_code"
-
-	fieldTurnIndex        = "turn_index"
-	fieldInputAudioBytes  = "input_audio_bytes"
-	fieldInputTextBytes   = "input_text_bytes"
-	fieldOutputAudioBytes = "output_audio_bytes"
-	fieldOutputTextBytes  = "output_text_bytes"
-	fieldOutputToolBytes  = "output_tool_bytes"
-
+	fieldClassification           = "classification"
+	fieldTerminalReason           = "terminal_reason"
+	fieldTerminalProvenance       = "terminal_provenance"
+	fieldOutputState              = "output_state"
+	fieldProvider                 = "provider"
+	fieldModel                    = "model"
+	fieldTurnsCompleted           = "turns_completed"
+	fieldFailingEvent             = "failing_event"
+	fieldProviderErrorType        = "provider_error_type"
+	fieldProviderErrorCode        = "provider_error_code"
+	fieldTurnIndex                = "turn_index"
+	fieldInputAudioBytes          = "input_audio_bytes"
+	fieldInputTextBytes           = "input_text_bytes"
+	fieldOutputAudioBytes         = "output_audio_bytes"
+	fieldOutputTextBytes          = "output_text_bytes"
+	fieldOutputToolBytes          = "output_tool_bytes"
 	fieldProviderPromptTokens     = "provider_prompt_tokens"
 	fieldProviderCompletionTokens = "provider_completion_tokens"
 	fieldProviderTotalTokens      = "provider_total_tokens"
 	fieldProviderReasoningTokens  = "provider_reasoning_tokens"
-
-	fieldToolName              = "tool_name"
-	fieldToolCallID            = "tool_call_id"
-	fieldFailureClassification = "failure_classification"
-	fieldFailureReason         = "failure_reason"
-
+	fieldToolName                 = "tool_name"
+	fieldToolCallID               = "tool_call_id"
+	fieldFailureClassification    = "failure_classification"
+	fieldFailureReason            = "failure_reason"
 	// These fields extend the canonical session_failure record when a terminal
 	// path leaves provider-requested tool results unresolved.
 	SessionDiagnosticFieldUnresolvedToolResultCount = sessioncontract.SessionDiagnosticFieldUnresolvedToolResultCount
@@ -101,7 +98,6 @@ const (
 	SessionDiagnosticFieldCancelledToolContinuationCount   = sessioncontract.SessionDiagnosticFieldCancelledToolContinuationCount
 	SessionDiagnosticFieldCancelledToolContinuationCallIDs = sessioncontract.SessionDiagnosticFieldCancelledToolContinuationCallIDs
 )
-
 const (
 	fieldUnresolvedToolResultCount = SessionDiagnosticFieldUnresolvedToolResultCount
 	fieldUnresolvedToolCallIDs     = SessionDiagnosticFieldUnresolvedToolCallIDs
@@ -130,7 +126,6 @@ type ScheduledAudioInput struct {
 	// The zero value preserves the diagnostics-only injection behavior.
 	EndOfTurn bool
 }
-
 type diagnosticSinkFanout []SessionDiagnosticSink
 
 func combineDiagnosticSinks(sinks ...SessionDiagnosticSink) SessionDiagnosticSink {
@@ -149,7 +144,6 @@ func combineDiagnosticSinks(sinks ...SessionDiagnosticSink) SessionDiagnosticSin
 		return filtered
 	}
 }
-
 func (f diagnosticSinkFanout) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
 	for _, sink := range f {
 		if sink != nil {
@@ -200,6 +194,11 @@ func (c *audioTurnCounters) account(direction metrics.Direction, modality metric
 // touched by the provider-send wrapper, so that small state machine has its
 // own synchronization boundary.
 type sessionProgressObserver struct {
+	// lifecycle owns response identity, scheduled logical-turn ownership,
+	// continuation association, retry budget, and terminal dispositions. The
+	// fields below are compatibility projections consumed by the existing CLI
+	// scheduler and tests; they do not make lifecycle decisions.
+	lifecycle      sessiondiagnostics.Service
 	sink           SessionDiagnosticSink
 	recorder       metrics.Recorder
 	productionSink *metrics.InMemorySink
@@ -257,10 +256,9 @@ type sessionProgressObserver struct {
 	// Room mixer input is admitted by a background pump rather than the
 	// session delta consumer. Keep its per-turn and lifetime byte totals behind
 	// their own lock so concurrent provider observation remains race-free.
-	roomInputMu         sync.Mutex
-	roomInputTurnBytes  uint64
-	roomInputTotalBytes uint64
-
+	roomInputMu             sync.Mutex
+	roomInputTurnBytes      uint64
+	roomInputTotalBytes     uint64
 	toolStateMu             sync.Mutex
 	unresolvedToolCalls     map[string]struct{}
 	acceptedToolCalls       map[string]struct{}
@@ -284,18 +282,15 @@ type sessionProgressObserver struct {
 	// provider tool event is reported as unexecutable rather than creating an
 	// obligation that no executor can satisfy.
 	toolResultsEnabled bool
-
 	// toolDeltaSeen tracks whether the in-flight provider tool call streamed
 	// TOOLCALL.DELTA bytes, so a terminal TOOLCALL.END carrying full arguments
 	// is counted only when no deltas preceded it.
-	toolDeltaSeen bool
-
-	usagePrompt     uint64
-	usageCompletion uint64
-	usageTotal      uint64
-	usageReasoning  uint64
-	usageSeen       bool
-
+	toolDeltaSeen          bool
+	usagePrompt            uint64
+	usageCompletion        uint64
+	usageTotal             uint64
+	usageReasoning         uint64
+	usageSeen              bool
 	livenessMu             sync.Mutex
 	livenessErr            error
 	livenessObserver       func(error)
@@ -327,9 +322,8 @@ type sessionProgressObserver struct {
 	// separate from the diagnostic sink so a failure still produces exactly
 	// one canonical session_failure record.
 	failureObserver func(sessionTerminalObservation)
-
-	emitOnce    sync.Once
-	metricsOnce sync.Once
+	emitOnce        sync.Once
+	metricsOnce     sync.Once
 }
 
 func (o *sessionProgressObserver) markRoomBoundCancellation() {
@@ -337,7 +331,6 @@ func (o *sessionProgressObserver) markRoomBoundCancellation() {
 		o.roomBoundCancellation = true
 	}
 }
-
 func (o *sessionProgressObserver) notifyTerminalObservation(observation sessionTerminalObservation) bool {
 	if o == nil {
 		return false
@@ -347,7 +340,6 @@ func (o *sessionProgressObserver) notifyTerminalObservation(observation sessionT
 	}
 	return o.terminalObserver(observation)
 }
-
 func (o *sessionProgressObserver) notifyFailureObservation(observation sessionTerminalObservation) bool {
 	if !observation.Failure || !o.notifyTerminalObservation(observation) {
 		return false
@@ -357,7 +349,6 @@ func (o *sessionProgressObserver) notifyFailureObservation(observation sessionTe
 	}
 	return true
 }
-
 func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Recorder, provider, model string) *sessionProgressObserver {
 	productionSink, err := metrics.NewInMemorySink()
 	if err != nil {
@@ -368,6 +359,7 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		panic(err)
 	}
 	return &sessionProgressObserver{
+		lifecycle:             sessiondiagnosticswire.NewService(sessiondiagnostics.Options{}),
 		sink:                  sink,
 		recorder:              recorder,
 		productionSink:        productionSink,
@@ -385,7 +377,6 @@ func newSessionProgressObserver(sink SessionDiagnosticSink, recorder metrics.Rec
 		livenessWakeCh:        make(chan struct{}, 1),
 	}
 }
-
 func (o *sessionProgressObserver) scheduleAudioInputs(inputs []ScheduledAudioInput) {
 	if o == nil {
 		return

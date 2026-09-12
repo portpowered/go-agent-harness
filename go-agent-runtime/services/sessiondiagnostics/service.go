@@ -5,7 +5,6 @@ package sessiondiagnostics
 
 import (
 	"context"
-	"errors"
 	"time"
 )
 
@@ -43,6 +42,7 @@ const (
 	EventResponseAdopt             EventKind = "response.adopt"
 	EventResponseBelongs           EventKind = "response.belongs"
 	EventResponseOwnsEnd           EventKind = "response.owns_end"
+	EventResponseContent           EventKind = "response.content"
 	EventResponseEnd               EventKind = "response.end"
 	EventResponseFinish            EventKind = "response.finish"
 	EventBindScheduledBoundary     EventKind = "scheduled.bind_boundary"
@@ -208,14 +208,18 @@ type Snapshot struct {
 	ContinuationStates    []ContinuationState
 }
 
-var (
+type lifecycleError string
+
+func (e lifecycleError) Error() string { return string(e) }
+
+const (
 	// ErrClosed identifies an event submitted after Close.
-	ErrClosed = errors.New("session diagnostics lifecycle is closed")
+	ErrClosed lifecycleError = "session diagnostics lifecycle is closed"
 	// ErrMalformedSequence identifies an event that cannot be associated with
 	// the current lifecycle without guessing ownership.
-	ErrMalformedSequence = errors.New("malformed session diagnostics sequence")
+	ErrMalformedSequence lifecycleError = "malformed session diagnostics sequence"
 	// ErrRetryExhausted identifies a second retry claim for one scheduled turn.
-	ErrRetryExhausted = errors.New("session diagnostics retry budget exhausted")
+	ErrRetryExhausted lifecycleError = "session diagnostics retry budget exhausted"
 )
 
 // Service owns all mutable response, scheduled-turn, retry, and continuation
