@@ -36,3 +36,15 @@ The task does not modify shared registry or architecture-baseline files. These e
 Required shared files remain unchanged: `scripts/wire-packages.txt` and `docs/architecture/architecture-size-baseline.json`. No new architecture complexity, size, or mutable-global findings were reported.
 
 CI has not been polled or represented as green. The exact next action is to push this candidate and submit it to the script CI gate; repair only exact CI rejection findings on this same task/branch.
+
+## Accepted-main reconciliation and current-head evidence
+
+- Released accepted main advanced to `59af6325614d80173447fe2018a0471e27b4e7b1` for the C64 predecessor. It was integrated in this isolated worktree with merge commit `808d8ec5`; the original C85 commits, startup ancestry, and fixed planning baseline remain preserved. The accepted C64 paths remain predecessor changes and were not edited by C85.
+- The causal repair is `c57fd5e5`: the extracted service rechecks target activity before every source-to-target frame contribution, preserving the legacy mid-frame inactive-target error barrier. The repair has normal and race causal coverage.
+- `verify.py --mode all` passes on the merged candidate: fixed baseline `409` lines, retained adapter `139` lines, `270` retired, released-main scope base `59af6325`, no excluded paths, and only the public scheduler and Wire packages imported by the external consumer. The scope verifier was updated in `e6b19291` to compare candidate ownership against released `origin/main` while retaining the fixed retirement baseline.
+- Post-merge focused service tests pass at `-count=3` in normal and race modes; fractional-timeline/production-mixer scheduler tests pass at `-count=3` in normal and race modes.
+- Post-merge accumulated replay regressions pass at `COUNT=3` in both normal and race modes. The normal integration matrix passed in `82.880s`; the race integration matrix passed in `226.969s`.
+- The post-merge credential-free external consumer reports `{"external_consumer":true,"credential_free":true,"released":2,"acknowledgements":1,"malformed_rejected":true}`.
+- Post-merge gates pass: `make coverage-changed COVERAGE_BASE=84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f`, `make coverage-registration`, `make vet`, `make staticcheck`, `make lint`, and `git diff --check`.
+- `make wire-check` remains blocked only by the unregistered `go-agent-runtime/services/roomreplayschedule/wire/wire_gen.go`; `make architecture-size-check` remains blocked by the nine stale legacy-scheduler baseline entries plus the generated-file-spoof finding. The required shared files `scripts/wire-packages.txt` and `docs/architecture/architecture-size-baseline.json` remain unchanged under active C79 ownership.
+- PR #477 is still the same open candidate. CI has not been polled or represented as green; after C79 releases its guarded shared-file repair, fetch/reconcile accepted main again, apply only the generated-Wire registration and nine demonstrated downward baseline removals, rerun the bounded gates, push the same branch, and submit the same task to script CI.
