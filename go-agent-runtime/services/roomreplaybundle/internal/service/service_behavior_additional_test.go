@@ -11,11 +11,16 @@ import (
 	"time"
 )
 
+const (
+	roomReplayAdditionalParticipantID = "beta"
+	roomReplayHumanParticipantKind    = "human"
+)
+
 func TestLoadRoomReplayPlanAcceptsArrayAndAliasSchemas(t *testing.T) {
 	bundle, manifest := writeRoomReplayBundle(t)
 	participants := roomReplayTestMap(t, manifest["participants"], "participants")
 	participantValues := make([]any, 0, len(participants))
-	for _, participantID := range []string{"alpha", "beta"} {
+	for _, participantID := range []string{"alpha", roomReplayAdditionalParticipantID} {
 		original := roomReplayTestMap(t, participants[participantID], "participant "+participantID)
 		participant := make(map[string]any, len(original))
 		for key, value := range original {
@@ -68,7 +73,7 @@ func TestLoadRoomReplayPlanAcceptsArrayAndAliasSchemas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadRoomReplayPlan with array/alias schema: %v", err)
 	}
-	if len(plan.Participants) != 2 || plan.Participants[0].ID != "alpha" || plan.Participants[1].ID != "beta" {
+	if len(plan.Participants) != 2 || plan.Participants[0].ID != "alpha" || plan.Participants[1].ID != roomReplayAdditionalParticipantID {
 		t.Fatalf("participants = %+v, want stable array order", plan.Participants)
 	}
 	if len(plan.Artifacts) != 16 || plan.TimelinePath == "" || plan.RoomMixPath == "" {
@@ -92,8 +97,8 @@ func TestLoadRoomReplayPlanAcceptsLegacyAliasesAndHumanParticipant(t *testing.T)
 		"sample_encoding": "pcm_s16le",
 	}
 	participants := roomReplayTestMap(t, manifest["participants"], "participants")
-	beta := roomReplayTestMap(t, participants["beta"], "participant beta")
-	beta["kind"] = "human"
+	beta := roomReplayTestMap(t, participants[roomReplayAdditionalParticipantID], "participant beta")
+	beta["kind"] = roomReplayHumanParticipantKind
 	delete(beta, "provider")
 	delete(beta, "model")
 	betaArtifacts := roomReplayTestMap(t, beta["artifacts"], "participant beta artifacts")
@@ -107,7 +112,7 @@ func TestLoadRoomReplayPlanAcceptsLegacyAliasesAndHumanParticipant(t *testing.T)
 	if plan.PCMFormat.SampleRate != 24000 || plan.PCMFormat.Encoding != "pcm_s16le" {
 		t.Fatalf("PCM format = %+v, want nested legacy aliases", plan.PCMFormat)
 	}
-	if len(plan.Participants) != 2 || plan.Participants[1].Kind != "human" {
+	if len(plan.Participants) != 2 || plan.Participants[1].Kind != roomReplayHumanParticipantKind {
 		t.Fatalf("participants = %+v, want human participant", plan.Participants)
 	}
 	if plan.Participants[1].CapturePath != "" {
