@@ -2,7 +2,7 @@
   "aggregate_timeout_seconds": 300,
   "artifact": {
     "bytes": 53101346,
-    "sha256": "f7720680114fd658bac69c52311b0f85141055ca851b0729a8e7af2ea41ab8eb"
+    "sha256": "c8e197c44008bfe91993821aebe34e98c604035b48697b6e94e25b7faea9744f"
   },
   "case": "scheduled-tool-continuation",
   "checks": [
@@ -11,35 +11,35 @@
         "go",
         "build",
         "-o",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-cqsbi3hx/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-r1cwq28z/yui",
         "./agent-cli/cmd/yui"
       ],
-      "elapsed_seconds": 7.848,
+      "elapsed_seconds": 9.091,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-cqsbi3hx/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-r1cwq28z/yui",
         "interaction",
         "--help"
       ],
-      "elapsed_seconds": 0.538,
+      "elapsed_seconds": 0.531,
       "returncode": 0,
       "stderr": "",
       "stdout": "Inspect provider-neutral gateway interactions.\n\nUse the replay subcommand to stream normalized PNIG fixture events as one JSON object per line without provider credentials or live network calls.\n\nUsage:\n  yui interaction [flags]\n  yui interaction [command]\n\nExamples:\n  yui interaction replay ./fixtures/example.interaction.json\n\nAvailable Commands:\n  replay      Replay a normalized interaction fixture as NDJSON\n\nFlags:\n  -h, --help   help for interaction\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui interaction [command] --help\" for more information about a command.\n"
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-cqsbi3hx/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-r1cwq28z/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-cqsbi3hx/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-r1cwq28z/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
       ],
-      "elapsed_seconds": 0.06,
+      "elapsed_seconds": 0.061,
       "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
       "observations": {
         "first_assistant_output": true,
@@ -61,10 +61,10 @@
         "-count=1",
         "-timeout=25s"
       ],
-      "elapsed_seconds": 0.376,
+      "elapsed_seconds": 0.843,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.162s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.168s\n"
     },
     {
       "argv": [
@@ -76,10 +76,10 @@
         "-count=1",
         "-timeout=25s"
       ],
-      "elapsed_seconds": 5.84,
+      "elapsed_seconds": 5.856,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.503s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.502s\n"
     },
     {
       "argv": [
@@ -91,15 +91,15 @@
         "-count=1",
         "-timeout=25s"
       ],
-      "elapsed_seconds": 15.909,
+      "elapsed_seconds": 16.166,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/test/integration\t12.550s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/test/integration\t13.038s\n"
     }
   ],
   "child_timeout_seconds": 60,
   "credential_free": true,
-  "elapsed_seconds": 31.686,
+  "elapsed_seconds": 34.312,
   "fixtures": {
     "healthy": {
       "bytes": 3433,
@@ -114,14 +114,14 @@
   "schema": "audio-runtime-c79-replay/v2",
   "shipped_workflow": {
     "argv": [
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-cqsbi3hx/yui",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-r1cwq28z/yui",
       "--config-dir",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-cqsbi3hx/config",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-r1cwq28z/config",
       "session",
       "--replay",
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
     ],
-    "elapsed_seconds": 0.06,
+    "elapsed_seconds": 0.061,
     "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
     "observations": {
       "first_assistant_output": true,
@@ -137,10 +137,10 @@
   "source": {
     "go_version": "go version go1.26.7 darwin/arm64",
     "ignored_evidence_changes": [],
-    "revision": "7ba0ba9702f49f0e25dafdb4e9f88437b067ed4e",
+    "revision": "cfb197fd2c197a63eb1fb02f6a1167326a62856b",
     "status": "",
-    "tracked_input_count": 10477,
-    "tracked_input_sha256": "f2774dddb3cf595caf103990d5f97fd9cf6b3c57927ba3e418aacc00ea5c24dd",
+    "tracked_input_count": 10482,
+    "tracked_input_sha256": "6f2637908ee810d10f7502dd99f92936d5bae09a977ff23b875b25ecf7c6d57a",
     "tracked_non_file_paths": [
       "docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-59f370b/source-identity/source-repo",
       "docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo"
