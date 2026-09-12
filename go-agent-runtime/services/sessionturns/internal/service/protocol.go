@@ -47,7 +47,8 @@ func sendMessage(ctx context.Context, connection messages.Session, message messa
 			cause = context.Canceled
 		case messages.SessionSendTimedOut:
 			cause = context.DeadlineExceeded
-		default:
+		case messages.SessionSendSucceeded, messages.SessionSendBufferFull,
+			messages.SessionSendClosed, messages.SessionSendTerminalFailure:
 			cause = fallback
 		}
 	}
@@ -96,7 +97,10 @@ func nextResponseMessage(ctx context.Context, connection messages.Session, buffe
 }
 
 func responseError(message messages.StreamMessage) error {
-	value, _ := message.Value.(*messages.ErrorValue)
+	value := (*messages.ErrorValue)(nil)
+	if candidate, ok := message.Value.(*messages.ErrorValue); ok {
+		value = candidate
+	}
 	if value != nil && value.IsNonTerminal() {
 		return nil
 	}
