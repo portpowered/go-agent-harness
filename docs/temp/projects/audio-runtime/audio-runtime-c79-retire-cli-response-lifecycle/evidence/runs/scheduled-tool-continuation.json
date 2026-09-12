@@ -1,8 +1,8 @@
 {
-  "aggregate_timeout_seconds": 240,
+  "aggregate_timeout_seconds": 300,
   "artifact": {
     "built_from_origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-    "built_from_revision": "05a6ea5a39927d224fe81200a2698e68c0a25005",
+    "built_from_revision": "a8e45355fe495f58c3ba1078a80050492ae6f864",
     "bytes": 53103442,
     "sha256": "f222823d925b149878073bf501f68db3147bfa8224c887eed9654e7b72ea8e24"
   },
@@ -13,35 +13,35 @@
         "go",
         "build",
         "-o",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/yui",
         "./agent-cli/cmd/yui"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 69291,
+        "process_group_id": 35532,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 4.502,
+      "elapsed_seconds": 6.154,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/yui",
         "interaction",
         "--help"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 69458,
+        "process_group_id": 35825,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.533,
+      "elapsed_seconds": 0.694,
       "returncode": 0,
       "stderr": "",
       "stdout": "Inspect provider-neutral gateway interactions.\n\nUse the replay subcommand to stream normalized PNIG fixture events as one JSON object per line without provider credentials or live network calls.\n\nUsage:\n  yui interaction [flags]\n  yui interaction [command]\n\nExamples:\n  yui interaction replay ./fixtures/example.interaction.json\n\nAvailable Commands:\n  replay      Replay a normalized interaction fixture as NDJSON\n\nFlags:\n  -h, --help   help for interaction\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui interaction [command] --help\" for more information about a command.\n"
@@ -54,14 +54,14 @@
       ],
       "cleanup": {
         "kill_sent": true,
-        "process_group_id": 69477,
+        "process_group_id": 35864,
         "reaped": true,
         "survivors": false,
         "term_sent": true
       },
       "cleanup_verified": true,
       "control": "process-group-term-kill-reap",
-      "elapsed_seconds": 11.007,
+      "elapsed_seconds": 11.006,
       "expected_timeout": true,
       "observations": {
         "kill_sent": true,
@@ -77,21 +77,21 @@
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 70504,
+        "process_group_id": 36202,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.058,
+      "elapsed_seconds": 0.055,
       "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
       "fixture_provenance": {
         "bytes": 3433,
@@ -109,23 +109,23 @@
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-config",
         "--workdir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-image",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-image",
         "session",
         "--replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-continuation.session.json",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-continuation.session.json",
         "--provider",
         "openai",
         "--model",
         "gpt-realtime",
-        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-image/fixture.png without relying on its filename."
+        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-image/fixture.png without relying on its filename."
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 70507,
+        "process_group_id": 36205,
         "reaped": true,
         "survivors": false,
         "term_sent": false
@@ -140,11 +140,11 @@
         "tool_calls": 1,
         "tool_results": 1
       },
-      "elapsed_seconds": 0.024,
-      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-continuation.session.json",
+      "elapsed_seconds": 0.037,
+      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-continuation.session.json",
       "fixture_provenance": {
         "bytes": 6979,
-        "sha256": "7466a8b0751b4ccbbeb2b69c9641d9caa3a7b1c4816ff6d2bb57b768fac486ed"
+        "sha256": "29b7f29d033af2cebce91dfc3f5166714882839dfd4a4ca779a6dccc7578d465"
       },
       "image_provenance": {
         "bytes": 82,
@@ -159,7 +159,7 @@
       },
       "returncode": 0,
       "stderr": "",
-      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\nAssistant: The image is a one-by-one image with a single indigo pixel.\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\nAssistant: The image is a one-by-one image with a single indigo pixel.\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
       "template_provenance": {
         "bytes": 6511,
         "sha256": "7dc5b54bc2ca32958f32b84e7cb694867bae92a3e593828101e94f9d6f898bc5"
@@ -167,16 +167,16 @@
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/scheduled/scheduled-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/scheduled/scheduled-config",
         "session",
         "--replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/scheduled/scheduled-tool-continuation.session.json"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/scheduled/scheduled-tool-continuation.session.json"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 70510,
+        "process_group_id": 36206,
         "reaped": true,
         "survivors": false,
         "term_sent": false
@@ -194,8 +194,8 @@
         "tool_calls": 0,
         "tool_results": 0
       },
-      "elapsed_seconds": 0.077,
-      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/scheduled/scheduled-tool-continuation.session.json",
+      "elapsed_seconds": 0.068,
+      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/scheduled/scheduled-tool-continuation.session.json",
       "fixture_provenance": {
         "bytes": 72624,
         "sha256": "8030b1df99d8855a43796c3af09ee8ce8da5897374066578aa96b8532e02548b"
@@ -227,15 +227,15 @@
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 70513,
+        "process_group_id": 36207,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.342,
+      "elapsed_seconds": 0.423,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.162s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.165s\n"
     },
     {
       "argv": [
@@ -249,15 +249,15 @@
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 70521,
+        "process_group_id": 36214,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 2.118,
+      "elapsed_seconds": 2.313,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.497s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.529s\n"
     },
     {
       "argv": [
@@ -271,18 +271,18 @@
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 70538,
+        "process_group_id": 36271,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 14.296,
+      "elapsed_seconds": 15.854,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/test/integration\t12.554s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/test/integration\t14.156s\n"
     }
   ],
-  "child_timeout_seconds": 45,
+  "child_timeout_seconds": 60,
   "cleanup_control": {
     "argv": [
       "/opt/homebrew/opt/python@3.14/bin/python3.14",
@@ -291,14 +291,14 @@
     ],
     "cleanup": {
       "kill_sent": true,
-      "process_group_id": 69477,
+      "process_group_id": 35864,
       "reaped": true,
       "survivors": false,
       "term_sent": true
     },
     "cleanup_verified": true,
     "control": "process-group-term-kill-reap",
-    "elapsed_seconds": 11.007,
+    "elapsed_seconds": 11.006,
     "expected_timeout": true,
     "observations": {
       "kill_sent": true,
@@ -313,8 +313,8 @@
     "timeout": true
   },
   "credential_free": true,
-  "elapsed_seconds": 33.767,
-  "final_head": "05a6ea5a39927d224fe81200a2698e68c0a25005",
+  "elapsed_seconds": 38.03,
+  "final_head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
   "final_head_matches_built_source": true,
   "fixtures": {
     "healthy": {
@@ -343,21 +343,21 @@
   "shipped_workflow": {
     "healthy": {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 70504,
+        "process_group_id": 36202,
         "reaped": true,
         "survivors": false,
         "term_sent": false
       },
-      "elapsed_seconds": 0.058,
+      "elapsed_seconds": 0.055,
       "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
       "fixture_provenance": {
         "bytes": 3433,
@@ -375,16 +375,16 @@
     },
     "scheduled_follow_on": {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/scheduled/scheduled-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/scheduled/scheduled-config",
         "session",
         "--replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/scheduled/scheduled-tool-continuation.session.json"
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/scheduled/scheduled-tool-continuation.session.json"
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 70510,
+        "process_group_id": 36206,
         "reaped": true,
         "survivors": false,
         "term_sent": false
@@ -402,8 +402,8 @@
         "tool_calls": 0,
         "tool_results": 0
       },
-      "elapsed_seconds": 0.077,
-      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/scheduled/scheduled-tool-continuation.session.json",
+      "elapsed_seconds": 0.068,
+      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/scheduled/scheduled-tool-continuation.session.json",
       "fixture_provenance": {
         "bytes": 72624,
         "sha256": "8030b1df99d8855a43796c3af09ee8ce8da5897374066578aa96b8532e02548b"
@@ -425,23 +425,23 @@
     },
     "tool_continuation": {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-config",
         "--workdir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-image",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-image",
         "session",
         "--replay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-continuation.session.json",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-continuation.session.json",
         "--provider",
         "openai",
         "--model",
         "gpt-realtime",
-        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-image/fixture.png without relying on its filename."
+        "Please inspect the image at /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-image/fixture.png without relying on its filename."
       ],
       "cleanup": {
         "kill_sent": false,
-        "process_group_id": 70507,
+        "process_group_id": 36205,
         "reaped": true,
         "survivors": false,
         "term_sent": false
@@ -456,11 +456,11 @@
         "tool_calls": 1,
         "tool_results": 1
       },
-      "elapsed_seconds": 0.024,
-      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-continuation.session.json",
+      "elapsed_seconds": 0.037,
+      "fixture": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-continuation.session.json",
       "fixture_provenance": {
         "bytes": 6979,
-        "sha256": "7466a8b0751b4ccbbeb2b69c9641d9caa3a7b1c4816ff6d2bb57b768fac486ed"
+        "sha256": "29b7f29d033af2cebce91dfc3f5166714882839dfd4a4ca779a6dccc7578d465"
       },
       "image_provenance": {
         "bytes": 82,
@@ -475,7 +475,7 @@
       },
       "returncode": 0,
       "stderr": "",
-      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v1zot2u8/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\nAssistant: The image is a one-by-one image with a single indigo pixel.\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+      "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-nyqln1j8/tool/tool-image; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: read_image\nTool result: {\"version\":2,\"status\":\"success\",\"mime_type\":\"image/png\",\"byte_length\":82,\"sha256\":\"6e9dc04fbe72a6a58b226206c8779938002eb26c9302299190b8a2574e8672a5\",\"typed_projection\":\"input_image\"}\nAssistant: The image is a one-by-one image with a single indigo pixel.\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
       "template_provenance": {
         "bytes": 6511,
         "sha256": "7dc5b54bc2ca32958f32b84e7cb694867bae92a3e593828101e94f9d6f898bc5"
@@ -486,7 +486,12 @@
   "source": {
     "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
     "go_version": "go version go1.26.7 darwin/arm64",
-    "ignored_evidence_changes": [],
+    "ignored_evidence_changes": [
+      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-retirement-and-scope.json"
+    ],
     "origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
     "prd_branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
     "required_ancestry": {
@@ -507,7 +512,7 @@
         "revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
       }
     },
-    "revision": "05a6ea5a39927d224fe81200a2698e68c0a25005",
+    "revision": "a8e45355fe495f58c3ba1078a80050492ae6f864",
     "status": "",
     "tracked_input_count": 10482,
     "tracked_input_sha256": "8ddbbdf1d24d28dfd647ab56fbdc9e8b47a53d6dbd684a0b6d6c3532d6736093",
