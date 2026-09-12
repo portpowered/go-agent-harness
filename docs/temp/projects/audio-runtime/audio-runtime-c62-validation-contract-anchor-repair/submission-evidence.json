@@ -4,7 +4,7 @@
   "candidateStatus": "READY_FOR_SCRIPT_CI",
   "candidate": {
     "branch": "codex/audio-runtime-c62-validation-contract-anchor-repair",
-    "revision": "de85685cdffe02c986e78d45e8a50dcff19ab521",
+    "revision": "05f4c86bae78d5c14fa05a5d5b3e0dca828bee61",
     "implementationRevision": "63988c0af875f2fd379b0fc866282dee600ea09e",
     "pullRequest": 453,
     "pullRequestUrl": "https://github.com/portpowered/go-agent-harness/pull/453",
@@ -156,7 +156,7 @@
     "realtimeSessionsUsed": 0
   },
   "postRejectionRevalidation": {
-    "sourceRevision": "de85685cdffe02c986e78d45e8a50dcff19ab521",
+    "sourceRevision": "05f4c86bae78d5c14fa05a5d5b3e0dca828bee61",
     "acceptedMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
     "originMainAlreadyAncestor": true,
     "focused": [
@@ -196,6 +196,24 @@
     },
     "realtimeSessionsUsed": 0,
     "validatorsLaunched": false,
+    "scriptCiRevalidation": {
+      "run": 34660505714,
+      "head": "05f4c86bae78d5c14fa05a5d5b3e0dca828bee61",
+      "status": "completed",
+      "conclusion": "success",
+      "requiredChecks": [
+        {"name": "CI (coverage)", "job": 103461829257, "conclusion": "success"},
+        {"name": "CI (WebMCP Chrome)", "job": 103461829436, "conclusion": "success"},
+        {"name": "CI (race)", "job": 103461829440, "conclusion": "success"},
+        {"name": "CI (static)", "job": 103461829463, "conclusion": "success"},
+        {"name": "CI (hermetic)", "job": 103461829476, "conclusion": "success"},
+        {"name": "CI (unit)", "job": 103461829507, "conclusion": "success"},
+        {"name": "CI (macOS audio release)", "job": 103461829533, "conclusion": "success"},
+        {"name": "CI (integration)", "job": 103461829539, "conclusion": "success"},
+        {"name": "CI (Windows audio portable)", "job": 103461829551, "conclusion": "success"}
+      ],
+      "note": "Observed completed run for the exact reviewed pre-evidence-update head; this executor does not poll the replacement run."
+    },
     "nextAction": "Push this changed same-task head and submit it to SCRIPT CI; the executor does not poll CI."
   },
   "changedFiles": {
