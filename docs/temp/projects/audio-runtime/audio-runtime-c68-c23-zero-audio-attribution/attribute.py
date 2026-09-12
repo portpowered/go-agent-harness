@@ -70,6 +70,9 @@ MAX_RETAINED_ARTIFACT_FILES = 4096
 MAX_POSITIVE_RUNS = 4
 CHILD_TIMEOUT_MAX = 60.0
 TOTAL_TIMEOUT_MAX = 300.0
+UNBOUND_SOURCE_REVISION = "unbound-working-tree"
+NEGATIVE_MUTATION_OLD = 'messages.NewAudioDeltaValueWithMediaType(pcm, "audio/pcm;rate=16000")'
+NEGATIVE_MUTATION_NEW = 'messages.NewAudioDeltaValueWithMediaType(pcm[:0], "audio/pcm;rate=16000")'
 _GIT_ARCHIVE_HASHES: dict[str, str] = {}
 RECORDING_MODES = ("off", "on")
 SOURCE_FILES_FOR_CAUSAL_TRACE = (
@@ -214,6 +217,22 @@ def fixture_value() -> dict[str, Any]:
 
 def fixture_digest() -> str:
     return canonical_digest(fixture_value())
+
+
+def validate_frozen_inputs(provenance: dict[str, Any]) -> None:
+    """Recheck the committed predecessor copies before every derived run."""
+    for label, source_path, input_path in (
+        ("c23", C23_TASK_PATH, INPUT_C23),
+        ("c56", C56_TASK_PATH, INPUT_C56),
+    ):
+        revision = provenance.get(f"{label}_revision")
+        require(isinstance(revision, str) and len(revision) == 40, f"{label} predecessor revision is not bound")
+        recorded = provenance.get("inputs", {}).get(label, {})
+        expected_files = recorded.get("files") if isinstance(recorded, dict) else None
+        require(isinstance(expected_files, list), f"{label} predecessor manifest is missing")
+        actual_files = source_task_manifest(revision, source_path, input_path)
+        require(actual_files == expected_files, f"{label} predecessor evidence copy changed")
+        require(canonical_digest(actual_files) == recorded.get("manifest_sha256"), f"{label} predecessor manifest digest changed")
 
 
 def source_task_manifest(revision: str, source_path: str, destination: Path) -> list[dict[str, Any]]:
@@ -387,6 +406,7 @@ def copy_build_main(source_meta: dict[str, Any], label: str) -> Path:
     source_root = OWNED_ROOT / source_meta["root"]
     destination = source_root / "__c68_input__" / label / "main.go"
     destination.parent.mkdir(parents=True, exist_ok=True)
+    require(not destination.is_symlink(), f"build consumer destination is a symlink: {owned_rel(destination)}")
     shutil.copyfile(INPUT_C23 / "consumer" / "main.go", destination)
     require(destination.is_file(), f"source consumer copy was not created: {destination}")
     return destination
@@ -587,6 +607,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     assert_scope()
     provenance = load_json(PROVENANCE_PATH)
     require(provenance["c23_revision"] == args.c23_revision and provenance["c56_revision"] == args.c56_revision, "build revisions differ from prepared provenance")
+    validate_frozen_inputs(provenance)
     build_root = OWNED_ROOT / "scratch" / "build"
     build_root.mkdir(parents=True, exist_ok=True)
     records: dict[str, Any] = {}
@@ -648,11 +669,7 @@ def sanitized_environment(source_revision: str, run_root: Path) -> dict[str, str
     config.mkdir(parents=True, exist_ok=True)
     allowed.update({
         "HOME": str(home), "USERPROFILE": str(home), "XDG_CONFIG_HOME": str(config),
-        "LANG": "C", "LC_ALL": "C", "C68_SOURCE_REVISION": source_revision,
-        # The frozen consumer reports this value, but the report is never the
-        # source attestation.  validate_build_binding independently binds the
-        # archive, extracted tree, build inputs and executable before launch.
-        "C23_SOURCE_REVISION": source_revision,
+        "LANG": "C", "LC_ALL": "C",
     })
     # Keep the child HOME credential-free without forcing every Go regression
     # run to redownload the workspace toolchain and module graph.  These are
@@ -686,6 +703,8 @@ def _read_pipe(stream: Any, retained: bytearray, observed: list[int], overflow: 
 
 
 def group_alive(pid: int) -> bool:
+    if not hasattr(os, "killpg"):
+        return process_alive(pid)
     try:
         os.killpg(pid, 0)
     except (ProcessLookupError, OSError):
@@ -713,6 +732,105 @@ def group_members(pgid: int) -> list[int]:
     return sorted(members)
 
 
+def process_snapshot() -> dict[int, dict[str, int | str]]:
+    """Read a bounded process table for descendants that changed groups."""
+    if os.name == "nt":
+        return {}
+    result = subprocess.run(
+        ["ps", "-axo", "pid=,ppid=,pgid=,stat="],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return {}
+    snapshot: dict[int, dict[str, int | str]] = {}
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) < 3:
+            continue
+        try:
+            pid, ppid, pgid = (int(value) for value in fields[:3])
+        except ValueError:
+            continue
+        snapshot[pid] = {"ppid": ppid, "pgid": pgid, "stat": fields[3] if len(fields) > 3 else ""}
+    return snapshot
+
+
+def descendant_pids(root_pid: int, snapshot: dict[int, dict[str, int | str]] | None = None) -> list[int]:
+    snapshot = process_snapshot() if snapshot is None else snapshot
+    children: dict[int, list[int]] = {}
+    for pid, details in snapshot.items():
+        ppid = details.get("ppid")
+        if isinstance(ppid, int):
+            children.setdefault(ppid, []).append(pid)
+    pending = list(children.get(root_pid, []))
+    descendants: list[int] = []
+    seen: set[int] = set()
+    while pending:
+        pid = pending.pop(0)
+        if pid in seen or pid == root_pid:
+            continue
+        seen.add(pid)
+        descendants.append(pid)
+        pending.extend(children.get(pid, []))
+    return sorted(descendants)
+
+
+def process_alive(pid: int, snapshot: dict[int, dict[str, int | str]] | None = None) -> bool:
+    if pid <= 0:
+        return False
+    if snapshot is not None:
+        details = snapshot.get(pid)
+        if details is None:
+            return False
+        stat = str(details.get("stat", ""))
+        if stat.startswith("Z"):
+            return False
+    try:
+        os.kill(pid, 0)
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+    return True
+
+
+def wait_for_process_exit(pids: Iterable[int], timeout: float) -> list[int]:
+    tracked = sorted({pid for pid in pids if pid > 0})
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        snapshot = process_snapshot()
+        survivors = [pid for pid in tracked if process_alive(pid, snapshot if snapshot else None)]
+        if not survivors:
+            return []
+        time.sleep(0.05)
+    snapshot = process_snapshot()
+    return [pid for pid in tracked if process_alive(pid, snapshot if snapshot else None)]
+
+
+def signal_pid(pid: int, value: signal.Signals, errors: list[str]) -> bool:
+    try:
+        os.kill(pid, value)
+        return True
+    except ProcessLookupError:
+        return False
+    except OSError as error:
+        errors.append(f"{value.name} pid {pid}: {error}")
+        return False
+
+
+def signal_group(pgid: int, value: signal.Signals, errors: list[str]) -> bool:
+    if not hasattr(os, "killpg"):
+        return False
+    try:
+        os.killpg(pgid, value)
+        return True
+    except ProcessLookupError:
+        return False
+    except OSError as error:
+        errors.append(f"{value.name} group {pgid}: {error}")
+        return False
+
+
 def wait_for_group_exit(pgid: int, timeout: float) -> list[int]:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -727,43 +845,45 @@ def stop_group(process: subprocess.Popen[Any]) -> dict[str, Any]:
     pgid = process.pid
     before_members = group_members(pgid)
     before = group_alive(pgid)
+    before_descendants = descendant_pids(process.pid)
+    tracked_descendants = set(before_descendants)
     term_sent = False
     kill_sent = False
     errors: list[str] = []
     if before:
-        try:
-            os.killpg(pgid, signal.SIGTERM)
-            term_sent = True
-        except ProcessLookupError:
-            pass
-        except OSError as error:
-            errors.append(f"SIGTERM: {error}")
+        term_sent = signal_group(pgid, signal.SIGTERM, errors) or term_sent
+    # A descendant can call setsid() and escape the original process group.
+    # Signal the exact snapshot of descendants as well as the group, before
+    # the leader can reparent them and make their ownership ambiguous.
+    for pid in sorted(tracked_descendants):
+        if process_alive(pid):
+            term_sent = signal_pid(pid, signal.SIGTERM, errors) or term_sent
+    if before or process.poll() is None or tracked_descendants:
         with suppress(subprocess.TimeoutExpired):
             process.wait(timeout=2)
-        # The process leader may exit while a grandchild keeps the same
-        # session/process group alive.  Kill the group based on group state,
-        # never on the leader's poll result alone.
+        tracked_descendants.update(descendant_pids(process.pid))
         if group_alive(pgid):
-            try:
-                os.killpg(pgid, signal.SIGKILL)
-                kill_sent = True
-            except ProcessLookupError:
-                pass
-            except OSError as error:
-                errors.append(f"SIGKILL: {error}")
+            kill_sent = signal_group(pgid, signal.SIGKILL, errors) or kill_sent
+        for pid in sorted(tracked_descendants):
+            if process_alive(pid):
+                kill_sent = signal_pid(pid, signal.SIGKILL, errors) or kill_sent
         with suppress(subprocess.TimeoutExpired):
             process.wait(timeout=2)
     if process.poll() is None:
         with suppress(subprocess.TimeoutExpired):
             process.wait(timeout=2)
     survivors = wait_for_group_exit(pgid, 2.0)
-    after = group_alive(pgid) or bool(survivors)
+    descendant_survivors = wait_for_process_exit(tracked_descendants, 2.0)
+    after = group_alive(pgid) or bool(survivors) or bool(descendant_survivors)
     return {
         "pgid": pgid,
         "group_alive_before": before,
         "group_members_before": before_members,
         "group_alive_after": after,
         "group_members_after": survivors,
+        "descendants_before": before_descendants,
+        "descendants_after": descendant_survivors,
+        "descendant_processes_reaped": not descendant_survivors,
         "term_sent": term_sent,
         "kill_sent": kill_sent,
         "parent_reaped": process.returncode is not None,
@@ -788,20 +908,88 @@ def artifact_disk_usage(root: Path) -> dict[str, Any]:
     return {"bytes": total, "files": files, "cap_bytes": MAX_RUN_ARTIFACT_BYTES, "bounded": total <= MAX_RUN_ARTIFACT_BYTES}
 
 
+def artifact_inventory(root: Path) -> dict[str, Any]:
+    """Bind an artifact root without retaining its contents in the ledger."""
+    disk = artifact_disk_usage(root)
+    entries: list[dict[str, Any]] = []
+    for path in sorted(root.rglob("*")):
+        if path.is_file() and not path.is_symlink():
+            entries.append({"path": str(path.relative_to(root)), "bytes": path.stat().st_size, "sha256": sha256_file(path)})
+    return {
+        "root": owned_rel(root),
+        "bytes": disk["bytes"],
+        "files": disk["files"],
+        "cap_bytes": disk["cap_bytes"],
+        "tree_sha256": canonical_digest(entries),
+    }
+
+
+def positive_artifact_inventory() -> list[dict[str, Any]]:
+    root = OWNED_ROOT / "artifacts" / "runs"
+    if not root.is_dir():
+        return []
+    result: list[dict[str, Any]] = []
+    for child in sorted(root.iterdir()):
+        require(not child.is_symlink(), f"positive artifact root is a symlink: {owned_rel(child)}")
+        if child.is_dir():
+            result.append(artifact_inventory(child))
+        else:
+            require(False, f"positive artifact runs contains an unaccounted file: {owned_rel(child)}")
+    return result
+
+
+def sync_positive_artifact_inventory(ledger: dict[str, Any], complete_roots: Iterable[str] = ()) -> list[dict[str, Any]]:
+    """Account for every retained positive root and reject changed history."""
+    complete = set(complete_roots)
+    stored = ledger.get("positive_artifact_inventory", [])
+    require(isinstance(stored, list), "positive artifact inventory is malformed")
+    known: dict[str, dict[str, Any]] = {}
+    for item in stored:
+        require(isinstance(item, dict) and isinstance(item.get("root"), str), "positive artifact inventory entry is malformed")
+        root = item["root"]
+        require(root not in known, f"positive artifact root is recorded more than once: {root}")
+        known[root] = item
+    actual = positive_artifact_inventory()
+    for item in actual:
+        root = item["root"]
+        prior = known.get(root)
+        if prior is not None:
+            require(prior == item or {key: prior.get(key) for key in item} == item, f"retained positive artifact changed: {root}")
+            continue
+        item = {**item, "state": "complete" if root in complete else "historical"}
+        known[root] = item
+    result = sorted(known.values(), key=lambda item: item["root"])
+    ledger["positive_artifact_inventory"] = result
+    ledger["duplicate_guard"] = {
+        **(ledger.get("duplicate_guard") if isinstance(ledger.get("duplicate_guard"), dict) else {}),
+        "enabled": True,
+        "all_retained_positive_roots_accounted": True,
+        "inventory_sha256": canonical_digest(result),
+    }
+    return result
+
+
 def retained_artifact_usage() -> dict[str, Any]:
     roots = [OWNED_ROOT / "artifacts" / "runs", OWNED_ROOT / "artifacts" / "negative-control", OWNED_ROOT / "artifacts" / "cleanup-control"]
     total = 0
     files = 0
+    per_root: list[dict[str, Any]] = []
     for root in roots:
         if not root.is_dir():
             continue
-        for path in root.rglob("*"):
+        children = [child for child in sorted(root.iterdir()) if child.is_dir()]
+        for child in children:
+            inventory = artifact_inventory(child)
+            per_root.append(inventory)
+            files += inventory["files"]
+            total += inventory["bytes"]
+        for path in root.iterdir():
             if path.is_symlink():
                 require(False, f"retained artifact symlink is not allowed: {owned_rel(path)}")
             if path.is_file():
                 files += 1
                 total += path.stat().st_size
-    return {"bytes": total, "files": files, "cap_bytes": MAX_RETAINED_ARTIFACT_BYTES, "cap_files": MAX_RETAINED_ARTIFACT_FILES, "bounded": total <= MAX_RETAINED_ARTIFACT_BYTES and files <= MAX_RETAINED_ARTIFACT_FILES}
+    return {"bytes": total, "files": files, "cap_bytes": MAX_RETAINED_ARTIFACT_BYTES, "cap_files": MAX_RETAINED_ARTIFACT_FILES, "bounded": total <= MAX_RETAINED_ARTIFACT_BYTES and files <= MAX_RETAINED_ARTIFACT_FILES, "per_root": per_root}
 
 
 def run_child(command: list[str], label: str, cwd: Path, source_revision: str, run_root: Path, timeout: float, *, binary_binding: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -954,15 +1142,27 @@ def execution_evidence(execution: dict[str, Any], report_path: Path, artifact_ro
     require(not execution["timed_out"], f"{source_label}/{mode} child timed out")
     require(execution["output_bounded"], f"{source_label}/{mode} child exceeded output cap")
     require(execution["cleanup"]["parent_reaped"] and not execution["cleanup"]["group_alive_after"], f"{source_label}/{mode} child cleanup failed")
-    require(execution["cleanup"].get("pipes_reaped") is True and not execution["cleanup"].get("group_members_after"), f"{source_label}/{mode} child descendants or pipes survived")
+    require(execution["cleanup"].get("pipes_reaped") is True and not execution["cleanup"].get("group_members_after") and execution["cleanup"].get("descendant_processes_reaped") is True and not execution["cleanup"].get("descendants_after"), f"{source_label}/{mode} child descendants or pipes survived")
     binding = execution.get("binary_binding")
     require(isinstance(binding, dict) and binding.get("verified") is True and binding.get("label") == source_label, f"{source_label}/{mode} executable binding is missing")
     require(binding.get("source_revision") == execution["source_revision"], f"{source_label}/{mode} executable source identity drifted")
     report = load_json(report_path)
     require(report.get("schema") == "c23.v1", f"{source_label}/{mode} report schema mismatch")
     require(report.get("scenario") == "tool-matrix" and report.get("turns") == 1, f"{source_label}/{mode} was not the one-turn matrix")
-    require(report.get("source_revision") == execution["source_revision"], f"{source_label}/{mode} source identity drifted")
+    # The frozen consumer's source_revision field is an untrusted diagnostic
+    # populated from its environment.  Do not inject an expected revision or
+    # let that field attest the binary; the archive/tree/build/binary binding
+    # above is the independent source attestation.
+    require(report.get("source_revision") == UNBOUND_SOURCE_REVISION, f"{source_label}/{mode} consumer reported a trusted source identity")
     execution["reported_source_revision"] = report.get("source_revision")
+    execution["source_attestation"] = {
+        "revision": binding["source_revision"],
+        "source_archive_sha256": binding["source_archive_sha256"],
+        "source_tree_sha256": binding["source_tree_sha256"],
+        "build_inputs_sha256": binding["build_inputs_sha256"],
+        "binary_sha256": binding["binary_sha256"],
+        "report_source_revision_untrusted": True,
+    }
     require(report.get("fixture_sha256") == fixture_digest(), f"{source_label}/{mode} fixture digest drifted")
     require(report.get("trace_complete") is True, f"{source_label}/{mode} trace is incomplete")
     require(report.get("events", {}).get("overflow_drops") == 0, f"{source_label}/{mode} public event trace overflowed")
@@ -997,6 +1197,7 @@ def execution_evidence(execution: dict[str, Any], report_path: Path, artifact_ro
     recording_audio = int(usage.get("accepted_audio", 0) or 0)
     recording_audio_bytes = int(usage.get("audio_bytes", 0) or 0)
     drops = usage_record["record"].get("drops", {})
+    require(isinstance(drops, dict) and "live_event_overflow" in drops, f"{source_label}/{mode} recording drop accounting is unavailable")
     drops_zero = all(int(value or 0) == 0 for value in drops.values())
     recording_ok = (mode == "off" and not recording_enabled) or (
         mode == "on" and recording_enabled and recording_available and recording_audio == 0 and recording_audio_bytes == 0
@@ -1056,6 +1257,7 @@ def reserve_comparison_run(driver_sha256: str) -> tuple[str, dict[str, Any]]:
     }
     require(ledger.get("schema") == "audio-runtime.c68.zero-audio-attribution.comparison-runs.v1", "comparison run ledger schema mismatch")
     require(not any(item.get("runner_sha256") == driver_sha256 for item in ledger.get("attempts", [])), "C68 comparison driver was already attempted; unchanged duplicate run rejected")
+    sync_positive_artifact_inventory(ledger)
     run_id = new_run_id("comparison")
     COMPARISON_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -1080,7 +1282,14 @@ def reserve_comparison_run(driver_sha256: str) -> tuple[str, dict[str, Any]]:
         attempt["prior_comparison"] = prior_record
     ledger.setdefault("attempts", []).append(attempt)
     ledger["current_run_id"] = run_id
-    ledger["duplicate_guard"] = {"enabled": True, "atomic_lock": owned_rel(COMPARISON_LOCK_PATH), "unchanged_driver_rejected": True, "history_preserved": bool(prior_record)}
+    ledger["duplicate_guard"] = {
+        **(ledger.get("duplicate_guard") if isinstance(ledger.get("duplicate_guard"), dict) else {}),
+        "enabled": True,
+        "atomic_lock": owned_rel(COMPARISON_LOCK_PATH),
+        "unchanged_driver_rejected": True,
+        "history_preserved": bool(prior_record),
+        "run_ids_unique": True,
+    }
     write_json(COMPARISON_LEDGER_PATH, ledger)
     return run_id, prior_record or {}
 
@@ -1094,6 +1303,9 @@ def finish_comparison_run(run_id: str, state: str, summary: dict[str, Any]) -> N
     matches[0].update(summary)
     matches[0]["state"] = state
     matches[0]["finished_at_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    complete_roots = summary.get("artifact_roots", []) if isinstance(summary.get("artifact_roots", []), list) else []
+    inventory = sync_positive_artifact_inventory(ledger, complete_roots)
+    matches[0]["positive_artifact_inventory_sha256"] = canonical_digest([item for item in inventory if item.get("root") in complete_roots])
     write_json(COMPARISON_LEDGER_PATH, ledger)
     if COMPARISON_LOCK_PATH.exists():
         COMPARISON_LOCK_PATH.unlink()
@@ -1114,7 +1326,7 @@ def write_attribution(comparison: dict[str, Any]) -> dict[str, Any]:
         "comparison": {"run_id": comparison["run_id"], "sha256": canonical_digest(comparison), "path": owned_rel(COMPARISON_PATH)},
         "provenance": {"path": owned_rel(PROVENANCE_PATH), "sha256": sha256_file(PROVENANCE_PATH), "prepared_head": provenance["head"], "current_main": provenance["current_main"]},
         "build": {"path": owned_rel(BUILD_PATH), "sha256": sha256_file(BUILD_PATH), "bindings": comparison["build_bindings"]},
-        "source_binding": {"independent_of_consumer_report": True, "report_source_revision_is_consistency_only": True, "executions": [{"source": item["source"], "mode": item["mode"], "binary_sha256": item["execution"]["binary_binding"]["binary_sha256"], "build_inputs_sha256": item["execution"]["binary_binding"]["build_inputs_sha256"]} for item in comparison["executions"]]},
+        "source_binding": {"independent_of_consumer_report": True, "report_source_revision_is_untrusted": True, "executions": [{"source": item["source"], "mode": item["mode"], "binary_sha256": item["execution"]["binary_binding"]["binary_sha256"], "build_inputs_sha256": item["execution"]["binary_binding"]["build_inputs_sha256"]} for item in comparison["executions"]]},
         "first_divergent_boundary": attribution["first_divergent_boundary"],
         "first_divergent_api": attribution["first_divergent_api"],
         "first_divergent_path": attribution["first_divergent_path"],
@@ -1137,6 +1349,7 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
     assert_scope()
     provenance = load_json(PROVENANCE_PATH)
     require(provenance["c23_revision"] == args.c23_revision and provenance["c56_revision"] == args.c56_revision, "comparison revisions differ from provenance")
+    validate_frozen_inputs(provenance)
     require(args.turns == 1, "C68 comparison is exactly one logical turn per execution")
     require(tuple(args.recording) == RECORDING_MODES, "C68 comparison recording modes must be exactly off,on")
     driver_sha256 = sha256_file(Path(__file__))
@@ -1179,7 +1392,15 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "run_id": run_id, "runner_sha256": driver_sha256,
             "aggregate_elapsed_ms": int((time.monotonic() - started) * 1000), "aggregate_timeout_seconds": args.total_timeout_seconds,
             "artifact_disk": {"bytes": artifact_disk_bytes, "cap_bytes": MAX_RETAINED_ARTIFACT_BYTES, "bounded": artifact_disk_bytes <= MAX_RETAINED_ARTIFACT_BYTES},
-            "duplicate_guard": {"enabled": True, "ledger": owned_rel(COMPARISON_LEDGER_PATH), "prior_attempt_preserved": bool(prior), "current_run_id": run_id},
+            "duplicate_guard": {
+                "enabled": True,
+                "ledger": owned_rel(COMPARISON_LEDGER_PATH),
+                "prior_attempt_preserved": bool(prior),
+                "current_run_id": run_id,
+                "positive_artifact_roots_accounted": True,
+                "artifact_roots": [item["artifact_root"] for item in evidence],
+                "positive_artifact_inventory_sha256": canonical_digest([artifact_inventory(owned_path(item["artifact_root"])) for item in evidence]),
+            },
             "binding_guard": binding_guard,
             "build_bindings": bindings,
             "executions": evidence,
@@ -1213,7 +1434,16 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "preserved": True,
         })
         write_attribution(comparison)
-        finish_comparison_run(run_id, "complete", {"positive_execution_count": len(evidence), "elapsed_ms": comparison["aggregate_elapsed_ms"], "comparison_sha256": canonical_digest(comparison)})
+        finish_comparison_run(
+            run_id,
+            "complete",
+            {
+                "positive_execution_count": len(evidence),
+                "elapsed_ms": comparison["aggregate_elapsed_ms"],
+                "comparison_sha256": canonical_digest(comparison),
+                "artifact_roots": [item["artifact_root"] for item in evidence],
+            },
+        )
         print(json.dumps({"status": "compared", "positive_executions": len(evidence), "classification": classification, "run_id": run_id}, sort_keys=True))
         return comparison
     except Exception as error:
@@ -1224,30 +1454,43 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
 
 def make_negative_source() -> tuple[Path, str, str]:
     source = INPUT_C23 / "consumer" / "main.go"
-    original = source.read_text()
-    old = "messages.NewAudioDeltaValueWithMediaType(pcm, \"audio/pcm;rate=16000\")"
-    new = "messages.NewAudioDeltaValueWithMediaType(pcm[:0], \"audio/pcm;rate=16000\")"
+    original = source.read_bytes()
+    old = NEGATIVE_MUTATION_OLD.encode()
+    new = NEGATIVE_MUTATION_NEW.encode()
     require(original.count(old) == 1, "negative control could not identify exactly one provider audio emission")
     mutated = original.replace(old, new)
     negative = OWNED_ROOT / "consumer-negative" / "main.go"
     negative.parent.mkdir(parents=True, exist_ok=True)
-    negative.write_text(mutated)
+    require(not negative.is_symlink(), f"negative consumer destination is a symlink: {owned_rel(negative)}")
+    negative.write_bytes(mutated)
     return negative, sha256_file(source), sha256_file(negative)
+
+
+def expected_negative_consumer_bytes() -> bytes:
+    original = (INPUT_C23 / "consumer" / "main.go").read_bytes()
+    old = NEGATIVE_MUTATION_OLD.encode()
+    new = NEGATIVE_MUTATION_NEW.encode()
+    require(original.count(old) == 1, "frozen consumer does not contain exactly one negative-control audio emission")
+    return original.replace(old, new)
 
 
 def negative_control(args: argparse.Namespace) -> dict[str, Any]:
     assert_scope()
     require(args.mutation == "first-provider-audio", "C68 only admits the first-provider-audio negative mutation")
     provenance = load_json(PROVENANCE_PATH)
+    validate_frozen_inputs(provenance)
     build_manifest = load_json(BUILD_PATH)
     source_revision = provenance["c56_revision"]
     validate_build_binding("c56", provenance, build_manifest["builds"]["c56"], args.child_timeout_seconds, consumer_sha256=sha256_file(INPUT_C23 / "consumer" / "main.go"))
     root = source_root(provenance["sources"]["c56"])
     negative, original_hash, negative_hash = make_negative_source()
+    expected_negative = expected_negative_consumer_bytes()
+    require(negative.read_bytes() == expected_negative, "negative control is not the admitted exact first-provider mutation")
     binary = OWNED_ROOT / "scratch" / "build" / "c56-negative-consumer"
     command = ["go", "build", "-trimpath", "-o", str(binary), str(root / "__c68_input__" / "negative" / "main.go")]
     negative_source = root / "__c68_input__" / "negative" / "main.go"
     negative_source.parent.mkdir(parents=True, exist_ok=True)
+    require(not negative_source.is_symlink(), f"negative build source is a symlink: {owned_rel(negative_source)}")
     shutil.copyfile(negative, negative_source)
     run_command(command, cwd=root, timeout=args.child_timeout_seconds)
     require(binary.is_file(), "negative control build did not produce a binary")
@@ -1277,8 +1520,9 @@ def negative_control(args: argparse.Namespace) -> dict[str, Any]:
     require(report_path.is_file(), "negative control did not preserve its report")
     report = load_json(report_path)
     require(report.get("schema") == "c23.v1" and report.get("scenario") == "tool-matrix" and report.get("turns") == 1 and report.get("recording") is not True, "negative control report shape changed")
-    require(report.get("source_revision") == source_revision and report.get("fixture_sha256") == fixture_digest(), "negative control source or fixture identity drifted")
+    require(report.get("source_revision") == UNBOUND_SOURCE_REVISION and report.get("fixture_sha256") == fixture_digest(), "negative control trusted its consumer source identity")
     require(isinstance(report.get("error"), str) and report["error"].startswith("PCM oracle mismatch:"), "negative control did not fail at the public PCM oracle")
+    require(report.get("trace_complete") is True and report.get("clean_shutdown") is True, "negative control stopped before the public audio boundary")
     pcm = report.get("pcm") if isinstance(report.get("pcm"), dict) else {}
     provider = provider_audio(artifact_root)
     events = report.get("events") if isinstance(report.get("events"), dict) else {}
@@ -1305,9 +1549,9 @@ def negative_control(args: argparse.Namespace) -> dict[str, Any]:
 def cleanup_control(args: argparse.Namespace) -> dict[str, Any]:
     """Prove that a surviving grandchild is killed with its process group."""
     assert_scope()
-    probe_root = OWNED_ROOT / "artifacts" / "cleanup-control"
+    probe_root = OWNED_ROOT / "artifacts" / "cleanup-control" / new_run_id("cleanup")
     require(not probe_root.exists(), f"cleanup control output already exists: {owned_rel(probe_root)}")
-    grandchild = "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)"
+    grandchild = "import os,signal,time; os.setsid(); signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)"
     parent = "import subprocess,sys,time; p=subprocess.Popen([sys.executable,'-c',sys.argv[1]]); print(p.pid,flush=True); time.sleep(30)"
     command = [sys.executable, "-c", parent, grandchild]
     execution = run_child(command, "cleanup-grandchild", REPO_ROOT, git_value("rev-parse", "HEAD"), probe_root / "process", min(args.child_timeout_seconds, 2.0))
@@ -1322,6 +1566,9 @@ def cleanup_control(args: argparse.Namespace) -> dict[str, Any]:
         and execution["cleanup"].get("pipes_reaped") is True
         and execution["cleanup"]["group_alive_after"] is False
         and not execution["cleanup"].get("group_members_after")
+        and execution["cleanup"].get("descendants_before")
+        and execution["cleanup"].get("descendant_processes_reaped") is True
+        and not execution["cleanup"].get("descendants_after")
         and disk["bounded"]
     )
     require(passed, "cleanup control did not prove bounded process-group descendant reaping")
@@ -1354,7 +1601,7 @@ def c21_regressions(args: argparse.Namespace) -> dict[str, Any]:
     race = run_child(race_cmd, "c21-race-count-1", cwd, tested_source_revision, race_root, args.child_timeout_seconds)
     for label, result, artifact_root in (("normal", normal, normal_root), ("race", race, race_root)):
         require(result["returncode"] == 0 and not result["timed_out"] and result["output_bounded"], f"C21 {label} regression failed: {read_child_text(result, 'stderr')[-2000:]}")
-        require(result["cleanup"]["parent_reaped"] and not result["cleanup"]["group_alive_after"] and result["cleanup"].get("pipes_reaped") is True and not result["cleanup"].get("group_members_after"), f"C21 {label} cleanup failed")
+        require(result["cleanup"]["parent_reaped"] and not result["cleanup"]["group_alive_after"] and result["cleanup"].get("pipes_reaped") is True and not result["cleanup"].get("group_members_after") and result["cleanup"].get("descendant_processes_reaped") is True and not result["cleanup"].get("descendants_after"), f"C21 {label} cleanup failed")
         result["artifact_disk"] = artifact_disk_usage(artifact_root)
     value = {
         "schema": "audio-runtime.c68.zero-audio-attribution.c21.v1", "task": TASK,

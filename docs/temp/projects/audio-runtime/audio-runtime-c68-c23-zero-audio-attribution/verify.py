@@ -82,6 +82,7 @@ def verify_provenance() -> None:
 
 def verify_build_bindings() -> dict[str, dict]:
     provenance = load(ATTRIBUTE.PROVENANCE_PATH)
+    ATTRIBUTE.validate_frozen_inputs(provenance)
     build = load(ATTRIBUTE.BUILD_PATH)
     require(build.get("schema") == "audio-runtime.c68.zero-audio-attribution.build.v1" and build.get("task") == ATTRIBUTE.TASK, "build manifest identity mismatch")
     require(build.get("runner_sha256") == ATTRIBUTE.sha256_file(Path(ATTRIBUTE.__file__)), "build manifest was not produced by the current attribution driver")
@@ -121,11 +122,12 @@ def verify_oracle_controls() -> None:
     report = load(report_path)
     artifact_root = report_path.parent
     require(report.get("schema") == "c23.v1" and report.get("scenario") == "tool-matrix" and report.get("turns") == 1 and report.get("recording") is not True, "negative control report shape changed")
-    require(report.get("source_revision") == provenance["c56_revision"] and report.get("fixture_sha256") == ATTRIBUTE.fixture_digest(), "negative control source or fixture identity drifted")
+    require(report.get("source_revision") == ATTRIBUTE.UNBOUND_SOURCE_REVISION and report.get("fixture_sha256") == ATTRIBUTE.fixture_digest(), "negative control trusted its consumer source identity")
     require(isinstance(report.get("error"), str) and report["error"].startswith("PCM oracle mismatch:"), "negative control did not fail at the public PCM oracle")
+    require(report.get("trace_complete") is True and report.get("clean_shutdown") is True, "negative control stopped before the public audio boundary")
     require(execution.get("returncode") == 1 and execution.get("timed_out") is False and execution.get("output_bounded") is True, "negative control accepted an arbitrary nonzero or timeout result")
     cleanup = execution.get("cleanup", {})
-    require(cleanup.get("parent_reaped") is True and cleanup.get("group_alive_after") is False and cleanup.get("pipes_reaped") is True and not cleanup.get("group_members_after") and not cleanup.get("errors"), "negative child cleanup was incomplete")
+    require(cleanup.get("parent_reaped") is True and cleanup.get("group_alive_after") is False and cleanup.get("pipes_reaped") is True and not cleanup.get("group_members_after") and cleanup.get("descendant_processes_reaped") is True and not cleanup.get("descendants_after") and not cleanup.get("errors"), "negative child cleanup was incomplete")
     provider = negative.get("provider_capture")
     require(isinstance(provider, dict), "negative control omitted provider capture evidence")
     require(ATTRIBUTE.owned_path(provider.get("path", "")).parent == artifact_root, "negative provider capture is outside its execution root")
@@ -136,6 +138,8 @@ def verify_oracle_controls() -> None:
     by_kind = events.get("by_kind") if isinstance(events.get("by_kind"), dict) else {}
     require(pcm.get("bytes") == 0 and pcm.get("sha256") == ATTRIBUTE.sha256_bytes(b""), "negative public PCM is not empty at the rejection boundary")
     require(provider.get("audio_delta_records") == 1 and provider.get("nonempty_records") == 0 and provider.get("recorded_bytes") == [0] and provider.get("bytes") == 0 and by_kind.get("AUDIO.DELTA") == 1, "negative control accepted absent or arbitrary provider capture")
+    require(ATTRIBUTE.owned_path(negative.get("mutated_source", "")).read_bytes() == ATTRIBUTE.expected_negative_consumer_bytes(), "negative control source is not the exact admitted mutation")
+    require(negative.get("mutated_consumer_sha256") == ATTRIBUTE.sha256_file(ATTRIBUTE.owned_path(negative.get("mutated_source", ""))), "negative control source hash is stale")
     require(negative.get("passed") is True, "negative control did not pass its exact rejection assertion")
     disk = ATTRIBUTE.artifact_disk_usage(artifact_root)
     require(negative.get("artifact_disk") == disk and disk.get("bounded") is True, "negative artifact disk evidence is not bounded")
@@ -158,8 +162,26 @@ def verify_boundaries() -> None:
     ledger = load(ATTRIBUTE.COMPARISON_LEDGER_PATH)
     attempts = ledger.get("attempts")
     require(ledger.get("schema") == "audio-runtime.c68.zero-audio-attribution.comparison-runs.v1" and isinstance(attempts, list), "comparison run ledger is missing")
+    stored_inventory = ledger.get("positive_artifact_inventory")
+    require(isinstance(stored_inventory, list), "comparison ledger does not account for retained positive artifacts")
+    stored_by_root = {}
+    for item in stored_inventory:
+        require(isinstance(item, dict) and isinstance(item.get("root"), str) and item["root"] not in stored_by_root, "comparison ledger has duplicate positive artifact roots")
+        stored_by_root[item["root"]] = item
+    actual_inventory = ATTRIBUTE.positive_artifact_inventory()
+    require({item["root"] for item in actual_inventory} == set(stored_by_root), "comparison ledger has unaccounted positive artifacts")
+    for item in actual_inventory:
+        recorded = stored_by_root[item["root"]]
+        require({key: recorded.get(key) for key in item} == item, f"positive artifact inventory changed: {item['root']}")
+    require(ledger.get("duplicate_guard", {}).get("all_retained_positive_roots_accounted") is True and ledger["duplicate_guard"].get("inventory_sha256") == ATTRIBUTE.canonical_digest(stored_inventory), "comparison duplicate guard is not fail-closed")
     current_attempts = [item for item in attempts if item.get("run_id") == comparison["run_id"]]
     require(len(current_attempts) == 1 and current_attempts[0].get("state") == "complete" and current_attempts[0].get("runner_sha256") == comparison["runner_sha256"], "comparison run was not completed under the duplicate guard")
+    current_roots = comparison.get("duplicate_guard", {}).get("artifact_roots")
+    require(comparison.get("duplicate_guard", {}).get("positive_artifact_roots_accounted") is True and isinstance(current_roots, list) and len(current_roots) == 4, "comparison duplicate guard did not bind its positive roots")
+    require(current_attempts[0].get("artifact_roots") == current_roots, "comparison attempt roots are not bound to the candidate")
+    current_inventory = [item for item in actual_inventory if item["root"] in set(current_roots)]
+    require(comparison["duplicate_guard"].get("positive_artifact_inventory_sha256") == ATTRIBUTE.canonical_digest(current_inventory), "comparison positive artifact inventory binding changed")
+    require(current_attempts[0].get("positive_artifact_inventory_sha256") == ATTRIBUTE.canonical_digest(current_inventory), "comparison attempt artifact inventory binding changed")
     require(len({item.get("run_id") for item in attempts}) == len(attempts), "comparison ledger contains duplicate run identities")
     require(ledger.get("duplicate_guard", {}).get("enabled") is True and ledger["duplicate_guard"].get("unchanged_driver_rejected") is True, "comparison ledger does not fail closed on duplicate drivers")
     require(comparison["duplicate_guard"].get("prior_attempt_preserved") is True and ledger["duplicate_guard"].get("history_preserved") is True, "prior comparison attempt was discarded")
@@ -175,15 +197,17 @@ def verify_boundaries() -> None:
         execution = item.get("execution", {})
         binding = execution.get("binary_binding")
         require(binding == bindings[label] and binding.get("verified") is True, f"{label}/{item['mode']} executable binding changed")
-        require(execution.get("source_revision") == provenance[f"{label}_revision"] and execution.get("reported_source_revision") == provenance[f"{label}_revision"], f"{label}/{item['mode']} source identity drifted")
+        require(execution.get("source_revision") == provenance[f"{label}_revision"] and execution.get("reported_source_revision") == ATTRIBUTE.UNBOUND_SOURCE_REVISION, f"{label}/{item['mode']} source identity drifted")
+        attestation = execution.get("source_attestation", {})
+        require(attestation.get("revision") == bindings[label]["source_revision"] and attestation.get("source_archive_sha256") == bindings[label]["source_archive_sha256"] and attestation.get("source_tree_sha256") == bindings[label]["source_tree_sha256"] and attestation.get("build_inputs_sha256") == bindings[label]["build_inputs_sha256"] and attestation.get("binary_sha256") == bindings[label]["binary_sha256"] and attestation.get("report_source_revision_untrusted") is True, f"{label}/{item['mode']} source attestation is missing")
         require(execution.get("returncode") == 0 and execution.get("timed_out") is False and execution.get("output_bounded") is True, f"positive child failed: {label}/{item['mode']}")
         cleanup = execution.get("cleanup", {})
-        require(cleanup.get("parent_reaped") is True and cleanup.get("group_alive_after") is False and cleanup.get("pipes_reaped") is True and not cleanup.get("group_members_after") and not cleanup.get("errors"), f"positive child cleanup failed: {label}/{item['mode']}")
+        require(cleanup.get("parent_reaped") is True and cleanup.get("group_alive_after") is False and cleanup.get("pipes_reaped") is True and not cleanup.get("group_members_after") and cleanup.get("descendant_processes_reaped") is True and not cleanup.get("descendants_after") and not cleanup.get("errors"), f"positive child cleanup failed: {label}/{item['mode']}")
         run_root = ATTRIBUTE.owned_path(item.get("artifact_root", ""))
         report_path = ATTRIBUTE.owned_path(item.get("report", ""))
         require(report_path.is_file() and report_path.parent == run_root, f"{label}/{item['mode']} report is outside its execution root")
         report = load(report_path)
-        require(report.get("source_revision") == provenance[f"{label}_revision"] and report.get("fixture_sha256") == ATTRIBUTE.fixture_digest(), f"{label}/{item['mode']} report identity changed")
+        require(report.get("source_revision") == ATTRIBUTE.UNBOUND_SOURCE_REVISION and report.get("fixture_sha256") == ATTRIBUTE.fixture_digest(), f"{label}/{item['mode']} report trusted a source identity")
         require(report.get("schema") == "c23.v1" and report.get("scenario") == "tool-matrix" and report.get("turns") == 1 and report.get("trace_complete") is True and report.get("clean_shutdown") is True, f"{label}/{item['mode']} public report is incomplete")
         require(report.get("events", {}).get("overflow_drops") == 0 and report.get("events", {}).get("by_kind", {}).get("AUDIO.DELTA") == 1, f"{label}/{item['mode']} public audio event boundary is incomplete")
         provider = item["boundaries"]["provider_capture"]
@@ -233,6 +257,8 @@ def verify_attribution() -> None:
     require(attribution.get("classification") == "C56_RECORDING_DEFECT" and attribution.get("first_divergent_boundary") == "recording_observer_admission", "attribution is not the demonstrated C56 recording defect")
     require("observer.go:71-80" in attribution.get("first_divergent_path", "") and "terminalDrainSession" in attribution.get("causal_detail", "") and "SetMediaAttached(true)" in attribution.get("causal_detail", ""), "causal attribution omitted the capability-to-observer transition")
     require(attribution.get("c23_revision") == comparison.get("c23_revision") and attribution.get("c56_revision") == comparison.get("c56_revision"), "canonical attribution source revisions changed")
+    source_binding = attribution.get("source_binding", {})
+    require(source_binding.get("independent_of_consumer_report") is True and source_binding.get("report_source_revision_is_untrusted") is True, "canonical attribution trusts the consumer source label")
     require(attribution.get("comparison", {}).get("sha256") == ATTRIBUTE.canonical_digest(comparison) and attribution["comparison"].get("path") == ATTRIBUTE.owned_rel(ATTRIBUTE.COMPARISON_PATH), "canonical attribution is not bound to comparison evidence")
     require(attribution.get("provenance", {}).get("sha256") == ATTRIBUTE.sha256_file(ATTRIBUTE.PROVENANCE_PATH) and attribution.get("build", {}).get("sha256") == ATTRIBUTE.sha256_file(ATTRIBUTE.BUILD_PATH), "canonical attribution provenance/build binding changed")
     require(attribution.get("build", {}).get("bindings") == comparison.get("build_bindings"), "canonical attribution executable bindings changed")
@@ -246,13 +272,14 @@ def verify_attribution() -> None:
 
 def verify_cleanup() -> None:
     verify_scope()
+    provenance = load(ATTRIBUTE.PROVENANCE_PATH)
     comparison = load(ATTRIBUTE.COMPARISON_PATH)
     for item in comparison.get("executions", []):
         cleanup = item.get("execution", {}).get("cleanup", {})
-        require(cleanup.get("parent_reaped") is True and cleanup.get("group_alive_after") is False and cleanup.get("pipes_reaped") is True and not cleanup.get("group_members_after") and not cleanup.get("errors"), f"live child group remains: {item.get('source')}/{item.get('mode')}")
+        require(cleanup.get("parent_reaped") is True and cleanup.get("group_alive_after") is False and cleanup.get("pipes_reaped") is True and not cleanup.get("group_members_after") and cleanup.get("descendant_processes_reaped") is True and not cleanup.get("descendants_after") and not cleanup.get("errors"), f"live child group remains: {item.get('source')}/{item.get('mode')}")
     negative = load(ATTRIBUTE.NEGATIVE_PATH)
     cleanup = negative.get("execution", {}).get("cleanup", {})
-    require(cleanup.get("parent_reaped") is True and cleanup.get("group_alive_after") is False and cleanup.get("pipes_reaped") is True and not cleanup.get("group_members_after") and not cleanup.get("errors"), "negative child group remains")
+    require(cleanup.get("parent_reaped") is True and cleanup.get("group_alive_after") is False and cleanup.get("pipes_reaped") is True and not cleanup.get("group_members_after") and cleanup.get("descendant_processes_reaped") is True and not cleanup.get("descendants_after") and not cleanup.get("errors"), "negative child group remains")
     cleanup_control = load(ATTRIBUTE.CLEANUP_PATH)
     require(cleanup_control.get("schema") == "audio-runtime.c68.zero-audio-attribution.cleanup.v1" and cleanup_control.get("passed") is True and cleanup_control.get("runner_sha256") == ATTRIBUTE.sha256_file(Path(ATTRIBUTE.__file__)), "grandchild cleanup control is missing or stale")
     control_execution = cleanup_control.get("execution", {})
@@ -262,7 +289,7 @@ def verify_cleanup() -> None:
     require(cleanup_control.get("artifact_disk") == ATTRIBUTE.artifact_disk_usage(control_root), "grandchild cleanup disk evidence changed")
     regressions = load(ATTRIBUTE.REGRESSIONS_PATH)
     tested = regressions.get("source_revision")
-    require(regressions.get("schema") == "audio-runtime.c68.zero-audio-attribution.c21.v1" and regressions.get("passed") is True and isinstance(tested, str) and len(tested) == 40 and tested != ATTRIBUTE.CURRENT_MAIN and regressions.get("candidate_head") == tested, "C21 regression evidence is not tied to the changed candidate")
+    require(regressions.get("schema") == "audio-runtime.c68.zero-audio-attribution.c21.v1" and regressions.get("passed") is True and isinstance(tested, str) and len(tested) == 40 and tested != ATTRIBUTE.CURRENT_MAIN and regressions.get("candidate_head") == tested and tested == provenance.get("head"), "C21 regression evidence is not tied to the prepared final candidate")
     head = git("rev-parse", "HEAD")
     require(ATTRIBUTE.git_is_ancestor(tested, head), "final head does not preserve the tested C21 candidate")
     changed_after_test = [line for line in git("diff", "--name-only", f"{tested}..{head}").splitlines() if line]
@@ -271,7 +298,7 @@ def verify_cleanup() -> None:
     for label, artifact_root in (("normal", ATTRIBUTE.OWNED_ROOT / "artifacts" / "c21" / "normal"), ("race", ATTRIBUTE.OWNED_ROOT / "artifacts" / "c21" / "race")):
         result = regressions.get(label, {})
         check = result.get("cleanup", {})
-        require(result.get("returncode") == 0 and result.get("timed_out") is False and result.get("output_bounded") is True and check.get("parent_reaped") is True and check.get("group_alive_after") is False and check.get("pipes_reaped") is True and not check.get("group_members_after") and not check.get("errors"), f"C21 {label} regression did not pass")
+        require(result.get("returncode") == 0 and result.get("timed_out") is False and result.get("output_bounded") is True and check.get("parent_reaped") is True and check.get("group_alive_after") is False and check.get("pipes_reaped") is True and not check.get("group_members_after") and check.get("descendant_processes_reaped") is True and not check.get("descendants_after") and not check.get("errors"), f"C21 {label} regression did not pass")
         require(result.get("artifact_disk") == ATTRIBUTE.artifact_disk_usage(artifact_root), f"C21 {label} disk evidence changed")
     retained = ATTRIBUTE.retained_artifact_usage()
     require(retained.get("bounded") is True, "retained artifact disk/file bound is exceeded")

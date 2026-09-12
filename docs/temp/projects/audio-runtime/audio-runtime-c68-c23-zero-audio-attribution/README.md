@@ -18,6 +18,7 @@ prove descendant process-group cleanup before running the four-case comparison.
 ```text
 python3 docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/attribute.py prepare --c23-revision b2fb41401cd0934378b9ff1bc131532fdc19f614 --c56-revision 85710a53a2e9449884fb81f979df0599269ef3b3 --child-timeout-seconds 60 --total-timeout-seconds 300
 python3 docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/attribute.py build --c23-revision b2fb41401cd0934378b9ff1bc131532fdc19f614 --c56-revision 85710a53a2e9449884fb81f979df0599269ef3b3 --child-timeout-seconds 60 --total-timeout-seconds 300
+python3 docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/attribute.py cleanup-control --c23-revision b2fb41401cd0934378b9ff1bc131532fdc19f614 --c56-revision 85710a53a2e9449884fb81f979df0599269ef3b3 --child-timeout-seconds 60 --total-timeout-seconds 300
 python3 docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/attribute.py negative-control --mutation first-provider-audio --c23-revision b2fb41401cd0934378b9ff1bc131532fdc19f614 --c56-revision 85710a53a2e9449884fb81f979df0599269ef3b3 --child-timeout-seconds 60 --total-timeout-seconds 300
 python3 docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/attribute.py compare --turns 1 --recording off on --c23-revision b2fb41401cd0934378b9ff1bc131532fdc19f614 --c56-revision 85710a53a2e9449884fb81f979df0599269ef3b3 --child-timeout-seconds 60 --total-timeout-seconds 300
 python3 docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/attribute.py c21-regressions --c23-revision b2fb41401cd0934378b9ff1bc131532fdc19f614 --c56-revision 85710a53a2e9449884fb81f979df0599269ef3b3 --child-timeout-seconds 60 --total-timeout-seconds 300
@@ -57,3 +58,9 @@ reaches `RecordAudio`.
 This evidence does not claim script CI, review, merge, realtime credentials,
 physical devices, or acoustic output. After commit/push/PR handoff, the next
 action is the external script CI gate; do not poll it here.
+
+The prior PR457 integration rejection is preserved in
+`ci-integration-rejection.json`: run `34669154964`, job `103487069605`, lost
+6,400 high-rate rendered samples while reporting zero dropped samples. This is
+the existing C47/C64 audio-stability residual, outside the C68 evidence-only
+lease, and is not claimed as repaired here.
