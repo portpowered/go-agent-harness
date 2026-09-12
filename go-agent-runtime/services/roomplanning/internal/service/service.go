@@ -19,7 +19,7 @@ type Service struct{}
 func New() roomplanning.Service { return &Service{} }
 
 func (s *Service) Await(ctx context.Context, options roomplanning.AwaitOptions) error {
-	return roomplanning.Await(ctx, options)
+	return awaitAdmission(ctx, options)
 }
 
 func (s *Service) Plan(ctx context.Context, options roomplanning.Options) (roomplanning.PlanResult, error) {

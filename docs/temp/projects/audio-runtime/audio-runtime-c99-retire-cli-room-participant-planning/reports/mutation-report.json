@@ -1,24 +1,24 @@
 {
-  "candidate_revision": "50bf09b3d423e14b3e768c4997d1256ba663affd",
+  "candidate_revision": "1e5d4347b9cb1265e1aea23e84f4d18345f88022",
   "matrix": [
     {
       "mutations": [
         {
           "compiled": true,
           "label": "replay-credential-consultation",
-          "output": "--- FAIL: TestPlanReplayNeverConsultsLiveSeams (0.00s)\n    service_test.go:75: replay consulted credentials\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning\t0.171s\nFAIL\n",
+          "output": "--- FAIL: TestPlanReplayNeverConsultsLiveSeams (0.00s)\n    service_test.go:75: replay consulted credentials\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning\t0.163s\nFAIL\n",
           "rejected": true
         },
         {
           "compiled": true,
           "label": "admission-before-readiness",
-          "output": "--- FAIL: TestAwaitWaitsForReadinessAfterConnection (0.00s)\n    service_test.go:196: admission returned before readiness: <nil>\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning\t0.160s\nFAIL\n",
+          "output": "--- FAIL: TestAwaitWaitsForReadinessAfterConnection (0.00s)\n    service_test.go:196: admission returned before readiness: <nil>\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/roomplanning\t0.164s\nFAIL\n",
           "rejected": true
         },
         {
           "compiled": true,
           "label": "whole-room-local-failure",
-          "output": "--- FAIL: TestRunRoom_StartupParticipantFailurePreservesViableParticipants (2.00s)\n    session_room_test.go:733: viable participants were not admitted: map[]\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t2.437s\nFAIL\n",
+          "output": "--- FAIL: TestRunRoom_StartupParticipantFailurePreservesViableParticipants (2.00s)\n    session_room_test.go:733: viable participants were not admitted: map[]\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t2.444s\nFAIL\n",
           "rejected": true
         }
       ],

@@ -95,7 +95,7 @@ def mutation_matrix() -> list[dict]:
         ),
         causal_mutation(
             "admission-before-readiness",
-            REPO_ROOT / "go-agent-runtime/services/roomplanning/admission.go",
+            REPO_ROOT / "go-agent-runtime/services/roomplanning/internal/service/admission.go",
             "\t\tif allReady {\n\t\t\treturn nil\n\t\t}",
             "\t\tif allReady || true {\n\t\t\treturn nil\n\t\t}",
             ["./go-agent-runtime/services/roomplanning", "-run", "TestAwaitWaitsForReadinessAfterConnection", "-count=1", "-timeout=30s"],
