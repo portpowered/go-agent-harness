@@ -222,10 +222,6 @@ func TestSessionProgressObserver_ContinuationRequestBeforeCallObservation(t *tes
 	// must remain correlated with this call instead of being lost.
 	observer.noteToolResultAccepted(callID)
 	observer.noteToolContinuationRequested()
-	// SESSION.OPEN can be delivered after those provider-send acknowledgements
-	// because the model runner observes the internal tool call before the
-	// public delta consumer drains the provider boundary.
-	observer.resetObservedResponseState()
 	observer.observe(messages.StreamMessage{
 		Type:  messages.StreamTypeToolCallEnd,
 		Role:  messages.RoleAssistant,

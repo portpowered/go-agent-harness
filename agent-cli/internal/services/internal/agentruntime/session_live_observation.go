@@ -215,10 +215,6 @@ func (s *observedSession) Send(ctx context.Context, msg messages.StreamMessage) 
 // session lifecycle boundary. Tool calls are resolved only after this method
 // reports success from the wrapped provider session.
 func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
-	if s.progress != nil {
-		s.progress.lifecycleGate.Lock()
-		defer s.progress.lifecycleGate.Unlock()
-	}
 	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
 	if !outcome.OK() {
 		if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
