@@ -46,24 +46,32 @@ func (service *Service) Send(ctx context.Context, session messages.Session, text
 }
 
 func sendCompleteMessage(ctx context.Context, session messages.Session, message messages.Message, deferResponse bool) error {
-	mode := "response"
 	if deferResponse {
-		mode = "without-response"
-		if !supportsCompleteMessagesWithoutResponse(session) {
-			return sendFailure(ctx, session, mode+" capability is unavailable")
-		}
-		if sender, ok := session.(imageinput.MessageSenderWithoutResponseWithError); ok {
-			if err := sender.SendMessageWithoutResponseWithError(ctx, message); err != nil {
-				return &imageinput.SendError{Mode: mode, Cause: err}
-			}
-			return nil
-		}
-		sender, ok := session.(imageinput.MessageSenderWithoutResponse)
-		if !ok || !sender.SendMessageWithoutResponse(ctx, message) {
-			return sendFailure(ctx, session, mode)
+		return sendDeferredMessage(ctx, session, message)
+	}
+	return sendImmediateMessage(ctx, session, message)
+}
+
+func sendDeferredMessage(ctx context.Context, session messages.Session, message messages.Message) error {
+	const mode = "without-response"
+	if !supportsCompleteMessagesWithoutResponse(session) {
+		return sendFailure(ctx, session, mode+" capability is unavailable")
+	}
+	if sender, ok := session.(imageinput.MessageSenderWithoutResponseWithError); ok {
+		if err := sender.SendMessageWithoutResponseWithError(ctx, message); err != nil {
+			return &imageinput.SendError{Mode: mode, Cause: err}
 		}
 		return nil
 	}
+	sender, ok := session.(imageinput.MessageSenderWithoutResponse)
+	if ok && sender.SendMessageWithoutResponse(ctx, message) {
+		return nil
+	}
+	return sendFailure(ctx, session, mode)
+}
+
+func sendImmediateMessage(ctx context.Context, session messages.Session, message messages.Message) error {
+	const mode = "response"
 	if !supportsCompleteMessages(session) {
 		return sendFailure(ctx, session, mode+" capability is unavailable")
 	}
@@ -74,10 +82,10 @@ func sendCompleteMessage(ctx context.Context, session messages.Session, message 
 		return nil
 	}
 	sender, ok := session.(imageinput.MessageSender)
-	if !ok || !sender.SendMessage(ctx, message) {
-		return sendFailure(ctx, session, mode)
+	if ok && sender.SendMessage(ctx, message) {
+		return nil
 	}
-	return nil
+	return sendFailure(ctx, session, mode)
 }
 
 func supportsCompleteMessages(session messages.Session) bool {

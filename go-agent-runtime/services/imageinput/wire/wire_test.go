@@ -1,4 +1,4 @@
-package wire_test
+package wire
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/imageinput"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/imageinput/wire"
 )
 
 type loader struct{ bytes []byte }
@@ -22,7 +21,7 @@ func TestNewServiceUsesExplicitLoader(t *testing.T) {
 	if err := png.Encode(&fixture, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
 		t.Fatalf("encode fixture: %v", err)
 	}
-	service := wire.NewService(loader{bytes: fixture.data})
+	service := NewService(loader{bytes: fixture.data})
 	parts, err := service.Prepare(context.Background(), []string{"fixture"}, imageinput.Capabilities{SupportsImageInput: true})
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
