@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from functools import lru_cache
 import hashlib
 import json
 import os
@@ -184,6 +185,13 @@ def source_text(root: Path, ref: str, path: str) -> str:
     if result["exit_code"] != 0:
         return ""
     return result["output"]
+
+
+@lru_cache(maxsize=4096)
+def source_model(root: Path, ref: str, path: str) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """Cache the complete source/token/scope model for deterministic repeated scans."""
+    text = source_text(root, ref, path)
+    return text, go_tokens(text), declarations(text), package_scope(text, path)
 
 
 def status_lines(root: Path, *, cwd: Path | None = None) -> list[str]:
@@ -547,13 +555,10 @@ def caller_edges(
     term = symbol.rsplit(".", 1)[-1]
     edges: list[dict[str, Any]] = []
     for search_path in search_paths:
-        text = source_text(root, ref, search_path)
+        text, tokens, local_declarations, package = source_model(root, ref, search_path)
         if not text:
             continue
         lines = text.splitlines()
-        tokens = go_tokens(text)
-        local_declarations = declarations(text)
-        package = package_scope(text, search_path)
         for token in tokens:
             if token["value"] != term:
                 continue
@@ -682,8 +687,8 @@ def hunk_symbol_evidence(
     hunk: dict[str, Any],
     search_paths: list[str],
 ) -> list[dict[str, Any]]:
-    base_declarations = declarations(source_text(root, base, path))
-    candidate_declarations = declarations(source_text(root, candidate, path))
+    base_declarations = source_model(root, base, path)[2]
+    candidate_declarations = source_model(root, candidate, path)[2]
     selected: list[tuple[str, dict[str, Any], dict[str, Any] | None]] = []
     for ref_name, items, line_number in (
         ("base", base_declarations, hunk["old_span"]["start_line"]),
@@ -925,8 +930,8 @@ def api_relationship(root: Path, c61: str, c83: str, c61_paths: list[str], c83_p
     public_imports = sorted(f"{runtime_module}/{path}" for path in c61_public_paths)
     c61_only_symbols: list[dict[str, Any]] = []
     for path in c61_go_paths:
-        candidate_items = declarations(source_text(root, c61, path))
-        base_items = {item["symbol"] for item in declarations(source_text(root, ACCEPTED_MAIN, path))}
+        candidate_items = source_model(root, c61, path)[2]
+        base_items = {item["symbol"] for item in source_model(root, ACCEPTED_MAIN, path)[2]}
         for item in candidate_items:
             if item["symbol"] not in base_items:
                 c61_only_symbols.append(
@@ -950,8 +955,7 @@ def api_relationship(root: Path, c61: str, c83: str, c61_paths: list[str], c83_p
     edges: list[dict[str, Any]] = []
     scans: list[dict[str, Any]] = []
     for path in scanned_paths:
-        text = source_text(root, c83, path)
-        tokens = go_tokens(text)
+        text, tokens, local_declarations, _ = source_model(root, c83, path)
         imports = go_imports(text)
         import_by_alias = {item["alias"]: item for item in imports}
         scans.append(
@@ -962,7 +966,7 @@ def api_relationship(root: Path, c61: str, c83: str, c61_paths: list[str], c83_p
                 "source_sha256": hashlib.sha256(text.encode()).hexdigest(),
                 "token_count": len(tokens),
                 "imports": imports,
-                "declarations": declarations(text),
+                "declarations": local_declarations,
             }
         )
         for item in imports:
@@ -1009,7 +1013,7 @@ def api_relationship(root: Path, c61: str, c83: str, c61_paths: list[str], c83_p
             )
         declaration_names = {
             (item["span"]["start_line"], item.get("name_span", {}).get("start_column"), item["symbol"].rsplit(".", 1)[-1])
-            for item in declarations(text)
+            for item in local_declarations
         }
         for index, token in enumerate(tokens):
             target_item = symbol_targets.get(token["value"])
