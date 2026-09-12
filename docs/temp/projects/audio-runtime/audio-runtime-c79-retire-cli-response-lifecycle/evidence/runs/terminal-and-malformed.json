@@ -11,35 +11,35 @@
         "go",
         "build",
         "-o",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-yemrcwrt/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v15bf7g2/yui",
         "./agent-cli/cmd/yui"
       ],
-      "elapsed_seconds": 4.667,
+      "elapsed_seconds": 5.233,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-yemrcwrt/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v15bf7g2/yui",
         "interaction",
         "--help"
       ],
-      "elapsed_seconds": 0.543,
+      "elapsed_seconds": 0.544,
       "returncode": 0,
       "stderr": "",
       "stdout": "Inspect provider-neutral gateway interactions.\n\nUse the replay subcommand to stream normalized PNIG fixture events as one JSON object per line without provider credentials or live network calls.\n\nUsage:\n  yui interaction [flags]\n  yui interaction [command]\n\nExamples:\n  yui interaction replay ./fixtures/example.interaction.json\n\nAvailable Commands:\n  replay      Replay a normalized interaction fixture as NDJSON\n\nFlags:\n  -h, --help   help for interaction\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui interaction [command] --help\" for more information about a command.\n"
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-yemrcwrt/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v15bf7g2/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-yemrcwrt/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v15bf7g2/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
       ],
-      "elapsed_seconds": 0.066,
+      "elapsed_seconds": 0.056,
       "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
       "observations": {
         "first_assistant_output": true,
@@ -53,14 +53,14 @@
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-yemrcwrt/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v15bf7g2/yui",
         "--config-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-yemrcwrt/config",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v15bf7g2/config",
         "session",
         "--replay",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/agent-cli/test/integration/testdata/openai_realtime_error.session.json"
       ],
-      "elapsed_seconds": 0.059,
+      "elapsed_seconds": 0.057,
       "expected_failure": true,
       "fixture": "agent-cli/test/integration/testdata/openai_realtime_error.session.json",
       "returncode": 1,
@@ -78,10 +78,10 @@
         "-count=1",
         "-timeout=25s"
       ],
-      "elapsed_seconds": 0.373,
+      "elapsed_seconds": 0.353,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.157s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.166s\n"
     },
     {
       "argv": [
@@ -93,15 +93,15 @@
         "-count=1",
         "-timeout=25s"
       ],
-      "elapsed_seconds": 3.898,
+      "elapsed_seconds": 3.848,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t2.154s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t2.110s\n"
     }
   ],
   "child_timeout_seconds": 60,
   "credential_free": true,
-  "elapsed_seconds": 10.294,
+  "elapsed_seconds": 10.917,
   "fixtures": {
     "healthy": {
       "bytes": 3433,
@@ -114,14 +114,14 @@
   },
   "malformed_workflow": {
     "argv": [
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-yemrcwrt/yui",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v15bf7g2/yui",
       "--config-dir",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-yemrcwrt/config",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v15bf7g2/config",
       "session",
       "--replay",
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/agent-cli/test/integration/testdata/openai_realtime_error.session.json"
     ],
-    "elapsed_seconds": 0.059,
+    "elapsed_seconds": 0.057,
     "expected_failure": true,
     "fixture": "agent-cli/test/integration/testdata/openai_realtime_error.session.json",
     "returncode": 1,
@@ -132,14 +132,14 @@
   "schema": "audio-runtime-c79-replay/v2",
   "shipped_workflow": {
     "argv": [
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-yemrcwrt/yui",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v15bf7g2/yui",
       "--config-dir",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-yemrcwrt/config",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-v15bf7g2/config",
       "session",
       "--replay",
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
     ],
-    "elapsed_seconds": 0.066,
+    "elapsed_seconds": 0.056,
     "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
     "observations": {
       "first_assistant_output": true,
@@ -154,11 +154,17 @@
   "software_replay_only": true,
   "source": {
     "go_version": "go version go1.26.7 darwin/arm64",
-    "ignored_evidence_changes": [],
-    "revision": "22c01c034b2ff2fe6099b480627b9a34d529332e",
+    "ignored_evidence_changes": [
+      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-retirement-and-scope.json",
+      " M docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/scheduled-tool-continuation.json"
+    ],
+    "revision": "836b5f2ddf476169d74f3d34c30b9a73e8e3cfe9",
     "status": "",
     "tracked_input_count": 10490,
-    "tracked_input_sha256": "a910c54d9b7d97925c10f15f1a3ffeee28fc80027a08dec349e71adfa3d6b183",
+    "tracked_input_sha256": "f3e95337abbc4c9b62ce871d5a41a18657408c33fc25e155a1ad961698161814",
     "tracked_non_file_paths": [
       "docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-59f370b/source-identity/source-repo",
       "docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo"
