@@ -56,10 +56,10 @@
       "./go-agent-runtime/services/recording/..."
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration",
-    "elapsed_ms": 2124,
+    "elapsed_ms": 3241,
     "returncode": 0,
     "stderr": "",
-    "stdout": "?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/evidence\t1.786s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/service\t0.510s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/session\t0.323s\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire\t[no test files]\n",
+    "stdout": "?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/evidence\t2.865s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/service\t0.722s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/internal/session\t0.759s\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire\t[no test files]\n",
     "timed_out": false
   }
 }
