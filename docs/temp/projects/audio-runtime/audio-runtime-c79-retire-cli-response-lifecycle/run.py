@@ -592,6 +592,7 @@ def run_shipped_malformed_tool_workflow(binary: Path, prepared: dict, *, timeout
 
 
 def materialize_scheduled_audio_fixture(directory: Path) -> dict:
+    directory.mkdir(parents=True, exist_ok=True)
     source = SCHEDULED_AUDIO_FIXTURE_SOURCE.read_text(encoding="utf-8")
     marker = "const audioTurnReplayFixtureJSON = `"
     start = source.find(marker)
