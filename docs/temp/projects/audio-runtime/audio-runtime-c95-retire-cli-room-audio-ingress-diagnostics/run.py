@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run bounded credential-free C95 runtime regressions and build shipped YUI."""
+"""Run bounded credential-free C95 runtime regressions and launch shipped YUI."""
 
 from __future__ import annotations
 
@@ -205,6 +205,47 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def run_yui_room_example(
+    run_dir: Path,
+    child_timeout: float,
+    aggregate_timeout: float,
+    started: float,
+) -> dict[str, object]:
+    """Exercise the built public room command before the focused Go cases."""
+    case = run_dir / "yui-room-example"
+    config = case / "config"
+    config.mkdir(parents=True, exist_ok=True)
+    execution = run_child(
+        "yui-room-example",
+        [
+            str(YUI),
+            "--config-dir",
+            str(config),
+            "--workdir",
+            str(case),
+            "--allow-path",
+            str(case),
+            "room",
+            "run",
+            "--example",
+        ],
+        case,
+        child_timeout,
+        aggregate_timeout,
+        started,
+    )
+    lines = [line for line in str(execution["stdout"]).splitlines() if line.strip()]
+    try:
+        manifest = json.loads("\n".join(lines))
+    except json.JSONDecodeError as error:
+        raise RunnerError(f"yui room example was not JSON: {error}") from error
+    participants = manifest.get("participants") if isinstance(manifest, dict) else None
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1 or not isinstance(participants, list) or len(participants) < 2:
+        raise RunnerError("yui room example did not expose a valid participant manifest")
+    execution["manifest"] = manifest
+    return execution
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", action="append", choices=sorted(CASE_COMMANDS), required=True)
@@ -228,7 +269,7 @@ def main() -> int:
         )
         if not YUI.is_file():
             raise RunnerError("YUI build did not produce an artifact")
-        cases = []
+        cases = [run_yui_room_example(run_dir, args.child_timeout, args.aggregate_timeout, started)]
         for name in args.case:
             case = run_child(name, CASE_COMMANDS[name], CLI_ROOT, args.child_timeout, args.aggregate_timeout, started)
             cases.append(case)
