@@ -9,8 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,6 +18,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionconfig"
+	sessionconfigwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionconfig/wire"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -35,7 +35,7 @@ const (
 	sessionProviderGrok   = config.ProviderGrok
 	sessionProviderOpenAI = config.ProviderOpenAI
 	openAIRealtimeModel   = openAIRealtimeDefaultModel
-	openAIRealtimeBaseURL = "wss://api.openai.com/v1/realtime"
+	openAIRealtimeBaseURL = sessionconfig.OpenAIRealtimeBaseURL
 
 	// SessionTransportWebSocket is the unchanged session transport default.
 	SessionTransportWebSocket = "ws"
@@ -43,7 +43,7 @@ const (
 	SessionTransportWebRTC = "webrtc"
 	// SessionOpenAIAPIKeyEnv is the canonical environment key used by the
 	// shared config loader for OpenAI realtime sessions.
-	SessionOpenAIAPIKeyEnv = "AGENT_MODEL__OPENAI__API_KEY"
+	SessionOpenAIAPIKeyEnv = sessionconfig.OpenAIRealtimeAPIKeyEnv
 )
 
 var (
@@ -52,31 +52,31 @@ var (
 	ErrSessionAudioInTurnBargeRequiresSequence = sessioncontract.ErrSessionAudioInTurnBargeRequiresSequence
 	// ErrInvalidSessionRuntimeSelection identifies a malformed or incompatible
 	// transport/signaling/media selection at the service boundary.
-	ErrInvalidSessionRuntimeSelection = errors.New("invalid session runtime selection")
+	ErrInvalidSessionRuntimeSelection = sessionconfig.ErrInvalidSessionRuntimeSelection
 	// ErrInvalidSessionTransport identifies a transport value the service does
 	// not know how to dispatch.
-	ErrInvalidSessionTransport = errors.New("invalid session transport")
+	ErrInvalidSessionTransport = sessionconfig.ErrInvalidSessionTransport
 	// ErrSessionSignalingRequiresWebRTC identifies signaling supplied for the
 	// unchanged WebSocket runtime.
-	ErrSessionSignalingRequiresWebRTC = errors.New("session signaling requires WebRTC transport")
+	ErrSessionSignalingRequiresWebRTC = sessionconfig.ErrSessionSignalingRequiresWebRTC
 	// ErrSessionMediaSourceRequiresWebRTC identifies a media source supplied for
 	// the unchanged WebSocket runtime.
-	ErrSessionMediaSourceRequiresWebRTC = errors.New("session media source requires WebRTC transport")
+	ErrSessionMediaSourceRequiresWebRTC = sessionconfig.ErrSessionMediaSourceRequiresWebRTC
 	// ErrSessionWebRTCRequiresSignaling identifies a WebRTC request without an
 	// endpoint for the signaling exchange.
-	ErrSessionWebRTCRequiresSignaling = errors.New("WebRTC session transport requires signaling")
+	ErrSessionWebRTCRequiresSignaling = sessionconfig.ErrSessionWebRTCRequiresSignaling
 	// ErrSessionWebRTCRequiresMediaSource identifies a WebRTC request without a
 	// selected external media source.
-	ErrSessionWebRTCRequiresMediaSource = errors.New("WebRTC session transport requires media source")
+	ErrSessionWebRTCRequiresMediaSource = sessionconfig.ErrSessionWebRTCRequiresMediaSource
 	// ErrSessionRuntimeSelectionConflict identifies two aliases carrying
 	// different signaling endpoint values.
-	ErrSessionRuntimeSelectionConflict = errors.New("conflicting session signaling endpoints")
+	ErrSessionRuntimeSelectionConflict = sessionconfig.ErrSessionRuntimeSelectionConflict
 	// ErrOpenAIRealtimeAPIKeyMissing classifies the preflight error returned
 	// when an OpenAI realtime session has no credential. Callers that do not
 	// expose an --api-key flag (for example `room run`) should catch this
 	// with errors.Is and substitute a remedy their command actually accepts
 	// instead of surfacing the --api-key wording below.
-	ErrOpenAIRealtimeAPIKeyMissing = errors.New("openai realtime api key is missing")
+	ErrOpenAIRealtimeAPIKeyMissing = sessionconfig.ErrOpenAIRealtimeAPIKeyMissing
 )
 
 type SessionRuntimeSelection = rtcontract.SessionRuntimeSelection
@@ -107,411 +107,198 @@ func scheduledAudioDispatchPolicyForOptions(opts SessionRunOptions) ScheduledAud
 // SessionRuntimeSelectionError reports all fields that made a selection
 // invalid while preserving a stable sentinel and the more specific cause.
 // Fields contain service option names without the leading command-line dashes.
-type SessionRuntimeSelectionError struct {
-	Fields []string
-	Err    error
-}
-
-func (e *SessionRuntimeSelectionError) Error() string {
-	if e == nil {
-		return ErrInvalidSessionRuntimeSelection.Error()
-	}
-	if len(e.Fields) == 0 {
-		return fmt.Sprintf("%s: %v", ErrInvalidSessionRuntimeSelection, e.Err)
-	}
-	if e.Err == nil {
-		return fmt.Sprintf("%s (%s)", ErrInvalidSessionRuntimeSelection, strings.Join(e.Fields, ", "))
-	}
-	return fmt.Sprintf("%s (%s): %v", ErrInvalidSessionRuntimeSelection, strings.Join(e.Fields, ", "), e.Err)
-}
-
-func (e *SessionRuntimeSelectionError) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return errors.Join(ErrInvalidSessionRuntimeSelection, e.Err)
-}
+type SessionRuntimeSelectionError = sessionconfig.RuntimeSelectionError
 
 // SessionRunOptions contains the user-facing agent session command options.
 type SessionRunOptions struct {
-	// runtimeFactory is installed by the private service composition root.
-	// It is intentionally unexported so transport requests cannot construct
-	// provider gateways or dialers.
-	runtimeFactory sessionRuntimeFactory
-	// ModelCatalog is installed by service composition and owns the immutable
-	// provider capability metadata used during session planning.
-	ModelCatalog runtimeproviders.ModelCatalog
-	RecordPath   string
-	ReplayPath   string
-	// ReplayTiming selects whether websocket replay runs as fast as causal
-	// ordering permits (immediate) or preserves capture timestamp_ms cadence
-	// (recorded). Empty retains the immediate compatibility default.
-	ReplayTiming string
-	// roomReplay marks a session that is part of a room-owned replay. Room
-	// orchestration supplies audio frames from the shared timeline, so the
-	// single-session replay planner must not auto-reconstruct client audio
-	// turns from the provider capture.
-	roomReplay bool
-	Provider   string
-	// ProviderProvided distinguishes an explicit provider flag from the
-	// command's empty/default value when resolving persisted bare-session
-	// settings.
-	ProviderProvided bool
-	Model            string
-	ModelProvided    bool
-	// NoInputTranscription explicitly disables the live OpenAI customer-audio
-	// transcription default. It has no effect on replay, whose recorded
-	// session.update remains authoritative.
-	NoInputTranscription bool
-	// InputAudioTranscription is the resolved request-scoped transcription
-	// policy. Nil preserves the existing mode-specific policy resolution.
-	InputAudioTranscription *models.InputAudioTranscriptionConfig
-	APIKey                  string
-	BaseURL                 string
-	ConfigDir               string
-	// WorkDir and AllowPaths are the canonical customer filesystem scope for
-	// this session. FilesystemPolicy is the immutable snapshot supplied to all
-	// filesystem tools; the string fields remain useful to non-tool runtimes.
-	WorkDir          string
-	AllowPaths       []string
-	FilesystemPolicy *tools.FilesystemPolicy
-	Prompt           string
-	// PromptProvided distinguishes an explicitly supplied empty prompt from an
-	// omitted prompt. Replay uses the distinction to opt into capture-derived
-	// prompt planning only when the caller did not provide a prompt.
-	PromptProvided bool
-	// Voice selects the optional OpenAI Realtime audio output voice for this
-	// invocation. The empty value preserves the provider default. It is kept
-	// on the session options rather than package state so concurrent sessions
-	// retain independent configuration.
-	Voice string
-	// ReasoningEffort selects the OpenAI Realtime reasoning budget.
-	ReasoningEffort   string
-	SessionInferencer messages.SessionInferencer
-	// AudioOutputRequested tells realtime planning that assistant PCM will be
-	// consumed by a local file/device output boundary. It is set by the audio
-	// entry points before provider construction so the provider's declared
-	// output rate is available before any sink or device is opened.
-	AudioOutputRequested bool
-	WebSocketDialer      transport.Dialer
-	// RecordSessionCapturePath, when non-empty, makes NewLiveSessionInferencer
-	// wrap the resolved websocket dialer (WebSocketDialer, or the provider's
-	// real default dialer when that is unset) with a raw-traffic recorder,
-	// and makes the returned inferencer additionally implement
-	// SessionInferencerCaptureFlusher. It is unrelated to RecordPath/the
-	// solo `agent session run --record` path: this seam exists so a caller
-	// that constructs a session through NewLiveSessionInferencer directly
-	// (the room runtime's default participant factory) can capture the same
-	// kind of raw provider session capture that path produces.
-	RecordSessionCapturePath string
-	// RTCRuntimeFactory optionally supplies the service-owned WebRTC runtime
-	// constructor. A nil value keeps the WebSocket path unchanged; selecting
-	// WebRTC without a factory returns an explicit setup error rather than
-	// silently falling back to WebSocket.
-	RTCRuntimeFactory SessionRTCRuntimeFactory
-
-	// Transport selects the live session runtime. Empty preserves the existing
-	// WebSocket default. The value is retained as supplied in the option
-	// contract only long enough for case/space-insensitive validation; plans
-	// store the canonical ws or webrtc value.
-	Transport string
-	// TransportProvided distinguishes the pflag default from an explicit
-	// transport selection so persisted bare-session transport can be honored.
-	TransportProvided bool
-	// BareLive marks the resolved zero/alternate-free live-device request. It
-	// is intentionally separate from BrowserToolsEnabled and capture modes.
-	BareLive bool
-	// TurnDetection is the resolved server-side VAD policy for a bare live
-	// session. Nil preserves existing non-bare behavior.
-	TurnDetection *models.TurnDetectionConfig
-	// Signaling is the selected opaque signaling endpoint. It is consumed by
-	// the WebRTC runtime only; it must remain empty for the WebSocket runtime.
-	Signaling string
-	// SignalingEndpoint is the descriptive alias used by non-CLI callers. When
-	// both signaling fields are supplied they must carry the same value.
-	SignalingEndpoint string
-	// MediaSource is the selected opaque external media-source identity. It is
-	// consumed by the WebRTC runtime only; it must remain empty for WebSocket.
-	MediaSource string
-	// RTCDeviceBinding carries optional registry-backed local audio selectors.
-	// The runtime opens these devices only after planning succeeds and before
-	// provider/peer setup begins.
-	RTCDeviceBinding RTCDeviceBindingRequest
-
-	// ToolExecutor optionally injects the composed session tool executor.
-	// When nil, duplex loop construction stays byte-for-byte identical to the
-	// no-tools behavior; provider tool calls keep reaching the loop default
-	// and fail exactly as they did before this field existed.
-	ToolExecutor messages.ToolExecutor
-	// ToolDefinitions is the config-filtered tool surface advertised to the
-	// session provider and the duplex agent loop. It must be derived from the
-	// same config snapshot as ToolExecutor.
-	ToolDefinitions []messages.ToolDefinition
-	// ToolDefinitionBase is the immutable static and stable broker surface
-	// retained by the live dynamic-tool publisher. Callers that do not provide
-	// a separate base retain compatibility; the publisher falls back to the
-	// initial ToolDefinitions snapshot.
-	ToolDefinitionBase []messages.ToolDefinition
-	// RefreshToolDefinitions returns the complete current session tool surface,
-	// including static, stable broker, and current first-class page tools. Its
-	// error is kept explicit so a failed catalog read cannot advance provider
-	// alignment.
-	RefreshToolDefinitions func(context.Context) ([]messages.ToolDefinition, error)
-	// BrowserWatch supplies an independent subscription to semantic broker
-	// selection/catalog/generation events for this session.
-	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
-	// BrowserEventWatch supplies the adapter-owned semantic browser events used
-	// only by the optional recording observer. It never owns session delivery.
-	BrowserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
-	// BrowserCapabilityState is the session-owned browser state used to compose
-	// model-facing selection grounding. It must not be inferred from the
-	// presence or absence of dynamic page definitions.
-	BrowserCapabilityState webmcp.BrowserCapabilityState
-	// BrowserToolsEnabled records the resolved browser capability admission.
-	// It allows an explicitly activated live session to run without requiring
-	// the legacy provider-recording flag while keeping ordinary sessions on
-	// their existing validation path.
-	BrowserToolsEnabled bool
-	// BrowserToolsInteractive marks the explicit browser-only live invocation:
-	// browser capability is enabled, but no prompt, capture, replay, image, or
-	// finite audio driver selected a more specific session mode. It is resolved
-	// by the CLI admission boundary and keeps browser capability separate from
-	// the bare-session identity.
-	BrowserToolsInteractive bool
-	// LoadedConfig is the config snapshot used to derive session capabilities.
-	// When present, provider resolution reuses it instead of loading config a
-	// second time during runtime planning.
-	LoadedConfig *config.Config
-	// InteractiveToolPolicy optionally supplies an already-resolved policy
-	// snapshot. When nil, runtime planning resolves one from LoadedConfig, an
-	// existing ConfigDir file, or the documented defaults before provider
-	// construction.
-	InteractiveToolPolicy *InteractiveToolPolicy
-
-	// CapabilityClose is the optional cleanup hook transferred from the CLI
-	// session capability factory. The service wraps it in one shared
-	// SessionCapabilityCoordinator so planning, runtime, and nested wrappers
-	// cannot close the same capability more than once.
-	CapabilityClose       func() error
-	capabilityCoordinator SessionCapabilityCoordinator
-
-	// CancellationIntent carries the CLI-owned, run-scoped SIGINT marker into
-	// terminal accounting. A nil value preserves ordinary caller-cancellation
-	// behavior for service callers that do not own OS signal handling.
-	CancellationIntent *SessionCancellationIntent
-
-	// ToolExecutionTimeout overrides the per-invocation session tool adapter
-	// deadline for hermetic tests. Zero selects the class-specific interactive
-	// policy budget.
-	ToolExecutionTimeout time.Duration
-
-	// Clock stamps runtime observations. A nil clock uses the host clock. The
-	// generated CLI supplies the composed clock so replay and recording
-	// observers can correlate events across command instances.
-	Clock platformclock.Source
-	// LivenessClock supplies participant-owned watchdog timers. Nil derives a
-	// timer clock from Clock when possible, otherwise the session uses the host
-	// clock. Deterministic callers can inject this seam without changing the
-	// runtime timestamp source.
-	LivenessClock SessionLivenessClock
-	// RuntimeObserver receives clock-stamped audio, turn, and terminal events
-	// from the session command. The terminal event carries the production-owned
-	// session-cumulative token totals and complete metrics snapshot. Nil keeps
-	// the runtime observationally silent.
-	RuntimeObserver SessionRuntimeObserver
-
-	// Diagnostics optionally receives one canonical structured record per
-	// terminal failure plus per-turn and tool-call records. Nil keeps runtime
-	// behavior byte-for-byte unchanged.
-	Diagnostics SessionDiagnosticSink
-	// ToolDiagnostics optionally receives the original typed error for each
-	// session tool failure. It is an operator-only channel; the provider sees
-	// the session adapter's customer-safe projection instead.
-	ToolDiagnostics SessionToolDiagnosticSink
-	// MetricsRecorder optionally receives per-direction stream observations.
-	MetricsRecorder metrics.Recorder
-	// Observability carries application-wide metric and logging ports. The
-	// composition root always supplies default no-op implementations.
-	Observability observability.Dependencies
-	// StreamObserver optionally receives every session stream delta after it
-	// crosses the session loop boundary. Nil keeps runtime behavior unchanged.
-	StreamObserver SessionStreamObserver
-	// AudioInputs schedules user audio injections through the loop's existing
-	// audio-input seam, attributed to specific turns.
-	AudioInputs []ScheduledAudioInput
-	// AudioInTurnBarge selects the explicit active-response dispatch policy for
-	// repeated --audio-in-turn inputs. False preserves the completion-gated
-	// serialized policy.
-	AudioInTurnBarge bool
-	// AudioInterruptions delivers event-driven customer audio through the same
-	// duplex loop as scheduled inputs. The browser conversation runner uses it
-	// for overlap audio that must be admitted only after an in-flight browser
-	// invocation is observed; it is intentionally not a second audio loop.
-	AudioInterruptions <-chan ScheduledAudioInput
-	// ClientOwnsAudioTurnBoundaries requests an explicit client-owned realtime
-	// audio turn contract for a finite --audio-in source. The source sends the
-	// MESSAGE.END boundary itself; provider VAD must not auto-commit the same
-	// buffer before that boundary arrives.
+	// Composition-owned runtime and provider capability dependencies.
+	runtimeFactory                sessionRuntimeFactory
+	ModelCatalog                  runtimeproviders.ModelCatalog
+	RecordPath                    string
+	ReplayPath                    string
+	ReplayTiming                  string
+	roomReplay                    bool
+	Provider                      string
+	ProviderProvided              bool
+	Model                         string
+	ModelProvided                 bool
+	NoInputTranscription          bool
+	InputAudioTranscription       *models.InputAudioTranscriptionConfig
+	APIKey                        string
+	BaseURL                       string
+	ConfigDir                     string
+	WorkDir                       string
+	AllowPaths                    []string
+	FilesystemPolicy              *tools.FilesystemPolicy
+	Prompt                        string
+	PromptProvided                bool
+	Voice                         string
+	ReasoningEffort               string
+	SessionInferencer             messages.SessionInferencer
+	AudioOutputRequested          bool
+	WebSocketDialer               transport.Dialer
+	RecordSessionCapturePath      string
+	RTCRuntimeFactory             SessionRTCRuntimeFactory
+	Transport                     string
+	TransportProvided             bool
+	BareLive                      bool
+	TurnDetection                 *models.TurnDetectionConfig
+	Signaling                     string
+	SignalingEndpoint             string
+	MediaSource                   string
+	RTCDeviceBinding              RTCDeviceBindingRequest
+	ToolExecutor                  messages.ToolExecutor
+	ToolDefinitions               []messages.ToolDefinition
+	ToolDefinitionBase            []messages.ToolDefinition
+	RefreshToolDefinitions        func(context.Context) ([]messages.ToolDefinition, error)
+	BrowserWatch                  func(context.Context) <-chan webmcp.BrokerEvent
+	BrowserEventWatch             func(context.Context) <-chan webmcp.BrowserEvent
+	BrowserCapabilityState        webmcp.BrowserCapabilityState
+	BrowserToolsEnabled           bool
+	BrowserToolsInteractive       bool
+	LoadedConfig                  *config.Config
+	InteractiveToolPolicy         *InteractiveToolPolicy
+	CapabilityClose               func() error
+	capabilityCoordinator         SessionCapabilityCoordinator
+	CancellationIntent            *SessionCancellationIntent
+	ToolExecutionTimeout          time.Duration
+	Clock                         platformclock.Source
+	LivenessClock                 SessionLivenessClock
+	RuntimeObserver               SessionRuntimeObserver
+	Diagnostics                   SessionDiagnosticSink
+	ToolDiagnostics               SessionToolDiagnosticSink
+	MetricsRecorder               metrics.Recorder
+	Observability                 observability.Dependencies
+	StreamObserver                SessionStreamObserver
+	AudioInputs                   []ScheduledAudioInput
+	AudioInTurnBarge              bool
+	AudioInterruptions            <-chan ScheduledAudioInput
 	ClientOwnsAudioTurnBoundaries bool
-	// SessionUpdatedTimeout overrides the bounded wait for the initial
-	// SESSION.UPDATED acknowledgement in deterministic callers. Zero selects
-	// the production timeout.
-	SessionUpdatedTimeout time.Duration
-	// WaitForClose keeps the replay session loop running across multiple
-	// completed turns until an explicit SESSION.CLOSE arrives instead of
-	// stopping at the first completed turn. Defaults to false, which preserves
-	// the existing single-turn stop behavior byte-for-byte.
-	WaitForClose bool
-
-	// sessionImageCapabilities is resolved once by the entry point that owns
-	// an initial --image turn and reused when the read_image tool is bound.
-	// Keeping it private prevents callers from bypassing the capability
-	// resolver while allowing all session wrappers to share one snapshot.
-	sessionImageCapabilities *SessionImageCapabilities
-
-	// recordingClaim is acquired before provider construction and shared by
-	// nested session wrappers. It is intentionally private; command callers
-	// select the destination through RecordPath and do not manage sidecars.
-	recordingClaim *sessionRecordingClaim
-	// recordingDirectoryClaim is acquired before provider/media setup and shared
-	// by nested directory-recording wrappers through finalization.
-	recordingDirectoryClaim *sessionRecordingDirectoryClaim
+	SessionUpdatedTimeout         time.Duration
+	WaitForClose                  bool
+	sessionImageCapabilities      *SessionImageCapabilities
+	recordingClaim                *sessionRecordingClaim
+	recordingDirectoryClaim       *sessionRecordingDirectoryClaim
 }
 
-// validateSessionCaptureOptions performs pure request validation before credential or device setup.
-func validateSessionCaptureOptions(opts SessionRunOptions) error {
-	if opts.RecordPath != "" && opts.ReplayPath != "" {
-		return fmt.Errorf("agent session does not support --record and --replay together; choose one capture mode")
-	}
-	if opts.RecordPath != "" && !isJSONCapturePath(opts.RecordPath) {
-		return fmt.Errorf("--record path %q must end with .json", opts.RecordPath)
-	}
-	if opts.ReplayPath != "" && !isJSONCapturePath(opts.ReplayPath) {
-		return fmt.Errorf("--replay path %q must end with .json", opts.ReplayPath)
-	}
-	if timing := normalizedSessionReplayTiming(opts.ReplayTiming); timing == "" {
-		return fmt.Errorf("--replay-timing %q is invalid; use immediate or recorded", opts.ReplayTiming)
-	} else if timing == sessionReplayTimingRecorded && opts.ReplayPath == "" {
-		return fmt.Errorf("--replay-timing recorded requires --replay")
-	}
-	return nil
+func newSessionConfigService(opts SessionRunOptions) sessionconfig.Service {
+	return sessionconfigwire.NewService(sessionconfigwire.Dependencies{ModelCatalog: opts.ModelCatalog})
 }
 
-func validateSessionRunOptions(opts SessionRunOptions) error {
-	if err := sessioncontract.ValidateOpenAIRealtimeVoice(opts.Voice); err != nil {
-		return err
+func sessionConfigRequest(opts SessionRunOptions, defaults sessionconfig.Defaults) sessionconfig.Request {
+	return sessionconfig.Request{
+		Provider:          opts.Provider,
+		ProviderProvided:  opts.ProviderProvided,
+		Model:             opts.Model,
+		ModelProvided:     opts.ModelProvided,
+		APIKey:            opts.APIKey,
+		BaseURL:           opts.BaseURL,
+		ReasoningEffort:   opts.ReasoningEffort,
+		Voice:             opts.Voice,
+		RecordPath:        opts.RecordPath,
+		ReplayPath:        opts.ReplayPath,
+		ReplayTiming:      opts.ReplayTiming,
+		SessionInferencer: opts.SessionInferencer,
+		Transport:         opts.Transport,
+		Signaling:         opts.Signaling,
+		SignalingEndpoint: opts.SignalingEndpoint,
+		MediaSource:       opts.MediaSource,
+		Defaults:          defaults,
 	}
-	if err := sessioncontract.ValidateOpenAIRealtimeReasoningEffort(opts.ReasoningEffort); err != nil {
-		return err
+}
+
+func sessionConfigDefaults(cfg *config.Config) sessionconfig.Defaults {
+	var defaults sessionconfig.Defaults
+	if cfg == nil {
+		return defaults
 	}
-	if _, err := resolveSessionRuntimeSelection(opts); err != nil {
-		return err
-	}
-	if err := validateSessionCaptureOptions(opts); err != nil {
-		return err
-	}
-	// Validate the complete capture before any caller-owned audio source,
-	// derived artifact sink, provider plan, or replay session can be created.
-	// Injected sessions are an explicit low-level test seam and do not use the
-	// path-based replay contract.
-	if opts.ReplayPath != "" && opts.SessionInferencer == nil {
-		if _, err := gwtesting.LoadSessionCaptureForReplay(opts.ReplayPath); err != nil {
-			return fmt.Errorf("replay session capture %s: %w", opts.ReplayPath, err)
+	defaults.Provider = cfg.Model.Provider
+	if cfg.Session != nil {
+		defaults.Session = &sessionconfig.SessionDefaults{
+			Provider:        cfg.Session.Provider,
+			Model:           cfg.Session.Model,
+			ReasoningEffort: cfg.Session.ReasoningEffort,
+			Transport:       cfg.Session.Transport,
 		}
 	}
-	return nil
+	if cfg.Model.OpenAI != nil {
+		defaults.OpenAI = &sessionconfig.ProviderConfig{
+			Model:           cfg.Model.OpenAI.Model,
+			APIKey:          cfg.Model.OpenAI.APIKey,
+			BaseURL:         cfg.Model.OpenAI.BaseURL,
+			ReasoningEffort: cfg.Model.OpenAI.ReasoningEffort,
+		}
+	}
+	if cfg.Model.Grok != nil {
+		defaults.Grok = &sessionconfig.ProviderConfig{
+			Model:   cfg.Model.Grok.Model,
+			APIKey:  cfg.Model.Grok.APIKey,
+			BaseURL: cfg.Model.Grok.BaseURL,
+		}
+	}
+	return defaults
+}
+
+func loadSessionConfigForResolution(opts SessionRunOptions) (*config.Config, error) {
+	if opts.LoadedConfig != nil {
+		return opts.LoadedConfig, nil
+	}
+	storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize config: %w", err)
+	}
+	loadedCfg, err := storage.Load()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+	return loadedCfg, nil
+}
+
+// Deprecated: callers should use the public sessionconfig service; this keeps
+// the CLI's early capture-only preflight ordering intact.
+func validateSessionCaptureOptions(opts SessionRunOptions) error {
+	return newSessionConfigService(opts).ValidateCapture(sessionConfigRequest(opts, sessionconfig.Defaults{}))
+}
+
+// Deprecated: the reusable policy lives in sessionconfig; this is the CLI
+// compatibility adapter that preserves the historical voice error identity.
+func validateSessionRunOptions(opts SessionRunOptions) error {
+	return adaptSessionConfigError(newSessionConfigService(opts).Validate(sessionConfigRequest(opts, sessionconfig.Defaults{})))
+}
+
+func adaptSessionConfigError(err error) error {
+	var voiceErr *sessionconfig.InvalidOpenAIRealtimeVoiceError
+	if !errors.As(err, &voiceErr) {
+		return err
+	}
+	return &sessioncontract.InvalidOpenAIRealtimeVoiceError{
+		Voice:           voiceErr.Voice,
+		SupportedVoices: append([]string(nil), voiceErr.SupportedVoices...),
+	}
 }
 
 const (
-	sessionReplayTimingImmediate = "immediate"
-	sessionReplayTimingRecorded  = "recorded"
+	sessionReplayTimingImmediate = sessionconfig.ReplayTimingImmediate
+	sessionReplayTimingRecorded  = sessionconfig.ReplayTimingRecorded
 )
 
+// Deprecated: replay timing normalization is owned by sessionconfig.Service.
 func normalizedSessionReplayTiming(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", sessionReplayTimingImmediate:
-		return sessionReplayTimingImmediate
-	case sessionReplayTimingRecorded:
-		return sessionReplayTimingRecorded
-	default:
-		return ""
-	}
+	return newSessionConfigService(SessionRunOptions{}).NormalizeReplayTiming(value)
 }
 
+// Deprecated: runtime planners still consume the legacy transport value type;
+// selection decisions are made by sessionconfig.Service.
 func resolveSessionRuntimeSelection(opts SessionRunOptions) (SessionRuntimeSelection, error) {
-	transportValue := strings.ToLower(strings.TrimSpace(opts.Transport))
-	if transportValue == "" {
-		transportValue = SessionTransportWebSocket
+	selection, err := newSessionConfigService(opts).ResolveRuntimeSelection(sessionConfigRequest(opts, sessionconfig.Defaults{}))
+	if err != nil {
+		return SessionRuntimeSelection{}, err
 	}
-	if transportValue != SessionTransportWebSocket && transportValue != SessionTransportWebRTC {
-		return SessionRuntimeSelection{}, sessionRuntimeSelectionError(
-			[]string{"transport"},
-			fmt.Errorf("%w: %q (want %q or %q)", ErrInvalidSessionTransport, opts.Transport, SessionTransportWebSocket, SessionTransportWebRTC),
-		)
-	}
-
-	signaling := opts.Signaling
-	if opts.SignalingEndpoint != "" {
-		if signaling != "" && signaling != opts.SignalingEndpoint {
-			return SessionRuntimeSelection{}, sessionRuntimeSelectionError(
-				[]string{"signaling", "signaling-endpoint"},
-				ErrSessionRuntimeSelectionConflict,
-			)
-		}
-		signaling = opts.SignalingEndpoint
-	}
-	selection := SessionRuntimeSelection{
-		Transport:         transportValue,
-		SignalingEndpoint: signaling,
-		MediaSource:       opts.MediaSource,
-	}
-
-	var fields []string
-	var causes []error
-	if transportValue == SessionTransportWebSocket {
-		if strings.TrimSpace(signaling) != "" {
-			fields = append(fields, "transport", "signaling")
-			causes = append(causes, ErrSessionSignalingRequiresWebRTC)
-		}
-		if strings.TrimSpace(opts.MediaSource) != "" {
-			fields = append(fields, "transport", "media-source")
-			causes = append(causes, ErrSessionMediaSourceRequiresWebRTC)
-		}
-	} else {
-		if strings.TrimSpace(signaling) == "" {
-			fields = append(fields, "transport", "signaling")
-			causes = append(causes, ErrSessionWebRTCRequiresSignaling)
-		}
-		if strings.TrimSpace(opts.MediaSource) == "" {
-			fields = append(fields, "transport", "media-source")
-			causes = append(causes, ErrSessionWebRTCRequiresMediaSource)
-		}
-	}
-	if len(causes) != 0 {
-		return SessionRuntimeSelection{}, sessionRuntimeSelectionError(uniqueSessionSelectionFields(fields), errors.Join(causes...))
-	}
-	return selection, nil
-}
-
-func sessionRuntimeSelectionError(fields []string, err error) error {
-	return &SessionRuntimeSelectionError{Fields: append([]string(nil), fields...), Err: err}
-}
-
-func uniqueSessionSelectionFields(fields []string) []string {
-	seen := make(map[string]struct{}, len(fields))
-	unique := make([]string, 0, len(fields))
-	for _, field := range fields {
-		if _, ok := seen[field]; ok {
-			continue
-		}
-		seen[field] = struct{}{}
-		unique = append(unique, field)
-	}
-	return unique
-}
-
-func isJSONCapturePath(path string) bool {
-	return strings.EqualFold(filepath.Ext(path), ".json")
+	return SessionRuntimeSelection{
+		Transport:         selection.Transport,
+		SignalingEndpoint: selection.SignalingEndpoint,
+		MediaSource:       selection.MediaSource,
+	}, nil
 }
 
 func validateInjectedLiveSession(opts SessionRunOptions) error {
@@ -541,6 +328,8 @@ func missingSessionProviderError() error {
 	return fmt.Errorf("--record requires --provider %s or --provider %s for live session inference", sessionProviderGrok, sessionProviderOpenAI)
 }
 
+// Deprecated: this edge adapter loads the host config snapshot and delegates
+// provider selection to sessionconfig.Service.
 func effectiveSessionProvider(opts SessionRunOptions) string {
 	if strings.TrimSpace(opts.Provider) != "" {
 		return resolveRealtimeSessionProvider(opts, nil)
@@ -566,116 +355,38 @@ func effectiveSessionProvider(opts SessionRunOptions) string {
 // openrouter therefore fall through to OpenAI without changing ask or chat.
 // Provider values are normalized at this boundary so downstream config
 // overrides and runtime planners see the same canonical identity.
+//
+// Deprecated: provider selection is owned by sessionconfig.Service.
 func resolveRealtimeSessionProvider(opts SessionRunOptions, cfg *config.Config) string {
-	if provider := strings.ToLower(strings.TrimSpace(opts.Provider)); provider != "" {
-		return provider
-	}
-	if cfg != nil && cfg.Session != nil {
-		if provider := strings.ToLower(strings.TrimSpace(cfg.Session.Provider)); provider != "" {
-			return provider
-		}
-	}
-	if cfg != nil {
-		switch provider := strings.ToLower(strings.TrimSpace(cfg.Model.Provider)); provider {
-		case sessionProviderOpenAI, sessionProviderGrok:
-			return provider
-		}
-	}
-	return sessionProviderOpenAI
+	return newSessionConfigService(opts).ResolveProvider(sessionConfigRequest(opts, sessionConfigDefaults(cfg)))
 }
 
+// Deprecated: this converts the public provider snapshot to the CLI config
+// type required by the concrete Grok gateway constructor.
 func resolveGrokSessionConfig(opts SessionRunOptions) (config.GrokConfig, error) {
-	loadedCfg := opts.LoadedConfig
-	if loadedCfg == nil {
-		storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)
-		if err != nil {
-			return config.GrokConfig{}, fmt.Errorf("failed to initialize config: %w", err)
-		}
-		loadedCfg, err = storage.Load()
-		if err != nil {
-			return config.GrokConfig{}, fmt.Errorf("failed to load config: %w", err)
-		}
-	}
-	provider := resolveRealtimeSessionProvider(opts, loadedCfg)
-	opts.Provider = provider
-
-	effective := loadedCfg.ApplyOverrides(opts.APIKey, opts.Model, opts.Provider, opts.BaseURL)
-	if strings.TrimSpace(effective.Model.Provider) == "" {
-		return config.GrokConfig{}, missingSessionProviderError()
-	}
-	if !strings.EqualFold(effective.Model.Provider, sessionProviderGrok) {
-		return config.GrokConfig{}, fmt.Errorf("--record supports provider %q only; got %q", sessionProviderGrok, effective.Model.Provider)
-	}
-	if err := effective.ValidateGrokSession(); err != nil {
-		return config.GrokConfig{}, err
-	}
-	active, err := effective.ActiveGrokConfig()
+	loadedCfg, err := loadSessionConfigForResolution(opts)
 	if err != nil {
 		return config.GrokConfig{}, err
 	}
-	return *active, nil
+	resolved, err := newSessionConfigService(opts).ResolveGrokConfig(sessionConfigRequest(opts, sessionConfigDefaults(loadedCfg)))
+	if err != nil {
+		return config.GrokConfig{}, err
+	}
+	return config.GrokConfig{Model: resolved.Model, APIKey: resolved.APIKey, BaseURL: resolved.BaseURL}, nil
 }
 
+// Deprecated: this converts the public provider snapshot to the CLI config
+// type required by the concrete OpenAI gateway constructor.
 func resolveOpenAIRealtimeSessionConfig(opts SessionRunOptions) (config.OpenAIConfig, error) {
-	if opts.ModelProvided && opts.Model == "" {
-		return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelErrorFor(opts, opts.Model)
-	}
-
-	loadedCfg := opts.LoadedConfig
-	if loadedCfg == nil {
-		storage, err := config.NewDefaultConfigStorage(opts.ConfigDir)
-		if err != nil {
-			return config.OpenAIConfig{}, fmt.Errorf("failed to initialize config: %w", err)
-		}
-		loadedCfg, err = storage.Load()
-		if err != nil {
-			return config.OpenAIConfig{}, fmt.Errorf("failed to load config: %w", err)
-		}
-	}
-	provider := resolveRealtimeSessionProvider(opts, loadedCfg)
-	opts.Provider = provider
-
-	effective := loadedCfg.ApplyOverrides(opts.APIKey, opts.Model, opts.Provider, opts.BaseURL)
-	if strings.TrimSpace(effective.Model.Provider) == "" {
-		return config.OpenAIConfig{}, missingSessionProviderError()
-	}
-	if !strings.EqualFold(effective.Model.Provider, sessionProviderOpenAI) {
-		return config.OpenAIConfig{}, fmt.Errorf("--record supports provider %q only for OpenAI realtime sessions; got %q", sessionProviderOpenAI, effective.Model.Provider)
-	}
-	active, err := effective.ActiveOpenAIConfig()
+	loadedCfg, err := loadSessionConfigForResolution(opts)
 	if err != nil {
 		return config.OpenAIConfig{}, err
 	}
-	if !opts.ModelProvided && opts.Model == "" && loadedCfg.Model.OpenAI == nil {
-		active.Model = openAIRealtimeModel
-	}
-	if strings.TrimSpace(active.APIKey) == "" {
-		return config.OpenAIConfig{}, fmt.Errorf("%w: OpenAI API key is required for live realtime session mode (set %s, pass --api-key, or configure model.openai.api_key in %s)", ErrOpenAIRealtimeAPIKeyMissing, SessionOpenAIAPIKeyEnv, config.ConfigFileName)
-	}
-	if strings.TrimSpace(active.Model) == "" {
-		if active.Model == "" && !opts.ModelProvided && opts.Model == "" {
-			active.Model = openAIRealtimeModel
-		} else {
-			return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelErrorFor(opts, active.Model)
-		}
-	}
-	if _, ok := lookupOpenAIRealtimeModel(opts, active.Model); !ok {
-		return config.OpenAIConfig{}, unsupportedOpenAIRealtimeModelErrorFor(opts, active.Model)
-	}
-	active.ReasoningEffort = strings.TrimSpace(opts.ReasoningEffort)
-	if active.ReasoningEffort == "" && loadedCfg.Session != nil {
-		active.ReasoningEffort = strings.TrimSpace(loadedCfg.Session.ReasoningEffort)
-	}
-	if err := sessioncontract.ValidateOpenAIRealtimeReasoningEffort(active.ReasoningEffort); err != nil {
+	resolved, err := newSessionConfigService(opts).ResolveOpenAIRealtimeConfig(sessionConfigRequest(opts, sessionConfigDefaults(loadedCfg)))
+	if err != nil {
 		return config.OpenAIConfig{}, err
 	}
-	if active.ReasoningEffort != "" {
-		metadata, _ := lookupOpenAIRealtimeModel(opts, active.Model)
-		if !metadata.SupportsReasoning {
-			return config.OpenAIConfig{}, fmt.Errorf("OpenAI model %q does not support --reasoning-effort; use %q", active.Model, openAIRealtime21Model)
-		}
-	}
-	return *active, nil
+	return config.OpenAIConfig{Model: resolved.Model, APIKey: resolved.APIKey, BaseURL: resolved.BaseURL, ReasoningEffort: resolved.ReasoningEffort}, nil
 }
 
 // NewGrokSessionInferencer builds the session-capable Grok realtime inferencer.
@@ -884,20 +595,9 @@ func NewLiveSessionInferencer(opts SessionRunOptions, instructions string) (mess
 	}
 }
 
+// Deprecated: sessionconfig.Service owns request-scoped cloning.
 func cloneSessionTurnDetection(policy *models.TurnDetectionConfig) *models.TurnDetectionConfig {
-	if policy == nil {
-		return nil
-	}
-	copy := *policy
-	if policy.CreateResponse != nil {
-		createResponse := *policy.CreateResponse
-		copy.CreateResponse = &createResponse
-	}
-	if policy.InterruptResponse != nil {
-		interruptResponse := *policy.InterruptResponse
-		copy.InterruptResponse = &interruptResponse
-	}
-	return &copy
+	return newSessionConfigService(SessionRunOptions{}).CloneTurnDetection(policy)
 }
 
 func deviceProbeSessionConfig(model, instructions string, input, output models.AudioFormat) models.SessionConfig {
@@ -912,19 +612,8 @@ func deviceProbeSessionConfig(model, instructions string, input, output models.A
 	}
 }
 
+// Deprecated: sessionconfig.Service owns endpoint normalization; this adapts
+// the result to the provider constructor's config type.
 func openAIRealtimeURL(sessionCfg config.OpenAIConfig) string {
-	base := strings.TrimSpace(sessionCfg.BaseURL)
-	if base == "" {
-		base = openAIRealtimeBaseURL
-	}
-	parsed, err := url.Parse(base)
-	if err != nil {
-		return base
-	}
-	query := parsed.Query()
-	if query.Get("model") == "" {
-		query.Set("model", sessionCfg.Model)
-	}
-	parsed.RawQuery = query.Encode()
-	return parsed.String()
+	return newSessionConfigService(SessionRunOptions{}).OpenAIRealtimeURL(sessionconfig.ProviderConfig{Model: sessionCfg.Model, BaseURL: sessionCfg.BaseURL})
 }
