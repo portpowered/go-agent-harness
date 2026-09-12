@@ -40,23 +40,20 @@ func adaptRTCDeviceBinding(inner *devicebinding.Binding) *RTCDeviceBinding {
 	if inner == nil {
 		return nil
 	}
-	var source *devicert.RTCDeviceSource
-	if value, ok := inner.Source.(*devicert.RTCDeviceSource); ok {
-		source = value
+	return &RTCDeviceBinding{
+		Source:   as[devicert.RTCDeviceSource](inner.Source),
+		Sink:     as[devicert.RTCDeviceSink](inner.Sink),
+		Capture:  as[devicert.BufferedCapture](inner.Capture),
+		feedback: as[audio.PCM16FeedbackGate](inner.Feedback),
+		inner:    inner,
 	}
-	var sink *devicert.RTCDeviceSink
-	if value, ok := inner.Sink.(*devicert.RTCDeviceSink); ok {
-		sink = value
+}
+func as[T any](value any) *T {
+	result, ok := value.(*T)
+	if !ok {
+		return nil
 	}
-	var capture *devicert.BufferedCapture
-	if value, ok := inner.Capture.(*devicert.BufferedCapture); ok {
-		capture = value
-	}
-	var feedback *audio.PCM16FeedbackGate
-	if value, ok := inner.Feedback.(*audio.PCM16FeedbackGate); ok {
-		feedback = value
-	}
-	return &RTCDeviceBinding{Source: source, Sink: sink, Capture: capture, feedback: feedback, inner: inner}
+	return result
 }
 func (b *RTCDeviceBinding) Close() error {
 	if b == nil {
