@@ -56397,7 +56397,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -56547,7 +56547,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -56690,7 +56690,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -56769,7 +56769,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -56947,7 +56947,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -58536,7 +58536,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -58750,7 +58750,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -60166,7 +60166,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -129477,7 +129477,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -129603,7 +129603,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -129729,7 +129729,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -129855,7 +129855,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -129981,7 +129981,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -130107,7 +130107,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -130233,7 +130233,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -130359,7 +130359,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -130485,7 +130485,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -130611,7 +130611,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -130737,7 +130737,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -130863,7 +130863,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -130989,7 +130989,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -131115,7 +131115,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -131241,7 +131241,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -131367,7 +131367,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -131493,7 +131493,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -131619,7 +131619,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -131745,7 +131745,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -131871,7 +131871,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -131997,7 +131997,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -132123,7 +132123,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -132249,7 +132249,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -132375,7 +132375,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -132501,7 +132501,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -132627,7 +132627,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -132753,7 +132753,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -132879,7 +132879,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -133005,7 +133005,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -133131,7 +133131,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -133257,7 +133257,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -133383,7 +133383,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -133509,7 +133509,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -133635,7 +133635,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -133761,7 +133761,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -133887,7 +133887,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -134013,7 +134013,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -134139,7 +134139,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -134265,7 +134265,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -134391,7 +134391,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -134517,7 +134517,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -134643,7 +134643,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -134769,7 +134769,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -134895,7 +134895,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -135021,7 +135021,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -135147,7 +135147,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -135273,7 +135273,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -135399,7 +135399,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -135525,7 +135525,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -135651,7 +135651,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -135777,7 +135777,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -135903,7 +135903,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -136029,7 +136029,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -136155,7 +136155,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -136315,7 +136315,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -136442,7 +136442,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -136568,7 +136568,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -136694,7 +136694,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -136821,7 +136821,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -136948,7 +136948,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -137075,7 +137075,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -137202,7 +137202,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -137400,7 +137400,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -137538,7 +137538,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -137710,7 +137710,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -137848,7 +137848,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -138087,7 +138087,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -138182,7 +138182,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -138277,7 +138277,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -138372,7 +138372,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -138467,7 +138467,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -138551,7 +138551,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -138635,7 +138635,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -138730,7 +138730,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -138837,7 +138837,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -138921,7 +138921,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -139016,7 +139016,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -139111,7 +139111,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -139218,7 +139218,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -139313,7 +139313,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -139408,7 +139408,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -140423,7 +140423,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -140516,7 +140516,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -140611,7 +140611,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -140694,7 +140694,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -140777,7 +140777,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -140860,7 +140860,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -140943,7 +140943,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -141026,7 +141026,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -141157,7 +141157,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -141252,7 +141252,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -141359,7 +141359,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -141454,7 +141454,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -141547,7 +141547,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -141631,7 +141631,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -141726,7 +141726,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -141833,7 +141833,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -141928,7 +141928,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -142023,7 +142023,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -142130,7 +142130,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -142261,7 +142261,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -142404,7 +142404,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -142523,7 +142523,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -142618,7 +142618,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -142725,7 +142725,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -142820,7 +142820,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -142927,7 +142927,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -143070,7 +143070,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -143177,7 +143177,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -143272,7 +143272,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -143367,7 +143367,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -143474,7 +143474,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -143581,7 +143581,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -143698,7 +143698,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -143829,7 +143829,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -143924,7 +143924,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -144043,7 +144043,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -144138,7 +144138,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -144233,7 +144233,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -144340,7 +144340,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -144447,7 +144447,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -144590,7 +144590,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -144709,7 +144709,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -144804,7 +144804,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -144911,7 +144911,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -145006,7 +145006,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -145111,7 +145111,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -145206,7 +145206,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -145299,7 +145299,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -145715,7 +145715,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -145801,7 +145801,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -145994,7 +145994,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -146137,7 +146137,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -146294,7 +146294,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -146425,7 +146425,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -146522,7 +146522,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -146617,7 +146617,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -146703,7 +146703,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -146800,7 +146800,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -146886,7 +146886,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -146983,7 +146983,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -147069,7 +147069,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -147155,7 +147155,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -147241,7 +147241,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -147396,7 +147396,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -147482,7 +147482,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -147579,7 +147579,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -147676,7 +147676,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -147797,7 +147797,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -147883,7 +147883,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -147980,7 +147980,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -148089,7 +148089,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -148186,7 +148186,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -148283,7 +148283,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -148380,7 +148380,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -148477,7 +148477,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -148598,7 +148598,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -148695,7 +148695,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -175997,7 +175997,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -176080,7 +176080,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -176163,7 +176163,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -176270,7 +176270,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -176354,7 +176354,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -176449,7 +176449,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -176544,7 +176544,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -176649,7 +176649,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -176733,7 +176733,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -176841,7 +176841,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -177078,7 +177078,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -177185,7 +177185,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -177292,7 +177292,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -177376,7 +177376,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -177459,7 +177459,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -177543,7 +177543,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -177638,7 +177638,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -177782,7 +177782,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -177878,7 +177878,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -177986,7 +177986,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -178070,7 +178070,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -178154,7 +178154,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -178238,7 +178238,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -178322,7 +178322,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -178427,7 +178427,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -178534,7 +178534,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -178618,7 +178618,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -178702,7 +178702,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -178797,7 +178797,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -178892,7 +178892,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -179333,7 +179333,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -179454,7 +179454,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -179575,7 +179575,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -179696,7 +179696,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -179817,7 +179817,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -179938,7 +179938,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -180060,7 +180060,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -180229,7 +180229,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -180350,7 +180350,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -180471,7 +180471,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -180592,7 +180592,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -180714,7 +180714,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -180836,7 +180836,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -180967,7 +180967,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -181134,7 +181134,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -181267,7 +181267,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -181398,7 +181398,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -181531,7 +181531,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -181676,7 +181676,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -181809,7 +181809,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -181954,7 +181954,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -182087,7 +182087,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -182230,7 +182230,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -182373,7 +182373,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -182495,7 +182495,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -182676,7 +182676,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -182821,7 +182821,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -182990,7 +182990,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -183159,7 +183159,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -183292,7 +183292,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -183437,7 +183437,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -183570,7 +183570,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -183703,7 +183703,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -183872,7 +183872,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -183994,7 +183994,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -184116,7 +184116,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -184238,7 +184238,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -184371,7 +184371,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -184504,7 +184504,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -184635,7 +184635,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -209821,7 +209821,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -210000,7 +210000,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -210095,7 +210095,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -210202,7 +210202,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -210331,7 +210331,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -210415,7 +210415,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -210499,7 +210499,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -210583,7 +210583,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",
@@ -210667,7 +210667,7 @@
             ],
             "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+            "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
             "observation_commands": [
               [
                 "gh",

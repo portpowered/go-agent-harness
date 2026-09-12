@@ -122,7 +122,7 @@
       "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
     ]
   ],
-  "observed_at": "2026-09-12T23:10:39Z",
+  "observed_at": "2026-09-12T23:45:22Z",
   "prs": [
     {
       "accepted_main_changed_production_paths": [],
@@ -2175,7 +2175,7 @@
         "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
         "scripts/wire-packages.txt"
       ],
-      "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+      "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
       "head_branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
       "is_retirement_checkpoint": true,
       "number": 470,
@@ -2224,7 +2224,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c79-retire-cli-response-lifecycle",
       "task_state": {
-        "name": "init",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-114",
@@ -4036,6 +4036,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates-validation.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/canonical-board.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/ci-rejection-34724763555.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/ownership.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/proof-levels.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json",
@@ -4072,7 +4073,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/report.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py"
       ],
-      "head": "c47e39c143c199e3d4023604d6f30fee750126e1",
+      "head": "c1c69000d2d239415bdf5646f4f873e5305d4156",
       "head_branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
       "is_retirement_checkpoint": true,
       "number": 493,
@@ -4186,7 +4187,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verification-summary.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py"
       ],
-      "head": "be743f506f1db606fb88ad23c5432359a677c74a",
+      "head": "98352dfe20456b1db8bcb9e559fc44ddd8371e6d",
       "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "is_retirement_checkpoint": true,
       "number": 494,
@@ -4300,7 +4301,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c109-characterize-browser-retirement-integration",
       "task_state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-224",

@@ -12,7 +12,7 @@
     "500",
     "--all"
   ],
-  "observed_at": "2026-09-12T23:10:11Z",
+  "observed_at": "2026-09-12T23:44:50Z",
   "results": [
     {
       "chainingTraceDepth": 1,
@@ -1696,19 +1696,19 @@
       "workTypeName": "idea"
     },
     {
-      "chainingTraceDepth": 21,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "chainingTraceDepth": 6,
+      "currentChainingTraceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
       "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
+        "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309"
       ],
-      "requestId": "audio-runtime-c109-browser-retirement-integration-rehearsal-20260912T1924Z",
+      "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
       "state": {
         "name": "init",
         "type": "PROCESSING"
       },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-review-247",
+      "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "workId": "work-review-250",
       "workTypeName": "review"
     },
     {
@@ -1726,7 +1726,7 @@
       ],
       "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
       "state": {
-        "name": "init",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "tags": {
@@ -1758,7 +1758,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"branch\": \"codex/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-        "_rejection_feedback": "PR #494 current head is be743f506f1db606fb88ad23c5432359a677c74a1; CI run 34721910571 is green. Independent pinned CLI replay passed with 4,800-byte PCM, 3,244-byte WAV, tool marker, manifest, and clean shutdown. However all checked-in release/provenance/state/public/regression evidence still pins cf20ae6fe0277b5534c3a352983223b79ac65250, while the PR description is older still. This violates exact-head evidence and repeats the prior stale-artifact finding. Regenerate the complete release evidence and SHA256SUMS for the final submitted head, update PR #494 metadata with the exact head/current candidates, commit and push only owned paths, submit that exact head to SCRIPT CI without polling, then obtain fresh independent review. Do not merge; preserve the canonical completeness, subtraction-deletion, focused, accumulated-regression, and independent replay findings."
+        "_rejection_feedback": "PR #494 head 98352dfe20456b1db8bcb9e559fc44ddd8371e6d has all nine required checks green in run 34725036123. Independent analyzer, verifier, candidate/subtraction, scope, and credential-free replay checks passed. However checked-in provenance, PR inventory, state, public replay, regression, and release summaries still pin be743f506f1db606fb88ad23c5432359a677c74a, so evidence is stale for the current head. Same C107 executor must regenerate all release evidence and SHA256SUMS at 98352dfe, refresh exact board/PR/head/ancestry/artifact references, commit and push only the owned C107 directory, submit the changed head to SCRIPT CI without polling, then request fresh review. Preserve prior completeness/deletion negative controls; do not merge."
       },
       "traceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
       "workId": "work-task-218",
@@ -1784,7 +1784,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"branch\": \"codex/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-        "_rejection_feedback": "CI checks failed for PR #493 at head 03042970b8c6f83b67cde57e6d8305e0096a61d9: required checks failed on current head 03042970b8c6f83b67cde57e6d8305e0096a61d9: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34722793034/job/103631590627). Return this task to the executor with the listed failures."
+        "_rejection_feedback": "CI checks failed for PR #493 at head c75c87547ff52c416e0fadd92385958d4b24cc78: required checks failed on current head c75c87547ff52c416e0fadd92385958d4b24cc78: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34724763555/job/103636855490). Return this task to the executor with the listed failures."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-222",
@@ -1805,12 +1805,12 @@
       ],
       "requestId": "audio-runtime-c109-browser-retirement-integration-rehearsal-20260912T1924Z",
       "state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration\", \"branch\": \"codex/audio-runtime-c109-characterize-browser-retirement-integration\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-        "_rejection_feedback": "PR #495 head e0af439b has all nine required CI checks green in run 34718968843, but actionable evidence defects remain. Independent runs passed: required/reverse analyzer, 12/12 positive checks, 3/3 malformed/canceled checks; however analyzer output records both preserved C61/C83 worktrees as present:false and verify.py still accepts this as unchanged (analyze.py:158-173; verify.py:67-72). git output is truncated before ref/worktree parsing (analyze.py:46-86), and the ledger is hard-coded/heuristic, omitting exact spans, callers, conflict kinds and evidence IDs while matching historical JSON instead of source (analyze.py:181-200,329-375). The sequence lacks required inputs, preconditions, commands, observables, timeouts, stop conditions and rollback/checkpoints (analyze.py:462-498). broadGates emits six non-manifest keys instead of the nine exact manifest gates, and verification only checks values are OPEN (analyze.py:635-642; verify.py:138). run_public_checks.py accepts arbitrary --tree, does not bind/verify the exact main->C61->C83 tree, captures only the shipped child summary instead of its detailed effects/artifact/shutdown report, ignores cleanup failures, and has an unbounded communicate after timeout (run_public_checks.py:44-103,177-240). Fresh required/control verification also failed on mutable unrelated worktree inventory, proving determinism is not normalized. Amend only the C109 directory on the same task/PR: capture complete structured refs and actual preserved-worktree identity, require successful fetch/current-head identity and fail closed on missing preservation; implement the exact symbol/API/conflict/ownership ledger and full bounded sequence; bind public evidence to the exact synthetic tree with retained hashes/effects/cleanup and test discovery; emit/assert all nine gates OPEN; add causal negatives for these failures and regenerate both orders, determinism, attribution and public reports. Preserve C61/C83/C79 ownership, retain C61 OPEN_RECONCILE_TEST_REWRITTEN and the C79/provider-audio 6400-sample loss, then push the changed head and resubmit to SCRIPT CI. Do not merge this head."
+        "_rejection_feedback": "PR #495 head e3cde9327bf7f8d562bdbe7ba77aecbee77f6a76 has green required CI, and independent verify/public probes passed, but evidence defects remain: (1) C109-03 explicitly requires ci-attribution.json; it is absent. analyze.py:867-917 emits only hard-coded nested attribution with no exact-head/job evidence or failed-lane signatures. Historical run 34713381619 is head 22cc6769aaf06d1e2c1275b064cc7ec29de3e371 and has static/integration failures; retain all seven passing lanes plus exact failure ownership. (2) Ledger caller_edges are raw textual references without containing caller symbols/declarations; api_relationship uses a hard-coded five-symbol list and added-line search, so c83_requires_c61_api=false is not source-complete. Make the ledger AST/source-derived and require caller identity/spans in verify.py. (3) Checked-in final provenance was generated at e0af439b with dirty scripts and differs from a clean e3cde932 analyzer run; bind final evidence to the committed head and regenerate required/control artifacts. (4) run_public_checks.py scans forbidden markers only after output truncation and ignores auxiliary cleanup failure for --tree. Fix these fail-closed paths. Amend only the C109 directory on the same task/PR, regenerate ledger/attribution/sequence/public reports and negatives, rerun verify and public probes, push the new head, and resubmit exact HEAD to SCRIPT CI; do not modify C61, C83, or C79-owned files."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-224",
@@ -1863,7 +1863,7 @@
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence\", \"branch\": \"codex/audio-runtime-c112-retire-cli-session-trace-evidence\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
         "_rejection_feedback": "CI checks failed for PR #498 at head 8b2983338ea449fd739994e8fbbc958581bd2e7b: required checks failed on current head 8b2983338ea449fd739994e8fbbc958581bd2e7b: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345381). Return this task to the executor with the listed failures.",
-        "continue_feedback": "Revision 8b298333 is clean, pushed, admitted, branch-matched, and PR #498 is open. Admission and required startup/origin/main ancestry passed. Focused normal/race, GOWORK=off consumer, C112 adapter, and accumulated normal regressions pass. CI run 34722701991 fails only on C79-owned sessiontrace Wire registration and stale prepareTrace baseline entries; hermetic also records the unrelated DynamicToolPublisher timeout. C79 still owns both registries, so no authorized source repair remains. After C79 guarded merge and lease release, integrate main, apply only those two changes, rerun bounded gates, commit/push PR #498, and submit the changed head to SCRIPT CI without polling."
+        "continue_feedback": "Revision 8b298333 is clean, pushed, admitted, branch-matched, and ancestry-verified. Focused normal/race tests, GOWORK=off consumer, and COUNT=3 accumulated regressions pass. CI run 34722701991 failed only on unregistered sessiontrace Wire output and stale prepareTrace baseline. C79 PR #470 remains open and owns both shared files. Next: after guarded C79 release, integrate origin/main, apply only those demonstrated repairs, rerun bounded gates, commit/push PR #498, and resubmit the same task to SCRIPT CI without polling."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-238",
@@ -2375,6 +2375,44 @@
       },
       "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
       "workId": "work-review-246",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 21,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c109-browser-retirement-integration-rehearsal-20260912T1924Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #495 head e3cde9327bf7f8d562bdbe7ba77aecbee77f6a76 has green required CI, and independent verify/public probes passed, but evidence defects remain: (1) C109-03 explicitly requires ci-attribution.json; it is absent. analyze.py:867-917 emits only hard-coded nested attribution with no exact-head/job evidence or failed-lane signatures. Historical run 34713381619 is head 22cc6769aaf06d1e2c1275b064cc7ec29de3e371 and has static/integration failures; retain all seven passing lanes plus exact failure ownership. (2) Ledger caller_edges are raw textual references without containing caller symbols/declarations; api_relationship uses a hard-coded five-symbol list and added-line search, so c83_requires_c61_api=false is not source-complete. Make the ledger AST/source-derived and require caller identity/spans in verify.py. (3) Checked-in final provenance was generated at e0af439b with dirty scripts and differs from a clean e3cde932 analyzer run; bind final evidence to the committed head and regenerate required/control artifacts. (4) run_public_checks.py scans forbidden markers only after output truncation and ignores auxiliary cleanup failure for --tree. Fix these fail-closed paths. Amend only the C109 directory on the same task/PR, regenerate ledger/attribution/sequence/public reports and negatives, rerun verify and public probes, push the new head, and resubmit exact HEAD to SCRIPT CI; do not modify C61, C83, or C79-owned files."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-247",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 10,
+      "currentChainingTraceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "previousChainingTraceIds": [
+        "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf"
+      ],
+      "requestId": "audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #494 head 98352dfe20456b1db8bcb9e559fc44ddd8371e6d has all nine required checks green in run 34725036123. Independent analyzer, verifier, candidate/subtraction, scope, and credential-free replay checks passed. However checked-in provenance, PR inventory, state, public replay, regression, and release summaries still pin be743f506f1db606fb88ad23c5432359a677c74a, so evidence is stale for the current head. Same C107 executor must regenerate all release evidence and SHA256SUMS at 98352dfe, refresh exact board/PR/head/ancestry/artifact references, commit and push only the owned C107 directory, submit the changed head to SCRIPT CI without polling, then request fresh review. Preserve prior completeness/deletion negative controls; do not merge."
+      },
+      "traceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
+      "workId": "work-review-249",
       "workTypeName": "review"
     },
     {

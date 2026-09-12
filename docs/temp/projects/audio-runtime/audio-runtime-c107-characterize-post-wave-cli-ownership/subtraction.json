@@ -4,8 +4,8 @@
       "accepted_main_changed_paths": [],
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "checkpoint_sha": "be743f506f1db606fb88ad23c5432359a677c74a",
-      "head": "be743f506f1db606fb88ad23c5432359a677c74a",
+      "checkpoint_sha": "98352dfe20456b1db8bcb9e559fc44ddd8371e6d",
+      "head": "98352dfe20456b1db8bcb9e559fc44ddd8371e6d",
       "lease_paths": [],
       "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
       "observation_command": "canonical board row + gh pr view --json files",
@@ -21,8 +21,8 @@
       "accepted_main_changed_paths": [],
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
-      "checkpoint_sha": "c47e39c143c199e3d4023604d6f30fee750126e1",
-      "head": "c47e39c143c199e3d4023604d6f30fee750126e1",
+      "checkpoint_sha": "c1c69000d2d239415bdf5646f4f873e5305d4156",
+      "head": "c1c69000d2d239415bdf5646f4f873e5305d4156",
       "lease_paths": [],
       "name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
       "observation_command": "canonical board row + gh pr view --json files",
@@ -45,7 +45,7 @@
       "observation_command": "canonical board row + gh pr view --json files",
       "pr_number": 495,
       "state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "work_id": "work-task-224",
@@ -122,8 +122,8 @@
       ],
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-      "checkpoint_sha": "40702f55bbf7406236caff55454ad67cb09b1025",
-      "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+      "checkpoint_sha": "a8e45355fe495f58c3ba1078a80050492ae6f864",
+      "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
       "lease_paths": [
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
@@ -140,7 +140,7 @@
       "observation_command": "canonical board row + gh pr view --json files",
       "pr_number": 470,
       "state": {
-        "name": "init",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "work_id": "work-task-114",
@@ -256,10 +256,10 @@
     498
   ],
   "candidate_rule": "a candidate path must be an accepted-main production path with zero path_owners and must not be a shared path dependency",
-  "canonical_board_sha256": "423117f37a7eeeb9553203bc2719834e81daf0a354ca1c59977c9514641e938b",
-  "captured_at": "2026-09-12T23:10:39Z",
+  "canonical_board_sha256": "d4d01120f57dd38f1a9dafaa04a562464e1cc054fbe94f83bcd2217d7389e3a3",
+  "captured_at": "2026-09-12T23:45:22Z",
   "contract_revision": "audio-runtime-v1",
-  "open_pr_inventory_sha256": "116f3f596de55baf751728519082c2d0d738ac2b39a1430ffc71ab646288ec1f",
+  "open_pr_inventory_sha256": "cad91dc5d08113e3129dbd2b2e5b3b45a153e821f4635da1dbd121f820c38560",
   "path_owners": {
     "agent-cli/internal/services/internal/agentruntime/capability_alias.go": [],
     "agent-cli/internal/services/internal/agentruntime/metrics_collector.go": [
@@ -1563,7 +1563,7 @@
         ],
         "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-        "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+        "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
         "observation_commands": [
           [
             "gh",
@@ -1610,7 +1610,7 @@
         ],
         "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-        "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+        "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
         "observation_commands": [
           [
             "gh",
@@ -1658,7 +1658,7 @@
         ],
         "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-        "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+        "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
         "observation_commands": [
           [
             "gh",
@@ -1705,7 +1705,7 @@
         ],
         "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-        "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+        "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
         "observation_commands": [
           [
             "gh",
@@ -1753,7 +1753,7 @@
         ],
         "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-        "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+        "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
         "observation_commands": [
           [
             "gh",
@@ -2228,7 +2228,7 @@
         ],
         "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-        "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+        "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
         "observation_commands": [
           [
             "gh",
@@ -2317,7 +2317,7 @@
         ],
         "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-        "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+        "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
         "observation_commands": [
           [
             "gh",
@@ -2865,7 +2865,7 @@
         ],
         "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-        "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+        "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
         "observation_commands": [
           [
             "gh",
@@ -5345,7 +5345,7 @@
       ],
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-      "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+      "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
       "observation_commands": [
         [
           "gh",
@@ -6231,7 +6231,7 @@
       "accepted_main_changed_paths": [],
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
-      "head": "c47e39c143c199e3d4023604d6f30fee750126e1",
+      "head": "c1c69000d2d239415bdf5646f4f873e5305d4156",
       "observation_commands": [
         [
           "gh",
@@ -6267,7 +6267,7 @@
       "accepted_main_changed_paths": [],
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "head": "be743f506f1db606fb88ad23c5432359a677c74a",
+      "head": "98352dfe20456b1db8bcb9e559fc44ddd8371e6d",
       "observation_commands": [
         [
           "gh",
@@ -6481,7 +6481,7 @@
   "shared_path_dependencies": [
     {
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+      "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
       "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
       "path": "docs/architecture/architecture-size-baseline.json",
       "pr_number": 470,
@@ -6490,7 +6490,7 @@
     },
     {
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "head": "40702f55bbf7406236caff55454ad67cb09b1025",
+      "head": "a8e45355fe495f58c3ba1078a80050492ae6f864",
       "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
       "path": "scripts/wire-packages.txt",
       "pr_number": 470,

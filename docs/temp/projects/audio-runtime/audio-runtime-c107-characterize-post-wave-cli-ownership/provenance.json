@@ -9,25 +9,25 @@
   "ancestry": {
     "accepted_source": {
       "ancestor": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "descendant": "be743f506f1db606fb88ad23c5432359a677c74a",
+      "descendant": "98352dfe20456b1db8bcb9e559fc44ddd8371e6d",
       "exit_code": 0,
       "passed": true
     },
     "baseline": {
       "ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
-      "descendant": "be743f506f1db606fb88ad23c5432359a677c74a",
+      "descendant": "98352dfe20456b1db8bcb9e559fc44ddd8371e6d",
       "exit_code": 0,
       "passed": true
     },
     "current_origin_main": {
       "ancestor": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "descendant": "be743f506f1db606fb88ad23c5432359a677c74a",
+      "descendant": "98352dfe20456b1db8bcb9e559fc44ddd8371e6d",
       "exit_code": 0,
       "passed": true
     },
     "startup_integration": {
       "ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-      "descendant": "be743f506f1db606fb88ad23c5432359a677c74a",
+      "descendant": "98352dfe20456b1db8bcb9e559fc44ddd8371e6d",
       "exit_code": 0,
       "passed": true
     }
@@ -41,7 +41,7 @@
   },
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-  "candidate_revision": "be743f506f1db606fb88ad23c5432359a677c74a",
+  "candidate_revision": "98352dfe20456b1db8bcb9e559fc44ddd8371e6d",
   "contract_revision": "audio-runtime-v1",
   "credentials": "not used; command environment for public replay removes credential variables",
   "current_origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
@@ -58,7 +58,7 @@
     "stderr_sha256": "5734d4f16efc02917bc8fcad6a99bca535438180ce08197ee6e22031f788af7b",
     "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
-  "observed_at": "2026-09-12T23:10:40Z",
+  "observed_at": "2026-09-12T23:45:23Z",
   "prd_identity": {
     "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "project": "audio-runtime"
