@@ -48,7 +48,7 @@
   "shared_prerequisite": {
     "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
     "work_id": "work-task-114",
-      "state_observed": "init/PROCESSING; PR open with no guarded merge observed",
+      "state_observed": "ci-pending/PROCESSING; PR open with no guarded merge observed",
       "pr_head_observed": "5ea7aec83731a0c168a84637218fc53be63189b3",
       "reviewed_guarded_merge_observed": false,
     "paths": [
