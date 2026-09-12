@@ -1,5 +1,9 @@
 {
   "aggregate_timeout_seconds": 300,
+  "artifact": {
+    "bytes": 53100066,
+    "sha256": "03e56993b0e0c3f050d688a59dc37fa91c8819ea5f1977a15ffa9707ff66acfd"
+  },
   "case": "scheduled-tool-continuation",
   "checks": [
     {
@@ -7,24 +11,45 @@
         "go",
         "build",
         "-o",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-cmiikgie/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-pu7tbrdv/yui",
         "./agent-cli/cmd/yui"
       ],
-      "elapsed_seconds": 5.861,
+      "elapsed_seconds": 4.899,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
     },
     {
       "argv": [
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-cmiikgie/yui",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-pu7tbrdv/yui",
         "interaction",
         "--help"
       ],
-      "elapsed_seconds": 0.521,
+      "elapsed_seconds": 0.517,
       "returncode": 0,
       "stderr": "",
       "stdout": "Inspect provider-neutral gateway interactions.\n\nUse the replay subcommand to stream normalized PNIG fixture events as one JSON object per line without provider credentials or live network calls.\n\nUsage:\n  yui interaction [flags]\n  yui interaction [command]\n\nExamples:\n  yui interaction replay ./fixtures/example.interaction.json\n\nAvailable Commands:\n  replay      Replay a normalized interaction fixture as NDJSON\n\nFlags:\n  -h, --help   help for interaction\n\nGlobal Flags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui interaction [command] --help\" for more information about a command.\n"
+    },
+    {
+      "argv": [
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-pu7tbrdv/yui",
+        "--config-dir",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-pu7tbrdv/config",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
+      ],
+      "elapsed_seconds": 0.066,
+      "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
+      "observations": {
+        "first_assistant_output": true,
+        "second_assistant_output": true,
+        "session_closed": true,
+        "terminal_observed": true
+      },
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: append_file, edit_file, exec, list_dir, read_file, read_image, write_file\nAssistant: Hello there\nAssistant: Second turn reply\n[session closed: healthy_complete]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n"
     },
     {
       "argv": [
@@ -36,10 +61,10 @@
         "-count=1",
         "-timeout=25s"
       ],
-      "elapsed_seconds": 0.399,
+      "elapsed_seconds": 0.322,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.158s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.160s\n"
     },
     {
       "argv": [
@@ -51,10 +76,10 @@
         "-count=1",
         "-timeout=25s"
       ],
-      "elapsed_seconds": 2.136,
+      "elapsed_seconds": 2.025,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.502s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.491s\n"
     },
     {
       "argv": [
@@ -66,15 +91,58 @@
         "-count=1",
         "-timeout=25s"
       ],
-      "elapsed_seconds": 14.312,
+      "elapsed_seconds": 22.649,
       "returncode": 0,
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/test/integration\t12.713s\n"
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/test/integration\t21.036s\n"
     }
   ],
-  "child_timeout_seconds": 60,
+  "child_timeout_seconds": 90,
   "credential_free": true,
-  "elapsed_seconds": 23.235,
-  "schema": "audio-runtime-c79-replay/v1",
-  "software_replay_only": true
+  "elapsed_seconds": 31.374,
+  "fixtures": {
+    "healthy": {
+      "bytes": 3433,
+      "sha256": "55ba85c408ed1b907a7cea68a0b44908ff33378e9c98344dd1dcdc7cfa2f6890"
+    },
+    "malformed": {
+      "bytes": 2282,
+      "sha256": "45477407488f387b2ff9651f1e7f2337df2ca5788ed8a47b8eaa0ca0b21da1c3"
+    }
+  },
+  "malformed_workflow": null,
+  "schema": "audio-runtime-c79-replay/v2",
+  "shipped_workflow": {
+    "argv": [
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-pu7tbrdv/yui",
+      "--config-dir",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-yui-pu7tbrdv/config",
+      "session",
+      "--replay",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json"
+    ],
+    "elapsed_seconds": 0.066,
+    "fixture": "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
+    "observations": {
+      "first_assistant_output": true,
+      "second_assistant_output": true,
+      "session_closed": true,
+      "terminal_observed": true
+    },
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: append_file, edit_file, exec, list_dir, read_file, read_image, write_file\nAssistant: Hello there\nAssistant: Second turn reply\n[session closed: healthy_complete]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n"
+  },
+  "software_replay_only": true,
+  "source": {
+    "go_version": "go version go1.26.7 darwin/arm64",
+    "revision": "f4b4ee8e302c80f58823944da9778c34b6896613",
+    "status": "",
+    "tracked_input_count": 10474,
+    "tracked_input_sha256": "bc8c857d95d3f19352124a848f2e044d39ff612248a7afef265db630c955ee0e",
+    "tracked_non_file_paths": [
+      "docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-59f370b/source-identity/source-repo",
+      "docs/temp/projects/audio-runtime/audio-runtime-c11-hermetic-package-profile/ctrl-955efeb/source-identity/source-repo"
+    ]
+  }
 }
