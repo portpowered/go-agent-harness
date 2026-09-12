@@ -4,8 +4,8 @@ This directory contains the C66-owned verification controls and the separate
 `GOWORK=off` consumer for the public `toolpublication` contract.
 
 The frozen production baseline is `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`
-with 593 physical lines in the legacy CLI controller. The adapter is 218 lines
-at the current checkpoint, a net retirement of 375 production lines; the two
+with 593 physical lines in the legacy CLI controller. The adapter is 232 lines
+at the current checkpoint, a net retirement of 361 production lines; the two
 existing session callers remain byte-identical to that baseline.
 
 The focused service, adapter, consumer, replay-control and bounded-cleanup
