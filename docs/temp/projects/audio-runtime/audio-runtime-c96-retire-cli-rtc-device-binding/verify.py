@@ -95,22 +95,24 @@ def source_facts() -> dict[str, object]:
 
 
 def changed_paths() -> list[str]:
-    output = git("diff", "--name-only", f"{BASE_REVISION}...HEAD")
+    output = git("diff", "--name-only", "origin/main...HEAD")
     return [line for line in output.splitlines() if line]
 
 
 def verify_identity() -> dict[str, object]:
     prd = json.loads((REPO_ROOT / "prd.json").read_text(encoding="utf-8"))
     facts = source_facts()
+    origin_main = git("rev-parse", "origin/main")
     require(git("branch", "--show-current") == EXPECTED_BRANCH, "candidate branch does not match PRD")
     require(prd.get("branchName") == EXPECTED_BRANCH, "prd.json branchName changed")
     require(facts == {"lines": EXPECTED_SOURCE_LINES, "sha256": EXPECTED_SOURCE_SHA256}, "immutable legacy source facts changed")
     require(subprocess.run(["git", "merge-base", "--is-ancestor", STARTUP_REVISION, "HEAD"], cwd=REPO_ROOT).returncode == 0, "startup ancestry missing")
     require(subprocess.run(["git", "merge-base", "--is-ancestor", BASE_REVISION, "HEAD"], cwd=REPO_ROOT).returncode == 0, "accepted-main ancestry missing")
+    require(subprocess.run(["git", "merge-base", "--is-ancestor", origin_main, "HEAD"], cwd=REPO_ROOT).returncode == 0, "fresh origin/main ancestry missing")
     return {
         "branch": EXPECTED_BRANCH,
         "candidate_revision": git("rev-parse", "HEAD"),
-        "origin_main": git("rev-parse", "origin/main"),
+        "origin_main": origin_main,
         "startup_revision": STARTUP_REVISION,
         "accepted_main_revision": BASE_REVISION,
         "immutable_source": facts,
@@ -159,7 +161,10 @@ def mutate_and_reject(label: str, relative: str, old: str, new: str, test_packag
             content = path.read_text(encoding="utf-8")
             require(content.count(old) == 1, f"mutation {label} source anchor is not unique")
             path.write_text(content.replace(old, new, 1), encoding="utf-8")
-            result = run(["go", "test", str(test_package), "-run", f"^{test_name}$", "-count=1", "-timeout=120s"], worktree / "go-agent-runtime", timeout=180)
+            package_arg = test_package.as_posix()
+            if not package_arg.startswith("."):
+                package_arg = f"./{package_arg}"
+            result = run(["go", "test", package_arg, "-run", f"^{test_name}$", "-count=1", "-timeout=120s"], worktree / "go-agent-runtime", timeout=180)
             require(result["returncode"] != 0, f"mutation {label} unexpectedly passed: {result}")
             require(test_name in str(result["output_tail"]), f"mutation {label} failed outside its intended oracle: {result}")
             return {"mutation": label, "returncode": result["returncode"], "oracle": test_name, "output_tail": result["output_tail"]}
@@ -184,7 +189,7 @@ def verify_mutations() -> dict[str, object]:
             'return nil, errors.Join(&devicebinding.BindingError{Flag: outputDeviceFlag, Direction: devicegw.DirectionOutput, DeviceID: request.OutputDevice, Err: err}, binding.Close())',
             'return nil, &devicebinding.BindingError{Flag: outputDeviceFlag, Direction: devicegw.DirectionOutput, DeviceID: request.OutputDevice, Err: err}',
             Path("./services/devicebinding"),
-            "TestServiceOutputFailureReturnsTypedErrorAndRollsBack",
+            "TestServiceOutputFailureReturnsTypedErrorAndRollsBackInput",
         ),
         mutate_and_reject(
             "false-render-support",
