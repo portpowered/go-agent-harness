@@ -1,5 +1,5 @@
 {
-  "candidate": "996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7",
+  "candidate": "34816f5b0bce04cdff768322ba8bc0269ca63d32",
   "mode": "retirement-and-scope",
   "payload": {
     "diff_check": {
@@ -8,7 +8,7 @@
         "diff",
         "--check"
       ],
-      "elapsed_seconds": 0.043,
+      "elapsed_seconds": 0.033,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
@@ -60,6 +60,7 @@
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/wire/package.json",
         "docs/architecture/architecture-policy.json",
         "docs/architecture/architecture-size-baseline.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",

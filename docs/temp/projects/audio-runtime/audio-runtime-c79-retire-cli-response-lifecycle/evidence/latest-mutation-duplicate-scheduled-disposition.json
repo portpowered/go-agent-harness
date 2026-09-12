@@ -1,5 +1,5 @@
 {
-  "candidate": "996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7",
+  "candidate": "34816f5b0bce04cdff768322ba8bc0269ca63d32",
   "mode": "mutation-duplicate-scheduled-disposition",
   "payload": {
     "anchor": "if lifecycle.Disposition != sessiondiagnostics.DispositionPending {",
@@ -10,17 +10,17 @@
         "go",
         "test",
         "-overlay",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-mutation-86grxulr/overlay.json",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c79-mutation-sbzr9p6e/overlay.json",
         "./go-agent-runtime/services/sessiondiagnostics/wire",
         "-run",
         "TestToolContinuationRemainsOneScheduledLifecycle",
         "-count=1",
         "-timeout=120s"
       ],
-      "elapsed_seconds": 0.338,
+      "elapsed_seconds": 0.331,
       "returncode": 1,
       "stderr": "",
-      "stdout": "--- FAIL: TestToolContinuationRemainsOneScheduledLifecycle (0.00s)\n    wire_test.go:317: duplicate disposition was accepted or changed snapshot: {Accepted:true NewResponse:false OwnsResponse:false Candidate:false Admitted:false ContinuationChanged:false ResponseID: ScheduledIndex:0 HasScheduledIndex:true Disposition:completed PendingContinuations:0 Retry:{Accepted:false Delay:0s Exhausted:false}}\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.154s\nFAIL\n"
+      "stdout": "--- FAIL: TestToolContinuationRemainsOneScheduledLifecycle (0.00s)\n    wire_test.go:317: duplicate disposition was accepted or changed snapshot: {Accepted:true NewResponse:false OwnsResponse:false Candidate:false Admitted:false ContinuationChanged:false ResponseID: ScheduledIndex:0 HasScheduledIndex:true Disposition:completed PendingContinuations:0 Retry:{Accepted:false Delay:0s Exhausted:false}}\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.160s\nFAIL\n"
     }
   },
   "schema": "audio-runtime-c79-evidence/v1"
