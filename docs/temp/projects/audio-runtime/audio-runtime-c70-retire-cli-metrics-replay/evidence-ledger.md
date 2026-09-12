@@ -9,7 +9,7 @@ acceptance evidence.
 - `project-control.py verify-work --type task --name audio-runtime-c70-retire-cli-metrics-replay` returned `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c70-retire-cli-metrics-replay"}`.
 - The admitted manifest is the repository-root `prd.json`. Its `branchName` is `codex/audio-runtime-c70-retire-cli-metrics-replay`, matching this isolated worktree.
 - The startup integration revision is `8bdafc7f947a3a2c9856220abdc539437035bd21`; planning and fetched `origin/main` are `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`.
-- `origin/main` was fetched before implementation and was an ancestor of the isolated candidate. The running host checkout was never merged or reset.
+- Candidate checkpoint `8da976ad905fbc8c1f7136d5c708bf04bf0d555c` is pushed to the matching branch; startup integration, planning main, and fetched `origin/main` are all ancestors. The running host checkout was never merged or reset.
 - The canonical board admitted task row `work-task-82` in `init`, with no C70 review or rejection row. Existing predecessor checkpoints and leases remain outside this change.
 
 ## Scoped implementation
