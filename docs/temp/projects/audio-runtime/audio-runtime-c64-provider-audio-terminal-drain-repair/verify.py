@@ -225,7 +225,7 @@ def verify_causal_source() -> None:
     for marker in ("TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio", "PlaybackSamplesObserver", "drainStarted", "closeStarted", "continuationRequested", "provider-close-before-drain", "drain-before-provider-close", "reflect.DeepEqual", "RenderedSamples()", "PlaybackStats()", "QueuedSamples", "UnderflowSamples", "C64_SEQUENCE_EVIDENCE", "C64_RENDER_EVIDENCE", "C64_ACCEPTED_SOURCE_FAILURE", "provider/admission/consumption/queue reconciliation", "DroppedSamples", "OverflowEvents", "DiscardedSamples", "ToolExecutor", "ToolDefinitions", "StreamObserver"):
         require(marker in tests, f"deterministic barrier oracle missing: {marker}")
     require("time.Sleep(" not in tests, "barrier control uses sleep-only scheduling")
-    require(tests.count("terminalDrainProviderSamples = 9600") == 1 and tests.count("terminalDrainDeviceSamples   = 6400") == 1, "barrier sample counts are not exact")
+    require(tests.count("terminalDrainProviderSamples  = 9600") == 1 and tests.count("terminalDrainDeviceSamples    = 6400") == 1, "barrier sample counts are not exact")
 
 
 def run_focused_transition() -> dict:
