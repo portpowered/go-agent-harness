@@ -37,7 +37,7 @@
     "externalConsumerGOWORKOff": "GOWORK=off go test ./... in the separate external-consumer module: passed",
     "focusedNormal": "go test ./internal/services/internal/agentruntime -run 'ProviderSessionRuntimeService|Replay' -count=1: 118 passed",
     "focusedRace": "go test -race ./agent-cli/internal/services/internal/agentruntime -run 'ProviderSessionRuntimeService|Replay' -count=1: 118 passed",
-    "accumulatedRace": "COUNT=1 scripts/test-session-ci-regressions.sh race with task-specific GOCACHE: all packages passed",
+    "accumulatedRace": "COUNT=1 scripts/test-session-ci-regressions.sh all: normal, coverage and race all packages passed",
     "causalMutations": "verify.py positive-and-three-mutations: all three mutated candidates failed the causal oracle",
     "cliProbe": "run.py: OpenAI replay, Grok replay, divergent replay negative, and non-provider smoke passed",
     "retirementCensus": "verify.py retirement-and-owned-paths: branch, ancestry, manifest baseline, exact dead-helper diff/caller proof, 130 legacy lines and 253-line reduction passed",
@@ -51,8 +51,8 @@
     "go-agent-runtime/services/providersession/wire": "100.0%"
   },
   "latestVerification": {
-    "sourceRevision": "ddcf156cf8d4b159906bb64bc0cc75e4cd2e5a01",
-    "verifiedAt": "2026-09-12T18:14:45Z",
+    "sourceRevision": "03bb682a300b11a5a18be5140902202656424bf5",
+    "verifiedAt": "2026-09-12T19:36:53Z",
     "focused": {
       "providersessionNormal": "go test ./go-agent-runtime/services/providersession/... -count=1: passed",
       "providersessionRace": "go test -race ./go-agent-runtime/services/providersession/... -count=3: passed",
@@ -68,6 +68,7 @@
     "architectureSizeCheck": "blocked by C79-owned baseline data",
     "architectureIssues": [
       "baseline-drift: agent-cli internal agentruntime package files 238 > maintained baseline 237",
+      "baseline-drift: internal/services/internal/agentruntime/session_replay.go 624 > maintained baseline 670",
       "baseline-stale: removed planOpenAIReplayRuntime cognitive-complexity entry",
       "baseline-stale: removed planOpenAIReplayRuntime cyclomatic entry",
       "baseline-stale: removed planOpenAIReplayRuntime function-lines entry"
@@ -76,14 +77,17 @@
     "staticcheck": "make staticcheck: pinned 2026.1 passed across all modules after the bounded cleanup"
   },
   "ciRejection": {
-    "run": "34708137776",
-    "job": "103591834921",
-    "ownedFinding": "three U1000 helpers in session_replay.go",
+    "run": "34710642998",
+    "staticJob": "103598686291",
+    "integrationJob": "103598686275",
+    "ownedFinding": "no remaining C101 code finding; the exact static rejection is C79-leased Wire/architecture registry work, and integration is an unrelated go-agent-loop session-isolation timeout",
     "peerOwnedFindingsPreserved": [
       "one providersession Wire registration missing from scripts/wire-packages.txt",
       "one agentruntime package-file baseline drift",
-      "three stale planOpenAIReplayRuntime architecture entries"
+      "one reduced session_replay.go architecture baseline entry",
+      "three stale planOpenAIReplayRuntime architecture entries",
+      "go-agent-loop functional session-isolation tests stuck at the 2-minute deadline"
     ]
   },
-  "nextAction": "After C79 releases scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json, integrate the accepted current main, apply only the demonstrated C101 Wire registration and four architecture changes, rerun the bounded gates, commit/push the same PR 489 head, and submit it to script CI without polling."
+  "nextAction": "After C79 releases scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json, integrate the accepted current main, apply only the demonstrated C101 Wire registration and architecture-baseline changes, rerun the bounded gates, commit/push the changed PR 489 head, and submit it to script CI without polling."
 }
