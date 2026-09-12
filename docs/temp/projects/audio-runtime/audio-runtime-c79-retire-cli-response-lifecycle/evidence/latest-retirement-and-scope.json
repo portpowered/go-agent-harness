@@ -1,5 +1,5 @@
 {
-  "candidate": "89de52379b12f80096f4cf203ef84522bbf46c5c",
+  "candidate": "4d026497962a50ec78f60fc58abe5323d59ec560",
   "mode": "retirement-and-scope",
   "payload": {
     "diff_check": {
@@ -8,7 +8,7 @@
         "diff",
         "--check"
       ],
-      "elapsed_seconds": 0.063,
+      "elapsed_seconds": 0.038,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
@@ -17,12 +17,12 @@
       "baseline": 1387,
       "files": {
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": 389,
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 390
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 396
       },
       "maximum": 787,
       "minimum_retired": 600,
-      "retired": 608,
-      "total": 779
+      "retired": 602,
+      "total": 785
     },
     "scope": {
       "forbidden_shared_paths": [],
@@ -33,6 +33,13 @@
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/internal/service/package.json",
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/package.json",
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/wire/package.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-retirement-and-scope.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/credential-free-audio-tool-replay.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/scheduled-tool-continuation.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/terminal-and-malformed.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/go.mod",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/main_test.go",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/run.py",
