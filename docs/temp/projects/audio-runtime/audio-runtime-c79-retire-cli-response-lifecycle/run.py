@@ -107,13 +107,28 @@ def source_provenance() -> dict:
     ).stdout.split(b"\0")
     digest = hashlib.sha256()
     input_count = 0
+    non_file_paths = []
     for raw_path in tracked:
         if not raw_path:
             continue
         path = ROOT / os.fsdecode(raw_path)
         digest.update(raw_path)
         digest.update(b"\0")
-        digest.update(hashlib.sha256(path.read_bytes()).digest())
+        if path.is_file():
+            digest.update(hashlib.sha256(path.read_bytes()).digest())
+        else:
+            # Gitlinks are tracked entries but materialize as directories in
+            # this worktree. Include their index record instead of attempting
+            # to read directory bytes.
+            entry = subprocess.run(
+                ["git", "ls-files", "--stage", "--", os.fsdecode(raw_path)],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+            ).stdout
+            digest.update(b"gitlink\0")
+            digest.update(entry)
+            non_file_paths.append(os.fsdecode(raw_path))
         input_count += 1
     go_version = subprocess.run(
         ["go", "version"], cwd=ROOT, check=True, capture_output=True, text=True
@@ -123,6 +138,7 @@ def source_provenance() -> dict:
         "status": status,
         "tracked_input_count": input_count,
         "tracked_input_sha256": digest.hexdigest(),
+        "tracked_non_file_paths": non_file_paths,
         "go_version": go_version,
     }
 
