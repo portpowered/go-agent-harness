@@ -1,0 +1,46 @@
+{
+  "baseline": {
+    "path": "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+    "originMainLines": 569,
+    "ownedSymbols": [
+      "SessionLivenessTimer/Clock compatibility aliases",
+      "provider liveness sentinel/error compatibility aliases",
+      "sessionLivenessMetadata and room-result metadata adapter",
+      "providerLiveness service composition adapter",
+      "provider event/dispatch and response-end mapping",
+      "observer lifecycle forwarding and stable error-channel forwarding",
+      "responseHasToolLifecycleObligation observer snapshot"
+    ],
+    "movedPolicy": [
+      "empty-response classification",
+      "typed error facts and sentinel identity",
+      "10-second watchdog",
+      "first-cause latch",
+      "timer-generation checks",
+      "local-tool suppression",
+      "stable event wake and bounded stop"
+    ]
+  },
+  "productionCallers": [
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
+    "agent-cli/internal/services/internal/agentruntime/session_live.go",
+    "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+    "agent-cli/internal/services/internal/agentruntime/session_live_setup.go",
+    "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go",
+    "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go",
+    "agent-cli/internal/services/internal/agentruntime/session_tools.go",
+    "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+    "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go"
+  ],
+  "testCallers": [
+    "agent-cli/internal/services/internal/agentruntime/session_liveness_test.go",
+    "agent-cli/internal/services/internal/agentruntime/session_response_admission_test.go"
+  ],
+  "excludedPeers": "All other Go files under agent-cli/internal/services/internal/agentruntime are byte-identical to origin/main at the disjoint checkpoint.",
+  "sharedRegistries": [
+    "scripts/wire-packages.txt",
+    "docs/architecture/architecture-size-baseline.json"
+  ]
+}
