@@ -187,6 +187,10 @@ func sessionPlaybackDiagnosticObserver(sink SessionDiagnosticSink) devicert.RTCD
 // queue snapshot at device teardown. RTCDeviceSink invokes this observer only
 // after the native handle is closed, never from its real-time callback.
 func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, logger observability.Logger) devicert.RTCDevicePlaybackObserver {
+	return sessionPlaybackObservabilityObserverWithContext(context.Background(), sampler, logger)
+}
+
+func sessionPlaybackObservabilityObserverWithContext(ctx context.Context, sampler observability.MetricSampler, logger observability.Logger) devicert.RTCDevicePlaybackObserver {
 	sampler = observability.EnsureMetricSampler(sampler)
 	logger = observability.EnsureLogger(logger)
 	return func(id devicegw.DeviceID, stats audio.PlaybackQueueStats) {
@@ -196,10 +200,12 @@ func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, l
 			"channels":    strconv.Itoa(stats.Format.Channels),
 		}
 		for _, definition := range playbackMetricSamples {
-			_ = observability.TrySample(context.Background(), sampler, observability.MetricSample{
+			if err := observability.TrySample(ctx, sampler, observability.MetricSample{
 				Name: definition.name, Kind: definition.kind, Unit: definition.unit,
 				Value: definition.value(stats), Fields: fields,
-			})
+			}); err != nil {
+				continue
+			}
 		}
 		level := "info"
 		if stats.UnderflowEvents > 0 || stats.OverflowEvents > 0 {
@@ -210,9 +216,11 @@ func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, l
 		logFields["underflow_samples"] = strconv.FormatUint(stats.UnderflowSamples, 10)
 		logFields["zero_filled_samples"] = strconv.FormatUint(stats.ZeroFilledSamples, 10)
 		logFields["rendered_samples"] = strconv.FormatUint(stats.RenderedSamples, 10)
-		_ = observability.TryLog(context.Background(), logger, observability.LogRecord{
+		if err := observability.TryLog(ctx, logger, observability.LogRecord{
 			Level: level, Message: SessionLogMessagePlaybackSnapshot, Fields: logFields,
-		})
+		}); err != nil {
+			return
+		}
 	}
 }
 

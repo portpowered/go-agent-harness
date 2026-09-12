@@ -320,10 +320,10 @@ func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 		// production service entrypoints install runtimeFactory from Wire.
 		factory = newDefaultSessionRuntimeFactory()
 	}
-	return planSessionRuntimeWithFactory(opts, factory)
+	return planSessionRuntimeWithFactory(context.Background(), opts, factory)
 }
 
-func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
+func planSessionRuntimeWithFactory(ctx context.Context, opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {
 	recordingClaim, err := ensureSessionRecordingClaim(&opts)
 	if err != nil {
 		return sessionRuntimePlan{}, err
@@ -457,7 +457,7 @@ func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntim
 	plan.rtcDeviceRequest.PlaybackObserver = combineRTCDevicePlaybackObservers(
 		plan.rtcDeviceRequest.PlaybackObserver,
 		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(plan.diagnostics)),
-		sessionPlaybackObservabilityObserver(observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
+		sessionPlaybackObservabilityObserverWithContext(ctx, observabilityDependencies.MetricSampler, observabilityDependencies.Logger),
 	)
 	plan.rtcDeviceRequest.PlaybackReceiptObserver = combineRTCDevicePlaybackReceiptObservers(
 		plan.rtcDeviceRequest.PlaybackReceiptObserver,

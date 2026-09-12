@@ -25,7 +25,7 @@ func TestPlanSessionRuntime_RetainsExactWebRTCSelection(t *testing.T) {
 	const signaling = " loopback://sentinel/signaling?token=exact "
 	const media = "rtsp://fixture:secret@sentinel.example/camera/main"
 
-	plan, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	plan, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
 		ReplayPath:        "synthetic.session.json",
 		SessionInferencer: &selectionTestInferencer{},
 		Transport:         " WebRTC ",
@@ -108,7 +108,7 @@ func TestPlanSessionRuntime_InvalidSelectionFailsBeforeFactorySideEffects(t *tes
 				},
 			}
 
-			_, err := planSessionRuntimeWithFactory(testCase.opts, factory)
+			_, err := planSessionRuntimeWithFactory(context.Background(), testCase.opts, factory)
 			if err == nil {
 				t.Fatal("invalid runtime selection returned nil")
 			}

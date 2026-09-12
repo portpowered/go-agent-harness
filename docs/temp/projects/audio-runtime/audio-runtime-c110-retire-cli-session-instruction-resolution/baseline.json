@@ -1,0 +1,9 @@
+{
+  "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
+  "startup_ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "accepted_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "legacy_path": "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
+  "legacy_baseline_lines": 277,
+  "legacy_baseline_sha256": "57a1e2b77f282e8c7a8351b3b1bf966baacf1d4674764b92542a9b2cfc6e8adc"
+}

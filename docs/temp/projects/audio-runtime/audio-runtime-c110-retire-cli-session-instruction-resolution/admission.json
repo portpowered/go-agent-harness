@@ -1,0 +1,8 @@
+{
+  "status": "admitted",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
+  "session": "~default",
+  "server": "http://127.0.0.1:7439"
+}

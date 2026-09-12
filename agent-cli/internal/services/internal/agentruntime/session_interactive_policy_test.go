@@ -204,7 +204,7 @@ func TestPlanSessionRuntimeRejectsInvalidInteractiveConfigBeforeProviderSetup(t 
 		return nil, errors.New("provider must not be built")
 	}
 
-	_, err := planSessionRuntimeWithFactory(SessionRunOptions{ModelCatalog: testModelCatalog(),
+	_, err := planSessionRuntimeWithFactory(context.Background(), SessionRunOptions{ModelCatalog: testModelCatalog(),
 		LoadedConfig:    &config.Config{Tools: config.ToolsConfig{Interactive: settings}},
 		Provider:        config.ProviderGrok,
 		RecordPath:      "capture.json",

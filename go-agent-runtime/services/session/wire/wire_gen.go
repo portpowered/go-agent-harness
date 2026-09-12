@@ -12,7 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/instructions"
 	session2 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/service"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -25,13 +24,6 @@ import (
 func NewService(deps Dependencies) session.Service {
 	executor := newExecutor(deps)
 	service := newService(deps, executor)
-	return service
-}
-
-// NewInstructionService assembles the stateless session instruction policy
-// service while exposing only its public contract to hosts and embedders.
-func NewInstructionService() session.InstructionService {
-	service := instructions.New()
 	return service
 }
 

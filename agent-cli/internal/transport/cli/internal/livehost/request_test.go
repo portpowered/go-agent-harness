@@ -10,7 +10,7 @@ import (
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	sessioninstructionswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire"
 )
 
 func TestAssembleLiveRequestWaitForCloseOverridesFiniteAudioPolicy(t *testing.T) {
@@ -58,7 +58,7 @@ func TestBuildRequestUsesWireInstructionCompositionBeforeProviderStartup(t *test
 		SystemPrompt: "literal prompt", LoadedConfig: &config.Config{},
 	}
 	got, err := BuildRequest(context.Background(), request, nil, RequestDependencies{
-		InstructionService: runtimeSessionWire.NewInstructionService(),
+		InstructionService: sessioninstructionswire.NewInstructionService(),
 		PageSightToolID:    "show_page",
 		Capabilities: func(*config.Config) (*runtimeSession.LiveCapabilities, error) {
 			return &runtimeSession.LiveCapabilities{Definitions: []messages.ToolDefinition{{Name: "read_file"}}}, nil

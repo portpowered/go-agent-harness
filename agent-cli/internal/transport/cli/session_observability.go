@@ -25,7 +25,7 @@ import (
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	sessioninstructionswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -201,7 +201,7 @@ func (c *SessionCommand) runtimeLiveRequest(ctx context.Context, request service
 		ReplayService:       c.liveReplayService,
 		ModelAdmission:      c.modelAdmission,
 		CredentialReference: c.liveCredentialReference,
-		InstructionService:  runtimeSessionWire.NewInstructionService(),
+		InstructionService:  sessioninstructionswire.NewInstructionService(),
 		PageSightToolID:     cliTools.PageSightToolID,
 		Capabilities:        c.runtimeLiveCapabilities,
 		BindImagePreparer:   bindRuntimeLiveImagePreparer,

@@ -16,7 +16,8 @@ import (
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions"
+	sessioninstructionswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
@@ -27,7 +28,7 @@ type RequestDependencies struct {
 	ReplayService       runtimeReplay.Service
 	ModelAdmission      runtimeProviders.ModelAdmission
 	CredentialReference func(string) string
-	InstructionService  runtimeSession.InstructionService
+	InstructionService  sessioninstructions.InstructionService
 	PageSightToolID     string
 	Capabilities        func(*config.Config) (*runtimeSession.LiveCapabilities, error)
 	BindImagePreparer   func(messages.ToolExecutor) messages.ToolExecutor
@@ -117,7 +118,7 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 func resolveAndComposeInstructions(ctx context.Context, request serviceSession.Request, capabilities *runtimeSession.LiveCapabilities, deps RequestDependencies) (string, error) {
 	instructionService := deps.InstructionService
 	if instructionService == nil {
-		instructionService = runtimeSessionWire.NewInstructionService()
+		instructionService = sessioninstructionswire.NewInstructionService()
 	}
 	workspaceDir := request.WorkDir
 	if workspaceDir == "" && request.LoadedConfig != nil {
@@ -135,14 +136,14 @@ func resolveAndComposeInstructions(ctx context.Context, request serviceSession.R
 		scopeSet = true
 	}
 	loader := liveInstructionLoader{workspaceDir: workspaceDir, configDir: request.ConfigDir}
-	var instructionLoader runtimeSession.InstructionLoader = loader
+	var instructionLoader sessioninstructions.InstructionLoader = loader
 	if request.SystemPrompt == "" && workspaceDir == "" {
 		// An unconfigured embedded caller has no workspace source to select.
 		// Leave the loader nil so the runtime preserves the exact empty prompt
 		// identity instead of reading a process-relative AGENTS.md.
 		instructionLoader = nil
 	}
-	resolved, err := instructionService.Resolve(ctx, runtimeSession.InstructionRequest{
+	resolved, err := instructionService.Resolve(ctx, sessioninstructions.InstructionRequest{
 		Prompt:                     request.SystemPrompt,
 		WorkspaceDir:               workspaceDir,
 		FilesystemScopeDescription: scopeDescription,
@@ -152,7 +153,7 @@ func resolveAndComposeInstructions(ctx context.Context, request serviceSession.R
 	if err != nil {
 		return "", err
 	}
-	composition := runtimeSession.InstructionComposition{
+	composition := sessioninstructions.InstructionComposition{
 		Instructions:        resolved.Instructions,
 		BrowserToolsEnabled: request.BrowserToolsEnabled,
 		PageSightToolID:     deps.PageSightToolID,
