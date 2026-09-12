@@ -709,3 +709,55 @@ C23 fresh admission and prerequisite ownership checkpoint — 2026-09-12T00:02:0
   an explicit primary ownership decision; then fetch that exact main,
   rebuild/rebind provenance, rerun the sequence, and submit the same PR once
   it passes.
+
+C23 fresh C53/current-main characterization checkpoint — 2026-09-12T00:10Z
+
+- Revalidated the admitted task before execution. The required project-control
+  command returned `status=admitted` for the sole `audio-runtime` project;
+  `prd.json.branchName` matches the isolated branch
+  `codex/audio-runtime-c23-long-session-tool-characterization`. After a fresh
+  `git fetch origin main`, `origin/main` is pinned to
+  `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`, and the candidate is
+  `f4d25c445c6b4c3499e9abafbf9ffdf4e3dafa6f`. Startup and project-baseline
+  ancestry remain present; the branch diff still contains only the seven
+  admitted C23 evidence paths. The reviewed C53 merge is in `origin/main`;
+  the separate unreviewed C56 candidate remains
+  `9f089bfa703a0e024844b5f0fdbe62b4c44720d8` and was not consumed.
+- The mandated fresh `prepare` completed and bound exact provenance:
+  fixture `7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e`,
+  consumer `5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17`,
+  yui `ab769e04aa8029ede164a4f7b88e3363b02316c3d165fa13051a333a1a81280c`,
+  and build-input set SHA-256
+  `05e9d0ee4b1c8a563935b94f4f5157e6b536a6068a5ee1c541496753f1150aab`
+  over 951 inputs. `verify-provenance --negative-control tampered-fixture`
+  passed by rejecting the altered fixture SHA.
+- The bounded controls driver reproduced the first current-main failure at
+  `controls-on-16` and wrote
+  `artifacts/first-failures/f4d25c445c6b4c3499e9abafbf9ffdf4e3dafa6f-controls.json`.
+  The linked child report is
+  `artifacts/runs/20260912T000942Z-controls-on-16/consumer-report.json`.
+  The child stayed within the 60-second child/600-second phase bounds,
+  returned 0, was reaped with no descendants, and proved clean shutdown,
+  complete trace, 355 events, 32 tool calls/results, and zero overflow drops.
+  Public provider PCM is present (pcm16-le, 16 kHz, mono, 2048 bytes,
+  SHA-256 `0faff01bc55288aaeac0e322b72e2bb0a56fba5129e0e7d2651d66eda9c46bb4`),
+  but recording usage is `accepted_audio=0`, `audio_bytes=0`,
+  `audio_items=0`, and the semantic manifest contains only
+  `client.transcript.jsonl`, `agent.transcript.jsonl`, `session-log.jsonl`,
+  and `provider.json`; the required `audio/out-000.pcm` is absent. This is
+  the known C53/current recording/media boundary, not a justification to
+  weaken the C23 artifact oracle or to edit an unowned production/peer path.
+- The accumulated C21 regression
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` passed
+  normal `-count=5` (15/15, 13.814s) and race `-count=1` (3/3, 12.848s).
+  No matrix, shipped-regressions, self-check, or final report was relabeled
+  after the required controls failure; CI was not polled and no acceptance or
+  green-CI claim was made. Storage preflight had approximately 57.6 GiB free,
+  so capacity is not the blocker.
+- Disposition remains `CONTINUE`. Exact next action: wait for a reviewed
+  recording/media repair to reach `origin/main`, or obtain an explicit primary
+  ownership decision for that production boundary; then fetch that exact
+  main, rebuild/rebind provenance, rerun the complete bounded controls,
+  matrix, shipped-regressions, self-check, and report sequence plus the C21
+  regressions, and update/push the same PR #415 only after the candidate is
+  green so it can be sent to script CI without polling.
