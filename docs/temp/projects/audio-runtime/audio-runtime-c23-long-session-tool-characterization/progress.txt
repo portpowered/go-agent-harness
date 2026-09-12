@@ -825,3 +825,44 @@ C23 executor visit: preserved recording prerequisite and regression evidence —
   C21 normal/race regressions, then update/push PR #415 and return `ACCEPTED`
   to script-owned CI without polling. Until then preserve this task and do not
   submit the unchanged C53/C56-red candidate.
+
+C23 executor visit: admission and external prerequisite recheck — 2026-09-12T00:42Z
+
+- Re-read the required operating policy and implementation handoff, the sole
+  admitted project manifest, `prd.json`, the complete task-local progress
+  ledger, and preserved Review-155, Review-169, and Review-191 findings.
+  `project-control.py verify-work --type task --name
+  audio-runtime-c23-long-session-tool-characterization` returned `admitted`.
+  The isolated branch exactly matches `prd.json.branchName`; HEAD is clean at
+  `606634d3d2bc64734624bed2a0638bc5583efa91`, and PR #415 is the same pushed
+  candidate. The branch diff remains limited to the seven admitted C23 paths.
+- Fresh `git fetch origin main` remains `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`.
+  Required startup and project-baseline ancestry checks pass. No host
+  checkout, predecessor, shared, production, or peer path was changed.
+- Fresh accumulated C21
+  `TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls` passed
+  normal `-count=5` (`15/15`, `13.640s`) and race `-count=1` (`3/3`,
+  `12.491s`). Python compilation, driver/probe help, `git diff --check`, and
+  the normal bounded process control passed; the spawned child was reaped.
+- The immutable C23 current-main first failure remains
+  `artifacts/first-failures/f4d25c445c6b4c3499e9abafbf9ffdf4e3dafa6f-controls.json`
+  with child report
+  `artifacts/runs/20260912T000942Z-controls-on-16/consumer-report.json`:
+  provider/public PCM and clean completion are present, but recording usage is
+  `accepted_audio=0`, `audio_bytes=0`, `audio_items=0`, and
+  `audio/out-000.pcm` is absent. The unchanged red control was not rerun and
+  its complete sequence/report artifacts were not relabeled.
+- The only demonstrated repair prerequisite remains outside this lease:
+  C56 PR #448 is open at head `85710a53`, has no reviews, is unmerged, and its
+  current static check is failing. Its unreviewed candidate cannot be consumed
+  or treated as an accepted recording repair. No C23 oracle, deadline, or
+  acceptance criterion was weakened; CI, review, merge, vertical, device,
+  acoustic, and project-completion claims remain open.
+- Disposition is `CONTINUE`. Exact next action: after a reviewed
+  recording/media repair reaches `origin/main`, or primary supplies an
+  explicit ownership decision for that boundary, fetch and integrate that
+  exact main without reset, rebuild and rebind provenance, rerun the complete
+  bounded controls/matrix/shipped-regressions/self-check/report sequence plus
+  C21 normal/race regressions, then update/push PR #415 and return `ACCEPTED`
+  to script-owned CI without polling. Until then do not submit the unchanged
+  C53/C56-red candidate.
