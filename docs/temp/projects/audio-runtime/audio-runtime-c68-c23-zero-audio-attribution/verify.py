@@ -180,8 +180,8 @@ def verify_boundaries() -> None:
     require(comparison.get("duplicate_guard", {}).get("positive_artifact_roots_accounted") is True and isinstance(current_roots, list) and len(current_roots) == 4, "comparison duplicate guard did not bind its positive roots")
     require(current_attempts[0].get("artifact_roots") == current_roots, "comparison attempt roots are not bound to the candidate")
     current_inventory = [item for item in actual_inventory if item["root"] in set(current_roots)]
-    require(comparison["duplicate_guard"].get("positive_artifact_inventory_sha256") == ATTRIBUTE.canonical_digest(current_inventory), "comparison positive artifact inventory binding changed")
-    require(current_attempts[0].get("positive_artifact_inventory_sha256") == ATTRIBUTE.canonical_digest(current_inventory), "comparison attempt artifact inventory binding changed")
+    require(comparison["duplicate_guard"].get("positive_artifact_inventory_sha256") == ATTRIBUTE.artifact_inventory_digest(current_inventory), "comparison positive artifact inventory binding changed")
+    require(current_attempts[0].get("positive_artifact_inventory_sha256") == ATTRIBUTE.artifact_inventory_digest(current_inventory), "comparison attempt artifact inventory binding changed")
     require(len({item.get("run_id") for item in attempts}) == len(attempts), "comparison ledger contains duplicate run identities")
     require(ledger.get("duplicate_guard", {}).get("enabled") is True and ledger["duplicate_guard"].get("unchanged_driver_rejected") is True, "comparison ledger does not fail closed on duplicate drivers")
     require(comparison["duplicate_guard"].get("prior_attempt_preserved") is True and ledger["duplicate_guard"].get("history_preserved") is True, "prior comparison attempt was discarded")

@@ -924,6 +924,12 @@ def artifact_inventory(root: Path) -> dict[str, Any]:
     }
 
 
+def artifact_inventory_digest(items: Iterable[dict[str, Any]]) -> str:
+    """Digest artifact identity fields, excluding ledger-only state labels."""
+    fields = ("root", "bytes", "files", "cap_bytes", "tree_sha256")
+    return canonical_digest([{key: item[key] for key in fields} for item in items])
+
+
 def positive_artifact_inventory() -> list[dict[str, Any]]:
     root = OWNED_ROOT / "artifacts" / "runs"
     if not root.is_dir():
@@ -1305,7 +1311,7 @@ def finish_comparison_run(run_id: str, state: str, summary: dict[str, Any]) -> N
     matches[0]["finished_at_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     complete_roots = summary.get("artifact_roots", []) if isinstance(summary.get("artifact_roots", []), list) else []
     inventory = sync_positive_artifact_inventory(ledger, complete_roots)
-    matches[0]["positive_artifact_inventory_sha256"] = canonical_digest([item for item in inventory if item.get("root") in complete_roots])
+    matches[0]["positive_artifact_inventory_sha256"] = artifact_inventory_digest([item for item in inventory if item.get("root") in complete_roots])
     write_json(COMPARISON_LEDGER_PATH, ledger)
     if COMPARISON_LOCK_PATH.exists():
         COMPARISON_LOCK_PATH.unlink()
@@ -1399,7 +1405,7 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
                 "current_run_id": run_id,
                 "positive_artifact_roots_accounted": True,
                 "artifact_roots": [item["artifact_root"] for item in evidence],
-                "positive_artifact_inventory_sha256": canonical_digest([artifact_inventory(owned_path(item["artifact_root"])) for item in evidence]),
+                "positive_artifact_inventory_sha256": artifact_inventory_digest([artifact_inventory(owned_path(item["artifact_root"])) for item in evidence]),
             },
             "binding_guard": binding_guard,
             "build_bindings": bindings,
