@@ -678,3 +678,34 @@ C23 bounded ownership recheck — 2026-09-11T23:52:07Z
   shipped-regressions/self-check/report sequence plus C21 normal/race
   regressions, then push/update the same PR #415 and return `ACCEPTED` to the
   script CI gate without polling. Do not resubmit this unchanged red head.
+
+C23 fresh admission and prerequisite ownership checkpoint — 2026-09-12T00:02:07Z
+
+- Re-read the required operating policy and implementation handoff, the
+  admitted `prd.json`, this task-local progress ledger, and the preserved
+  C23 Review-155/169/191 findings. `factory/scripts/project-control.py
+  verify-work --type task --name
+  audio-runtime-c23-long-session-tool-characterization` returned
+  `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c23-long-session-tool-characterization"}`.
+  The isolated branch matches `prd.branchName` exactly and the worktree was
+  clean at candidate `d28d1827de68c35ea5eee1db8030779d1c8e8732`.
+- The complete canonical `~default` all/500 Work response was saved for this
+  visit. The task remains `work-task-21` in `init` with the same PR #415; the
+  latest task feedback retains the first required recording-on/16 failure:
+  provider/public PCM and clean completion exist, but recording usage is
+  `accepted_audio=0`, `audio_bytes=0`, with no `audio/out-000.pcm`.
+- `git fetch origin main` still resolves `origin/main` to
+  `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`; startup and project-baseline
+  ancestry remain preserved. The required C56 candidate remains the separate
+  unreviewed PR #448 at
+  `9f089bfa703a0e024844b5f0fdbe62b4c44720d8`; it is not on `origin/main` and
+  its current CI has static, integration, coverage, and hermetic failures.
+  C23 owns only its evidence folder and has no authority to edit the
+  recording/runtime production paths or consume an unreviewed peer candidate.
+- No unchanged controls or matrix were rerun, no C23 oracle/deadline was
+  weakened, no production/shared/peer path was edited, and no CI polling or
+  acceptance claim was made. The complete bounded sequence plus the C21
+  regressions remains pending a reviewed recording repair on `origin/main` or
+  an explicit primary ownership decision; then fetch that exact main,
+  rebuild/rebind provenance, rerun the sequence, and submit the same PR once
+  it passes.
