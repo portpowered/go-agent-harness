@@ -45,6 +45,17 @@ RELEASED_SHARED_PATHS = (
 COMPATIBILITY_REGRESSION_TEST = "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_test.go"
 ALLOWED_PREFIXES += RELEASED_SHARED_PATHS
 ALLOWED_PREFIXES += (COMPATIBILITY_REGRESSION_TEST,)
+# The latest independent review identified these direct adapter consumers as
+# part of the same thin-adapter repair. They contain no second lifecycle
+# implementation; they now query the admitted reducer service instead.
+REVIEW_REPAIR_PATHS = (
+    "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+    "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go",
+    "agent-cli/internal/services/internal/agentruntime/session_response_admission.go",
+    "agent-cli/internal/services/internal/agentruntime/session_response_admission_test.go",
+    "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_regression_test.go",
+)
+ALLOWED_PREFIXES += REVIEW_REPAIR_PATHS
 
 
 def command(argv: list[str], *, cwd: Path = ROOT, timeout: int = 240, env: dict[str, str] | None = None) -> dict:
