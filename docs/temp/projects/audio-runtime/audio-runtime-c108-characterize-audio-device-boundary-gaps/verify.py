@@ -152,7 +152,10 @@ def subprocess_result(argv: list[str], cwd: pathlib.Path = ROOT, timeout: int = 
 
 def parse_status_paths() -> list[str]:
     rows = []
-    for line in git("status", "--short").splitlines():
+    status = subprocess.run(["git", "status", "--short"], cwd=ROOT, text=True, capture_output=True)
+    if status.returncode != 0:
+        raise EvidenceFailure("git status failed: " + status.stderr.strip())
+    for line in status.stdout.splitlines():
         if not line:
             continue
         value = line[3:] if len(line) > 3 else ""

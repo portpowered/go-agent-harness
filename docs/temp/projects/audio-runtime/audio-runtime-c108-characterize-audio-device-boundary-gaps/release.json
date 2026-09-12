@@ -1,6 +1,6 @@
 {
   "branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
-  "candidate_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "candidate_revision": "22d7f712894be651ce2af8975b63a868e71f83c9",
   "immutable_project_criteria": "AUDIO, DEVICE, EMBED, SERVICE, TRACE, REPLAY, FAILURES, QUALITY and PARITY remain OPEN",
   "independent_review": "not performed by executor",
   "owned_directory": "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps",

@@ -1,5 +1,9 @@
 {
-  "changed_paths_at_capture": [],
+  "changed_paths_at_capture": [
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/canonical-board.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py"
+  ],
   "controlled_shared_paths": {
     "C101": "provider-session caller dependency only; no C108 mutation",
     "C103": "RTC-session caller dependency only; no C108 mutation",
@@ -31,6 +35,18 @@
   "ownership_claim": "C108 owns only its evidence directory; no repair lease, shared-file lease, or project acceptance is claimed.",
   "passes": true,
   "peer_rows": [
+    {
+      "content": null,
+      "last_output": null,
+      "name": "audio-runtime-c103-retire-cli-rtc-session-runtime",
+      "rejection_feedback": null,
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "work_id": "work-thoughts-228",
+      "work_type": "thoughts"
+    },
     {
       "content": null,
       "last_output": null,
@@ -176,40 +192,6 @@
     {
       "content": [
         {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c101-retire-cli-provider-session-runtime\", \"branch\": \"codex/audio-runtime-c101-retire-cli-provider-session-runtime\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-          "type": "text"
-        }
-      ],
-      "last_output": null,
-      "name": "audio-runtime-c101-retire-cli-provider-session-runtime",
-      "rejection_feedback": null,
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "work_id": "work-task-194",
-      "work_type": "task"
-    },
-    {
-      "content": [
-        {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c103-retire-cli-rtc-session-runtime\", \"branch\": \"codex/audio-runtime-c103-retire-cli-rtc-session-runtime\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-          "type": "text"
-        }
-      ],
-      "last_output": null,
-      "name": "audio-runtime-c103-retire-cli-rtc-session-runtime",
-      "rejection_feedback": null,
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "work_id": "work-task-200",
-      "work_type": "task"
-    },
-    {
-      "content": [
-        {
           "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"branch\": \"codex/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
           "type": "text"
         }
@@ -240,6 +222,18 @@
       },
       "work_id": "work-task-218",
       "work_type": "task"
+    },
+    {
+      "content": null,
+      "last_output": null,
+      "name": "audio-runtime-c101-retire-cli-provider-session-runtime",
+      "rejection_feedback": null,
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-thoughts-227",
+      "work_type": "thoughts"
     },
     {
       "content": null,
@@ -333,6 +327,40 @@
         "type": "FAILED"
       },
       "work_id": "work-task-192",
+      "work_type": "task"
+    },
+    {
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c101-retire-cli-provider-session-runtime\", \"branch\": \"codex/audio-runtime-c101-retire-cli-provider-session-runtime\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "last_output": null,
+      "name": "audio-runtime-c101-retire-cli-provider-session-runtime",
+      "rejection_feedback": null,
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-194",
+      "work_type": "task"
+    },
+    {
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c103-retire-cli-rtc-session-runtime\", \"branch\": \"codex/audio-runtime-c103-retire-cli-rtc-session-runtime\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "last_output": null,
+      "name": "audio-runtime-c103-retire-cli-rtc-session-runtime",
+      "rejection_feedback": null,
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-200",
       "work_type": "task"
     },
     {
