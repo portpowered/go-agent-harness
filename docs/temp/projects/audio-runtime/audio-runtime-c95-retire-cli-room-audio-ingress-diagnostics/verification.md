@@ -24,12 +24,12 @@ rejected-counted-accepted            compiled_and_failed_oracle
 
 `run.py --case room-ingress-replay --case room-ingress-rejection
 --case non-room-audio-tool --child-timeout 60 --aggregate-timeout 300` passed at
-candidate `57831667a2943b4517f8e218f73f8e404ee31557`. It built the
+candidate `94d1fd1586fa4b533b221b5d725c907d6f3e5b63`. It built the
 `nomicrophone` YUI artifact (SHA-256
 `15e5e0a2c4aeec1b43ae85eb8de7394080ffd5f1ff8d7bc999266d84d3697a1b`), launched
 the built public `room run --example` command, validated its two-participant
 manifest, then ran all three focused children. All four bounded children exited
-zero in 16.0 seconds with joined reader threads, reaped parents, no
+zero in 13.9 seconds with joined reader threads, reaped parents, no
 process-group survivors, and output under the 64 KiB cap.
 
 The accumulated historical regression matrix also passed with
