@@ -283,13 +283,19 @@ func (o *sessionProgressObserver) responseEventBelongsToActive(id string) bool {
 	if o == nil {
 		return false
 	}
+	// Validate the response envelope before applying the untagged content
+	// boundary. A foreign response event must not clear the reducer's terminal
+	// marker and make a duplicate end for the active response admissible.
+	if !o.plainEvent(sd.EventResponseBelongs, id).Accepted {
+		return false
+	}
 	o.toolStateMu.Lock()
 	contentBoundary := o.messageEndSeen
 	o.toolStateMu.Unlock()
 	if contentBoundary {
 		o.lifecycleEvent(sd.Event{Kind: sd.EventResponseContent})
 	}
-	return o.plainEvent(sd.EventResponseBelongs, id).Accepted
+	return true
 }
 func (o *sessionProgressObserver) observeProviderToolCallStartForResponse(callID, name, responseID string) {
 	if o == nil || strings.TrimSpace(callID) == "" {

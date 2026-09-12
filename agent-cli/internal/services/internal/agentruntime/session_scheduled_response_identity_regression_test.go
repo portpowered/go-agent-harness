@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
 )
 
 func TestSessionProgressObserver_SyntheticToolEnvelopeBeforeAndAfterContinuationStart(t *testing.T) {
@@ -98,5 +99,39 @@ func TestSessionProgressObserver_ThreeChainedToolCallsCreditOneScheduledTurn(t *
 	}
 	if observer.completedScheduled != 1 {
 		t.Errorf("completed scheduled responses = %d, want 1", observer.completedScheduled)
+	}
+}
+
+func TestSessionProgressObserver_ForeignContentCannotClearTerminalBoundary(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime-2.1-mini")
+	if !observer.beginObservedResponseForPurpose("response-a", messages.ResponsePurpose(sd.ResponsePurposeNormal)) {
+		t.Fatal("failed to open response-a")
+	}
+
+	first := observer.observeProviderMessageEndForResponse(
+		messages.RoleAssistant,
+		&messages.MessageEndValue{Type: "message_end", Status: "completed"},
+		"response-a",
+		true,
+	)
+	if !first {
+		t.Fatal("initial response-a end was not observed")
+	}
+
+	// The adapter's content event is intentionally untagged. It must only
+	// clear the reducer's terminal boundary after the enclosing response
+	// identity has been validated.
+	if observer.responseEventBelongsToActive("response-b") {
+		t.Fatal("foreign response content was accepted")
+	}
+
+	duplicate := observer.lifecycleEvent(sd.Event{
+		Kind:       sd.EventResponseEnd,
+		ResponseID: "response-a",
+		Output:     true,
+		Terminal:   &sd.Terminal{Status: "completed"},
+	})
+	if duplicate.Accepted || duplicate.Candidate || duplicate.Admitted || !observer.lifecycle.Snapshot().ActiveResponse {
+		t.Fatalf("duplicate response-a end crossed foreign content boundary: observation=%+v snapshot=%+v", duplicate, observer.lifecycle.Snapshot())
 	}
 }
