@@ -576,6 +576,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--case",
+        action="append",
         required=True,
         choices=[
             "ordered-observation-replay",
@@ -593,14 +594,15 @@ def main() -> int:
     candidate_revision = git_value("rev-parse", "HEAD")
     require(is_ancestor(source_revision, candidate_revision), "candidate does not contain fetched origin/main")
     peer = peer_snapshot()
-    if args.case == "ordered-observation-replay":
-        case_ordered(source_revision, candidate_revision, peer, started, args.child_timeout)
-    elif args.case == "malformed-or-out-of-order-replay":
-        case_malformed(source_revision, candidate_revision, peer, started, args.child_timeout)
-    else:
-        case_audio_tool_continuation(
-            source_revision, candidate_revision, peer, started, args.child_timeout
-        )
+    for case in args.case:
+        if case == "ordered-observation-replay":
+            case_ordered(source_revision, candidate_revision, peer, started, args.child_timeout)
+        elif case == "malformed-or-out-of-order-replay":
+            case_malformed(source_revision, candidate_revision, peer, started, args.child_timeout)
+        else:
+            case_audio_tool_continuation(
+                source_revision, candidate_revision, peer, started, args.child_timeout
+            )
     elapsed = time.monotonic() - started
     require(elapsed <= args.aggregate_timeout, f"aggregate timeout exceeded: {elapsed:.3f}s")
     return 0

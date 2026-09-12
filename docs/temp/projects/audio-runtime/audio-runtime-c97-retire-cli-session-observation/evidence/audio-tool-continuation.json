@@ -1,6 +1,6 @@
 {
-  "aggregate_elapsed_ms": 13717,
-  "candidate_revision": "612243184b9b15fec9bf699a1d7e4e25e8b1e875",
+  "aggregate_elapsed_ms": 13315,
+  "candidate_revision": "92c55f4c19e0bbfcb6d7c55e18ce75143b47ff7a",
   "classification": {
     "acoustic": "not_attempted",
     "audio_tool_continuation": "proved",
@@ -30,7 +30,7 @@
     "cwd": "agent-cli",
     "disk_bounded": true,
     "disk_bytes": 79,
-    "elapsed_ms": 13570,
+    "elapsed_ms": 11257,
     "label": "audio-tool-continuation",
     "output_bounded": true,
     "returncode": 0,
