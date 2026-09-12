@@ -13,6 +13,7 @@ import time
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[4]
+EVIDENCE_ROOT = HERE / "evidence"
 EVIDENCE = HERE / "evidence" / "runs"
 
 CASES = {
@@ -102,7 +103,10 @@ def source_provenance() -> dict:
         capture_output=True,
         text=True,
     )
-    evidence_prefix = str(EVIDENCE.relative_to(ROOT)) + "/"
+    # Evidence is deliberately written by each bounded run. Treat every
+    # descendant of the owned evidence root as a diagnostic output, while
+    # still requiring all executable source and fixture inputs to be clean.
+    evidence_prefix = str(EVIDENCE_ROOT.relative_to(ROOT)) + "/"
     status = []
     ignored_evidence_changes = []
     for line in status_result.stdout.splitlines():
