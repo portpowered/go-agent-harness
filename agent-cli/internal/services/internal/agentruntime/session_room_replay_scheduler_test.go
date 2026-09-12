@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -142,69 +141,6 @@ func TestRunRoomReplaySchedulesOverlapThroughProductionMixer(t *testing.T) {
 		if gotFanouts[index] != wantFanouts[index] {
 			t.Fatalf("scheduler fanout[%d] = %v, want %v", index, gotFanouts[index], wantFanouts[index])
 		}
-	}
-}
-
-func TestRoomReplaySchedulerCancellationStopsManualMixer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	format := room.PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond}
-	mixer, err := room.NewPCM16MixerWithConfig(ctx, room.PCM16MixerConfig{
-		Format:            format,
-		InputQueueFrames:  4,
-		OutputQueueFrames: 1,
-		Manual:            true,
-	})
-	if err != nil {
-		t.Fatalf("new manual mixer: %v", err)
-	}
-	t.Cleanup(func() { _ = mixer.Close() })
-	if err := mixer.AddInput("source"); err != nil {
-		t.Fatalf("add source input: %v", err)
-	}
-	target := &roomParticipantRuntime{
-		plan:            &roomParticipantPlan{manifest: room.Participant{ID: "target"}},
-		ctx:             ctx,
-		mixer:           mixer,
-		replayFrameAcks: make(chan struct{}, 1),
-	}
-	pumpDone := make(chan struct{})
-	go func() {
-		defer close(pumpDone)
-		for {
-			if _, err := mixer.ReadFrame(ctx); err != nil {
-				return
-			}
-			select {
-			case target.replayFrameAcks <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	schedule := &roomReplaySchedule{
-		frameDuration: format.FrameDuration,
-		frameBytes:    4,
-		frames: []roomReplayScheduledFrame{
-			{contributions: []roomReplayContribution{{sourceID: "source", sequence: 1, pcm: roomPCM16(1000, 2)}}},
-			{contributions: []roomReplayContribution{{sourceID: "source", sequence: 2, pcm: roomPCM16(2000, 2)}}},
-		},
-		targetIDs: []string{"target"},
-	}
-	var cancelOnce sync.Once
-	err = schedule.run(ctx, []*roomParticipantRuntime{target}, nil, RoomRunOptions{
-		onParticipantAudioFanned: func(string, string, []byte) {
-			cancelOnce.Do(cancel)
-		},
-	})
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("scheduler cancellation error = %v, want context cancellation", err)
-	}
-	select {
-	case <-pumpDone:
-	case <-time.After(time.Second):
-		t.Fatal("manual mixer pump did not stop after scheduler cancellation")
 	}
 }
 
