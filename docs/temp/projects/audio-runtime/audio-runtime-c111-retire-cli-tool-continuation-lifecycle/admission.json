@@ -1,0 +1,115 @@
+{
+  "schema": "audio-runtime.c111.admission.v1",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "factorySession": "~default",
+  "taskWorkID": "work-task-236",
+  "taskStateAtAdmission": "init",
+  "verifyWork": {
+    "command": "project-control.py verify-work --type task --name audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+    "status": "admitted"
+  },
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+  "branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+  "branchMatchesPRD": true,
+  "sourceRevisionBeforeMutation": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "originMainFetched": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "requiredAncestry": {
+    "factoryStartup": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "acceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "startupIsAncestor": true,
+    "acceptedMainIsAncestor": true
+  },
+  "manifest": {
+    "path": "factory/projects/audio-runtime/manifest.json",
+    "sha256": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
+    "intendedMain": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+    "baselineRevision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+    "realtimeBudget": {
+      "sessionsPerMission": 3,
+      "totalSecondsPerMission": 120,
+      "used": 0
+    }
+  },
+  "authority": {
+    "sourcePlan": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
+    "request": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
+    "acceptance": "edd1f5cbca1de8b49f96cdf8f039732d28a0082ef3718015e10535ff2e6a441a",
+    "prd": "1a295a5e7faeacce658f05e48f75e75b47083120534484a326afe3513436fefc",
+    "progress": "4ce380ea1a579cdf16b6e3b6706db47daa31a83899d9228d37a00e066e89941d"
+  },
+  "immutableSource": {
+    "revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "path": "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go",
+    "physicalLines": 147,
+    "sha256": "48000dcd73b85ebbe93fd40a3996529878a99c799b67b0779d60f55dbb43fc1e"
+  },
+  "symbols": [
+    "SessionScheduledAudioClassification",
+    "SessionUnresolvedToolResultClassification",
+    "SessionImageContinuationClassification",
+    "SessionToolContinuationClassification",
+    "ErrSessionUnresolvedToolResults",
+    "ErrSessionImageContinuationIncomplete",
+    "ErrSessionToolContinuationIncomplete",
+    "ErrSessionAudioResponseIncomplete",
+    "joinSessionAudioOutputError",
+    "SessionUnresolvedToolResultsError",
+    "newSessionUnresolvedToolResultsError",
+    "withUnresolvedToolResults",
+    "SessionImageContinuationError",
+    "SessionToolContinuationError",
+    "formatContinuationMetadata",
+    "withPendingToolContinuations",
+    "withPendingImageContinuations"
+  ],
+  "productionCallers": {
+    "joinSessionAudioOutputError": [
+      "agent-cli/internal/services/internal/agentruntime/session_audio_in.go:366",
+      "agent-cli/internal/services/internal/agentruntime/session_audio_in.go:381"
+    ],
+    "withUnresolvedToolResults": [
+      "agent-cli/internal/services/internal/agentruntime/session_live.go:491",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:217"
+    ],
+    "withPendingToolContinuations": [
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:218"
+    ],
+    "withPendingImageContinuations": [
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:219"
+    ],
+    "formatContinuationMetadata": [
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:129",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:132",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:135"
+    ]
+  },
+  "publicErrorOwnersBeforeMutation": {
+    "ErrSessionUnresolvedToolResults": "agent-cli/internal/services/agentsession/tool_lifecycle.go",
+    "SessionUnresolvedToolResultsError": "agent-cli/internal/services/agentsession/tool_lifecycle.go",
+    "ErrSessionImageContinuationIncomplete": "go-agent-runtime/services/session/live_errors.go",
+    "SessionImageContinuationError": "go-agent-runtime/services/session/live_errors.go",
+    "ErrSessionToolContinuationIncomplete": "go-agent-runtime/services/session/live_errors.go",
+    "SessionToolContinuationError": "go-agent-runtime/services/session/live_errors.go",
+    "ErrSessionAudioResponseIncomplete": "go-agent-runtime/services/session/live_errors.go"
+  },
+  "activeLeasesObserved": [
+    "C78/work-task-109",
+    "C79/work-task-114 (scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json)",
+    "C89/work-task-151",
+    "C101/work-task-194",
+    "C104/work-task-202",
+    "C107/work-task-218 (in-review)"
+  ],
+  "excludedPathFingerprintsBeforeMutation": {
+    "scripts/wire-packages.txt": "3958443ed08ad6a550fd29ce8191c026d1a4017339e00c0b7406e0dcec7de05b",
+    "docs/architecture/architecture-size-baseline.json": "6d61448b83eca374b324335f6a9e2fac768969d073b1091d17d48d45bf3badd1",
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": "0584e3acc16e29b8fb79ece8a19199f0f8690de39099af922f08781edd957eb8"
+  },
+  "previousReviewFindings": [],
+  "progressNote": "progress.txt is inherited C07 history and contains no C111 section; no C111 review row or rejection feedback was present in the full ~default board response.",
+  "preMutationWorktree": "clean",
+  "sharedFilesUntouched": true,
+  "secondProject": false,
+  "acceptanceWaiver": false
+}
