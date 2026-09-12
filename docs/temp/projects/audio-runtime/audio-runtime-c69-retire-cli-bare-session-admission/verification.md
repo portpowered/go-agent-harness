@@ -2,7 +2,8 @@
 
 All commands below were run in the isolated C69 worktree with the repository's
 `rtk` command wrapper. No Realtime session, physical device, or acoustic claim
-is made by this slice.
+is made by this slice. The clean branch is pushed at `d85daa6a` and PR #458 is
+open; CI was not polled.
 
 ## Passing focused evidence
 
@@ -74,8 +75,8 @@ unchanged under the implementation handoff.
 
 ## Next gate action
 
-Push the clean checkpoint and update the task PR now. Do not submit unchanged
-script CI while the two exact shared leases remain active. Once C57 releases
+Do not submit unchanged script CI while the two exact shared leases remain
+active. Once C57 releases
 the Wire registry lease and C61 releases the architecture-baseline lease,
 integrate the exact accepted current main, make only the downward C69 registry
 and five stale-entry deletions, rerun the focused gates, then submit the same

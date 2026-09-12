@@ -12,7 +12,9 @@ It is evidence for the isolated candidate, not whole-project acceptance.
 | planning origin/main | `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06` |
 | fetched execution origin/main | `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06` |
 | candidate branch | `codex/audio-runtime-c69-retire-cli-bare-session-admission` |
-| candidate checkpoint | `a6ccb7cc29acb235b44c614e9674ff70349b42a9` |
+| implementation checkpoint | `a6ccb7cc29acb235b44c614e9674ff70349b42a9` |
+| final pushed PR head | `d85daa6a0780bd64ba08e49ed77374394f1ee2d0` |
+| pull request | `#458` |
 | accepted-main production file SHA-256 | `2aadc03e24f3b3dcad97d7a04d25f61e9541275a790674168d3f79487948fb74` |
 | candidate production file SHA-256 | `5a44be4cae20845844e7c64403749c4837912e32e8502f5aa7c78b51b3f98221` |
 | candidate public contract SHA-256 | `79bf38607a6be13979130e488a06bd68e0cee50b1c79dd4a443afcbd1f3db087` |
