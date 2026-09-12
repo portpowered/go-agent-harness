@@ -12,11 +12,22 @@
 
 - Runtime normal/race: 21 tests in 3 packages.
 - CLI room replay package: 1,057 tests; focused CLI race: 8 tests.
-- `go vet`, pinned `staticcheck 2026.1`, coverage registration, and diff check pass.
+- `go vet`, pinned golangci-lint 2.9.0, `staticcheck 2026.1`, coverage registration, and diff check pass.
 - External consumer prints `C75_ROOMREPLAYBUNDLE_CONSUMER PASS` and rejects a
   same-length artifact corruption with `ErrInvalidRoomReplayBundle`.
 - Legacy named CLI production files: 1,899 lines at admitted main; current
   compatibility files: 313 lines; 1,586 production lines retired.
+- Current candidate `c3e8f8901d802dad74d52acb7006551f88171d66` includes freshly
+  fetched `origin/main` `84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f`. The repair
+  handles close errors, checked JSON/type assertions, malformed timing errors,
+  and the prior roundtrip-test budget growth.
+
+## Prior CI repair
+
+The earlier PR #465 head `9543afb2` static job in run `34674059055` failed on
+the unregistered generated Wire file, 35 expected C75 shared baseline findings,
+and three unchecked type assertions in the roundtrip test. The owned source and
+test repairs are now locally validated; no current-head CI result is claimed.
 
 ## Shared gate handoff
 

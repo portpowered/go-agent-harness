@@ -4125,3 +4125,25 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   push this implementation repair, refresh the evidence bundle at that
   revision, and update the same PR; request the exact shared registrations
   only after those leases release.
+
+- C75 current-main integration and CI-rejection repair checkpoint: fetched
+  `origin/main` at `84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f` and merged it into
+  the isolated branch as `979c8904`, preserving the accepted-main/startup
+  ancestry and all predecessor worktrees. The earlier PR #465 static job
+  `34674059055` was read in full: it found the unregistered generated Wire
+  file, 35 shared architecture/baseline findings, and three unchecked type
+  assertions in the owned roundtrip test.
+- C75 repair commit `c3e8f8901d802dad74d52acb7006551f88171d66` fixes the owned
+  lint findings, checks service close/error/type paths, propagates malformed
+  timing errors, uses a named scanner buffer constant, and reduces the
+  roundtrip function below all three previous architecture thresholds. Pinned
+  golangci-lint `2.9.0` reports zero issues in all 15 modules; focused runtime
+  normal/race (`21` tests), CLI normal/race (`1057`/`8` tests), vet and
+  staticcheck pass.
+- Refreshed C75 evidence at `c3e8f890` passes runtime/CLI/race/vet/staticcheck,
+  coverage registration (`179` packages / `6` modules), external GOWORK=off
+  consumer and diff-check. `wire-check` still reports only the unregistered
+  `go-agent-runtime/services/roomreplaybundle/wire/wire_gen.go`; architecture
+  still reports only the exact 35 downward/stale retired-CLI entries and that
+  generated-file registration. Shared paths remain held by C57/C61; no CI,
+  review, merge, or vertical acceptance is claimed.
