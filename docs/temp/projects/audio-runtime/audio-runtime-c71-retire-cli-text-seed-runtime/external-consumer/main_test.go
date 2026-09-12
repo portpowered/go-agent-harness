@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/textseed"
@@ -12,11 +13,14 @@ import (
 )
 
 type consumerSession struct {
-	mu       sync.Mutex
-	sent     []messages.StreamMessage
-	incoming *messages.TypedBuffer[messages.StreamMessage]
-	done     chan struct{}
-	closed   bool
+	mu            sync.Mutex
+	sent          []messages.StreamMessage
+	complete      []messages.Message
+	queued        []messages.Message
+	responseCalls int
+	incoming      *messages.TypedBuffer[messages.StreamMessage]
+	done          chan struct{}
+	closed        bool
 }
 
 func newConsumerSession() *consumerSession {
@@ -45,6 +49,35 @@ func (s *consumerSession) Close() error {
 	}
 	return nil
 }
+
+func (s *consumerSession) RequestResponse(context.Context) messages.SessionSendOutcome {
+	s.mu.Lock()
+	s.responseCalls++
+	s.mu.Unlock()
+	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+}
+
+func (s *consumerSession) SupportsResponseRequests() bool { return true }
+
+func (s *consumerSession) SendMessage(_ context.Context, msg messages.Message) bool {
+	s.mu.Lock()
+	s.complete = append(s.complete, msg)
+	s.mu.Unlock()
+	return true
+}
+
+func (s *consumerSession) SendMessageWithoutResponse(_ context.Context, msg messages.Message) bool {
+	s.mu.Lock()
+	s.queued = append(s.queued, msg)
+	s.mu.Unlock()
+	return true
+}
+
+func (s *consumerSession) SupportsCompleteMessages() bool { return true }
+
+func (s *consumerSession) SupportsCompleteMessagesWithoutResponse() bool { return true }
+
+func (s *consumerSession) TerminalError() error { return nil }
 
 func TestExternalConsumerUsesOnlyPublicTextSeedAndWireContracts(t *testing.T) {
 	service := textseedwire.NewService(textseed.AllocatorFunc(func() string { return "external-wire" }))
@@ -75,6 +108,42 @@ func TestExternalConsumerUsesOnlyPublicTextSeedAndWireContracts(t *testing.T) {
 	}
 	if err := wrapper.Close(); err != nil {
 		t.Fatalf("close: %v", err)
+	}
+	select {
+	case <-wrapper.Done():
+	case <-time.After(time.Second):
+		t.Fatal("empty-seed wrapper did not shut down")
+	}
+
+	nonemptyInner := newConsumerSession()
+	nonempty := service.WrapSession(context.Background(), nonemptyInner, "external-wire-2", textseed.Seed{Value: "nonempty seed", Present: true})
+	if !nonempty.Send(context.Background(), messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Value: messages.NewTextDeltaValue("external-wire-2"),
+	}) {
+		t.Fatal("nonempty seed send rejected")
+	}
+	nonemptyInner.mu.Lock()
+	if got := nonemptyInner.sent[0].Value.(*messages.TextDeltaValue).Content; got != "nonempty seed" {
+		t.Fatalf("nonempty seed = %q, want nonempty seed", got)
+	}
+	nonemptyInner.mu.Unlock()
+	if !nonempty.SupportsResponseRequests() || !nonempty.RequestResponse(context.Background()).OK() {
+		t.Fatal("response capability was not forwarded")
+	}
+	if !nonempty.SupportsCompleteMessages() || !nonempty.SendMessage(context.Background(), messages.Message{}) {
+		t.Fatal("complete-message capability was not forwarded")
+	}
+	if !nonempty.SupportsCompleteMessagesWithoutResponse() || !nonempty.SendMessageWithoutResponse(context.Background(), messages.Message{}) {
+		t.Fatal("deferred complete-message capability was not forwarded")
+	}
+	if err := nonempty.Close(); err != nil {
+		t.Fatalf("nonempty close: %v", err)
+	}
+	select {
+	case <-nonempty.Done():
+	case <-time.After(time.Second):
+		t.Fatal("nonempty wrapper did not shut down")
 	}
 }
 

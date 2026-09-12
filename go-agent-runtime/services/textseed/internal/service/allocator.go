@@ -29,7 +29,7 @@ func newDefaultAllocator() *sequenceAllocator {
 	a := newSequenceAllocator("")
 	var nonce [16]byte
 	if _, err := rand.Read(nonce[:]); err == nil {
-		a.prefix = "\x00agent-cli-session-text-seed:" + hex.EncodeToString(nonce[:]) + ":"
+		a.prefix = fmt.Sprintf("\x00agent-cli-session-text-seed:%s:%p:", hex.EncodeToString(nonce[:]), a)
 		return a
 	}
 	// A crypto source is available on supported Go platforms. Keep a

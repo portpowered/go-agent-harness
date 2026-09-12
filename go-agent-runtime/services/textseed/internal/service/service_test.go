@@ -87,6 +87,20 @@ func (i fakeInferencer) ConnectSession(context.Context) (messages.Session, error
 	return i.session, nil
 }
 
+type fakeCompleteCapabilities struct {
+	*fakeSession
+	complete        bool
+	withoutResponse bool
+}
+
+func (s *fakeCompleteCapabilities) SupportsCompleteMessages() bool {
+	return s.complete
+}
+
+func (s *fakeCompleteCapabilities) SupportsCompleteMessagesWithoutResponse() bool {
+	return s.withoutResponse
+}
+
 func newTestService(t *testing.T) textseed.Service {
 	t.Helper()
 	return New(textseed.AllocatorFunc(func() string { return "\x00textseed:test:1" }))
@@ -121,6 +135,20 @@ func TestServiceAllocatesNonEmptyUniqueValuesConcurrently(t *testing.T) {
 	second := NewDefault().Allocate()
 	if first == second {
 		t.Fatalf("independent services allocated the same value %q", first)
+	}
+
+	services := make([]*Service, 64)
+	seenServices := make(map[string]struct{}, len(services))
+	for i := range services {
+		services[i] = NewDefault()
+		value := services[i].Allocate()
+		if value == "" {
+			t.Fatal("independent service returned an empty value")
+		}
+		if _, exists := seenServices[value]; exists {
+			t.Fatalf("live independent services allocated the same value %q", value)
+		}
+		seenServices[value] = struct{}{}
 	}
 }
 
@@ -224,6 +252,19 @@ func TestServiceForwardsLifecycleAndOptionalCapabilities(t *testing.T) {
 	case <-wrapper.Done():
 	case <-time.After(time.Second):
 		t.Fatal("wrapped session did not finish after close")
+	}
+}
+
+func TestServicePreservesCompleteMessageCapabilityFlags(t *testing.T) {
+	inner := &fakeCompleteCapabilities{fakeSession: newFakeSession()}
+	wrapper := newTestService(t).WrapSession(context.Background(), inner, "sentinel", textseed.Seed{})
+	t.Cleanup(func() {
+		if err := wrapper.Close(); err != nil {
+			t.Errorf("cleanup close: %v", err)
+		}
+	})
+	if wrapper.SupportsCompleteMessages() || wrapper.SupportsCompleteMessagesWithoutResponse() {
+		t.Fatal("wrapper reported a capability disabled by the inner session")
 	}
 }
 

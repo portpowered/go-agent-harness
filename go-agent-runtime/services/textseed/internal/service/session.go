@@ -60,11 +60,17 @@ func (s *session) SendMessageWithoutResponse(ctx context.Context, msg messages.M
 }
 
 func (s *session) SupportsCompleteMessages() bool {
+	if capabilities, ok := s.inner.(textseed.CompleteMessageCapabilities); ok {
+		return capabilities.SupportsCompleteMessages()
+	}
 	_, ok := s.inner.(textseed.CompleteMessageSender)
 	return ok
 }
 
 func (s *session) SupportsCompleteMessagesWithoutResponse() bool {
+	if capabilities, ok := s.inner.(textseed.CompleteMessageCapabilities); ok {
+		return capabilities.SupportsCompleteMessagesWithoutResponse()
+	}
 	_, ok := s.inner.(textseed.CompleteMessageWithoutResponseSender)
 	return ok
 }

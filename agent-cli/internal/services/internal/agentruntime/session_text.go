@@ -11,7 +11,7 @@ import (
 	textseedwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/textseed/wire"
 )
 
-// Deprecated: use textseed.Seed at the runtime service boundary.
+// SessionTextSeed is a compatibility alias for textseed.Seed; the adapter symbols below are deprecated.
 type SessionTextSeed = textseed.Seed
 
 // RunSessionWithTextSeed runs a session using the explicit text seed when it
