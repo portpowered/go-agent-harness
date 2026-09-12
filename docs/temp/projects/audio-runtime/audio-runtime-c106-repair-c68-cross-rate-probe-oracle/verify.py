@@ -148,7 +148,11 @@ def check_cleanup(evidence: Path) -> None:
 
 
 def check_scope(root: Path) -> None:
-    changed = [line for line in rtk("git", "diff", "--name-only", f"{SOURCE_REVISION}...HEAD").splitlines() if line]
+    changed = [
+        line
+        for line in rtk("git", "diff", "--name-only", f"{SOURCE_REVISION}...HEAD").splitlines()
+        if line and line != "Changes:"
+    ]
     allowed_prefixes = (
         str(TEST_RELATIVE),
         "docs/temp/projects/audio-runtime/audio-runtime-c106-repair-c68-cross-rate-probe-oracle/",
