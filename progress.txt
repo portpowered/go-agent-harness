@@ -4147,3 +4147,43 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   still reports only the exact 35 downward/stale retired-CLI entries and that
   generated-file registration. Shared paths remain held by C57/C61; no CI,
   review, merge, or vertical acceptance is claimed.
+
+# C75 current-head focused revalidation and lease checkpoint 2026-09-12T05:38Z
+
+- Reverified the sole admitted `audio-runtime` task with
+  `project-control.py verify-work --type task --name
+  audio-runtime-c75-retire-cli-room-replay-bundle`; the isolated branch still
+  matches `prd.json`, the worktree was clean before evidence refresh, and
+  `origin/main=84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f` remains an ancestor.
+  Required startup `8bdafc7f`, accepted planning main `d5d6f843`, and the
+  freshly fetched current main all remain in the candidate. No host checkout,
+  predecessor worktree, peer path, or shared file was reset or edited.
+- The provided C75 runner at the exact `bcca5943570d7242c0aee922f490b183c304cd7f`
+  head passes runtime normal/race, the full CLI room-replay package, focused
+  CLI race, vet, staticcheck, coverage registration (`179` packages across
+  six modules), the separate `GOWORK=off` consumer with
+  `C75_ROOMREPLAYBUNDLE_CONSUMER PASS`, and diff-check. The runner records
+  `passed=true`, the exact legacy census `337 + 1,158 + 404 = 1,899`, current
+  CLI files `88 + 219 + 6 = 313`, and `1,586` retired lines.
+- The accumulated `rtk proxy env COUNT=1 bash
+  scripts/test-session-ci-regressions.sh all` passes normal, coverage and race
+  modes. It includes the expected replay/PCM/transcript negative controls, 20
+  high-rate audio trials, device simulations, and OpenAI tool-lifecycle
+  controls; all exits were zero with expected negative diagnostics only.
+- The shared gates remain blocked under the preserved C57/C61 ownership:
+  `make wire-check` returns only the unregistered generated
+  `go-agent-runtime/services/roomreplaybundle/wire/wire_gen.go`, and
+  `make architecture-size-check` returns exactly the 35 C75 downward/stale
+  retired-CLI/roundtrip findings plus that generated-file registration. The
+  refreshed owned evidence remains `passed=true` while recording both lease
+  failures; neither `scripts/wire-packages.txt` nor
+  `docs/architecture/architecture-size-baseline.json` was changed.
+- This is an evidence-only descendant checkpoint; no current-head script CI,
+  independent review, guarded merge, immutable vertical probe, physical/
+  acoustic proof or project completion is claimed. Exact next action: retain
+  this same task, commit/push the owned evidence checkpoint, and wait for the
+  canonical C57/C61 shared-file release. Once released, apply only the
+  demonstrated roomreplaybundle Wire registration and C75 downward/deleted
+  baseline entries, rerun the two gates plus focused checks, update PR #465,
+  and return `ACCEPTED` to script-owned CI without polling. Do not resubmit the
+  unchanged head or self-review.

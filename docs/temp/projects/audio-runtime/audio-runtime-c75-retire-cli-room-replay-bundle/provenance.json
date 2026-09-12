@@ -1,7 +1,7 @@
 {
   "accepted_main": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
   "branch": "codex/audio-runtime-c75-retire-cli-room-replay-bundle",
-  "candidate_revision": "25609520a201d210dc346da955bded16a14398dc",
+  "candidate_revision": "bcca5943570d7242c0aee922f490b183c304cd7f",
   "fresh_fetch_origin_main_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
   "owned_evidence_prefix": "docs/temp/projects/audio-runtime/audio-runtime-c75-retire-cli-room-replay-bundle",
   "schema": "audio-runtime.c75.provenance.v1",
