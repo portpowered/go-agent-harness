@@ -5,11 +5,11 @@
   "source_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
   "current_main_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "candidate_revision": "177a34100dd89044d223b963b325e7fa1c578f62",
-  "fixture_revision": "177a34100dd89044d223b963b325e7fa1c578f62",
-  "candidate_diff_sha256": "fb8517e7615e664449123563cf202da2901d0e1f24a052732096cc7d6c77ead1",
+  "candidate_revision": "20fbfca3e029dee260ab6df1ac8e4f3f5ff13c42",
+  "fixture_revision": "20fbfca3e029dee260ab6df1ac8e4f3f5ff13c42",
+  "candidate_diff_sha256": "ef014c31cfc09b538b0ceff0ccfee3b9bdbf8371c19445a595eb2332f0ea5c5d",
   "fixture_test_hashes": {
-    "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "8ab9649bd8af5c958c321f83ad92d8cf2d9a021634e17d88981a133e8a94e634"
+    "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "2f5b60313f5c7a062de63efb0d482c0f7278436368cad046c6c369a9afc16ce9"
   },
   "historical_negative": {
     "ci_run": "34638493032",
@@ -77,10 +77,10 @@
     "source_hashes": {
       "rtc_device_runtime.go": "c594b3ac4a1503074679866296396bc1f4c5e05e9f8ac7b9c158b11985612676",
       "test_fixtures": {
-        "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "8ab9649bd8af5c958c321f83ad92d8cf2d9a021634e17d88981a133e8a94e634"
+        "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "2f5b60313f5c7a062de63efb0d482c0f7278436368cad046c6c369a9afc16ce9"
       }
     },
-    "artifact_sha256": "5a172b0b2899a39009a3e8e8429e7af2566bdc873e8a823fec8cb65a14c4a898",
+    "artifact_sha256": "40f39139c0ece13367be766c4ee6b45e0314c17c0b97b233e62656859f039d44",
     "failure_evidence": {
       "provider_samples": 9600,
       "admitted_samples": 0,
@@ -97,7 +97,7 @@
       "timed_out": false,
       "output_bounded": true,
       "cleanup": {"parent_reaped": true, "reader_thread_joined": true, "group_alive_after": false},
-      "artifact_sha256": "5a172b0b2899a39009a3e8e8429e7af2566bdc873e8a823fec8cb65a14c4a898"
+      "artifact_sha256": "40f39139c0ece13367be766c4ee6b45e0314c17c0b97b233e62656859f039d44"
     },
     "result": {
       "command": ["<isolated-accepted-source-artifact>", "-test.run", "^TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio$", "-test.v", "-test.count=1", "-test.timeout=60s"],
@@ -105,7 +105,7 @@
       "timed_out": false,
       "output_bounded": true,
       "cleanup": {"parent_reaped": true, "reader_thread_joined": true, "group_alive_after": false},
-      "output_tail": "=== RUN   TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio\n    rtc_device_runtime_test.go:450: C64_ACCEPTED_SOURCE_FAILURE provider_samples=9600 admitted_samples=0 consumed_samples=0 rendered_samples=0 queued_samples=0 underflow_samples=0 callback_count=0 shutdown=provider-close\n    rtc_device_runtime_test.go:454: accepted source incorrectly passed terminal drain control: phase=provider-close-before-drain provider=9600 admitted=0 consumed=0 rendered=0 queued=0\n--- FAIL: TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio (0.01s)\nFAIL\n"
+      "output_tail": "=== RUN   TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio\n    rtc_device_runtime_test.go:448: C64_ACCEPTED_SOURCE_FAILURE provider_samples=9600 admitted_samples=0 consumed_samples=0 rendered_samples=0 queued_samples=0 underflow_samples=0 callback_count=0 shutdown=provider-close\n    rtc_device_runtime_test.go:452: accepted source incorrectly passed terminal drain control: phase=provider-close-before-drain provider=9600 admitted=0 consumed=0 rendered=0 queued=0\n--- FAIL: TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio (0.01s)\nFAIL\n"
     }
   },
   "repaired_candidate": {
@@ -113,10 +113,10 @@
     "source_hashes": {
       "rtc_device_runtime.go": "0abe47c8aeaff7f1d856be1a4a25cf8682ee276913ff73b2788e9ff1cd903c5a",
       "test_fixtures": {
-        "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "8ab9649bd8af5c958c321f83ad92d8cf2d9a021634e17d88981a133e8a94e634"
+        "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "2f5b60313f5c7a062de63efb0d482c0f7278436368cad046c6c369a9afc16ce9"
       }
     },
-    "artifact_sha256": "dd305f11ab430015b56c9e165158f49fb1c15229bacac76d11340266f60f257b",
+    "artifact_sha256": "ebdb4fc8cc2f87ca69b7809f45094814c71c1820105363f55868eeb6ec6a2f77",
     "sequence_evidence": {
       "provider_events": 17,
       "tool_calls": 2,
@@ -140,7 +140,7 @@
       "timed_out": false,
       "output_bounded": true,
       "cleanup": {"parent_reaped": true, "reader_thread_joined": true, "group_alive_after": false},
-      "artifact_sha256": "dd305f11ab430015b56c9e165158f49fb1c15229bacac76d11340266f60f257b"
+      "artifact_sha256": "ebdb4fc8cc2f87ca69b7809f45094814c71c1820105363f55868eeb6ec6a2f77"
     },
     "result": {
       "command": ["<isolated-candidate-artifact>", "-test.run", "^TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio$", "-test.v", "-test.count=1", "-test.timeout=60s"],
@@ -148,7 +148,7 @@
       "timed_out": false,
       "output_bounded": true,
       "cleanup": {"parent_reaped": true, "reader_thread_joined": true, "group_alive_after": false},
-      "output_tail": "=== RUN   TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio\n    rtc_device_runtime_test.go:442: C64_SEQUENCE_EVIDENCE provider_events=17 tool_calls=2 continuation=two-tool final_response=terminal-drain-final-response order=tool-turn-before-final-audio\n    rtc_device_runtime_test.go:495: C64_RENDER_EVIDENCE provider_samples=9600 admitted_samples=6400 consumed_samples=6400 rendered_samples=6720 queued_samples=0 underflow_samples=320 callback_count=14 shutdown=complete\n--- PASS: TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio (0.04s)\nPASS\n"
+      "output_tail": "=== RUN   TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio\n    rtc_device_runtime_test.go:440: C64_SEQUENCE_EVIDENCE provider_events=17 tool_calls=2 continuation=two-tool final_response=terminal-drain-final-response order=tool-turn-before-final-audio\n    rtc_device_runtime_test.go:493: C64_RENDER_EVIDENCE provider_samples=9600 admitted_samples=6400 consumed_samples=6400 rendered_samples=6720 queued_samples=0 underflow_samples=320 callback_count=14 shutdown=complete\n--- PASS: TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio (0.03s)\nPASS\n"
     }
   }
 }
