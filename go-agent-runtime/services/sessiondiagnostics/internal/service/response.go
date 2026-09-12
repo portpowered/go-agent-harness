@@ -28,6 +28,9 @@ func (r *reducer) existingResponseOpenLocked(id string) (sessiondiagnostics.Obse
 		if _, ok := r.retiredIDs[id]; ok {
 			return sessiondiagnostics.Observation{ResponseID: id}, true
 		}
+		if _, ok := r.staleIDs[id]; ok {
+			return sessiondiagnostics.Observation{ResponseID: id}, true
+		}
 	}
 	if !r.activeResponse {
 		return sessiondiagnostics.Observation{}, false
@@ -38,10 +41,45 @@ func (r *reducer) existingResponseOpenLocked(id string) (sessiondiagnostics.Obse
 	if r.activeResponseID != "" && id == "" {
 		return sessiondiagnostics.Observation{ResponseID: r.activeResponseID}, true
 	}
+	if r.activeResponseID == "" && id != "" {
+		// A provider may expose an untagged response boundary before its late
+		// response ID. Treat the tagged open as adoption of that same active
+		// lifecycle, not as a replacement response.
+		return r.adoptResponseLocked(id), true
+	}
 	if r.activeResponseID != "" && id != "" {
+		if !r.canReplaceActiveResponseLocked() {
+			// A foreign open cannot steal an active response. The current
+			// response must first cross its explicit terminal/continuation
+			// boundary (or be finished by the host).
+			return sessiondiagnostics.Observation{ResponseID: id}, true
+		}
 		r.retiredIDs[r.activeResponseID] = struct{}{}
 	}
 	return sessiondiagnostics.Observation{}, false
+}
+
+func (r *reducer) canReplaceActiveResponseLocked() bool {
+	if r.messageEndSeen {
+		return true
+	}
+	// A second tagged start may supersede a provisional boundary that has not
+	// emitted content yet. Once content or a tool call is observed, a foreign
+	// start is out of order until the current response reaches its terminal
+	// boundary.
+	if !r.responseContentSeen && !r.toolTurn && len(r.continuations) == 0 {
+		return true
+	}
+	if _, ok := r.pendingContinuationIndexLocked(); ok {
+		return true
+	}
+	for _, state := range r.continuations {
+		if state.ResultAccepted && state.ProviderCallObserved && state.ToolResponseComplete && state.ContinuationResponseID == "" && !state.ContinuationComplete {
+			return true
+		}
+	}
+	_, ok := r.pendingRetryIndexLocked()
+	return ok
 }
 
 func (r *reducer) adoptUnscheduledContinuationIDLocked(id string, purpose sessiondiagnostics.ResponsePurpose) {
@@ -68,6 +106,9 @@ func (r *reducer) adoptResponseLocked(rawID string) sessiondiagnostics.Observati
 		return sessiondiagnostics.Observation{ResponseID: id}
 	}
 	if _, ok := r.retiredIDs[id]; ok {
+		return sessiondiagnostics.Observation{ResponseID: id}
+	}
+	if _, ok := r.staleIDs[id]; ok {
 		return sessiondiagnostics.Observation{ResponseID: id}
 	}
 	if r.activeScheduledSet && !r.bindScheduledIDLocked(r.activeScheduledIndex, id).Accepted {
@@ -108,12 +149,14 @@ func (r *reducer) ownsResponseEndLocked(rawID string) bool {
 		}
 		_, completed := r.completedIDs[id]
 		_, retired := r.retiredIDs[id]
-		return !completed && !retired
+		_, stale := r.staleIDs[id]
+		return !completed && !retired && !stale
 	}
 	if id != "" {
 		_, completed := r.completedIDs[id]
 		_, retired := r.retiredIDs[id]
-		return !completed && !retired
+		_, stale := r.staleIDs[id]
+		return !completed && !retired && !stale
 	}
 	if !r.messageEndSeen {
 		return true

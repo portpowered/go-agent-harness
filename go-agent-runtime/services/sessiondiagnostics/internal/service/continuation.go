@@ -23,6 +23,7 @@ func (r *reducer) toolCallLocked(event sessiondiagnostics.Event) sessiondiagnost
 	}
 	state.ProviderCallObserved = true
 	r.continuations[callID] = state
+	r.responseContentSeen = true
 	r.toolTurn = true
 	return sessiondiagnostics.Observation{Accepted: true, ResponseID: responseID}
 }
@@ -35,6 +36,9 @@ func (r *reducer) toolResultAcceptedLocked(callID string) sessiondiagnostics.Obs
 	state := r.continuations[callID]
 	state.CallID = callID
 	state.ResultAccepted = true
+	if continuationCanComplete(state) {
+		state.ContinuationComplete = true
+	}
 	r.continuations[callID] = state
 	return sessiondiagnostics.Observation{Accepted: true}
 }
@@ -49,6 +53,9 @@ func (r *reducer) continuationRequestedLocked(callID string) (sessiondiagnostics
 			continue
 		}
 		state.ContinuationRequested = true
+		if continuationCanComplete(state) {
+			state.ContinuationComplete = true
+		}
 		r.continuations[id] = state
 		requested++
 	}
@@ -60,7 +67,7 @@ func (r *reducer) continuationRequestedLocked(callID string) (sessiondiagnostics
 
 func (r *reducer) endResponseLocked(event sessiondiagnostics.Event) (sessiondiagnostics.Observation, time.Duration, bool, error) {
 	id := strings.TrimSpace(event.ResponseID)
-	effectiveID, early, admitted := r.admitResponseEndLocked(id)
+	effectiveID, early, admitted := r.admitResponseEndLocked(id, event.Purpose)
 	if !admitted {
 		return early, 0, false, nil
 	}
@@ -78,18 +85,19 @@ func (r *reducer) endResponseLocked(event sessiondiagnostics.Event) (sessiondiag
 	}
 	pending := r.pendingContinuationCountLocked()
 	unresolved := r.unresolvedCallCountLocked()
-	candidate := event.Output && event.Role != sessiondiagnostics.RoleTool && !r.toolTurn && unresolved == 0 && pending == 0
+	candidate := r.responsePurposeAllowsAdmissionLocked() && terminalAllowsAdmission(event.Terminal) && event.Output && event.Role != sessiondiagnostics.RoleTool && !r.toolTurn && unresolved == 0 && pending == 0
 	r.toolTurn = false
 	return sessiondiagnostics.Observation{
 		Accepted:             true,
 		Candidate:            candidate,
+		Admitted:             candidate,
 		ResponseID:           effectiveID,
 		ContinuationChanged:  changed,
 		PendingContinuations: pending,
 	}, 0, false, nil
 }
 
-func (r *reducer) admitResponseEndLocked(id string) (string, sessiondiagnostics.Observation, bool) {
+func (r *reducer) admitResponseEndLocked(id string, purpose sessiondiagnostics.ResponsePurpose) (string, sessiondiagnostics.Observation, bool) {
 	if !r.ownsResponseEndLocked(id) {
 		return id, sessiondiagnostics.Observation{ResponseID: id}, false
 	}
@@ -100,7 +108,10 @@ func (r *reducer) admitResponseEndLocked(id string) (string, sessiondiagnostics.
 		}
 	}
 	if !r.activeResponse && id != "" {
-		opened := r.openResponseLocked(id, sessiondiagnostics.ResponsePurposeNormal)
+		opened := r.openResponseLocked(id, purpose)
+		if !opened.NewResponse {
+			return id, opened, false
+		}
 		if opened.NewResponse {
 			r.bindBoundaryLocked(id)
 		}

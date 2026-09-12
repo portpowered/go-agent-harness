@@ -53,6 +53,7 @@ func (r *reducer) applyResponseLocked(event sessiondiagnostics.Event) (sessiondi
 		owns := r.ownsResponseEndLocked(event.ResponseID)
 		return sessiondiagnostics.Observation{Accepted: owns, OwnsResponse: owns}, 0, false, nil
 	case sessiondiagnostics.EventResponseContent:
+		r.responseContentSeen = true
 		r.messageEndSeen = false
 		return sessiondiagnostics.Observation{Accepted: true}, 0, false, nil
 	case sessiondiagnostics.EventResponseEnd:

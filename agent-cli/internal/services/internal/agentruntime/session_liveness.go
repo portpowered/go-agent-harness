@@ -127,16 +127,13 @@ func (o *sessionProgressObserver) responseHasToolLifecycleObligation() bool {
 		return false
 	}
 	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	if o.toolCallInTurn || len(o.unresolvedToolCalls) > 0 {
+	toolCallInTurn := o.toolCallInTurn
+	unresolved := len(o.unresolvedToolCalls)
+	o.toolStateMu.Unlock()
+	if toolCallInTurn || unresolved > 0 {
 		return true
 	}
-	for _, state := range o.toolContinuations {
-		if state != nil && state.resultAccepted && !state.continuationComplete {
-			return true
-		}
-	}
-	return false
+	return o.hasPendingToolContinuations()
 }
 
 func responseCancellationBoundary(value *messages.MessageEndValue) bool {

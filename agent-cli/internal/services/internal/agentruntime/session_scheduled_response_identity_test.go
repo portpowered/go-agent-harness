@@ -131,10 +131,8 @@ func TestSessionProgressObserver_ChainedToolContinuationCreditsPredecessor(t *te
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ResponseID: firstContinuationID, ToolCallId: secondCallID, Value: messages.NewToolCallEndValue(secondCallID, "second_tool", `{}`)})
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: firstContinuationID, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
 
-	observer.toolStateMu.Lock()
-	firstState := observer.toolContinuations[firstCallID]
-	firstComplete := firstState != nil && firstState.continuationComplete
-	observer.toolStateMu.Unlock()
+	firstState, firstOK := observer.continuationState(firstCallID)
+	firstComplete := firstOK && firstState.ContinuationComplete
 	if !firstComplete {
 		t.Fatal("chained tool response stranded the predecessor continuation")
 	}
@@ -145,10 +143,8 @@ func TestSessionProgressObserver_ChainedToolContinuationCreditsPredecessor(t *te
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: secondContinuationID, Value: messages.NewTextDeltaValue("all done")})
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: secondContinuationID, Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"}})
 
-	observer.toolStateMu.Lock()
-	secondState := observer.toolContinuations[secondCallID]
-	secondComplete := secondState != nil && secondState.continuationComplete
-	observer.toolStateMu.Unlock()
+	secondState, secondOK := observer.continuationState(secondCallID)
+	secondComplete := secondOK && secondState.ContinuationComplete
 	if !secondComplete {
 		t.Fatal("final chained continuation did not complete")
 	}

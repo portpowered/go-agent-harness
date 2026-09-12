@@ -13,6 +13,29 @@ import (
 
 const continuationCompletedStatus = "completed"
 
+const (
+	providerAuthoredCompletion = "provider_authored_completion"
+	loopSynthesizedCompletion  = "loop_synthesized_completion"
+)
+
+func (r *reducer) responsePurposeAllowsAdmissionLocked() bool {
+	return r.activePurpose != sessiondiagnostics.ResponsePurposeToolAcknowledgement
+}
+
+func terminalAllowsAdmission(terminal *sessiondiagnostics.Terminal) bool {
+	if terminal == nil {
+		return true
+	}
+	status := normalize(terminal.Status)
+	if status != "" && status != continuationCompletedStatus {
+		return false
+	}
+	if reason := normalize(terminal.Reason); reason != "" && reason != providerAuthoredCompletion && reason != loopSynthesizedCompletion {
+		return false
+	}
+	return true
+}
+
 func recordContinuationTerminal(state *sessiondiagnostics.ContinuationState, terminal *sessiondiagnostics.Terminal, output bool) bool {
 	if state == nil || !state.ToolResponseComplete {
 		return false
@@ -48,7 +71,7 @@ func applyContinuationTerminalMetadata(state *sessiondiagnostics.ContinuationSta
 
 func markContinuationFailure(state *sessiondiagnostics.ContinuationState) {
 	status := normalize(state.ContinuationStatus)
-	failed := !state.ContinuationOutput || (status != "" && status != continuationCompletedStatus) || (state.ContinuationReason != "" && state.ContinuationReason != "provider_authored_completion" && state.ContinuationReason != "loop_synthesized_completion")
+	failed := !state.ContinuationOutput || (status != "" && status != continuationCompletedStatus) || (state.ContinuationReason != "" && state.ContinuationReason != providerAuthoredCompletion && state.ContinuationReason != loopSynthesizedCompletion)
 	if failed && state.ContinuationStatusDetails == "" && state.ContinuationReason != "" && !state.ContinuationOutput {
 		state.ContinuationStatusDetails = "assistant continuation produced no observable output"
 	}
@@ -65,7 +88,7 @@ func continuationCanComplete(state sessiondiagnostics.ContinuationState) bool {
 	if state.ContinuationFailure || (status != "" && status != continuationCompletedStatus) {
 		return false
 	}
-	if state.ContinuationReason != "" && state.ContinuationReason != "provider_authored_completion" && state.ContinuationReason != "loop_synthesized_completion" {
+	if state.ContinuationReason != "" && state.ContinuationReason != providerAuthoredCompletion && state.ContinuationReason != loopSynthesizedCompletion {
 		return false
 	}
 	return state.ContinuationOutput

@@ -2,12 +2,13 @@ package agentruntime
 
 import (
 	"context"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
-	sdw "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
 	"maps"
 	"strings"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sd "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics"
+	sdw "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire"
 )
 
 type scheduledAudioResponseDisposition = sd.Disposition
@@ -125,26 +126,6 @@ func (o *sessionProgressObserver) syncLifecycleProjection() {
 	o.retryCandidateIndex = snapshot.RetryCandidateIndex
 	o.retryCandidateSet = snapshot.RetryCandidateSet
 	o.retryCandidateID = snapshot.RetryCandidateID
-	o.projectToolContinuations(snapshot.ContinuationStates)
-}
-func (o *sessionProgressObserver) projectToolContinuations(states []sd.ContinuationState) {
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	o.ensureToolStateLocked()
-	previous := o.toolContinuations
-	for _, value := range states {
-		prior := previous[value.CallID]
-		o.toolContinuations[value.CallID] = &toolContinuationState{
-			toolName: value.ToolName, responseID: value.ResponseID, providerCallObserved: value.ProviderCallObserved || prior != nil && prior.providerCallObserved,
-			resultAccepted: value.ResultAccepted || prior != nil && prior.resultAccepted, toolResponseComplete: value.ToolResponseComplete || prior != nil && prior.toolResponseComplete,
-			continuationRequested: value.ContinuationRequested || prior != nil && prior.continuationRequested, continuationResponseID: value.ContinuationResponseID,
-			continuationScheduledIndex: value.ContinuationScheduledIndex, continuationScheduledSet: value.ContinuationScheduledSet,
-			continuationTerminalSeen: value.ContinuationTerminalSeen, continuationStatus: value.ContinuationStatus,
-			continuationErrorCode: value.ContinuationErrorCode, continuationStatusDetails: value.ContinuationStatusDetails,
-			continuationTerminalReason: messages.TerminalReason(value.ContinuationReason), continuationOutputObserved: value.ContinuationOutput,
-			continuationFailureObserved: value.ContinuationFailure, continuationComplete: value.ContinuationComplete || prior != nil && (prior.continuationComplete || continuationSupersededByServerTurnLocked(prior)),
-		}
-	}
 }
 func (o *sessionProgressObserver) lifecycleEvent(event sd.Event) sd.Observation {
 	observation, err := o.applyLifecycle(context.Background(), event)
@@ -302,14 +283,14 @@ func (o *sessionProgressObserver) observeProviderToolCallStartForResponse(callID
 		return
 	}
 	o.lifecycleEvent(sd.Event{Kind: sd.EventToolCall, CallID: callID, ToolName: name, ResponseID: responseID})
+	accepted := o.continuationResultAccepted(callID)
 	o.toolStateMu.Lock()
 	o.ensureToolStateLocked()
 	o.providerToolCallSeen = true
 	// The provider-facing tool-result send may complete while the shared
-	// lifecycle reducer is applying the tool-call event. Re-read acceptance
-	// under the lock before creating an unresolved obligation so that a result
-	// accepted during that handoff cannot be reintroduced as pending.
-	_, accepted := o.acceptedToolCalls[callID]
+	// lifecycle reducer is applying the tool-call event. The reducer snapshot
+	// above is authoritative, so an accepted result cannot be reintroduced as
+	// pending here.
 	if accepted {
 		delete(o.unresolvedToolCalls, callID)
 	} else {

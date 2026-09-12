@@ -28,6 +28,7 @@ type reducer struct {
 	activePurpose    sessiondiagnostics.ResponsePurpose
 	completedIDs     map[string]struct{}
 	retiredIDs       map[string]struct{}
+	staleIDs         map[string]struct{}
 
 	scheduled             []sessiondiagnostics.ScheduledState
 	scheduledResponseByID map[string]int
@@ -42,9 +43,10 @@ type reducer struct {
 	retryCandidateSet     bool
 	retryCandidateID      string
 
-	continuations  map[string]sessiondiagnostics.ContinuationState
-	toolTurn       bool
-	messageEndSeen bool
+	continuations       map[string]sessiondiagnostics.ContinuationState
+	toolTurn            bool
+	messageEndSeen      bool
+	responseContentSeen bool
 }
 
 var _ sessiondiagnostics.Service = (*reducer)(nil)
@@ -56,6 +58,7 @@ func New(options sessiondiagnostics.Options) sessiondiagnostics.Service {
 		scheduler:             options.RetryScheduler,
 		completedIDs:          make(map[string]struct{}),
 		retiredIDs:            make(map[string]struct{}),
+		staleIDs:              make(map[string]struct{}),
 		scheduledResponseByID: make(map[string]int),
 		continuations:         make(map[string]sessiondiagnostics.ContinuationState),
 	}
@@ -142,11 +145,12 @@ func (r *reducer) snapshotLocked() sessiondiagnostics.Snapshot {
 }
 
 func (r *reducer) resetLocked() {
+	r.retireKnownResponseIDsLocked()
+	r.completedIDs = make(map[string]struct{})
+	r.retiredIDs = make(map[string]struct{})
 	r.activeResponse = false
 	r.activeResponseID = ""
 	r.activePurpose = sessiondiagnostics.ResponsePurposeNormal
-	r.completedIDs = make(map[string]struct{})
-	r.retiredIDs = make(map[string]struct{})
 	r.scheduled = nil
 	r.scheduledResponseByID = make(map[string]int)
 	r.nextScheduledResponse = 0
@@ -157,4 +161,48 @@ func (r *reducer) resetLocked() {
 	r.continuations = make(map[string]sessiondiagnostics.ContinuationState)
 	r.toolTurn = false
 	r.messageEndSeen = false
+	r.responseContentSeen = false
+}
+
+// retireKnownResponseIDsLocked preserves the ownership history that a reset
+// must not erase. A late provider event from the previous lifecycle can arrive
+// after SESSION.OPEN has reset the reducer; keeping every known response ID
+// retired makes that event fail closed instead of reopening a fresh lifecycle.
+func (r *reducer) retireKnownResponseIDsLocked() {
+	if r.staleIDs == nil {
+		r.staleIDs = make(map[string]struct{})
+	}
+	for id := range r.completedIDs {
+		if id != "" {
+			r.staleIDs[id] = struct{}{}
+		}
+	}
+	for id := range r.retiredIDs {
+		if id != "" {
+			r.staleIDs[id] = struct{}{}
+		}
+	}
+	if r.activeResponseID != "" {
+		r.staleIDs[r.activeResponseID] = struct{}{}
+	}
+	for id := range r.scheduledResponseByID {
+		if id != "" {
+			r.staleIDs[id] = struct{}{}
+		}
+	}
+	for _, scheduled := range r.scheduled {
+		for _, id := range scheduled.ResponseIDs {
+			if id != "" {
+				r.staleIDs[id] = struct{}{}
+			}
+		}
+	}
+	for _, continuation := range r.continuations {
+		if continuation.ResponseID != "" {
+			r.staleIDs[continuation.ResponseID] = struct{}{}
+		}
+		if continuation.ContinuationResponseID != "" {
+			r.staleIDs[continuation.ContinuationResponseID] = struct{}{}
+		}
+	}
 }

@@ -90,11 +90,9 @@ func TestSessionProgressObserver_ThreeChainedToolCallsCreditOneScheduledTurn(t *
 	emitChainStep("response-c", "call-c", "queueing the moves")
 	emitChainStep("response-d", "", "done, the task is complete")
 
-	observer.toolStateMu.Lock()
-	defer observer.toolStateMu.Unlock()
 	for _, callID := range []string{"call-a", "call-b", "call-c"} {
-		state := observer.toolContinuations[callID]
-		if state == nil || !state.continuationComplete {
+		state, ok := observer.continuationState(callID)
+		if !ok || !state.ContinuationComplete {
 			t.Errorf("continuation for %s was not completed", callID)
 		}
 	}

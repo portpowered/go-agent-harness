@@ -53,6 +53,85 @@ func TestResponseFinishRejectsWrongIDWithoutClearingActiveResponse(t *testing.T)
 	}
 }
 
+func TestResponseOpenRejectsForeignIDUntilExplicitBoundary(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
+		t.Helper()
+		observation, err := service.Apply(ctx, event)
+		if err != nil {
+			t.Fatalf("apply %s: %v", event.Kind, err)
+		}
+		return observation
+	}
+
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-a"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseContent})
+	foreign := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-b"})
+	if foreign.Accepted || foreign.NewResponse || service.Snapshot().ActiveResponseID != "response-a" {
+		t.Fatalf("foreign open stole active response: observation=%+v snapshot=%+v", foreign, service.Snapshot())
+	}
+
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseFinish, ResponseID: "response-a"})
+	fresh := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-b"})
+	if !fresh.Accepted || !fresh.NewResponse || service.Snapshot().ActiveResponseID != "response-b" {
+		t.Fatalf("fresh open after finish = %+v, snapshot=%+v", fresh, service.Snapshot())
+	}
+}
+
+func TestToolAcknowledgementCannotBeAdmittedAsAssistantTurn(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	if _, err := service.Apply(ctx, sessiondiagnostics.Event{
+		Kind:       sessiondiagnostics.EventResponseOpen,
+		ResponseID: "tool-ack",
+		Purpose:    sessiondiagnostics.ResponsePurposeToolAcknowledgement,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	end, err := service.Apply(ctx, sessiondiagnostics.Event{
+		Kind:       sessiondiagnostics.EventResponseEnd,
+		ResponseID: "tool-ack",
+		Output:     true,
+		Terminal:   &sessiondiagnostics.Terminal{Status: "completed", Reason: "provider_authored_completion"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if end.Candidate || end.Admitted {
+		t.Fatalf("tool acknowledgement was admitted as assistant output: %+v", end)
+	}
+}
+
+func TestResetRejectsLateResponseFromPreviousGeneration(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
+		t.Helper()
+		observation, err := service.Apply(ctx, event)
+		if err != nil {
+			t.Fatalf("apply %s: %v", event.Kind, err)
+		}
+		return observation
+	}
+
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-old"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventReset})
+	lateEnd := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, ResponseID: "response-old", Output: true})
+	if lateEnd.Accepted || service.Snapshot().ActiveResponse {
+		t.Fatalf("late previous-generation end reclaimed lifecycle: observation=%+v snapshot=%+v", lateEnd, service.Snapshot())
+	}
+	lateOpen := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-old"})
+	if lateOpen.Accepted || lateOpen.NewResponse {
+		t.Fatalf("late previous-generation open was accepted: %+v", lateOpen)
+	}
+
+	fresh := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-new"})
+	if !fresh.Accepted || !fresh.NewResponse || service.Snapshot().ActiveResponseID != "response-new" {
+		t.Fatalf("fresh generation open = %+v, snapshot=%+v", fresh, service.Snapshot())
+	}
+}
+
 func TestResetClearsReducerStateWithoutReplacingMutex(t *testing.T) {
 	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()
@@ -147,8 +226,8 @@ func TestToolContinuationRemainsOneScheduledLifecycle(t *testing.T) {
 		t.Fatalf("continuation consumed wrong scheduled slot: %+v", bound)
 	}
 	end := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, ResponseID: "response-continuation", Output: true, Terminal: &sessiondiagnostics.Terminal{Status: "completed", Reason: "provider_authored_completion"}})
-	if !end.Candidate || end.PendingContinuations != 0 {
-		t.Fatalf("continuation end = %+v, want candidate with no pending continuation", end)
+	if !end.Candidate || !end.Admitted || end.PendingContinuations != 0 {
+		t.Fatalf("continuation end = %+v, want admitted candidate with no pending continuation", end)
 	}
 	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventScheduledDisposition, ResponseID: "response-continuation", Disposition: sessiondiagnostics.DispositionCompleted})
 	if got := service.Snapshot().CompletedScheduled; got != 1 {
@@ -216,7 +295,7 @@ func TestUnscheduledToolContinuationAdoptsResponseID(t *testing.T) {
 	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, Role: sessiondiagnostics.RoleTool, CallID: "call-1"})
 	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-continuation"})
 	end := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, ResponseID: "response-continuation", Output: true, Terminal: &sessiondiagnostics.Terminal{Status: "completed", Reason: "provider_authored_completion"}})
-	if !end.Candidate || end.PendingContinuations != 0 {
+	if !end.Candidate || !end.Admitted || end.PendingContinuations != 0 {
 		t.Fatalf("unscheduled continuation end = %+v", end)
 	}
 }
