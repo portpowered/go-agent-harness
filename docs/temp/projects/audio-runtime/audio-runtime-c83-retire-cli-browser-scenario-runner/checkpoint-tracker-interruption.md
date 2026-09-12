@@ -27,6 +27,43 @@ The unchanged legacy runner, its large runner test, and C61 policy/report paths 
 - New internal service coverage: 70.9% with the declared 70.00% floor.
 - `git diff --check`: passed.
 
+## Static rejection repair checkpoint
+
+- Repair commit `351a3894` is pushed to PR `#473` on the same admitted branch. It
+  reduces the extracted tracker/interruption complexity, keeps the ordinary
+  scenario controller as an inactive non-nil implementation, makes service
+  error identities immutable typed constants, moves the public service test to
+  the Wire composition package, and registers the generated browserrunner
+  graph in `docs/architecture/architecture-policy.json`.
+- On this repaired source, normal and race browserrunner tests each passed 45
+  cases per repetition across three repetitions; the focused CLI browser
+  conversation/scenario controls passed 135 normal cases; the external
+  consumer passed normal and race suites across three repetitions; coverage
+  registration passed for 179 workspace packages; direct browserrunner Wire
+  generation was deterministic; pinned vet, lint, staticcheck and diff checks
+  passed.
+- `make architecture-size-check` now reports exactly nine stale C83 baseline
+  entries, all for the refactored tracker/interruption symbols. No new
+  architecture violation remains. `scripts/wire-packages.txt` and
+  `docs/architecture/architecture-size-baseline.json` remain untouched: the
+  current handoff assigns their shared writer lease to C79.
+- The earlier CI run `34680130446` was on pre-repair head `71e32168`: unit,
+  race, integration, hermetic, WebMCP Chrome, macOS audio release and Windows
+  portable software passed; static failed on the missing shared Wire entry,
+  generated-file registration, code-gate findings and the nine stale entries.
+  Coverage failed on the C47-owned
+  `TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/slow_device`
+  remote-playback final-marker timeout. The known race-only timeout in
+  `session_browser_scenario_report_test.go` remains outside C83 ownership;
+  its normal control passes.
+
 ## Next action
 
-Commit and push this disjoint checkpoint, then hand the same task to the script CI gate. After C61 lands through its reviewed guarded merge, reconcile its exact runner checkpoint against this base before continuing the remaining C83 orchestration extraction and thin CLI adapter work.
+After C79 releases the shared Wire/baseline lease and C61 supplies its reviewed
+public contract through guarded main, fetch and reconcile current `origin/main`
+on this same branch. Add only the demonstrated browserrunner Wire registration
+and the nine exact downward baseline deletions, rerun the accumulated focused
+gates, push PR `#473`, and submit that changed head to script CI without
+polling. Then retain the task for any exact CI rejection and repair the same
+task; no CI-green, review, merge, vertical probe or project acceptance is
+claimed here.
