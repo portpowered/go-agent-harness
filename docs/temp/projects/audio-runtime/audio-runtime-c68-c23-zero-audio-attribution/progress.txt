@@ -28,3 +28,19 @@ focused regressions passed.
 boundaries, attribution, cleanup, and the C21 evidence. Classification is
 C56_RECORDING_DEFECT; no C23 runner/oracle repair is indicated. Next action
 after commit/push/PR is external script CI submission without polling.
+
+2026-09-11: Script CI run 34665087212 rejected PR457 at candidate
+3084b83f469600f8714c875b2b0d0cae7ad6bf5f only in the audio stability race
+step. The exact failure was the unchanged current-main test
+TestVirtualPlaybackCapacityAdversarial/08_waiter_remains_blocked_above_low_watermark
+in go-device-gateway/pkg/devices: capacity wait returned while it should be
+blocked: <nil>. The full job log is identified by SHA-256
+cddf5ac18cfdd77d4445974bc9f8094418417a50604f36a82d3bc2d84068c17b.
+
+2026-09-11: The exact make test-audio-stability-race command passed locally,
+and the named subtest passed 20 focused -race iterations. The candidate diff
+still contains only the owned evidence directory; no production/shared path,
+assertion, timeout or oracle was changed. The failure is retained as
+ci-race-reproduction.json and is not attributed to C68. After this changed
+evidence checkpoint, push PR457 and submit the same task to script CI without
+polling; retain ownership for any exact new rejection.
