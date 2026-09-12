@@ -13,12 +13,12 @@
         "./pkg/mixer"
       ],
       "cwd": "go-audio",
-      "elapsed_seconds": 2.017,
+      "elapsed_seconds": 1.333,
       "exit_code": 0,
       "label": "go-audio-boundary",
       "proof_limit": "SIMULATED_CALLBACK_CONSUMPTION_OR_LOWER; no physical/acoustic claim",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "116aa82701da682090a54ef30622f6d2aa33a4987606e64c804b060d3523da44"
+      "stdout_sha256": "26d403e985a1ce83f14e6e0b4bb72ccf27f2ffff9683379b9472edd56fba08f5"
     },
     {
       "argv": [
@@ -30,12 +30,12 @@
         "./pkg/runtime"
       ],
       "cwd": "go-device-gateway",
-      "elapsed_seconds": 2.924,
+      "elapsed_seconds": 1.893,
       "exit_code": 0,
       "label": "go-device-gateway-boundary",
       "proof_limit": "SIMULATED_CALLBACK_CONSUMPTION_OR_LOWER; no physical/acoustic claim",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "06df0ddf14c80934b13c4c4d08d37b0dce57a0880a2902fdec50707944e1fc2b"
+      "stdout_sha256": "8dbda2ef8603f13d8d063ffe5f81ff5bf5a30b45acb8eaa89418a0de10115c55"
     },
     {
       "argv": [
@@ -49,12 +49,12 @@
         "-v"
       ],
       "cwd": "agent-cli",
-      "elapsed_seconds": 8.865,
+      "elapsed_seconds": 2.329,
       "exit_code": 0,
       "label": "agentruntime-causal",
       "proof_limit": "SIMULATED_CALLBACK_CONSUMPTION_OR_LOWER; no physical/acoustic claim",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "6dd0ed5ed928dc5cd2ffb589a759028b8869eb5cd2b139fbb97a6aeafbf2546a"
+      "stdout_sha256": "10c6b79d40a92235bdded4dc5c79d8697d63a6aa35fb076a32643b35608b5f8a"
     },
     {
       "argv": [
@@ -67,12 +67,12 @@
         "Test(InboundTrack|OutboundTrack)"
       ],
       "cwd": "go-llm-gateway",
-      "elapsed_seconds": 5.585,
+      "elapsed_seconds": 5.125,
       "exit_code": 0,
       "label": "rtc-transport-causal",
       "proof_limit": "SIMULATED_CALLBACK_CONSUMPTION_OR_LOWER; no physical/acoustic claim",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_sha256": "be097c1e6250a64bf1a8e1e95bf91be30e92488c78efd4bdd0220cc6ba3e1c90"
+      "stdout_sha256": "27314e5e69a92b1a1b97be994c2c7def67a2206b9678f8188b6daa6c4a991b6b"
     }
   ],
   "schema_version": "c108-focused-checks-v1",

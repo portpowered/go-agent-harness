@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -46,6 +47,7 @@ OWNERSHIP = HERE / "ownership.json"
 BOARD = HERE / "canonical-board.json"
 CANDIDATES = HERE / "candidates.json"
 PROOF_LEVELS = HERE / "proof-levels.json"
+OWNED_REL = str(HERE.relative_to(ROOT))
 
 PEER_OWNED_PATHS = {
     "C79": {
@@ -59,6 +61,48 @@ PEER_OWNED_PATHS = {
     "C103": set(),
     "C104": set(),
     "C107": set(),
+}
+PEER_WORKS = {
+    "C79": {
+        "work": "audio-runtime-c79-retire-wire-baseline-entries",
+        "pr": 470,
+        "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+    },
+    "C83": {
+        "work": "audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "pr": 473,
+        "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+    },
+    "C84": {
+        "work": "audio-runtime-c84-retire-cli-room-participant-lifecycle",
+        "pr": 486,
+        "branch": "codex/audio-runtime-c84-retire-cli-room-participant-lifecycle",
+    },
+    "C99": {
+        "work": "audio-runtime-c99-retire-cli-room-participant-planning",
+        "pr": 488,
+        "branch": "codex/audio-runtime-c99-retire-cli-room-participant-planning",
+    },
+    "C101": {
+        "work": "audio-runtime-c101-retire-cli-provider-session-runtime",
+        "pr": 489,
+        "branch": "codex/audio-runtime-c101-retire-cli-provider-session-runtime",
+    },
+    "C103": {
+        "work": "audio-runtime-c103-retire-cli-rtc-session-runtime",
+        "pr": 490,
+        "branch": "codex/audio-runtime-c103-retire-cli-rtc-session-runtime",
+    },
+    "C104": {
+        "work": "audio-runtime-c104-retire-cli-session-finalization-boundary",
+        "pr": 492,
+        "branch": "codex/audio-runtime-c104-retire-cli-session-finalization-boundary",
+    },
+    "C107": {
+        "work": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+        "pr": 494,
+        "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
+    },
 }
 REQUIRED_COVERAGE = {
     "packet_parsing",
@@ -152,7 +196,7 @@ def subprocess_result(argv: list[str], cwd: pathlib.Path = ROOT, timeout: int = 
 
 def parse_status_paths() -> list[str]:
     rows = []
-    status = subprocess.run(["git", "status", "--short"], cwd=ROOT, text=True, capture_output=True)
+    status = subprocess.run(["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=ROOT, text=True, capture_output=True)
     if status.returncode != 0:
         raise EvidenceFailure("git status failed: " + status.stderr.strip())
     for line in status.stdout.splitlines():
@@ -165,13 +209,32 @@ def parse_status_paths() -> list[str]:
     return rows
 
 
-def ensure_only_owned_changes() -> list[str]:
-    paths = parse_status_paths()
-    owned_prefix = str(HERE.relative_to(ROOT)) + "/"
-    outside = [path for path in paths if path != str(HERE.relative_to(ROOT)) and not path.startswith(owned_prefix)]
+def changed_paths(revision: str, descendant: str) -> list[str]:
+    output = git("diff", "--name-only", revision, descendant)
+    return sorted({path.strip() for path in output.splitlines() if path.strip()})
+
+
+def validate_owned_paths(paths: list[str], diagnostic_prefix: str = "") -> list[str]:
+    unique = sorted({path for path in paths if path})
+    owned_prefix = OWNED_REL + "/"
+    outside = [path for path in unique if path != OWNED_REL and not path.startswith(owned_prefix)]
     if outside:
-        raise EvidenceFailure("mutation outside owned C108 directory: " + ", ".join(outside))
-    return paths
+        raise EvidenceFailure(diagnostic_prefix + "mutation outside owned C108 directory: " + ", ".join(outside))
+    return unique
+
+
+def ensure_only_owned_changes() -> list[str]:
+    """Reject both working-tree and committed candidate mutations outside C108."""
+    status_paths = parse_status_paths()
+    committed_paths = changed_paths(SOURCE_REVISION, "HEAD")
+    unstaged_paths = [path for path in git("diff", "--name-only").splitlines() if path]
+    staged_paths = [path for path in git("diff", "--cached", "--name-only").splitlines() if path]
+    untracked_result = subprocess_result(["git", "ls-files", "--others", "--exclude-standard"], ROOT, 30)
+    if untracked_result["exit_code"] != 0:
+        raise EvidenceFailure("git untracked-path query failed: " + untracked_result["stderr"].strip())
+    untracked_paths = [path for path in untracked_result["stdout"].splitlines() if path]
+    all_paths = validate_owned_paths(status_paths + committed_paths + unstaged_paths + staged_paths + untracked_paths)
+    return all_paths
 
 
 def source_file_hash(revision: str, path: str) -> str:
@@ -181,6 +244,12 @@ def source_file_hash(revision: str, path: str) -> str:
 def exact_ancestor(revision: str, descendant: str) -> bool:
     result = subprocess.run(["git", "merge-base", "--is-ancestor", revision, descendant], cwd=ROOT)
     return result.returncode == 0
+
+
+def source_equivalent_at_head(tested_revision: str, head: str) -> bool:
+    if not tested_revision or not exact_ancestor(tested_revision, head):
+        return False
+    return not [path for path in changed_paths(tested_revision, head) if path != OWNED_REL and not path.startswith(OWNED_REL + "/")]
 
 
 def board_rows() -> list[dict[str, Any]]:
@@ -206,6 +275,116 @@ def board_rows() -> list[dict[str, Any]]:
 
 def task_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [row for row in rows if row.get("name") == WORK]
+
+
+def observed_at() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def state_name(row: dict[str, Any]) -> str:
+    state = row.get("state")
+    if isinstance(state, dict):
+        return str(state.get("name") or state.get("type") or "").lower()
+    return str(state or "").lower()
+
+
+def is_terminal_row(row: dict[str, Any]) -> bool:
+    return state_name(row) in {"terminal", "fin", "failed", "complete", "completed", "done", "cancelled", "canceled"}
+
+
+def peer_board_row(rows: list[dict[str, Any]], peer: str) -> dict[str, Any] | None:
+    work_name = PEER_WORKS[peer]["work"]
+    exact = [row for row in rows if row.get("name") == work_name]
+    if exact:
+        return exact[0]
+    return next((row for row in rows if peer.lower() in str(row.get("name", "")).lower()), None)
+
+
+def peer_pr_observation(peer: str, rows: list[dict[str, Any]], captured_at: str) -> dict[str, Any]:
+    config = PEER_WORKS[peer]
+    list_result = subprocess_result(
+        [
+            "rtk", "gh", "pr", "list", "--state", "all", "--head", config["branch"], "--limit", "20",
+            "--json", "number,state,title,url,headRefName,headRefOid,baseRefName",
+        ],
+        ROOT,
+        60,
+    )
+    if list_result["exit_code"] != 0:
+        raise EvidenceFailure(f"peer {peer} PR query failed: {list_result['stderr'].strip()}")
+    try:
+        prs = json.loads(list_result["stdout"] or "[]")
+    except json.JSONDecodeError as exc:
+        raise EvidenceFailure(f"peer {peer} PR query was not JSON: {exc}") from exc
+    if not isinstance(prs, list):
+        raise EvidenceFailure(f"peer {peer} PR query did not return a list")
+    selected = next((item for item in prs if item.get("number") == config["pr"]), None)
+    if selected is None and prs:
+        selected = prs[0]
+    if selected is None:
+        raise EvidenceFailure(f"peer {peer} has no discoverable PR for branch {config['branch']}")
+
+    number = str(selected.get("number"))
+    diff_result = subprocess_result(["rtk", "gh", "pr", "diff", number, "--name-only"], ROOT, 60)
+    if diff_result["exit_code"] != 0:
+        raise EvidenceFailure(f"peer {peer} PR #{number} diff query failed: {diff_result['stderr'].strip()}")
+    diff_paths = sorted({line.strip() for line in diff_result["stdout"].splitlines() if line.strip()})
+    board = peer_board_row(rows, peer)
+    return {
+        "peer": peer,
+        "observed_at": captured_at,
+        "board": {
+            "name": board.get("name") if board else config["work"],
+            "work_id": board.get("workId") if board else None,
+            "state": board.get("state") if board else None,
+            "state_name": state_name(board) if board else "missing",
+            "last_output": board.get("_last_output") if board else None,
+            "rejection_feedback": board.get("_rejection_feedback") if board else None,
+        },
+        "branch": config["branch"],
+        "pr": selected,
+        "diff": {
+            "query": diff_result["argv"],
+            "changed_paths": diff_paths,
+            "sha256": sha256_bytes(diff_result["stdout"].encode()),
+        },
+    }
+
+
+def refresh_candidate_peer_intersections(observations: dict[str, dict[str, Any]]) -> None:
+    if not CANDIDATES.exists():
+        raise EvidenceFailure("candidate evidence is missing before peer ownership refresh")
+    candidates = read_json(CANDIDATES)
+    for candidate in candidates.get("candidates", []):
+        writer_paths = set(candidate.get("exact_writer_files", []))
+        intersections = {}
+        for peer, observation in observations.items():
+            peer_paths = set(observation["diff"]["changed_paths"])
+            intersections[peer] = {
+                "observed_at": observation["observed_at"],
+                "board_work_id": observation["board"].get("work_id"),
+                "board_state": observation["board"].get("state"),
+                "branch": observation["branch"],
+                "pr": observation["pr"],
+                "diff_sha256": observation["diff"]["sha256"],
+                "writer_paths": sorted(peer_paths),
+                "overlap_with_candidate_writers": sorted(writer_paths & peer_paths),
+                "status": "exact_writer_overlap" if writer_paths & peer_paths else "no_exact_writer_overlap",
+            }
+        candidate["peer_intersections"] = intersections
+    write_json(CANDIDATES, candidates)
+
+
+def live_peer_writer_paths() -> dict[str, set[str]]:
+    paths = {peer: set(values) for peer, values in PEER_OWNED_PATHS.items()}
+    if not OWNERSHIP.exists():
+        return paths
+    data = read_json(OWNERSHIP)
+    for observation in data.get("peer_observations", []):
+        peer = observation.get("peer")
+        if peer in paths:
+            paths[peer].update(observation.get("diff", {}).get("changed_paths", []))
+    return paths
 
 
 def verify_admission() -> dict[str, Any]:
@@ -313,6 +492,11 @@ def ensure_provenance() -> dict[str, Any]:
     data = read_json(PROVENANCE)
     if data.get("origin_main_revision") != SOURCE_REVISION or data.get("startup_integration_revision") != STARTUP_INTEGRATION:
         raise EvidenceFailure("provenance is stale for the pinned accepted/main revisions")
+    head = git("rev-parse", "HEAD")
+    if not source_equivalent_at_head(data.get("candidate_revision", ""), head):
+        raise EvidenceFailure("provenance candidate revision is not an ancestor/source-equivalent of the current HEAD")
+    if data.get("branch") != BRANCH or pathlib.Path(data.get("worktree", "")).resolve() != ROOT:
+        raise EvidenceFailure("provenance branch/worktree does not match the isolated task")
     return data
 
 
@@ -324,13 +508,15 @@ def ownership_mode() -> dict[str, Any]:
     if task is None:
         raise EvidenceFailure("canonical board C108 task row is missing")
     reviews = [row for row in rows if row.get("name") == WORK and row.get("workTypeName") in {"review", "ci"}]
-    peer_rows = [row for row in rows if row.get("name") in {"audio-runtime-c79-retire-wire-baseline-entries", "audio-runtime-c83-", "audio-runtime-c84-", "audio-runtime-c99-", "audio-runtime-c101-", "audio-runtime-c103-", "audio-runtime-c104-", "audio-runtime-c107-"}]
-    # Board names can carry suffixes; preserve all rows whose text names the peer IDs.
-    peer_rows.extend(row for row in rows if any(peer in str(row.get("name", "")) for peer in ("c79", "c83", "c84", "c99", "c101", "c103", "c104", "c107")) and row not in peer_rows)
+    blocking_reviews = [row for row in reviews if not is_terminal_row(row)]
+    captured_at = observed_at()
+    peer_observations = {peer: peer_pr_observation(peer, rows, captured_at) for peer in PEER_WORKS}
+    refresh_candidate_peer_intersections(peer_observations)
     changed_paths = ensure_only_owned_changes()
     evidence = {
-        "schema_version": "c108-ownership-v1",
+        "schema_version": "c108-ownership-v2",
         "work": WORK,
+        "observed_at": captured_at,
         "task": {
             "work_id": task.get("workId"),
             "state": task.get("state"),
@@ -345,33 +531,35 @@ def ownership_mode() -> dict[str, Any]:
             {"work_id": row.get("workId"), "state": row.get("state"), "content": row.get("content"), "last_output": row.get("_last_output"), "rejection_feedback": row.get("_rejection_feedback")}
             for row in reviews
         ],
-        "peer_rows": [
-            {"name": row.get("name"), "work_id": row.get("workId"), "work_type": row.get("workTypeName"), "state": row.get("state"), "content": row.get("content"), "last_output": row.get("_last_output"), "rejection_feedback": row.get("_rejection_feedback")}
-            for row in peer_rows
-        ],
+        "peer_observations": list(peer_observations.values()),
         "controlled_shared_paths": {
-            "C79": sorted(PEER_OWNED_PATHS["C79"]),
-            "C83": "recheck exact writer paths from live PR before any future lease; no C108 mutation",
-            "C84": "recheck exact writer paths from live PR before any future lease; no C108 mutation",
-            "C99": "recheck exact writer paths from live PR before any future lease; no C108 mutation",
-            "C101": "provider-session caller dependency only; no C108 mutation",
-            "C103": "RTC-session caller dependency only; no C108 mutation",
-            "C104": "finalization caller dependency only; no C108 mutation",
-            "C107": "live owner must be rechecked before any future lease; no C108 mutation",
-            "historical_preserved": {
-                "C26/C30": ["agent-cli/internal/room/mixer.go"],
-                "C59": ["agent-cli/internal/services/internal/agentruntime/session_audio_in.go"],
-                "C92": ["agent-cli/internal/services/internal/agentruntime/session_audio_out.go"],
-                "C64/C96": ["agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go", "agent-cli/internal/services/internal/agentruntime/rtc_device_binding.go"],
-            },
+            peer: {
+                "observed_at": observation["observed_at"],
+                "writer_paths": observation["diff"]["changed_paths"],
+                "overlap_with_c108_evidence": sorted(path for path in observation["diff"]["changed_paths"] if path == OWNED_REL or path.startswith(OWNED_REL + "/")),
+                "status": "read_only_dependency_recheck",
+            }
+            for peer, observation in peer_observations.items()
+        },
+        "historical_preserved": {
+            "C26/C30": ["agent-cli/internal/room/mixer.go"],
+            "C59": ["agent-cli/internal/services/internal/agentruntime/session_audio_in.go"],
+            "C92": ["agent-cli/internal/services/internal/agentruntime/session_audio_out.go"],
+            "C64/C96": ["agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go", "agent-cli/internal/services/internal/agentruntime/rtc_device_binding.go"],
+        },
+        "review_gate": {
+            "historical_terminal_rows_preserved": True,
+            "blocking_review_or_ci_work_ids": [row.get("workId") for row in blocking_reviews],
+            "terminal_review_or_ci_work_ids": [row.get("workId") for row in reviews if is_terminal_row(row)],
+            "executor_does_not_self_review": True,
         },
         "changed_paths_at_capture": changed_paths,
         "ownership_claim": "C108 owns only its evidence directory; no repair lease, shared-file lease, or project acceptance is claimed.",
-        "passes": not reviews,
+        "passes": not blocking_reviews,
     }
-    if reviews:
-        raise EvidenceFailure("a C108 review/CI row already exists; inspect exact findings before proceeding")
     write_json(OWNERSHIP, evidence)
+    if blocking_reviews:
+        raise EvidenceFailure("an active C108 review/CI row remains; preserve ownership and inspect its exact findings before handoff")
     return evidence
 
 
@@ -549,8 +737,175 @@ def validate_proof_data(proof: dict[str, Any], diagnostic_prefix: str = "") -> N
         fail("native Windows hardware scope is not explicitly excluded")
 
 
+PUBLIC_FIXTURE_REL = "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json"
+PUBLIC_FIXTURE_SHA256 = "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+PUBLIC_PCM_SHA256 = "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
+
+
+def evidence_location(value: str, label: str, require_owned: bool = True) -> pathlib.Path:
+    path = pathlib.Path(value)
+    if not path.is_absolute():
+        path = HERE / path
+    path = path.resolve()
+    if require_owned and not path.is_relative_to(HERE):
+        raise EvidenceFailure(f"public artifact escapes owned evidence directory: {label}={value}")
+    return path
+
+
+def evidence_file(value: str, label: str, require_owned: bool = True) -> pathlib.Path:
+    path = evidence_location(value, label, require_owned)
+    if not path.is_file():
+        raise EvidenceFailure(f"public artifact is missing: {label}={value}")
+    return path
+
+
+def evidence_directory(value: str, label: str, require_owned: bool = True) -> pathlib.Path:
+    path = evidence_location(value, label, require_owned)
+    if not path.is_dir():
+        raise EvidenceFailure(f"public artifact directory is missing: {label}={value}")
+    return path
+
+
+def command_value(command: list[str], flag: str) -> str:
+    try:
+        return command[command.index(flag) + 1]
+    except (ValueError, IndexError) as exc:
+        raise EvidenceFailure(f"public command is missing {flag}") from exc
+
+
+def validate_report_hash(report: dict[str, Any], path_key: str, hash_key: str, label: str) -> pathlib.Path:
+    path = evidence_file(str(report.get(path_key, "")), label)
+    expected = report.get(hash_key)
+    if not isinstance(expected, str) or sha256_file(path) != expected:
+        raise EvidenceFailure(f"public artifact hash mismatch: {label}")
+    return path
+
+
+def validate_process_artifacts(report: dict[str, Any], head: str, case: str) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
+    tested_revision = report.get("candidate_revision")
+    if report.get("case") != case or report.get("source_revision") != SOURCE_REVISION or not source_equivalent_at_head(tested_revision, head):
+        raise EvidenceFailure(f"{case} report is stale or not source-equivalent to the current candidate head")
+    if report.get("credential_free") is not True or report.get("realtime_used") is not False:
+        raise EvidenceFailure(f"{case} report has an invalid credential/realtime claim")
+    if not isinstance(report.get("binary_sha256"), str) or not isinstance(report.get("binary_bytes"), int) or report.get("binary_bytes", 0) <= 0:
+        raise EvidenceFailure(f"{case} binary build attestation is incomplete")
+    process = report.get("process", {})
+    if process.get("timed_out") or process.get("output_limited") or not process.get("process_group_gone"):
+        raise EvidenceFailure(f"{case} process evidence is not bounded and clean")
+    stdout = validate_report_hash(process, "stdout_path", "stdout_sha256", f"{case} stdout")
+    stderr = validate_report_hash(process, "stderr_path", "stderr_sha256", f"{case} stderr")
+    command = report.get("command")
+    if not isinstance(command, list) or not command:
+        raise EvidenceFailure(f"{case} command evidence is missing")
+    workdir = evidence_directory(command_value(command, "--workdir"), f"{case} workdir")
+    allow_path = pathlib.Path(command_value(command, "--allow-path")).resolve()
+    if allow_path != workdir or not workdir.is_dir():
+        raise EvidenceFailure(f"{case} workdir/allow-path is not the owned run directory")
+    record_dir = pathlib.Path(command_value(command, "--record-dir")).resolve()
+    if not record_dir.is_relative_to(HERE):
+        raise EvidenceFailure(f"{case} record directory escapes owned evidence")
+    fixture = pathlib.Path(command_value(command, "--replay")).resolve()
+    if fixture != (ROOT / PUBLIC_FIXTURE_REL).resolve() and case == "replay":
+        raise EvidenceFailure("replay command does not use the pinned fixture")
+    return workdir, record_dir, fixture
+
+
+def validate_binary_attestations(reports: list[dict[str, Any]]) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="c108-verify-yui-") as temp:
+        binary = pathlib.Path(temp) / "yui"
+        result = subprocess_result(["go", "build", "-tags=nomicrophone", "-trimpath", "-o", str(binary), "./agent-cli/cmd/yui"], ROOT, 300)
+        if result["exit_code"] != 0 or result["timed_out"] or not binary.is_file():
+            raise EvidenceFailure("verification build of shipped executable failed")
+        actual_sha256 = sha256_file(binary)
+        actual_bytes = binary.stat().st_size
+    for report in reports:
+        if report.get("binary_sha256") != actual_sha256 or report.get("binary_bytes") != actual_bytes:
+            raise EvidenceFailure(f"{report.get('case')} binary hash/size does not match a fresh verification build")
+    return {
+        "command": result["argv"],
+        "sha256": actual_sha256,
+        "bytes": actual_bytes,
+        "reports_match": True,
+    }
+
+
+def validate_public_reports() -> dict[str, Any]:
+    head = git("rev-parse", "HEAD")
+    replay = read_json(RUNS / "public" / "replay.json")
+    negative = read_json(RUNS / "public" / "malformed-truncated.json")
+    binary_build = validate_binary_attestations([replay, negative])
+    replay_workdir, replay_record_dir, replay_fixture = validate_process_artifacts(replay, head, "replay")
+    negative_workdir, negative_record_dir, negative_fixture = validate_process_artifacts(negative, head, "malformed-truncated")
+    expected_fixture = (ROOT / PUBLIC_FIXTURE_REL).resolve()
+    if not expected_fixture.is_file() or sha256_file(expected_fixture) != PUBLIC_FIXTURE_SHA256:
+        raise EvidenceFailure("pinned public fixture hash changed")
+    if replay_fixture != expected_fixture or replay.get("fixture") != PUBLIC_FIXTURE_REL or replay.get("fixture_sha256") != PUBLIC_FIXTURE_SHA256:
+        raise EvidenceFailure("replay fixture provenance is stale")
+    if negative.get("fixture") != PUBLIC_FIXTURE_REL or negative.get("fixture_sha256") != PUBLIC_FIXTURE_SHA256:
+        raise EvidenceFailure("malformed fixture provenance is stale")
+    if negative_fixture == expected_fixture or not negative_fixture.is_relative_to(HERE) or not negative_fixture.is_file() or sha256_file(negative_fixture) != negative.get("mutated_fixture_sha256"):
+        raise EvidenceFailure("malformed replay does not pin its owned mutated fixture")
+
+    replay_command = replay["command"]
+    replay_audio = evidence_file(command_value(replay_command, "--audio-out"), "replay audio output")
+    replay_record = replay_record_dir
+    raw_audio = evidence_file(str(replay_record / "audio" / "out-000.pcm"), "replay raw PCM")
+    if raw_audio.stat().st_size != replay.get("raw_pcm_bytes") or sha256_file(raw_audio) != replay.get("raw_pcm_sha256") or sha256_file(raw_audio) != PUBLIC_PCM_SHA256:
+        raise EvidenceFailure("replay raw PCM receipt hash/effect changed")
+    if replay_audio.stat().st_size != replay.get("audio_output_bytes") or sha256_file(replay_audio) != replay.get("audio_output_sha256") or replay_audio.stat().st_size <= 44:
+        raise EvidenceFailure("replay WAV receipt hash/effect changed")
+    manifest = evidence_file(str(replay_record / "manifest.json"), "replay manifest")
+    session_log = evidence_file(str(replay_record / "session-log.jsonl"), "replay session log")
+    if sha256_file(manifest) != replay.get("manifest_sha256") or sha256_file(session_log) != replay.get("session_log_sha256"):
+        raise EvidenceFailure("replay manifest/session-log hash changed")
+    try:
+        manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise EvidenceFailure("replay manifest is not valid JSON") from exc
+    if manifest_data.get("terminal") != replay.get("terminal"):
+        raise EvidenceFailure("replay terminal effect does not match manifest")
+    for artifact in manifest_data.get("artifacts", []):
+        artifact_path = pathlib.Path(artifact.get("path", ""))
+        if artifact_path.is_absolute() or ".." in artifact_path.parts:
+            raise EvidenceFailure("replay manifest contains an unsafe artifact path")
+        actual = evidence_file(str(replay_record / artifact_path), f"replay manifest artifact {artifact.get('path')}")
+        if sha256_file(actual) != artifact.get("sha256"):
+            raise EvidenceFailure(f"replay manifest artifact hash changed: {artifact.get('path')}")
+    marker = evidence_file(str(replay_workdir / "evidence" / "runs" / "exec-invocations-v4.log"), "replay tool marker")
+    replay_output = (validate_report_hash(replay["process"], "stdout_path", "stdout_sha256", "replay stdout").read_text(encoding="utf-8", errors="replace") + validate_report_hash(replay["process"], "stderr_path", "stderr_sha256", "replay stderr").read_text(encoding="utf-8", errors="replace"))
+    if "PROBE_TOOL_MARKER_9182" not in replay_output or "strict replay continuation" not in replay_output or "PROBE_TOOL_MARKER_9182" not in marker.read_text(encoding="utf-8", errors="replace"):
+        raise EvidenceFailure("replay observable tool effect is missing")
+    if replay.get("observable_effects") != ["tool_marker", "strict_replay_continuation", "audio_pcm_receipt", "audio_wav_receipt", "fixture_complete", "provider_close"]:
+        raise EvidenceFailure("replay observable-effect list changed")
+
+    negative_command = negative["command"]
+    negative_audio = evidence_location(command_value(negative_command, "--audio-out"), "malformed audio output")
+    if negative_audio.exists() and negative_audio.is_file() and negative_audio.stat().st_size:
+        raise EvidenceFailure("malformed replay produced a non-empty WAV receipt")
+    negative_raw = negative_record_dir / "audio" / "out-000.pcm"
+    if negative_raw.exists() and negative_raw.is_file() and negative_raw.stat().st_size:
+        raise EvidenceFailure("malformed replay produced a non-empty PCM receipt")
+    negative_output = validate_report_hash(negative["process"], "stdout_path", "stdout_sha256", "malformed stdout").read_text(encoding="utf-8", errors="replace") + validate_report_hash(negative["process"], "stderr_path", "stderr_sha256", "malformed stderr").read_text(encoding="utf-8", errors="replace")
+    if negative.get("process", {}).get("exit_code", 0) == 0 or not negative.get("clean_shutdown") or not any(literal.lower() in negative_output.lower() for literal in negative.get("rejection_literals", [])):
+        raise EvidenceFailure("malformed replay rejection effect is missing")
+    if negative.get("accepted_pcm_receipt") is not False:
+        raise EvidenceFailure("malformed replay claims an accepted PCM receipt")
+    return {
+        "head": head,
+        "tested_revisions": {
+            "replay": replay.get("candidate_revision"),
+            "malformed_truncated": negative.get("candidate_revision"),
+        },
+        "source_equivalent_to_head": True,
+        "binary_build": binary_build,
+        "replay_artifacts_checked": len(manifest_data.get("artifacts", [])) + 4,
+        "malformed_receipt_absent": True,
+    }
+
+
 def proof_levels_mode() -> dict[str, Any]:
     ensure_provenance()
+    public_artifacts = validate_public_reports()
     replay = read_json(RUNS / "public" / "replay.json")
     negative = read_json(RUNS / "public" / "malformed-truncated.json")
     if replay.get("case") != "replay" or replay.get("proof_level") != "SOFTWARE_REPLAY" or not replay.get("credential_free") or replay.get("realtime_used"):
@@ -600,6 +955,7 @@ def proof_levels_mode() -> dict[str, Any]:
         ],
         "replay_report": replay,
         "malformed_report": negative,
+        "public_artifacts": public_artifacts,
         "focused_checks": focused,
         "native_windows_hardware": "OUT_OF_SCOPE_AND_NEVER_PASS",
         "physical_acoustics": "OUT_OF_SCOPE_AND_NEVER_PASS",
@@ -631,12 +987,13 @@ def validate_candidate_data(candidates: dict[str, Any], inventory: dict[str, Any
     if len(rows) < 3:
         fail("fewer than three evidence-backed candidate repairs")
     symbols = candidate_source_symbols(inventory)
+    peer_paths = live_peer_writer_paths()
     all_paths: list[str] = []
     for row in rows:
         if not row.get("id") or not row.get("finding_ids") or len(row.get("exact_writer_files", [])) == 0 or len(row.get("exact_symbols", [])) == 0:
             fail(f"candidate {row.get('id')} lacks exact writer evidence")
         for path in row["exact_writer_files"]:
-            if any(path in paths for paths in PEER_OWNED_PATHS.values()):
+            if any(path in paths for paths in peer_paths.values()):
                 fail(f"peer-owned candidate path: {path}")
             if path not in symbols:
                 fail(f"candidate {row['id']} writer path is not in inventory: {path}")
@@ -652,12 +1009,23 @@ def validate_candidate_data(candidates: dict[str, Any], inventory: dict[str, Any
             if not row.get(key):
                 fail(f"candidate {row['id']} missing required field {key}")
         for peer in ("C79", "C83", "C84", "C99", "C101", "C103", "C104", "C107"):
-            if peer not in row.get("peer_intersections", {}):
+            intersection = row.get("peer_intersections", {}).get(peer)
+            if not isinstance(intersection, dict):
                 fail(f"candidate {row['id']} missing peer intersection {peer}")
+            pr = intersection.get("pr")
+            if not intersection.get("observed_at") or not intersection.get("branch") or not isinstance(pr, dict) or not pr.get("number") or not pr.get("headRefOid"):
+                fail(f"candidate {row['id']} peer intersection {peer} lacks timestamped PR/head evidence")
+            if not intersection.get("diff_sha256") or not isinstance(intersection.get("writer_paths"), list):
+                fail(f"candidate {row['id']} peer intersection {peer} lacks diff/writer-path evidence")
+            overlap = set(intersection.get("overlap_with_candidate_writers", []))
+            if overlap:
+                fail(f"candidate {row['id']} overlaps live peer {peer} writer paths: {', '.join(sorted(overlap))}")
         destination = row["destination"]
         for key in ("thin_contract", "private_internal", "dedicated_wire_owner", "retained_adapter"):
             if not destination.get(key):
                 fail(f"candidate {row['id']} missing destination {key}")
+        if destination["dedicated_wire_owner"].endswith("/internal/wire") or not destination["dedicated_wire_owner"].endswith("/wire"):
+            fail(f"candidate {row['id']} has invalid dedicated Wire destination layout: {destination['dedicated_wire_owner']}")
     if len(all_paths) != len(set(all_paths)):
         fail("candidate writer paths are not pairwise disjoint")
 
@@ -728,13 +1096,25 @@ def negative_controls_mode() -> dict[str, Any]:
     else:
         raise EvidenceFailure("peer-path mutation was accepted")
 
+    try:
+        validate_owned_paths([OWNED_REL + "/synthetic-committed-evidence.json", "README.md"], "NEGATIVE_COMMITTED_PATH: ")
+    except EvidenceFailure as exc:
+        if "mutation outside owned C108 directory" not in str(exc):
+            raise EvidenceFailure("committed-path mutation returned the wrong diagnostic")
+        results.append({"mutation": "insert committed outside-owned tracked path", "rejected": True, "diagnostic": str(exc)})
+    else:
+        raise EvidenceFailure("committed outside-owned mutation was accepted")
+
     outside = ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps-negative-control.txt"
     try:
         try:
             outside.write_text("must not be accepted\n", encoding="utf-8")
             outside_paths = [str(outside.relative_to(ROOT))]
-            owned_prefix = str(HERE.relative_to(ROOT)) + "/"
-            if any(path != str(HERE.relative_to(ROOT)) and not path.startswith(owned_prefix) for path in outside_paths):
+            try:
+                validate_owned_paths(outside_paths)
+            except EvidenceFailure as exc:
+                if "mutation outside owned C108 directory" not in str(exc):
+                    raise
                 results.append({"mutation": "write outside owned directory", "rejected": True, "diagnostic": "mutation outside owned C108 directory"})
             else:
                 raise EvidenceFailure("outside-owned mutation was not detected")
@@ -754,19 +1134,28 @@ def text_files_under_owned() -> list[pathlib.Path]:
 
 def release_mode() -> dict[str, Any]:
     provenance = ensure_provenance()
-    ensure_only_owned_changes()
+    all_changed_paths = ensure_only_owned_changes()
     head = git("rev-parse", "HEAD")
     if not exact_ancestor(STARTUP_INTEGRATION, head) or not exact_ancestor(SOURCE_REVISION, head):
         raise EvidenceFailure("release candidate is missing required ancestry")
     if git("rev-parse", "--abbrev-ref", "HEAD") != BRANCH:
         raise EvidenceFailure("release branch does not match PRD")
-    production_diff = git("diff", "--name-only", SOURCE_REVISION, "--", "agent-cli", "go-agent-loop", "go-agent-runtime", "go-llm-gateway")
+    committed_paths = changed_paths(SOURCE_REVISION, head)
+    production_diff = [path for path in committed_paths if not path.startswith(OWNED_REL + "/") and path != OWNED_REL]
     if production_diff:
-        raise EvidenceFailure("release contains production changes outside C108 evidence: " + production_diff)
+        raise EvidenceFailure("release contains changes outside C108 evidence: " + ", ".join(production_diff))
     diff_check = subprocess_result(["git", "diff", "--check"], ROOT, 60)
-    if diff_check["exit_code"] != 0:
+    committed_diff_check = subprocess_result(["git", "diff", "--check", SOURCE_REVISION, head], ROOT, 60)
+    if diff_check["exit_code"] != 0 or committed_diff_check["exit_code"] != 0:
         raise EvidenceFailure("git diff --check failed")
-    required = [PROVENANCE, OWNERSHIP, BOARD, ANALYSIS / "inventory.json", ANALYSIS / "classifications.json", ANALYSIS / "call-paths.json", CANDIDATES, PROOF_LEVELS, RUNS / "public" / "replay.json", RUNS / "public" / "malformed-truncated.json", RUNS / "focused-checks" / "report.json", RUNS / "negative-controls" / "report.json"]
+    inventory = read_json(ANALYSIS / "inventory.json")
+    candidates = read_json(CANDIDATES)
+    proof = read_json(PROOF_LEVELS)
+    validate_inventory_data(inventory, SOURCE_REVISION)
+    validate_candidate_data(candidates, inventory)
+    validate_proof_data(proof)
+    public_artifacts = validate_public_reports()
+    required = [PROVENANCE, OWNERSHIP, BOARD, ANALYSIS / "inventory.json", ANALYSIS / "classifications.json", ANALYSIS / "call-paths.json", ANALYSIS / "inventory-validation.json", ANALYSIS / "determinism.json", CANDIDATES, HERE / "candidates-validation.json", PROOF_LEVELS, RUNS / "public" / "replay.json", RUNS / "public" / "malformed-truncated.json", RUNS / "focused-checks" / "report.json", RUNS / "negative-controls" / "report.json"]
     missing = [str(path.relative_to(HERE)) for path in required if not path.exists()]
     if missing:
         raise EvidenceFailure("release evidence is incomplete: " + ", ".join(missing))
@@ -791,7 +1180,10 @@ def release_mode() -> dict[str, Any]:
         "startup_integration_revision": STARTUP_INTEGRATION,
         "branch": BRANCH,
         "owned_directory": str(HERE.relative_to(ROOT)),
-        "production_diff": [],
+        "candidate_changed_paths": committed_paths,
+        "working_tree_changed_paths": all_changed_paths,
+        "production_diff": production_diff,
+        "public_artifacts": public_artifacts,
         "required_evidence": [str(path.relative_to(HERE)) for path in required],
         "script_ci": "submit exact HEAD; do not poll or duplicate broad CI",
         "independent_review": "not performed by executor",

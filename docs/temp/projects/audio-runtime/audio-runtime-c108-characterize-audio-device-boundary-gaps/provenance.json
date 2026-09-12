@@ -50,6 +50,16 @@
       "workId": "work-task-222"
     },
     {
+      "content": null,
+      "last_output": null,
+      "rejection_feedback": null,
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "workId": "work-review-230"
+    },
+    {
       "content": [
         {
           "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"branch\": \"codex/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
@@ -66,7 +76,7 @@
     }
   ],
   "branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
-  "candidate_revision": "22d7f712894be651ce2af8975b63a868e71f83c9",
+  "candidate_revision": "336cc2aa7591cbf0b1ffdf35bec29095e4dcf898",
   "contract_revision": "audio-runtime-v1",
   "factory_server": "http://127.0.0.1:7439",
   "factory_session": "~default",
@@ -78,7 +88,7 @@
       "main"
     ],
     "cwd": ".",
-    "elapsed_seconds": 0.54,
+    "elapsed_seconds": 0.594,
     "exit_code": 0,
     "stderr": "From https://github.com/portpowered/go-agent-harness\n * branch              main       -> FETCH_HEAD\nAuto packing the repository in background for optimum performance.\nSee \"git help gc\" for manual housekeeping.\nwarning: The last gc run reported the following. Please correct the root cause\nand remove /Users/abdifamily/work/harness/go-agent-harness/.git/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/gc.log\nAutomatic cleanup will not be performed until the file is removed.\n\nwarning: There are too many unreachable loose objects; run 'git prune' to remove them.\n\n",
     "stdout": "",
@@ -3584,7 +3594,9 @@
   "schema_version": "c108-provenance-v1",
   "source_archive_sha256": "d3d02949213d8822047a7d723a487e692f153c6bfe8ca5eb6b927823ee90dbf4",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "status_paths_at_capture": [],
+  "status_paths_at_capture": [
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/release.json"
+  ],
   "toolchain": {
     "go_env": [
       "go1.26.7",

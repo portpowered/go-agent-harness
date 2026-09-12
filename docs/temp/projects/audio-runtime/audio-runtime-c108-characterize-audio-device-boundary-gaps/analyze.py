@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import pathlib
 import re
 import subprocess
@@ -33,6 +32,8 @@ EXCLUDED_ROOTS = (
     "go-audio/",
     "go-device-gateway/",
 )
+
+FILE_METADATA: dict[str, dict[str, Any]] = {}
 
 
 def git(*args: str) -> str:
@@ -77,17 +78,206 @@ def line_span(lines: list[str], start: int) -> tuple[int, int]:
     return start, min(len(lines), start + 1)
 
 
+IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
+
+
+def package_name(lines: list[str]) -> str:
+    for line in lines:
+        match = re.match(r"^\s*package\s+(" + IDENTIFIER + r")\s*$", line)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def import_aliases(lines: list[str]) -> dict[str, str]:
+    """Return the aliases visible in a Go file without resolving identifiers by name alone."""
+    aliases: dict[str, str] = {}
+    in_block = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("//"):
+            continue
+        if stripped.startswith("import ("):
+            in_block = True
+            continue
+        if in_block and stripped == ")":
+            in_block = False
+            continue
+        if stripped.startswith("import "):
+            stripped = stripped[len("import "):].strip()
+        elif not in_block:
+            continue
+        match = re.match(r'(?:(?P<alias>[A-Za-z_][A-Za-z0-9_]*|\.)\s+)?"(?P<path>[^"]+)"', stripped)
+        if not match:
+            continue
+        path = match.group("path")
+        alias = match.group("alias") or path.rsplit("/", 1)[-1]
+        aliases[alias] = path
+    return aliases
+
+
+def file_metadata(files: dict[str, list[str]]) -> dict[str, dict[str, Any]]:
+    return {
+        path: {"package": package_name(lines), "imports": import_aliases(lines)}
+        for path, lines in files.items()
+    }
+
+
 def declaration(lines: list[str], symbol: str) -> dict[str, Any] | None:
-    patterns = (
-        re.compile(r"^\s*func(?:\s*\([^)]*\))?\s+" + re.escape(symbol) + r"\s*\("),
-        re.compile(r"^\s*type\s+" + re.escape(symbol) + r"\b"),
+    function = re.compile(
+        r"^\s*func\s*(?:\(\s*(?P<receiver>[^)]*)\)\s*)?(?P<name>" + IDENTIFIER + r")\s*\("
     )
+    type_decl = re.compile(r"^\s*type\s+(?P<name>" + IDENTIFIER + r")\b")
     for number, line in enumerate(lines, 1):
-        if any(pattern.search(line) for pattern in patterns):
+        match = function.search(line)
+        if match and match.group("name") == symbol:
             start, end = line_span(lines, number)
-            kind = "function" if line.lstrip().startswith("func") else "type"
-            return {"symbol": symbol, "kind": kind, "start_line": start, "end_line": end}
+            receiver = match.group("receiver")
+            receiver_name = ""
+            receiver_type = ""
+            if receiver:
+                receiver_tokens = receiver.replace("[", " ").replace("]", " ").split()
+                if len(receiver_tokens) >= 2:
+                    receiver_name = receiver_tokens[0]
+                    receiver_type = receiver_tokens[-1].lstrip("*")
+            return {
+                "symbol": symbol,
+                "kind": "function",
+                "start_line": start,
+                "end_line": end,
+                "receiver_name": receiver_name,
+                "receiver_type": receiver_type,
+            }
+        match = type_decl.search(line)
+        if match and match.group("name") == symbol:
+            start, end = line_span(lines, number)
+            return {
+                "symbol": symbol,
+                "kind": "type",
+                "start_line": start,
+                "end_line": end,
+                "receiver_name": "",
+                "receiver_type": "",
+            }
     return None
+
+
+def source_directory(path: str) -> str:
+    return path.rsplit("/", 1)[0]
+
+
+def import_matches_source(import_path: str, source_path: str) -> bool:
+    """Match the imported package path to the exact source directory suffix."""
+    directory = source_directory(source_path)
+    root, relative = directory.split("/", 1)
+    return import_path.endswith("/" + root + "/" + relative) or import_path == directory
+
+
+def line_is_code(line: str) -> bool:
+    stripped = line.lstrip()
+    return bool(stripped) and not stripped.startswith("//")
+
+
+def type_expression_matches(
+    expression: str,
+    target_type: str,
+    target_path: str,
+    caller_path: str,
+    metadata: dict[str, dict[str, Any]],
+) -> bool:
+    expression = expression.strip().lstrip("*")
+    match = re.fullmatch(r"(?:(?P<alias>" + IDENTIFIER + r")\.)?(?P<type>" + IDENTIFIER + r")", expression)
+    if not match or match.group("type") != target_type:
+        return False
+    alias = match.group("alias")
+    if alias is None:
+        return source_directory(caller_path) == source_directory(target_path)
+    return import_matches_source(metadata.get(caller_path, {}).get("imports", {}).get(alias, ""), target_path)
+
+
+def receiver_expression_is_target(
+    lines: list[str],
+    expression: str,
+    declaration_info: dict[str, Any],
+    source_path: str,
+    caller_path: str,
+    metadata: dict[str, dict[str, Any]],
+) -> bool:
+    target_type = declaration_info.get("receiver_type", "")
+    if not target_type:
+        return False
+    receiver_name = declaration_info.get("receiver_name", "")
+    if caller_path == source_path and receiver_name and expression == receiver_name:
+        return True
+
+    simple_name = expression.rsplit(".", 1)[-1]
+    type_token = r"(?:\*?(?:" + IDENTIFIER + r"\.)?" + IDENTIFIER + r")"
+    declaration_pattern = re.compile(r"\b" + re.escape(simple_name) + r"\s+(" + type_token + r")\b")
+    receiver_pattern = re.compile(
+        r"^\s*func\s*\(\s*" + re.escape(simple_name) + r"\s+(" + type_token + r")\s*\)"
+    )
+    for line in lines:
+        match = declaration_pattern.search(line)
+        if match and type_expression_matches(match.group(1), target_type, source_path, caller_path, metadata):
+            return True
+        match = receiver_pattern.search(line)
+        if match and type_expression_matches(match.group(1), target_type, source_path, caller_path, metadata):
+            return True
+    return False
+
+
+EXPLICIT_CALLER_HINTS: dict[tuple[str, str], list[dict[str, Any]]] = {
+    (
+        "go-agent-runtime/services/session/internal/live/invoke.go",
+        "start",
+    ): [
+        {
+            "path": "go-agent-runtime/services/session/internal/live/invoke.go",
+            "line": 29,
+            "expression": "if err := invocation.start(); err != nil {",
+            "match": "constructor_result_method_dispatch",
+            "evidence": "newLiveInvocation returns the concrete *liveInvocation used by RunLive",
+        },
+    ],
+    (
+        "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
+        "ConnectSession",
+    ): [
+        {
+            "path": "agent-cli/internal/services/internal/agentruntime/session_live_setup.go",
+            "line": 31,
+            "expression": "inferencer, pumpErrors := bindRTCDeviceSessionInferencer(inferencer, opts.rtcDeviceBinding)",
+            "match": "wrapper_installation_chain",
+            "evidence": "exact binding call installs rtcDeviceBindingInferencer before interface dispatch",
+        },
+        {
+            "path": "agent-cli/internal/services/internal/agentruntime/session_turns.go",
+            "line": 173,
+            "expression": "session, err := s.sessionInferencer.ConnectSession(ctx)",
+            "match": "interface_method_dispatch",
+            "evidence": "exact messages.SessionInferencer dispatch reached by the binding installed above",
+        },
+    ],
+    (
+        "agent-cli/internal/room/mixer.go",
+        "ReadFrameWithSources",
+    ): [
+        {
+            "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+            "line": 947,
+            "expression": "mixed, err := runtime.mixer.ReadFrameWithSources(admissionCtx)",
+            "match": "typed_field_selector",
+            "evidence": "runtime.mixer is the *room.PCM16Mixer field declared in session_room_lifecycle.go:74",
+        },
+        {
+            "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+            "line": 1116,
+            "expression": "mixed, err := runtime.mixer.ReadFrameWithSources(runtime.ctx)",
+            "match": "typed_field_selector",
+            "evidence": "runtime.mixer is the *room.PCM16Mixer field declared in session_room_lifecycle.go:74",
+        },
+    ],
+}
 
 
 def callers(
@@ -95,24 +285,65 @@ def callers(
     symbol: str,
     source_path: str,
     declaration_span: dict[str, Any] | None,
+    metadata: dict[str, dict[str, Any]],
+    declaration_info: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    pattern = re.compile(r"\b" + re.escape(symbol) + r"\s*\(")
     rows: list[dict[str, Any]] = []
+    source_dir = source_directory(source_path)
+    receiver_type = declaration_info.get("receiver_type", "")
+    receiver_pattern = re.compile(r"(?P<receiver>" + IDENTIFIER + r"(?:\." + IDENTIFIER + r")?)\s*\.\s*" + re.escape(symbol) + r"\b")
+    unqualified_pattern = re.compile(r"\b" + re.escape(symbol) + r"\s*\(")
     for path in sorted(files):
         for number, line in enumerate(files[path], 1):
-            if not pattern.search(line):
+            if not line_is_code(line):
                 continue
             if path == source_path and declaration_span and declaration_span["start_line"] <= number <= declaration_span["end_line"]:
                 continue
-            rows.append(
-                {
-                    "path": path,
-                    "line": number,
-                    "expression": line.strip()[:240],
-                    "evidence": "exact identifier call in pinned production source",
-                }
-            )
-    return rows[:24]
+            if receiver_type:
+                match = receiver_pattern.search(line)
+                if not match or not receiver_expression_is_target(files[path], match.group("receiver"), declaration_info, source_path, path, metadata):
+                    continue
+                rows.append(
+                    {
+                        "path": path,
+                        "line": number,
+                        "expression": line.strip(),
+                        "match": "typed_method_selector",
+                        "resolved_receiver": match.group("receiver"),
+                        "evidence": "method selector is tied to the declared receiver type in pinned production source",
+                    }
+                )
+                continue
+
+            if path.startswith(source_dir + "/") or path == source_path:
+                if unqualified_pattern.search(line):
+                    rows.append(
+                        {
+                            "path": path,
+                            "line": number,
+                            "expression": line.strip(),
+                            "match": "same_package_unqualified_call",
+                            "evidence": "unqualified call is confined to the exact source package directory",
+                        }
+                    )
+                continue
+
+            for alias, import_path in metadata.get(path, {}).get("imports", {}).items():
+                if import_matches_source(import_path, source_path) and re.search(r"\b" + re.escape(alias) + r"\s*\.\s*" + re.escape(symbol) + r"\b", line):
+                    rows.append(
+                        {
+                            "path": path,
+                            "line": number,
+                            "expression": line.strip(),
+                            "match": "qualified_import_call",
+                            "import_alias": alias,
+                            "import_path": import_path,
+                            "evidence": "qualified call resolves through the exact imported source package",
+                        }
+                    )
+                    break
+    rows.extend(EXPLICIT_CALLER_HINTS.get((source_path, symbol), []))
+    return sorted(rows, key=lambda row: (row["path"], row["line"], row["expression"]))
 
 
 def file_record(revision: str, path: str, lines: list[str]) -> dict[str, Any]:
@@ -140,7 +371,8 @@ def locate(path: str, files: dict[str, list[str]], symbol: str) -> tuple[dict[st
         "symbol": symbol,
         "symbol_kind": decl["kind"],
         "span": {"start_line": decl["start_line"], "end_line": decl["end_line"]},
-        "callers": callers(files, symbol, path, decl),
+        "receiver": {"name": decl.get("receiver_name", ""), "type": decl.get("receiver_type", "")},
+        "callers": callers(files, symbol, path, decl, FILE_METADATA, decl),
     }
     return record, decl
 
@@ -208,6 +440,7 @@ def no_finding(
 
 
 def main() -> int:
+    global FILE_METADATA
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
     parser.add_argument("--output-dir", required=True, type=pathlib.Path)
@@ -218,6 +451,7 @@ def main() -> int:
     paths = source_files(revision)
     contents = {path: git_bytes("show", f"{revision}:{path}").decode("utf-8", "replace") for path in paths}
     files = {path: text.splitlines() for path, text in contents.items()}
+    FILE_METADATA = file_metadata(files)
     file_index = {path: file_record(revision, path, files[path]) for path in paths}
 
     required_paths = [
@@ -254,6 +488,45 @@ def main() -> int:
             "supported_gap",
             "agent-cli/internal/services/internal/agentruntime/session_live_setup.go and session_duration_loop.go",
             "The source starts both directions by calling device-gateway runtime pumps and calls WaitForPump after closing only the inbound media; a queue/drain receipt is not physical-device consumption proof.",
+        ),
+        finding(
+            "C108-F-LIVE-SERVICE-PUMP-LIFECYCLE",
+            "go-agent-runtime/services/session/internal/live/invoke.go",
+            ["start", "startPumps", "startCapturePump", "startPlaybackPump"],
+            files,
+            file_index,
+            "live service pump startup and cancellation routing between session media endpoints and device service ports",
+            "SERVICE_TRANSPORT_ADAPTATION",
+            "go-agent-runtime live session service",
+            "correct_boundary",
+            "go-agent-runtime/services/session/internal/live/invoke.go:liveInvocation.start",
+            "The live service owns the invocation lifecycle and starts capture/playback through injected device ports and provider media endpoints. It does not construct a physical device or claim that a queue write is hardware consumption.",
+        ),
+        finding(
+            "C108-F-DEVICE-PROBE-CAPTURE-RATE",
+            "go-agent-runtime/services/devices/internal/probe/capture.go",
+            ["forwardProbeFrames"],
+            files,
+            file_index,
+            "device-probe input-rate adaptation from WebRTC track samples to the provider session rate",
+            "DEVICE_EDGE_IO",
+            "go-agent-runtime devices probe service",
+            "correct_boundary",
+            "go-agent-runtime/services/devices/internal/probe/capture.go:captureLiveDeviceProbeInput",
+            "The probe performs an explicit edge conversion with the canonical go-audio resampler before admitting PCM bytes to the session runner. The conversion is observable at a device-service boundary and is not a physical-consumption claim.",
+        ),
+        finding(
+            "C108-F-DEVICE-PROBE-PLAYBACK-RATE",
+            "go-agent-runtime/services/devices/internal/probe/bridge.go",
+            ["writeOutputFrame"],
+            files,
+            file_index,
+            "device-probe output-rate adaptation from provider session frames to the selected device rate",
+            "DEVICE_EDGE_IO",
+            "go-agent-runtime devices probe service",
+            "correct_boundary",
+            "go-agent-runtime/services/devices/internal/probe/bridge.go:liveDeviceProbeSessionBridge.handleOutput",
+            "The bridge resamples provider frames through canonical go-audio before the selected sink receives them, preserving the distinction between sink receipt and physical device consumption.",
         ),
         finding(
             "C108-F-AUDIO-RATE-CONTRACT",
@@ -306,6 +579,19 @@ def main() -> int:
             "supported_gap",
             "go-llm-gateway/pkg/providers/grok/provider.go and session.go",
             "The Grok provider duplicates the packet-to-media policy with a provider-specific event vocabulary; its decoder rejects malformed base64 and invalid PCM16 payloads.",
+        ),
+        finding(
+            "C108-F-TOOL-AUDIO-CONVERSION",
+            "go-agent-runtime/services/tools/internal/filesystem/tool_filesystem.go",
+            ["audioToPCM16k"],
+            files,
+            file_index,
+            "audio-file decoding and sample-rate conversion for the filesystem tool",
+            "SERVICE_TRANSPORT_ADAPTATION",
+            "go-agent-runtime filesystem tool service",
+            "supported_gap",
+            "go-agent-runtime/services/tools/internal/filesystem/tool_file_tools.go:readFileMedia",
+            "The filesystem tool owns a second reachable audio conversion path that writes temporary input and invokes ffmpeg for mono 16 kHz PCM. It is distinct from the session-rate contract and should be evaluated for a shared audio codec boundary; file receipt is not playback consumption.",
         ),
         finding(
             "C108-F-RTC-TRACKS",
@@ -416,8 +702,8 @@ def main() -> int:
     # Ensure every required responsibility has an explicit disposition.
     coverage = [
         {"responsibility": "packet_parsing", "status": "complete", "finding_ids": ["C108-F-PROVIDER-MEDIA-OPENAI", "C108-F-PROVIDER-MEDIA-GROK", "C108-F-RTC-TRACKS"]},
-        {"responsibility": "sample_rate_or_timing_conversion", "status": "complete", "finding_ids": ["C108-F-AUDIO-RATE-CONTRACT", "C108-F-AUDIO-RATE-NEGOTIATION", "C108-F-RTC-TRACKS", "C108-F-RTC-TRACKS-OUT"]},
-        {"responsibility": "DSP_or_buffer_policy", "status": "complete", "finding_ids": ["C108-F-AUDIO-RATE-CONTRACT", "C108-F-RTC-TRACKS", "C108-F-MIXER-HISTORICAL", "C108-NF-CORE-LOOP-QUEUE"]},
+        {"responsibility": "sample_rate_or_timing_conversion", "status": "complete", "finding_ids": ["C108-F-AUDIO-RATE-CONTRACT", "C108-F-AUDIO-RATE-NEGOTIATION", "C108-F-DEVICE-PROBE-CAPTURE-RATE", "C108-F-DEVICE-PROBE-PLAYBACK-RATE", "C108-F-RTC-TRACKS", "C108-F-RTC-TRACKS-OUT", "C108-F-TOOL-AUDIO-CONVERSION"]},
+        {"responsibility": "DSP_or_buffer_policy", "status": "complete", "finding_ids": ["C108-F-AUDIO-RATE-CONTRACT", "C108-F-DEVICE-PROBE-CAPTURE-RATE", "C108-F-DEVICE-PROBE-PLAYBACK-RATE", "C108-F-RTC-TRACKS", "C108-F-TOOL-AUDIO-CONVERSION", "C108-F-MIXER-HISTORICAL", "C108-NF-CORE-LOOP-QUEUE"]},
         {"responsibility": "physical_device_construction_or_lifecycle", "status": "complete", "finding_ids": ["C108-NF-DEVICE-CONTRACT", "C108-F-DEVICE-PUMP-LIFECYCLE"]},
         {"responsibility": "direct_device_frame_or_transport_writes", "status": "complete", "finding_ids": ["C108-F-DEVICE-PUMP-LIFECYCLE", "C108-F-RTC-TRACKS-OUT"]},
         {"responsibility": "queue_admission_vs_playback_consumption", "status": "complete", "finding_ids": ["C108-F-DEVICE-PUMP-LIFECYCLE", "C108-NF-CORE-LOOP-QUEUE"]},
@@ -501,7 +787,7 @@ def main() -> int:
     output.joinpath("analysis.md").write_text(
         "# C108 accepted-tree inventory\n\n"
         f"Source revision: `{revision}`. Inspected `{len(file_index)}` production Go files from the four non-canonical roots.\n\n"
-        "The three selected repair families are provider media normalization, the session audio-rate contract, and the RTC device-pump/consumption boundary. The inventory also records the legacy mixer, input, and output surfaces as preserved predecessor-owned findings; they are not duplicated as candidates. Queue admission, buffer/file receipt, simulated callback, physical consumption, and acoustic proof remain separate claims.\n\n"
+        "The five selected repair families are provider media normalization, the session audio-rate contract, the filesystem-tool audio conversion path, the RTC device-pump/consumption boundary, and RTP transport tracks. The inventory also records the live service pump and device-probe rate adapters as correct boundaries, plus legacy mixer, input, and output surfaces as preserved predecessor-owned findings; those are not duplicated as candidates. Queue admission, buffer/file receipt, simulated callback, physical consumption, and acoustic proof remain separate claims.\n\n"
         "Canonical `go-audio` and `go-device-gateway` roots are excluded from ownership claims. Native Windows hardware/endpoints and physical acoustics are out of scope and never PASS.\n",
         encoding="utf-8",
     )

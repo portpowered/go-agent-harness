@@ -17,6 +17,11 @@
       "rejected": true
     },
     {
+      "diagnostic": "NEGATIVE_COMMITTED_PATH: mutation outside owned C108 directory: README.md",
+      "mutation": "insert committed outside-owned tracked path",
+      "rejected": true
+    },
+    {
       "diagnostic": "mutation outside owned C108 directory",
       "mutation": "write outside owned directory",
       "rejected": true

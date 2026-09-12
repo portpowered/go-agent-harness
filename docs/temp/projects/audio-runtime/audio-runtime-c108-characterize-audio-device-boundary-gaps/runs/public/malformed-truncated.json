@@ -3,11 +3,11 @@
   "acoustic_proof": "OUT_OF_SCOPE_AND_NEVER_PASS",
   "binary_bytes": 50937874,
   "binary_sha256": "2c38b32c2a586fe6c77f72b03510977e1275d064f35ec70cd709683920500ae2",
-  "candidate_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "candidate_revision": "336cc2aa7591cbf0b1ffdf35bec29095e4dcf898",
   "case": "malformed-truncated",
   "clean_shutdown": true,
   "command": [
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-xp5b_s3i/yui",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-xpkb2dcw/yui",
     "session",
     "--replay",
     "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/malformed.session.json",
@@ -29,7 +29,7 @@
   "physical_device_consumption": "UNKNOWN_AND_OUT_OF_SCOPE",
   "process": {
     "argv": [
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-xp5b_s3i/yui",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-xpkb2dcw/yui",
       "session",
       "--replay",
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/malformed.session.json",

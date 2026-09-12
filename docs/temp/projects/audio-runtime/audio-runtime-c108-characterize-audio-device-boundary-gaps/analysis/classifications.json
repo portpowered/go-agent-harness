@@ -30,8 +30,29 @@
     },
     {
       "boundary_class": "DEVICE_EDGE_IO",
+      "finding_id": "C108-F-DEVICE-PROBE-CAPTURE-RATE",
+      "judgment": "correct_boundary",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "DEVICE_EDGE_IO",
+      "finding_id": "C108-F-DEVICE-PROBE-PLAYBACK-RATE",
+      "judgment": "correct_boundary",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "DEVICE_EDGE_IO",
       "finding_id": "C108-F-DEVICE-PUMP-LIFECYCLE",
       "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "SERVICE_TRANSPORT_ADAPTATION",
+      "finding_id": "C108-F-LIVE-SERVICE-PUMP-LIFECYCLE",
+      "judgment": "correct_boundary",
       "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
       "reachability": "reachable_production"
     },
@@ -66,6 +87,13 @@
     {
       "boundary_class": "DEVICE_EDGE_IO",
       "finding_id": "C108-F-RTC-TRACKS-OUT",
+      "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "SERVICE_TRANSPORT_ADAPTATION",
+      "finding_id": "C108-F-TOOL-AUDIO-CONVERSION",
       "judgment": "supported_gap",
       "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
       "reachability": "reachable_production"

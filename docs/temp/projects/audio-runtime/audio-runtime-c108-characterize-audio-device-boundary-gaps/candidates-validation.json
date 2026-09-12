@@ -3,7 +3,8 @@
     "C108-CANDIDATE-DEVICE-PUMP",
     "C108-CANDIDATE-AUDIO-RATE-CONTRACT",
     "C108-CANDIDATE-PROVIDER-MEDIA",
-    "C108-CANDIDATE-RTC-TRANSPORT"
+    "C108-CANDIDATE-RTC-TRANSPORT",
+    "C108-CANDIDATE-TOOL-AUDIO-CONVERSION"
   ],
   "pairwise_disjoint": true,
   "passes": true,
@@ -16,6 +17,7 @@
     "go-llm-gateway/pkg/providers/openai/session_media.go",
     "go-llm-gateway/pkg/providers/grok/session_media.go",
     "go-llm-gateway/pkg/transport/rtc/track_in.go",
-    "go-llm-gateway/pkg/transport/rtc/track_out.go"
+    "go-llm-gateway/pkg/transport/rtc/track_out.go",
+    "go-agent-runtime/services/tools/internal/filesystem/tool_filesystem.go"
   ]
 }
