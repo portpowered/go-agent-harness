@@ -1,0 +1,40 @@
+{
+  "project": "audio-runtime",
+  "work": "audio-runtime-c106-repair-c68-cross-rate-probe-oracle",
+  "session": "~default",
+  "server": "http://127.0.0.1:7439",
+  "verifyWork": {
+    "command": "project-control.py verify-work --type task --name audio-runtime-c106-repair-c68-cross-rate-probe-oracle",
+    "result": "{\"status\": \"admitted\", \"project\": \"audio-runtime\", \"name\": \"audio-runtime-c106-repair-c68-cross-rate-probe-oracle\"}"
+  },
+  "branch": "codex/audio-runtime-c106-repair-c68-cross-rate-probe-oracle",
+  "prdBranchName": "codex/audio-runtime-c106-repair-c68-cross-rate-probe-oracle",
+  "sourceRevision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "fetchedOriginMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "requiredAncestors": [
+    "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "d4766c3dbbf2c198142047ead4449d58dd47d485"
+  ],
+  "preEditStatus": "clean",
+  "ownedPaths": [
+    "agent-cli/internal/services/internal/agentruntime/session_replay_rate_domain_contract_test.go",
+    "docs/temp/projects/audio-runtime/audio-runtime-c106-repair-c68-cross-rate-probe-oracle/"
+  ],
+  "testSource": {
+    "path": "agent-cli/internal/services/internal/agentruntime/session_replay_rate_domain_contract_test.go",
+    "sha256": "2ac6f9d7fee9752f04a14a9fed991a2eaf4b4e9d3085cfb95434daa42b1c6524"
+  },
+  "canonicalC102": {
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c102-c68-zero-audio-attribution-vertical-probe.json",
+    "sha256": "be9653bda364f5017516d049c06e13ebae6527759b6a4f5eb549b31c03f0001e",
+    "decision": "FAILED",
+    "sourceRevision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "immutable": true
+  },
+  "scopeConclusion": {
+    "productionAudioPathChanged": false,
+    "historicalC102Changed": false,
+    "observerOmission": "UNRESOLVED",
+    "nativeWindowsHardwareOrAcousticProof": "OUT_OF_SCOPE"
+  }
+}
