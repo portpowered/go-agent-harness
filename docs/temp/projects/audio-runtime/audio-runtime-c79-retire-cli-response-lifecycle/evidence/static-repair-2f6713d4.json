@@ -1,12 +1,12 @@
 {
   "schema": "audio-runtime-c79-evidence/v1",
   "mode": "static-repair",
-  "candidate": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
-  "parent": "a5d26045b7e39f21a0b5d663826db0394af87b6a",
+  "candidate": "996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7",
+  "parent": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
   "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
   "origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
   "source_provenance": {
-    "tested_revision": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
+    "tested_revision": "996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7",
     "tracked_input_count": 10482,
     "tracked_input_sha256": "94a061e14f492c7889259172de1b7542a492f26c9e1d7bf1e532b672c120ba21",
     "replay_artifact_sha256": "f222823d925b149878073bf501f68db3147bfa8224c887eed9654e7b72ea8e24"
@@ -69,7 +69,7 @@
     "job": "independent review",
     "old_head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
     "code_findings": "foreign response-open replacement, stale finish purpose/terminal boundary, and duplicate response-end admission",
-    "remaining_findings": "the historical three findings were repaired in 66211b7b and the lint-clean test repair in 724a2e0b; this candidate adds the work-review-239 ownership-ordering repair and is source-pinned to ecf09f5a; script CI remains authoritative"
+    "remaining_findings": "the historical three findings were repaired in 66211b7b and the lint-clean test repair in 724a2e0b; the work-review-239 ownership-ordering repair is ecf09f5a, and this refreshed ledger is source-pinned to the final evidence head 996ce66e; script CI remains authoritative"
   },
   "latest_review_repair": {
     "review": "work-review-239",

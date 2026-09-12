@@ -1,5 +1,5 @@
 {
-  "candidate": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
+  "candidate": "996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7",
   "mode": "response-matrix",
   "payload": {
     "checks": [
@@ -13,10 +13,10 @@
           "-count=1",
           "-timeout=180s"
         ],
-        "elapsed_seconds": 0.752,
+        "elapsed_seconds": 0.762,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t0.162s [no tests to run]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.301s\n"
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t0.158s [no tests to run]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.295s\n"
       },
       {
         "argv": [
@@ -28,10 +28,10 @@
           "-count=1",
           "-timeout=210s"
         ],
-        "elapsed_seconds": 11.591,
+        "elapsed_seconds": 8.19,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.246s\n"
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.202s\n"
       },
       {
         "argv": [
@@ -41,7 +41,7 @@
           "-count=1",
           "-timeout=90s"
         ],
-        "elapsed_seconds": 0.335,
+        "elapsed_seconds": 0.34,
         "returncode": 0,
         "stderr": "",
         "stdout": "ok  \texample.com/audio-runtime-c79-sessiondiagnostics-consumer\t0.160s\n"
