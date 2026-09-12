@@ -1,5 +1,5 @@
 {
-  "candidate": "1bcccd46feca53eed770b1507a0f6af921b168a6",
+  "candidate": "2f6713d44060b8987ccb5a588c05b6ce2df4d13e",
   "mode": "response-matrix",
   "payload": {
     "checks": [
@@ -13,10 +13,10 @@
           "-count=1",
           "-timeout=180s"
         ],
-        "elapsed_seconds": 0.631,
+        "elapsed_seconds": 0.608,
         "returncode": 0,
         "stderr": "",
-        "stdout": "?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t[no test files]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.155s\n"
+        "stdout": "?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t[no test files]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.167s\n"
       },
       {
         "argv": [
@@ -28,10 +28,10 @@
           "-count=1",
           "-timeout=210s"
         ],
-        "elapsed_seconds": 8.029,
+        "elapsed_seconds": 7.968,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.248s\n"
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.305s\n"
       },
       {
         "argv": [
@@ -41,10 +41,10 @@
           "-count=1",
           "-timeout=90s"
         ],
-        "elapsed_seconds": 0.438,
+        "elapsed_seconds": 0.316,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \texample.com/audio-runtime-c79-sessiondiagnostics-consumer\t0.166s\n"
+        "stdout": "ok  \texample.com/audio-runtime-c79-sessiondiagnostics-consumer\t0.160s\n"
       }
     ],
     "lines": {
@@ -59,14 +59,23 @@
       "total": 785
     },
     "scope": {
-      "forbidden_shared_paths": [],
-      "outside_owned_paths": [],
+      "forbidden_shared_paths": [
+        "docs/architecture/architecture-size-baseline.json",
+        "scripts/wire-packages.txt"
+      ],
+      "outside_owned_paths": [
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/architecture-size-baseline.json",
+        "scripts/wire-packages.txt"
+      ],
       "paths": [
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/internal/service/package.json",
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/package.json",
         "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/wire/package.json",
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/architecture-size-baseline.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
@@ -87,7 +96,8 @@
         "go-agent-runtime/services/sessiondiagnostics/service.go",
         "go-agent-runtime/services/sessiondiagnostics/wire/providers.go",
         "go-agent-runtime/services/sessiondiagnostics/wire/wire_gen.go",
-        "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go"
+        "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
+        "scripts/wire-packages.txt"
       ]
     }
   },

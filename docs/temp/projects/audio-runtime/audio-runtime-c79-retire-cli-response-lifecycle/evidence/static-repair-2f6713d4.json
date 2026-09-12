@@ -1,0 +1,57 @@
+{
+  "schema": "audio-runtime-c79-evidence/v1",
+  "mode": "static-repair",
+  "candidate": "2f6713d44060b8987ccb5a588c05b6ce2df4d13e",
+  "parent": "63d411f26deaebd377b7e132e9ffb177b3a138be",
+  "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+  "origin_main": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "changes": {
+    "wire_registry": "go-agent-runtime/services/sessiondiagnostics/wire",
+    "architecture_policy_generator": "services/sessiondiagnostics/wire/wire_gen.go",
+    "baseline_deletions": [
+      "file-lines:session_diagnostics_response.go",
+      "cognitive-complexity:*sessionProgressObserver.adoptObservedResponseID",
+      "cyclomatic-complexity:*sessionProgressObserver.adoptObservedResponseID",
+      "cognitive-complexity:*sessionProgressObserver.beginObservedResponseForPurpose",
+      "cyclomatic-complexity:*sessionProgressObserver.beginObservedResponseForPurpose",
+      "cyclomatic-complexity:*sessionProgressObserver.claimScheduledRateLimitRetry",
+      "cognitive-complexity:*sessionProgressObserver.observeProviderMessageEndForResponse",
+      "cyclomatic-complexity:*sessionProgressObserver.observeProviderMessageEndForResponse",
+      "cognitive-complexity:*sessionProgressObserver.ownsObservedResponseEnd",
+      "cyclomatic-complexity:*sessionProgressObserver.ownsObservedResponseEnd",
+      "cognitive-complexity:recordContinuationTerminalLocked",
+      "cyclomatic-complexity:recordContinuationTerminalLocked"
+    ]
+  },
+  "gates": {
+    "fmt": "pass",
+    "wire_check": "pass",
+    "architecture_size": "pass: 189 packages, 1905 files, 28058 functions",
+    "coverage_registration": "pass: 179 packages across 6 modules",
+    "vet": "pass",
+    "lint": "pass: pinned golangci-lint v2.9.0, 0 issues",
+    "staticcheck": "pass: pinned staticcheck 2026.1",
+    "diff_check": "pass"
+  },
+  "causal_regressions": {
+    "response_matrix": "pass",
+    "service_race": "pass: 12 tests across 3 packages, count=3",
+    "external_consumer": "pass: GOWORK=off",
+    "mutation_remove_continuation_owner": "expected failure",
+    "mutation_duplicate_scheduled_disposition": "expected failure",
+    "cli_normal": "pass: 218 tests",
+    "cli_race": "pass: 218 tests",
+    "public_scheduled_tool_continuation": "pass",
+    "public_terminal_and_malformed": "pass",
+    "public_credential_free_audio_tool_replay": "pass"
+  },
+  "prior_ci_rejection": {
+    "run": "34677755468",
+    "job": "103510566504",
+    "old_head": "85ed181d2073e501ea00c5ba8f581f9dc009998d",
+    "code_findings": "resolved by preserved C79 commits before this static checkpoint",
+    "remaining_findings": "Wire registration and 12 stale C79 baseline entries, resolved here"
+  },
+  "known_scope_helper_limitation": "The legacy retirement-and-scope verifier still hard-codes scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json as forbidden. The handoff released those exact leases; the direct diff and architecture/Wire gates are the authoritative post-release checks. The verifier was not weakened.",
+  "acceptance": "executor evidence only; no script-CI success, review, merge, vertical probe or project acceptance claimed"
+}
