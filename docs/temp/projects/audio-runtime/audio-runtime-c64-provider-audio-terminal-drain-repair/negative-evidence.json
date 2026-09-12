@@ -12,6 +12,7 @@
   "evidence_only_paths": ["docs/temp/projects/audio-runtime/audio-runtime-c64-provider-audio-terminal-drain-repair/negative-evidence.json"],
   "verification_revision": "29aeab99f6068db89fedce537b46967419400c28",
   "verification_diff_sha256": "92afcce4cf4f054e7689329908f6df0db293264b9d2bdc1adcbc24aa6e7e9e09",
+  "source_control_mode": "detached accepted-source production with candidate fixture",
   "fixture_test_hashes": {
     "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "38b232053d9d4f46de2060ee5482e9fe4701c852b278ee654863a365689d04f5"
   },
