@@ -12,7 +12,7 @@
     "500",
     "--all"
   ],
-  "observed_at": "2026-09-12T20:15:24Z",
+  "observed_at": "2026-09-12T21:05:18Z",
   "results": [
     {
       "chainingTraceDepth": 1,
@@ -30,38 +30,6 @@
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "batch-admit-audio-runtime-audio-runtime-v1-audio-runtime",
       "workTypeName": "project"
-    },
-    {
-      "chainingTraceDepth": 25,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c103-retire-cli-rtc-session-runtime",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-c102-c103-validation-retirement-20260912T1534Z",
-      "state": {
-        "name": "init",
-        "type": "INITIAL"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-thoughts-228",
-      "workTypeName": "thoughts"
-    },
-    {
-      "chainingTraceDepth": 25,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c104-retire-cli-session-finalization-boundary",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-c102-c103-validation-retirement-20260912T1534Z",
-      "state": {
-        "name": "init",
-        "type": "INITIAL"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-thoughts-229",
-      "workTypeName": "thoughts"
     },
     {
       "chainingTraceDepth": 22,
@@ -285,6 +253,102 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "batch-audio-runtime-c109-browser-retirement-integration-rehearsal-20260912T1924Z-audio-runtime-c109-characterize-browser-retirement-integration",
+      "workTypeName": "idea"
+    },
+    {
+      "chainingTraceDepth": 30,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c110-retire-cli-session-instruction-resolution",
+          "targetWorkId": "work-thoughts-227",
+          "targetWorkName": "audio-runtime-c101-retire-cli-provider-session-runtime",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+      "state": {
+        "name": "to-complete",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_parent_request_id": "audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z",
+        "_parent_work_id": "work-thoughts-227",
+        "_source_dispatch_id": "033d0add-04dd-4d47-adea-3212f3cdbaea",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
+        "_work_type": "idea"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c110-c112-residual-retirement-20260912T2010Z-audio-runtime-c110-retire-cli-session-instruction-resolution",
+      "workTypeName": "idea"
+    },
+    {
+      "chainingTraceDepth": 30,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+          "targetWorkId": "work-thoughts-227",
+          "targetWorkName": "audio-runtime-c101-retire-cli-provider-session-runtime",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+      "state": {
+        "name": "to-complete",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_parent_request_id": "audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z",
+        "_parent_work_id": "work-thoughts-227",
+        "_source_dispatch_id": "033d0add-04dd-4d47-adea-3212f3cdbaea",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+        "_work_type": "idea"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c110-c112-residual-retirement-20260912T2010Z-audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+      "workTypeName": "idea"
+    },
+    {
+      "chainingTraceDepth": 30,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c112-retire-cli-session-trace-evidence",
+          "targetWorkId": "work-thoughts-227",
+          "targetWorkName": "audio-runtime-c101-retire-cli-provider-session-runtime",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+      "state": {
+        "name": "to-complete",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_parent_request_id": "audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z",
+        "_parent_work_id": "work-thoughts-227",
+        "_source_dispatch_id": "033d0add-04dd-4d47-adea-3212f3cdbaea",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+        "_work_type": "idea"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c110-c112-residual-retirement-20260912T2010Z-audio-runtime-c112-retire-cli-session-trace-evidence",
       "workTypeName": "idea"
     },
     {
@@ -1632,6 +1696,22 @@
       "workTypeName": "idea"
     },
     {
+      "chainingTraceDepth": 6,
+      "currentChainingTraceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309"
+      ],
+      "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "workId": "work-review-239",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 5,
       "content": [
         {
@@ -1646,7 +1726,7 @@
       ],
       "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
       "state": {
-        "name": "init",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "tags": {
@@ -1656,32 +1736,6 @@
       },
       "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
       "workId": "work-task-114",
-      "workTypeName": "task"
-    },
-    {
-      "chainingTraceDepth": 5,
-      "content": [
-        {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"branch\": \"codex/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
-          "type": "text"
-        }
-      ],
-      "currentChainingTraceId": "trace-request-time-6856b79998050320ff15cec7aa8baf47",
-      "name": "audio-runtime-c84-retire-cli-room-participant-lifecycle",
-      "previousChainingTraceIds": [
-        "trace-request-time-6856b79998050320ff15cec7aa8baf47"
-      ],
-      "requestId": "audio-runtime-c84-room-participant-lifecycle-retirement-20260912T0804Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"branch\": \"codex/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
-        "continue_feedback": "Revision 8b732e6e is clean, pushed, and PR #486 updated. Admission and branch/PRD checks pass; focused normal/race tests, consumer, mutations, retirement 522/869, coverage, Wire, vet, lint, staticcheck, and accumulated regressions pass. Architecture reports 15 C79-owned findings; C79 remains ci-pending with shared-path ownership. Next: after C79’s reviewed guarded merge, fetch/integrate main, apply demonstrated registry/baseline updates, rerun bounded gates, and submit this same task to script CI without polling."
-      },
-      "traceId": "trace-request-time-6856b79998050320ff15cec7aa8baf47",
-      "workId": "work-task-136",
       "workTypeName": "task"
     },
     {
@@ -1703,7 +1757,8 @@
         "type": "PROCESSING"
       },
       "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"branch\": \"codex/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}"
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"branch\": \"codex/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+        "_rejection_feedback": "PR #494 head 8593f08f has all nine CI checks green, and independent pinned analyzer/public replay passed. However, verify.py:720-782 fails open: removing one symbol row and its edges, then adjusting self-reported totals, still passes with 2,488 instead of 2,489 symbols. verify.py:1007-1029 also accepts subtraction with preserved PR #438 removed (40 instead of 41 checkpoints). Repair verifier completeness checks and add deletion-row regressions; require all active/preserved PR identities, then rerun release evidence, push, and resubmit the exact head to SCRIPT CI without polling. Do not merge 8593f08f."
       },
       "traceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
       "workId": "work-task-218",
@@ -1724,11 +1779,12 @@
       ],
       "requestId": "audio-runtime-c108-audio-device-boundary-characterization-20260912T1920Z",
       "state": {
-        "name": "ci-pending",
+        "name": "init",
         "type": "PROCESSING"
       },
       "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"branch\": \"codex/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}"
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"branch\": \"codex/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+        "_rejection_feedback": "PR #493 head 336cc2aa7591cbf0b1ffdf35bec29095e4dcf898 changes only the owned evidence directory and reported required CI is green. Independent replay and malformed-PCM runs passed with clean shutdown. Reject: analyze.py:93-115 uses bare-name caller matching and truncates results, producing false cross-provider and unrelated ConnectSession/ReadFrame/WriteFrame caller edges; exact caller ownership is unproven. Inventory omits reachable paths including go-agent-runtime/services/session/internal/live/invoke.go:191-225 pump lifecycle, devices/internal/probe/capture.go:48 and bridge.go:190 resampling, and services/tools/internal/filesystem/tool_filesystem.go:232-233 audioToPCM16k; classify or justify each and regenerate findings/candidates. provenance.json pins 22d7f712 and release.json pins 0ec1ea3, while HEAD is 336cc2a; public artifacts likewise lack a verified final-head equivalence. Refresh provenance, release, hashes, and both public cases at final HEAD, then rerun pristine and causal-negative verification. ownership.json has only prose recheck placeholders for C83/C84/C99/C101/C103/C104/C107 and lacks timestamped live PR/head/diff/writer-path observations; re-query those peers and update intersections. Harden verify.py:168,248,763 to reject committed mutations across all tracked paths and validate actual artifact hashes/effects, not only metadata. Correct candidate Wire destinations from services/X/internal/wire to the required services/X/wire layout. Executor must make these owned-evidence/analyzer/verifier corrections, regenerate evidence, submit the exact new HEAD to script CI, and obtain a fresh review."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-222",
@@ -1753,27 +1809,87 @@
         "type": "PROCESSING"
       },
       "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration\", \"branch\": \"codex/audio-runtime-c109-characterize-browser-retirement-integration\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}"
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration\", \"branch\": \"codex/audio-runtime-c109-characterize-browser-retirement-integration\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+        "_rejection_feedback": "PR #495 at 4b0a763d has green current-head CI (run 34716813540), and independent normal plus malformed/canceled public runs passed, but the evidence gate fails. analyze.py truncates git output before parsing refs/worktrees; the report is visibly truncated, omits required C61/C83 refs, and records both preserved worktrees absent while verify.py accepts absent as unchanged. The ledger is heuristic and hand-coded: it lacks exact source spans, callers, conflict kinds, evidence IDs, and live CI/log attribution. The bounded sequence omits required inputs, preconditions, commands, expected observables, timeouts, stop conditions, and rollback checkpoints. run_public_checks.py hard-codes effects, discards the detailed shipped workflow report, accepts arbitrary --tree input, ignores cleanup failures, and has an unbounded timeout-path communicate. The emitted broadGates are not the manifest’s nine exact gate IDs, and fetch failure is not fatal. Amend only the C109 directory: capture structured, complete refs/worktree provenance and fail closed on missing preservation; implement and verify the exact ledger and sequence schema; bind public evidence to the exact synthetic main->C61->C83 tree with retained hashes/effects and bounded cleanup; emit/assert all nine manifest gates OPEN; require successful fetch and current-head identity. Regenerate both orders, determinism, negative fixtures, and both public workflows, commit/push a new PR head, and submit it to the script CI gate. Preserve C61/C83 and C79 ownership; leave all nine project gates open, retain C61 OPEN_RECONCILE_TEST_REWRITTEN, and retain the C83 6400-sample loss as C79/provider-audio evidence."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-224",
       "workTypeName": "task"
     },
     {
-      "chainingTraceDepth": 29,
+      "chainingTraceDepth": 32,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"branch\": \"codex/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c101-retire-cli-provider-session-runtime",
+      "name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "requestId": "audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z",
+      "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
       "state": {
         "name": "init",
         "type": "PROCESSING"
       },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"branch\": \"codex/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}"
+      },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-thoughts-227",
-      "workTypeName": "thoughts"
+      "workId": "work-task-232",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 32,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"branch\": \"codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"branch\": \"codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-236",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 32,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence\", \"branch\": \"codex/audio-runtime-c112-retire-cli-session-trace-evidence\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence\", \"branch\": \"codex/audio-runtime-c112-retire-cli-session-trace-evidence\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-238",
+      "workTypeName": "task"
     },
     {
       "chainingTraceDepth": 22,
@@ -2094,6 +2210,63 @@
       "workTypeName": "review"
     },
     {
+      "chainingTraceDepth": 33,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c108-audio-device-boundary-characterization-20260912T1920Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #493 head 336cc2aa7591cbf0b1ffdf35bec29095e4dcf898 changes only the owned evidence directory and reported required CI is green. Independent replay and malformed-PCM runs passed with clean shutdown. Reject: analyze.py:93-115 uses bare-name caller matching and truncates results, producing false cross-provider and unrelated ConnectSession/ReadFrame/WriteFrame caller edges; exact caller ownership is unproven. Inventory omits reachable paths including go-agent-runtime/services/session/internal/live/invoke.go:191-225 pump lifecycle, devices/internal/probe/capture.go:48 and bridge.go:190 resampling, and services/tools/internal/filesystem/tool_filesystem.go:232-233 audioToPCM16k; classify or justify each and regenerate findings/candidates. provenance.json pins 22d7f712 and release.json pins 0ec1ea3, while HEAD is 336cc2a; public artifacts likewise lack a verified final-head equivalence. Refresh provenance, release, hashes, and both public cases at final HEAD, then rerun pristine and causal-negative verification. ownership.json has only prose recheck placeholders for C83/C84/C99/C101/C103/C104/C107 and lacks timestamped live PR/head/diff/writer-path observations; re-query those peers and update intersections. Harden verify.py:168,248,763 to reject committed mutations across all tracked paths and validate actual artifact hashes/effects, not only metadata. Correct candidate Wire destinations from services/X/internal/wire to the required services/X/wire layout. Executor must make these owned-evidence/analyzer/verifier corrections, regenerate evidence, submit the exact new HEAD to script CI, and obtain a fresh review."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-230",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 21,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c109-browser-retirement-integration-rehearsal-20260912T1924Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #495 at 4b0a763d has green current-head CI (run 34716813540), and independent normal plus malformed/canceled public runs passed, but the evidence gate fails. analyze.py truncates git output before parsing refs/worktrees; the report is visibly truncated, omits required C61/C83 refs, and records both preserved worktrees absent while verify.py accepts absent as unchanged. The ledger is heuristic and hand-coded: it lacks exact source spans, callers, conflict kinds, evidence IDs, and live CI/log attribution. The bounded sequence omits required inputs, preconditions, commands, expected observables, timeouts, stop conditions, and rollback checkpoints. run_public_checks.py hard-codes effects, discards the detailed shipped workflow report, accepts arbitrary --tree input, ignores cleanup failures, and has an unbounded timeout-path communicate. The emitted broadGates are not the manifest’s nine exact gate IDs, and fetch failure is not fatal. Amend only the C109 directory: capture structured, complete refs/worktree provenance and fail closed on missing preservation; implement and verify the exact ledger and sequence schema; bind public evidence to the exact synthetic main->C61->C83 tree with retained hashes/effects and bounded cleanup; emit/assert all nine manifest gates OPEN; require successful fetch and current-head identity. Regenerate both orders, determinism, negative fixtures, and both public workflows, commit/push a new PR head, and submit it to the script CI gate. Preserve C61/C83 and C79 ownership; leave all nine project gates open, retain C61 OPEN_RECONCILE_TEST_REWRITTEN, and retain the C83 6400-sample loss as C79/provider-audio evidence."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-233",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 10,
+      "currentChainingTraceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "previousChainingTraceIds": [
+        "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf"
+      ],
+      "requestId": "audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #494 head 8593f08f has all nine CI checks green, and independent pinned analyzer/public replay passed. However, verify.py:720-782 fails open: removing one symbol row and its edges, then adjusting self-reported totals, still passes with 2,488 instead of 2,489 symbols. verify.py:1007-1029 also accepts subtraction with preserved PR #438 removed (40 instead of 41 checkpoints). Repair verifier completeness checks and add deletion-row regressions; require all active/preserved PR identities, then rerun release evidence, push, and resubmit the exact head to SCRIPT CI without polling. Do not merge 8593f08f."
+      },
+      "traceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
+      "workId": "work-review-234",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 9,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "name": "audio-runtime-c62-validation-contract-anchor-repair",
@@ -2395,6 +2568,36 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-125",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 5,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"branch\": \"codex/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-request-time-6856b79998050320ff15cec7aa8baf47",
+      "failureDetail": {
+        "message": "runner returned failed outcome",
+        "reason": "unknown"
+      },
+      "name": "audio-runtime-c84-retire-cli-room-participant-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-request-time-6856b79998050320ff15cec7aa8baf47"
+      ],
+      "requestId": "audio-runtime-c84-room-participant-lifecycle-retirement-20260912T0804Z",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"branch\": \"codex/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+        "continue_feedback": "Admission is confirmed for audio-runtime/audio-runtime-v1; branch and prd.json match, HEAD 3e9aee59 is clean/pushed, and required ancestry is intact. C84 focused, race, consumer, mutation, regression, Wire, lint, staticcheck, vet, coverage and retirement evidence remains green. C79 still exclusively owns the shared registries; PR #470 is open at a5d26045 with no guarded merge. Next: after C79 merges, fetch origin/main, merge it into this same branch, apply only demonstrated C84 registry/baseline changes, rerun bounded gates, push PR #486, and return ACCEPTED to script CI without polling."
+      },
+      "traceId": "trace-request-time-6856b79998050320ff15cec7aa8baf47",
+      "workId": "work-task-136",
       "workTypeName": "task"
     },
     {
@@ -4594,6 +4797,81 @@
       "workTypeName": "plan"
     },
     {
+      "chainingTraceDepth": 31,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"branch\": \"codex/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"branch\": \"codex/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-plan-231",
+      "workTypeName": "plan"
+    },
+    {
+      "chainingTraceDepth": 31,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"branch\": \"codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"branch\": \"codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-plan-235",
+      "workTypeName": "plan"
+    },
+    {
+      "chainingTraceDepth": 31,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence\", \"branch\": \"codex/audio-runtime-c112-retire-cli-session-trace-evidence\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence\", \"branch\": \"codex/audio-runtime-c112-retire-cli-session-trace-evidence\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-plan-237",
+      "workTypeName": "plan"
+    },
+    {
       "chainingTraceDepth": 6,
       "content": [
         {
@@ -6710,6 +6988,106 @@
       },
       "traceId": "trace-request-time-d168f2a5f82715cea881c2435f145bd1",
       "workId": "work-thoughts-226",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 29,
+      "content": [
+        {
+          "text": "{\"request\":{\"requestId\":\"audio-runtime-c110-c112-residual-retirement-20260912T2010Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c110-retire-cli-session-instruction-resolution\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI session instruction resolution and composition policy\",\"requestedOutcome\":\"From accepted main d4766c3dbbf2c198142047ead4449d58dd47d485, move reusable instruction-file/workspace resolution, skill-summary loading, filesystem-scope composition, grounding-policy composition and error attribution from agent-cli/internal/services/internal/agentruntime/session_instructions.go behind a thin public go-agent-runtime/services/sessioninstructions contract, private internal/service implementation and dedicated Wire construction. Keep RunSessionWithInstructions* as decision-free compatibility/orchestration adapters and preserve provider construction, replay bypass, text seed, duration and audio behavior. The accepted-main legacy file is 277 physical production lines; require at least 190 net legacy lines retired, excluding new runtime, generated, test and evidence lines. Do not edit C56 recording, C59 audio input, C67 image, C72 session.go transport, C74 options, C79 diagnostics, C104 finalization, C107 evidence, or the C79-leased scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json. Checkpoint the disjoint service/adapter/tests now; after C79's reviewed guarded merge, reconcile only demonstrated C110 registry/baseline changes. Continue through actionable repairs, current-head script CI, independent review and guarded merge; the primary will then stage and independently probe the exact immutable executable.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan; factory/projects/audio-runtime/acceptance.md; docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/candidates.json#session-instruction-resolution\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_instructions.go\",\"agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go\",\"go-agent-runtime/services/sessioninstructions/\",\"coverage-manifest/go-agent-runtime/services/sessioninstructions/\",\"docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/\"],\"verification\":\"Record exact source/file baselines and caller inventory. From a separate GOWORK=off consumer with no agent-cli imports, construct the public service and prove literal/file/AGENTS.md selection, explicit none, bounded instruction input, skill-summary composition, filesystem-scope and grounding-policy composition, input immutability, loader/stat/read failures, missing capability, cancellation and no hidden initialization. Run focused normal/race CLI instruction and composition controls, malformed/oversized and missing-loader fail-closed mutations before provider construction, public yui instruction/text-seed process workflow with observable output and clean shutdown, and an existing credential-free audio/tool replay regression. Use bounded deadlines. Run gofmt, vet, pinned lint/staticcheck, coverage, architecture/size/complexity and generated Wire checks without raising a baseline or absorbing peer findings. Submit changed-head script CI without polling; require fresh independent review and guarded merge. Then require a fresh Luna engineering scope=vertical probe for SERVICE, QUALITY, EMBED and PARITY that launches the shipped instruction workflow, checks effects and shutdown, exercises one invalid instruction negative, and reruns the existing audio/tool workflow. No credentials, Realtime usage, device claim or acoustic claim.\",\"remainingGateIDs\":[\"SERVICE\",\"QUALITY\",\"EMBED\",\"PARITY\"]}},{\"name\":\"audio-runtime-c111-retire-cli-tool-continuation-lifecycle\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI tool-continuation terminal policy\",\"requestedOutcome\":\"From accepted main d4766c3dbbf2c198142047ead4449d58dd47d485, move unresolved tool-result and image/tool-continuation obligation construction, deterministic metadata, typed error identity and terminal error joining from agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go behind a thin public go-agent-runtime/services/sessioncontinuation contract, private internal/service implementation and dedicated Wire construction. Keep only explicit Deprecated aliases and decision-free adapters needed by existing callers. Preserve exact call IDs, first non-success send status, stable ordering, errors.Is/errors.As identity, primary provider/cancellation/audio-output causes and image-specific precedence. The accepted-main legacy file is 147 physical production lines; require at least 90 net legacy lines retired, excluding new runtime, generated, test and evidence lines. Do not edit C78 session_tools, C79 diagnostics/observer state, C89 liveness, C101 provider replay, C104 finalization, C107 evidence, or the C79-leased Wire/architecture registries. Checkpoint disjoint work now and reconcile only demonstrated C111 registry/baseline changes after C79's reviewed merge. Continue actionable repairs through current-head script CI, independent review and guarded merge before immutable probing.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan; factory/projects/audio-runtime/acceptance.md; docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/candidates.json#session-tool-continuation-lifecycle\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go\",\"agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle_c111_test.go\",\"go-agent-runtime/services/sessioncontinuation/\",\"coverage-manifest/go-agent-runtime/services/sessioncontinuation/\",\"docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/\"],\"verification\":\"Record exact source/symbol/caller baselines. Prove the public contract from a separate GOWORK=off consumer without CLI imports, using errors.Is/errors.As for unresolved-result, image-continuation and ordinary-continuation errors. Run focused normal/race controls for blank/duplicate IDs, lexical ordering, first failed send status, immutable snapshots, stable metadata, exact primary-error joins, image precedence, cancellation and zero survivors. Preserve TestSessionToolResultConversationMissingContinuationIsBounded, TestSessionToolResultConversationCorruptAudioDeltaIsRejected, TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose and TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle. Negative controls must omit a required continuation and corrupt an audio delta, yielding a bounded typed failure rather than silent completion. Launch the credential-free shipped tool-continuation replay, verify final output/error effects and clean shutdown, then rerun an existing non-tool audio workflow. Run formatting, vet, pinned lint/staticcheck, coverage, architecture/size/complexity and Wire checks without baseline growth. Submit changed-head script CI without polling; require independent review, guarded merge and a fresh Luna engineering scope=vertical probe for SERVICE, REPLAY, FAILURES, QUALITY and PARITY against the immutable executable. No credentials, Realtime or physical/acoustic claim.\",\"remainingGateIDs\":[\"SERVICE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}},{\"name\":\"audio-runtime-c112-retire-cli-session-trace-evidence\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI session trace capture and publication policy\",\"requestedOutcome\":\"From accepted main d4766c3dbbf2c198142047ead4449d58dd47d485, move trace creation, deterministic clock requirement, microphone/upload/playback/render tap chaining, runtime observation/redaction, bounded close, failure retention and atomic bundle attachment from agent-cli/internal/services/internal/agentruntime/trace.go behind a thin public go-agent-runtime/services/sessiontrace contract, private internal/service implementation and dedicated Wire construction. Keep only CLI request/options adaptation and decision-free compatibility glue; device ownership remains in the gateway and recording primitives remain centralized in go-audio. Preserve prior observers, error joining, trace credential redaction, unavailable-render evidence, no-overwrite publication and original evidence on failure. The accepted-main legacy file is 119 physical production lines; require at least 70 net legacy lines retired, excluding runtime, generated, test and evidence lines. Do not edit C56 recording, C59/C92 audio I/O, C64/C96 device paths, C79 diagnostics, C97 observation, C108 evidence, or the C79-leased Wire/architecture registries. Checkpoint disjoint service/adapter/tests now and apply only demonstrated C112 shared-file changes after C79's reviewed merge. Continue actionable repairs through current-head script CI, independent review and guarded merge before immutable probing.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan; factory/projects/audio-runtime/acceptance.md; docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/candidates.json#session-trace-evidence\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/trace.go\",\"agent-cli/internal/services/internal/agentruntime/trace_c112_test.go\",\"go-agent-runtime/services/sessiontrace/\",\"coverage-manifest/go-agent-runtime/services/sessiontrace/\",\"docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/\"],\"verification\":\"Record exact source/symbol/caller baselines. From a separate GOWORK=off consumer with no agent-cli imports, construct the service with a deterministic clock and prove microphone pre-gate/uploaded, speaker-enqueued/rendered and runtime observations, prior-observer chaining, redaction, bounded close and attach behavior. Focused normal/race tests must cover nil clock, cancellation, observer errors, duplicate destination, rename failure, unpublished failure retention, immutable inputs and zero survivors. Same-length trace mutation, missing clock and duplicate destination must fail closed without overwriting evidence. Launch exact shipped yui with --record-dir/--trace-audio on credential-free audio/tool replay; check correlated observable files/events, redaction, terminal effects and clean shutdown, then recheck an existing interruption replay. Explicitly label process smoke, software replay and simulated callbacks; make no actual-device or acoustic claim. Run formatting, vet, pinned lint/staticcheck, coverage, architecture/size/complexity and Wire checks without baseline growth. Submit changed-head script CI without polling; require independent review, guarded merge and a fresh Luna engineering scope=vertical probe for TRACE, REPLAY, SERVICE, QUALITY and PARITY against the immutable executable.\",\"remainingGateIDs\":[\"TRACE\",\"REPLAY\",\"SERVICE\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c101-retire-cli-provider-session-runtime",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c99-room-participant-planning-retirement-20260912T1355Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"request\":{\"requestId\":\"audio-runtime-c110-c112-residual-retirement-20260912T2010Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c110-retire-cli-session-instruction-resolution\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI session instruction resolution and composition policy\",\"requestedOutcome\":\"From accepted main d4766c3dbbf2c198142047ead4449d58dd47d485, move reusable instruction-file/workspace resolution, skill-summary loading, filesystem-scope composition, grounding-policy composition and error attribution from agent-cli/internal/services/internal/agentruntime/session_instructions.go behind a thin public go-agent-runtime/services/sessioninstructions contract, private internal/service implementation and dedicated Wire construction. Keep RunSessionWithInstructions* as decision-free compatibility/orchestration adapters and preserve provider construction, replay bypass, text seed, duration and audio behavior. The accepted-main legacy file is 277 physical production lines; require at least 190 net legacy lines retired, excluding new runtime, generated, test and evidence lines. Do not edit C56 recording, C59 audio input, C67 image, C72 session.go transport, C74 options, C79 diagnostics, C104 finalization, C107 evidence, or the C79-leased scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json. Checkpoint the disjoint service/adapter/tests now; after C79's reviewed guarded merge, reconcile only demonstrated C110 registry/baseline changes. Continue through actionable repairs, current-head script CI, independent review and guarded merge; the primary will then stage and independently probe the exact immutable executable.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan; factory/projects/audio-runtime/acceptance.md; docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/candidates.json#session-instruction-resolution\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_instructions.go\",\"agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go\",\"go-agent-runtime/services/sessioninstructions/\",\"coverage-manifest/go-agent-runtime/services/sessioninstructions/\",\"docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/\"],\"verification\":\"Record exact source/file baselines and caller inventory. From a separate GOWORK=off consumer with no agent-cli imports, construct the public service and prove literal/file/AGENTS.md selection, explicit none, bounded instruction input, skill-summary composition, filesystem-scope and grounding-policy composition, input immutability, loader/stat/read failures, missing capability, cancellation and no hidden initialization. Run focused normal/race CLI instruction and composition controls, malformed/oversized and missing-loader fail-closed mutations before provider construction, public yui instruction/text-seed process workflow with observable output and clean shutdown, and an existing credential-free audio/tool replay regression. Use bounded deadlines. Run gofmt, vet, pinned lint/staticcheck, coverage, architecture/size/complexity and generated Wire checks without raising a baseline or absorbing peer findings. Submit changed-head script CI without polling; require fresh independent review and guarded merge. Then require a fresh Luna engineering scope=vertical probe for SERVICE, QUALITY, EMBED and PARITY that launches the shipped instruction workflow, checks effects and shutdown, exercises one invalid instruction negative, and reruns the existing audio/tool workflow. No credentials, Realtime usage, device claim or acoustic claim.\",\"remainingGateIDs\":[\"SERVICE\",\"QUALITY\",\"EMBED\",\"PARITY\"]}},{\"name\":\"audio-runtime-c111-retire-cli-tool-continuation-lifecycle\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI tool-continuation terminal policy\",\"requestedOutcome\":\"From accepted main d4766c3dbbf2c198142047ead4449d58dd47d485, move unresolved tool-result and image/tool-continuation obligation construction, deterministic metadata, typed error identity and terminal error joining from agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go behind a thin public go-agent-runtime/services/sessioncontinuation contract, private internal/service implementation and dedicated Wire construction. Keep only explicit Deprecated aliases and decision-free adapters needed by existing callers. Preserve exact call IDs, first non-success send status, stable ordering, errors.Is/errors.As identity, primary provider/cancellation/audio-output causes and image-specific precedence. The accepted-main legacy file is 147 physical production lines; require at least 90 net legacy lines retired, excluding new runtime, generated, test and evidence lines. Do not edit C78 session_tools, C79 diagnostics/observer state, C89 liveness, C101 provider replay, C104 finalization, C107 evidence, or the C79-leased Wire/architecture registries. Checkpoint disjoint work now and reconcile only demonstrated C111 registry/baseline changes after C79's reviewed merge. Continue actionable repairs through current-head script CI, independent review and guarded merge before immutable probing.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan; factory/projects/audio-runtime/acceptance.md; docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/candidates.json#session-tool-continuation-lifecycle\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go\",\"agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle_c111_test.go\",\"go-agent-runtime/services/sessioncontinuation/\",\"coverage-manifest/go-agent-runtime/services/sessioncontinuation/\",\"docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/\"],\"verification\":\"Record exact source/symbol/caller baselines. Prove the public contract from a separate GOWORK=off consumer without CLI imports, using errors.Is/errors.As for unresolved-result, image-continuation and ordinary-continuation errors. Run focused normal/race controls for blank/duplicate IDs, lexical ordering, first failed send status, immutable snapshots, stable metadata, exact primary-error joins, image precedence, cancellation and zero survivors. Preserve TestSessionToolResultConversationMissingContinuationIsBounded, TestSessionToolResultConversationCorruptAudioDeltaIsRejected, TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose and TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle. Negative controls must omit a required continuation and corrupt an audio delta, yielding a bounded typed failure rather than silent completion. Launch the credential-free shipped tool-continuation replay, verify final output/error effects and clean shutdown, then rerun an existing non-tool audio workflow. Run formatting, vet, pinned lint/staticcheck, coverage, architecture/size/complexity and Wire checks without baseline growth. Submit changed-head script CI without polling; require independent review, guarded merge and a fresh Luna engineering scope=vertical probe for SERVICE, REPLAY, FAILURES, QUALITY and PARITY against the immutable executable. No credentials, Realtime or physical/acoustic claim.\",\"remainingGateIDs\":[\"SERVICE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}},{\"name\":\"audio-runtime-c112-retire-cli-session-trace-evidence\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI session trace capture and publication policy\",\"requestedOutcome\":\"From accepted main d4766c3dbbf2c198142047ead4449d58dd47d485, move trace creation, deterministic clock requirement, microphone/upload/playback/render tap chaining, runtime observation/redaction, bounded close, failure retention and atomic bundle attachment from agent-cli/internal/services/internal/agentruntime/trace.go behind a thin public go-agent-runtime/services/sessiontrace contract, private internal/service implementation and dedicated Wire construction. Keep only CLI request/options adaptation and decision-free compatibility glue; device ownership remains in the gateway and recording primitives remain centralized in go-audio. Preserve prior observers, error joining, trace credential redaction, unavailable-render evidence, no-overwrite publication and original evidence on failure. The accepted-main legacy file is 119 physical production lines; require at least 70 net legacy lines retired, excluding runtime, generated, test and evidence lines. Do not edit C56 recording, C59/C92 audio I/O, C64/C96 device paths, C79 diagnostics, C97 observation, C108 evidence, or the C79-leased Wire/architecture registries. Checkpoint disjoint service/adapter/tests now and apply only demonstrated C112 shared-file changes after C79's reviewed merge. Continue actionable repairs through current-head script CI, independent review and guarded merge before immutable probing.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan; factory/projects/audio-runtime/acceptance.md; docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/candidates.json#session-trace-evidence\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/trace.go\",\"agent-cli/internal/services/internal/agentruntime/trace_c112_test.go\",\"go-agent-runtime/services/sessiontrace/\",\"coverage-manifest/go-agent-runtime/services/sessiontrace/\",\"docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/\"],\"verification\":\"Record exact source/symbol/caller baselines. From a separate GOWORK=off consumer with no agent-cli imports, construct the service with a deterministic clock and prove microphone pre-gate/uploaded, speaker-enqueued/rendered and runtime observations, prior-observer chaining, redaction, bounded close and attach behavior. Focused normal/race tests must cover nil clock, cancellation, observer errors, duplicate destination, rename failure, unpublished failure retention, immutable inputs and zero survivors. Same-length trace mutation, missing clock and duplicate destination must fail closed without overwriting evidence. Launch exact shipped yui with --record-dir/--trace-audio on credential-free audio/tool replay; check correlated observable files/events, redaction, terminal effects and clean shutdown, then recheck an existing interruption replay. Explicitly label process smoke, software replay and simulated callbacks; make no actual-device or acoustic claim. Run formatting, vet, pinned lint/staticcheck, coverage, architecture/size/complexity and Wire checks without baseline growth. Submit changed-head script CI without polling; require independent review, guarded merge and a fresh Luna engineering scope=vertical probe for TRACE, REPLAY, SERVICE, QUALITY and PARITY against the immutable executable.\",\"remainingGateIDs\":[\"TRACE\",\"REPLAY\",\"SERVICE\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-227",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 25,
+      "content": [
+        {
+          "text": "No new Work dispatched.\n\nC103 remains preserved at PR 490 head `14cd3496`: eight CI checks pass; static is blocked by C79-owned Wire and architecture registry paths.\n\nC79’s review rejected three bounded lifecycle defects and stale evidence provenance. The same C79 executor is already running the repair. C110–C112 are already admitted, so no duplicate capacity work is needed.\n\nUpdated [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md:1) with the evidence and exact next decision.",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c103-retire-cli-rtc-session-runtime",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c102-c103-validation-retirement-20260912T1534Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "No new Work dispatched.\n\nC103 remains preserved at PR 490 head `14cd3496`: eight CI checks pass; static is blocked by C79-owned Wire and architecture registry paths.\n\nC79’s review rejected three bounded lifecycle defects and stale evidence provenance. The same C79 executor is already running the repair. C110–C112 are already admitted, so no duplicate capacity work is needed.\n\nUpdated [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md:1) with the evidence and exact next decision."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-228",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 25,
+      "content": [
+        {
+          "text": "Reconciliation complete; no Work dispatched or moved.\n\n- C104 remains preserved at clean PR 492 head `d5734d2c`.\n- Eight of nine CI checks pass; static is blocked solely by C79-owned Wire and architecture registries.\n- C79’s repair owner is active. C104 must resume only after C79’s reviewed guarded merge.\n- Eight useful delivery items remain active or queued; no safe independent ninth item was identified.\n- No vertical is acceptance-ready. All nine project criteria remain open.\n- Updated [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md:3) with evidence and the exact next decision.",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c104-retire-cli-session-finalization-boundary",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c102-c103-validation-retirement-20260912T1534Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "Reconciliation complete; no Work dispatched or moved.\n\n- C104 remains preserved at clean PR 492 head `d5734d2c`.\n- Eight of nine CI checks pass; static is blocked solely by C79-owned Wire and architecture registries.\n- C79’s repair owner is active. C104 must resume only after C79’s reviewed guarded merge.\n- Eight useful delivery items remain active or queued; no safe independent ninth item was identified.\n- No vertical is acceptance-ready. All nine project criteria remain open.\n- Updated [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md:3) with evidence and the exact next decision."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-229",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 6,
+      "content": [
+        {
+          "text": "Reconciliation complete; no Work was dispatched or moved.\n\n- C84 is preserved at clean PR #486 head `3e9aee59`; its terminal failure was executor-level, not runtime evidence.\n- C84 remains blocked only by C79’s exclusive Wire/baseline ownership. Resuming it now would repeat an unchanged attempt.\n- C79 is in fresh independent review (`work-review-239`) with all nine CI checks green.\n- C107–C112 remain active. One executor slot is free, but no additional conflict-free item is currently evidenced.\n- No vertical was accepted; all nine project criteria remain open.\n- Updated [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md) and [implementation-handoff.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/factory/docs/implementation-handoff.md).\n\nNext decision: consume C79’s review, then—if approved—guarded-merge and vertically probe C79 before explicitly resuming the same C84 task.",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-request-time-6856b79998050320ff15cec7aa8baf47",
+      "name": "audio-runtime-c84-retire-cli-room-participant-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-request-time-6856b79998050320ff15cec7aa8baf47"
+      ],
+      "requestId": "audio-runtime-c84-room-participant-lifecycle-retirement-20260912T0804Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "Reconciliation complete; no Work was dispatched or moved.\n\n- C84 is preserved at clean PR #486 head `3e9aee59`; its terminal failure was executor-level, not runtime evidence.\n- C84 remains blocked only by C79’s exclusive Wire/baseline ownership. Resuming it now would repeat an unchanged attempt.\n- C79 is in fresh independent review (`work-review-239`) with all nine CI checks green.\n- C107–C112 remain active. One executor slot is free, but no additional conflict-free item is currently evidenced.\n- No vertical was accepted; all nine project criteria remain open.\n- Updated [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md) and [implementation-handoff.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/factory/docs/implementation-handoff.md).\n\nNext decision: consume C79’s review, then—if approved—guarded-merge and vertically probe C79 before explicitly resuming the same C84 task."
+      },
+      "traceId": "trace-request-time-6856b79998050320ff15cec7aa8baf47",
+      "workId": "work-thoughts-240",
       "workTypeName": "thoughts"
     },
     {

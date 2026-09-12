@@ -15,4 +15,4 @@
 === RUN   TestSessionDirectoryRecordingWritesConversationSessionLog
 --- PASS: TestSessionDirectoryRecordingWritesConversationSessionLog (0.00s)
 PASS
-ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	0.442s
+ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	0.431s

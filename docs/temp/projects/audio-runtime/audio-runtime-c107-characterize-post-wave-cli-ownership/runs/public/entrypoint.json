@@ -11,11 +11,11 @@
     "300"
   ],
   "credential_free": true,
-  "elapsed_seconds": 11.887899,
+  "elapsed_seconds": 10.665169,
   "exit_code": 0,
   "realtime": "not used; delegated offline fixture replay",
   "schema_version": "c107-public-regressions-entrypoint-v1",
   "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "stdout_sha256": "7a6524cd05433c28e0c3f95a08eb40443ad8cf31958da28fbf71bab9f72127a7"
+  "stdout_sha256": "00e16ffb7c3775538e0ab485cb6f91f0eca1c9bfe1efab7f909dfec3a5ea4d40"
 }
