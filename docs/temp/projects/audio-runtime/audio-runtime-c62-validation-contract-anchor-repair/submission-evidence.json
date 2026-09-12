@@ -4,18 +4,20 @@
   "candidateStatus": "READY_FOR_SCRIPT_CI",
   "candidate": {
     "branch": "codex/audio-runtime-c62-validation-contract-anchor-repair",
-    "revision": "05f4c86bae78d5c14fa05a5d5b3e0dca828bee61",
+    "revision": "5323b76ef9eda776564a569b0a7f88faf24b24b6",
     "implementationRevision": "63988c0af875f2fd379b0fc866282dee600ea09e",
     "pullRequest": 453,
     "pullRequestUrl": "https://github.com/portpowered/go-agent-harness/pull/453",
     "baselineOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
     "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-    "worktreeStatus": "tracked candidate clean; pre-existing untracked test bytecode preserved",
+    "worktreeStatus": "tracked candidate clean; no untracked paths",
     "ancestry": {
       "startupIntegrationIsAncestor": true,
       "originMainIsAncestor": true,
       "fetchCommand": "rtk git fetch origin main",
-      "acceptedMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06"
+      "planningOriginMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+      "acceptedMainRevision": "59af6325614d80173447fe2018a0471e27b4e7b1",
+      "integratedOriginMainRevision": "59af6325614d80173447fe2018a0471e27b4e7b1"
     }
   },
   "admission": {
@@ -145,7 +147,8 @@
     "diagnostic": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_02 rendered 171191/177591 compared samples, losing exactly 6400; provider/playback accounting reported zero drops, overflows and discards.",
     "scope": "C47-owned shipped audio integration; no C62 factory-script check failed.",
     "acceptedMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
-    "nextAction": "Do not resubmit this unchanged C47 failure. C47's repaired reviewed merge is now the accepted-main ancestor; this same C62 branch retains that ancestry, has rerun the focused and accumulated C62 controls, and is ready to submit its changed head to SCRIPT CI without polling."
+    "resolution": "The reviewed C64 provider-audio terminal-drain repair is present in fetched origin/main 59af6325614d80173447fe2018a0471e27b4e7b1 and was integrated into this C62 branch by merge 5323b76ef9eda776564a569b0a7f88faf24b24b6.",
+    "nextAction": "Preserve this external C47-owned rejection as history; do not retry its old head. C62 integrated current origin/main, reran its focused and accumulated controls, and is ready to submit the changed same-task head to SCRIPT CI without polling."
   },
   "successorCompletionRegression": {
     "result": "PASS",
@@ -156,8 +159,11 @@
     "realtimeSessionsUsed": 0
   },
   "postRejectionRevalidation": {
-    "sourceRevision": "05f4c86bae78d5c14fa05a5d5b3e0dca828bee61",
-    "acceptedMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6",
+    "acceptedMainRevision": "59af6325614d80173447fe2018a0471e27b4e7b1",
+    "planningOriginMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "integratedOriginMainRevision": "59af6325614d80173447fe2018a0471e27b4e7b1",
+    "integrationMergeRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6",
     "originMainAlreadyAncestor": true,
     "focused": [
       {
@@ -214,7 +220,14 @@
       ],
       "note": "Observed completed run for the exact reviewed pre-evidence-update head; this executor does not poll the replacement run."
     },
-    "nextAction": "Push this changed same-task head and submit it to SCRIPT CI; the executor does not poll CI."
+    "nextAction": "Push this changed same-task head with the current-main integration evidence and submit it to SCRIPT CI; the executor does not poll CI."
+  },
+  "currentMainIntegration": {
+    "previousHead": "923d90705a4876f2908d59a161a20669d02c6445",
+    "originMainRevision": "59af6325614d80173447fe2018a0471e27b4e7b1",
+    "mergeRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6",
+    "result": "PASS; fetched current origin/main was merged cleanly in the isolated C62 worktree, startup integration and origin/main ancestry both pass, and no C62-owned source or fixture conflict occurred.",
+    "c64Context": "The integrated main revision contains the reviewed provider-audio terminal-drain repair that was the external failure recorded above."
   },
   "changedFiles": {
     "factory/scripts/project_scope_amendment.py": "fabe4bdc74c21703c872239ba57c3abc15d760a7690985d7e8404ba2d65e8817",
@@ -257,6 +270,42 @@
     {
       "command": "rtk git diff --check",
       "result": "PASS"
+    },
+    {
+      "command": "rtk git merge-base --is-ancestor 8bdafc7f947a3a2c9856220abdc539437035bd21 HEAD && rtk git merge-base --is-ancestor origin/main HEAD",
+      "result": "PASS",
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6",
+      "originMainRevision": "59af6325614d80173447fe2018a0471e27b4e7b1"
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_project_control factory.scripts.tests.test_prepare_validation",
+      "result": "PASS",
+      "tests": 34,
+      "skipped": 16,
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6"
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 FACTORY_ROOT=<admitted-factory-root> FACTORY_TEST_CONTRACT_CHILD=1 FACTORY_TEST_MODULES='factory.scripts.tests.test_project_scope_amendment factory.scripts.tests.test_project_control factory.scripts.tests.test_prepare_validation factory.scripts.tests.test_prepare_validation_budget' make -e test-factory-scripts",
+      "result": "PASS",
+      "tests": 38,
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6"
+    },
+    {
+      "command": "rtk proxy env -u FACTORY_ROOT -u FACTORY_PROJECT_MANIFEST PYTHONDONTWRITEBYTECODE=1 make test-factory-scripts",
+      "result": "PASS",
+      "tests": 76,
+      "commandContractTests": 4,
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6"
+    },
+    {
+      "command": "rtk proxy env PYTHONDONTWRITEBYTECODE=1 python3 -B -m py_compile factory/scripts/project_scope_amendment.py factory/scripts/tests/test_prepare_validation.py factory/scripts/tests/test_project_scope_amendment.py factory/scripts/tests/test_project_control.py factory/scripts/tests/test_prepare_validation_budget.py",
+      "result": "PASS",
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6"
+    },
+    {
+      "command": "rtk git diff --check",
+      "result": "PASS",
+      "sourceRevision": "5323b76ef9eda776564a569b0a7f88faf24b24b6"
     }
   ],
   "deferredGates": {
