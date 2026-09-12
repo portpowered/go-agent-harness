@@ -170,3 +170,27 @@ made on the Darwin validator.
   merge, immutable validation, physical/acoustic proof or project completion.
   The next action is push this same revision, update PR `#467`, and submit the
   changed head to script-owned CI without polling.
+
+## Owned-path correction and final candidate checkpoint
+
+- The provider regression assertion was moved out of the unowned
+  `session_bare_test.go` and into the admitted
+  `session_runtime_selection_test.go`; the former is back to its predecessor
+  content. The behavior and service implementation are unchanged. This
+  ownership correction is `bc2602f5da29fcaa8d4edfbb186a4e43ac066b1e`.
+- On the corrected head, `verify.py --mode all` returned `ACCEPTED`: inventory
+  remains `930 -> 619` with `311` retired; the literal matrix, external
+  GOWORK=off consumer, normal/race sessionconfig parity, focused CLI parity,
+  and both isolated mutation controls passed. The mutation oracles again
+  failed exactly as intended in temporary detached worktrees and reported
+  `tree_clean: true`. `run.py --case all` also returned `ACCEPTED` across all
+  seven cases. Focused post-correction tests passed 69 CLI tests and 22
+  service tests across three packages. The exact final head is pushed as
+  `bc2602f5da29fcaa8d4edfbb186a4e43ac066b1e`.
+- Startup `8bdafc7f947a3a2c9856220abdc539437035bd21`, accepted main
+  `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`, and fetched `origin/main`
+  `84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f` are all ancestors of the final
+  head; the worktree is clean and `git diff --check` passes. PR `#467` is
+  updated to this head and remains open for script-owned CI. No CI result is
+  claimed, and no other project, waiver, peer path or host checkout was
+  introduced.
