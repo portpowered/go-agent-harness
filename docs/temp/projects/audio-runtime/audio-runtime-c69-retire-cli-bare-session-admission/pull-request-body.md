@@ -15,12 +15,13 @@
 
 ## Focused validation
 
-- Bare-admission normal: 13 tests across 3 packages
-- Bare-admission race: 39 tests across 3 packages
+- Bare-admission normal: 16 tests across 3 packages
+- Bare-admission race: 48 tests across 3 packages
 - CLI compatibility normal/race: 27 tests each
 - Independent consumer normal/race: pass with `GOWORK=off`
 - `make fmt`, `make vet`, pinned golangci-lint v2.9.0, pinned staticcheck 2026.1: pass
 - Coverage registration: 179 packages across 6 modules
+- Full `coverage-changed` target including the 80% bare-admission floor: pass
 
 ## Handoff state
 

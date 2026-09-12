@@ -2,17 +2,16 @@
 
 All commands below were run in the isolated C69 worktree with the repository's
 `rtk` command wrapper. No Realtime session, physical device, or acoustic claim
-is made by this slice. The clean branch is pushed at `d85daa6a` and PR #458 is
-open; CI was not polled.
+is made by this slice. PR #458 is open; CI was not polled.
 
 ## Passing focused evidence
 
 ```text
 rtk go test ./go-agent-runtime/services/bareadmission/... -count=1
-Go test: 13 passed in 3 packages
+Go test: 16 passed in 3 packages
 
 rtk go test -race ./go-agent-runtime/services/bareadmission/... -count=3
-Go test: 39 passed in 3 packages
+Go test: 48 passed in 3 packages
 
 rtk go test ./agent-cli/internal/services/internal/agentruntime -run 'Test(ResolveBareSession|ResolveRealtimeSessionProvider|NewLiveSessionInferencerCarriesBareAudioPolicies|BareSession|BrowserToolsMinimal)' -count=1 -timeout=300s
 Go test: 27 passed in 1 packages
@@ -28,6 +27,9 @@ ok example.com/audio-runtime-c69-bareadmission-consumer
 
 rtk make coverage-registration
 coverage registration passed: 179 workspace packages checked across 6 modules
+
+rtk make coverage-changed COVERAGE_BASE=d5d6f84363d8569d5dc1a59985f8d45cf50e1d06
+coverage gate passed, including the 80.00% bareadmission package floor
 
 rtk make fmt
 all workspace Go modules passed formatting validation
