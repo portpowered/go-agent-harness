@@ -18,7 +18,7 @@ STARTUP_ANCESTOR = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 TEST_RELATIVE = Path("agent-cli/internal/services/internal/agentruntime/session_replay_rate_domain_contract_test.go")
 C102_RELATIVE = Path("docs/temp/projects/audio-runtime/audio-runtime-c102-c68-zero-audio-attribution-vertical-probe.json")
 C102_SHA256 = "be9653bda364f5017516d049c06e13ebae6527759b6a4f5eb549b31c03f0001e"
-TEST_SHA256 = "2ac6f9d7fee9752f04a14a9fed991a2eaf4b4e9d3085cfb95434daa42b1c6524"
+TEST_SHA256 = "63fc562d382e1d26c2ed8b317a046e6f8add3cca710eb90b7b00295729ed5589"
 
 
 def fail(message: str) -> None:

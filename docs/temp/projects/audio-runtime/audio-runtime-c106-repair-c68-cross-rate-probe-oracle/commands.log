@@ -44,3 +44,24 @@ $ rtk git status --porcelain --untracked-files=all
 ok
 
 Final staged-artifact scope: only the owned C106 regression test and evidence directory differ from d4766c3d; required startup and main ancestors are present.
+
+CI-static repair checkpoint from rejected head d8f3cb273afe3bd1738577dcf6d94b590aca32fe:
+
+$ rtk make lint
+Pinned golangci-lint 2.9.0: all 15 modules reported 0 issues.
+
+$ rtk make staticcheck
+Pinned staticcheck 2026.1: all 15 modules completed with no findings.
+
+$ rtk go test -count=1 -timeout=180s ./agent-cli/internal/services/internal/agentruntime -run '^TestSessionReplayRateDomainContract'
+Go test: 3 passed in 1 packages
+
+$ rtk go test -count=1 -timeout=180s ./agent-cli/test/integration -run '^TestSessionCommand_CreditsConsecutiveScheduledToolContinuations$'
+Go test: 1 passed in 1 packages
+
+$ rtk go test -count=1 -timeout=180s ./agent-cli/test/integration -run '^TestS2SV3CBargeInRepeatedReconcilesViaCLIReplay$'
+Go test: 1 passed in 1 packages
+
+$ rtk make architecture-size-check
+FAIL: baseline-drift github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime (238 > 237).
+The shared architecture-size baseline is owned by active predecessor C79 and was not changed by C106.

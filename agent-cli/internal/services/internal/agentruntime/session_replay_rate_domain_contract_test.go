@@ -37,12 +37,16 @@ const (
 	c106PublicPCM    = 1600
 )
 
-var (
-	errC106OracleRateMismatch   = errors.New("C106 cross-rate oracle rejected sample rate")
-	errC106OracleOddPCM         = errors.New("C106 cross-rate oracle rejected odd PCM16 byte count")
-	errC106OracleDuration       = errors.New("C106 cross-rate oracle rejected duration")
-	errC106OracleSampleMismatch = errors.New("C106 cross-rate oracle rejected sample mismatch")
-	errC106OracleUnsupportedPCM = errors.New("C106 cross-rate oracle rejected PCM16 shape")
+type c106OracleError string
+
+func (e c106OracleError) Error() string { return string(e) }
+
+const (
+	errC106OracleRateMismatch   c106OracleError = "C106 cross-rate oracle rejected sample rate"
+	errC106OracleOddPCM         c106OracleError = "C106 cross-rate oracle rejected odd PCM16 byte count"
+	errC106OracleDuration       c106OracleError = "C106 cross-rate oracle rejected duration"
+	errC106OracleSampleMismatch c106OracleError = "C106 cross-rate oracle rejected sample mismatch"
+	errC106OracleUnsupportedPCM c106OracleError = "C106 cross-rate oracle rejected PCM16 shape"
 )
 
 type c106PublicSessionResult struct {
@@ -52,11 +56,9 @@ type c106PublicSessionResult struct {
 	outputRate       int
 	outputSamples    int
 	replayDone       bool
-	replayErr        error
 	finalized        bool
 	finalizeErr      error
 }
-
 type c106EventCollector struct {
 	mu       sync.Mutex
 	messages []messages.StreamMessage
@@ -212,9 +214,8 @@ func c106BuildReplayFixture(t *testing.T) string {
 	return path
 }
 
-func c106RunPublicSession(t *testing.T, recording bool) c106PublicSessionResult {
+func c106BuildPublicInferencer(t *testing.T, fixturePath string) (messages.SessionInferencer, *gwtesting.ReplayWebSocketDialer) {
 	t.Helper()
-	fixturePath := c106BuildReplayFixture(t)
 	dialer, err := gwtesting.NewReplayWebSocketDialer(fixturePath)
 	if err != nil {
 		t.Fatalf("open C106 replay dialer: %v", err)
@@ -238,17 +239,10 @@ func c106RunPublicSession(t *testing.T, recording bool) c106PublicSessionResult 
 	}
 	outputConfigurer.SetSessionAudioOutput(models.AudioFormatPCM16, models.SampleRate(c106ProviderRate))
 	inputConfigurer.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate(c106ProviderRate))
+	return inferencer, dialer
+}
 
-	outputPath := filepath.Join(t.TempDir(), "public-16k.wav")
-	sink, err := audio.NewFileSinkAtSampleRate(outputPath, nil, c106PublicRate)
-	if err != nil {
-		t.Fatalf("open C106 public sink: %v", err)
-	}
-	collector := &c106EventCollector{}
-	var recorder *c106Recorder
-	if recording {
-		recorder = &c106Recorder{}
-	}
+func c106NewPublicRunner(t *testing.T, inferencer messages.SessionInferencer) session.LiveRunner {
 	liveService := sessionwire.NewLiveService(sessionwire.LiveDependencies{
 		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
 			return inferencer, nil
@@ -261,6 +255,76 @@ func c106RunPublicSession(t *testing.T, recording bool) c106PublicSessionResult 
 	if !ok {
 		t.Fatalf("C106 live service %T does not implement LiveRunner", liveService)
 	}
+	return runner
+}
+
+func c106ReadPublicSessionResult(t *testing.T, outputPath string, dialer *gwtesting.ReplayWebSocketDialer, collector *c106EventCollector, recorder *c106Recorder) c106PublicSessionResult {
+	t.Helper()
+	select {
+	case <-dialer.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("C106 replay did not reach its bounded terminal cleanup")
+	}
+	if replayErr := dialer.Err(); replayErr != nil {
+		t.Fatalf("C106 replay divergence or incomplete capture: %v", replayErr)
+	}
+	publicWAV, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read C106 public WAV: %v", err)
+	}
+	outputRate, publicSamples, err := wavio.Read(bytes.NewReader(publicWAV))
+	if err != nil {
+		t.Fatalf("parse C106 public WAV: %v", err)
+	}
+	publicPCM := c106PCM16LEBytes(publicSamples)
+	if recorder == nil {
+		return c106PublicSessionResult{
+			providerPCM:   collector.audioPCM(),
+			publicPCM:     publicPCM,
+			outputRate:    outputRate,
+			outputSamples: len(publicSamples),
+			replayDone:    true,
+		}
+	}
+	messagePCM, mediaPCM, finalized, finalizeErr := recorder.snapshot()
+	if !finalized {
+		t.Fatal("C106 recording-on run did not finalize its recorder")
+	}
+	if finalizeErr != nil {
+		t.Fatalf("C106 recording-on recorder finalized with run error: %v", finalizeErr)
+	}
+	eventPCM := collector.audioPCM()
+	if !bytes.Equal(messagePCM, eventPCM) {
+		t.Fatalf("C106 recording message audio differs from public event audio: message=%d event=%d bytes", len(messagePCM), len(eventPCM))
+	}
+	return c106PublicSessionResult{
+		providerPCM:      eventPCM,
+		publicPCM:        publicPCM,
+		recordedMediaPCM: mediaPCM,
+		outputRate:       outputRate,
+		outputSamples:    len(publicSamples),
+		replayDone:       true,
+		finalized:        finalized,
+		finalizeErr:      finalizeErr,
+	}
+}
+
+func c106RunPublicSession(t *testing.T, recording bool) c106PublicSessionResult {
+	t.Helper()
+	fixturePath := c106BuildReplayFixture(t)
+	inferencer, dialer := c106BuildPublicInferencer(t, fixturePath)
+
+	outputPath := filepath.Join(t.TempDir(), "public-16k.wav")
+	sink, err := audio.NewFileSinkAtSampleRate(outputPath, nil, c106PublicRate)
+	if err != nil {
+		t.Fatalf("open C106 public sink: %v", err)
+	}
+	collector := &c106EventCollector{}
+	var recorder *c106Recorder
+	if recording {
+		recorder = &c106Recorder{}
+	}
+	runner := c106NewPublicRunner(t, inferencer)
 	request := session.LiveRequest{
 		SessionID:             "sess_c106_rate_domain",
 		ParticipantID:         "participant_c106",
@@ -298,51 +362,7 @@ func c106RunPublicSession(t *testing.T, recording bool) c106PublicSessionResult 
 	if runErr != nil {
 		t.Fatalf("C106 public session replay recording=%t: %v; replay=%v", recording, runErr, dialer.Err())
 	}
-	select {
-	case <-dialer.Done():
-	case <-time.After(2 * time.Second):
-		t.Fatal("C106 replay did not reach its bounded terminal cleanup")
-	}
-	if replayErr := dialer.Err(); replayErr != nil {
-		t.Fatalf("C106 replay divergence or incomplete capture: %v", replayErr)
-	}
-	publicWAV, err := os.ReadFile(outputPath)
-	if err != nil {
-		t.Fatalf("read C106 public WAV: %v", err)
-	}
-	outputRate, publicSamples, err := wavio.Read(bytes.NewReader(publicWAV))
-	if err != nil {
-		t.Fatalf("parse C106 public WAV: %v", err)
-	}
-	if recorder == nil {
-		return c106PublicSessionResult{
-			providerPCM:   collector.audioPCM(),
-			publicPCM:     c106PCM16LEBytes(publicSamples),
-			outputRate:    outputRate,
-			outputSamples: len(publicSamples),
-			replayDone:    true,
-		}
-	}
-	messagePCM, mediaPCM, finalized, finalizeErr := recorder.snapshot()
-	if !finalized {
-		t.Fatal("C106 recording-on run did not finalize its recorder")
-	}
-	if finalizeErr != nil {
-		t.Fatalf("C106 recording-on recorder finalized with run error: %v", finalizeErr)
-	}
-	if !bytes.Equal(messagePCM, collector.audioPCM()) {
-		t.Fatalf("C106 recording message audio differs from public event audio: message=%d event=%d bytes", len(messagePCM), len(collector.audioPCM()))
-	}
-	return c106PublicSessionResult{
-		providerPCM:      collector.audioPCM(),
-		publicPCM:        c106PCM16LEBytes(publicSamples),
-		recordedMediaPCM: mediaPCM,
-		outputRate:       outputRate,
-		outputSamples:    len(publicSamples),
-		replayDone:       true,
-		finalized:        finalized,
-		finalizeErr:      finalizeErr,
-	}
+	return c106ReadPublicSessionResult(t, outputPath, dialer, collector, recorder)
 }
 
 func c106CompareCrossRatePCM(providerRate int, providerPCM []byte, publicRate int, publicPCM []byte) error {
@@ -354,19 +374,19 @@ func c106CompareCrossRatePCM(providerRate int, providerPCM []byte, publicRate in
 	}
 	providerSamples, err := codec.DecodePCM16(providerPCM)
 	if err != nil {
-		return fmt.Errorf("%w: provider: %v", errC106OracleUnsupportedPCM, err)
+		return fmt.Errorf("%w: provider: %w", errC106OracleUnsupportedPCM, err)
 	}
 	publicSamples, err := codec.DecodePCM16(publicPCM)
 	if err != nil {
-		return fmt.Errorf("%w: public: %v", errC106OracleUnsupportedPCM, err)
+		return fmt.Errorf("%w: public: %w", errC106OracleUnsupportedPCM, err)
 	}
 	resampler, err := wavio.NewPCM16Resampler(providerRate, publicRate)
 	if err != nil {
-		return fmt.Errorf("%w: create canonical resampler: %v", errC106OracleUnsupportedPCM, err)
+		return fmt.Errorf("%w: create canonical resampler: %w", errC106OracleUnsupportedPCM, err)
 	}
 	converted, err := resampler.Process(providerSamples, true)
 	if err != nil {
-		return fmt.Errorf("%w: process canonical resampler: %v", errC106OracleUnsupportedPCM, err)
+		return fmt.Errorf("%w: process canonical resampler: %w", errC106OracleUnsupportedPCM, err)
 	}
 	if uint64(len(providerSamples))*uint64(publicRate) != uint64(len(publicSamples))*uint64(providerRate) {
 		return fmt.Errorf("%w: provider_samples=%d public_samples=%d", errC106OracleDuration, len(providerSamples), len(publicSamples))
