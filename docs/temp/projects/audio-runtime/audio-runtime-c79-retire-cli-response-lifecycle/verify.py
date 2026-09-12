@@ -24,6 +24,7 @@ LEGACY_FILES = [
 ALLOWED_PREFIXES = (
     "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
     "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+    "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
     "agent-cli/internal/services/internal/agentruntime/session_diagnostics_test.go",
     "go-agent-runtime/services/sessiondiagnostics/",
     "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/",
