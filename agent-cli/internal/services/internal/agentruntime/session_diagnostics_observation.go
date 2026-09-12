@@ -12,17 +12,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	}
 	unlockProviderBoundary := o.lockProviderBoundary()
 	defer unlockProviderBoundary()
-	// Server-VAD providers own these boundaries and report them inbound. Emit
-	// the runtime observations before the general stream callback so room
-	// evidence and package-level test gates see the same accepted boundary.
-	if o.runtime != nil && o.runtime.providerBoundaryObserving && msg.Role != messages.RoleTool {
-		switch msg.Type {
-		case messages.StreamTypeInputItemAdded:
-			o.runtime.providerInputCommit()
-		case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
-			o.runtime.responseCreate(msg)
-		}
-	}
+	o.observeProviderBoundary(msg)
 	if o.streamObserver != nil {
 		o.streamObserver(msg)
 	}
@@ -48,7 +38,6 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	responseLifecycleID := msgResponseID
 	acknowledgementResponse := msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement
 	newResponseBoundary := false
-	activeResponse, activeResponseID := o.observedResponseProjection()
 	switch msg.Type {
 	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
 		// The normalized provider boundary is active from response creation
@@ -69,7 +58,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 		if !o.ownsObservedResponseEnd(msgResponseID) {
 			return
 		}
-		activeResponse, activeResponseID = o.observedResponseProjection()
+		activeResponse, activeResponseID := o.observedResponseProjection()
 		if msgResponseID != "" && activeResponse && activeResponseID == "" && !o.adoptObservedResponseID(msgResponseID) {
 			return
 		}
@@ -100,36 +89,7 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if responseLifecycleID == "" {
 		_, responseLifecycleID = o.observedResponseProjection()
 	}
-	switch msg.Type {
-	case messages.StreamTypeSessionOpen:
-		o.sawSessionOpen = true
-		o.sessionID = ""
-		o.lifecycleProjectionMu.Lock()
-		o.activeResponse = false
-		o.activeResponseID = ""
-		o.completedResponseIDs = make(map[string]struct{})
-		o.retiredResponseIDs = make(map[string]struct{})
-		o.lifecycleProjectionMu.Unlock()
-		o.resetObservedResponseState()
-		if v, ok := msg.Value.(*messages.SessionOpenValue); ok && v != nil {
-			o.sessionID = v.SessionID
-		}
-		o.sessionUpdated = false
-	case messages.StreamTypeSessionUpdated:
-		if !o.sawSessionOpen {
-			break
-		}
-		updatedID := ""
-		if v, ok := msg.Value.(*messages.SessionUpdatedValue); ok && v != nil {
-			updatedID = v.SessionID
-		}
-		// Some compatible transports omit the session ID. When both sides
-		// provide one, require an exact match to the current connection.
-		if o.sessionID != "" && updatedID != "" && o.sessionID != updatedID {
-			break
-		}
-		o.sessionUpdated = true
-	}
+	o.observeSessionLifecycleBoundary(msg)
 
 	switch v := msg.Value.(type) {
 	case *messages.SessionOpenValue:
@@ -301,6 +261,56 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	case *messages.SessionCloseValue:
 		o.captureFailureFromClose(v)
 		o.disarmProviderProgress()
+	}
+}
+
+func (o *sessionProgressObserver) observeProviderBoundary(msg messages.StreamMessage) {
+	// Server-VAD providers own these boundaries and report them inbound. Emit
+	// the runtime observations before the general stream callback so room
+	// evidence and package-level test gates see the same accepted boundary.
+	if o.runtime == nil || !o.runtime.providerBoundaryObserving || msg.Role == messages.RoleTool {
+		return
+	}
+	//nolint:exhaustive // only provider boundary events are handled here.
+	switch msg.Type {
+	case messages.StreamTypeInputItemAdded:
+		o.runtime.providerInputCommit()
+	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
+		o.runtime.responseCreate(msg)
+	}
+}
+
+func (o *sessionProgressObserver) observeSessionLifecycleBoundary(msg messages.StreamMessage) {
+	//nolint:exhaustive // only session lifecycle boundaries are handled here.
+	switch msg.Type {
+	case messages.StreamTypeSessionOpen:
+		o.sawSessionOpen = true
+		o.sessionID = ""
+		o.lifecycleProjectionMu.Lock()
+		o.activeResponse = false
+		o.activeResponseID = ""
+		o.completedResponseIDs = make(map[string]struct{})
+		o.retiredResponseIDs = make(map[string]struct{})
+		o.lifecycleProjectionMu.Unlock()
+		o.resetObservedResponseState()
+		if v, ok := msg.Value.(*messages.SessionOpenValue); ok && v != nil {
+			o.sessionID = v.SessionID
+		}
+		o.sessionUpdated = false
+	case messages.StreamTypeSessionUpdated:
+		if !o.sawSessionOpen {
+			return
+		}
+		updatedID := ""
+		if v, ok := msg.Value.(*messages.SessionUpdatedValue); ok && v != nil {
+			updatedID = v.SessionID
+		}
+		// Some compatible transports omit the session ID. When both sides
+		// provide one, require an exact match to the current connection.
+		if o.sessionID != "" && updatedID != "" && o.sessionID != updatedID {
+			return
+		}
+		o.sessionUpdated = true
 	}
 }
 

@@ -101,54 +101,49 @@ func (o *sessionProgressObserver) dispatchScheduledInputs(ctx context.Context, l
 		return nil
 	}
 	for {
-		o.lifecycleProjectionMu.Lock()
-		if len(o.pendingInputs) == 0 {
-			o.lifecycleProjectionMu.Unlock()
-			break
-		}
-		input := o.pendingInputs[0]
-		inputIndex := o.scheduledInputs - len(o.pendingInputs) + 1
-		due := o.scheduledAudioInputDueLocked(input)
-		o.lifecycleProjectionMu.Unlock()
+		input, inputIndex, due := o.nextScheduledAudioInput()
 		if !due || o.hasToolLifecycleObligation() {
 			break
 		}
-		if err := loop.SendAudioInput(ctx, input.PCM); err != nil {
-			return fmt.Errorf("send scheduled audio input %d: %w", inputIndex, err)
+		if err := o.sendScheduledAudioInput(ctx, loop, input, inputIndex); err != nil {
+			return err
 		}
-		if input.EndOfTurn {
-			if err := loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
-				return fmt.Errorf("send scheduled audio input %d end-of-turn: %w", inputIndex, err)
-			}
-			o.armProviderProgress()
-		}
-		o.lifecycleProjectionMu.Lock()
-		if !o.scheduledTurnBaseSet {
-			o.scheduledTurnBase = o.turnsCompleted
-			o.scheduledTurnBaseSet = true
-		}
-		o.dispatchedInputs++
-		o.scheduledResponses = append(o.scheduledResponses, scheduledAudioResponseLifecycle{})
-		o.pendingInputs = o.pendingInputs[1:]
-		o.lifecycleProjectionMu.Unlock()
-		o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
 	}
 	return nil
 }
 
-// scheduledAudioInputDue applies the explicit scheduling policy to the next
-// queued input. Once scheduled dispatch begins, the completion threshold
-// includes every resolved scheduled lifecycle, including owned cancellation,
-// while retaining the initial prompt/seed offset. Active-response lookahead
-// remains based on admitted turns so a cancellation cannot release more than
-// the one input that barged the active response.
-func (o *sessionProgressObserver) scheduledAudioInputDue(input ScheduledAudioInput) bool {
-	if o == nil {
-		return true
-	}
+func (o *sessionProgressObserver) nextScheduledAudioInput() (ScheduledAudioInput, int, bool) {
 	o.lifecycleProjectionMu.Lock()
 	defer o.lifecycleProjectionMu.Unlock()
-	return o.scheduledAudioInputDueLocked(input)
+	if len(o.pendingInputs) == 0 {
+		return ScheduledAudioInput{}, 0, false
+	}
+	input := o.pendingInputs[0]
+	inputIndex := o.scheduledInputs - len(o.pendingInputs) + 1
+	return input, inputIndex, o.scheduledAudioInputDueLocked(input)
+}
+
+func (o *sessionProgressObserver) sendScheduledAudioInput(ctx context.Context, loop scheduledSessionInputSender, input ScheduledAudioInput, inputIndex int) error {
+	if err := loop.SendAudioInput(ctx, input.PCM); err != nil {
+		return fmt.Errorf("send scheduled audio input %d: %w", inputIndex, err)
+	}
+	if input.EndOfTurn {
+		if err := loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
+			return fmt.Errorf("send scheduled audio input %d end-of-turn: %w", inputIndex, err)
+		}
+		o.armProviderProgress()
+	}
+	o.lifecycleProjectionMu.Lock()
+	if !o.scheduledTurnBaseSet {
+		o.scheduledTurnBase = o.turnsCompleted
+		o.scheduledTurnBaseSet = true
+	}
+	o.dispatchedInputs++
+	o.scheduledResponses = append(o.scheduledResponses, scheduledAudioResponseLifecycle{})
+	o.pendingInputs = o.pendingInputs[1:]
+	o.lifecycleProjectionMu.Unlock()
+	o.account(metrics.DirectionInput, metrics.ModalityAudio, len(input.PCM))
+	return nil
 }
 
 func (o *sessionProgressObserver) scheduledAudioInputDueLocked(input ScheduledAudioInput) bool {

@@ -1,9 +1,6 @@
-// This file contains the session diagnostic contract: the canonical structured
-// failure record, per-turn accounting records, unexecutable tool-call records,
-// and the observer that derives them from the session loop's delta stream.
+// This file contains the session diagnostic contract and delta-stream observer.
 //
-// Field names and values documented here are a stable operator contract; see
-// docs/architecture/s2s-session-diagnostic-contract.md.
+// Field names and values are a stable operator contract; see the architecture docs.
 package agentruntime
 
 import (
