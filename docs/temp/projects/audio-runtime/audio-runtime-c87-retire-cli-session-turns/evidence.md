@@ -102,3 +102,41 @@ architecture, focused causal, and accumulated regression checks, commit and
 push the same PR `#476`, and submit the changed head to script CI without
 polling. Preserve the C64 high-rate failure as dependency evidence and retain
 C87 ownership for any actionable same-task rejection.
+
+## Current-main dependency recheck
+
+The isolated branch remains clean and pushed at `eba38db1c450e0679456536f2a5d6da3cff6c4ff`;
+`git fetch origin main` refreshed `origin/main` to
+`3d3e72786ac6fc1fd47c7e029589e5117674b035`. Startup integration and planning
+main ancestry still pass, while current-main ancestry remains intentionally
+open until C79's reviewed guarded merge releases the shared lease. PR `#476`
+remains open at the same head. The sole admitted project and task identity
+remain admitted; `admission.json` records no previous reviewer findings, and
+GitHub has no C87 review row.
+
+The completed exact-head PR run `34689223740` at `eba38db1` was read from the
+full failed log. Unit, integration, coverage, race, hermetic, WebMCP Chrome,
+macOS audio release and Windows portable checks pass. Static fails only on the
+same C79-owned set: the unregistered
+`go-agent-runtime/services/sessionturns/wire/wire_gen.go` plus the twelve
+downward/stale entries listed above. No C87-owned source defect or C64
+integration failure was reported by this newer run; the earlier C64 high-rate
+failure remains preserved historical dependency evidence.
+
+Fresh bounded rechecks on `eba38db1` pass: sessionturns normal/race (45/42
+tests), CLI compatibility normal/race (6/2), the separate `GOWORK=off`
+consumer, all three verifier modes, the credential-free runner, and
+`COUNT=1 scripts/test-session-ci-regressions.sh all` in normal, coverage and
+race modes. `make coverage-registration`, pinned staticcheck and focused vet
+pass. `make wire-check` and `make architecture-size-check` fail only with the
+same shared registration/baseline findings. The pinned local lint also reports
+one pre-existing C64-owned `rtc_device_runtime_test.go:275` blank-assignment
+finding; that file is unchanged by C87 and the fetched current main contains
+C64's `//nolint:errcheck` repair. No shared or peer path was edited.
+
+This remains an executor checkpoint, not CI-green, review, merge, vertical or
+project acceptance. Exact next action is unchanged: after C79's reviewed
+guarded merge, integrate the then-accepted main, apply only C87's generated
+Wire registration and twelve downward/deletion-only baseline changes, rerun
+the bounded gates, commit/push the same PR and submit its changed head to
+script CI without polling.
