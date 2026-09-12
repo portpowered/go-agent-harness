@@ -54,6 +54,7 @@ TOTAL_TIMEOUT = 600
 AGGREGATE_STARTED = 0.0
 REQUESTED_CHILD_TIMEOUT = CHILD_TIMEOUT
 REQUESTED_TOTAL_TIMEOUT = TOTAL_TIMEOUT
+CANONICAL_INVENTORY_SHAPE: dict[str, Any] | None = None
 
 REQUIRED_ACTIVE_NAMES = {
     "audio-runtime-c79-retire-cli-response-lifecycle",
@@ -524,7 +525,7 @@ def build_subtraction(board: dict[str, Any], prs: dict[str, Any], source_paths: 
     preserved: list[dict[str, Any]] = []
     for pr in prs["prs"]:
         paths = sorted(set(pr.get("accepted_main_changed_production_paths", [])) & source_paths)
-        if not paths:
+        if not paths and not pr.get("is_retirement_checkpoint"):
             continue
         owner_name = pr.get("task_name") if pr.get("task_name") != "NONE" else f"PR#{pr['number']}"
         owner_work_id = pr.get("task_work_id", "NONE")
@@ -711,11 +712,79 @@ def run_analyzer_once(output: pathlib.Path) -> dict[str, Any]:
     return run_bounded("analyzer", command, ROOT, HERE / "runs/inventory", timeout=240)
 
 
+def canonical_inventory_shape() -> dict[str, Any]:
+    """Derive the accepted-main inventory independently of checked-in evidence.
+
+    Inventory validation must not trust the submitted rows or their self-reported
+    totals to establish completeness.  Re-run the pinned source census in a
+    disposable directory and retain only the stable file/symbol/edge shape used
+    for comparisons.  The cache is process-local and never becomes evidence.
+    """
+    global CANONICAL_INVENTORY_SHAPE
+    if CANONICAL_INVENTORY_SHAPE is not None:
+        return CANONICAL_INVENTORY_SHAPE
+    require_time("canonical inventory completeness")
+    with tempfile.TemporaryDirectory(prefix="c107-canonical-inventory-") as temp:
+        output = pathlib.Path(temp) / "inventory"
+        command = [sys.executable, str(ANALYZER), "--root", str(ROOT), "--source", SOURCE_REVISION, "--output-dir", str(output)]
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            env=safe_environment(),
+            capture_output=True,
+            text=True,
+            timeout=min(240, max(1, int(max(1, remaining_time())))),
+        )
+        if result.returncode != 0:
+            raise EvidenceFailure(f"canonical source census failed: {redact_text(result.stderr or result.stdout).strip()}")
+        canonical = read_json(output / "inventory.json")
+    if canonical.get("source_revision") != SOURCE_REVISION or canonical.get("target_root") != TARGET_ROOT:
+        raise EvidenceFailure("canonical source census is not pinned")
+    files = canonical.get("files")
+    symbols = canonical.get("symbols")
+    call_edges = canonical.get("call_edges")
+    if not isinstance(files, list) or not isinstance(symbols, list) or not isinstance(call_edges, list):
+        raise EvidenceFailure("canonical source census omitted completeness rows")
+    canonical_files = {row.get("path"): row for row in files if isinstance(row, dict) and row.get("path")}
+    canonical_symbols = {row.get("id"): row for row in symbols if isinstance(row, dict) and row.get("id")}
+    if len(canonical_files) != len(files) or len(canonical_symbols) != len(symbols):
+        raise EvidenceFailure("canonical source census contains duplicate file or symbol identities")
+    CANONICAL_INVENTORY_SHAPE = {
+        "files": canonical_files,
+        "file_symbol_ids": {path: list(row.get("top_level_symbol_ids") or []) for path, row in canonical_files.items()},
+        "symbols": canonical_symbols,
+        "call_edges": call_edges,
+        "totals": canonical.get("totals") or {},
+    }
+    return CANONICAL_INVENTORY_SHAPE
+
+
+def symbol_shape(symbol: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: symbol.get(key)
+        for key in (
+            "id",
+            "name",
+            "qualified_name",
+            "kind",
+            "receiver",
+            "exported",
+            "package",
+            "import_path",
+            "file",
+            "line",
+            "end_line",
+            "signature",
+        )
+    }
+
+
 def validate_inventory(path: pathlib.Path, *, require_subtraction: bool = True) -> dict[str, Any]:
     inventory = read_json(path)
     if inventory.get("source_revision") != SOURCE_REVISION or inventory.get("target_root") != TARGET_ROOT:
         raise EvidenceFailure("inventory source or target root is not pinned")
     expected = source_counts()
+    canonical = canonical_inventory_shape()
     files = inventory.get("files")
     symbols = inventory.get("symbols")
     if not isinstance(files, list) or not isinstance(symbols, list):
@@ -728,6 +797,12 @@ def validate_inventory(path: pathlib.Path, *, require_subtraction: bool = True) 
     symbol_ids = [row.get("id") for row in symbols]
     if len(symbol_ids) != len(set(symbol_ids)):
         raise EvidenceFailure("inventory has duplicate stable symbol IDs")
+    expected_symbol_ids = set(canonical["symbols"])
+    actual_symbol_ids = set(symbol_ids)
+    if actual_symbol_ids != expected_symbol_ids:
+        missing = sorted(expected_symbol_ids - actual_symbol_ids)
+        extra = sorted(actual_symbol_ids - expected_symbol_ids)
+        raise EvidenceFailure(f"inventory symbol coverage mismatch; missing={missing[:4]} extra={extra[:4]}")
     file_map = {row["path"]: row for row in files}
     class_counts: Counter[str] = Counter()
     for file in files:
@@ -740,9 +815,15 @@ def validate_inventory(path: pathlib.Path, *, require_subtraction: bool = True) 
         ids = file.get("top_level_symbol_ids")
         if not isinstance(ids, list) or len(ids) != len(set(ids)):
             raise EvidenceFailure(f"file symbol index is incomplete: {file['path']}")
+        expected_ids = canonical["file_symbol_ids"].get(file["path"])
+        if ids != expected_ids:
+            raise EvidenceFailure(f"file symbol coverage mismatch: {file['path']}")
     for symbol in symbols:
         if symbol.get("file") not in file_map or not symbol.get("id") or not symbol.get("name"):
             raise EvidenceFailure(f"symbol has no accepted-main file or stable identity: {symbol!r}")
+        expected_symbol = canonical["symbols"].get(symbol["id"])
+        if expected_symbol is None or symbol_shape(symbol) != symbol_shape(expected_symbol):
+            raise EvidenceFailure(f"inventory symbol identity/span mismatch: {symbol.get('id')}")
         if symbol.get("class") not in ALLOWED_CLASSES:
             raise EvidenceFailure(f"symbol classification missing or invalid: {symbol.get('id')}")
         if symbol.get("class") == "deprecated_adapter":
@@ -764,14 +845,26 @@ def validate_inventory(path: pathlib.Path, *, require_subtraction: bool = True) 
             raise EvidenceFailure(f"dependency/subtraction evidence missing: {symbol.get('id')}")
         class_counts[symbol["class"]] += 1
     totals = inventory.get("totals") or {}
-    if totals.get("production_files") != expected["production_files"] or totals.get("physical_lines") != expected["physical_lines"] or totals.get("bytes") != expected["bytes"] or totals.get("top_level_symbols") != len(symbols):
-        raise EvidenceFailure(f"inventory totals mismatch: {totals!r} expected files/lines/bytes={expected['production_files']}/{expected['physical_lines']}/{expected['bytes']}")
-    if totals.get("exact_static_call_edges") != len(inventory.get("call_edges", [])) or totals.get("class_counts") != dict(sorted(class_counts.items())):
+    canonical_totals = canonical["totals"]
+    expected_totals = {
+        "production_files": expected["production_files"],
+        "physical_lines": expected["physical_lines"],
+        "bytes": expected["bytes"],
+        "top_level_symbols": len(canonical["symbols"]),
+        "exact_static_call_edges": len(canonical["call_edges"]),
+        "no_static_caller_symbols": canonical_totals.get("no_static_caller_symbols"),
+    }
+    actual_totals = {key: totals.get(key) for key in expected_totals}
+    if actual_totals != expected_totals:
+        raise EvidenceFailure(f"inventory totals mismatch: {actual_totals!r} expected={expected_totals!r}")
+    if totals.get("class_counts") != dict(sorted(class_counts.items())):
         raise EvidenceFailure("inventory aggregate call/class totals are inconsistent")
     valid_ids = set(symbol_ids)
     for edge in inventory.get("call_edges", []):
         if edge.get("callee") not in valid_ids or not edge.get("caller") or not isinstance(edge.get("call"), dict):
             raise EvidenceFailure(f"call edge is not tied to an emitted symbol: {edge!r}")
+    if inventory.get("call_edges") != canonical["call_edges"]:
+        raise EvidenceFailure("inventory call-edge coverage mismatch")
     if require_subtraction:
         subtraction = read_json(HERE / "subtraction.json")
         owner_map = subtraction.get("path_owners") or {}
@@ -1004,9 +1097,7 @@ def materialize_candidates() -> dict[str, Any]:
     return document
 
 
-def validate_subtraction() -> dict[str, Any]:
-    subtraction = read_json(HERE / "subtraction.json")
-    prs = read_json(HERE / "pr-inventory.json")
+def validate_subtraction_document(subtraction: dict[str, Any], prs: dict[str, Any], board: dict[str, Any]) -> dict[str, Any]:
     expected_by_number = {str(row.get("number")): row for row in prs.get("prs", [])}
     path_owners = subtraction.get("path_owners")
     if subtraction.get("source_revision") != SOURCE_REVISION or not isinstance(path_owners, dict):
@@ -1016,9 +1107,49 @@ def validate_subtraction() -> dict[str, Any]:
             expected = expected_by_number.get(str(owner.get("pr_number")))
             if expected is None or expected.get("head") != owner.get("head") or expected.get("base") != owner.get("base") or path not in expected.get("accepted_main_changed_production_paths", []):
                 raise EvidenceFailure(f"subtraction PR head/path mismatch for {path}: PR {owner.get('pr_number')}")
+    expected_retirement_prs = {
+        int(row["number"]): row
+        for row in prs.get("prs", [])
+        if row.get("is_retirement_checkpoint") and isinstance(row.get("number"), int)
+    }
+    preserved = subtraction.get("preserved_unmerged_checkpoints")
+    if not isinstance(preserved, list):
+        raise EvidenceFailure("subtraction omitted preserved checkpoint rows")
+    preserved_by_number: dict[int, dict[str, Any]] = {}
+    for owner in preserved:
+        try:
+            number = int(owner.get("pr_number"))
+        except (TypeError, ValueError) as exc:
+            raise EvidenceFailure(f"subtraction preserved checkpoint has invalid PR identity: {owner!r}") from exc
+        if number in preserved_by_number:
+            raise EvidenceFailure(f"subtraction duplicated preserved PR identity: {number}")
+        expected = expected_retirement_prs.get(number)
+        if expected is None:
+            raise EvidenceFailure(f"subtraction contains an unobserved retirement PR identity: {number}")
+        expected_paths = sorted(expected.get("accepted_main_changed_production_paths", []))
+        expected_owner = expected.get("task_name") if expected.get("task_name") != "NONE" else f"PR#{number}"
+        if owner.get("owner") != expected_owner or owner.get("work_id") != expected.get("task_work_id") or owner.get("head") != expected.get("head") or owner.get("base") != expected.get("base") or owner.get("branch") != expected.get("head_branch") or sorted(owner.get("accepted_main_changed_paths", [])) != expected_paths:
+            raise EvidenceFailure(f"subtraction preserved checkpoint identity mismatch: PR {number}")
+        preserved_by_number[number] = owner
+    expected_numbers = sorted(expected_retirement_prs)
+    recorded_numbers = sorted(preserved_by_number)
+    if recorded_numbers != expected_numbers:
+        missing = sorted(set(expected_numbers) - set(recorded_numbers))
+        extra = sorted(set(recorded_numbers) - set(expected_numbers))
+        raise EvidenceFailure(f"subtraction omitted open retirement PR identities: missing={missing} extra={extra}")
+
+    expected_active_names = {
+        row.get("name")
+        for row in active_task_rows(board.get("results", []))
+        if row.get("name")
+    }
     active_names = {row.get("name") for row in subtraction.get("active_tasks", [])}
     preserved_names = {row.get("owner") for row in subtraction.get("preserved_unmerged_checkpoints", [])}
     represented_names = active_names | preserved_names
+    if active_names != expected_active_names:
+        missing = sorted(expected_active_names - active_names)
+        extra = sorted(active_names - expected_active_names)
+        raise EvidenceFailure(f"subtraction active-task identity set mismatch: missing={missing} extra={extra}")
     missing = sorted(REQUIRED_ACTIVE_NAMES - represented_names)
     if missing:
         raise EvidenceFailure(f"subtraction omitted required active/preserved checkpoints: {missing}")
@@ -1026,7 +1157,16 @@ def validate_subtraction() -> dict[str, Any]:
         raise EvidenceFailure("subtraction required checkpoint identity set is not pinned")
     if sorted(SHARED_PATHS) != sorted(row.get("path") for row in subtraction.get("shared_path_dependencies", [])):
         raise EvidenceFailure("shared Wire/architecture dependencies are not explicit")
-    return {"source_revision": SOURCE_REVISION, "owned_source_paths": len([path for path, owners in path_owners.items() if owners]), "unsubtracted_source_paths": len([path for path, owners in path_owners.items() if not owners]), "active_tasks": len(subtraction.get("active_tasks", [])), "preserved_checkpoints": len(subtraction.get("preserved_unmerged_checkpoints", []))}
+    if sorted(int(number) for number in subtraction.get("all_open_retirement_pr_numbers", [])) != expected_numbers:
+        raise EvidenceFailure("subtraction all_open_retirement_pr_numbers is incomplete")
+    return {"source_revision": SOURCE_REVISION, "owned_source_paths": len([path for path, owners in path_owners.items() if owners]), "unsubtracted_source_paths": len([path for path, owners in path_owners.items() if not owners]), "active_tasks": len(subtraction.get("active_tasks", [])), "preserved_checkpoints": len(subtraction.get("preserved_unmerged_checkpoints", [])), "retirement_pr_numbers": expected_numbers}
+
+
+def validate_subtraction() -> dict[str, Any]:
+    subtraction = read_json(HERE / "subtraction.json")
+    prs = read_json(HERE / "pr-inventory.json")
+    board = read_json(HERE / "canonical-board.json")
+    return validate_subtraction_document(subtraction, prs, board)
 
 
 def validate_candidates() -> dict[str, Any]:
@@ -1085,17 +1225,8 @@ def validate_copy(inventory_path: pathlib.Path, subtraction_path: pathlib.Path, 
     inventory = read_json(inventory_path)
     subtraction = read_json(subtraction_path)
     prs = read_json(pr_path)
-    if inventory.get("source_revision") != SOURCE_REVISION:
-        raise EvidenceFailure("inventory source revision mismatch")
-    for symbol in inventory.get("symbols", []):
-        if symbol.get("class") not in ALLOWED_CLASSES:
-            raise EvidenceFailure(f"symbol classification missing or invalid: {symbol.get('id')}")
-    expected_by_number = {str(row.get("number")): row for row in prs.get("prs", [])}
-    for path, owners in (subtraction.get("path_owners") or {}).items():
-        for owner in owners:
-            expected = expected_by_number.get(str(owner.get("pr_number")))
-            if expected is None or expected.get("head") != owner.get("head"):
-                raise EvidenceFailure(f"subtraction PR head mismatch: PR {owner.get('pr_number')}")
+    validate_inventory(inventory_path, require_subtraction=False)
+    validate_subtraction_document(subtraction, prs, read_json(HERE / "canonical-board.json"))
 
 
 def negative_controls() -> dict[str, Any]:
@@ -1120,15 +1251,49 @@ def negative_controls() -> dict[str, Any]:
         del inventory["symbols"][0]["class"]
         write_json(mutated_inventory, inventory)
         class_result = subprocess.run([sys.executable, str(__file__), "--mode", "validate-copy", "--inventory", str(mutated_inventory), "--subtraction", str(original_subtraction), "--pr-inventory", str(original_pr)], cwd=ROOT, env=safe_environment(), capture_output=True, text=True, timeout=min(60, max(1, int(max(1, remaining_time())))))
-        for label, result, expected_text in (("pinned-pr-head", head_result, "subtraction PR head mismatch"), ("symbol-classification", class_result, "symbol classification missing or invalid")):
+
+        mutated_row_inventory = temp_path / "inventory-row-deleted.json"
+        row_deleted_inventory = read_json(original_inventory)
+        deleted_symbol = row_deleted_inventory["symbols"].pop(0)
+        totals = row_deleted_inventory["totals"]
+        totals["top_level_symbols"] -= 1
+        totals["exact_static_call_edges"] -= sum(1 for edge in row_deleted_inventory.get("call_edges", []) if edge.get("callee") == deleted_symbol["id"])
+        totals["no_static_caller_symbols"] -= int(deleted_symbol.get("caller_edge_status") == "no-static-caller")
+        class_counts = totals.get("class_counts", {})
+        class_counts[deleted_symbol["class"]] -= 1
+        row_deleted_inventory["call_edges"] = [edge for edge in row_deleted_inventory.get("call_edges", []) if edge.get("callee") != deleted_symbol["id"]]
+        write_json(mutated_row_inventory, row_deleted_inventory)
+        row_result = subprocess.run([sys.executable, str(__file__), "--mode", "validate-copy", "--inventory", str(mutated_row_inventory), "--subtraction", str(original_subtraction), "--pr-inventory", str(original_pr)], cwd=ROOT, env=safe_environment(), capture_output=True, text=True, timeout=min(60, max(1, int(max(1, remaining_time())))))
+
+        mutated_checkpoint_subtraction = temp_path / "subtraction-checkpoint-deleted.json"
+        checkpoint_subtraction = read_json(original_subtraction)
+        preserved_rows = checkpoint_subtraction.get("preserved_unmerged_checkpoints", [])
+        target_checkpoint = next((row for row in preserved_rows if int(row.get("pr_number", -1)) == 438), None)
+        if target_checkpoint is None:
+            target_checkpoint = preserved_rows[0] if preserved_rows else None
+        if target_checkpoint is None:
+            raise EvidenceFailure("negative control has no preserved checkpoint row to delete")
+        deleted_pr_number = int(target_checkpoint["pr_number"])
+        checkpoint_subtraction["preserved_unmerged_checkpoints"] = [row for row in preserved_rows if int(row.get("pr_number", -1)) != deleted_pr_number]
+        write_json(mutated_checkpoint_subtraction, checkpoint_subtraction)
+        checkpoint_result = subprocess.run([sys.executable, str(__file__), "--mode", "validate-copy", "--inventory", str(original_inventory), "--subtraction", str(mutated_checkpoint_subtraction), "--pr-inventory", str(original_pr)], cwd=ROOT, env=safe_environment(), capture_output=True, text=True, timeout=min(60, max(1, int(max(1, remaining_time())))))
+
+        for label, result, expected_text in (
+            ("pinned-pr-head", head_result, "subtraction PR head/path mismatch"),
+            ("symbol-classification", class_result, "symbol classification missing or invalid"),
+            ("symbol-row-deletion", row_result, "inventory symbol coverage mismatch"),
+            ("preserved-pr-deletion", checkpoint_result, "subtraction omitted open retirement PR identities"),
+        ):
             combined = redact_text(result.stdout + result.stderr)
             if result.returncode == 0 or expected_text not in combined:
                 raise EvidenceFailure(f"{label} mutation did not fail closed with stable diagnostic")
         report = {
-            "schema_version": "c107-negative-controls-v1",
+            "schema_version": "c107-negative-controls-v2",
             "source_revision": SOURCE_REVISION,
             "pr_head_mutation": {"exit_code": head_result.returncode, "diagnostic": redact_text(head_result.stderr.strip() or head_result.stdout.strip()), "mutated_from": expected_head, "mutated_to": first_owner["head"]},
             "symbol_classification_deletion": {"exit_code": class_result.returncode, "diagnostic": redact_text(class_result.stderr.strip() or class_result.stdout.strip()), "deleted_symbol_id": deleted_id},
+            "symbol_row_deletion": {"exit_code": row_result.returncode, "diagnostic": redact_text(row_result.stderr.strip() or row_result.stdout.strip()), "deleted_symbol_id": deleted_symbol["id"], "self_reported_totals_adjusted": True},
+            "preserved_pr_deletion": {"exit_code": checkpoint_result.returncode, "diagnostic": redact_text(checkpoint_result.stderr.strip() or checkpoint_result.stdout.strip()), "deleted_pr_number": deleted_pr_number},
             "pristine_validation": validate_subtraction(),
         }
     write_json(HERE / "runs/negative-controls/report.json", report)
