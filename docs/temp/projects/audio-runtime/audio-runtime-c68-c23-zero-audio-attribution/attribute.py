@@ -55,14 +55,22 @@ FIXTURE_PATH = INPUT_C23 / "fixtures.json"
 PROVENANCE_PATH = OWNED_ROOT / "provenance.json"
 BUILD_PATH = OWNED_ROOT / "build-manifest.json"
 COMPARISON_PATH = OWNED_ROOT / "comparison.json"
+ATTRIBUTION_PATH = OWNED_ROOT / "attribution.json"
+COMPARISON_LEDGER_PATH = OWNED_ROOT / "comparison-runs.json"
+COMPARISON_LOCK_PATH = OWNED_ROOT / "artifacts" / ".comparison.lock"
 NEGATIVE_PATH = OWNED_ROOT / "negative-control.json"
 REGRESSIONS_PATH = OWNED_ROOT / "c21-regressions.json"
+CLEANUP_PATH = OWNED_ROOT / "cleanup-control.json"
 FIRST_FAILURE_PATH = OWNED_ROOT / "artifacts" / "first-failures" / "recording-observer-admission.json"
 MAX_CHILD_OUTPUT_BYTES = 64 * 1024
 MAX_FIXTURE_BYTES = 2 * 1024 * 1024
+MAX_RUN_ARTIFACT_BYTES = 4 * 1024 * 1024
+MAX_RETAINED_ARTIFACT_BYTES = 64 * 1024 * 1024
+MAX_RETAINED_ARTIFACT_FILES = 4096
 MAX_POSITIVE_RUNS = 4
 CHILD_TIMEOUT_MAX = 60.0
 TOTAL_TIMEOUT_MAX = 300.0
+_GIT_ARCHIVE_HASHES: dict[str, str] = {}
 RECORDING_MODES = ("off", "on")
 SOURCE_FILES_FOR_CAUSAL_TRACE = (
     "go-agent-runtime/services/session/internal/live/service.go",
@@ -120,6 +128,16 @@ def owned_rel(path: Path) -> str:
         raise VerificationError(f"path escaped C68 owned root: {path}") from error
 
 
+def owned_path(value: str | Path) -> Path:
+    if not isinstance(value, (str, Path)):
+        raise VerificationError(f"owned path is malformed: {value!r}")
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        candidate = OWNED_ROOT / candidate
+    owned_rel(candidate)
+    return candidate
+
+
 def repo_rel(path: Path) -> str:
     try:
         return str(path.resolve().relative_to(REPO_ROOT.resolve()))
@@ -153,7 +171,9 @@ def git_is_ancestor(ancestor: str, descendant: str) -> bool:
 
 
 def current_status() -> list[str]:
-    return git_value("status", "--porcelain", "--untracked-files=all").splitlines()
+    # Do not use git_value here: its .strip() would remove the first
+    # porcelain status column from the first changed path.
+    return run_command(["git", "status", "--porcelain", "--untracked-files=all"]).stdout.splitlines()
 
 
 def status_path(line: str) -> str:
@@ -210,12 +230,47 @@ def source_task_manifest(revision: str, source_path: str, destination: Path) -> 
         actual = target.read_bytes()
         require(actual == expected, f"copied predecessor evidence changed: {owned_rel(target)}")
         result.append({"path": relative, "bytes": len(actual), "sha256": sha256_bytes(actual)})
+    expected_paths = {item["path"] for item in result}
+    actual_paths = {
+        str(path.relative_to(destination))
+        for path in destination.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+    require(actual_paths == expected_paths, f"copied predecessor evidence has extra or missing files: {owned_rel(destination)}")
+    require(not [path for path in destination.rglob("*") if path.is_symlink()], f"copied predecessor evidence contains a symlink: {owned_rel(destination)}")
     return result
 
 
 def git_blob_sha(revision: str, path: str) -> str:
     data = subprocess.run(["git", "show", f"{revision}:{path}"], cwd=REPO_ROOT, check=True, capture_output=True).stdout
     return sha256_bytes(data)
+
+
+def git_archive_sha256(revision: str) -> str:
+    cached = _GIT_ARCHIVE_HASHES.get(revision)
+    if cached:
+        return cached
+    process = subprocess.Popen(
+        ["git", "archive", "--format=tar", revision],
+        cwd=REPO_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    digest = hashlib.sha256()
+    require(process.stdout is not None and process.stderr is not None, "git archive pipes were not created")
+    while True:
+        chunk = process.stdout.read(1024 * 1024)
+        if not chunk:
+            break
+        digest.update(chunk)
+    process.stdout.close()
+    error = process.stderr.read().decode(errors="replace")
+    process.stderr.close()
+    returncode = process.wait()
+    require(returncode == 0, f"git archive hash failed for {revision}: {error[:2000]}")
+    value = digest.hexdigest()
+    _GIT_ARCHIVE_HASHES[revision] = value
+    return value
 
 
 def archive_source(revision: str, label: str) -> dict[str, Any]:
@@ -226,8 +281,15 @@ def archive_source(revision: str, label: str) -> dict[str, Any]:
     source_root.mkdir(parents=True, exist_ok=True)
     archive_dir.mkdir(parents=True, exist_ok=True)
     marker = source_root / ".extracted-revision"
-    if marker.is_file() and marker.read_text().strip() == revision and (source_root / "go.work").is_file():
-        archive_hash = sha256_file(archive_path) if archive_path.is_file() else ""
+    expected_archive_hash = git_archive_sha256(revision)
+    if (
+        marker.is_file()
+        and marker.read_text().strip() == revision
+        and archive_path.is_file()
+        and sha256_file(archive_path) == expected_archive_hash
+        and (source_root / "go.work").is_file()
+    ):
+        archive_hash = sha256_file(archive_path)
     else:
         if archive_path.exists():
             archive_path.unlink()
@@ -250,12 +312,75 @@ def archive_source(revision: str, label: str) -> dict[str, Any]:
         marker.write_text(revision + "\n")
         archive_hash = sha256_file(archive_path)
     require((source_root / "go.work").is_file(), f"archived source has no go.work: {source_root}")
+    require(archive_path.is_file() and archive_path.stat().st_size > 0, f"source archive is missing: {archive_path}")
+    require(archive_hash == expected_archive_hash, f"source archive is not the exact Git archive for {revision}")
+    tree_digest, tree_files = source_tree_digest(archive_path, source_root)
     return {
         "revision": revision,
-        "archive": {"path": owned_rel(archive_path), "bytes": archive_path.stat().st_size, "sha256": archive_hash},
+        "archive": {"path": owned_rel(archive_path), "bytes": archive_path.stat().st_size, "sha256": archive_hash, "git_archive_sha256": expected_archive_hash},
         "root": owned_rel(source_root),
         "go_work_sha256": sha256_file(source_root / "go.work"),
+        "tree_sha256": tree_digest,
+        "tree_files": tree_files,
     }
+
+
+def source_tree_digest(archive_path: Path, source_root: Path) -> tuple[str, int]:
+    """Bind every extracted archive file to the exact Git archive bytes."""
+    expected: list[dict[str, Any]] = []
+    expected_paths: set[str] = set()
+    with tarfile.open(archive_path, "r") as archive:
+        for member in archive:
+            if not member.isfile():
+                continue
+            relative = Path(member.name)
+            target = (source_root / relative).resolve()
+            require(target == source_root.resolve() or source_root.resolve() in target.parents, f"archive file escaped source root: {member.name}")
+            require(not target.is_symlink() and target.is_file(), f"extracted archive file is missing or symlinked: {member.name}")
+            stream = archive.extractfile(member)
+            require(stream is not None, f"archive file cannot be read: {member.name}")
+            expected_bytes = stream.read()
+            actual_bytes = target.read_bytes()
+            require(actual_bytes == expected_bytes, f"extracted archive file changed: {member.name}")
+            expected_paths.add(member.name)
+            expected.append({"path": member.name, "bytes": len(actual_bytes), "sha256": sha256_bytes(actual_bytes)})
+    for path in source_root.rglob("*"):
+        if path.is_symlink():
+            relative = path.relative_to(source_root)
+            require(relative == Path(".extracted-revision") or (relative.parts and relative.parts[0] == "__c68_input__"), f"unexpected source symlink: {owned_rel(path)}")
+            continue
+        if not path.is_file():
+            continue
+        relative = str(path.relative_to(source_root))
+        if relative == ".extracted-revision" or relative.split("/", 1)[0] == "__c68_input__":
+            continue
+        require(relative in expected_paths, f"unaccounted file in extracted source: {owned_rel(path)}")
+    expected.sort(key=lambda item: item["path"])
+    return canonical_digest(expected), len(expected)
+
+
+def validate_source_binding(source_meta: dict[str, Any]) -> dict[str, Any]:
+    revision = source_meta.get("revision")
+    require(isinstance(revision, str) and len(revision) == 40, "source binding revision is not a full SHA")
+    assert_commit(revision)
+    require(isinstance(source_meta.get("root"), str), "source root binding is malformed")
+    root = owned_path(source_meta["root"])
+    require(root.is_dir(), f"source binding root is missing: {owned_rel(root)}")
+    archive_meta = source_meta.get("archive")
+    require(isinstance(archive_meta, dict), f"source archive binding is missing for {revision}")
+    archive = owned_path(archive_meta.get("path", ""))
+    require(archive.is_file(), f"source archive is missing: {owned_rel(archive)}")
+    require(archive.stat().st_size == int(archive_meta.get("bytes", -1)), f"source archive size changed: {owned_rel(archive)}")
+    archive_sha = sha256_file(archive)
+    require(archive_sha == archive_meta.get("sha256"), f"source archive hash changed: {owned_rel(archive)}")
+    require(archive_meta.get("git_archive_sha256") == git_archive_sha256(revision) and archive_sha == archive_meta.get("git_archive_sha256"), f"source archive is not the exact Git archive for {revision}")
+    marker = root / ".extracted-revision"
+    require(marker.is_file() and marker.read_text().strip() == revision, f"source extraction marker does not bind {owned_rel(root)} to {revision}")
+    tree_sha, tree_files = source_tree_digest(archive, root)
+    require(tree_sha == source_meta.get("tree_sha256") and tree_files == int(source_meta.get("tree_files", -1)), f"extracted source tree changed: {owned_rel(root)}")
+    go_work = root / "go.work"
+    require(sha256_file(go_work) == source_meta.get("go_work_sha256"), f"archived go.work changed: {owned_rel(go_work)}")
+    return {"revision": revision, "root": owned_rel(root), "archive_sha256": archive_sha, "tree_sha256": tree_sha, "tree_files": tree_files, "verified": True}
 
 
 def copy_build_main(source_meta: dict[str, Any], label: str) -> Path:
@@ -340,7 +465,8 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def source_root(meta: dict[str, Any]) -> Path:
-    root = OWNED_ROOT / meta["root"]
+    require(isinstance(meta.get("root"), str), "source root binding is malformed")
+    root = owned_path(meta["root"])
     require(root.is_dir(), f"missing extracted source root: {owned_rel(root)}")
     return root
 
@@ -391,6 +517,72 @@ def build_input_manifest(root: Path, main: Path, timeout: float) -> list[dict[st
     return result
 
 
+def validate_build_binding(label: str, provenance: dict[str, Any], build_record: dict[str, Any], timeout: float, *, consumer_sha256: str | None = None) -> dict[str, Any]:
+    """Recompute source, input and executable identity; never trust child labels."""
+    source_meta = provenance.get("sources", {}).get(label) if isinstance(provenance.get("sources"), dict) else None
+    require(isinstance(source_meta, dict), f"missing {label} source binding")
+    source = validate_source_binding(source_meta)
+    revision = source["revision"]
+    require(build_record.get("revision") == revision, f"{label} build revision is not bound to its source archive")
+    require(build_record.get("source_archive_sha256") == source["archive_sha256"], f"{label} build archive hash is not bound to the source archive")
+    require(build_record.get("source_tree_sha256") == source["tree_sha256"] and int(build_record.get("source_tree_files", -1)) == source["tree_files"], f"{label} build source tree binding changed")
+    root = owned_path(build_record.get("source_root", ""))
+    require(root == owned_path(source_meta.get("root", "")), f"{label} build root differs from the bound source root")
+    main = owned_path(build_record.get("consumer_source", ""))
+    require(main.is_file() and not main.is_symlink(), f"{label} build consumer source is missing")
+    require(sha256_file(main) == build_record.get("consumer_source_sha256"), f"{label} consumer source hash changed")
+    if consumer_sha256 is not None:
+        require(sha256_file(main) == consumer_sha256, f"{label} consumer source is not the expected consumer")
+    inputs = build_input_manifest(root, main, timeout)
+    require(inputs == build_record.get("build_inputs"), f"{label} build input files or hashes changed")
+    require(canonical_digest(inputs) == build_record.get("build_inputs_sha256"), f"{label} build input digest changed")
+    binary_meta = build_record.get("binary")
+    require(isinstance(binary_meta, dict), f"{label} executable binding is missing")
+    binary = owned_path(binary_meta.get("path", ""))
+    require(binary.is_file() and not binary.is_symlink(), f"{label} executable is missing")
+    actual_sha = sha256_file(binary)
+    require(binary.stat().st_size == int(binary_meta.get("bytes", -1)) and actual_sha == binary_meta.get("sha256"), f"{label} executable hash or size changed")
+    return {
+        "label": label,
+        "source_revision": revision,
+        "source_root": owned_rel(root),
+        "source_archive_sha256": source["archive_sha256"],
+        "source_tree_sha256": source["tree_sha256"],
+        "build_inputs_sha256": build_record["build_inputs_sha256"],
+        "binary_path": owned_rel(binary),
+        "binary_sha256": actual_sha,
+        "binary_bytes": binary.stat().st_size,
+        "verified": True,
+    }
+
+
+def executable_binding_guard(bindings: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Prove that a sibling revision's binary cannot launch under this label."""
+    cases: list[dict[str, Any]] = []
+    for expected_label, actual_label in (("c23", "c56"), ("c56", "c23")):
+        expected = bindings[expected_label]
+        actual = bindings[actual_label]
+        expected_path = owned_path(expected["binary_path"])
+        actual_path = owned_path(actual["binary_path"])
+        require(expected_path.resolve() != actual_path.resolve(), "C23 and C56 executable bindings unexpectedly share a path")
+        try:
+            run_child(
+                [str(actual_path)],
+                f"binding-swap-{actual_label}-as-{expected_label}",
+                REPO_ROOT,
+                expected["source_revision"],
+                OWNED_ROOT / "artifacts" / "binding-guard" / f"{expected_label}-as-{actual_label}",
+                1.0,
+                binary_binding=expected,
+            )
+        except VerificationError as error:
+            require("not the bound binary" in str(error), f"unexpected executable swap rejection: {error}")
+            cases.append({"expected_label": expected_label, "actual_label": actual_label, "rejected": True})
+        else:
+            raise VerificationError(f"executable swap was not rejected: {actual_label} launched as {expected_label}")
+    return {"enabled": True, "swapped_binary_rejected": True, "cases": cases}
+
+
 def build(args: argparse.Namespace) -> dict[str, Any]:
     assert_scope()
     provenance = load_json(PROVENANCE_PATH)
@@ -400,6 +592,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     records: dict[str, Any] = {}
     for label in ("c23", "c56"):
         meta = provenance["sources"][label]
+        source_binding = validate_source_binding(meta)
         root = source_root(meta)
         main = copy_build_main(meta, label)
         binary = build_root / f"{label}-consumer"
@@ -413,6 +606,9 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "source_root": owned_rel(root),
             "consumer_source": owned_rel(main),
             "consumer_source_sha256": sha256_file(INPUT_C23 / "consumer" / "main.go"),
+            "source_archive_sha256": source_binding["archive_sha256"],
+            "source_tree_sha256": source_binding["tree_sha256"],
+            "source_tree_files": source_binding["tree_files"],
             "binary": {"path": owned_rel(binary), "bytes": binary.stat().st_size, "sha256": sha256_file(binary)},
             "command": command,
             "build_inputs": inputs,
@@ -425,8 +621,13 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "flags": ["-trimpath"],
         "consumer_source_sha256": sha256_file(INPUT_C23 / "consumer" / "main.go"),
         "fixture_sha256": fixture_digest(),
+        "runner_sha256": sha256_file(Path(__file__)),
         "builds": records,
     }
+    bindings = {}
+    for label in ("c23", "c56"):
+        bindings[label] = validate_build_binding(label, provenance, value["builds"][label], args.child_timeout_seconds, consumer_sha256=sha256_file(INPUT_C23 / "consumer" / "main.go"))
+    value["binding_guard"] = executable_binding_guard(bindings)
     write_json(BUILD_PATH, value)
     print(json.dumps({"status": "built", "binaries": {key: value["binary"]["sha256"] for key, value in records.items()}}, sort_keys=True))
     return value
@@ -448,8 +649,9 @@ def sanitized_environment(source_revision: str, run_root: Path) -> dict[str, str
     allowed.update({
         "HOME": str(home), "USERPROFILE": str(home), "XDG_CONFIG_HOME": str(config),
         "LANG": "C", "LC_ALL": "C", "C68_SOURCE_REVISION": source_revision,
-        # The preserved C23 consumer's provenance contract is intentionally
-        # retained while it is executed against both exact source revisions.
+        # The frozen consumer reports this value, but the report is never the
+        # source attestation.  validate_build_binding independently binds the
+        # archive, extracted tree, build inputs and executable before launch.
         "C23_SOURCE_REVISION": source_revision,
     })
     # Keep the child HOME credential-free without forcing every Go regression
@@ -491,14 +693,46 @@ def group_alive(pid: int) -> bool:
     return True
 
 
+def group_members(pgid: int) -> list[int]:
+    """Return observable process-group members when the host exposes /proc."""
+    proc_root = Path("/proc")
+    if not proc_root.is_dir():
+        return [] if not group_alive(pgid) else [-1]
+    members: list[int] = []
+    for entry in proc_root.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat = (entry / "stat").read_text()
+            _, remainder = stat.split(") ", 1)
+            fields = remainder.split()
+            if len(fields) >= 4 and int(fields[2]) == pgid:
+                members.append(int(entry.name))
+        except (OSError, ValueError):
+            continue
+    return sorted(members)
+
+
+def wait_for_group_exit(pgid: int, timeout: float) -> list[int]:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        members = group_members(pgid)
+        if not group_alive(pgid) and not members:
+            return []
+        time.sleep(0.05)
+    return group_members(pgid) if group_alive(pgid) else []
+
+
 def stop_group(process: subprocess.Popen[Any]) -> dict[str, Any]:
-    before = group_alive(process.pid)
+    pgid = process.pid
+    before_members = group_members(pgid)
+    before = group_alive(pgid)
     term_sent = False
     kill_sent = False
     errors: list[str] = []
     if before:
         try:
-            os.killpg(process.pid, signal.SIGTERM)
+            os.killpg(pgid, signal.SIGTERM)
             term_sent = True
         except ProcessLookupError:
             pass
@@ -506,9 +740,12 @@ def stop_group(process: subprocess.Popen[Any]) -> dict[str, Any]:
             errors.append(f"SIGTERM: {error}")
         with suppress(subprocess.TimeoutExpired):
             process.wait(timeout=2)
-        if process.poll() is None and group_alive(process.pid):
+        # The process leader may exit while a grandchild keeps the same
+        # session/process group alive.  Kill the group based on group state,
+        # never on the leader's poll result alone.
+        if group_alive(pgid):
             try:
-                os.killpg(process.pid, signal.SIGKILL)
+                os.killpg(pgid, signal.SIGKILL)
                 kill_sent = True
             except ProcessLookupError:
                 pass
@@ -519,12 +756,60 @@ def stop_group(process: subprocess.Popen[Any]) -> dict[str, Any]:
     if process.poll() is None:
         with suppress(subprocess.TimeoutExpired):
             process.wait(timeout=2)
-    after = group_alive(process.pid)
-    return {"group_alive_before": before, "group_alive_after": after, "term_sent": term_sent, "kill_sent": kill_sent, "parent_reaped": process.returncode is not None, "errors": errors}
+    survivors = wait_for_group_exit(pgid, 2.0)
+    after = group_alive(pgid) or bool(survivors)
+    return {
+        "pgid": pgid,
+        "group_alive_before": before,
+        "group_members_before": before_members,
+        "group_alive_after": after,
+        "group_members_after": survivors,
+        "term_sent": term_sent,
+        "kill_sent": kill_sent,
+        "parent_reaped": process.returncode is not None,
+        "errors": errors,
+    }
 
 
-def run_child(command: list[str], label: str, cwd: Path, source_revision: str, run_root: Path, timeout: float) -> dict[str, Any]:
+def artifact_disk_usage(root: Path) -> dict[str, Any]:
+    require(root.is_dir(), f"artifact root is missing: {owned_rel(root)}")
+    total = 0
+    files = 0
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            require(path.resolve() == root.resolve() or root.resolve() in path.resolve().parents, f"artifact symlink escaped owned root: {owned_rel(path)}")
+            require(False, f"artifact symlinks are not allowed: {owned_rel(path)}")
+        if not path.is_file():
+            continue
+        files += 1
+        total += path.stat().st_size
+        require(files <= MAX_RETAINED_ARTIFACT_FILES, f"artifact file count exceeded {MAX_RETAINED_ARTIFACT_FILES}: {owned_rel(root)}")
+        require(total <= MAX_RUN_ARTIFACT_BYTES, f"artifact disk cap exceeded {MAX_RUN_ARTIFACT_BYTES} bytes: {owned_rel(root)}")
+    return {"bytes": total, "files": files, "cap_bytes": MAX_RUN_ARTIFACT_BYTES, "bounded": total <= MAX_RUN_ARTIFACT_BYTES}
+
+
+def retained_artifact_usage() -> dict[str, Any]:
+    roots = [OWNED_ROOT / "artifacts" / "runs", OWNED_ROOT / "artifacts" / "negative-control", OWNED_ROOT / "artifacts" / "cleanup-control"]
+    total = 0
+    files = 0
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if path.is_symlink():
+                require(False, f"retained artifact symlink is not allowed: {owned_rel(path)}")
+            if path.is_file():
+                files += 1
+                total += path.stat().st_size
+    return {"bytes": total, "files": files, "cap_bytes": MAX_RETAINED_ARTIFACT_BYTES, "cap_files": MAX_RETAINED_ARTIFACT_FILES, "bounded": total <= MAX_RETAINED_ARTIFACT_BYTES and files <= MAX_RETAINED_ARTIFACT_FILES}
+
+
+def run_child(command: list[str], label: str, cwd: Path, source_revision: str, run_root: Path, timeout: float, *, binary_binding: dict[str, Any] | None = None) -> dict[str, Any]:
     require(timeout > 0, f"{label} has no remaining child budget")
+    if binary_binding is not None:
+        executable = owned_path(binary_binding.get("binary_path", ""))
+        require(command and Path(command[0]).resolve() == executable.resolve(), f"{label} command executable is not the bound binary")
+        require(executable.is_file() and sha256_file(executable) == binary_binding.get("binary_sha256"), f"{label} executable changed after binding")
     run_root.mkdir(parents=True, exist_ok=True)
     stdout_path = run_root / "stdout.log"
     stderr_path = run_root / "stderr.log"
@@ -559,6 +844,9 @@ def run_child(command: list[str], label: str, cwd: Path, source_revision: str, r
     cleanup = stop_group(process)
     out_thread.join(timeout=2)
     err_thread.join(timeout=2)
+    cleanup["pipes_reaped"] = not out_thread.is_alive() and not err_thread.is_alive()
+    if not cleanup["pipes_reaped"]:
+        cleanup["errors"].append("output pipe reader did not terminate")
     stdout_path.write_bytes(retained_out)
     stderr_path.write_bytes(retained_err)
     return {
@@ -570,6 +858,7 @@ def run_child(command: list[str], label: str, cwd: Path, source_revision: str, r
         "stdout_observed_bytes": observed_out[0], "stderr_observed_bytes": observed_err[0],
         "output_bounded": not (overflow or overflow_out[0] or overflow_err[0]),
         "cleanup": cleanup,
+        "binary_binding": binary_binding,
     }
 
 
@@ -603,14 +892,17 @@ def first_string(value: Any, key: str) -> str | None:
 
 def provider_audio(artifact_root: Path) -> dict[str, Any]:
     candidates = sorted(artifact_root.rglob("provider.session.json"))
-    require(candidates, f"provider capture was not finalized below {owned_rel(artifact_root)}")
+    require(len(candidates) == 1, f"provider capture count is not exactly one below {owned_rel(artifact_root)}")
     path = candidates[0]
+    require(path.resolve().parent == artifact_root.resolve(), f"provider capture is not at the execution boundary: {owned_rel(path)}")
     capture = json.loads(path.read_text())
+    require(isinstance(capture, dict) and isinstance(capture.get("records"), list), f"provider capture is not a structured session record: {owned_rel(path)}")
     audio_records: list[bytes] = []
     # The capture stores the outer session record and the nested stream
     # message, both of which carry type=AUDIO.DELTA.  Count only the outer
     # records so one provider emission cannot be attributed twice.
-    for item in capture.get("records", []) if isinstance(capture, dict) and isinstance(capture.get("records"), list) else []:
+    for item in capture["records"]:
+        require(isinstance(item, dict), f"provider capture contains a malformed record: {owned_rel(path)}")
         if item.get("type") != "AUDIO.DELTA":
             continue
         content = first_string(item.get("payload", item), "content")
@@ -634,7 +926,7 @@ def semantic_root(report: dict[str, Any], artifact_root: Path) -> Path | None:
         candidate = Path(value)
         if not candidate.is_absolute():
             candidate = REPO_ROOT / candidate
-        if candidate.is_dir():
+        if candidate.is_dir() and artifact_root.resolve() in candidate.resolve().parents:
             return candidate
     candidate = artifact_root / "semantic"
     return candidate if candidate.is_dir() else None
@@ -662,10 +954,15 @@ def execution_evidence(execution: dict[str, Any], report_path: Path, artifact_ro
     require(not execution["timed_out"], f"{source_label}/{mode} child timed out")
     require(execution["output_bounded"], f"{source_label}/{mode} child exceeded output cap")
     require(execution["cleanup"]["parent_reaped"] and not execution["cleanup"]["group_alive_after"], f"{source_label}/{mode} child cleanup failed")
+    require(execution["cleanup"].get("pipes_reaped") is True and not execution["cleanup"].get("group_members_after"), f"{source_label}/{mode} child descendants or pipes survived")
+    binding = execution.get("binary_binding")
+    require(isinstance(binding, dict) and binding.get("verified") is True and binding.get("label") == source_label, f"{source_label}/{mode} executable binding is missing")
+    require(binding.get("source_revision") == execution["source_revision"], f"{source_label}/{mode} executable source identity drifted")
     report = load_json(report_path)
     require(report.get("schema") == "c23.v1", f"{source_label}/{mode} report schema mismatch")
     require(report.get("scenario") == "tool-matrix" and report.get("turns") == 1, f"{source_label}/{mode} was not the one-turn matrix")
     require(report.get("source_revision") == execution["source_revision"], f"{source_label}/{mode} source identity drifted")
+    execution["reported_source_revision"] = report.get("source_revision")
     require(report.get("fixture_sha256") == fixture_digest(), f"{source_label}/{mode} fixture digest drifted")
     require(report.get("trace_complete") is True, f"{source_label}/{mode} trace is incomplete")
     require(report.get("events", {}).get("overflow_drops") == 0, f"{source_label}/{mode} public event trace overflowed")
@@ -681,7 +978,7 @@ def execution_evidence(execution: dict[str, Any], report_path: Path, artifact_ro
     public_sha = str(pcm.get("sha256", ""))
     public_ok = public_bytes == len(expected) and public_sha == sha256_bytes(expected) and int(pcm.get("sample_rate", 0) or 0) == int(fixture_value()["audio"]["sample_rate"])
     provider = provider_audio(artifact_root)
-    provider_ok = provider["nonempty"] and provider["bytes"] == len(expected) and provider["audio_delta_records"] == 1
+    provider_ok = provider["nonempty"] and provider["bytes"] == len(expected) and provider["audio_delta_records"] == 1 and provider["nonempty_records"] == 1 and provider["recorded_bytes"] == [len(expected)]
     usage_record = recording_usage(report)
     usage = usage_record["usage"]
     root = semantic_root(report, artifact_root)
@@ -729,86 +1026,200 @@ def execution_evidence(execution: dict[str, Any], report_path: Path, artifact_ro
         require(semantic["manifest"] is not None, f"{source_label}/{mode} semantic manifest is missing")
         require(not semantic["audio_path"]["exists"], f"{source_label}/{mode} unexpectedly produced audio; attribution must be re-planned")
         require(boundary_status["recording_usage"]["queue_items_final"] == 0 and boundary_status["recording_usage"]["queue_bytes_final"] == 0, f"{source_label}/{mode} recording spool did not drain")
+    disk = artifact_disk_usage(artifact_root)
+    execution["artifact_disk"] = disk
     return {
         "source": source_label, "mode": mode, "execution": execution, "report": owned_rel(report_path),
         "artifact_root": owned_rel(artifact_root), "boundaries": boundary_status,
         "public_event_audio_delta_count": public_audio_delta_count,
         "recording_report": report.get("recording_usage", {}),
+        "artifact_disk": disk,
     }
+
+
+def new_run_id(prefix: str) -> str:
+    return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + f"-{time.time_ns() % 1_000_000_000:09d}-{prefix}"
+
+
+def reserve_comparison_run(driver_sha256: str) -> tuple[str, dict[str, Any]]:
+    """Atomically reserve one comparison attempt and reject unchanged retries."""
+    if COMPARISON_LOCK_PATH.exists():
+        lock = load_json(COMPARISON_LOCK_PATH)
+        raise VerificationError(f"C68 comparison is already reserved: {lock.get('run_id', 'unknown')}")
+    prior = load_json(COMPARISON_PATH) if COMPARISON_PATH.is_file() else None
+    if prior and prior.get("accepted_as_evidence") is True and prior.get("runner_sha256") == driver_sha256:
+        raise VerificationError("C68 comparison already completed with this driver; unchanged duplicate run rejected")
+    ledger = load_json(COMPARISON_LEDGER_PATH) if COMPARISON_LEDGER_PATH.is_file() else {
+        "schema": "audio-runtime.c68.zero-audio-attribution.comparison-runs.v1",
+        "task": TASK,
+        "attempts": [],
+    }
+    require(ledger.get("schema") == "audio-runtime.c68.zero-audio-attribution.comparison-runs.v1", "comparison run ledger schema mismatch")
+    require(not any(item.get("runner_sha256") == driver_sha256 for item in ledger.get("attempts", [])), "C68 comparison driver was already attempted; unchanged duplicate run rejected")
+    run_id = new_run_id("comparison")
+    COMPARISON_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(COMPARISON_LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as error:
+        raise VerificationError("C68 comparison reservation raced with another run") from error
+    with os.fdopen(descriptor, "w") as stream:
+        json.dump({"schema": "audio-runtime.c68.zero-audio-attribution.comparison-lock.v1", "task": TASK, "run_id": run_id, "runner_sha256": driver_sha256, "state": "running"}, stream, indent=2, sort_keys=True)
+        stream.write("\n")
+    prior_record = None
+    if prior:
+        prior_record = {
+            "source": "comparison.json",
+            "sha256": sha256_file(COMPARISON_PATH),
+            "run_id": prior.get("run_id", "legacy-unidentified"),
+            "runner_sha256": prior.get("runner_sha256"),
+            "positive_execution_count": prior.get("positive_execution_count"),
+            "state": "historical",
+        }
+    attempt = {"run_id": run_id, "runner_sha256": driver_sha256, "started_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "state": "running"}
+    if prior_record:
+        attempt["prior_comparison"] = prior_record
+    ledger.setdefault("attempts", []).append(attempt)
+    ledger["current_run_id"] = run_id
+    ledger["duplicate_guard"] = {"enabled": True, "atomic_lock": owned_rel(COMPARISON_LOCK_PATH), "unchanged_driver_rejected": True, "history_preserved": bool(prior_record)}
+    write_json(COMPARISON_LEDGER_PATH, ledger)
+    return run_id, prior_record or {}
+
+
+def finish_comparison_run(run_id: str, state: str, summary: dict[str, Any]) -> None:
+    ledger = load_json(COMPARISON_LEDGER_PATH)
+    attempts = ledger.get("attempts")
+    require(isinstance(attempts, list), "comparison run ledger attempts are malformed")
+    matches = [item for item in attempts if item.get("run_id") == run_id]
+    require(len(matches) == 1, f"comparison run ledger is missing {run_id}")
+    matches[0].update(summary)
+    matches[0]["state"] = state
+    matches[0]["finished_at_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    write_json(COMPARISON_LEDGER_PATH, ledger)
+    if COMPARISON_LOCK_PATH.exists():
+        COMPARISON_LOCK_PATH.unlink()
+
+
+def write_attribution(comparison: dict[str, Any]) -> dict[str, Any]:
+    provenance = load_json(PROVENANCE_PATH)
+    attribution = comparison["attribution"]
+    value: dict[str, Any] = {
+        "schema": "audio-runtime.c68.zero-audio-attribution.attribution.v1",
+        "task": TASK,
+        "project": PROJECT,
+        "contract": "audio-runtime-v1",
+        "classification": attribution["classification"],
+        "exactly_one_classification": attribution["exactly_one_classification"],
+        "c23_revision": comparison["c23_revision"],
+        "c56_revision": comparison["c56_revision"],
+        "comparison": {"run_id": comparison["run_id"], "sha256": canonical_digest(comparison), "path": owned_rel(COMPARISON_PATH)},
+        "provenance": {"path": owned_rel(PROVENANCE_PATH), "sha256": sha256_file(PROVENANCE_PATH), "prepared_head": provenance["head"], "current_main": provenance["current_main"]},
+        "build": {"path": owned_rel(BUILD_PATH), "sha256": sha256_file(BUILD_PATH), "bindings": comparison["build_bindings"]},
+        "source_binding": {"independent_of_consumer_report": True, "report_source_revision_is_consistency_only": True, "executions": [{"source": item["source"], "mode": item["mode"], "binary_sha256": item["execution"]["binary_binding"]["binary_sha256"], "build_inputs_sha256": item["execution"]["binary_binding"]["build_inputs_sha256"]} for item in comparison["executions"]]},
+        "first_divergent_boundary": attribution["first_divergent_boundary"],
+        "first_divergent_api": attribution["first_divergent_api"],
+        "first_divergent_path": attribution["first_divergent_path"],
+        "causal_detail": attribution["causal_detail"],
+        "smallest_existing_c56_executor_repair": attribution["smallest_existing_c56_executor_repair"],
+        "owner_action": {"owner": "audio-runtime-c56-retire-cli-recording-orchestration", "action": "preserve provider-media capability absence at the terminalDrainSession/capturingInferencer handoff so the public observer reaches RecordAudio", "scope": "existing C56 executor; C68 performs no production mutation"},
+        "c23_runner_repair_needed": attribution["c23_runner_repair_needed"],
+        "c56_candidate_restores_audio": attribution["c56_candidate_restores_audio"],
+        "limitations": ["C68 does not claim C56 delivery or C23 delivery", "C68 does not claim device consumption or acoustic output", "script CI, independent review, guarded merge and post-merge vertical probing remain external"],
+        "evidence_ready": True,
+    }
+    if REGRESSIONS_PATH.is_file():
+        regressions = load_json(REGRESSIONS_PATH)
+        value["c21_regressions"] = {"path": owned_rel(REGRESSIONS_PATH), "sha256": sha256_file(REGRESSIONS_PATH), "tested_source_revision": regressions.get("source_revision"), "passed": regressions.get("passed") is True}
+    write_json(ATTRIBUTION_PATH, value)
+    return value
 
 
 def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
     assert_scope()
-    build_manifest = load_json(BUILD_PATH)
     provenance = load_json(PROVENANCE_PATH)
     require(provenance["c23_revision"] == args.c23_revision and provenance["c56_revision"] == args.c56_revision, "comparison revisions differ from provenance")
     require(args.turns == 1, "C68 comparison is exactly one logical turn per execution")
     require(tuple(args.recording) == RECORDING_MODES, "C68 comparison recording modes must be exactly off,on")
+    driver_sha256 = sha256_file(Path(__file__))
+    run_id, prior = reserve_comparison_run(driver_sha256)
     started = time.monotonic()
-    executions: list[dict[str, Any]] = []
     evidence: list[dict[str, Any]] = []
-    run_stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + f"-{time.time_ns() % 1_000_000_000:09d}"
-    for source_label in ("c23", "c56"):
-        source_revision = provenance[f"{source_label}_revision"]
-        root = source_root(provenance["sources"][source_label])
-        binary = OWNED_ROOT / build_manifest["builds"][source_label]["binary"]["path"]
-        for mode in RECORDING_MODES:
-            require(len(evidence) < MAX_POSITIVE_RUNS, "positive execution count exceeded four")
-            artifact_root = OWNED_ROOT / "artifacts" / "runs" / f"{run_stamp}-{source_label}-{mode}"
-            report_path = artifact_root / "report.json"
-            command = [str(binary), "-scenario=tool-matrix", "-fixture=" + str(FIXTURE_PATH), "-turns=1", "-recording=" + ("true" if mode == "on" else "false"), "-artifact-root=" + str(artifact_root), "-output=" + str(report_path)]
-            execution = run_child(command, f"{source_label}-{mode}", root, source_revision, artifact_root / "process", args.child_timeout_seconds)
-            executions.append(execution)
-            evidence.append(execution_evidence(execution, report_path, artifact_root, source_label, mode))
-            require(time.monotonic() - started <= args.total_timeout_seconds, "C68 positive comparison exceeded aggregate timeout")
-    require(len(evidence) == MAX_POSITIVE_RUNS, "comparison did not execute exactly four positive cases")
-    by_source = {label: {item["mode"]: item for item in evidence if item["source"] == label} for label in ("c23", "c56")}
-    for label in by_source:
-        require(set(by_source[label]) == set(RECORDING_MODES), f"{label} is missing a recording mode")
-        off = by_source[label]["off"]
-        on = by_source[label]["on"]
-        require(off["boundaries"]["public_pcm"]["sha256"] == on["boundaries"]["public_pcm"]["sha256"], f"{label} off/on public PCM differs")
-        require(off["boundaries"]["provider_capture"]["sha256"] == on["boundaries"]["provider_capture"]["sha256"], f"{label} off/on provider PCM differs")
-    classification = "C56_RECORDING_DEFECT"
-    comparison = {
-        "schema": "audio-runtime.c68.zero-audio-attribution.comparison.v1",
-        "task": TASK, "c23_revision": args.c23_revision, "c56_revision": args.c56_revision,
-        "turns": args.turns, "recording_modes": list(RECORDING_MODES), "positive_execution_count": len(evidence),
-        "aggregate_elapsed_ms": int((time.monotonic() - started) * 1000), "aggregate_timeout_seconds": args.total_timeout_seconds,
-        "executions": evidence,
-        "attribution": {
+    try:
+        build_manifest = load_json(BUILD_PATH)
+        bindings = {label: validate_build_binding(label, provenance, build_manifest["builds"][label], args.child_timeout_seconds, consumer_sha256=sha256_file(INPUT_C23 / "consumer" / "main.go")) for label in ("c23", "c56")}
+        binding_guard = executable_binding_guard(bindings)
+        require(build_manifest.get("binding_guard") == binding_guard, "build manifest executable swap guard changed")
+        for source_label in ("c23", "c56"):
+            source_revision = provenance[f"{source_label}_revision"]
+            root = source_root(provenance["sources"][source_label])
+            binary = owned_path(build_manifest["builds"][source_label]["binary"]["path"])
+            for mode in RECORDING_MODES:
+                require(len(evidence) < MAX_POSITIVE_RUNS, "positive execution count exceeded four")
+                artifact_root = OWNED_ROOT / "artifacts" / "runs" / f"{run_id}-{source_label}-{mode}"
+                require(not artifact_root.exists(), f"comparison artifact root already exists: {owned_rel(artifact_root)}")
+                report_path = artifact_root / "report.json"
+                command = [str(binary), "-scenario=tool-matrix", "-fixture=" + str(FIXTURE_PATH), "-turns=1", "-recording=" + ("true" if mode == "on" else "false"), "-artifact-root=" + str(artifact_root), "-output=" + str(report_path)]
+                execution = run_child(command, f"{source_label}-{mode}", root, source_revision, artifact_root / "process", args.child_timeout_seconds, binary_binding=bindings[source_label])
+                evidence.append(execution_evidence(execution, report_path, artifact_root, source_label, mode))
+                require(time.monotonic() - started <= args.total_timeout_seconds, "C68 positive comparison exceeded aggregate timeout")
+        require(len(evidence) == MAX_POSITIVE_RUNS, "comparison did not execute exactly four positive cases")
+        by_source = {label: {item["mode"]: item for item in evidence if item["source"] == label} for label in ("c23", "c56")}
+        for label in by_source:
+            require(set(by_source[label]) == set(RECORDING_MODES), f"{label} is missing a recording mode")
+            off = by_source[label]["off"]
+            on = by_source[label]["on"]
+            require(off["boundaries"]["public_pcm"]["bytes"] == on["boundaries"]["public_pcm"]["bytes"] and off["boundaries"]["public_pcm"]["sha256"] == on["boundaries"]["public_pcm"]["sha256"], f"{label} off/on public PCM differs")
+            require(off["boundaries"]["provider_capture"]["bytes"] == on["boundaries"]["provider_capture"]["bytes"] and off["boundaries"]["provider_capture"]["sha256"] == on["boundaries"]["provider_capture"]["sha256"], f"{label} off/on provider PCM differs")
+        classification = "C56_RECORDING_DEFECT"
+        artifact_disk_bytes = sum(item["artifact_disk"]["bytes"] for item in evidence)
+        require(artifact_disk_bytes <= MAX_RETAINED_ARTIFACT_BYTES, "C68 retained positive artifact disk cap exceeded")
+        comparison = {
+            "schema": "audio-runtime.c68.zero-audio-attribution.comparison.v1",
+            "task": TASK, "c23_revision": args.c23_revision, "c56_revision": args.c56_revision,
+            "turns": args.turns, "recording_modes": list(RECORDING_MODES), "positive_execution_count": len(evidence),
+            "run_id": run_id, "runner_sha256": driver_sha256,
+            "aggregate_elapsed_ms": int((time.monotonic() - started) * 1000), "aggregate_timeout_seconds": args.total_timeout_seconds,
+            "artifact_disk": {"bytes": artifact_disk_bytes, "cap_bytes": MAX_RETAINED_ARTIFACT_BYTES, "bounded": artifact_disk_bytes <= MAX_RETAINED_ARTIFACT_BYTES},
+            "duplicate_guard": {"enabled": True, "ledger": owned_rel(COMPARISON_LEDGER_PATH), "prior_attempt_preserved": bool(prior), "current_run_id": run_id},
+            "binding_guard": binding_guard,
+            "build_bindings": bindings,
+            "executions": evidence,
+            "attribution": {
+                "classification": classification,
+                "negative_control_required": True,
+                "first_divergent_boundary": "recording_observer_admission",
+                "first_divergent_api": "session.LiveRecorder.RecordAudio is never invoked for normalized provider AUDIO.DELTA in this no-provider-media fixture",
+                "first_divergent_path": "go-agent-runtime/services/session/internal/live/observations/observer.go:71-80, reached through terminalDrainSession capability façade at service.go:338-362 and lifecycle.go:387-400",
+                "causal_detail": "terminalDrainSession always implements MediaSession; its empty endpoints satisfy no-device media requirements, so capturingInferencer calls SetMediaAttached(true), skipping Observer.messageAudio. The provider and public PCM boundaries remain non-empty, but recording accepted_audio/audio_bytes stay zero and finalization has no audio/out-000.pcm.",
+                "smallest_existing_c56_executor_repair": "preserve provider-media capability absence at the terminalDrainSession/capturingInferencer handoff (service.go:338-362; lifecycle.go:387-400; session_adapter.go:45-55) so the public observer fallback reaches RecordAudio; this is outside C68 owned paths and is not a C23 fixture/oracle repair",
+                "c23_runner_repair_needed": False,
+                "c56_candidate_restores_audio": False,
+                "exactly_one_classification": True,
+            },
+            "accepted_as_evidence": True,
+            "ci_status": "not_polled; submit candidate to external script CI gate",
+        }
+        write_json(COMPARISON_PATH, comparison)
+        # Preserve the first demonstrated causal failure as a stable pointer.
+        first_failure = next(item for item in evidence if item["source"] == "c23" and item["mode"] == "on")
+        write_json(FIRST_FAILURE_PATH, {
+            "schema": "audio-runtime.c68.zero-audio-attribution.first-failure.v1",
+            "boundary": "recording_observer_admission",
             "classification": classification,
-            "negative_control_required": True,
-            "first_divergent_boundary": "recording_observer_admission",
-            "first_divergent_api": "session.LiveRecorder.RecordAudio is never invoked for normalized provider AUDIO.DELTA in this no-provider-media fixture",
-            "first_divergent_path": "go-agent-runtime/services/session/internal/live/observations/observer.go:71-80, reached through terminalDrainSession capability façade at service.go:338-362 and lifecycle.go:387-400",
-            "causal_detail": "terminalDrainSession always implements MediaSession; its empty endpoints satisfy no-device media requirements, so capturingInferencer calls SetMediaAttached(true), skipping Observer.messageAudio. The provider and public PCM boundaries remain non-empty, but recording accepted_audio/audio_bytes stay zero and finalization has no audio/out-000.pcm.",
-            "smallest_existing_c56_executor_repair": "preserve provider-media capability absence at the terminalDrainSession/capturingInferencer handoff (service.go:338-362; lifecycle.go:387-400; session_adapter.go:45-55) so the public observer fallback reaches RecordAudio; this is outside C68 owned paths and is not a C23 fixture/oracle repair",
-            "c23_runner_repair_needed": False,
-            "c56_candidate_restores_audio": False,
-            "exactly_one_classification": True,
-        },
-        "accepted_as_evidence": True,
-        "ci_status": "not_polled; submit candidate to external script CI gate",
-    }
-    write_json(COMPARISON_PATH, comparison)
-    # Preserve the first demonstrated causal failure as a stable pointer. The
-    # full raw report and semantic tree remain under the corresponding run;
-    # this small record keeps the handoff reviewable without duplicating them.
-    first_failure = next(item for item in evidence if item["source"] == "c23" and item["mode"] == "on")
-    write_json(FIRST_FAILURE_PATH, {
-        "schema": "audio-runtime.c68.zero-audio-attribution.first-failure.v1",
-        "boundary": "recording_observer_admission",
-        "classification": classification,
-        "source": "c23",
-        "source_revision": args.c23_revision,
-        "run": first_failure["artifact_root"],
-        "report": first_failure["report"],
-        "evidence": first_failure["boundaries"],
-        "preserved": True,
-    })
-    print(json.dumps({"status": "compared", "positive_executions": len(evidence), "classification": classification}, sort_keys=True))
-    return comparison
+            "source": "c23",
+            "source_revision": args.c23_revision,
+            "run": first_failure["artifact_root"],
+            "report": first_failure["report"],
+            "evidence": first_failure["boundaries"],
+            "preserved": True,
+        })
+        write_attribution(comparison)
+        finish_comparison_run(run_id, "complete", {"positive_execution_count": len(evidence), "elapsed_ms": comparison["aggregate_elapsed_ms"], "comparison_sha256": canonical_digest(comparison)})
+        print(json.dumps({"status": "compared", "positive_executions": len(evidence), "classification": classification, "run_id": run_id}, sort_keys=True))
+        return comparison
+    except Exception as error:
+        with suppress(Exception):
+            finish_comparison_run(run_id, "failed", {"error": str(error)[:2000]})
+        raise
 
 
 def make_negative_source() -> tuple[Path, str, str]:
@@ -830,6 +1241,7 @@ def negative_control(args: argparse.Namespace) -> dict[str, Any]:
     provenance = load_json(PROVENANCE_PATH)
     build_manifest = load_json(BUILD_PATH)
     source_revision = provenance["c56_revision"]
+    validate_build_binding("c56", provenance, build_manifest["builds"]["c56"], args.child_timeout_seconds, consumer_sha256=sha256_file(INPUT_C23 / "consumer" / "main.go"))
     root = source_root(provenance["sources"]["c56"])
     negative, original_hash, negative_hash = make_negative_source()
     binary = OWNED_ROOT / "scratch" / "build" / "c56-negative-consumer"
@@ -839,30 +1251,91 @@ def negative_control(args: argparse.Namespace) -> dict[str, Any]:
     shutil.copyfile(negative, negative_source)
     run_command(command, cwd=root, timeout=args.child_timeout_seconds)
     require(binary.is_file(), "negative control build did not produce a binary")
-    artifact_root = OWNED_ROOT / "artifacts" / "negative-control" / time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    source_binding = validate_source_binding(provenance["sources"]["c56"])
+    negative_inputs = build_input_manifest(root, negative_source, args.child_timeout_seconds)
+    negative_build = {
+        "revision": source_revision,
+        "source_root": owned_rel(root),
+        "consumer_source": owned_rel(negative_source),
+        "consumer_source_sha256": negative_hash,
+        "source_archive_sha256": source_binding["archive_sha256"],
+        "source_tree_sha256": source_binding["tree_sha256"],
+        "source_tree_files": source_binding["tree_files"],
+        "binary": {"path": owned_rel(binary), "sha256": sha256_file(binary), "bytes": binary.stat().st_size},
+        "build_inputs": negative_inputs,
+        "build_inputs_sha256": canonical_digest(negative_inputs),
+    }
+    binding = validate_build_binding("c56", provenance, negative_build, args.child_timeout_seconds, consumer_sha256=negative_hash)
+    binding["label"] = "c56-negative"
+    artifact_root = OWNED_ROOT / "artifacts" / "negative-control" / new_run_id("negative")
+    require(not artifact_root.exists(), f"negative-control artifact root already exists: {owned_rel(artifact_root)}")
     report_path = artifact_root / "report.json"
     child_command = [str(binary), "-scenario=tool-matrix", "-fixture=" + str(FIXTURE_PATH), "-turns=1", "-recording=false", "-artifact-root=" + str(artifact_root), "-output=" + str(report_path)]
-    execution = run_child(child_command, "negative-first-provider-audio", root, source_revision, artifact_root / "process", args.child_timeout_seconds)
-    require(execution["returncode"] != 0, "negative control unexpectedly passed malformed provider audio")
+    execution = run_child(child_command, "negative-first-provider-audio", root, source_revision, artifact_root / "process", args.child_timeout_seconds, binary_binding=binding)
+    require(execution["returncode"] == 1 and not execution["timed_out"] and execution["output_bounded"], "negative control did not fail with the expected bounded oracle error")
+    require(execution["cleanup"]["parent_reaped"] and not execution["cleanup"]["group_alive_after"] and execution["cleanup"].get("pipes_reaped") is True and not execution["cleanup"].get("group_members_after"), "negative control cleanup was incomplete")
     require(report_path.is_file(), "negative control did not preserve its report")
     report = load_json(report_path)
+    require(report.get("schema") == "c23.v1" and report.get("scenario") == "tool-matrix" and report.get("turns") == 1 and report.get("recording") is False, "negative control report shape changed")
     require(report.get("source_revision") == source_revision and report.get("fixture_sha256") == fixture_digest(), "negative control source or fixture identity drifted")
-    pcm = report.get("pcm", {})
+    require(isinstance(report.get("error"), str) and report["error"].startswith("PCM oracle mismatch:"), "negative control did not fail at the public PCM oracle")
+    pcm = report.get("pcm") if isinstance(report.get("pcm"), dict) else {}
     provider = provider_audio(artifact_root)
-    passed = int(pcm.get("bytes", 0) or 0) == 0 and not provider["nonempty"]
+    events = report.get("events") if isinstance(report.get("events"), dict) else {}
+    by_kind = events.get("by_kind") if isinstance(events.get("by_kind"), dict) else {}
+    passed = int(pcm.get("bytes", 0) or 0) == 0 and pcm.get("sha256") == sha256_bytes(b"") and provider["audio_delta_records"] == 1 and provider["nonempty_records"] == 0 and provider["recorded_bytes"] == [0] and provider["bytes"] == 0 and by_kind.get("AUDIO.DELTA") == 1
     require(passed, "negative control did not fail at the intended provider/public audio oracle boundary")
+    disk = artifact_disk_usage(artifact_root)
     value = {
         "schema": "audio-runtime.c68.zero-audio-attribution.negative.v1", "task": TASK,
         "mutation": args.mutation, "positive_fixture_sha256": fixture_digest(),
         "original_consumer_sha256": original_hash, "mutated_consumer_sha256": negative_hash,
         "mutated_source": owned_rel(negative), "binary": {"path": owned_rel(binary), "sha256": sha256_file(binary), "bytes": binary.stat().st_size},
-        "execution": execution, "report": owned_rel(report_path), "provider_capture": provider,
+        "build_binding": binding, "build": negative_build,
+        "execution": execution, "report": owned_rel(report_path), "provider_capture": provider, "artifact_disk": disk,
         "public_pcm": {"bytes": int(pcm.get("bytes", 0) or 0), "sha256": pcm.get("sha256"), "expected_rejection": True},
         "classification": "oracle_control_rejects_malformed_first_provider_audio",
         "passed": True,
     }
     write_json(NEGATIVE_PATH, value)
     print(json.dumps({"status": "negative-control-passed", "mutation": args.mutation, "returncode": execution["returncode"]}, sort_keys=True))
+    return value
+
+
+def cleanup_control(args: argparse.Namespace) -> dict[str, Any]:
+    """Prove that a surviving grandchild is killed with its process group."""
+    assert_scope()
+    probe_root = OWNED_ROOT / "artifacts" / "cleanup-control"
+    require(not probe_root.exists(), f"cleanup control output already exists: {owned_rel(probe_root)}")
+    grandchild = "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)"
+    parent = "import subprocess,sys,time; p=subprocess.Popen([sys.executable,'-c',sys.argv[1]]); print(p.pid,flush=True); time.sleep(30)"
+    command = [sys.executable, "-c", parent, grandchild]
+    execution = run_child(command, "cleanup-grandchild", REPO_ROOT, git_value("rev-parse", "HEAD"), probe_root / "process", min(args.child_timeout_seconds, 2.0))
+    disk = artifact_disk_usage(probe_root)
+    execution["artifact_disk"] = disk
+    passed = (
+        execution["timed_out"] is True
+        and execution["cleanup"]["group_alive_before"] is True
+        and execution["cleanup"]["term_sent"] is True
+        and execution["cleanup"]["kill_sent"] is True
+        and execution["cleanup"]["parent_reaped"] is True
+        and execution["cleanup"].get("pipes_reaped") is True
+        and execution["cleanup"]["group_alive_after"] is False
+        and not execution["cleanup"].get("group_members_after")
+        and disk["bounded"]
+    )
+    require(passed, "cleanup control did not prove bounded process-group descendant reaping")
+    value = {
+        "schema": "audio-runtime.c68.zero-audio-attribution.cleanup.v1",
+        "task": TASK,
+        "runner_sha256": sha256_file(Path(__file__)),
+        "execution": execution,
+        "artifact_disk": disk,
+        "passed": True,
+        "negative_case": "parent exits on TERM while grandchild ignores TERM; group KILL and reap are required",
+    }
+    write_json(CLEANUP_PATH, value)
+    print(json.dumps({"status": "cleanup-control-passed", "kill_sent": True, "survivors": 0}, sort_keys=True))
     return value
 
 
@@ -875,19 +1348,23 @@ def c21_regressions(args: argparse.Namespace) -> dict[str, Any]:
     race_root = OWNED_ROOT / "artifacts" / "c21" / "race"
     normal_cmd = ["go", "test", package, "-run", pattern, "-count=5", "-timeout=60s"]
     race_cmd = ["go", "test", "-race", package, "-run", pattern, "-count=1", "-timeout=60s"]
-    normal = run_child(normal_cmd, "c21-normal-count-5", cwd, git_value("rev-parse", "HEAD"), normal_root, args.child_timeout_seconds)
-    race = run_child(race_cmd, "c21-race-count-1", cwd, git_value("rev-parse", "HEAD"), race_root, args.child_timeout_seconds)
-    for label, result, marker in (("normal", normal, "ok"), ("race", race, "ok")):
+    tested_source_revision = git_value("rev-parse", "HEAD")
+    require(tested_source_revision != CURRENT_MAIN, "C21 evidence must run against the changed candidate, not base current main")
+    normal = run_child(normal_cmd, "c21-normal-count-5", cwd, tested_source_revision, normal_root, args.child_timeout_seconds)
+    race = run_child(race_cmd, "c21-race-count-1", cwd, tested_source_revision, race_root, args.child_timeout_seconds)
+    for label, result, artifact_root in (("normal", normal, normal_root), ("race", race, race_root)):
         require(result["returncode"] == 0 and not result["timed_out"] and result["output_bounded"], f"C21 {label} regression failed: {read_child_text(result, 'stderr')[-2000:]}")
-        require(result["cleanup"]["parent_reaped"] and not result["cleanup"]["group_alive_after"], f"C21 {label} cleanup failed")
-        del marker
+        require(result["cleanup"]["parent_reaped"] and not result["cleanup"]["group_alive_after"] and result["cleanup"].get("pipes_reaped") is True and not result["cleanup"].get("group_members_after"), f"C21 {label} cleanup failed")
+        result["artifact_disk"] = artifact_disk_usage(artifact_root)
     value = {
         "schema": "audio-runtime.c68.zero-audio-attribution.c21.v1", "task": TASK,
-        "source_revision": git_value("rev-parse", "HEAD"), "test": "TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls",
+        "source_revision": tested_source_revision, "candidate_head": tested_source_revision, "runner_sha256": sha256_file(Path(__file__)), "test": "TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls",
         "normal": normal, "race": race, "normal_count": 5, "race_count": 1, "passed": True,
         "scope": "focused accumulated C21 normal/race regression only",
     }
     write_json(REGRESSIONS_PATH, value)
+    comparison = load_json(COMPARISON_PATH)
+    write_attribution(comparison)
     print(json.dumps({"status": "c21-regressions-passed", "normal_count": 5, "race_count": 1}, sort_keys=True))
     return value
 
@@ -913,6 +1390,8 @@ def main() -> int:
     revisions(compare_parser)
     compare_parser.add_argument("--turns", type=int, required=True)
     compare_parser.add_argument("--recording", nargs="+", required=True)
+    cleanup_parser = sub.add_parser("cleanup-control")
+    revisions(cleanup_parser)
     c21_parser = sub.add_parser("c21-regressions")
     revisions(c21_parser)
 
@@ -926,6 +1405,8 @@ def main() -> int:
             negative_control(args)
         elif args.command == "compare":
             run_matrix(args)
+        elif args.command == "cleanup-control":
+            cleanup_control(args)
         elif args.command == "c21-regressions":
             c21_regressions(args)
         else:
