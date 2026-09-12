@@ -296,12 +296,15 @@ const (
 )
 
 func TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio(t *testing.T) {
+	cancelOnTerminal := os.Getenv("C64_CANCEL_ON_TERMINAL") == "1"
 	scenario := newTerminalDrainExternalScenario(t)
+	if !cancelOnTerminal {
+		scenario.barrierInbound.releaseRead()
+	}
 	samples := terminalDrainExternalSamples()
 	scenario.push(t, samples)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cancelOnTerminal := os.Getenv("C64_CANCEL_ON_TERMINAL") == "1"
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- agentruntime.RunSession(ctx, io.Discard, agentruntime.SessionRunOptions{
@@ -315,7 +318,7 @@ func TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio(t *tes
 			},
 			StreamObserver: func(msg messages.StreamMessage) {
 				scenario.observeStream(msg)
-				if cancelOnTerminal && msg.Type == messages.StreamTypeSessionClose {
+				if cancelOnTerminal && msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == "" {
 					cancel()
 				}
 			},
@@ -324,7 +327,7 @@ func TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio(t *tes
 	phase := scenario.releaseRun(t, runErr)
 	select {
 	case err := <-runErr:
-		if err != nil && !errors.Is(err, context.Canceled) {
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("run session (%s): %v", phase, err)
 		}
 	case <-time.After(2 * time.Second):
@@ -349,6 +352,7 @@ type terminalDrainExternalScenario struct {
 	admittedMu      sync.Mutex
 	admittedSamples int
 	admittedPCM     []int16
+	providerSamples int
 	streamMu        sync.Mutex
 	streamEvents    []terminalDrainStreamEvent
 }
@@ -382,7 +386,7 @@ func newTerminalDrainExternalScenario(t *testing.T) *terminalDrainExternalScenar
 	scenario.providerMedia = audio.NewSessionMediaAtRate(nil, terminalDrainProviderRate)
 	scenario.barrierInbound = &terminalDrainExternalInbound{
 		InboundMedia: scenario.providerMedia.Endpoints().Inbound,
-		drainStarted: make(chan struct{}),
+		drainStarted: make(chan struct{}), readReady: make(chan struct{}), readClosed: make(chan struct{}),
 	}
 	scenario.provider = &terminalDrainExternalSession{
 		receive: messages.NewTypedBuffer[messages.StreamMessage](32), done: make(chan struct{}),

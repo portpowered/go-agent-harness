@@ -147,6 +147,9 @@ func (s *terminalDrainExternalScenario) push(t *testing.T, samples []int16) {
 	if err := s.providerMedia.FlushInbound(); err != nil {
 		t.Fatalf("flush provider response: %v", err)
 	}
+	s.admittedMu.Lock()
+	s.providerSamples += len(samples)
+	s.admittedMu.Unlock()
 }
 
 func (s *terminalDrainExternalScenario) releaseRun(t *testing.T, runErr <-chan error) string {
@@ -174,16 +177,17 @@ func (s *terminalDrainExternalScenario) assertAcceptedSourceFailure(t *testing.T
 	t.Helper()
 	s.admittedMu.Lock()
 	admitted := s.admittedSamples
+	providerSamples := s.providerSamples
 	s.admittedMu.Unlock()
-	providerSamples := s.barrierInbound.samplesRead()
+	readSamples := s.barrierInbound.samplesRead()
 	renderedPCM := s.registry.RenderedSamples()
 	stats := s.registry.PlaybackStats()
 	consumed := stats.RenderedSamples - stats.UnderflowSamples
 	t.Logf("C64_ACCEPTED_SOURCE_FAILURE provider_samples=%d admitted_samples=%d consumed_samples=%d rendered_samples=%d queued_samples=%d underflow_samples=%d callback_count=%d shutdown=provider-close", providerSamples, admitted, consumed, len(renderedPCM), stats.QueuedSamples, stats.UnderflowSamples, stats.CallbackCount)
-	if phase != "provider-close-before-drain" || providerSamples != len(samples) || admitted != 0 || consumed != 0 || len(renderedPCM) != 0 || stats.QueuedSamples != 0 {
-		t.Fatalf("accepted source control did not reproduce provider-close-before-drain: phase=%s provider=%d admitted=%d consumed=%d rendered=%d queued=%d stats=%+v", phase, providerSamples, admitted, consumed, len(renderedPCM), stats.QueuedSamples, stats)
+	if phase != "provider-close-before-drain" || providerSamples != len(samples) || readSamples != 0 || admitted != 0 || consumed != 0 || len(renderedPCM) != 0 || stats.QueuedSamples != 0 {
+		t.Fatalf("accepted source control did not reproduce provider-close-before-drain: phase=%s provider=%d read=%d admitted=%d consumed=%d rendered=%d queued=%d stats=%+v", phase, providerSamples, readSamples, admitted, consumed, len(renderedPCM), stats.QueuedSamples, stats)
 	}
-	t.Fatalf("accepted source incorrectly passed terminal drain control: phase=%s provider=%d admitted=%d consumed=%d rendered=%d queued=%d", phase, providerSamples, admitted, consumed, len(renderedPCM), stats.QueuedSamples)
+	t.Fatalf("accepted source incorrectly passed terminal drain control: phase=%s provider=%d read=%d admitted=%d consumed=%d rendered=%d queued=%d", phase, providerSamples, readSamples, admitted, consumed, len(renderedPCM), stats.QueuedSamples)
 }
 
 func (s *terminalDrainExternalScenario) assertOutput(t *testing.T, phase string, samples []int16) {
@@ -191,6 +195,7 @@ func (s *terminalDrainExternalScenario) assertOutput(t *testing.T, phase string,
 	s.admittedMu.Lock()
 	got := s.admittedSamples
 	gotPCM := append([]int16(nil), s.admittedPCM...)
+	pushedSamples := s.providerSamples
 	s.admittedMu.Unlock()
 	if phase != "drain-before-provider-close" {
 		providerSamples := s.barrierInbound.samplesRead()
@@ -215,8 +220,8 @@ func (s *terminalDrainExternalScenario) assertOutput(t *testing.T, phase string,
 	providerSamples := s.barrierInbound.samplesRead()
 	renderedPCM := s.registry.RenderedSamples()
 	stats := s.registry.PlaybackStats()
-	if providerSamples != len(samples) {
-		t.Fatalf("terminal drain phase %s provider read %d samples, want exact %d", phase, providerSamples, len(samples))
+	if pushedSamples != len(samples) || providerSamples != len(samples) {
+		t.Fatalf("terminal drain phase %s provider receipt/read %d/%d samples, want exact %d", phase, pushedSamples, providerSamples, len(samples))
 	}
 	assertTerminalDrainRendered(t, phase, wantPCM, renderedPCM, stats)
 	consumedSamples := stats.RenderedSamples - stats.UnderflowSamples
@@ -290,12 +295,23 @@ func (g *terminalDrainExternalGate) observe(ctx context.Context, _ int, samples 
 type terminalDrainExternalInbound struct {
 	audio.InboundMedia
 	drainStarted chan struct{}
+	readReady    chan struct{}
+	readClosed   chan struct{}
 	closeOnce    sync.Once
+	readOnce     sync.Once
+	closedOnce   sync.Once
 	readMu       sync.Mutex
 	readSamples  int
 }
 
 func (m *terminalDrainExternalInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {
+	select {
+	case <-m.readReady:
+	case <-m.readClosed:
+		return audio.PCMFrame{}, audio.ErrSessionMediaClosed
+	case <-ctx.Done():
+		return audio.PCMFrame{}, ctx.Err()
+	}
 	frame, err := m.InboundMedia.ReadFrame(ctx)
 	if err == nil {
 		m.readMu.Lock()
@@ -305,6 +321,10 @@ func (m *terminalDrainExternalInbound) ReadFrame(ctx context.Context) (audio.PCM
 	return frame, err
 }
 
+func (m *terminalDrainExternalInbound) releaseRead() {
+	m.readOnce.Do(func() { close(m.readReady) })
+}
+
 func (m *terminalDrainExternalInbound) samplesRead() int {
 	m.readMu.Lock()
 	defer m.readMu.Unlock()
@@ -312,7 +332,10 @@ func (m *terminalDrainExternalInbound) samplesRead() int {
 }
 
 func (m *terminalDrainExternalInbound) Close() error {
-	m.closeOnce.Do(func() { close(m.drainStarted) })
+	m.closeOnce.Do(func() {
+		close(m.drainStarted)
+		m.closedOnce.Do(func() { close(m.readClosed) })
+	})
 	return m.InboundMedia.Close()
 }
 
