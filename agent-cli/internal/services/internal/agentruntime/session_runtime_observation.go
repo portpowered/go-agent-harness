@@ -49,7 +49,7 @@ func (r *sessionRuntimeObservationRecorder) enableProviderBoundaryObservations()
 	r.providerBoundaryObserving = r.service.ProviderBoundaryObservationsEnabled()
 }
 func (r *sessionRuntimeObservationRecorder) call(fn func(sessionobservation.Service)) {
-	if r != nil {
+	if r != nil && r.service != nil {
 		fn(r.service)
 	}
 }
