@@ -1,6 +1,6 @@
 {
-  "aggregate_elapsed_ms": 14809,
-  "candidate_revision": "cee5b2c3360facb62befe75d7e30b337ec4b636a",
+  "aggregate_elapsed_ms": 15934,
+  "candidate_revision": "d848cf85ee3eece37e804c833e1f426024446d40",
   "classification": {
     "acoustic": "not_attempted",
     "audio_tool_continuation": "proved",
@@ -29,15 +29,15 @@
     ],
     "cwd": "agent-cli",
     "disk_bounded": true,
-    "disk_bytes": 79,
-    "elapsed_ms": 12195,
+    "disk_bytes": 80,
+    "elapsed_ms": 14712,
     "label": "audio-tool-continuation",
     "output_bounded": true,
     "returncode": 0,
     "stderr": "artifacts/audio-tool-continuation/process/stderr.log",
     "stderr_bytes": 0,
     "stdout": "artifacts/audio-tool-continuation/process/stdout.log",
-    "stdout_bytes": 79,
+    "stdout_bytes": 80,
     "timed_out": false
   },
   "passed": true,
