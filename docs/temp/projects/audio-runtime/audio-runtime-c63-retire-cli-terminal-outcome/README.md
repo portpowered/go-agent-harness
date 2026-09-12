@@ -100,6 +100,11 @@ once publication. Negative controls assert the second-publication sentinel,
 mixed independent cancellation as fatal, fail-closed incomplete/cyclic
 evidence, and no unbounded render retention.
 
+The accumulated `COUNT=1 bash scripts/test-session-ci-regressions.sh all`
+matrix passes in normal, coverage, and race modes, including the shipped
+terminal/audio/tool controls, simulated device controls, and composed provider
+controls. Expected negative-control diagnostics remain asserted.
+
 ## Separate consumer
 
 The temporary module under `consumer/` imports the public terminaloutcome
