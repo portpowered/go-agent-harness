@@ -35,6 +35,20 @@ class WorktreeCleanupTests(unittest.TestCase):
             self.assertEqual(report["mode"], "pressure-skip")
             self.assertEqual(report["freeDeltaBytes"], 0)
 
+    def test_global_cache_discovery_rejects_custom_go_cache(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            custom = Path(temp_dir) / "go-build"
+            custom.mkdir()
+
+            def runner(command, **kwargs):
+                return subprocess.CompletedProcess(command, 0, str(custom), "")
+
+            candidates = MODULE.global_cache_candidates(Path(temp_dir), runner=runner)
+
+        go_cache = candidates[0]
+        self.assertFalse(go_cache["eligible"])
+        self.assertIn("outside the approved", go_cache["reason"])
+
     def test_factory_guard_uses_remote_live_session_snapshot(self):
         calls = []
         response = {

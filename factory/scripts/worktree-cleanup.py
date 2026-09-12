@@ -52,6 +52,7 @@ SCRATCH_DIR_NAMES = frozenset(
 GO_BUILD_CACHE_NAME = "go-build"
 GO_BUILD_CACHE_MARKER = "cached build artifacts from the Go build system"
 GO_TOOLS_CACHE_NAME = "go-tools"
+STATICCHECK_CACHE_NAME = "staticcheck"
 OUTPUT_COVERAGE_PREFIX = "coverage"
 SAFE_WORKTREE_PREFIXES = ("/private/tmp/", "/tmp/")
 ACTIVE_WORKER_STATES = frozenset({"RESERVED", "STARTING", "RUNNING", "PAUSED"})
@@ -717,6 +718,46 @@ def build_cache_candidates(
     return result
 
 
+def global_cache_candidates(
+    root: Path, *, runner: CommandRunner = subprocess.run
+) -> list[dict[str, Any]]:
+    """Find only known regenerable caches in the operator's cache directory."""
+
+    cache_root = Path.home() / "Library" / "Caches"
+    go_cache_result = _run(["go", "env", "GOCACHE"], cwd=root, runner=runner)
+    paths: list[tuple[Path, str]] = []
+    if go_cache_result.returncode == 0 and go_cache_result.stdout.strip():
+        paths.append((Path(go_cache_result.stdout.strip()), "go-build"))
+    paths.append((cache_root / STATICCHECK_CACHE_NAME, "staticcheck"))
+    candidates: list[dict[str, Any]] = []
+    for path, output_type in paths:
+        path = path.expanduser().resolve()
+        entry = {
+            "kind": "global-build-cache",
+            "outputType": output_type,
+            "path": str(path),
+            "sizeBytes": 0,
+            "eligible": False,
+        }
+        if path.parent != cache_root.resolve() or path.name not in {
+            GO_BUILD_CACHE_NAME,
+            STATICCHECK_CACHE_NAME,
+        }:
+            entry["reason"] = "cache path is outside the approved user cache root"
+        elif not path.is_dir() or path.is_symlink():
+            entry["reason"] = "cache is absent or symlinked"
+        elif output_type == "go-build" and GO_BUILD_CACHE_MARKER not in (
+            path / "README"
+        ).read_text(encoding="utf-8", errors="replace"):
+            entry["reason"] = "cache lacks the Go regeneration marker"
+        else:
+            entry["sizeBytes"] = _apparent_size(path)
+            entry["eligible"] = True
+            entry["reason"] = f"regenerable shared {output_type} cache under disk pressure"
+        candidates.append(entry)
+    return candidates
+
+
 def worktree_candidates(
     root: Path,
     common_dir: Path,
@@ -872,6 +913,25 @@ def _remove_build_cache(
     shutil.rmtree(path)
 
 
+def _remove_global_cache(path: Path, output_type: str) -> None:
+    cache_root = (Path.home() / "Library" / "Caches").resolve()
+    path = path.resolve()
+    expected_name = GO_BUILD_CACHE_NAME if output_type == "go-build" else STATICCHECK_CACHE_NAME
+    if path.parent != cache_root or path.name != expected_name:
+        raise CleanupBlocked(f"global cache escaped its approved root: {path}")
+    if path.is_symlink() or not path.is_dir():
+        raise CleanupBlocked(f"global cache changed before removal: {path}")
+    if output_type == "go-build":
+        marker = (path / "README").read_text(encoding="utf-8", errors="replace")
+        if GO_BUILD_CACHE_MARKER not in marker:
+            raise CleanupBlocked("Go build cache regeneration marker changed")
+    quarantine = path.with_name(f".{path.name}.factory-cleanup-{os.getpid()}")
+    if quarantine.exists():
+        raise CleanupBlocked(f"global cache quarantine already exists: {quarantine}")
+    os.replace(path, quarantine)
+    shutil.rmtree(quarantine)
+
+
 def _remove_worktree(path: Path, root: Path, *, runner: CommandRunner = subprocess.run) -> None:
     if (
         not _is_safe_temp_path(path)
@@ -1008,6 +1068,11 @@ def execute(
         return report
 
     common_dir = common_git_dir(root, runner=runner)
+    global_caches = (
+        global_cache_candidates(root, runner=runner)
+        if pressure_trigger_bytes is not None
+        else []
+    )
     scratch = scratch_candidates(root, now=now, runner=runner)
     build_caches = build_cache_candidates(
         root,
@@ -1031,7 +1096,7 @@ def execute(
         root=root,
         server=server,
         guard=guard,
-        scratch=scratch,
+        scratch=global_caches + scratch,
         build_caches=build_caches,
         worktrees=worktrees,
         mode="apply" if apply else "dry-run",
@@ -1070,6 +1135,8 @@ def execute(
         try:
             if candidate["kind"] == "scratch":
                 _remove_scratch(path, root, runner=runner)
+            elif candidate["kind"] == "global-build-cache":
+                _remove_global_cache(path, candidate["outputType"])
             elif candidate["kind"] == "build-cache":
                 _remove_build_cache(
                     path,

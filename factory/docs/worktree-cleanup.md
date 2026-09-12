@@ -43,4 +43,8 @@ volume is under pressure. It starts below 32 GiB free and stops deleting after
 48 GiB is free, so it does not repeatedly scan a healthy disk. A repository
 common-dir lock prevents overlapping manual and automatic runs. Automatic
 reports live under `.git/factory-cleanup/`; active or queued Work names and all
-of the safety checks above remain protected.
+of the safety checks above remain protected. Under pressure only, the pass also
+removes the shared Go build and staticcheck caches after validating their exact
+paths under `~/Library/Caches` and Go's regeneration marker. Module downloads,
+local models, session history, source, recordings, and acceptance evidence stay
+outside the deletion boundary.
