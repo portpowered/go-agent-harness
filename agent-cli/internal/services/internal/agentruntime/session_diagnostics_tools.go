@@ -75,10 +75,8 @@ func sanitizeContinuationDetail(detail string) string {
 	return detail
 }
 
-// continuationCanCompleteLocked is deliberately stricter than a provider
-// terminal boundary. A continuation is successful only when the provider
-// reports completed (or a legacy provider omits status) and the assistant
-// emitted customer-visible text, transcript, or audio.
+// continuationCanCompleteLocked requires a completed provider terminal and
+// customer-visible assistant output.
 func continuationCanCompleteLocked(state *toolContinuationState) bool {
 	if state == nil || !state.resultAccepted || !state.continuationRequested || !state.toolResponseComplete || !state.continuationTerminalSeen {
 		return false
@@ -93,10 +91,8 @@ func continuationCanCompleteLocked(state *toolContinuationState) bool {
 	return state.continuationOutputObserved
 }
 
-// continuationSupersededByServerTurnLocked identifies OpenAI's normal
-// server-VAD handoff. A new user turn intentionally cancels the in-flight
-// assistant response; that cancellation retires this continuation obligation
-// instead of terminating the interactive session as a provider failure.
+// continuationSupersededByServerTurnLocked identifies a server-VAD handoff
+// that retires the in-flight continuation rather than reporting a failure.
 func continuationSupersededByServerTurnLocked(state *toolContinuationState) bool {
 	if state == nil || (normalizeContinuationStatus(state.continuationStatus) != "cancelled" && normalizeContinuationStatus(state.continuationStatus) != "canceled") {
 		return false
@@ -135,6 +131,7 @@ func (o *sessionProgressObserver) observeProviderToolCall(v *messages.ToolCallEn
 func (o *sessionProgressObserver) observeProviderToolCallWithID(callID, name string) {
 	o.observeProviderToolCallWithIDForResponse(callID, name, "")
 }
+
 // noteToolResultAccepted resolves exactly one provider call after the
 // provider-facing session send boundary reports success. Execution completion,
 // queueing, and rejected sends do not reach this method.
@@ -168,6 +165,7 @@ func (o *sessionProgressObserver) noteToolResultAccepted(callID string) {
 	default:
 	}
 }
+
 // noteToolContinuationRequested advances every accepted result in the
 // current provider batch at the explicit response.create send boundary. The
 // control event carries no call ID because one provider response may continue
@@ -209,6 +207,7 @@ func (o *sessionProgressObserver) noteToolContinuationRequested() {
 		}
 	}
 }
+
 // noteToolContinuationRequestedFor is used by complete-message providers.
 // SendMessage may represent a whole rich batch, so the exact call is marked
 // first and any already accepted sibling is advanced by the batch-level
