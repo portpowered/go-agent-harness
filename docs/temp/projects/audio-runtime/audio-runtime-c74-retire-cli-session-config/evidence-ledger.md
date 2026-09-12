@@ -60,3 +60,34 @@ made on the Darwin validator.
   then mediate only the demonstrated Wire registration and downward/stale C74
   architecture entries and rerun the final scoped gates before submitting the
   same PR head to script CI.
+
+## Reverification after the first script-CI rejection
+
+- On `2026-09-12T06:32:15Z`, the exact pushed source revision remained
+  `308466151f930f3b1ca1be74023d4f2ddd37c2dc`, with fetched `origin/main`
+  `84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f`; the worktree was clean and the
+  startup, planning-main and current-main ancestry checks remained true.
+- The focused C74 verifier passed again, including the independent literal
+  matrix, the two fail-closed mutation controls, normal/race sessionconfig
+  tests, the GOWORK=off public consumer, CLI parity, and the `930 -> 619`
+  (`311` retired) line census. The exact accumulated session regression
+  command `COUNT=1 bash scripts/test-session-ci-regressions.sh` passed in all
+  three modes: `normal`, `coverage`, and `race`. Each retained its expected
+  negative replay diagnostics, 20 high-rate trials, simulated-device checks,
+  and composed OpenAI tool-result checks; no source or assertion was changed.
+- PR `#467` remains open at the same head with no review or comment findings.
+  The full terminal run `34674915937` was read from saved job logs: static
+  failed only on the unregistered
+  `go-agent-runtime/services/sessionconfig/wire/wire_gen.go`, the C74
+  `session_options.go` `619 > 930` downward drift, and its three stale
+  complexity entries; integration failed only on the peer-owned test46
+  high-rate loss of `6,400` samples; hermetic failed only on the peer-owned
+  WebRTC camera frame timeout. Those peer failures are not C74 repairs.
+- C57 `work-task-26` and C61 `work-task-34` remain terminal `FAILED` rows with
+  retained ownership of `scripts/wire-packages.txt` and
+  `docs/architecture/architecture-size-baseline.json`, respectively. No
+  shared-file mutation is authorized at this checkpoint. The candidate is
+  clean, pushed and already represented by PR `#467`; it must remain with the
+  same task until those exact leases are released, then receive only its
+  demonstrated Wire registration and downward/deleted C74 ledger changes
+  before the scoped gates and a changed-head script-CI handoff are repeated.
