@@ -1,0 +1,26 @@
+[
+  {
+    "case": "help",
+    "exit": 0,
+    "expected_exit": 0,
+    "marker": "Usage:",
+    "marker_present": true,
+    "output": "Yui is a cross-platform voice-agent CLI for realtime conversations, local tools, recordings, replay, and structured WebMCP browser control.\n\nSet an OpenAI key, then start the default microphone and speaker session:\n\n  export OPENAI_API_KEY=\"your-openai-api-key\"\n  yui session\n\nRun `yui session --help` for audio, model, voice, recording, and browser options.\n\nUsage:\n  yui [command]\n\nExamples:\n  # Start a voice session in the current project\n  yui --workdir \"$PWD\" session\n\n  # Open a page and expose its WebMCP tools\n  yui session --browser-tools webmcp --browser-open https://example.com/\n\nAvailable Commands:\n  ask         Ask the agent a question and get a response\n  chat        Start an interactive chat session with the agent\n  completion  Generate the autocompletion script for the specified shell\n  config      Configuration management commands\n  devices     Discover available audio devices\n  help        Help about any command\n  interaction Inspect provider-neutral gateway interactions\n  media       Inspect external media sources\n  probe       Run deterministic offline probes\n  room        Run participant rooms\n  session     Run or manage agent sessions\n  tool        Invoke a tool directly by name and key=value args (for debugging)\n  webmcp      Inspect WebMCP browser readiness\n\nFlags:\n      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)\n  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)\n  -h, --help                     help for yui\n      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)\n  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)\n      --workdir string           Filesystem-tool workdir (default: the process current directory)\n\nUse \"yui [command] --help\" for more information about a command.\n"
+  },
+  {
+    "case": "audio-replay",
+    "exit": 0,
+    "expected_exit": 0,
+    "marker": "Assistant:",
+    "marker_present": true,
+    "output": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: Hello thereSecond turn reply\n\n[session closed: healthy_complete]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n"
+  },
+  {
+    "case": "tool-replay-negative",
+    "exit": 1,
+    "expected_exit": 1,
+    "marker": "unresolved",
+    "marker_present": true,
+    "output": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: append_file, edit_file, exec, list_dir, read_file, read_image, write_file\nTool call: get_weather {\"city\":\"Paris\"}\n\n[session closed: terminal_failure]\n[session terminal: classification=terminal_failure terminal_reason=terminal_failure terminal_provenance=session output_state=partial]\nError: replay session capture : run session loop: audio session ended before the final assistant response\ntool results were not delivered for 1 unresolved call(s): call_weather_001\n"
+  }
+]
