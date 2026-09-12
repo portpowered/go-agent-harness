@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtcsession"
@@ -20,12 +21,13 @@ type runtime struct {
 	startMu sync.Mutex
 	mu      sync.Mutex
 
-	started   bool
-	failed    bool
-	startErr  error
-	closed    bool
-	startDone chan struct{}
-	cancel    context.CancelFunc
+	started       bool
+	failed        bool
+	startErr      error
+	startCloseErr error
+	closed        bool
+	startDone     chan struct{}
+	cancel        context.CancelFunc
 
 	signaling rtc.Signaling
 	dataPlane rtcsession.SessionRTCDataPlane
@@ -110,7 +112,7 @@ func (r *runtime) acquire(ctx context.Context, resources *startResources) (strin
 	if err != nil {
 		return "resolve signaling", err
 	}
-	if signaling == nil {
+	if isNilResource(signaling) {
 		return "resolve signaling", rtcsession.ErrSessionRTCRuntimeUnavailable
 	}
 	dataPlane, err := r.components.NewDataPlane(ctx, signaling)
@@ -118,7 +120,7 @@ func (r *runtime) acquire(ctx context.Context, resources *startResources) (strin
 	if err != nil {
 		return "create RTC peer/data path", err
 	}
-	if dataPlane == nil {
+	if isNilResource(dataPlane) {
 		return "create RTC peer/data path", rtcsession.ErrSessionRTCDataPlaneUnavailable
 	}
 	media, err := r.components.OpenMediaSource(ctx, r.selection.MediaSource)
@@ -126,7 +128,7 @@ func (r *runtime) acquire(ctx context.Context, resources *startResources) (strin
 	if err != nil {
 		return "open media source", err
 	}
-	if media == nil {
+	if isNilResource(media) {
 		return "open media source", rtcsession.ErrSessionRTCRuntimeUnavailable
 	}
 	if err := dataPlane.AttachInboundMedia(ctx, media); err != nil {
@@ -140,11 +142,12 @@ func (r *runtime) failStart(resources startResources, phase string, err error) (
 	if resources.cancel != nil {
 		resources.cancel()
 	}
-	if closeErr := closeResources(resources.media, resources.dataPlane, resources.signaling); closeErr != nil {
-		wrapped = errors.Join(wrapped, wrapError("cleanup after "+phase, closeErr))
+	cleanupErr := closeResources(resources.media, resources.dataPlane, resources.signaling)
+	if cleanupErr != nil {
+		wrapped = errors.Join(wrapped, wrapError("cleanup after "+phase, cleanupErr))
 	}
 	r.mu.Lock()
-	r.failed, r.startErr, r.cancel = true, wrapped, nil
+	r.failed, r.startErr, r.startCloseErr, r.cancel = true, wrapped, cleanupErr, nil
 	r.mu.Unlock()
 	r.observe("start_failed", phase, "error")
 	return nil, wrapped
@@ -155,8 +158,7 @@ func (r *runtime) Close() error {
 		r.mu.Lock()
 		r.closed = true
 		cancel, startDone := r.cancel, r.startDone
-		media, dataPlane, signaling := r.media, r.dataPlane, r.signaling
-		r.media, r.dataPlane, r.signaling, r.cancel = nil, nil, nil, nil
+		r.cancel = nil
 		r.mu.Unlock()
 
 		if cancel != nil {
@@ -165,7 +167,13 @@ func (r *runtime) Close() error {
 		if startDone != nil {
 			<-startDone
 		}
-		r.closeErr = closeResources(media, dataPlane, signaling)
+		r.mu.Lock()
+		startCloseErr := r.startCloseErr
+		media, dataPlane, signaling := r.media, r.dataPlane, r.signaling
+		r.startCloseErr = nil
+		r.media, r.dataPlane, r.signaling = nil, nil, nil
+		r.mu.Unlock()
+		r.closeErr = errors.Join(startCloseErr, closeResources(media, dataPlane, signaling))
 		level := "info"
 		if r.closeErr != nil {
 			level = "error"
@@ -200,8 +208,21 @@ func closeResources(media sharedaudio.InboundMedia, dataPlane rtcsession.Session
 }
 
 func closeResource(resource interface{ Close() error }) error {
-	if resource == nil {
+	if isNilResource(resource) {
 		return nil
 	}
 	return resource.Close()
+}
+
+func isNilResource(resource any) bool {
+	if resource == nil {
+		return true
+	}
+	value := reflect.ValueOf(resource)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return value.IsNil()
+	default:
+		return false
+	}
 }

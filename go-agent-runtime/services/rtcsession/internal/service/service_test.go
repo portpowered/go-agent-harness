@@ -161,6 +161,21 @@ func TestRuntimeNilDependenciesAndReturns(t *testing.T) {
 	}
 }
 
+func TestRuntimeTypedNilReturnsAreUnavailable(t *testing.T) {
+	var signaling *testSignaling
+	components := testComponents()
+	components.ResolveSignaling = func(context.Context, string) (rtc.Signaling, error) {
+		return signaling, nil
+	}
+	runtime, err := New(components, nil, nil).NewRuntime(rtcsession.SessionRuntimeSelection{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Start(context.Background()); !errors.Is(err, rtcsession.ErrSessionRTCRuntimeUnavailable) {
+		t.Fatalf("typed nil signaling error = %v, want unavailable identity", err)
+	}
+}
+
 func TestRuntimePartialStartResolveFailureRetainsCause(t *testing.T) {
 	cause := errors.New("signaling offline")
 	components := testComponents()
@@ -292,6 +307,64 @@ func TestRuntimeCancellationAndConcurrentCloseAreBounded(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestRuntimeCloseDuringStartReturnsCleanupErrorsInReverseOrder(t *testing.T) {
+	mediaErr := errors.New("media close failed")
+	dataErr := errors.New("data close failed")
+	signalingErr := errors.New("signaling close failed")
+	attachStarted := make(chan struct{})
+	var events []string
+	components := testComponents()
+	components.ResolveSignaling = func(context.Context, string) (rtc.Signaling, error) {
+		return &testSignaling{closeFn: func() error {
+			events = append(events, "signaling close")
+			return signalingErr
+		}}, nil
+	}
+	components.NewDataPlane = func(context.Context, rtc.Signaling) (rtcsession.SessionRTCDataPlane, error) {
+		return &testDataPlane{
+			attachFn: func(ctx context.Context, _ sharedaudio.InboundMedia) error {
+				close(attachStarted)
+				<-ctx.Done()
+				return ctx.Err()
+			},
+			closeFn: func() error {
+				events = append(events, "data close")
+				return dataErr
+			},
+		}, nil
+	}
+	components.OpenMediaSource = func(context.Context, string) (sharedaudio.InboundMedia, error) {
+		return &testInbound{closeFn: func() error {
+			events = append(events, "media close")
+			return mediaErr
+		}}, nil
+	}
+	runtime, err := New(components, nil, nil).NewRuntime(rtcsession.SessionRuntimeSelection{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	startDone := make(chan error, 1)
+	go func() {
+		_, startErr := runtime.Start(context.Background())
+		startDone <- startErr
+	}()
+	<-attachStarted
+	closeDone := make(chan error, 1)
+	go func() { closeDone <- runtime.Close() }()
+	if err := <-startDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled start error = %v, want context cancellation", err)
+	}
+	closeErr := <-closeDone
+	for _, cause := range []error{mediaErr, dataErr, signalingErr} {
+		if !errors.Is(closeErr, cause) {
+			t.Fatalf("close error = %v, want cleanup cause %v", closeErr, cause)
+		}
+	}
+	if want := []string{"media close", "data close", "signaling close"}; !reflect.DeepEqual(events, want) {
+		t.Fatalf("cleanup events = %v, want %v", events, want)
+	}
 }
 
 func TestInferencerProviderFailureAndNilSession(t *testing.T) {
