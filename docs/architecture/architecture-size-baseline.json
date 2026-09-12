@@ -1596,56 +1596,6 @@
       "rule": "cognitive-complexity",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "symbol": "*sessionProgressObserver.adoptObservedResponseID",
-      "value": 18,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "symbol": "*sessionProgressObserver.beginObservedResponseForPurpose",
-      "value": 25,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "symbol": "*sessionProgressObserver.observeProviderMessageEndForResponse",
-      "value": 44,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "symbol": "*sessionProgressObserver.ownsObservedResponseEnd",
-      "value": 20,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "symbol": "recordContinuationTerminalLocked",
-      "value": 23,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_diagnostics_terminal.go",
       "symbol": "*sessionProgressObserver.emitTerminal",
       "value": 72,
@@ -11546,66 +11496,6 @@
       "rule": "cyclomatic-complexity",
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "symbol": "*sessionProgressObserver.adoptObservedResponseID",
-      "value": 20,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "symbol": "*sessionProgressObserver.beginObservedResponseForPurpose",
-      "value": 23,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "symbol": "*sessionProgressObserver.claimScheduledRateLimitRetry",
-      "value": 17,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "symbol": "*sessionProgressObserver.observeProviderMessageEndForResponse",
-      "value": 35,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "symbol": "*sessionProgressObserver.ownsObservedResponseEnd",
-      "value": 16,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "symbol": "recordContinuationTerminalLocked",
-      "value": 22,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_diagnostics_terminal.go",
       "symbol": "*sessionProgressObserver.emitTerminal",
       "value": 47,
@@ -17872,15 +17762,6 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
       "file": "internal/services/internal/agentruntime/session_conversation_log.go",
       "value": 531,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "file-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_diagnostics_response.go",
-      "value": 989,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
