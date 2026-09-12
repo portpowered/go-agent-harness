@@ -6,6 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -14,31 +17,23 @@ import (
 )
 
 var (
-	// ErrRTCSessionMediaUnavailable identifies a session owner that cannot
-	// provide the media endpoints required by a selected device binding.
+	// ErrRTCSessionMediaUnavailable identifies a missing provider media boundary.
 	ErrRTCSessionMediaUnavailable = errors.New("RTC session media endpoints are unavailable")
 )
 
-// RTCMediaEndpoints aliases the shared transport capability for callers that
-// already depend on the agent-cli service package. The device runtime never
-// closes these endpoints; their session owner retains that responsibility.
+const rtcDevicePlaybackDrainTimeout = 5 * time.Second
+
+// RTCMediaEndpoints aliases provider-owned RTC media endpoints.
 type RTCMediaEndpoints = audio.MediaEndpoints
 
-// RTCMediaSession aliases the shared optional RTC session capability.
-// WebSocket-only sessions need not implement it, which preserves their
-// existing behavior when no RTC device selector is present.
+// RTCMediaSession aliases the optional RTC session capability.
 type RTCMediaSession = audio.MediaSession
 
-// rtcMediaSessionForwarder lets service-side session decorators preserve the
-// optional provider capability without changing the public messages.Session
-// contract. The public rtc.MediaSession assertion remains the provider-owned
-// boundary; this private seam only walks through local wrappers.
 type rtcMediaSessionForwarder interface {
 	rtcMedia() (RTCMediaEndpoints, bool)
 }
 
-// RTCDeviceMediaError identifies a missing session media capability or one
-// missing directional endpoint while preserving the typed cause.
+// RTCDeviceMediaError identifies missing session media capability.
 type RTCDeviceMediaError struct {
 	Direction devicegw.Direction
 	Err       error
@@ -61,10 +56,6 @@ func (e *RTCDeviceMediaError) Unwrap() error {
 	return e.Err
 }
 
-// rtcDeviceBindingInferencer starts the device pumps after the underlying
-// session has handed back its real RTC media endpoints. Its error channel is
-// consumed by the session runtime so a media failure cannot disappear inside
-// a background goroutine.
 type rtcDeviceBindingInferencer struct {
 	inner   messages.SessionInferencer
 	binding *RTCDeviceBinding
@@ -96,8 +87,13 @@ func (i *rtcDeviceBindingInferencer) ConnectSession(ctx context.Context) (messag
 		return nil, err
 	}
 
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	i.startPumps(ctx, media)
-	return &rtcDeviceBoundSession{Session: session, binding: i.binding}, nil
+	bound := &rtcDeviceBoundSession{Session: session, binding: i.binding, lifecycleCtx: ctx}
+	bound.startReceiveForwarder()
+	return bound, nil
 }
 
 func rtcMediaFromSession(session messages.Session) (RTCMediaEndpoints, bool) {
@@ -147,23 +143,87 @@ func rtcDevicePumpStopped(err error) bool {
 		errors.Is(err, audio.ErrSessionMediaClosed)
 }
 
-// rtcDeviceBoundSession keeps the session owner and local device binding in
-// one lifecycle. Session.Close runs first so a provider-owned media read can
-// stop, then binding.Close waits for both pumps before releasing devicegw.
+// rtcDeviceBoundSession joins session and device lifecycles.
 type rtcDeviceBoundSession struct {
 	messages.Session
-	binding *RTCDeviceBinding
+	binding                                  *RTCDeviceBinding
+	lifecycleCtx                             context.Context
+	receive                                  *messages.TypedBuffer[messages.StreamMessage]
+	forwardStop, forwardDone                 chan struct{}
+	forwardOnce                              sync.Once
+	terminalObserved, gracefulCloseRequested atomic.Bool
 }
 
 type playbackDrainingSession interface {
 	DrainPlayback(context.Context) error
 }
 
-// Send keeps the legacy bool-only session path on the same cancellation
-// boundary as SendWithOutcome. Without this explicit method, the promoted
-// messages.Session.Send method would bypass the local playback flush.
 func (s *rtcDeviceBoundSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	return s.SendWithOutcome(ctx, msg).OK()
+}
+
+func (s *rtcDeviceBoundSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	if s == nil {
+		return nil
+	}
+	if s.receive != nil {
+		return s.receive
+	}
+	return s.Session.Receive()
+}
+
+func (s *rtcDeviceBoundSession) startReceiveForwarder() {
+	source := s.Session.Receive()
+	if source == nil {
+		return
+	}
+	s.receive = messages.NewTypedBuffer[messages.StreamMessage](source.Cap())
+	s.forwardStop = make(chan struct{})
+	s.forwardDone = make(chan struct{})
+	go func() {
+		defer close(s.forwardDone)
+		s.forwardReceive(source)
+	}()
+}
+
+func (s *rtcDeviceBoundSession) forwardReceive(source *messages.TypedBuffer[messages.StreamMessage]) {
+	for {
+		select {
+		case msg := <-source.Chan():
+			if !s.forwardSessionMessage(msg) {
+				return
+			}
+		case <-s.Session.Done():
+			s.forwardRemaining(source)
+			return
+		case <-s.forwardStop:
+			return
+		}
+	}
+}
+
+func (s *rtcDeviceBoundSession) forwardRemaining(source *messages.TypedBuffer[messages.StreamMessage]) {
+	for {
+		msg, ok := source.Read()
+		if !ok || !s.forwardSessionMessage(msg) {
+			return
+		}
+	}
+}
+
+func (s *rtcDeviceBoundSession) forwardSessionMessage(msg messages.StreamMessage) bool {
+	if msg.Type == messages.StreamTypeSessionClose {
+		s.terminalObserved.Store(true)
+	}
+	return s.receive != nil && s.receive.WriteWaitContextOrDone(context.Background(), s.forwardStop, msg).OK()
+}
+
+func (s *rtcDeviceBoundSession) stopReceiveForwarder() {
+	if s == nil || s.forwardStop == nil {
+		return
+	}
+	s.forwardOnce.Do(func() { close(s.forwardStop) })
+	<-s.forwardDone
 }
 
 func (s *rtcDeviceBoundSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
@@ -217,6 +277,7 @@ func (s *rtcDeviceBoundSession) SendWithOutcome(ctx context.Context, msg message
 		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
 	}
 	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
+	s.noteGracefulClose(msg, outcome)
 	if outcome.OK() && s.binding != nil && s.binding.Sink != nil {
 		switch msg.Type {
 		case messages.StreamTypeResponseCancel:
@@ -233,6 +294,12 @@ func (s *rtcDeviceBoundSession) SendWithOutcome(ctx context.Context, msg message
 		}
 	}
 	return outcome
+}
+
+func (s *rtcDeviceBoundSession) noteGracefulClose(msg messages.StreamMessage, outcome messages.SessionSendOutcome) {
+	if outcome.OK() && msg.Type == messages.StreamTypeSessionClose {
+		s.gracefulCloseRequested.Store(true)
+	}
 }
 
 func (s *rtcDeviceBoundSession) SessionAdmissionClosed() bool {
@@ -264,13 +331,29 @@ func (s *rtcDeviceBoundSession) Close() error {
 	if s == nil {
 		return nil
 	}
-	return errors.Join(s.Session.Close(), s.binding.Close())
+	var drainErr error
+	if s.cleanTerminal() {
+		// A clean terminal drains with a bounded context after owner cancellation.
+		drainParent := s.lifecycleCtx
+		if drainParent == nil {
+			drainParent = context.Background()
+		}
+		drainCtx, cancel := context.WithTimeout(context.WithoutCancel(drainParent), rtcDevicePlaybackDrainTimeout)
+		drainErr = s.DrainPlayback(drainCtx)
+		cancel()
+	}
+	var sessionErr error
+	if s.Session != nil {
+		sessionErr = s.Session.Close()
+	}
+	s.stopReceiveForwarder()
+	return errors.Join(drainErr, sessionErr, s.binding.Close())
 }
 
-// DrainPlayback seals only the provider-owned inbound media, leaving the
-// provider session lifecycle unchanged. The sink pump can then consume every
-// frame already accepted before the clean response boundary and wait for the
-// native callback queue without manufacturing a provider-close terminal.
+func (s *rtcDeviceBoundSession) cleanTerminal() bool {
+	return s.terminalObserved.Load() || s.gracefulCloseRequested.Load()
+}
+
 func (s *rtcDeviceBoundSession) DrainPlayback(ctx context.Context) error {
 	if s == nil || s.binding == nil || s.binding.Sink == nil {
 		return nil
@@ -304,10 +387,6 @@ func bindRTCDeviceSessionInferencer(inner messages.SessionInferencer, binding *R
 	return newRTCDeviceBindingInferencer(inner, binding)
 }
 
-// ensureRTCDeviceBindingBuffers creates all memory handoffs before loop
-// construction and before either device worker starts. This also keeps
-// programmatically assembled source-only bindings on the same production
-// ownership path as bindings returned by PrepareRTCDeviceBindings.
 func ensureRTCDeviceBindingBuffers(binding *RTCDeviceBinding) error {
 	if binding == nil || binding.Source == nil || binding.Capture != nil {
 		return nil
