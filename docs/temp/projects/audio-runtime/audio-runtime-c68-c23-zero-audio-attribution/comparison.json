@@ -1,0 +1,979 @@
+{
+  "accepted_as_evidence": true,
+  "aggregate_elapsed_ms": 11452,
+  "aggregate_timeout_seconds": 300.0,
+  "artifact_disk": {
+    "bounded": true,
+    "bytes": 233099,
+    "cap_bytes": 67108864
+  },
+  "attribution": {
+    "c23_runner_repair_needed": false,
+    "c56_candidate_restores_audio": false,
+    "causal_detail": "terminalDrainSession always implements MediaSession; its empty endpoints satisfy no-device media requirements, so capturingInferencer calls SetMediaAttached(true), skipping Observer.messageAudio. The provider and public PCM boundaries remain non-empty, but recording accepted_audio/audio_bytes stay zero and finalization has no audio/out-000.pcm.",
+    "classification": "C56_RECORDING_DEFECT",
+    "exactly_one_classification": true,
+    "first_divergent_api": "session.LiveRecorder.RecordAudio is never invoked for normalized provider AUDIO.DELTA in this no-provider-media fixture",
+    "first_divergent_boundary": "recording_observer_admission",
+    "first_divergent_path": "go-agent-runtime/services/session/internal/live/observations/observer.go:71-80, reached through terminalDrainSession capability façade at service.go:338-362 and lifecycle.go:387-400",
+    "negative_control_required": true,
+    "smallest_existing_c56_executor_repair": "preserve provider-media capability absence at the terminalDrainSession/capturingInferencer handoff (service.go:338-362; lifecycle.go:387-400; session_adapter.go:45-55) so the public observer fallback reaches RecordAudio; this is outside C68 owned paths and is not a C23 fixture/oracle repair"
+  },
+  "binding_guard": {
+    "cases": [
+      {
+        "actual_label": "c56",
+        "expected_label": "c23",
+        "rejected": true
+      },
+      {
+        "actual_label": "c23",
+        "expected_label": "c56",
+        "rejected": true
+      }
+    ],
+    "enabled": true,
+    "swapped_binary_rejected": true
+  },
+  "build_bindings": {
+    "c23": {
+      "binary_bytes": 10432034,
+      "binary_path": "scratch/build/c23-consumer",
+      "binary_sha256": "5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17",
+      "build_inputs_sha256": "682150ed90a74ad7cf4570ded541d83329003a10cb2eec248971ab22a22dfd6a",
+      "label": "c23",
+      "source_archive_sha256": "984e34904ae6aca952ac8ee1df77e052b8516e7cbc7dc734862fedd276f9dbd5",
+      "source_revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+      "source_root": "scratch/sources/c23",
+      "source_tree_sha256": "19bb59729062616fff5409fbf5f03ae57a247d3fd5d5790e825ffb5133545bd9",
+      "verified": true
+    },
+    "c56": {
+      "binary_bytes": 10608162,
+      "binary_path": "scratch/build/c56-consumer",
+      "binary_sha256": "a7bdbe354eb03b81bf3c60fa6d904750b3023bbda237255650d12b57487b7b1f",
+      "build_inputs_sha256": "dcbbe2cc7ef81171ef97bc313ae857e9176fd6d7dcd933e397433f38fa75362f",
+      "label": "c56",
+      "source_archive_sha256": "752bc7d1aae6dece63beb090bdda10d98e91bde48c1dc5b9d7f4a6fb82d90f7e",
+      "source_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+      "source_root": "scratch/sources/c56",
+      "source_tree_sha256": "915e0698f346c2829c348366a44b769efa4085327e62bc04e65995fc81ad4c25",
+      "verified": true
+    }
+  },
+  "c23_revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+  "c56_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+  "ci_status": "not_polled; submit candidate to external script CI gate",
+  "duplicate_guard": {
+    "artifact_roots": [
+      "artifacts/runs/20260912T034156Z-264425000-comparison-c23-off",
+      "artifacts/runs/20260912T034156Z-264425000-comparison-c23-on",
+      "artifacts/runs/20260912T034156Z-264425000-comparison-c56-off",
+      "artifacts/runs/20260912T034156Z-264425000-comparison-c56-on"
+    ],
+    "current_run_id": "20260912T034156Z-264425000-comparison",
+    "enabled": true,
+    "ledger": "comparison-runs.json",
+    "positive_artifact_inventory_sha256": "2df64fe34928e0acafbfd3dbe4b18f67c1022245c04fe045970624726254ec02",
+    "positive_artifact_roots_accounted": true,
+    "prior_attempt_preserved": true
+  },
+  "executions": [
+    {
+      "artifact_disk": {
+        "bounded": true,
+        "bytes": 16432,
+        "cap_bytes": 4194304,
+        "files": 4
+      },
+      "artifact_root": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-off",
+      "boundaries": {
+        "finalization": {
+          "audio_present": false,
+          "clean_shutdown": true,
+          "manifest_present": false,
+          "ok": true,
+          "terminal": {
+            "classification": "provider_authored_completion",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "provider_authored_completion"
+          }
+        },
+        "provider_capture": {
+          "audio_delta_records": 1,
+          "bytes": 128,
+          "expected_bytes": 128,
+          "nonempty": true,
+          "nonempty_records": 1,
+          "ok": true,
+          "path": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-off/provider.session.json",
+          "recorded_bytes": [
+            128
+          ],
+          "sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588"
+        },
+        "public_pcm": {
+          "bytes": 128,
+          "expected_bytes": 128,
+          "expected_sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588",
+          "format": "pcm16-le",
+          "ok": true,
+          "sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588"
+        },
+        "recording_usage": {
+          "accepted_audio": 0,
+          "accepted_events": 0,
+          "accepted_items": 0,
+          "accepted_messages": 0,
+          "audio_bytes": 0,
+          "available": false,
+          "drops": {
+            "live_event_overflow": 0
+          },
+          "drops_zero": true,
+          "enabled": false,
+          "ok": true,
+          "processed_items": 0,
+          "queue_bytes_final": 0,
+          "queue_items_final": 0
+        },
+        "semantic_artifacts": {
+          "audio_path": null,
+          "declared_artifacts": [],
+          "enabled": false,
+          "manifest": null,
+          "root": null
+        }
+      },
+      "execution": {
+        "artifact_disk": {
+          "bounded": true,
+          "bytes": 16432,
+          "cap_bytes": 4194304,
+          "files": 4
+        },
+        "binary_binding": {
+          "binary_bytes": 10432034,
+          "binary_path": "scratch/build/c23-consumer",
+          "binary_sha256": "5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17",
+          "build_inputs_sha256": "682150ed90a74ad7cf4570ded541d83329003a10cb2eec248971ab22a22dfd6a",
+          "label": "c23",
+          "source_archive_sha256": "984e34904ae6aca952ac8ee1df77e052b8516e7cbc7dc734862fedd276f9dbd5",
+          "source_revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+          "source_root": "scratch/sources/c23",
+          "source_tree_sha256": "19bb59729062616fff5409fbf5f03ae57a247d3fd5d5790e825ffb5133545bd9",
+          "verified": true
+        },
+        "cleanup": {
+          "descendant_processes_reaped": true,
+          "descendants_after": [],
+          "descendants_before": [],
+          "errors": [],
+          "group_alive_after": false,
+          "group_alive_before": false,
+          "group_members_after": [],
+          "group_members_before": [],
+          "kill_sent": false,
+          "parent_reaped": true,
+          "pgid": 2974,
+          "pipes_reaped": true,
+          "term_sent": false
+        },
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/build/c23-consumer",
+          "-scenario=tool-matrix",
+          "-fixture=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/inputs/c23-task/fixtures.json",
+          "-turns=1",
+          "-recording=false",
+          "-artifact-root=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/runs/20260912T034156Z-264425000-comparison-c23-off",
+          "-output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/runs/20260912T034156Z-264425000-comparison-c23-off/report.json"
+        ],
+        "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/sources/c23",
+        "elapsed_ms": 190,
+        "label": "c23-off",
+        "output_bounded": true,
+        "output_overflow": false,
+        "reported_source_revision": "unbound-working-tree",
+        "returncode": 0,
+        "source_attestation": {
+          "binary_sha256": "5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17",
+          "build_inputs_sha256": "682150ed90a74ad7cf4570ded541d83329003a10cb2eec248971ab22a22dfd6a",
+          "report_source_revision_untrusted": true,
+          "revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+          "source_archive_sha256": "984e34904ae6aca952ac8ee1df77e052b8516e7cbc7dc734862fedd276f9dbd5",
+          "source_tree_sha256": "19bb59729062616fff5409fbf5f03ae57a247d3fd5d5790e825ffb5133545bd9"
+        },
+        "source_revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+        "stderr": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-off/process/stderr.log",
+        "stderr_bytes": 0,
+        "stderr_observed_bytes": 0,
+        "stdout": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-off/process/stdout.log",
+        "stdout_bytes": 0,
+        "stdout_observed_bytes": 0,
+        "timed_out": false
+      },
+      "mode": "off",
+      "public_event_audio_delta_count": 1,
+      "recording_report": {
+        "available": false,
+        "drops": {
+          "live_event_overflow": 0
+        },
+        "enabled": false,
+        "limits": {
+          "audio_bytes": 4194304,
+          "audio_items": 8192,
+          "metadata_bytes": 262144,
+          "metadata_items": 1024,
+          "provider_bytes": 4194304,
+          "provider_items": 8192,
+          "sidecar_bytes": 262144,
+          "sidecar_items": 64,
+          "terminal_bytes": 131072,
+          "terminal_items": 16,
+          "transcript_bytes": 33554432,
+          "transcript_items": 32768
+        },
+        "provider_capture_available": true,
+        "provider_capture_usage": {
+          "accepted_audio": 0,
+          "accepted_events": 0,
+          "accepted_items": 20,
+          "accepted_messages": 0,
+          "audio_bytes": 0,
+          "audio_items": 0,
+          "metadata_bytes": 0,
+          "metadata_items": 0,
+          "peak_provider_bytes": 6498,
+          "peak_provider_items": 21,
+          "peak_provider_queue_bytes": 1602,
+          "peak_provider_queue_items": 5,
+          "peak_queue_bytes": 1602,
+          "peak_queue_items": 5,
+          "peak_summary_bytes": 0,
+          "peak_summary_items": 0,
+          "processed_items": 40,
+          "provider_accepted_items": 20,
+          "provider_bytes": 6045,
+          "provider_items": 20,
+          "provider_queue_bytes": 0,
+          "provider_queue_items": 0,
+          "queue_bytes": 0,
+          "queue_items": 0,
+          "sidecar_bytes": 0,
+          "sidecar_items": 0,
+          "summary_bytes": 0,
+          "summary_items": 0,
+          "terminal_bytes": 0,
+          "terminal_items": 0,
+          "transcript_bytes": 0,
+          "transcript_items": 0
+        }
+      },
+      "report": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-off/report.json",
+      "source": "c23"
+    },
+    {
+      "artifact_disk": {
+        "bounded": true,
+        "bytes": 100115,
+        "cap_bytes": 4194304,
+        "files": 9
+      },
+      "artifact_root": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-on",
+      "boundaries": {
+        "finalization": {
+          "audio_present": false,
+          "clean_shutdown": true,
+          "manifest_present": true,
+          "ok": true,
+          "terminal": {
+            "classification": "provider_authored_completion",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "provider_authored_completion"
+          }
+        },
+        "provider_capture": {
+          "audio_delta_records": 1,
+          "bytes": 128,
+          "expected_bytes": 128,
+          "nonempty": true,
+          "nonempty_records": 1,
+          "ok": true,
+          "path": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-on/provider.session.json",
+          "recorded_bytes": [
+            128
+          ],
+          "sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588"
+        },
+        "public_pcm": {
+          "bytes": 128,
+          "expected_bytes": 128,
+          "expected_sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588",
+          "format": "pcm16-le",
+          "ok": true,
+          "sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588"
+        },
+        "recording_usage": {
+          "accepted_audio": 0,
+          "accepted_events": 25,
+          "accepted_items": 53,
+          "accepted_messages": 28,
+          "audio_bytes": 0,
+          "available": true,
+          "drops": {
+            "live_event_overflow": 0
+          },
+          "drops_zero": true,
+          "enabled": true,
+          "ok": true,
+          "processed_items": 53,
+          "queue_bytes_final": 0,
+          "queue_items_final": 0
+        },
+        "semantic_artifacts": {
+          "audio_path": {
+            "bytes": 0,
+            "exists": false,
+            "path": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-on/semantic/audio/out-000.pcm",
+            "sha256": null
+          },
+          "declared_artifacts": [
+            "client.transcript.jsonl",
+            "agent.transcript.jsonl",
+            "session-log.jsonl",
+            "provider.json"
+          ],
+          "enabled": true,
+          "manifest": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-on/semantic/manifest.json",
+          "root": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-on/semantic",
+          "terminal": {
+            "classification": "provider_authored_completion",
+            "output_state": "complete",
+            "reason": "provider_authored_completion",
+            "terminal_provenance": "provider",
+            "terminal_reason": "provider_authored_completion"
+          }
+        }
+      },
+      "execution": {
+        "artifact_disk": {
+          "bounded": true,
+          "bytes": 100115,
+          "cap_bytes": 4194304,
+          "files": 9
+        },
+        "binary_binding": {
+          "binary_bytes": 10432034,
+          "binary_path": "scratch/build/c23-consumer",
+          "binary_sha256": "5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17",
+          "build_inputs_sha256": "682150ed90a74ad7cf4570ded541d83329003a10cb2eec248971ab22a22dfd6a",
+          "label": "c23",
+          "source_archive_sha256": "984e34904ae6aca952ac8ee1df77e052b8516e7cbc7dc734862fedd276f9dbd5",
+          "source_revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+          "source_root": "scratch/sources/c23",
+          "source_tree_sha256": "19bb59729062616fff5409fbf5f03ae57a247d3fd5d5790e825ffb5133545bd9",
+          "verified": true
+        },
+        "cleanup": {
+          "descendant_processes_reaped": true,
+          "descendants_after": [],
+          "descendants_before": [],
+          "errors": [],
+          "group_alive_after": false,
+          "group_alive_before": false,
+          "group_members_after": [],
+          "group_members_before": [],
+          "kill_sent": false,
+          "parent_reaped": true,
+          "pgid": 2978,
+          "pipes_reaped": true,
+          "term_sent": false
+        },
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/build/c23-consumer",
+          "-scenario=tool-matrix",
+          "-fixture=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/inputs/c23-task/fixtures.json",
+          "-turns=1",
+          "-recording=true",
+          "-artifact-root=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/runs/20260912T034156Z-264425000-comparison-c23-on",
+          "-output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/runs/20260912T034156Z-264425000-comparison-c23-on/report.json"
+        ],
+        "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/sources/c23",
+        "elapsed_ms": 170,
+        "label": "c23-on",
+        "output_bounded": true,
+        "output_overflow": false,
+        "reported_source_revision": "unbound-working-tree",
+        "returncode": 0,
+        "source_attestation": {
+          "binary_sha256": "5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17",
+          "build_inputs_sha256": "682150ed90a74ad7cf4570ded541d83329003a10cb2eec248971ab22a22dfd6a",
+          "report_source_revision_untrusted": true,
+          "revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+          "source_archive_sha256": "984e34904ae6aca952ac8ee1df77e052b8516e7cbc7dc734862fedd276f9dbd5",
+          "source_tree_sha256": "19bb59729062616fff5409fbf5f03ae57a247d3fd5d5790e825ffb5133545bd9"
+        },
+        "source_revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+        "stderr": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-on/process/stderr.log",
+        "stderr_bytes": 0,
+        "stderr_observed_bytes": 0,
+        "stdout": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-on/process/stdout.log",
+        "stdout_bytes": 0,
+        "stdout_observed_bytes": 0,
+        "timed_out": false
+      },
+      "mode": "on",
+      "public_event_audio_delta_count": 1,
+      "recording_report": {
+        "available": true,
+        "drops": {
+          "live_event_overflow": 0
+        },
+        "enabled": true,
+        "limits": {
+          "audio_bytes": 4194304,
+          "audio_items": 8192,
+          "metadata_bytes": 262144,
+          "metadata_items": 1024,
+          "provider_bytes": 4194304,
+          "provider_items": 8192,
+          "sidecar_bytes": 262144,
+          "sidecar_items": 64,
+          "terminal_bytes": 131072,
+          "terminal_items": 16,
+          "transcript_bytes": 33554432,
+          "transcript_items": 32768
+        },
+        "provider_capture_available": true,
+        "provider_capture_usage": {
+          "accepted_audio": 0,
+          "accepted_events": 0,
+          "accepted_items": 20,
+          "accepted_messages": 0,
+          "audio_bytes": 0,
+          "audio_items": 0,
+          "metadata_bytes": 0,
+          "metadata_items": 0,
+          "peak_provider_bytes": 6495,
+          "peak_provider_items": 21,
+          "peak_provider_queue_bytes": 2467,
+          "peak_provider_queue_items": 9,
+          "peak_queue_bytes": 2467,
+          "peak_queue_items": 9,
+          "peak_summary_bytes": 0,
+          "peak_summary_items": 0,
+          "processed_items": 40,
+          "provider_accepted_items": 20,
+          "provider_bytes": 6042,
+          "provider_items": 20,
+          "provider_queue_bytes": 0,
+          "provider_queue_items": 0,
+          "queue_bytes": 0,
+          "queue_items": 0,
+          "sidecar_bytes": 0,
+          "sidecar_items": 0,
+          "summary_bytes": 0,
+          "summary_items": 0,
+          "terminal_bytes": 0,
+          "terminal_items": 0,
+          "transcript_bytes": 0,
+          "transcript_items": 0
+        },
+        "usage": {
+          "accepted_audio": 0,
+          "accepted_events": 25,
+          "accepted_items": 53,
+          "accepted_messages": 28,
+          "audio_bytes": 0,
+          "audio_items": 0,
+          "metadata_bytes": 1812,
+          "metadata_items": 2,
+          "peak_provider_bytes": 0,
+          "peak_provider_items": 0,
+          "peak_provider_queue_bytes": 0,
+          "peak_provider_queue_items": 0,
+          "peak_queue_bytes": 25420,
+          "peak_queue_items": 27,
+          "peak_summary_bytes": 6750,
+          "peak_summary_items": 13,
+          "processed_items": 53,
+          "provider_accepted_items": 0,
+          "provider_bytes": 0,
+          "provider_items": 0,
+          "provider_queue_bytes": 0,
+          "provider_queue_items": 0,
+          "queue_bytes": 0,
+          "queue_items": 0,
+          "sidecar_bytes": 0,
+          "sidecar_items": 0,
+          "summary_bytes": 6332,
+          "summary_items": 12,
+          "terminal_bytes": 1836,
+          "terminal_items": 1,
+          "transcript_bytes": 72534,
+          "transcript_items": 52
+        }
+      },
+      "report": "artifacts/runs/20260912T034156Z-264425000-comparison-c23-on/report.json",
+      "source": "c23"
+    },
+    {
+      "artifact_disk": {
+        "bounded": true,
+        "bytes": 16434,
+        "cap_bytes": 4194304,
+        "files": 4
+      },
+      "artifact_root": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-off",
+      "boundaries": {
+        "finalization": {
+          "audio_present": false,
+          "clean_shutdown": true,
+          "manifest_present": false,
+          "ok": true,
+          "terminal": {
+            "classification": "provider_authored_completion",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "provider_authored_completion"
+          }
+        },
+        "provider_capture": {
+          "audio_delta_records": 1,
+          "bytes": 128,
+          "expected_bytes": 128,
+          "nonempty": true,
+          "nonempty_records": 1,
+          "ok": true,
+          "path": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-off/provider.session.json",
+          "recorded_bytes": [
+            128
+          ],
+          "sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588"
+        },
+        "public_pcm": {
+          "bytes": 128,
+          "expected_bytes": 128,
+          "expected_sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588",
+          "format": "pcm16-le",
+          "ok": true,
+          "sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588"
+        },
+        "recording_usage": {
+          "accepted_audio": 0,
+          "accepted_events": 0,
+          "accepted_items": 0,
+          "accepted_messages": 0,
+          "audio_bytes": 0,
+          "available": false,
+          "drops": {
+            "live_event_overflow": 0
+          },
+          "drops_zero": true,
+          "enabled": false,
+          "ok": true,
+          "processed_items": 0,
+          "queue_bytes_final": 0,
+          "queue_items_final": 0
+        },
+        "semantic_artifacts": {
+          "audio_path": null,
+          "declared_artifacts": [],
+          "enabled": false,
+          "manifest": null,
+          "root": null
+        }
+      },
+      "execution": {
+        "artifact_disk": {
+          "bounded": true,
+          "bytes": 16434,
+          "cap_bytes": 4194304,
+          "files": 4
+        },
+        "binary_binding": {
+          "binary_bytes": 10608162,
+          "binary_path": "scratch/build/c56-consumer",
+          "binary_sha256": "a7bdbe354eb03b81bf3c60fa6d904750b3023bbda237255650d12b57487b7b1f",
+          "build_inputs_sha256": "dcbbe2cc7ef81171ef97bc313ae857e9176fd6d7dcd933e397433f38fa75362f",
+          "label": "c56",
+          "source_archive_sha256": "752bc7d1aae6dece63beb090bdda10d98e91bde48c1dc5b9d7f4a6fb82d90f7e",
+          "source_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+          "source_root": "scratch/sources/c56",
+          "source_tree_sha256": "915e0698f346c2829c348366a44b769efa4085327e62bc04e65995fc81ad4c25",
+          "verified": true
+        },
+        "cleanup": {
+          "descendant_processes_reaped": true,
+          "descendants_after": [],
+          "descendants_before": [],
+          "errors": [],
+          "group_alive_after": false,
+          "group_alive_before": false,
+          "group_members_after": [],
+          "group_members_before": [],
+          "kill_sent": false,
+          "parent_reaped": true,
+          "pgid": 2982,
+          "pipes_reaped": true,
+          "term_sent": false
+        },
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/build/c56-consumer",
+          "-scenario=tool-matrix",
+          "-fixture=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/inputs/c23-task/fixtures.json",
+          "-turns=1",
+          "-recording=false",
+          "-artifact-root=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/runs/20260912T034156Z-264425000-comparison-c56-off",
+          "-output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/runs/20260912T034156Z-264425000-comparison-c56-off/report.json"
+        ],
+        "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/sources/c56",
+        "elapsed_ms": 186,
+        "label": "c56-off",
+        "output_bounded": true,
+        "output_overflow": false,
+        "reported_source_revision": "unbound-working-tree",
+        "returncode": 0,
+        "source_attestation": {
+          "binary_sha256": "a7bdbe354eb03b81bf3c60fa6d904750b3023bbda237255650d12b57487b7b1f",
+          "build_inputs_sha256": "dcbbe2cc7ef81171ef97bc313ae857e9176fd6d7dcd933e397433f38fa75362f",
+          "report_source_revision_untrusted": true,
+          "revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+          "source_archive_sha256": "752bc7d1aae6dece63beb090bdda10d98e91bde48c1dc5b9d7f4a6fb82d90f7e",
+          "source_tree_sha256": "915e0698f346c2829c348366a44b769efa4085327e62bc04e65995fc81ad4c25"
+        },
+        "source_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+        "stderr": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-off/process/stderr.log",
+        "stderr_bytes": 0,
+        "stderr_observed_bytes": 0,
+        "stdout": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-off/process/stdout.log",
+        "stdout_bytes": 0,
+        "stdout_observed_bytes": 0,
+        "timed_out": false
+      },
+      "mode": "off",
+      "public_event_audio_delta_count": 1,
+      "recording_report": {
+        "available": false,
+        "drops": {
+          "live_event_overflow": 0
+        },
+        "enabled": false,
+        "limits": {
+          "audio_bytes": 4194304,
+          "audio_items": 8192,
+          "metadata_bytes": 262144,
+          "metadata_items": 1024,
+          "provider_bytes": 4194304,
+          "provider_items": 8192,
+          "sidecar_bytes": 262144,
+          "sidecar_items": 64,
+          "terminal_bytes": 131072,
+          "terminal_items": 16,
+          "transcript_bytes": 33554432,
+          "transcript_items": 32768
+        },
+        "provider_capture_available": true,
+        "provider_capture_usage": {
+          "accepted_audio": 0,
+          "accepted_events": 0,
+          "accepted_items": 20,
+          "accepted_messages": 0,
+          "audio_bytes": 0,
+          "audio_items": 0,
+          "metadata_bytes": 0,
+          "metadata_items": 0,
+          "peak_provider_bytes": 6498,
+          "peak_provider_items": 21,
+          "peak_provider_queue_bytes": 3019,
+          "peak_provider_queue_items": 11,
+          "peak_queue_bytes": 3019,
+          "peak_queue_items": 11,
+          "peak_summary_bytes": 0,
+          "peak_summary_items": 0,
+          "processed_items": 40,
+          "provider_accepted_items": 20,
+          "provider_bytes": 6045,
+          "provider_items": 20,
+          "provider_queue_bytes": 0,
+          "provider_queue_items": 0,
+          "queue_bytes": 0,
+          "queue_items": 0,
+          "sidecar_bytes": 0,
+          "sidecar_items": 0,
+          "summary_bytes": 0,
+          "summary_items": 0,
+          "terminal_bytes": 0,
+          "terminal_items": 0,
+          "transcript_bytes": 0,
+          "transcript_items": 0
+        }
+      },
+      "report": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-off/report.json",
+      "source": "c56"
+    },
+    {
+      "artifact_disk": {
+        "bounded": true,
+        "bytes": 100118,
+        "cap_bytes": 4194304,
+        "files": 9
+      },
+      "artifact_root": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-on",
+      "boundaries": {
+        "finalization": {
+          "audio_present": false,
+          "clean_shutdown": true,
+          "manifest_present": true,
+          "ok": true,
+          "terminal": {
+            "classification": "provider_authored_completion",
+            "kind": "terminal",
+            "output_state": "complete",
+            "provenance": "provider",
+            "reason": "provider_authored_completion"
+          }
+        },
+        "provider_capture": {
+          "audio_delta_records": 1,
+          "bytes": 128,
+          "expected_bytes": 128,
+          "nonempty": true,
+          "nonempty_records": 1,
+          "ok": true,
+          "path": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-on/provider.session.json",
+          "recorded_bytes": [
+            128
+          ],
+          "sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588"
+        },
+        "public_pcm": {
+          "bytes": 128,
+          "expected_bytes": 128,
+          "expected_sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588",
+          "format": "pcm16-le",
+          "ok": true,
+          "sha256": "1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588"
+        },
+        "recording_usage": {
+          "accepted_audio": 0,
+          "accepted_events": 25,
+          "accepted_items": 53,
+          "accepted_messages": 28,
+          "audio_bytes": 0,
+          "available": true,
+          "drops": {
+            "live_event_overflow": 0
+          },
+          "drops_zero": true,
+          "enabled": true,
+          "ok": true,
+          "processed_items": 53,
+          "queue_bytes_final": 0,
+          "queue_items_final": 0
+        },
+        "semantic_artifacts": {
+          "audio_path": {
+            "bytes": 0,
+            "exists": false,
+            "path": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-on/semantic/audio/out-000.pcm",
+            "sha256": null
+          },
+          "declared_artifacts": [
+            "client.transcript.jsonl",
+            "agent.transcript.jsonl",
+            "session-log.jsonl",
+            "provider.json"
+          ],
+          "enabled": true,
+          "manifest": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-on/semantic/manifest.json",
+          "root": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-on/semantic",
+          "terminal": {
+            "classification": "provider_authored_completion",
+            "output_state": "complete",
+            "reason": "provider_authored_completion",
+            "terminal_provenance": "provider",
+            "terminal_reason": "provider_authored_completion"
+          }
+        }
+      },
+      "execution": {
+        "artifact_disk": {
+          "bounded": true,
+          "bytes": 100118,
+          "cap_bytes": 4194304,
+          "files": 9
+        },
+        "binary_binding": {
+          "binary_bytes": 10608162,
+          "binary_path": "scratch/build/c56-consumer",
+          "binary_sha256": "a7bdbe354eb03b81bf3c60fa6d904750b3023bbda237255650d12b57487b7b1f",
+          "build_inputs_sha256": "dcbbe2cc7ef81171ef97bc313ae857e9176fd6d7dcd933e397433f38fa75362f",
+          "label": "c56",
+          "source_archive_sha256": "752bc7d1aae6dece63beb090bdda10d98e91bde48c1dc5b9d7f4a6fb82d90f7e",
+          "source_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+          "source_root": "scratch/sources/c56",
+          "source_tree_sha256": "915e0698f346c2829c348366a44b769efa4085327e62bc04e65995fc81ad4c25",
+          "verified": true
+        },
+        "cleanup": {
+          "descendant_processes_reaped": true,
+          "descendants_after": [],
+          "descendants_before": [],
+          "errors": [],
+          "group_alive_after": false,
+          "group_alive_before": false,
+          "group_members_after": [],
+          "group_members_before": [],
+          "kill_sent": false,
+          "parent_reaped": true,
+          "pgid": 2986,
+          "pipes_reaped": true,
+          "term_sent": false
+        },
+        "command": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/build/c56-consumer",
+          "-scenario=tool-matrix",
+          "-fixture=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/inputs/c23-task/fixtures.json",
+          "-turns=1",
+          "-recording=true",
+          "-artifact-root=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/runs/20260912T034156Z-264425000-comparison-c56-on",
+          "-output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution/docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/artifacts/runs/20260912T034156Z-264425000-comparison-c56-on/report.json"
+        ],
+        "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/scratch/sources/c56",
+        "elapsed_ms": 150,
+        "label": "c56-on",
+        "output_bounded": true,
+        "output_overflow": false,
+        "reported_source_revision": "unbound-working-tree",
+        "returncode": 0,
+        "source_attestation": {
+          "binary_sha256": "a7bdbe354eb03b81bf3c60fa6d904750b3023bbda237255650d12b57487b7b1f",
+          "build_inputs_sha256": "dcbbe2cc7ef81171ef97bc313ae857e9176fd6d7dcd933e397433f38fa75362f",
+          "report_source_revision_untrusted": true,
+          "revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+          "source_archive_sha256": "752bc7d1aae6dece63beb090bdda10d98e91bde48c1dc5b9d7f4a6fb82d90f7e",
+          "source_tree_sha256": "915e0698f346c2829c348366a44b769efa4085327e62bc04e65995fc81ad4c25"
+        },
+        "source_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+        "stderr": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-on/process/stderr.log",
+        "stderr_bytes": 0,
+        "stderr_observed_bytes": 0,
+        "stdout": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-on/process/stdout.log",
+        "stdout_bytes": 0,
+        "stdout_observed_bytes": 0,
+        "timed_out": false
+      },
+      "mode": "on",
+      "public_event_audio_delta_count": 1,
+      "recording_report": {
+        "available": true,
+        "drops": {
+          "live_event_overflow": 0
+        },
+        "enabled": true,
+        "limits": {
+          "audio_bytes": 4194304,
+          "audio_items": 8192,
+          "metadata_bytes": 262144,
+          "metadata_items": 1024,
+          "provider_bytes": 4194304,
+          "provider_items": 8192,
+          "sidecar_bytes": 262144,
+          "sidecar_items": 64,
+          "terminal_bytes": 131072,
+          "terminal_items": 16,
+          "transcript_bytes": 33554432,
+          "transcript_items": 32768
+        },
+        "provider_capture_available": true,
+        "provider_capture_usage": {
+          "accepted_audio": 0,
+          "accepted_events": 0,
+          "accepted_items": 20,
+          "accepted_messages": 0,
+          "audio_bytes": 0,
+          "audio_items": 0,
+          "metadata_bytes": 0,
+          "metadata_items": 0,
+          "peak_provider_bytes": 6495,
+          "peak_provider_items": 21,
+          "peak_provider_queue_bytes": 2467,
+          "peak_provider_queue_items": 9,
+          "peak_queue_bytes": 2467,
+          "peak_queue_items": 9,
+          "peak_summary_bytes": 0,
+          "peak_summary_items": 0,
+          "processed_items": 40,
+          "provider_accepted_items": 20,
+          "provider_bytes": 6042,
+          "provider_items": 20,
+          "provider_queue_bytes": 0,
+          "provider_queue_items": 0,
+          "queue_bytes": 0,
+          "queue_items": 0,
+          "sidecar_bytes": 0,
+          "sidecar_items": 0,
+          "summary_bytes": 0,
+          "summary_items": 0,
+          "terminal_bytes": 0,
+          "terminal_items": 0,
+          "transcript_bytes": 0,
+          "transcript_items": 0
+        },
+        "usage": {
+          "accepted_audio": 0,
+          "accepted_events": 25,
+          "accepted_items": 53,
+          "accepted_messages": 28,
+          "audio_bytes": 0,
+          "audio_items": 0,
+          "metadata_bytes": 1812,
+          "metadata_items": 2,
+          "peak_provider_bytes": 0,
+          "peak_provider_items": 0,
+          "peak_provider_queue_bytes": 0,
+          "peak_provider_queue_items": 0,
+          "peak_queue_bytes": 25420,
+          "peak_queue_items": 27,
+          "peak_summary_bytes": 6750,
+          "peak_summary_items": 13,
+          "processed_items": 53,
+          "provider_accepted_items": 0,
+          "provider_bytes": 0,
+          "provider_items": 0,
+          "provider_queue_bytes": 0,
+          "provider_queue_items": 0,
+          "queue_bytes": 0,
+          "queue_items": 0,
+          "sidecar_bytes": 0,
+          "sidecar_items": 0,
+          "summary_bytes": 6332,
+          "summary_items": 12,
+          "terminal_bytes": 1836,
+          "terminal_items": 1,
+          "transcript_bytes": 72534,
+          "transcript_items": 52
+        }
+      },
+      "report": "artifacts/runs/20260912T034156Z-264425000-comparison-c56-on/report.json",
+      "source": "c56"
+    }
+  ],
+  "positive_execution_count": 4,
+  "recording_modes": [
+    "off",
+    "on"
+  ],
+  "run_id": "20260912T034156Z-264425000-comparison",
+  "runner_sha256": "ee5d2ddd103a1d4594360b893641c056aae713d6643ef11d5c841b0df5728079",
+  "schema": "audio-runtime.c68.zero-audio-attribution.comparison.v1",
+  "task": "audio-runtime-c68-c23-zero-audio-attribution",
+  "turns": 1
+}

@@ -1,0 +1,105 @@
+{
+  "build": {
+    "bindings": {
+      "c23": {
+        "binary_bytes": 10432034,
+        "binary_path": "scratch/build/c23-consumer",
+        "binary_sha256": "5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17",
+        "build_inputs_sha256": "682150ed90a74ad7cf4570ded541d83329003a10cb2eec248971ab22a22dfd6a",
+        "label": "c23",
+        "source_archive_sha256": "984e34904ae6aca952ac8ee1df77e052b8516e7cbc7dc734862fedd276f9dbd5",
+        "source_revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+        "source_root": "scratch/sources/c23",
+        "source_tree_sha256": "19bb59729062616fff5409fbf5f03ae57a247d3fd5d5790e825ffb5133545bd9",
+        "verified": true
+      },
+      "c56": {
+        "binary_bytes": 10608162,
+        "binary_path": "scratch/build/c56-consumer",
+        "binary_sha256": "a7bdbe354eb03b81bf3c60fa6d904750b3023bbda237255650d12b57487b7b1f",
+        "build_inputs_sha256": "dcbbe2cc7ef81171ef97bc313ae857e9176fd6d7dcd933e397433f38fa75362f",
+        "label": "c56",
+        "source_archive_sha256": "752bc7d1aae6dece63beb090bdda10d98e91bde48c1dc5b9d7f4a6fb82d90f7e",
+        "source_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+        "source_root": "scratch/sources/c56",
+        "source_tree_sha256": "915e0698f346c2829c348366a44b769efa4085327e62bc04e65995fc81ad4c25",
+        "verified": true
+      }
+    },
+    "path": "build-manifest.json",
+    "sha256": "7e1114af765fdbdb616e83926dd47a27ad819b898d20c121ff04749f5c16e5e8"
+  },
+  "c21_regressions": {
+    "passed": true,
+    "path": "c21-regressions.json",
+    "sha256": "d96a9668cefbae2b5ea4fb8b6c69603906412632f9d394c84766fe375dbbe562",
+    "tested_source_revision": "3d93b523eb594fae7cedeecdda2845a582b560bc"
+  },
+  "c23_revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+  "c23_runner_repair_needed": false,
+  "c56_candidate_restores_audio": false,
+  "c56_revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
+  "causal_detail": "terminalDrainSession always implements MediaSession; its empty endpoints satisfy no-device media requirements, so capturingInferencer calls SetMediaAttached(true), skipping Observer.messageAudio. The provider and public PCM boundaries remain non-empty, but recording accepted_audio/audio_bytes stay zero and finalization has no audio/out-000.pcm.",
+  "classification": "C56_RECORDING_DEFECT",
+  "comparison": {
+    "path": "comparison.json",
+    "run_id": "20260912T034156Z-264425000-comparison",
+    "sha256": "52a780c8abf90dceefeea1ed19d20807c13fe8d7511dfcbfeccc15cdb8dd1bc0"
+  },
+  "contract": "audio-runtime-v1",
+  "evidence_ready": true,
+  "exactly_one_classification": true,
+  "first_divergent_api": "session.LiveRecorder.RecordAudio is never invoked for normalized provider AUDIO.DELTA in this no-provider-media fixture",
+  "first_divergent_boundary": "recording_observer_admission",
+  "first_divergent_path": "go-agent-runtime/services/session/internal/live/observations/observer.go:71-80, reached through terminalDrainSession capability façade at service.go:338-362 and lifecycle.go:387-400",
+  "limitations": [
+    "C68 does not claim C56 delivery or C23 delivery",
+    "C68 does not claim device consumption or acoustic output",
+    "script CI, independent review, guarded merge and post-merge vertical probing remain external"
+  ],
+  "owner_action": {
+    "action": "preserve provider-media capability absence at the terminalDrainSession/capturingInferencer handoff so the public observer reaches RecordAudio",
+    "owner": "audio-runtime-c56-retire-cli-recording-orchestration",
+    "scope": "existing C56 executor; C68 performs no production mutation"
+  },
+  "project": "audio-runtime",
+  "provenance": {
+    "current_main": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "path": "provenance.json",
+    "prepared_head": "3d93b523eb594fae7cedeecdda2845a582b560bc",
+    "sha256": "f620645ddd0920071a729ac68b3f3883ee7999725ab6ac9db0e466d5115d4804"
+  },
+  "schema": "audio-runtime.c68.zero-audio-attribution.attribution.v1",
+  "smallest_existing_c56_executor_repair": "preserve provider-media capability absence at the terminalDrainSession/capturingInferencer handoff (service.go:338-362; lifecycle.go:387-400; session_adapter.go:45-55) so the public observer fallback reaches RecordAudio; this is outside C68 owned paths and is not a C23 fixture/oracle repair",
+  "source_binding": {
+    "executions": [
+      {
+        "binary_sha256": "5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17",
+        "build_inputs_sha256": "682150ed90a74ad7cf4570ded541d83329003a10cb2eec248971ab22a22dfd6a",
+        "mode": "off",
+        "source": "c23"
+      },
+      {
+        "binary_sha256": "5633845537ff8a03fed2654d4a20a037978f35c8e34119e447a6398807488a17",
+        "build_inputs_sha256": "682150ed90a74ad7cf4570ded541d83329003a10cb2eec248971ab22a22dfd6a",
+        "mode": "on",
+        "source": "c23"
+      },
+      {
+        "binary_sha256": "a7bdbe354eb03b81bf3c60fa6d904750b3023bbda237255650d12b57487b7b1f",
+        "build_inputs_sha256": "dcbbe2cc7ef81171ef97bc313ae857e9176fd6d7dcd933e397433f38fa75362f",
+        "mode": "off",
+        "source": "c56"
+      },
+      {
+        "binary_sha256": "a7bdbe354eb03b81bf3c60fa6d904750b3023bbda237255650d12b57487b7b1f",
+        "build_inputs_sha256": "dcbbe2cc7ef81171ef97bc313ae857e9176fd6d7dcd933e397433f38fa75362f",
+        "mode": "on",
+        "source": "c56"
+      }
+    ],
+    "independent_of_consumer_report": true,
+    "report_source_revision_is_untrusted": true
+  },
+  "task": "audio-runtime-c68-c23-zero-audio-attribution"
+}
