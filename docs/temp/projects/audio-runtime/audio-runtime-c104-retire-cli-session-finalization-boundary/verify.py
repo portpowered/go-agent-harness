@@ -45,8 +45,8 @@ def mutation_results() -> list[dict[str, object]]:
             '\tadd(f.phase("close WebRTC provider session", call(f.req.CloseSession)))\n\tadd(f.phase("close session capabilities", call(f.req.CloseCapabilities)))',
         ),
         "mixed-tree-is-clean": (
-            "if !errorTreeOnly(cause, allowed) {\n\t\t\t\treturn false\n\t\t\t}",
-            "if !errorTreeOnly(cause, allowed) {\n\t\t\t\tcontinue\n\t\t\t}",
+            "if !errorTreeOnly(cause, allowed) {\n\t\t\treturn false\n\t\t}",
+            "if !errorTreeOnly(cause, allowed) {\n\t\t\tcontinue\n\t\t}",
         ),
     }
     results = []

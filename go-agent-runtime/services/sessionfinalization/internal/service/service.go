@@ -147,7 +147,10 @@ func (b *terminationBoundary) Terminate(primary error) error {
 		quiesceErr := call(b.req.QuiesceUpstream)
 		var waitErr error = sessionfinalization.ErrMissingStragglerDrain
 		if b.req.WaitForStragglers != nil {
-			waitErr = callDrain(b.req.WaitForStragglers, sessionfinalization.DefaultDrainPolicy())
+			waitErr = callDrain(b.req.WaitForStragglers, sessionfinalization.DrainPolicy{
+				QuietPeriod: sessionfinalization.DefaultStragglerDrainQuietPeriod,
+				WallSafety:  sessionfinalization.DefaultStragglerDrainWallSafety,
+			})
 		}
 		stopErr := call(b.req.StopOwnedResources)
 		flushErr := call(b.req.FlushBuffered)
@@ -211,7 +214,7 @@ func nonNilContext(ctx context.Context) context.Context {
 
 func cancellationErrors(options sessionfinalization.ErrorTreeOptions) []error {
 	if len(options.CancellationErrors) == 0 {
-		return sessionfinalization.DefaultSIGINTCancellationErrors()
+		return (sessionfinalization.ErrorTreeOptions{}).WithDefaults().CancellationErrors
 	}
 	return options.CancellationErrors
 }
@@ -231,21 +234,44 @@ func errorTreeOnly(err error, allowed []error) bool {
 	if provider, ok := err.(sessionfinalization.CancellationCauseProvider); ok {
 		return cancellationCauseOnly(provider, allowed)
 	}
-	if unwrapper, ok := err.(interface{ Unwrap() []error }); ok {
-		causes := unwrapper.Unwrap()
-		if len(causes) == 0 {
+	if causes, ok := joinedCauses(err); ok {
+		return allErrorTreeOnly(causes, allowed)
+	}
+	if cause, ok := wrappedCause(err); ok {
+		return errorTreeOnly(cause, allowed)
+	}
+	return allowedError(err, allowed)
+}
+
+func joinedCauses(err error) ([]error, bool) {
+	unwrapper, ok := err.(interface{ Unwrap() []error })
+	if !ok {
+		return nil, false
+	}
+	return unwrapper.Unwrap(), true
+}
+
+func allErrorTreeOnly(causes []error, allowed []error) bool {
+	if len(causes) == 0 {
+		return false
+	}
+	for _, cause := range causes {
+		if !errorTreeOnly(cause, allowed) {
 			return false
 		}
-		for _, cause := range causes {
-			if !errorTreeOnly(cause, allowed) {
-				return false
-			}
-		}
-		return true
 	}
-	if unwrapper, ok := err.(interface{ Unwrap() error }); ok {
-		return errorTreeOnly(unwrapper.Unwrap(), allowed)
+	return true
+}
+
+func wrappedCause(err error) (error, bool) {
+	unwrapper, ok := err.(interface{ Unwrap() error })
+	if !ok {
+		return nil, false
 	}
+	return unwrapper.Unwrap(), true
+}
+
+func allowedError(err error, allowed []error) bool {
 	for _, candidate := range allowed {
 		if candidate != nil && errors.Is(err, candidate) {
 			return true

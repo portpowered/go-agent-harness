@@ -12,7 +12,7 @@ func sessionSIGINTErrorOnly(err error) bool {
 	return sfw.NewService().SIGINTErrorOnly(err, sessionSIGINTOptions())
 }
 func sessionSIGINTOptions() sf.ErrorTreeOptions {
-	return sf.NewErrorTreeOptions(ErrSessionAudioInputEndOfTurnLost, ErrSessionScheduledAudioIncomplete, ErrSessionUnresolvedToolResults)
+	return (sf.ErrorTreeOptions{}).WithDefaults(ErrSessionAudioInputEndOfTurnLost, ErrSessionScheduledAudioIncomplete, ErrSessionUnresolvedToolResults)
 }
 func (e *SessionAudioInputError) CancellationCause() error {
 	if e == nil {

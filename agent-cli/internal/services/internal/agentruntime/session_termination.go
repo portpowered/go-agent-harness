@@ -25,7 +25,7 @@ type sessionTerminationBoundary struct {
 func (b *sessionTerminationBoundary) terminate(primary error) error {
 	b.once.Do(func() {
 		req := sf.TerminationRequest{QuiesceUpstream: b.quiesceUpstream, StopOwnedResources: b.stopOwnedResources, FlushBuffered: b.flushBuffered}
-		req.WaitForStragglers = sf.AdaptDrain(b.waitForStragglers, func(p sf.DrainPolicy) sessionStragglerDrainPolicy {
+		req.WaitForStragglers = sfw.AdaptDrain(b.waitForStragglers, func(p sf.DrainPolicy) sessionStragglerDrainPolicy {
 			return sessionStragglerDrainPolicy{quietPeriod: p.QuietPeriod}
 		})
 		b.delegate = sfw.NewService().NewTerminationBoundary(b.ctx, req)

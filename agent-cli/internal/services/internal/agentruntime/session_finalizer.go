@@ -20,11 +20,11 @@ type sessionRuntimeFinalizer struct {
 
 func newSessionRuntimeFinalizer(plan sessionRuntimePlan) *sessionRuntimeFinalizer {
 	f := &sessionRuntimeFinalizer{plan: plan}
-	f.delegate = sfw.NewService().NewFinalizer(sf.NewFinalizerRequest(sf.OptionalCloser(plan.capabilityCoordinator), plan.closeSession, func() error { return closeRTCDeviceBinding(f.plan.loop.rtcDeviceBinding) }, sf.OptionalCloser(plan.rtcRuntime), plan.flushCapture, plan.finalize, func(ctx context.Context) context.Context {
+	f.delegate = sfw.NewService().NewFinalizer(sfw.NewFinalizerRequest(sfw.OptionalCloser(plan.capabilityCoordinator), plan.closeSession, func() error { return closeRTCDeviceBinding(f.plan.loop.rtcDeviceBinding) }, sfw.OptionalCloser(plan.rtcRuntime), plan.flushCapture, plan.finalize, func(ctx context.Context) context.Context {
 		return withSessionTerminalReporter(ctx, f.plan.loop.terminalReporter)
 	}, func() error { return f.plan.captureClaim.release() }, wrapSessionPhaseError, func(err error) error { return wrapSessionRuntimeError(f.plan, err) }))
 	f.setDeviceBinding = func(b *RTCDeviceBinding) { f.plan.loop.rtcDeviceBinding = b }
 	f.finish, f.cleanup = f.delegate.Finish, f.delegate.Cleanup
 	return f
 }
-func invokeSessionFinalizer(cleanup func() error) error { return sf.Invoke(cleanup) }
+func invokeSessionFinalizer(cleanup func() error) error { return sfw.Invoke(cleanup) }

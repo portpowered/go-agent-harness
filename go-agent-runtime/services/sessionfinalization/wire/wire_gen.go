@@ -11,7 +11,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionfinalization/internal/service"
 )
 
+// Injectors from providers.go:
+
 // NewService returns the reusable finalization contract.
 func NewService() sessionfinalization.Service {
-	return service.New()
+	serviceService := service.New()
+	return serviceService
 }

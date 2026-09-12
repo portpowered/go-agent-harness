@@ -4,8 +4,6 @@ package sessionfinalization
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"time"
 
@@ -15,20 +13,6 @@ import (
 // Cleanup is one best-effort terminal lifecycle action. The service invokes
 // every admitted action in contract order even when an earlier action fails.
 type Cleanup func() error
-
-// OptionalCloser turns a nil-or-closable host resource into a cleanup
-// callback. It keeps compatibility adapters free of resource-specific
-// lifecycle branches.
-func OptionalCloser(value any) Cleanup {
-	if value == nil {
-		return nil
-	}
-	closer, ok := value.(interface{ Close() error })
-	if !ok {
-		return nil
-	}
-	return closer.Close
-}
 
 // Service is the public composition contract. It returns only public
 // lifecycle interfaces; implementation state remains private to Wire.
@@ -60,32 +44,11 @@ type FinalizerRequest struct {
 	RuntimeError func(error) error
 }
 
-// NewFinalizerRequest is a convenience constructor for adapters that already
-// have callback variables and want to avoid importing the implementation.
-func NewFinalizerRequest(closeCapabilities, closeSession, closeDevice, closeRuntime, flushCapture Cleanup, finalize func(context.Context, io.Writer) error, finalizeContext func(context.Context) context.Context, releaseCaptureClaim Cleanup, phaseError func(string, error) error, runtimeError func(error) error) FinalizerRequest {
-	return FinalizerRequest{CloseCapabilities: closeCapabilities, CloseSession: closeSession, CloseDevice: closeDevice, CloseRuntime: closeRuntime, FlushCapture: flushCapture, Finalize: finalize, FinalizeContext: finalizeContext, ReleaseCaptureClaim: releaseCaptureClaim, PhaseError: phaseError, RuntimeError: runtimeError}
-}
-
 // Finalizer owns post-loop cleanup and joins all cleanup failures with the
 // initiating session result. Finish and Cleanup are safe to call repeatedly.
 type Finalizer interface {
 	Finish(context.Context, io.Writer, error) error
 	Cleanup(context.Context, io.Writer) error
-}
-
-// Invoke runs one cleanup callback with the contract's panic conversion. It
-// is kept public for small legacy adapters that still have independent
-// duration-artifact cleanup seams.
-func Invoke(cleanup Cleanup) (err error) {
-	if cleanup == nil {
-		return nil
-	}
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("%w: %v", ErrFinalizationPanic, recovered)
-		}
-	}()
-	return cleanup()
 }
 
 // DrainPolicy is the bounded policy supplied to the mandatory straggler
@@ -96,16 +59,6 @@ type DrainPolicy struct {
 	WallSafety  time.Duration
 }
 
-// AdaptDrain converts a host-local drain policy without exposing that policy
-// type through the reusable contract. A nil callback remains nil so the
-// mandatory-drain configuration error is preserved by the service.
-func AdaptDrain[T any](wait func(T) error, convert func(DrainPolicy) T) func(DrainPolicy) error {
-	if wait == nil {
-		return nil
-	}
-	return func(policy DrainPolicy) error { return wait(convert(policy)) }
-}
-
 const (
 	// DefaultStragglerDrainQuietPeriod is the deterministic provider quiet
 	// period used by every terminal boundary.
@@ -113,11 +66,6 @@ const (
 	// DefaultStragglerDrainWallSafety bounds a drain on a frozen logical clock.
 	DefaultStragglerDrainWallSafety = 250 * time.Millisecond
 )
-
-// DefaultDrainPolicy returns a fresh copy of the bounded drain policy.
-func DefaultDrainPolicy() DrainPolicy {
-	return DrainPolicy{QuietPeriod: DefaultStragglerDrainQuietPeriod, WallSafety: DefaultStragglerDrainWallSafety}
-}
 
 // TerminationRequest contains the loop-owned terminal callbacks. Waiting for
 // stragglers is mandatory; omitting it is a configuration failure, not a
@@ -165,10 +113,19 @@ type ErrorTreeOptions struct {
 	CancellationErrors []error
 }
 
-// NewErrorTreeOptions returns the public defaults plus host-specific legacy
-// cancellation sentinels.
-func NewErrorTreeOptions(extra ...error) ErrorTreeOptions {
-	return ErrorTreeOptions{CancellationErrors: append(DefaultSIGINTCancellationErrors(), extra...)}
+// WithDefaults returns the public defaults plus host-specific legacy
+// cancellation sentinels. It is a method so the root contract exposes only
+// types and values; composition helpers remain in the Wire package.
+func (ErrorTreeOptions) WithDefaults(extra ...error) ErrorTreeOptions {
+	return ErrorTreeOptions{CancellationErrors: append([]error{
+		context.Canceled,
+		session.ErrLiveUserCancellation,
+		session.ErrLiveAudioResponseIncomplete,
+		session.ErrLiveImageContinuationIncomplete,
+		session.ErrLiveScheduledAudioIncomplete,
+		session.ErrLiveToolContinuationIncomplete,
+		session.ErrLiveUnresolvedToolResults,
+	}, extra...)}
 }
 
 // ContractError is a comparable sentinel type used for configuration and
@@ -182,23 +139,3 @@ const (
 	ErrMissingStragglerDrain       ContractError = "session termination boundary requires a straggler drain"
 	ErrFinalizationPanic           ContractError = "session finalization panicked"
 )
-
-// DefaultSIGINTCancellationErrors returns the public, host-neutral terminal
-// causes that are clean when every error-tree leaf belongs to SIGINT cleanup.
-func DefaultSIGINTCancellationErrors() []error {
-	return []error{
-		context.Canceled,
-		session.ErrLiveUserCancellation,
-		session.ErrLiveAudioResponseIncomplete,
-		session.ErrLiveImageContinuationIncomplete,
-		session.ErrLiveScheduledAudioIncomplete,
-		session.ErrLiveToolContinuationIncomplete,
-		session.ErrLiveUnresolvedToolResults,
-	}
-}
-
-// IsContractError is a small convenience for hosts that need to test one of
-// the comparable exported contract sentinels without importing errors.
-func IsContractError(err error, target ContractError) bool {
-	return errors.Is(err, target)
-}

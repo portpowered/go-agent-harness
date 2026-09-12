@@ -16,6 +16,10 @@ type intentProbe bool
 
 func (i intentProbe) SIGINTReceived() bool { return bool(i) }
 
+type panicIntent struct{}
+
+func (panicIntent) SIGINTReceived() bool { panic("intent panic") }
+
 type causeProbe struct{ cause error }
 
 func (e *causeProbe) Error() string { return "cause boundary" }
@@ -24,6 +28,13 @@ func (e *causeProbe) CancellationCause() error {
 		return nil
 	}
 	return e.cause
+}
+
+type panicCause struct{}
+
+func (panicCause) Error() string { return "panic cause" }
+func (panicCause) CancellationCause() error {
+	panic("cause panic")
 }
 
 type unwrapOne struct{ cause error }
@@ -147,6 +158,71 @@ func TestFinalizerNormalizesNilInputsAndContinuesAfterPanic(t *testing.T) {
 	}
 }
 
+func TestFinalizerHandlesDecoratorAndCallbackPanics(t *testing.T) {
+	phaseErr := errors.New("phase failure")
+	finalizeErr := errors.New("finalize failure")
+	var gotContext context.Context
+	f := New().NewFinalizer(sessionfinalization.FinalizerRequest{
+		CloseSession: func() error { return phaseErr },
+		FinalizeContext: func(ctx context.Context) context.Context {
+			return context.WithValue(ctx, struct{}{}, "decorated")
+		},
+		Finalize: func(ctx context.Context, _ io.Writer) error {
+			gotContext = ctx
+			return finalizeErr
+		},
+		PhaseError:   func(string, error) error { panic("phase decorator panic") },
+		RuntimeError: func(error) error { panic("runtime decorator panic") },
+	})
+	err := f.Cleanup(context.Background(), io.Discard)
+	if !errors.Is(err, sessionfinalization.ErrFinalizationPanic) {
+		t.Fatalf("decorator panic error = %v", err)
+	}
+	if gotContext == nil || gotContext.Value(struct{}{}) != "decorated" {
+		t.Fatalf("finalize context = %v", gotContext)
+	}
+
+	contextPanic := New().NewFinalizer(sessionfinalization.FinalizerRequest{
+		FinalizeContext: func(context.Context) context.Context { panic("context decorator panic") },
+		Finalize:        func(ctx context.Context, _ io.Writer) error { return ctx.Err() },
+	})
+	if err := contextPanic.Cleanup(nil, nil); !errors.Is(err, sessionfinalization.ErrFinalizationPanic) {
+		t.Fatalf("context decorator panic = %v", err)
+	}
+
+	callbackPanic := New().NewFinalizer(sessionfinalization.FinalizerRequest{
+		Finalize: func(context.Context, io.Writer) error { panic("finalize callback panic") },
+	})
+	if err := callbackPanic.Cleanup(context.Background(), io.Discard); !errors.Is(err, sessionfinalization.ErrFinalizationPanic) {
+		t.Fatalf("finalize callback panic = %v", err)
+	}
+}
+
+func TestFinalizerAndTerminationNilReceiversAndPanicBoundaries(t *testing.T) {
+	primary := errors.New("primary")
+	var nilFinalizer *finalizer
+	if err := nilFinalizer.Finish(nil, nil, primary); !errors.Is(err, primary) {
+		t.Fatalf("nil finalizer finish = %v", err)
+	}
+	if err := nilFinalizer.Cleanup(nil, nil); err != nil {
+		t.Fatalf("nil finalizer cleanup = %v", err)
+	}
+	var nilBoundary *terminationBoundary
+	if err := nilBoundary.Terminate(primary); !errors.Is(err, primary) {
+		t.Fatalf("nil termination = %v", err)
+	}
+
+	b := New().NewTerminationBoundary(context.Background(), sessionfinalization.TerminationRequest{
+		WaitForStragglers:  func(sessionfinalization.DrainPolicy) error { panic("drain panic") },
+		StopOwnedResources: func() error { panic("stop panic") },
+		FlushBuffered:      func() error { panic("flush panic") },
+	})
+	err := b.Terminate(nil)
+	if !errors.Is(err, sessionfinalization.ErrFinalizationPanic) {
+		t.Fatalf("termination panics = %v", err)
+	}
+}
+
 func TestTerminationOrdersDrainAndJoinsContext(t *testing.T) {
 	primary := errors.New("primary")
 	quiesceErr, waitErr, stopErr, flushErr := errors.New("quiesce"), errors.New("wait"), errors.New("stop"), errors.New("flush")
@@ -156,7 +232,7 @@ func TestTerminationOrdersDrainAndJoinsContext(t *testing.T) {
 	b := New().NewTerminationBoundary(ctx, sessionfinalization.TerminationRequest{
 		QuiesceUpstream: func() error { order = append(order, "quiesce"); return quiesceErr },
 		WaitForStragglers: func(policy sessionfinalization.DrainPolicy) error {
-			if policy != sessionfinalization.DefaultDrainPolicy() {
+			if policy != (sessionfinalization.DrainPolicy{QuietPeriod: sessionfinalization.DefaultStragglerDrainQuietPeriod, WallSafety: sessionfinalization.DefaultStragglerDrainWallSafety}) {
 				t.Fatalf("drain policy %#v", policy)
 			}
 			order = append(order, "wait")
@@ -247,6 +323,15 @@ func TestSIGINTClassifierCoversNestedAndMixedErrorTrees(t *testing.T) {
 	}
 	if !New().SIGINTCancellationOnly(known, intentProbe(true), options) {
 		t.Fatal("true intent not classified as SIGINT")
+	}
+	if New().SIGINTCancellationOnly(known, nil, options) {
+		t.Fatal("nil intent classified as SIGINT")
+	}
+	if New().SIGINTCancellationOnly(known, panicIntent{}, options) {
+		t.Fatal("panicking intent classified as SIGINT")
+	}
+	if New().SIGINTErrorOnly(panicCause{}, options) {
+		t.Fatal("panicking cause classified as clean")
 	}
 }
 
