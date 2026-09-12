@@ -4,7 +4,7 @@
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c104-retire-cli-session-finalization-boundary/artifacts/yui",
     "sha256": "70700965577d5cb6eb499ca6e36e6d36a90b287679358f424266c22503183179",
     "bytes": 53034578,
-    "candidate_revision": "b22bf4cc8eff41cb976ad8a17797dc0ceacf8000"
+    "candidate_revision": "8569f92ad04ed4fdaf70fd0c7357d646140fa3a6"
   },
   "credential_environment_removed": [],
   "cases": [
@@ -33,7 +33,7 @@
       "stderr_truncated": false,
       "stdout_bytes": 636,
       "stderr_bytes": 0,
-      "elapsed_seconds": 0.558836,
+      "elapsed_seconds": 0.433144,
       "stdout": "Filesystem scope: workdir=$TMP/success/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: Hello thereSecond turn reply\n\n[session closed: healthy_complete]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
       "stderr": "",
       "markers": [
@@ -77,7 +77,7 @@
       "stderr_truncated": false,
       "stdout_bytes": 563,
       "stderr_bytes": 0,
-      "elapsed_seconds": 0.105768,
+      "elapsed_seconds": 0.13146,
       "stdout": "Filesystem scope: workdir=$TMP/sigint-cancellation/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n[session terminal: classification=user_cancelled terminal_reason=cancellation terminal_provenance=cli output_state=partial]\n",
       "stderr": "",
       "markers": [
@@ -116,7 +116,7 @@
       "stderr_truncated": false,
       "stdout_bytes": 594,
       "stderr_bytes": 181,
-      "elapsed_seconds": 0.221635,
+      "elapsed_seconds": 0.194082,
       "stdout": "Filesystem scope: workdir=$TMP/cleanup-failure/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n",
       "stderr": "Error: transcript: recording use destination $TMP/cleanup-failure/recording: transcript: invalid recording destination\n",
       "injection": {
@@ -164,7 +164,7 @@
       "stderr_truncated": false,
       "stdout_bytes": 699,
       "stderr_bytes": 0,
-      "elapsed_seconds": 0.199741,
+      "elapsed_seconds": 0.20108,
       "stdout": "Filesystem scope: workdir=$TMP/audio-tool-continuation-replay/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
       "stderr": "",
       "markers": [
