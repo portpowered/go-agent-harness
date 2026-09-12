@@ -39,12 +39,6 @@ const (
 	roomAudioIngressReasonParticipantTerminated     = runtimeDiagnostics.ReasonParticipantTerminated
 	roomAudioIngressReasonParticipantOutputRejected = runtimeDiagnostics.ReasonParticipantOutputRejected
 	roomAudioIngressReasonProviderInputRejected     = runtimeDiagnostics.ReasonProviderInputRejected
-	roomAudioIngressMixedSource                     = runtimeDiagnostics.MixedSource
-	roomAudioIngressNoPeer                          = runtimeDiagnostics.NoPeerSource
-	roomAudioIngressMaxFirstEvents                  = runtimeDiagnostics.MaxFirstEvents
-	roomAudioIngressDispositionDelivered            = runtimeDiagnostics.Delivered
-	roomAudioIngressDispositionBackpressured        = runtimeDiagnostics.Backpressured
-	roomAudioIngressDispositionRejected             = runtimeDiagnostics.Rejected
 )
 
 type RoomAudioIngressDisposition = runtimeDiagnostics.RoomAudioIngressDisposition
@@ -90,7 +84,9 @@ func notifyRoomParticipantMixerReady(opts RoomRunOptions, participantID string, 
 
 func (l *roomAudioIngressLedger) admit(sourcePeer string, disposition RoomAudioIngressDisposition, reason string, byteCount int, contentful bool) {
 	if l != nil {
-		_ = l.service.Admit(sourcePeer, disposition, reason, byteCount, contentful)
+		if err := l.service.Admit(sourcePeer, disposition, reason, byteCount, contentful); err != nil && !errors.Is(err, runtimeDiagnostics.ErrFinished) {
+			panic(err)
+		}
 	}
 }
 
@@ -102,7 +98,9 @@ func (l *roomAudioIngressLedger) resolveFrame(sourcePeers []string, byteCount in
 
 func (l *roomAudioIngressLedger) record(sourcePeer string, disposition RoomAudioIngressDisposition, reason string, byteCount int) {
 	if l != nil {
-		_ = l.service.Record(sourcePeer, disposition, reason, byteCount)
+		if err := l.service.Record(sourcePeer, disposition, reason, byteCount); err != nil && !errors.Is(err, runtimeDiagnostics.ErrFinished) {
+			panic(err)
+		}
 	}
 }
 
@@ -116,12 +114,12 @@ func roomPCMContentful(pcm []byte) bool { return runtimeDiagnostics.PCM16(pcm).C
 
 func roomAudioIngressDisposition(writeDisposition room.PCM16WriteDisposition, writeErr error) (RoomAudioIngressDisposition, string) {
 	if writeErr != nil {
-		return roomAudioIngressDispositionRejected, roomAudioIngressRejectionReason(writeErr)
+		return RoomAudioIngressRejected, roomAudioIngressRejectionReason(writeErr)
 	}
 	if writeDisposition == room.PCM16WriteBackpressured {
-		return roomAudioIngressDispositionBackpressured, runtimeDiagnostics.ReasonMixerAdmittedAfterWait
+		return RoomAudioIngressBackpressured, runtimeDiagnostics.ReasonMixerAdmittedAfterWait
 	}
-	return roomAudioIngressDispositionDelivered, runtimeDiagnostics.ReasonMixerAdmitted
+	return RoomAudioIngressDelivered, runtimeDiagnostics.ReasonMixerAdmitted
 }
 
 func roomAudioIngressRejectionReason(err error) string {

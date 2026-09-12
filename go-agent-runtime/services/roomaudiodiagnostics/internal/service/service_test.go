@@ -10,6 +10,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomaudiodiagnostics"
 )
 
+const rejectedDisposition = "rejected"
+
 type testSink struct {
 	mu       sync.Mutex
 	records  []roomaudiodiagnostics.Record
@@ -113,12 +115,12 @@ func TestDownstreamRejectionAndPendingLossPreserveSources(t *testing.T) {
 		t.Fatalf("sorted source records = %v", records)
 	}
 	for _, record := range records[:2] {
-		if record.Fields[roomaudiodiagnostics.FieldDisposition] != "rejected" || record.Fields[roomaudiodiagnostics.FieldReason] != roomaudiodiagnostics.ReasonParticipantOutputRejected {
+		if record.Fields[roomaudiodiagnostics.FieldDisposition] != rejectedDisposition || record.Fields[roomaudiodiagnostics.FieldReason] != roomaudiodiagnostics.ReasonParticipantOutputRejected {
 			t.Fatalf("downstream record = %v", record)
 		}
 	}
 	for _, record := range records[2:] {
-		if record.Fields[roomaudiodiagnostics.FieldDisposition] != "rejected" || record.Fields[roomaudiodiagnostics.FieldReason] != roomaudiodiagnostics.ReasonParticipantTerminated {
+		if record.Fields[roomaudiodiagnostics.FieldDisposition] != rejectedDisposition || record.Fields[roomaudiodiagnostics.FieldReason] != roomaudiodiagnostics.ReasonParticipantTerminated {
 			t.Fatalf("pending record = %v", record)
 		}
 	}
@@ -163,7 +165,7 @@ func TestInvalidDispositionRecordsFailClosedAndPreservesTypedError(t *testing.T)
 	}
 	service.Finish()
 	records := sink.recordsFor(roomaudiodiagnostics.EventRoomAudioIngress)
-	if len(records) != 1 || records[0].Fields[roomaudiodiagnostics.FieldDisposition] != "rejected" || records[0].Fields[roomaudiodiagnostics.FieldReason] != roomaudiodiagnostics.ReasonInvalidDisposition {
+	if len(records) != 1 || records[0].Fields[roomaudiodiagnostics.FieldDisposition] != rejectedDisposition || records[0].Fields[roomaudiodiagnostics.FieldReason] != roomaudiodiagnostics.ReasonInvalidDisposition {
 		t.Fatalf("invalid record = %v", records)
 	}
 }
@@ -176,7 +178,9 @@ func TestConcurrentRecordsAndFinishAreRaceSafe(t *testing.T) {
 		group.Add(1)
 		go func(index int) {
 			defer group.Done()
-			_ = service.Record(fmt.Sprintf("peer-%03d", index), roomaudiodiagnostics.Delivered, "concurrent", 2)
+			if err := service.Record(fmt.Sprintf("peer-%03d", index), roomaudiodiagnostics.Delivered, "concurrent", 2); err != nil {
+				t.Errorf("concurrent record: %v", err)
+			}
 		}(index)
 	}
 	group.Wait()

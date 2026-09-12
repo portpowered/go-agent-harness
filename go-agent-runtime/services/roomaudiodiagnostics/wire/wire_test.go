@@ -10,6 +10,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomaudiodiagnostics"
 )
 
+const alicePeer = "alice"
+
 type recordSink struct {
 	mu      sync.Mutex
 	records []roomaudiodiagnostics.Record
@@ -51,10 +53,10 @@ func TestWireCreatesIndependentServicesAndCopiesRecords(t *testing.T) {
 	if left == nil || right == nil {
 		t.Fatal("Wire returned nil service")
 	}
-	if err := left.Admit("alice", roomaudiodiagnostics.Delivered, "mixer_admitted", 4, true); err != nil {
+	if err := left.Admit(alicePeer, roomaudiodiagnostics.Delivered, "mixer_admitted", 4, true); err != nil {
 		t.Fatal(err)
 	}
-	left.ResolveFrame([]string{"alice"}, 4, "")
+	left.ResolveFrame([]string{alicePeer}, 4, "")
 	left.Finish()
 	right.Finish()
 
@@ -84,31 +86,31 @@ func TestFIFOPartialFramesKeepSortedSourceAndDisposition(t *testing.T) {
 		bytes       int
 		contentful  bool
 	}{
-		{"alice", roomaudiodiagnostics.Delivered, "alice-delivered", 4, true},
-		{"alice", roomaudiodiagnostics.Backpressured, "alice-waited", 6, true},
-		{"alice", roomaudiodiagnostics.Delivered, "alice-silent", 3, false},
+		{alicePeer, roomaudiodiagnostics.Delivered, "alice-delivered", 4, true},
+		{alicePeer, roomaudiodiagnostics.Backpressured, "alice-waited", 6, true},
+		{alicePeer, roomaudiodiagnostics.Delivered, "alice-silent", 3, false},
 		{"bob", roomaudiodiagnostics.Delivered, "bob-delivered", 5, true},
 	} {
 		if err := service.Admit(admission.source, admission.disposition, admission.reason, admission.bytes, admission.contentful); err != nil {
 			t.Fatal(err)
 		}
 	}
-	service.ResolveFrame([]string{"bob", "alice"}, 4, "")
-	service.ResolveFrame([]string{"alice", "bob"}, 4, "")
-	service.ResolveFrame([]string{"alice"}, 5, "")
+	service.ResolveFrame([]string{"bob", alicePeer}, 4, "")
+	service.ResolveFrame([]string{alicePeer, "bob"}, 4, "")
+	service.ResolveFrame([]string{alicePeer}, 5, "")
 	service.Finish()
 
 	records := recordsFor(sink.all(), roomaudiodiagnostics.EventRoomAudioIngress)
 	if len(records) != 3 {
 		t.Fatalf("first observations = %d, want three keys: %v", len(records), records)
 	}
-	if records[0].Fields[roomaudiodiagnostics.FieldSourcePeer] != "alice" || records[0].Fields[roomaudiodiagnostics.FieldDisposition] != "delivered" || records[0].Fields[roomaudiodiagnostics.FieldByteCount] != "4" {
+	if records[0].Fields[roomaudiodiagnostics.FieldSourcePeer] != alicePeer || records[0].Fields[roomaudiodiagnostics.FieldDisposition] != "delivered" || records[0].Fields[roomaudiodiagnostics.FieldByteCount] != "4" {
 		t.Fatalf("first alice observation = %v", records[0])
 	}
 	if records[1].Fields[roomaudiodiagnostics.FieldSourcePeer] != "bob" || records[1].Fields[roomaudiodiagnostics.FieldByteCount] != "4" {
 		t.Fatalf("first bob observation = %v", records[1])
 	}
-	if records[2].Fields[roomaudiodiagnostics.FieldSourcePeer] != "alice" || records[2].Fields[roomaudiodiagnostics.FieldDisposition] != "backpressured" || records[2].Fields[roomaudiodiagnostics.FieldByteCount] != "4" {
+	if records[2].Fields[roomaudiodiagnostics.FieldSourcePeer] != alicePeer || records[2].Fields[roomaudiodiagnostics.FieldDisposition] != "backpressured" || records[2].Fields[roomaudiodiagnostics.FieldByteCount] != "4" {
 		t.Fatalf("first backpressured observation = %v", records[2])
 	}
 	summaries := recordsFor(sink.all(), roomaudiodiagnostics.EventRoomAudioIngressSummary)
@@ -134,13 +136,13 @@ func TestFIFOPartialFramesKeepSortedSourceAndDisposition(t *testing.T) {
 func TestDownstreamRejectionPreservesEachSource(t *testing.T) {
 	sink := &recordSink{}
 	service := NewService(roomaudiodiagnostics.Options{ParticipantID: "target", Sink: sink})
-	if err := service.Admit("alice", roomaudiodiagnostics.Delivered, "mixer_admitted", 3, true); err != nil {
+	if err := service.Admit(alicePeer, roomaudiodiagnostics.Delivered, "mixer_admitted", 3, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.Admit("bob", roomaudiodiagnostics.Backpressured, "mixer_waited", 3, true); err != nil {
 		t.Fatal(err)
 	}
-	service.ResolveFrame([]string{"bob", "alice"}, 3, roomaudiodiagnostics.ReasonProviderInputRejected)
+	service.ResolveFrame([]string{"bob", alicePeer}, 3, roomaudiodiagnostics.ReasonProviderInputRejected)
 	service.Finish()
 	records := recordsFor(sink.all(), roomaudiodiagnostics.EventRoomAudioIngress)
 	if len(records) != 2 {
@@ -148,7 +150,7 @@ func TestDownstreamRejectionPreservesEachSource(t *testing.T) {
 	}
 	sources := []string{records[0].Fields[roomaudiodiagnostics.FieldSourcePeer], records[1].Fields[roomaudiodiagnostics.FieldSourcePeer]}
 	sort.Strings(sources)
-	if sources[0] != "alice" || sources[1] != "bob" {
+	if sources[0] != alicePeer || sources[1] != "bob" {
 		t.Fatalf("rejection sources = %v", sources)
 	}
 	for _, record := range records {
@@ -164,13 +166,13 @@ func TestDownstreamRejectionPreservesEachSource(t *testing.T) {
 func TestPendingContentfulLossAndSilentInputAreDistinct(t *testing.T) {
 	sink := &recordSink{}
 	service := NewService(roomaudiodiagnostics.Options{ParticipantID: "target", Sink: sink})
-	if err := service.Admit("alice", roomaudiodiagnostics.Delivered, "mixer_admitted", 10, true); err != nil {
+	if err := service.Admit(alicePeer, roomaudiodiagnostics.Delivered, "mixer_admitted", 10, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Admit("alice", roomaudiodiagnostics.Delivered, "mixer_admitted", 4, false); err != nil {
+	if err := service.Admit(alicePeer, roomaudiodiagnostics.Delivered, "mixer_admitted", 4, false); err != nil {
 		t.Fatal(err)
 	}
-	service.ResolveFrame([]string{"alice"}, 4, "")
+	service.ResolveFrame([]string{alicePeer}, 4, "")
 	service.Finish()
 	summary := recordsFor(sink.all(), roomaudiodiagnostics.EventRoomAudioIngressSummary)[0].Fields
 	if summary[roomaudiodiagnostics.FieldContentfulBytes] != "10" || summary[roomaudiodiagnostics.FieldDeliveredBytes] != "4" || summary[roomaudiodiagnostics.FieldRejectedBytes] != "6" || summary[roomaudiodiagnostics.FieldContentLoss] != "true" {
@@ -179,7 +181,7 @@ func TestPendingContentfulLossAndSilentInputAreDistinct(t *testing.T) {
 
 	emptySink := &recordSink{}
 	empty := NewService(roomaudiodiagnostics.Options{ParticipantID: "silent", Sink: emptySink})
-	if err := empty.Admit("alice", roomaudiodiagnostics.Delivered, "mixer_admitted", 4, false); err != nil {
+	if err := empty.Admit(alicePeer, roomaudiodiagnostics.Delivered, "mixer_admitted", 4, false); err != nil {
 		t.Fatal(err)
 	}
 	empty.Finish()
@@ -192,7 +194,7 @@ func TestPendingContentfulLossAndSilentInputAreDistinct(t *testing.T) {
 func TestInvalidDispositionIsTypedAndRecordedRejected(t *testing.T) {
 	sink := &recordSink{}
 	service := NewService(roomaudiodiagnostics.Options{ParticipantID: "target", Sink: sink})
-	err := service.Record("alice", roomaudiodiagnostics.Disposition("future"), "ignored", 7)
+	err := service.Record(alicePeer, roomaudiodiagnostics.Disposition("future"), "ignored", 7)
 	if !errors.Is(err, roomaudiodiagnostics.ErrInvalidDisposition) {
 		t.Fatalf("invalid disposition error = %v", err)
 	}
@@ -230,7 +232,7 @@ func TestSinkCanReenterFinish(t *testing.T) {
 			close(finished)
 		}
 	})})
-	if err := service.Record("alice", roomaudiodiagnostics.Delivered, "mixer_admitted", 1); err != nil {
+	if err := service.Record(alicePeer, roomaudiodiagnostics.Delivered, "mixer_admitted", 1); err != nil {
 		t.Fatal(err)
 	}
 	select {
