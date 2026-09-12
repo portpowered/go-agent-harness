@@ -1,4 +1,4 @@
-package bareadmission_test
+package service_test
 
 import (
 	"context"
@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/bareadmission"
-	bareadmissionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/bareadmission/wire"
+	serviceimpl "github.com/portpowered/go-agent-harness/go-agent-runtime/services/bareadmission/internal/service"
 )
 
-func testService() bareadmission.Service { return bareadmissionwire.NewService() }
+func testService() bareadmission.Service { return serviceimpl.New() }
 
 func testCatalog() *bareadmission.ModelCatalog {
 	return &bareadmission.ModelCatalog{Models: []bareadmission.Model{
@@ -154,7 +154,7 @@ func TestResolveModelAdmissionAndProviderFailures(t *testing.T) {
 	}
 }
 
-func TestResolveTransportVADAndCopiedBooleans(t *testing.T) {
+func TestResolveServerVADAndCopiedBooleans(t *testing.T) {
 	createResponse := false
 	interruptResponse := true
 	request := baseRequest()
@@ -173,11 +173,14 @@ func TestResolveTransportVADAndCopiedBooleans(t *testing.T) {
 	if createResponse {
 		t.Fatal("result mutation changed caller VAD boolean")
 	}
+}
 
+func TestResolveSemanticVADValidation(t *testing.T) {
+	request := baseRequest()
 	request.Transport = "ws"
 	request.TransportProvided = true
-	request.Config.Session.VAD = &bareadmission.VADConfig{Type: "semantic_vad", Eagerness: " LOW "}
-	result, err = testService().Resolve(context.Background(), request)
+	request.Config.Session = &bareadmission.SessionConfig{VAD: &bareadmission.VADConfig{Type: "semantic_vad", Eagerness: " LOW "}}
+	result, err := testService().Resolve(context.Background(), request)
 	if err != nil || result.Transport != bareadmission.TransportWebSocket || result.TurnDetection == nil || result.TurnDetection.Type != "semantic_vad" || result.TurnDetection.Eagerness != "low" {
 		t.Fatalf("semantic VAD result/error = %+v/%v", result, err)
 	}
@@ -190,12 +193,17 @@ func TestResolveTransportVADAndCopiedBooleans(t *testing.T) {
 	if _, err = testService().Resolve(context.Background(), request); err == nil || !strings.Contains(err.Error(), "eagerness") {
 		t.Fatalf("semantic eagerness error = %v", err)
 	}
-	request.Config.Session.VAD = &bareadmission.VADConfig{Type: "server_vad", Eagerness: "low"}
-	if _, err = testService().Resolve(context.Background(), request); err == nil || !strings.Contains(err.Error(), "server_vad does not support eagerness") {
+}
+
+func TestResolveDisabledVADAndInvalidTransport(t *testing.T) {
+	request := baseRequest()
+	request.Config.Session = &bareadmission.SessionConfig{VAD: &bareadmission.VADConfig{Type: "server_vad", Eagerness: "low"}}
+	if _, err := testService().Resolve(context.Background(), request); err == nil || !strings.Contains(err.Error(), "server_vad does not support eagerness") {
 		t.Fatalf("server eagerness error = %v", err)
 	}
+
 	request.Config.Session.VAD = &bareadmission.VADConfig{Enabled: func() *bool { value := false; return &value }(), Type: "semantic_vad", SilenceDurationMs: 1}
-	result, err = testService().Resolve(context.Background(), request)
+	result, err := testService().Resolve(context.Background(), request)
 	if err != nil || result.TurnDetection != nil {
 		t.Fatalf("disabled VAD result/error = %+v/%v, want nil VAD", result.TurnDetection, err)
 	}

@@ -6,7 +6,6 @@ package bareadmission
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -22,22 +21,26 @@ const (
 	DefaultTranscriptionModel = "gpt-live-transcribe"
 )
 
-var (
+type errorCode string
+
+func (e errorCode) Error() string { return string(e) }
+
+const (
 	// ErrUnsupportedProvider classifies a provider that the bare-session
 	// policy cannot admit.
-	ErrUnsupportedProvider = errors.New("unsupported bare live session provider")
+	ErrUnsupportedProvider errorCode = "unsupported bare live session provider"
 	// ErrCredentialMissing classifies a missing credential discovered before
 	// any host-owned provider or device acquisition.
-	ErrCredentialMissing = errors.New("bare live session credential is missing")
+	ErrCredentialMissing errorCode = "bare live session credential is missing"
 	// ErrInvalidTransport classifies a transport outside the two supported
 	// bare-session dispatch choices.
-	ErrInvalidTransport = errors.New("invalid session transport")
+	ErrInvalidTransport errorCode = "invalid session transport"
 
 	// These errors are deliberately local to the provider-neutral contract. The
 	// CLI compatibility adapter translates them to its historical provider
 	// error types at the host edge.
-	ErrModelCatalogRequired     = errors.New("provider model catalog is required")
-	ErrUnsupportedRealtimeModel = errors.New("unsupported realtime model")
+	ErrModelCatalogRequired     errorCode = "provider model catalog is required"
+	ErrUnsupportedRealtimeModel errorCode = "unsupported realtime model"
 )
 
 // UnsupportedRealtimeModelError is the stable provider-neutral typed

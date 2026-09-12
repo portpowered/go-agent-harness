@@ -25,66 +25,29 @@ func (s *Service) Resolve(ctx context.Context, request public.Request) (public.R
 	request.Catalog = cloneCatalog(request.Catalog)
 
 	provider := resolveProvider(request)
-	if provider != public.ProviderOpenAI && provider != public.ProviderGrok {
-		return public.Result{}, fmt.Errorf("%w: %q (bare sessions support %q and %q)", public.ErrUnsupportedProvider, provider, public.ProviderOpenAI, public.ProviderGrok)
-	}
-
-	model := strings.TrimSpace(request.Model)
-	if request.ModelProvided && model == "" {
-		return public.Result{}, unsupportedModel(request.Catalog, model)
-	}
-	if model == "" && request.Config != nil && request.Config.Session != nil {
-		model = strings.TrimSpace(request.Config.Session.Model)
-	}
-	providerConfig := configuredProvider(request.Config, provider)
-	if model == "" && providerConfig != nil {
-		model = strings.TrimSpace(providerConfig.Model)
-	}
-	if model == "" && provider == public.ProviderOpenAI {
-		model = public.DefaultOpenAIModel
-	}
-	if model == "" {
-		return public.Result{}, fmt.Errorf("%s session model is required for bare live session (configure model.%s.model or session.model in %s)", provider, provider, configPath(request.Config))
-	}
-	if err := validateModel(request.Catalog, provider, model); err != nil {
+	if err := validateProvider(provider); err != nil {
 		return public.Result{}, err
 	}
-
-	apiKey := resolveAPIKey(request, providerConfig, provider)
-	if strings.TrimSpace(apiKey) == "" {
-		return public.Result{}, &public.CredentialError{Provider: provider, ConfigPath: configPath(request.Config)}
+	providerConfig := configuredProvider(request.Config, provider)
+	model, err := resolveModel(request, provider, providerConfig)
+	if err != nil {
+		return public.Result{}, err
 	}
-
-	baseURL := request.BaseURL
-	if strings.TrimSpace(baseURL) == "" && providerConfig != nil {
-		baseURL = providerConfig.BaseURL
+	apiKey, err := resolveCredential(request, providerConfig, provider)
+	if err != nil {
+		return public.Result{}, err
 	}
-
-	transport := resolveTransport(request)
-	if transport != public.TransportWebSocket && transport != public.TransportWebRTC {
-		return public.Result{}, &public.InvalidTransportError{Transport: transport}
+	baseURL := resolveBaseURL(request, providerConfig)
+	transport, err := resolveTransport(request)
+	if err != nil {
+		return public.Result{}, err
 	}
-
 	turnDetection, err := resolveVAD(provider, sessionConfig(request.Config))
 	if err != nil {
 		return public.Result{}, err
 	}
-	transcription := resolveTranscription(sessionConfig(request.Config))
-	if request.NoInputTranscription {
-		transcription = &public.Transcription{}
-	}
-
-	device := request.Device
-	if session := sessionConfig(request.Config); session != nil {
-		if !device.InputPresent && device.InputDevice == "" {
-			device.InputDevice = session.InputDevice
-		}
-		if !device.OutputPresent && device.OutputDevice == "" {
-			device.OutputDevice = session.OutputDevice
-		}
-	}
-	device.InputPresent = true
-	device.OutputPresent = true
+	transcription := resolveTranscription(request)
+	device := resolveDevice(request)
 
 	if err := ctx.Err(); err != nil {
 		return public.Result{}, err
@@ -94,6 +57,38 @@ func (s *Service) Resolve(ctx context.Context, request public.Request) (public.R
 		BaseURL: baseURL, Transport: transport, TurnDetection: turnDetection,
 		InputAudioTranscription: transcription, Device: device,
 	}, nil
+}
+
+func validateProvider(provider string) error {
+	if provider == public.ProviderOpenAI || provider == public.ProviderGrok {
+		return nil
+	}
+	return fmt.Errorf("%w: %q (bare sessions support %q and %q)", public.ErrUnsupportedProvider, provider, public.ProviderOpenAI, public.ProviderGrok)
+}
+
+func resolveModel(request public.Request, provider string, providerConfig *public.ProviderConfig) (string, error) {
+	model := strings.TrimSpace(request.Model)
+	if request.ModelProvided && model == "" {
+		return "", unsupportedModel(request.Catalog, model)
+	}
+	if model == "" {
+		if session := sessionConfig(request.Config); session != nil {
+			model = strings.TrimSpace(session.Model)
+		}
+	}
+	if model == "" && providerConfig != nil {
+		model = strings.TrimSpace(providerConfig.Model)
+	}
+	if model == "" && provider == public.ProviderOpenAI {
+		model = public.DefaultOpenAIModel
+	}
+	if model == "" {
+		return "", fmt.Errorf("%s session model is required for bare live session (configure model.%s.model or session.model in %s)", provider, provider, configPath(request.Config))
+	}
+	if err := validateModel(request.Catalog, provider, model); err != nil {
+		return "", err
+	}
+	return model, nil
 }
 
 func resolveProvider(request public.Request) string {
@@ -132,6 +127,14 @@ func configuredProvider(config *public.ConfigSnapshot, provider string) *public.
 	return &copy
 }
 
+func resolveCredential(request public.Request, providerConfig *public.ProviderConfig, provider string) (string, error) {
+	apiKey := resolveAPIKey(request, providerConfig, provider)
+	if strings.TrimSpace(apiKey) == "" {
+		return "", &public.CredentialError{Provider: provider, ConfigPath: configPath(request.Config)}
+	}
+	return apiKey, nil
+}
+
 func resolveAPIKey(request public.Request, providerConfig *public.ProviderConfig, provider string) string {
 	if strings.TrimSpace(request.APIKey) != "" {
 		return request.APIKey
@@ -143,6 +146,13 @@ func resolveAPIKey(request public.Request, providerConfig *public.ProviderConfig
 		return request.EnvironmentOpenAIAPIKey
 	}
 	return ""
+}
+
+func resolveBaseURL(request public.Request, providerConfig *public.ProviderConfig) string {
+	if strings.TrimSpace(request.BaseURL) != "" || providerConfig == nil {
+		return request.BaseURL
+	}
+	return providerConfig.BaseURL
 }
 
 func validateModel(catalog *public.ModelCatalog, provider, model string) error {
@@ -169,7 +179,7 @@ func unsupportedModel(catalog *public.ModelCatalog, model string) error {
 	}
 }
 
-func resolveTransport(request public.Request) string {
+func resolveTransport(request public.Request) (string, error) {
 	transport := strings.ToLower(strings.TrimSpace(request.Transport))
 	if !request.TransportProvided && (transport == "" || transport == public.TransportWebSocket) {
 		if session := sessionConfig(request.Config); session != nil {
@@ -181,7 +191,10 @@ func resolveTransport(request public.Request) string {
 	if transport == "" {
 		transport = public.TransportWebSocket
 	}
-	return transport
+	if transport != public.TransportWebSocket && transport != public.TransportWebRTC {
+		return "", &public.InvalidTransportError{Transport: transport}
+	}
+	return transport, nil
 }
 
 func resolveVAD(provider string, config *public.SessionConfig) (*public.TurnDetection, error) {
@@ -197,40 +210,66 @@ func resolveVAD(provider string, config *public.SessionConfig) (*public.TurnDete
 	if vad.Enabled != nil && !*vad.Enabled {
 		return nil, nil
 	}
-	if configuredType := strings.TrimSpace(vad.Type); configuredType != "" {
-		configuredType = strings.ToLower(configuredType)
-		if configuredType != "server_vad" && (provider != public.ProviderOpenAI || configuredType != "semantic_vad") {
-			return nil, fmt.Errorf("bare live session VAD type %q is unsupported for %s", configuredType, provider)
-		}
-		turnDetection.Type = configuredType
+	if err := applyVADType(turnDetection, provider, vad.Type); err != nil {
+		return nil, err
 	}
 	if turnDetection.Type == "semantic_vad" {
-		if vad.Threshold != 0 || vad.PrefixPaddingMs != 0 || vad.SilenceDurationMs != 0 {
-			return nil, fmt.Errorf("semantic_vad does not support threshold, prefix_padding_ms, or silence_duration_ms")
-		}
-		eagerness := strings.ToLower(strings.TrimSpace(vad.Eagerness))
-		switch eagerness {
-		case "", "auto", "low", "medium", "high":
-			turnDetection.Eagerness = eagerness
-		default:
-			return nil, fmt.Errorf("semantic_vad eagerness %q is unsupported; want auto, low, medium, or high", vad.Eagerness)
+		if err := applySemanticVAD(turnDetection, vad); err != nil {
+			return nil, err
 		}
 	} else {
-		if strings.TrimSpace(vad.Eagerness) != "" {
-			return nil, fmt.Errorf("server_vad does not support eagerness")
+		if err := applyServerVAD(turnDetection, vad); err != nil {
+			return nil, err
 		}
-		turnDetection.Threshold = vad.Threshold
-		turnDetection.PrefixPaddingMs = vad.PrefixPaddingMs
-		turnDetection.SilenceDurationMs = vad.SilenceDurationMs
 	}
 	turnDetection.CreateResponse = cloneBool(vad.CreateResponse)
 	turnDetection.InterruptResponse = cloneBool(vad.InterruptResponse)
 	return turnDetection, nil
 }
 
-func resolveTranscription(config *public.SessionConfig) *public.Transcription {
+func applyVADType(turnDetection *public.TurnDetection, provider, configured string) error {
+	configured = strings.ToLower(strings.TrimSpace(configured))
+	if configured == "" {
+		return nil
+	}
+	if configured != "server_vad" && (provider != public.ProviderOpenAI || configured != "semantic_vad") {
+		return fmt.Errorf("bare live session VAD type %q is unsupported for %s", configured, provider)
+	}
+	turnDetection.Type = configured
+	return nil
+}
+
+func applySemanticVAD(turnDetection *public.TurnDetection, vad *public.VADConfig) error {
+	if vad.Threshold != 0 || vad.PrefixPaddingMs != 0 || vad.SilenceDurationMs != 0 {
+		return fmt.Errorf("semantic_vad does not support threshold, prefix_padding_ms, or silence_duration_ms")
+	}
+	eagerness := strings.ToLower(strings.TrimSpace(vad.Eagerness))
+	switch eagerness {
+	case "", "auto", "low", "medium", "high":
+		turnDetection.Eagerness = eagerness
+		return nil
+	default:
+		return fmt.Errorf("semantic_vad eagerness %q is unsupported; want auto, low, medium, or high", vad.Eagerness)
+	}
+}
+
+func applyServerVAD(turnDetection *public.TurnDetection, vad *public.VADConfig) error {
+	if strings.TrimSpace(vad.Eagerness) != "" {
+		return fmt.Errorf("server_vad does not support eagerness")
+	}
+	turnDetection.Threshold = vad.Threshold
+	turnDetection.PrefixPaddingMs = vad.PrefixPaddingMs
+	turnDetection.SilenceDurationMs = vad.SilenceDurationMs
+	return nil
+}
+
+func resolveTranscription(request public.Request) *public.Transcription {
 	transcription := &public.Transcription{Enabled: true, Model: public.DefaultTranscriptionModel}
+	config := sessionConfig(request.Config)
 	if config == nil || config.InputTranscription == nil {
+		if request.NoInputTranscription {
+			return &public.Transcription{}
+		}
 		return transcription
 	}
 	if config.InputTranscription.Enabled != nil {
@@ -239,7 +278,25 @@ func resolveTranscription(config *public.SessionConfig) *public.Transcription {
 	if model := strings.TrimSpace(config.InputTranscription.Model); model != "" {
 		transcription.Model = model
 	}
+	if request.NoInputTranscription {
+		return &public.Transcription{}
+	}
 	return transcription
+}
+
+func resolveDevice(request public.Request) public.DeviceSelection {
+	device := request.Device
+	if session := sessionConfig(request.Config); session != nil {
+		if !device.InputPresent && device.InputDevice == "" {
+			device.InputDevice = session.InputDevice
+		}
+		if !device.OutputPresent && device.OutputDevice == "" {
+			device.OutputDevice = session.OutputDevice
+		}
+	}
+	device.InputPresent = true
+	device.OutputPresent = true
+	return device
 }
 
 func sessionConfig(config *public.ConfigSnapshot) *public.SessionConfig {
