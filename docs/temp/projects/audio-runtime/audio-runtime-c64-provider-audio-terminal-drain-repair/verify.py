@@ -31,6 +31,7 @@ ALLOWED_PATHS = {
 	"agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
 	"agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go",
 	"agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_terminal_drain_test.go",
+	"agent-cli/test/integration/session_tool_audio_remote_e2e_test.go",
 }
 TEST_FIXTURE_RELATIVES = (Path("agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go"),)
 PRODUCTION_RELATIVE = Path("agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go")
