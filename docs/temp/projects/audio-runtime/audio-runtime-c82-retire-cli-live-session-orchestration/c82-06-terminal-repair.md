@@ -102,3 +102,31 @@ shared Wire/architecture ownership are still unreleased; the generated Wire
 registration and 11 demonstrated downward/stale architecture entries remain
 deferred. No script-CI, independent-review, guarded-merge, vertical, or
 project-acceptance result is claimed.
+
+## Current-head bounded causal and accumulated revalidation — 2026-09-12T09:58:38Z
+
+At exact source `fe3dd7af3e84529303aba42b31ba738f034e9ba8`, the requested
+focused and accumulated controls pass without touching the C64/C79 leased
+files:
+
+- `go test ./go-agent-runtime/services/sessionlive/... -count=5` passed 70
+  tests across 3 packages; the selected service race run passed 42 tests
+  across 3 packages.
+- The selected CLI live/scheduled/response run passed 264 normal tests and
+  88 race tests.
+- The GOWORK=off external consumer passed normal and race at `-count=3`.
+- `verify.py --mode behavior-matrix` and `--mode retirement-and-scope` passed;
+  the exact current adapter remains `579 + 54 = 633` lines with 500 retired.
+- Both mutation controls discovered and passed the positive tests, then failed
+  at their intended causal assertions: post-Done drain reported the missing
+  final text delta, and deadline cleanup reported the timer was not stopped.
+- `COUNT=3 scripts/test-session-ci-regressions.sh all` exited 0 in normal,
+  coverage, and race modes. The expected replay/PCM/transcript negative
+  diagnostics remained rejected, while high-rate audio/tool, scheduled,
+  simulated-device, and composed-provider controls passed.
+
+This is executor evidence only. C64 PR459 and C79 PR470 remain open, so their
+reviewed releases and a fresh accepted-main reconciliation are still required
+before applying the one generated-Wire registration and the 11 demonstrated
+downward/stale baseline changes. No script-CI, independent-review,
+guarded-merge, vertical, or project-acceptance result is claimed.
