@@ -283,8 +283,8 @@ def verify_identity(evidence: dict) -> None:
     require(evidence.get("candidate_diff_sha256") == sha256_candidate_diff(candidate_revision), "candidate diff hash is stale or unbound")
 
     verification_revision = require_revision(evidence.get("verification_revision"), "verification revision")
-    require(verification_revision == head, "evidence verification revision is not the current candidate head")
-    require(evidence.get("verification_diff_sha256") == sha256_candidate_diff(head), "verification diff hash is stale or unbound")
+    require(verification_revision == candidate_revision, "evidence verification revision is not the executable candidate revision")
+    require(evidence.get("verification_diff_sha256") == evidence.get("candidate_diff_sha256"), "verification diff hash is not bound to the executable candidate")
     evidence_only = evidence.get("evidence_only_descendant")
     evidence_paths = evidence.get("evidence_only_paths")
     require(isinstance(evidence_only, bool), "evidence-only descendant binding is missing")
