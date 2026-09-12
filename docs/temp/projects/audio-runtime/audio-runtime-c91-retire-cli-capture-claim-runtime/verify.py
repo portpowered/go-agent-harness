@@ -27,6 +27,7 @@ TASK = "audio-runtime-c91-retire-cli-capture-claim-runtime"
 BRANCH = "codex/audio-runtime-c91-retire-cli-capture-claim-runtime"
 BASELINE = "59af6325614d80173447fe2018a0471e27b4e7b1"
 STARTUP_INTEGRATION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
+SCOPE_BASE = "origin/main"
 LEGACY = "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go"
 LEGACY_SHA256 = "1747b40578f4788b1b698495652f7e8f85abbff278eab904581cd38edcc8b6cc"
 EVIDENCE_PREFIX = "docs/temp/projects/audio-runtime/audio-runtime-c91-retire-cli-capture-claim-runtime/"
@@ -90,7 +91,7 @@ def ancestor(older: str, newer: str) -> bool:
 
 
 def current_changed_paths() -> set[str]:
-	paths = set(filter(None, git("diff", "--name-only", BASELINE, "HEAD").splitlines()))
+	paths = set(filter(None, git("diff", "--name-only", SCOPE_BASE, "HEAD").splitlines()))
 	paths.update(filter(None, git("diff", "--name-only").splitlines()))
 	paths.update(filter(None, git("diff", "--cached", "--name-only").splitlines()))
 	paths.update(filter(None, git("ls-files", "--others", "--exclude-standard").splitlines()))
@@ -164,8 +165,8 @@ def check_scope() -> None:
         f"candidate escaped C91 ownership: {sorted(changed)}",
     )
     for path in EXCLUDED:
-        require(not ancestor(BASELINE, "HEAD") or git("diff", "--quiet", BASELINE, "HEAD", "--", path) == "", f"excluded path changed: {path}")
-        require(git("diff", "--quiet", BASELINE, "--", path) == "", f"excluded worktree path changed: {path}")
+        require(git("diff", "--quiet", SCOPE_BASE, "HEAD", "--", path) == "", f"excluded path changed: {path}")
+        require(git("diff", "--quiet", SCOPE_BASE, "--", path) == "", f"excluded worktree path changed: {path}")
     require("scripts/wire-packages.txt" not in changed, "C79 Wire registry was edited before release")
     require("docs/architecture/architecture-size-baseline.json" not in changed, "C79 architecture baseline was edited before release")
 
