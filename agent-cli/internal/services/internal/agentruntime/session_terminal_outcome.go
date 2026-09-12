@@ -18,8 +18,9 @@ type sessionTerminalReporter struct {
 }
 
 // Deprecated: this alias preserves the sentinel identity for existing CLI
-// callers while the runtime service owns publication errors.
-var ErrSessionTerminalAlreadyPublished = terminaloutcome.ErrSessionTerminalAlreadyPublished
+// callers while the runtime service owns publication errors. Keep the alias
+// immutable so the compatibility layer does not reintroduce mutable policy.
+const ErrSessionTerminalAlreadyPublished = terminaloutcome.ErrSessionTerminalAlreadyPublished
 
 type sessionTerminalReporterContextKey struct{}
 
