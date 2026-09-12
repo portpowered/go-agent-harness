@@ -124,6 +124,15 @@ func (r *reducer) bindNextLocked(rawID string) sessiondiagnostics.Observation {
 	return owner
 }
 
+func (r *reducer) hasPendingScheduledBoundaryLocked() bool {
+	for index := r.nextScheduledResponse; index < len(r.scheduled); index++ {
+		if !r.scheduled[index].Bound && r.scheduled[index].Disposition == sessiondiagnostics.DispositionPending {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *reducer) bindContinuationLocked(index int, id string) sessiondiagnostics.Observation {
 	if index < 0 || index >= len(r.scheduled) {
 		if r.logicalScheduledSet {

@@ -79,6 +79,83 @@ func TestResponseOpenRejectsForeignIDUntilExplicitBoundary(t *testing.T) {
 	}
 }
 
+func TestResponseOpenRejectsForeignIDBeforeAnyBoundary(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	if _, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-a"}); err != nil {
+		t.Fatal(err)
+	}
+
+	foreign, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if foreign.Accepted || foreign.NewResponse || service.Snapshot().ActiveResponseID != "response-a" {
+		t.Fatalf("foreign open before a boundary stole active response: observation=%+v snapshot=%+v", foreign, service.Snapshot())
+	}
+}
+
+func TestFinishClearsPurposeAndTerminalBoundary(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	if _, err := service.Apply(ctx, sessiondiagnostics.Event{
+		Kind:       sessiondiagnostics.EventResponseOpen,
+		ResponseID: "tool-ack",
+		Purpose:    sessiondiagnostics.ResponsePurposeToolAcknowledgement,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Apply(ctx, sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseFinish, ResponseID: "tool-ack"}); err != nil {
+		t.Fatal(err)
+	}
+
+	end, err := service.Apply(ctx, sessiondiagnostics.Event{
+		Kind:     sessiondiagnostics.EventResponseEnd,
+		Output:   true,
+		Terminal: &sessiondiagnostics.Terminal{Status: "completed", Reason: "provider_authored_completion"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !end.Candidate || !end.Admitted {
+		t.Fatalf("terminal-only normal response after tool acknowledgement was not admitted: %+v", end)
+	}
+}
+
+func TestResponseEndRejectsDuplicateBeforeFinish(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
+		t.Helper()
+		observation, err := service.Apply(ctx, event)
+		if err != nil {
+			t.Fatalf("apply %s: %v", event.Kind, err)
+		}
+		return observation
+	}
+
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-a"})
+	first := apply(sessiondiagnostics.Event{
+		Kind:       sessiondiagnostics.EventResponseEnd,
+		ResponseID: "response-a",
+		Output:     true,
+		Terminal:   &sessiondiagnostics.Terminal{Status: "completed", Reason: "provider_authored_completion"},
+	})
+	if !first.Candidate || !first.Admitted {
+		t.Fatalf("first response end = %+v, want admitted candidate", first)
+	}
+
+	duplicate := apply(sessiondiagnostics.Event{
+		Kind:       sessiondiagnostics.EventResponseEnd,
+		ResponseID: "response-a",
+		Output:     true,
+		Terminal:   &sessiondiagnostics.Terminal{Status: "completed", Reason: "provider_authored_completion"},
+	})
+	if duplicate.Accepted || duplicate.Candidate || duplicate.Admitted || !service.Snapshot().ActiveResponse {
+		t.Fatalf("duplicate response end was admitted or changed ownership: observation=%+v snapshot=%+v", duplicate, service.Snapshot())
+	}
+}
+
 func TestToolAcknowledgementCannotBeAdmittedAsAssistantTurn(t *testing.T) {
 	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()

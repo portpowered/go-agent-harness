@@ -15,6 +15,7 @@ func (r *reducer) openResponseLocked(rawID string, purpose sessiondiagnostics.Re
 	r.activeResponseID = id
 	r.activePurpose = purpose
 	r.messageEndSeen = false
+	r.responseContentSeen = false
 	r.toolTurn = false
 	r.adoptUnscheduledContinuationIDLocked(id, purpose)
 	return sessiondiagnostics.Observation{Accepted: true, NewResponse: true, ResponseID: id}
@@ -67,11 +68,12 @@ func (r *reducer) canReplaceActiveResponseLocked() bool {
 	if r.messageEndSeen {
 		return true
 	}
-	// A second tagged start may supersede a provisional boundary that has not
-	// emitted content yet. Once content or a tool call is observed, a foreign
-	// start is out of order until the current response reaches its terminal
-	// boundary.
-	if !r.responseContentSeen && !r.toolTurn && len(r.continuations) == 0 {
+	// Active-response scheduling may dispatch the next input before the prior
+	// response reaches MESSAGE.END. The newly appended, still-unbound slot is
+	// an explicit host boundary and permits that response to replace the
+	// provisional active response. A merely allocated schedule without an
+	// already-bound active owner is not enough to guess ownership.
+	if r.activeScheduledSet && r.hasPendingScheduledBoundaryLocked() {
 		return true
 	}
 	if _, ok := r.pendingContinuationIndexLocked(); ok {
@@ -190,6 +192,10 @@ func (r *reducer) finishResponseLocked(rawID string) sessiondiagnostics.Observat
 	}
 	r.activeResponse = false
 	r.activeResponseID = ""
+	r.activePurpose = sessiondiagnostics.ResponsePurposeNormal
+	r.messageEndSeen = false
+	r.responseContentSeen = false
+	r.toolTurn = false
 	if r.activeScheduledSet {
 		r.clearActiveOwnerLocked(r.activeScheduledIndex, id)
 	}

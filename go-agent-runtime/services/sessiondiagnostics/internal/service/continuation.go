@@ -67,6 +67,13 @@ func (r *reducer) continuationRequestedLocked(callID string) (sessiondiagnostics
 
 func (r *reducer) endResponseLocked(event sessiondiagnostics.Event) (sessiondiagnostics.Observation, time.Duration, bool, error) {
 	id := strings.TrimSpace(event.ResponseID)
+	// A provider response has exactly one terminal boundary. Tool-role events
+	// are the separate provider-tool-result bridge used to complete a pending
+	// continuation after the model's tool-call response has ended, so they may
+	// still arrive while messageEndSeen is true.
+	if r.messageEndSeen && event.Role != sessiondiagnostics.RoleTool {
+		return sessiondiagnostics.Observation{ResponseID: id}, 0, false, nil
+	}
 	effectiveID, early, admitted := r.admitResponseEndLocked(id, event.Purpose)
 	if !admitted {
 		return early, 0, false, nil
