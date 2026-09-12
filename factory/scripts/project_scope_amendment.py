@@ -42,8 +42,16 @@ HISTORICAL_REPORT_RELATIVE = (
 # These values are the reviewed authorization anchors.  They are intentionally
 # independent of the record supplied to ``append``: a forged document cannot
 # authorize itself by carrying a matching, self-selected digest.
-TRUSTED_MANIFEST_SHA256 = (
+#
+# The amendment record predates the strengthened SERVICE contract.  Its
+# provenance must therefore remain bound to the original manifest and authority
+# while the controller recognizes the one reviewed successor manifest that is
+# now admitted by the running factory.
+TRUSTED_ORIGINAL_MANIFEST_SHA256 = (
     "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d"
+)
+TRUSTED_SUCCESSOR_MANIFEST_SHA256 = (
+    "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34"
 )
 TRUSTED_AUTHORIZATION_SHA256 = (
     "c3bfa91543b349b2c9b89f48c3a95203db72bf59a4fd93b5e4b1851aee772413"
@@ -51,6 +59,133 @@ TRUSTED_AUTHORIZATION_SHA256 = (
 TRUSTED_HISTORICAL_REPORT_SHA256 = (
     "0345a628a6038e18bf7c7a59016e7a0002ae89734c6ff59aa541642f34b3d960"
 )
+
+ORIGINAL_ACCEPTANCE_SHA256 = (
+    "e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5"
+)
+SUCCESSOR_ACCEPTANCE_SHA256 = (
+    "edd1f5cbca1de8b49f96cdf8f039732d28a0082ef3718015e10535ff2e6a441a"
+)
+
+ORIGINAL_SERVICE_RUBRIC = (
+    "Services expose thin services/X contracts with private services/X/internal "
+    "implementations and per-service Wire construction; CLI transport delegates "
+    "business behavior."
+)
+SUCCESSOR_SERVICE_RUBRIC = (
+    "Services expose thin services/X contracts with private services/X/internal "
+    "implementations and per-service Wire construction. The legacy "
+    "agent-cli/internal/services/internal/agentruntime production package is fully "
+    "deprecated: all production callers use service-owned contracts and transport "
+    "integrations, and the package contains no business policy, reusable runtime "
+    "behavior, composition ownership, or device/audio implementation. Any temporary "
+    "compatibility symbols are explicit Deprecated: aliases or thin adapters with no "
+    "independent decisions or mutable state. CLI packages own only presentation, "
+    "argument/input adaptation, and transport integration into those services."
+)
+
+TRUSTED_ORIGINAL_AUTHORITY = {
+    "sourcePlan": {
+        "path": "factory/projects/audio-runtime/source-plan.md",
+        "sha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
+    },
+    "request": {
+        "path": "factory/projects/audio-runtime/request.md",
+        "sha256": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
+    },
+    "acceptance": {
+        "path": "factory/projects/audio-runtime/acceptance.md",
+        "sha256": ORIGINAL_ACCEPTANCE_SHA256,
+    },
+}
+TRUSTED_SUCCESSOR_AUTHORITY = {
+    **TRUSTED_ORIGINAL_AUTHORITY,
+    "acceptance": {
+        "path": "factory/projects/audio-runtime/acceptance.md",
+        "sha256": SUCCESSOR_ACCEPTANCE_SHA256,
+    },
+}
+
+
+def _criteria(service_rubric: str) -> list[dict[str, str]]:
+    return [
+        {
+            "id": "AUDIO",
+            "rubric": (
+                "One independently testable audio subsystem owns packet parsing, "
+                "formats, clocks, sample timing, DSP and buffer operations; the "
+                "core loop uses buffers without direct device IO."
+            ),
+        },
+        {
+            "id": "DEVICE",
+            "rubric": (
+                "The adjacent device gateway owns physical device abstractions and "
+                "lifecycle; playback evidence distinguishes actual consumption from "
+                "queue admission."
+            ),
+        },
+        {
+            "id": "EMBED",
+            "rubric": (
+                "A separate Go module constructs and exercises the runtime without "
+                "CLI imports, flags, terminal state or hidden global initialization."
+            ),
+        },
+        {"id": "SERVICE", "rubric": service_rubric},
+        {
+            "id": "TRACE",
+            "rubric": (
+                "Correlated device capture/playback, provider send/receive, tool "
+                "lifecycle, cancellation, queues/drops and terminal evidence use "
+                "explicit timing domains and bounded recording resources."
+            ),
+        },
+        {
+            "id": "REPLAY",
+            "rubric": (
+                "Credential-free replay preserves recorded audio packets, ordering, "
+                "tool events, interruption and termination; hardware and external "
+                "nondeterminism limits are explicit."
+            ),
+        },
+        {
+            "id": "FAILURES",
+            "rubric": (
+                "Truncated/no playback, barge-in failure, long-conversation slowdown "
+                "and tool-continuation collisions have reproducible characterization, "
+                "fixes where demonstrated, and exact residual limitations without "
+                "false completion claims."
+            ),
+        },
+        {
+            "id": "QUALITY",
+            "rubric": (
+                "Architecture boundaries, package/file/function size, complexity, "
+                "mutable globals, generated Wire consistency and relevant "
+                "compile/static/race checks pass without growing migration baselines "
+                "or weakening assertions."
+            ),
+        },
+        {
+            "id": "PARITY",
+            "rubric": (
+                "Supported CLI behavior is preserved and final integrated behavior "
+                "has fresh independent customer and engineering evidence, with "
+                "authorized bounded Realtime proof and explicit physical-device "
+                "evidence limits."
+            ),
+        },
+    ]
+
+
+TRUSTED_ORIGINAL_CRITERIA = _criteria(ORIGINAL_SERVICE_RUBRIC)
+TRUSTED_SUCCESSOR_CRITERIA = _criteria(SUCCESSOR_SERVICE_RUBRIC)
+
+# Kept as a compatibility alias for existing C39 callers/tests.  New code must
+# use the explicit original/successor names so it cannot accidentally bind the
+# historical amendment record to the current manifest.
+TRUSTED_MANIFEST_SHA256 = TRUSTED_ORIGINAL_MANIFEST_SHA256
 
 EXPECTED_EXCLUDED_SUBPROOF = [
     {
@@ -324,8 +459,41 @@ def _require_text(value: Any, label: str) -> str:
     return value
 
 
+def _validate_manifest_override(manifest_path: Path) -> None:
+    """Allow only the admitted root manifest at one reviewed digest."""
+
+    configured_manifest = os.environ.get("FACTORY_PROJECT_MANIFEST")
+    if configured_manifest is None:
+        return
+    try:
+        configured_path = Path(configured_manifest).expanduser().absolute()
+    except (OSError, RuntimeError, TypeError) as error:
+        raise ScopeAmendmentError(
+            "alternate project manifest override is not permitted"
+        ) from error
+    if configured_path != manifest_path:
+        raise ScopeAmendmentError(
+            "alternate project manifest override is not permitted"
+        )
+    try:
+        configured_digest = _digest(configured_path)
+    except (OSError, ScopeAmendmentError) as error:
+        raise ScopeAmendmentError(
+            "alternate project manifest override is not permitted"
+        ) from error
+    if configured_digest not in {
+        TRUSTED_ORIGINAL_MANIFEST_SHA256,
+        TRUSTED_SUCCESSOR_MANIFEST_SHA256,
+    }:
+        raise ScopeAmendmentError(
+            "alternate project manifest override is not permitted"
+        )
+
+
 def _contract_and_inputs(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     root = root.resolve()
+    manifest_path = _safe_file(root, MANIFEST_RELATIVE, "manifest")
+    _validate_manifest_override(manifest_path)
     # The amendment is rooted in the admitted checkout.  Do not let the
     # process-wide override select a second manifest when an isolated fixture
     # or an explicit controller root is being validated.
@@ -341,16 +509,23 @@ def _contract_and_inputs(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     if contract.get("project") != PROJECT or contract.get("contractRevision") != CONTRACT_REVISION:
         raise ScopeAmendmentError("admitted contract is not audio-runtime-v1")
 
-    manifest_path = _safe_file(root, MANIFEST_RELATIVE, "manifest")
-    if _digest(manifest_path) != TRUSTED_MANIFEST_SHA256:
-        raise ScopeAmendmentError("original manifest digest is not the reviewed anchor")
-    expected_authority: dict[str, dict[str, str]] = {}
-    for name, entry in contract.get("authority", {}).items():
-        if not isinstance(entry, dict):
-            raise ScopeAmendmentError("manifest authority entry is malformed")
-        expected_authority[name] = dict(entry)
-    if set(expected_authority) != {"sourcePlan", "request", "acceptance"}:
-        raise ScopeAmendmentError("manifest authority set changed")
+    manifest_sha256 = _digest(manifest_path)
+    if manifest_sha256 == TRUSTED_ORIGINAL_MANIFEST_SHA256:
+        expected_authority = copy.deepcopy(TRUSTED_ORIGINAL_AUTHORITY)
+        expected_criteria = TRUSTED_ORIGINAL_CRITERIA
+    elif manifest_sha256 == TRUSTED_SUCCESSOR_MANIFEST_SHA256:
+        expected_authority = copy.deepcopy(TRUSTED_SUCCESSOR_AUTHORITY)
+        expected_criteria = TRUSTED_SUCCESSOR_CRITERIA
+    else:
+        raise ScopeAmendmentError(
+            "manifest digest is not the original anchor or reviewed successor"
+        )
+
+    if contract.get("authority") != expected_authority:
+        raise ScopeAmendmentError("manifest authority is not the reviewed transition")
+    if contract.get("criteria") != expected_criteria:
+        raise ScopeAmendmentError("manifest criteria are not the reviewed transition")
+
     for name, expected in expected_authority.items():
         path = expected.get("path")
         sha256 = expected.get("sha256")
@@ -373,18 +548,6 @@ def admitted_contract(root: Path) -> dict[str, Any]:
     to select the contract; any other override fails closed.
     """
 
-    configured_manifest = os.environ.get("FACTORY_PROJECT_MANIFEST")
-    if configured_manifest is not None:
-        try:
-            configured_digest = _digest(Path(configured_manifest).expanduser())
-        except ScopeAmendmentError as error:
-            raise ScopeAmendmentError(
-                "alternate project manifest override is not permitted"
-            ) from error
-        if configured_digest != TRUSTED_MANIFEST_SHA256:
-            raise ScopeAmendmentError(
-                "alternate project manifest override is not permitted"
-            )
     contract, _ = _contract_and_inputs(root)
     return contract
 
@@ -440,20 +603,19 @@ def _validate_record_object(
     if record["amendmentId"] != AMENDMENT_ID:
         raise ScopeAmendmentError("amendment ID is not authorized")
 
-    contract, authority = _contract_and_inputs(root)
+    _contract_and_inputs(root)
     manifest = record["manifest"]
     _require_exact_keys(manifest, {"path", "sha256"}, "amendment manifest")
-    if manifest != {"path": MANIFEST_RELATIVE, "sha256": TRUSTED_MANIFEST_SHA256}:
+    if manifest != {
+        "path": MANIFEST_RELATIVE,
+        "sha256": TRUSTED_ORIGINAL_MANIFEST_SHA256,
+    }:
         raise ScopeAmendmentError("amendment does not bind the original manifest")
 
-    if record["authority"] != authority:
-        raise ScopeAmendmentError("amendment authority digests do not match the manifest")
-    expected_authority = {
-        name: {"path": entry["path"], "sha256": entry["sha256"]}
-        for name, entry in authority.items()
-    }
-    if record["authority"] != expected_authority:
-        raise ScopeAmendmentError("amendment authority entries are malformed")
+    if record["authority"] != TRUSTED_ORIGINAL_AUTHORITY:
+        raise ScopeAmendmentError(
+            "amendment authority must preserve the original manifest authority"
+        )
 
     authorization = record["authorization"]
     _require_exact_keys(
@@ -492,7 +654,7 @@ def _validate_record_object(
     if record["retainedProof"] != EXPECTED_RETAINED_PROOF:
         raise ScopeAmendmentError("amendment removed retained software evidence")
     criteria = record["criteria"]
-    if not isinstance(criteria, list) or criteria != contract["criteria"]:
+    if not isinstance(criteria, list) or criteria != TRUSTED_ORIGINAL_CRITERIA:
         raise ScopeAmendmentError("amendment changed immutable criterion IDs or rubrics")
     budget = record["realtimeBudget"]
     if budget != REALTIME_BUDGET_LIMITS:
@@ -542,7 +704,7 @@ def _validated_record_path(root: Path, record_path: str) -> tuple[Path, dict[str
 def create_record(root: Path) -> dict[str, Any]:
     """Construct the only authorized record from reviewed files on disk."""
 
-    contract, authority = _contract_and_inputs(root)
+    _contract_and_inputs(root)
     anchor = _trusted_authorization(root)
     _trusted_historical_report(root)
     record = {
@@ -550,8 +712,11 @@ def create_record(root: Path) -> dict[str, Any]:
         "project": PROJECT,
         "contractRevision": CONTRACT_REVISION,
         "amendmentId": AMENDMENT_ID,
-        "manifest": {"path": MANIFEST_RELATIVE, "sha256": TRUSTED_MANIFEST_SHA256},
-        "authority": authority,
+        "manifest": {
+            "path": MANIFEST_RELATIVE,
+            "sha256": TRUSTED_ORIGINAL_MANIFEST_SHA256,
+        },
+        "authority": copy.deepcopy(TRUSTED_ORIGINAL_AUTHORITY),
         "authorization": {
             "path": AUTHORIZATION_RELATIVE,
             "sha256": TRUSTED_AUTHORIZATION_SHA256,
@@ -566,7 +731,7 @@ def create_record(root: Path) -> dict[str, Any]:
         },
         "excludedSubproof": copy.deepcopy(EXPECTED_EXCLUDED_SUBPROOF),
         "retainedProof": copy.deepcopy(EXPECTED_RETAINED_PROOF),
-        "criteria": copy.deepcopy(contract["criteria"]),
+        "criteria": copy.deepcopy(TRUSTED_ORIGINAL_CRITERIA),
         "realtimeBudget": copy.deepcopy(REALTIME_BUDGET_LIMITS),
     }
     return _validate_record_object(root, record)
@@ -818,7 +983,12 @@ def validate_amended_report(
         or mission.get("amendment") != dict(amendment)
         or not _same_artifact(mission.get("build"), report.get("build"))
         or mission.get("sourceRevision") != source_revision
-        or mission.get("authority") != amendment["authority"]
+        # The amendment reference intentionally preserves the original
+        # authority as provenance, while prepare-validation stamps the
+        # currently admitted successor authority onto the fresh mission.
+        # Validate each value against its role in that lifecycle instead of
+        # requiring the staged mission to carry the historical authority.
+        or mission.get("authority") != contract["authority"]
         or mission.get("manifestSha256") != amendment["manifestSha256"]
         or mission.get("reportPath") != str(report_path)
     ):
