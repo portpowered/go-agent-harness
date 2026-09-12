@@ -8,7 +8,6 @@ package sessionturns
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -85,42 +84,41 @@ const (
 	TurnEventEnd   TurnEventType = "turn-end"
 )
 
-var (
+// ErrorCode is a comparable sentinel cause suitable for errors.Is and
+// errors.As. Constants keep the public contract immutable while preserving
+// exact identity through wrapped transition errors.
+type ErrorCode string
+
+func (e ErrorCode) Error() string { return string(e) }
+
+const (
 	// ErrTurnAlreadyActive identifies an overlapping start transition.
-	ErrTurnAlreadyActive = errors.New("turn start while another turn is active")
+	ErrTurnAlreadyActive ErrorCode = "turn start while another turn is active"
 	// ErrTurnEndWithoutStart identifies an end without an active turn.
-	ErrTurnEndWithoutStart = errors.New("turn end without start: no active turn")
+	ErrTurnEndWithoutStart ErrorCode = "turn end without start: no active turn"
 	// ErrEmptyTurn identifies empty text, audio, or response content.
-	ErrEmptyTurn = errors.New("turn content must not be empty")
+	ErrEmptyTurn ErrorCode = "turn content must not be empty"
 	// ErrInvalidTurnDirection identifies a direction outside the contract.
-	ErrInvalidTurnDirection = errors.New("turn direction is invalid")
+	ErrInvalidTurnDirection ErrorCode = "turn direction is invalid"
 	// ErrInvalidTurnTick identifies a non-increasing transition tick.
-	ErrInvalidTurnTick = errors.New("turn tick must be strictly increasing")
+	ErrInvalidTurnTick ErrorCode = "turn tick must be strictly increasing"
 	// ErrSessionEndedWithActiveTurn prevents Close from discarding a turn.
-	ErrSessionEndedWithActiveTurn = errors.New("session ended with active turn")
+	ErrSessionEndedWithActiveTurn ErrorCode = "session ended with active turn"
 	// ErrSessionClosed identifies a closed service or provider session.
-	ErrSessionClosed = errors.New("session is closed")
+	ErrSessionClosed ErrorCode = "session is closed"
 	// ErrTurnMismatch identifies an end for a different active turn.
-	ErrTurnMismatch = errors.New("turn does not match the active turn")
+	ErrTurnMismatch ErrorCode = "turn does not match the active turn"
 	// ErrMissingTurnInferencer identifies construction without a provider.
-	ErrMissingTurnInferencer = errors.New("session turn inferencer is not configured")
+	ErrMissingTurnInferencer ErrorCode = "session turn inferencer is not configured"
 	// ErrMissingTurnSession identifies a provider that returned no session.
-	ErrMissingTurnSession = errors.New("session turn provider returned no session")
+	ErrMissingTurnSession ErrorCode = "session turn provider returned no session"
 	// ErrSessionResponse is the fail-closed fallback for a blank provider error.
-	ErrSessionResponse = errors.New("session returned an error")
+	ErrSessionResponse ErrorCode = "session returned an error"
 	// ErrTurnInputRejected identifies a provider that rejected input admission.
-	ErrTurnInputRejected = errors.New("session rejected turn input")
+	ErrTurnInputRejected ErrorCode = "session rejected turn input"
 	// ErrTurnInputCommitRejected identifies a provider that rejected audio commit.
-	ErrTurnInputCommitRejected = errors.New("session rejected turn input commit")
+	ErrTurnInputCommitRejected ErrorCode = "session rejected turn input commit"
 )
-
-// NewTextTurnInput creates a text input without retaining caller-owned bytes.
-func NewTextTurnInput(text string) TurnInput { return TurnInput{Text: text} }
-
-// NewAudioTurnInput creates an audio input with an independent byte slice.
-func NewAudioTurnInput(audio []byte, mediaType string) TurnInput {
-	return TurnInput{Audio: append([]byte(nil), audio...), MediaType: mediaType}
-}
 
 // Empty reports whether the input has neither non-whitespace text nor audio.
 func (in TurnInput) Empty() bool {

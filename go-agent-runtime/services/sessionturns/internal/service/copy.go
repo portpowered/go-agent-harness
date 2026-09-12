@@ -39,79 +39,98 @@ func cloneMessage(message messages.Message) messages.Message {
 
 func cloneContentPart(part messages.ContentPart) messages.ContentPart {
 	switch value := part.(type) {
-	case messages.ControlPlanePart:
-		return value
-	case *messages.ControlPlanePart:
-		return clonePointer(value)
-	case messages.TextPart:
-		return value
-	case *messages.TextPart:
-		return clonePointer(value)
 	case messages.ImagePart:
 		value.Bytes = append([]byte(nil), value.Bytes...)
 		return value
 	case *messages.ImagePart:
-		if value == nil {
-			return (*messages.ImagePart)(nil)
-		}
-		clone := *value
-		clone.Bytes = append([]byte(nil), value.Bytes...)
-		return &clone
+		return cloneImagePart(value)
 	case messages.AudioPart:
 		value.Bytes = append([]byte(nil), value.Bytes...)
 		return value
 	case *messages.AudioPart:
-		if value == nil {
-			return (*messages.AudioPart)(nil)
-		}
-		clone := *value
-		clone.Bytes = append([]byte(nil), value.Bytes...)
-		return &clone
-	case messages.TranscriptPart:
-		return value
-	case *messages.TranscriptPart:
-		return clonePointer(value)
+		return cloneAudioPart(value)
 	case messages.VideoPart:
 		value.Bytes = append([]byte(nil), value.Bytes...)
 		return value
 	case *messages.VideoPart:
-		if value == nil {
-			return (*messages.VideoPart)(nil)
-		}
-		clone := *value
-		clone.Bytes = append([]byte(nil), value.Bytes...)
-		return &clone
+		return cloneVideoPart(value)
 	case messages.FilePart:
 		value.Bytes = append([]byte(nil), value.Bytes...)
 		return value
 	case *messages.FilePart:
-		if value == nil {
-			return (*messages.FilePart)(nil)
-		}
-		clone := *value
-		clone.Bytes = append([]byte(nil), value.Bytes...)
-		return &clone
+		return cloneFilePart(value)
 	case messages.EmbeddingPart:
 		value.Bytes = append([]byte(nil), value.Bytes...)
 		return value
 	case *messages.EmbeddingPart:
-		if value == nil {
-			return (*messages.EmbeddingPart)(nil)
-		}
-		clone := *value
-		clone.Bytes = append([]byte(nil), value.Bytes...)
-		return &clone
-	case messages.UsageInfoPart:
+		return cloneEmbeddingPart(value)
+	default:
+		return cloneScalarContentPart(part)
+	}
+}
+
+func cloneScalarContentPart(part messages.ContentPart) messages.ContentPart {
+	switch value := part.(type) {
+	case messages.ControlPlanePart, messages.TextPart, messages.TranscriptPart, messages.UsageInfoPart, messages.ReasoningPart:
 		return value
+	case *messages.ControlPlanePart:
+		return clonePointer(value)
+	case *messages.TextPart:
+		return clonePointer(value)
+	case *messages.TranscriptPart:
+		return clonePointer(value)
 	case *messages.UsageInfoPart:
 		return clonePointer(value)
-	case messages.ReasoningPart:
-		return value
 	case *messages.ReasoningPart:
 		return clonePointer(value)
 	default:
 		return part
 	}
+}
+
+func cloneImagePart(value *messages.ImagePart) messages.ContentPart {
+	if value == nil {
+		return (*messages.ImagePart)(nil)
+	}
+	clone := *value
+	clone.Bytes = append([]byte(nil), value.Bytes...)
+	return &clone
+}
+
+func cloneAudioPart(value *messages.AudioPart) messages.ContentPart {
+	if value == nil {
+		return (*messages.AudioPart)(nil)
+	}
+	clone := *value
+	clone.Bytes = append([]byte(nil), value.Bytes...)
+	return &clone
+}
+
+func cloneVideoPart(value *messages.VideoPart) messages.ContentPart {
+	if value == nil {
+		return (*messages.VideoPart)(nil)
+	}
+	clone := *value
+	clone.Bytes = append([]byte(nil), value.Bytes...)
+	return &clone
+}
+
+func cloneFilePart(value *messages.FilePart) messages.ContentPart {
+	if value == nil {
+		return (*messages.FilePart)(nil)
+	}
+	clone := *value
+	clone.Bytes = append([]byte(nil), value.Bytes...)
+	return &clone
+}
+
+func cloneEmbeddingPart(value *messages.EmbeddingPart) messages.ContentPart {
+	if value == nil {
+		return (*messages.EmbeddingPart)(nil)
+	}
+	clone := *value
+	clone.Bytes = append([]byte(nil), value.Bytes...)
+	return &clone
 }
 
 func clonePointer[T any](value *T) *T {

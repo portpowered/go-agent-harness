@@ -24,14 +24,14 @@ const (
 	TurnEventEnd                = sessionturns.TurnEventEnd
 )
 
-var ErrTurnAlreadyActive, ErrTurnEndWithoutStart, ErrEmptyTurn, ErrInvalidTurnDirection, ErrInvalidTurnTick, ErrSessionEndedWithActiveTurn, ErrSessionClosed, ErrTurnMismatch, ErrMissingTurnInferencer = sessionturns.ErrTurnAlreadyActive, sessionturns.ErrTurnEndWithoutStart, sessionturns.ErrEmptyTurn, sessionturns.ErrInvalidTurnDirection, sessionturns.ErrInvalidTurnTick, sessionturns.ErrSessionEndedWithActiveTurn, sessionturns.ErrSessionClosed, sessionturns.ErrTurnMismatch, sessionturns.ErrMissingTurnInferencer
+const ErrTurnAlreadyActive, ErrTurnEndWithoutStart, ErrEmptyTurn, ErrInvalidTurnDirection, ErrInvalidTurnTick, ErrSessionEndedWithActiveTurn, ErrSessionClosed, ErrTurnMismatch, ErrMissingTurnInferencer = sessionturns.ErrTurnAlreadyActive, sessionturns.ErrTurnEndWithoutStart, sessionturns.ErrEmptyTurn, sessionturns.ErrInvalidTurnDirection, sessionturns.ErrInvalidTurnTick, sessionturns.ErrSessionEndedWithActiveTurn, sessionturns.ErrSessionClosed, sessionturns.ErrTurnMismatch, sessionturns.ErrMissingTurnInferencer
 
-// Deprecated: use sessionturns.NewTextTurnInput.
-func NewTextTurnInput(text string) TurnInput { return sessionturns.NewTextTurnInput(text) }
+// Deprecated: construct sessionturns.TurnInput directly.
+func NewTextTurnInput(text string) TurnInput { return TurnInput{Text: text} }
 
-// Deprecated: use sessionturns.NewAudioTurnInput.
+// Deprecated: construct sessionturns.TurnInput directly.
 func NewAudioTurnInput(audio []byte, mediaType string) TurnInput {
-	return sessionturns.NewAudioTurnInput(audio, mediaType)
+	return TurnInput{Audio: append([]byte(nil), audio...), MediaType: mediaType}
 }
 
 // Deprecated: use sessionturns/wire.NewService.
