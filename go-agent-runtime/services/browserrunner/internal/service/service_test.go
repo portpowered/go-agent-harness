@@ -337,9 +337,11 @@ func TestInterruptionControllerRejectsMissingAudioAndNilReceiver(t *testing.T) {
 	}
 	nilController.ObserveInFlight("", "", "")
 	nilController.Close()
-	if newInterruptionController(browserrunner.InterruptionControllerConfig{Steps: []browserrunner.StepBoundary{{ID: "ordinary"}}}) != nil {
-		t.Fatal("ordinary-only scenario created interruption controller")
+	ordinary := newInterruptionController(browserrunner.InterruptionControllerConfig{Steps: []browserrunner.StepBoundary{{ID: "ordinary"}}})
+	if ordinary == nil || ordinary.Active() {
+		t.Fatal("ordinary-only scenario reported an active interruption controller")
 	}
+	ordinary.Close()
 }
 
 func TestInterruptionControllerPropagatesRecorderFailure(t *testing.T) {

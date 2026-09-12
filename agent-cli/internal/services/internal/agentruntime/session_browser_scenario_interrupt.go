@@ -26,7 +26,7 @@ func newBrowserConversationInterruptionController(
 		Run:       &browserConversationRunRecorder{run: run},
 		ErrorSink: tracker,
 	})
-	if delegate == nil {
+	if !delegate.Active() {
 		return nil
 	}
 	channel := make(chan ScheduledAudioInput, len(scenario.Steps))
@@ -84,18 +84,6 @@ func browserConversationAudioInputs(audio map[string]ScheduledAudioInput) map[st
 	return inputs
 }
 
-func cloneBrowserConversationAudioMap(audio map[string]ScheduledAudioInput) map[string]ScheduledAudioInput {
-	if audio == nil {
-		return nil
-	}
-	clone := make(map[string]ScheduledAudioInput, len(audio))
-	for stepID, input := range audio {
-		input.PCM = append([]byte(nil), input.PCM...)
-		clone[stepID] = input
-	}
-	return clone
-}
-
 // partitionBrowserConversationAudio keeps ordinary turns on the existing
 // completed-turn scheduler and holds interruption/cancel turns until their
 // semantic trigger. The runtime owns the classification rules.
@@ -112,7 +100,8 @@ func partitionBrowserConversationAudio(
 			EndOfTurn:           input.EndOfTurn,
 		}
 	}
-	normal, special := browserrunner.PartitionAudioInputs(browserConversationTrackingSteps(scenario), publicInputs)
+	partitioner := browserrunnerwire.NewService()
+	normal, special := partitioner.PartitionAudioInputs(browserConversationTrackingSteps(scenario), publicInputs)
 	normalInputs := make([]ScheduledAudioInput, len(normal))
 	for index, input := range normal {
 		normalInputs[index] = ScheduledAudioInput{

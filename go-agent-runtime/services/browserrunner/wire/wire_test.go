@@ -1,4 +1,4 @@
-package browserrunner_test
+package wire
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserrunner"
-	browserrunnerwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserrunner/wire"
 )
 
 type recordingRun struct {
@@ -95,7 +94,7 @@ func (s *errorSink) Error() error {
 
 func TestEvidenceTrackerRecordsOrderedTurnsAndNavigation(t *testing.T) {
 	run := &recordingRun{}
-	tracker := browserrunnerwire.NewEvidenceTracker(browserrunner.EvidenceTrackerConfig{
+	tracker := NewEvidenceTracker(browserrunner.EvidenceTrackerConfig{
 		Steps: []browserrunner.StepBoundary{
 			{ID: "welcome"},
 			{ID: "move", Navigation: &browserrunner.Navigation{FromPageID: "home", ToPageID: "cart", URL: "https://fixture.test/cart"}},
@@ -136,7 +135,7 @@ func TestEvidenceTrackerRecordsOrderedTurnsAndNavigation(t *testing.T) {
 func TestEvidenceTrackerDeadlineCancelsWithTypedErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tracker := browserrunnerwire.NewEvidenceTracker(browserrunner.EvidenceTrackerConfig{
+	tracker := NewEvidenceTracker(browserrunner.EvidenceTrackerConfig{
 		Steps: []browserrunner.StepBoundary{{ID: "slow", Deadline: 20 * time.Millisecond}},
 		Run:   &recordingRun{},
 	})
@@ -158,7 +157,7 @@ func TestEvidenceTrackerSuppressesLateEventsAfterExplicitCancel(t *testing.T) {
 	defer cancel()
 	run := &recordingRun{}
 	var canceledID, canceledReason string
-	tracker := browserrunnerwire.NewEvidenceTracker(browserrunner.EvidenceTrackerConfig{
+	tracker := NewEvidenceTracker(browserrunner.EvidenceTrackerConfig{
 		Steps: []browserrunner.StepBoundary{
 			{ID: "work"},
 			{ID: "stop", Cancel: &browserrunner.CancellationBoundary{Reason: "customer stopped"}},
@@ -197,7 +196,7 @@ func TestEvidenceTrackerSuppressesLateEventsAfterExplicitCancel(t *testing.T) {
 
 func TestInterruptionControllerQueuesInOrderAndCloses(t *testing.T) {
 	run := &recordingRun{}
-	controller := browserrunnerwire.NewInterruptionController(browserrunner.InterruptionControllerConfig{
+	controller := NewInterruptionController(browserrunner.InterruptionControllerConfig{
 		Steps: []browserrunner.StepBoundary{
 			{ID: "work"},
 			{ID: "overlap", Interrupt: &browserrunner.InterruptionBoundary{Trigger: "in_flight_invocation", ToolName: "write_state"}},
@@ -232,7 +231,7 @@ func TestInterruptionControllerQueuesInOrderAndCloses(t *testing.T) {
 
 func TestInterruptionControllerReportsQueueAdmissionFailure(t *testing.T) {
 	sink := &errorSink{}
-	controller := browserrunnerwire.NewInterruptionController(browserrunner.InterruptionControllerConfig{
+	controller := NewInterruptionController(browserrunner.InterruptionControllerConfig{
 		Steps: []browserrunner.StepBoundary{
 			{ID: "work"},
 			{ID: "overlap", Interrupt: &browserrunner.InterruptionBoundary{Trigger: "in_flight_invocation"}},
@@ -259,7 +258,7 @@ func TestPartitionAudioInputsRebasesOrdinaryTurns(t *testing.T) {
 		{ID: "stop", Cancel: &browserrunner.CancellationBoundary{}},
 		{ID: "two"},
 	}
-	normal, special := browserrunner.PartitionAudioInputs(steps, []browserrunner.AudioInput{
+	normal, special := NewService().PartitionAudioInputs(steps, []browserrunner.AudioInput{
 		{AfterCompletedTurns: 0, PCM: []byte{1}},
 		{AfterCompletedTurns: 1, PCM: []byte{2}},
 		{AfterCompletedTurns: 2, PCM: []byte{3}},

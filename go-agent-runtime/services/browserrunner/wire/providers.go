@@ -14,6 +14,13 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserrunner/internal/service"
 )
 
+// NewService assembles the browserrunner contracts and keeps the concrete
+// tracker, interruption, and partition implementations private.
+func NewService() browserrunner.Service {
+	wire.Build(service.NewService)
+	return nil
+}
+
 // NewEvidenceTracker constructs the provider-neutral evidence tracker.
 func NewEvidenceTracker(config browserrunner.EvidenceTrackerConfig) browserrunner.EvidenceTracker {
 	wire.Build(service.NewEvidenceTracker)

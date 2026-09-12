@@ -9,6 +9,7 @@ import (
 
 type interruptionController struct {
 	mu        sync.Mutex
+	active    bool
 	steps     []browserrunner.StepBoundary
 	run       browserrunner.RunRecorder
 	errorSink browserrunner.ErrorSink
@@ -26,7 +27,7 @@ func newInterruptionController(config browserrunner.InterruptionControllerConfig
 		}
 	}
 	if controlCount == 0 {
-		return nil
+		return &interruptionController{}
 	}
 	capacity := config.QueueCapacity
 	if capacity <= 0 {
@@ -39,6 +40,7 @@ func newInterruptionController(config browserrunner.InterruptionControllerConfig
 		capacity = 1
 	}
 	return &interruptionController{
+		active:    true,
 		steps:     cloneSteps(config.Steps),
 		run:       config.Run,
 		errorSink: config.ErrorSink,
@@ -46,6 +48,10 @@ func newInterruptionController(config browserrunner.InterruptionControllerConfig
 		channel:   make(chan browserrunner.AudioInput, capacity),
 		triggered: make(map[string]bool),
 	}
+}
+
+func (c *interruptionController) Active() bool {
+	return c != nil && c.active
 }
 
 func (c *interruptionController) AudioInterruptions() <-chan browserrunner.AudioInput {
@@ -103,68 +109,86 @@ func (c *interruptionController) nextEligibleInterruption(stepID, toolName strin
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	currentIndex := stepIndex(c.steps, stepID)
-	for index := range c.steps {
-		step := c.steps[index]
-		if step.Interrupt == nil || c.triggered[step.ID] {
-			continue
-		}
-		if currentIndex >= 0 && currentIndex != index && currentIndex+1 != index {
-			continue
-		}
-		if step.Interrupt.ToolName != "" && step.Interrupt.ToolName != toolName {
-			continue
-		}
-		input, ok := c.audio[step.ID]
-		if !ok || len(input.PCM) == 0 {
-			c.setErrorLocked(errors.New("declared interruption has no audio payload"))
-			return nil, nil, false
-		}
-		var cancelStep *browserrunner.StepBoundary
-		for later := index + 1; later < len(c.steps); later++ {
-			if c.steps[later].Cancel != nil {
-				cancelStep = &c.steps[later]
-				break
-			}
-			if c.steps[later].Interrupt != nil {
-				break
-			}
-		}
-		if cancelStep != nil {
-			cancelInput, cancelOK := c.audio[cancelStep.ID]
-			if !cancelOK || len(cancelInput.PCM) == 0 {
-				c.setErrorLocked(errors.New("declared cancellation has no audio payload"))
-				return nil, nil, false
-			}
-		}
-		return &c.steps[index], cancelStep, true
+	if trigger, cancel := c.findInterruptionLocked(currentIndex, toolName); trigger != nil {
+		return trigger, cancel, true
 	}
-
-	for index := range c.steps {
-		step := c.steps[index]
-		if step.Cancel == nil || c.triggered[step.ID] {
-			continue
-		}
-		// A cancel immediately following an interruption is released by the
-		// interruption branch above. A standalone cancel belongs to the
-		// invocation immediately preceding it.
-		if index > 0 && c.steps[index-1].Interrupt != nil {
-			continue
-		}
-		if currentIndex < 0 || currentIndex+1 != index {
-			continue
-		}
-		input, ok := c.audio[step.ID]
-		if !ok || len(input.PCM) == 0 {
-			c.setErrorLocked(errors.New("declared cancellation has no audio payload"))
-			return nil, nil, false
-		}
-		return &c.steps[index], nil, true
+	if cancel := c.findStandaloneCancelLocked(currentIndex); cancel != nil {
+		return cancel, nil, true
 	}
 	return nil, nil, false
 }
 
+func (c *interruptionController) findInterruptionLocked(currentIndex int, toolName string) (*browserrunner.StepBoundary, *browserrunner.StepBoundary) {
+	for index := range c.steps {
+		step := &c.steps[index]
+		if !c.isEligibleInterruption(*step, index, currentIndex, toolName) {
+			continue
+		}
+		if !c.hasAudio(step.ID) {
+			c.setErrorLocked(errors.New("declared interruption has no audio payload"))
+			return nil, nil
+		}
+		cancelStep := c.followingCancelLocked(index)
+		if cancelStep != nil && !c.hasAudio(cancelStep.ID) {
+			c.setErrorLocked(errors.New("declared cancellation has no audio payload"))
+			return nil, nil
+		}
+		return step, cancelStep
+	}
+	return nil, nil
+}
+
+func (c *interruptionController) findStandaloneCancelLocked(currentIndex int) *browserrunner.StepBoundary {
+	for index := range c.steps {
+		step := &c.steps[index]
+		if !c.isEligibleCancel(*step, index, currentIndex) {
+			continue
+		}
+		if !c.hasAudio(step.ID) {
+			c.setErrorLocked(errors.New("declared cancellation has no audio payload"))
+			return nil
+		}
+		return step
+	}
+	return nil
+}
+
+func (c *interruptionController) isEligibleInterruption(step browserrunner.StepBoundary, index, currentIndex int, toolName string) bool {
+	if step.Interrupt == nil || c.triggered[step.ID] {
+		return false
+	}
+	if currentIndex >= 0 && currentIndex != index && currentIndex+1 != index {
+		return false
+	}
+	return step.Interrupt.ToolName == "" || step.Interrupt.ToolName == toolName
+}
+
+func (c *interruptionController) isEligibleCancel(step browserrunner.StepBoundary, index, currentIndex int) bool {
+	if step.Cancel == nil || c.triggered[step.ID] || currentIndex < 0 || currentIndex+1 != index {
+		return false
+	}
+	return index == 0 || c.steps[index-1].Interrupt == nil
+}
+
+func (c *interruptionController) followingCancelLocked(index int) *browserrunner.StepBoundary {
+	for later := index + 1; later < len(c.steps); later++ {
+		if c.steps[later].Cancel != nil {
+			return &c.steps[later]
+		}
+		if c.steps[later].Interrupt != nil {
+			return nil
+		}
+	}
+	return nil
+}
+
+func (c *interruptionController) hasAudio(stepID string) bool {
+	input, ok := c.audio[stepID]
+	return ok && len(input.PCM) > 0
+}
+
 func (c *interruptionController) enqueueAudio(input browserrunner.AudioInput) bool {
-	if c == nil || len(input.PCM) == 0 {
+	if c == nil || !c.active || len(input.PCM) == 0 {
 		return false
 	}
 	input.PCM = append([]byte(nil), input.PCM...)
@@ -187,7 +211,7 @@ func (c *interruptionController) Close() {
 		return
 	}
 	c.mu.Lock()
-	if !c.closed {
+	if c.active && !c.closed {
 		c.closed = true
 		close(c.channel)
 	}

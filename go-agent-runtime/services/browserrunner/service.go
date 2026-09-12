@@ -7,22 +7,28 @@ package browserrunner
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-var (
+// ErrorKind is a comparable, immutable service error identity. Keeping the
+// sentinels as typed constants preserves errors.Is matching without mutable
+// package state in the service contract root.
+type ErrorKind string
+
+func (e ErrorKind) Error() string { return string(e) }
+
+const (
 	// ErrEvidence identifies the first malformed or out-of-order observation
 	// accepted by a tracker.
-	ErrEvidence = errors.New("browser runner evidence failed")
+	ErrEvidence ErrorKind = "browser runner evidence failed"
 	// ErrTimeout identifies a step deadline that expired while its assistant
 	// boundary was still pending.
-	ErrTimeout = errors.New("browser runner timed out")
+	ErrTimeout ErrorKind = "browser runner timed out"
 	// ErrInterruptionQueueFull identifies an interruption that could not be
 	// admitted without waiting for the audio consumer.
-	ErrInterruptionQueueFull = errors.New("browser runner interruption queue is full")
+	ErrInterruptionQueueFull ErrorKind = "browser runner interruption queue is full"
 )
 
 // StepBoundary is the small behavior projection needed by the tracker and
@@ -113,6 +119,15 @@ type ErrorSink interface {
 	SetError(error)
 }
 
+// Service is the provider-neutral browserrunner composition contract. Hosts
+// obtain isolated trackers, interruption controllers, and audio partitions
+// from the dedicated Wire package; implementation state remains private.
+type Service interface {
+	NewEvidenceTracker(EvidenceTrackerConfig) EvidenceTracker
+	NewInterruptionController(InterruptionControllerConfig) InterruptionController
+	PartitionAudioInputs([]StepBoundary, []AudioInput) ([]AudioInput, map[string]AudioInput)
+}
+
 // CancelInvocationFunc is bound by the host after its broker wrapper exists.
 type CancelInvocationFunc func(context.Context, string, string) error
 
@@ -142,6 +157,7 @@ type EvidenceTrackerConfig struct {
 // two bounded audio inputs and records the associated cancellation evidence.
 type InterruptionController interface {
 	AudioInterruptions() <-chan AudioInput
+	Active() bool
 	ObserveInFlight(stepID, invocationID, toolName string)
 	Close()
 }
@@ -155,51 +171,4 @@ type InterruptionControllerConfig struct {
 	Run           RunRecorder
 	ErrorSink     ErrorSink
 	QueueCapacity int
-}
-
-// PartitionAudioInputs keeps ordinary turns on a completed-turn scheduler and
-// returns semantic interruption/cancellation inputs keyed by step ID. Both
-// returned collections own defensive PCM copies.
-func PartitionAudioInputs(steps []StepBoundary, inputs []AudioInput) ([]AudioInput, map[string]AudioInput) {
-	specialIDs := make(map[string]struct{})
-	for index, step := range steps {
-		if step.Interrupt == nil && step.Cancel == nil {
-			continue
-		}
-		if step.Interrupt != nil {
-			specialIDs[step.ID] = struct{}{}
-		}
-		if step.Cancel != nil {
-			specialIDs[step.ID] = struct{}{}
-		}
-		if step.Interrupt == nil {
-			continue
-		}
-		for later := index + 1; later < len(steps); later++ {
-			if steps[later].Cancel != nil {
-				specialIDs[steps[later].ID] = struct{}{}
-				break
-			}
-			if steps[later].Interrupt != nil {
-				break
-			}
-		}
-	}
-
-	normal := make([]AudioInput, 0, len(inputs))
-	special := make(map[string]AudioInput, len(specialIDs))
-	for index, input := range inputs {
-		stepID := ""
-		if index < len(steps) {
-			stepID = steps[index].ID
-		}
-		input.PCM = append([]byte(nil), input.PCM...)
-		if _, held := specialIDs[stepID]; held {
-			special[stepID] = input
-			continue
-		}
-		input.AfterCompletedTurns = len(normal)
-		normal = append(normal, input)
-	}
-	return normal, special
 }

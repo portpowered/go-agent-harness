@@ -13,6 +13,13 @@ import (
 
 // Injectors from providers.go:
 
+// NewService assembles the browserrunner contracts and keeps the concrete
+// tracker, interruption, and partition implementations private.
+func NewService() browserrunner.Service {
+	browserrunnerService := service.NewService()
+	return browserrunnerService
+}
+
 // NewEvidenceTracker constructs the provider-neutral evidence tracker.
 func NewEvidenceTracker(config browserrunner.EvidenceTrackerConfig) browserrunner.EvidenceTracker {
 	evidenceTracker := service.NewEvidenceTracker(config)
