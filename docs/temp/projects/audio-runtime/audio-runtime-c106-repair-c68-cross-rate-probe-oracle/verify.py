@@ -160,7 +160,12 @@ def check_scope(root: Path) -> None:
     outside = [path for path in changed if not path.startswith(allowed_prefixes)]
     if outside:
         fail(f"changed paths outside C106 ownership: {outside}")
-    if rtk("git", "status", "--porcelain", "--untracked-files=all"):
+    status_lines = [
+        line
+        for line in rtk("git", "status", "--porcelain", "--untracked-files=all").splitlines()
+        if line and line not in {"Changes:", "clean — nothing to commit"}
+    ]
+    if status_lines:
         fail("worktree is not clean at staged-artifact verification")
 
 
