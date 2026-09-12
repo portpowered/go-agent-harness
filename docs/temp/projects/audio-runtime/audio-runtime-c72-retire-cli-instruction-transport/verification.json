@@ -1,0 +1,32 @@
+{
+  "task": "audio-runtime-c72-retire-cli-instruction-transport",
+  "project": "audio-runtime",
+  "baseRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "branch": "codex/audio-runtime-c72-retire-cli-instruction-transport",
+  "source": {
+    "path": "agent-cli/internal/services/internal/agentruntime/session.go",
+    "beforeLines": 225,
+    "afterLines": 76,
+    "productionLinesRetired": 149,
+    "sha256": "3e8dffac4e4ee99d0f37d766e0024ef4b8b3d0cb7559592fa94afa00628f0054"
+  },
+  "consumer": {
+    "goModSha256": "3d0f53b0e5dc7968270a972140e178a8dc5811710316bd7c87a928f8c678da54",
+    "goSumSha256": "4058f57b71ca3eacae5bbe82a1c8c106b12f0e1ebe9c4418cdcd0c2864021bcd",
+    "sourceSha256": "0742caf1619c468ab2a7997cbe574dc416481080e5cc076dd8255df1ef89c739",
+    "temporaryYuiBinarySha256": "f6121460bc9611222f1a676f02c116335f2adeb8377dfaea0ef3897c300b225c"
+  },
+  "checks": {
+    "serviceNormalRace": "pass: 7 tests across 3 packages",
+    "runtimeNormalRace": "pass: 858 tests across 60 packages",
+    "cliFocused": "pass: 45 tests",
+    "sessionRegressionsNormalRace": "pass: COUNT=1 bounded runner",
+    "coverageRegistration": "pass: 179 workspace packages",
+    "coverageFloors": "pass: sessionupdate 87.5%, internal/service 86.4%, wire 100%",
+    "vetLintStaticcheckFmt": "pass: repository gates; golangci-lint 2.9.0 and staticcheck 2026.1",
+    "drainMutation": "pass: mutation status=1, restored service-session sha256=859f775ceb8ef9e6e9b0949a760aee8331f8c3de2ffd984163aff942943253a5",
+    "wireAndArchitecture": "pending shared lease: C57 owns scripts/wire-packages.txt and C61 owns docs/architecture/architecture-size-baseline.json"
+  },
+  "scriptCiSubmitted": false,
+  "nextAction": "After both shared leases release, register the new Wire package and reconcile only the downward C72 size entries, rerun Wire/architecture and submit this same head to script CI."
+}
