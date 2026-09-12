@@ -191,10 +191,6 @@ func (o *sessionProgressObserver) projectToolContinuations(states []sd.Continuat
 	o.toolContinuations = make(map[string]*toolContinuationState, len(states))
 	for _, value := range states {
 		prior := previous[value.CallID]
-		continuationComplete := value.ContinuationComplete || prior != nil && prior.continuationComplete
-		if prior != nil && continuationSupersededByServerTurnLocked(prior) {
-			continuationComplete = true
-		}
 		o.toolContinuations[value.CallID] = &toolContinuationState{
 			toolName: value.ToolName, responseID: value.ResponseID, providerCallObserved: value.ProviderCallObserved || prior != nil && prior.providerCallObserved,
 			resultAccepted: value.ResultAccepted || prior != nil && prior.resultAccepted, toolResponseComplete: value.ToolResponseComplete || prior != nil && prior.toolResponseComplete,
@@ -203,7 +199,7 @@ func (o *sessionProgressObserver) projectToolContinuations(states []sd.Continuat
 			continuationTerminalSeen: value.ContinuationTerminalSeen, continuationStatus: value.ContinuationStatus,
 			continuationErrorCode: value.ContinuationErrorCode, continuationStatusDetails: value.ContinuationStatusDetails,
 			continuationTerminalReason: messages.TerminalReason(value.ContinuationReason), continuationOutputObserved: value.ContinuationOutput,
-			continuationFailureObserved: value.ContinuationFailure, continuationComplete: continuationComplete,
+			continuationFailureObserved: value.ContinuationFailure, continuationComplete: value.ContinuationComplete || prior != nil && (prior.continuationComplete || continuationSupersededByServerTurnLocked(prior)),
 		}
 	}
 }
