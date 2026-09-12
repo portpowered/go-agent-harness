@@ -22,7 +22,7 @@
       "nonempty": true,
       "nonempty_records": 1,
       "ok": true,
-      "path": "artifacts/runs/20260912T012758Z-708619000-c23-on/provider.session.json",
+      "path": "artifacts/runs/20260912T025041Z-104877000-comparison-c23-on/provider.session.json",
       "recorded_bytes": [
         128
       ],
@@ -57,7 +57,7 @@
       "audio_path": {
         "bytes": 0,
         "exists": false,
-        "path": "artifacts/runs/20260912T012758Z-708619000-c23-on/semantic/audio/out-000.pcm",
+        "path": "artifacts/runs/20260912T025041Z-104877000-comparison-c23-on/semantic/audio/out-000.pcm",
         "sha256": null
       },
       "declared_artifacts": [
@@ -67,8 +67,8 @@
         "provider.json"
       ],
       "enabled": true,
-      "manifest": "artifacts/runs/20260912T012758Z-708619000-c23-on/semantic/manifest.json",
-      "root": "artifacts/runs/20260912T012758Z-708619000-c23-on/semantic",
+      "manifest": "artifacts/runs/20260912T025041Z-104877000-comparison-c23-on/semantic/manifest.json",
+      "root": "artifacts/runs/20260912T025041Z-104877000-comparison-c23-on/semantic",
       "terminal": {
         "classification": "provider_authored_completion",
         "output_state": "complete",
@@ -79,8 +79,8 @@
     }
   },
   "preserved": true,
-  "report": "artifacts/runs/20260912T012758Z-708619000-c23-on/report.json",
-  "run": "artifacts/runs/20260912T012758Z-708619000-c23-on",
+  "report": "artifacts/runs/20260912T025041Z-104877000-comparison-c23-on/report.json",
+  "run": "artifacts/runs/20260912T025041Z-104877000-comparison-c23-on",
   "schema": "audio-runtime.c68.zero-audio-attribution.first-failure.v1",
   "source": "c23",
   "source_revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614"

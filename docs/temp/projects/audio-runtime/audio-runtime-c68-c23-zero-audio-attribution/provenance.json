@@ -63,7 +63,7 @@
     "path": "inputs/c23-task/fixtures.json",
     "sha256": "7e6508c3d46f6a14608a4affacb3c624c3a9054fce0c5f7a59b56d04c941102e"
   },
-  "head": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "head": "97b4f042869d47705517e651dc97a6ce586cb06a",
   "inputs": {
     "c23": {
       "files": [
@@ -312,22 +312,28 @@
     "c23": {
       "archive": {
         "bytes": 334213120,
+        "git_archive_sha256": "984e34904ae6aca952ac8ee1df77e052b8516e7cbc7dc734862fedd276f9dbd5",
         "path": "scratch/archives/c23-b2fb41401cd0934378b9ff1bc131532fdc19f614.tar",
         "sha256": "984e34904ae6aca952ac8ee1df77e052b8516e7cbc7dc734862fedd276f9dbd5"
       },
       "go_work_sha256": "bb93b21299499bd9d9264ccdc956e17ec3364e1f132f58f43282b0ff8a7c40bc",
       "revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
-      "root": "scratch/sources/c23"
+      "root": "scratch/sources/c23",
+      "tree_files": 10325,
+      "tree_sha256": "19bb59729062616fff5409fbf5f03ae57a247d3fd5d5790e825ffb5133545bd9"
     },
     "c56": {
       "archive": {
         "bytes": 334223360,
+        "git_archive_sha256": "752bc7d1aae6dece63beb090bdda10d98e91bde48c1dc5b9d7f4a6fb82d90f7e",
         "path": "scratch/archives/c56-85710a53a2e9449884fb81f979df0599269ef3b3.tar",
         "sha256": "752bc7d1aae6dece63beb090bdda10d98e91bde48c1dc5b9d7f4a6fb82d90f7e"
       },
       "go_work_sha256": "bb93b21299499bd9d9264ccdc956e17ec3364e1f132f58f43282b0ff8a7c40bc",
       "revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
-      "root": "scratch/sources/c56"
+      "root": "scratch/sources/c56",
+      "tree_files": 10365,
+      "tree_sha256": "915e0698f346c2829c348366a44b769efa4085327e62bc04e65995fc81ad4c25"
     }
   },
   "startup_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",

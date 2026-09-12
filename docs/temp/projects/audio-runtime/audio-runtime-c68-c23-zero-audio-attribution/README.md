@@ -12,6 +12,9 @@ registry is changed here.
 
 From the repository root, run the bounded phases in order:
 
+Include the `cleanup-control` phase between `build` and `negative-control` to
+prove descendant process-group cleanup before running the four-case comparison.
+
 ```text
 python3 docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/attribute.py prepare --c23-revision b2fb41401cd0934378b9ff1bc131532fdc19f614 --c56-revision 85710a53a2e9449884fb81f979df0599269ef3b3 --child-timeout-seconds 60 --total-timeout-seconds 300
 python3 docs/temp/projects/audio-runtime/audio-runtime-c68-c23-zero-audio-attribution/attribute.py build --c23-revision b2fb41401cd0934378b9ff1bc131532fdc19f614 --c56-revision 85710a53a2e9449884fb81f979df0599269ef3b3 --child-timeout-seconds 60 --total-timeout-seconds 300
@@ -38,7 +41,9 @@ Recording-on has a clean terminal and drained queue, but
 `accepted_audio=0`, `audio_bytes=0`, and no `semantic/audio/out-000.pcm`.
 The first-provider-audio mutation is rejected, proving the audio oracle is
 not silently accepting empty input. The focused C21 regression passed normal
-`-count=5` and race `-count=1`.
+`-count=5` and race `-count=1` against the changed candidate. The build and
+comparison records also reject swapping the C23 and C56 executables under the
+other source label.
 
 The fail-closed attribution is `C56_RECORDING_DEFECT`. The first divergent
 boundary is recording observer admission: `terminalDrainSession` exposes an

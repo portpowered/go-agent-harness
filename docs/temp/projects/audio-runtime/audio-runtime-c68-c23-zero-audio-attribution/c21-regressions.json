@@ -1,11 +1,23 @@
 {
+  "candidate_head": "97b4f042869d47705517e651dc97a6ce586cb06a",
   "normal": {
+    "artifact_disk": {
+      "bounded": true,
+      "bytes": 128074,
+      "cap_bytes": 4194304,
+      "files": 14
+    },
+    "binary_binding": null,
     "cleanup": {
       "errors": [],
       "group_alive_after": false,
       "group_alive_before": false,
+      "group_members_after": [],
+      "group_members_before": [],
       "kill_sent": false,
       "parent_reaped": true,
+      "pgid": 48244,
+      "pipes_reaped": true,
       "term_sent": false
     },
     "command": [
@@ -18,12 +30,12 @@
       "-timeout=60s"
     ],
     "cwd": "agent-cli",
-    "elapsed_ms": 24626,
+    "elapsed_ms": 15629,
     "label": "c21-normal-count-5",
     "output_bounded": true,
     "output_overflow": false,
     "returncode": 0,
-    "source_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "source_revision": "97b4f042869d47705517e651dc97a6ce586cb06a",
     "stderr": "artifacts/c21/normal/stderr.log",
     "stderr_bytes": 0,
     "stderr_observed_bytes": 0,
@@ -35,12 +47,23 @@
   "normal_count": 5,
   "passed": true,
   "race": {
+    "artifact_disk": {
+      "bounded": true,
+      "bytes": 128074,
+      "cap_bytes": 4194304,
+      "files": 14
+    },
+    "binary_binding": null,
     "cleanup": {
       "errors": [],
       "group_alive_after": false,
       "group_alive_before": false,
+      "group_members_after": [],
+      "group_members_before": [],
       "kill_sent": false,
       "parent_reaped": true,
+      "pgid": 48424,
+      "pipes_reaped": true,
       "term_sent": false
     },
     "command": [
@@ -54,12 +77,12 @@
       "-timeout=60s"
     ],
     "cwd": "agent-cli",
-    "elapsed_ms": 28334,
+    "elapsed_ms": 15464,
     "label": "c21-race-count-1",
     "output_bounded": true,
     "output_overflow": false,
     "returncode": 0,
-    "source_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "source_revision": "97b4f042869d47705517e651dc97a6ce586cb06a",
     "stderr": "artifacts/c21/race/stderr.log",
     "stderr_bytes": 0,
     "stderr_observed_bytes": 0,
@@ -69,9 +92,10 @@
     "timed_out": false
   },
   "race_count": 1,
+  "runner_sha256": "f9b8518512fe9d41920f93ef03e1898c329e236267ed909147abab4c391b2723",
   "schema": "audio-runtime.c68.zero-audio-attribution.c21.v1",
   "scope": "focused accumulated C21 normal/race regression only",
-  "source_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "source_revision": "97b4f042869d47705517e651dc97a6ce586cb06a",
   "task": "audio-runtime-c68-c23-zero-audio-attribution",
   "test": "TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnCommitControls"
 }

@@ -1,4 +1,20 @@
 {
+  "binding_guard": {
+    "cases": [
+      {
+        "actual_label": "c56",
+        "expected_label": "c23",
+        "rejected": true
+      },
+      {
+        "actual_label": "c23",
+        "expected_label": "c56",
+        "rejected": true
+      }
+    ],
+    "enabled": true,
+    "swapped_binary_rejected": true
+  },
   "builds": {
     "c23": {
       "binary": {
@@ -1800,7 +1816,10 @@
       "consumer_source": "scratch/sources/c23/__c68_input__/c23/main.go",
       "consumer_source_sha256": "0a8e8239614e5d8f87596e238153f44ddbe30f9d7e1cf123e37c084f2b69c3ec",
       "revision": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
-      "source_root": "scratch/sources/c23"
+      "source_archive_sha256": "984e34904ae6aca952ac8ee1df77e052b8516e7cbc7dc734862fedd276f9dbd5",
+      "source_root": "scratch/sources/c23",
+      "source_tree_files": 10325,
+      "source_tree_sha256": "19bb59729062616fff5409fbf5f03ae57a247d3fd5d5790e825ffb5133545bd9"
     },
     "c56": {
       "binary": {
@@ -3682,7 +3701,10 @@
       "consumer_source": "scratch/sources/c56/__c68_input__/c56/main.go",
       "consumer_source_sha256": "0a8e8239614e5d8f87596e238153f44ddbe30f9d7e1cf123e37c084f2b69c3ec",
       "revision": "85710a53a2e9449884fb81f979df0599269ef3b3",
-      "source_root": "scratch/sources/c56"
+      "source_archive_sha256": "752bc7d1aae6dece63beb090bdda10d98e91bde48c1dc5b9d7f4a6fb82d90f7e",
+      "source_root": "scratch/sources/c56",
+      "source_tree_files": 10365,
+      "source_tree_sha256": "915e0698f346c2829c348366a44b769efa4085327e62bc04e65995fc81ad4c25"
     }
   },
   "consumer_source_sha256": "0a8e8239614e5d8f87596e238153f44ddbe30f9d7e1cf123e37c084f2b69c3ec",
@@ -3691,6 +3713,7 @@
     "-trimpath"
   ],
   "go_version": "go version go1.26.7 darwin/arm64",
+  "runner_sha256": "f9b8518512fe9d41920f93ef03e1898c329e236267ed909147abab4c391b2723",
   "schema": "audio-runtime.c68.zero-audio-attribution.build.v1",
   "task": "audio-runtime-c68-c23-zero-audio-attribution"
 }

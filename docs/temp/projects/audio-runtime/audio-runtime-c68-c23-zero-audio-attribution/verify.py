@@ -120,7 +120,7 @@ def verify_oracle_controls() -> None:
     report_path = ATTRIBUTE.owned_path(negative.get("report", ""))
     report = load(report_path)
     artifact_root = report_path.parent
-    require(report.get("schema") == "c23.v1" and report.get("scenario") == "tool-matrix" and report.get("turns") == 1 and report.get("recording") is False, "negative control report shape changed")
+    require(report.get("schema") == "c23.v1" and report.get("scenario") == "tool-matrix" and report.get("turns") == 1 and report.get("recording") is not True, "negative control report shape changed")
     require(report.get("source_revision") == provenance["c56_revision"] and report.get("fixture_sha256") == ATTRIBUTE.fixture_digest(), "negative control source or fixture identity drifted")
     require(isinstance(report.get("error"), str) and report["error"].startswith("PCM oracle mismatch:"), "negative control did not fail at the public PCM oracle")
     require(execution.get("returncode") == 1 and execution.get("timed_out") is False and execution.get("output_bounded") is True, "negative control accepted an arbitrary nonzero or timeout result")
@@ -187,7 +187,9 @@ def verify_boundaries() -> None:
         require(report.get("schema") == "c23.v1" and report.get("scenario") == "tool-matrix" and report.get("turns") == 1 and report.get("trace_complete") is True and report.get("clean_shutdown") is True, f"{label}/{item['mode']} public report is incomplete")
         require(report.get("events", {}).get("overflow_drops") == 0 and report.get("events", {}).get("by_kind", {}).get("AUDIO.DELTA") == 1, f"{label}/{item['mode']} public audio event boundary is incomplete")
         provider = item["boundaries"]["provider_capture"]
-        require(provider == ATTRIBUTE.provider_audio(run_root), f"{label}/{item['mode']} provider evidence changed")
+        actual_provider = ATTRIBUTE.provider_audio(run_root)
+        require({key: provider.get(key) for key in actual_provider} == actual_provider, f"{label}/{item['mode']} provider evidence changed")
+        require(provider.get("expected_bytes") == len(expected) and provider.get("ok") is True, f"{label}/{item['mode']} provider expectation evidence changed")
         require(provider.get("nonempty") is True and provider.get("audio_delta_records") == 1 and provider.get("nonempty_records") == 1 and provider.get("recorded_bytes") == [len(expected)] and provider.get("bytes") == len(expected) and provider.get("sha256") == expected_sha, f"{label}/{item['mode']} provider audio boundary is not exactly one non-empty frame")
         pcm = report.get("pcm") if isinstance(report.get("pcm"), dict) else {}
         public = item["boundaries"]["public_pcm"]

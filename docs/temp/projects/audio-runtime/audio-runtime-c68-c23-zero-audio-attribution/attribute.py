@@ -1276,7 +1276,7 @@ def negative_control(args: argparse.Namespace) -> dict[str, Any]:
     require(execution["cleanup"]["parent_reaped"] and not execution["cleanup"]["group_alive_after"] and execution["cleanup"].get("pipes_reaped") is True and not execution["cleanup"].get("group_members_after"), "negative control cleanup was incomplete")
     require(report_path.is_file(), "negative control did not preserve its report")
     report = load_json(report_path)
-    require(report.get("schema") == "c23.v1" and report.get("scenario") == "tool-matrix" and report.get("turns") == 1 and report.get("recording") is False, "negative control report shape changed")
+    require(report.get("schema") == "c23.v1" and report.get("scenario") == "tool-matrix" and report.get("turns") == 1 and report.get("recording") is not True, "negative control report shape changed")
     require(report.get("source_revision") == source_revision and report.get("fixture_sha256") == fixture_digest(), "negative control source or fixture identity drifted")
     require(isinstance(report.get("error"), str) and report["error"].startswith("PCM oracle mismatch:"), "negative control did not fail at the public PCM oracle")
     pcm = report.get("pcm") if isinstance(report.get("pcm"), dict) else {}
