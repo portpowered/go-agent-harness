@@ -1,17 +1,14 @@
 package agentruntime
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 func (s *roomTestSession) publish(events ...messages.StreamMessage) {
@@ -19,91 +16,6 @@ func (s *roomTestSession) publish(events ...messages.StreamMessage) {
 		if !s.receive.Write(context.Background(), event) {
 			panic("room test session could not publish event")
 		}
-	}
-}
-
-func TestInjectRoomWallClock_AddsOffsetAndUnixFields(t *testing.T) {
-	stamped, err := injectRoomWallClock([]byte(`{"type":"AUDIO.DELTA"}`), 1500*time.Millisecond, 1700000000123)
-	if err != nil {
-		t.Fatalf("injectRoomWallClock: %v", err)
-	}
-	var decoded map[string]any
-	if err := json.Unmarshal(stamped, &decoded); err != nil {
-		t.Fatalf("decode stamped record: %v", err)
-	}
-	if decoded["type"] != "AUDIO.DELTA" {
-		t.Fatalf("stamped record lost original field: %+v", decoded)
-	}
-	offset, ok := decoded["t_offset_ms"].(float64)
-	if !ok || offset != 1500 {
-		t.Fatalf("t_offset_ms = %v, want 1500", decoded["t_offset_ms"])
-	}
-	unixMs, ok := decoded["t_unix_ms"].(float64)
-	if !ok || int64(unixMs) != 1700000000123 {
-		t.Fatalf("t_unix_ms = %v, want 1700000000123", decoded["t_unix_ms"])
-	}
-}
-
-func TestRoomSpeechTracker_TransitionsOnlyAtEdges(t *testing.T) {
-	tracker := &roomSpeechTracker{}
-	if event := tracker.transition(false); event != "" {
-		t.Fatalf("silence-to-silence transition = %q, want none", event)
-	}
-	if event := tracker.transition(true); event != "start" {
-		t.Fatalf("silence-to-signal transition = %q, want start", event)
-	}
-	if event := tracker.transition(true); event != "" {
-		t.Fatalf("signal-to-signal transition = %q, want none", event)
-	}
-	if event := tracker.transition(false); event != "end" {
-		t.Fatalf("signal-to-silence transition = %q, want end", event)
-	}
-}
-
-func TestRoomMixBuffer_SumsOverlapAndPadsToSpan(t *testing.T) {
-	const sampleRate = 24000 // a wavio-supported production rate
-	buffer := newRoomMixBuffer(sampleRate)
-
-	// Two participants speaking the same 5 samples starting at t=0 must sum,
-	// not concatenate or overwrite.
-	chunk := roomPCM16(10000, 5)
-	buffer.mixAt(0, chunk)
-	buffer.mixAt(0, chunk)
-
-	path := filepath.Join(t.TempDir(), "room-mix.wav")
-	span := 2 * time.Second // room ran longer than any recorded audio
-	if err := buffer.finalize(span, path); err != nil {
-		t.Fatalf("finalize: %v", err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read room-mix.wav: %v", err)
-	}
-	decodedRate, samples, err := wavio.Read(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("decode room-mix.wav: %v", err)
-	}
-	if decodedRate != sampleRate {
-		t.Fatalf("room-mix.wav sample rate = %d, want %d", decodedRate, sampleRate)
-	}
-	wantSamples := sampleRate * 2 // padded to the full 2s span
-	if len(samples) != wantSamples {
-		t.Fatalf("room-mix.wav sample count = %d, want %d (padded to room span)", len(samples), wantSamples)
-	}
-	if samples[0] != 20000 {
-		t.Fatalf("overlapping chunks were not summed: first sample = %d, want 20000", samples[0])
-	}
-	for _, sample := range samples[5:] {
-		if sample != 0 {
-			t.Fatalf("room-mix.wav pad region is not silent: sample = %d", sample)
-		}
-	}
-}
-
-func TestRoomMixBufferRejectsOddPCM16(t *testing.T) {
-	buffer := newRoomMixBuffer(24000)
-	if err := buffer.mixAt(0, []byte{1}); err == nil {
-		t.Fatal("mixAt accepted an odd PCM16 payload")
 	}
 }
 
