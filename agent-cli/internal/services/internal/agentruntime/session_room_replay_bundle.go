@@ -35,9 +35,7 @@ const (
 	RoomReplayBundleIncomplete = roomreplaybundle.RoomReplayBundleIncomplete
 )
 
-func newRoomReplayBundleService() roomreplaybundle.Service {
-	return roomReplayWire.NewService()
-}
+func newRoomReplayBundleService() roomreplaybundle.Service { return roomReplayWire.NewService() }
 
 // Deprecated: use roomreplaybundle/wire.NewService from a host composition
 // root. This adapter is retained for unchanged CLI room callers.
