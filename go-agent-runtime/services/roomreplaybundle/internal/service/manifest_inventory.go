@@ -21,9 +21,9 @@ func parseRoomReplayInventoryArray(raw json.RawMessage, field string) ([]roomRep
 	}
 	result := make([]roomReplayArtifactRef, 0, len(values))
 	for index, object := range values {
-		name, _, _ := firstRoomReplayStringField(object, nil, "name", "id", "key", "role")
-		if name == "" {
-			name, _, _ = firstRoomReplayStringField(object, nil, "path", "relative_path", "file", "filename")
+		name, err := roomReplayInventoryEntryName(object, fmt.Sprintf("%s[%d]", field, index))
+		if err != nil {
+			return nil, err
 		}
 		if name == "" {
 			name = fmt.Sprintf("%d", index)
@@ -45,7 +45,11 @@ func parseRoomReplayInventoryObject(raw json.RawMessage, field string) ([]roomRe
 	if err != nil {
 		return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, field, "", "artifact inventory object", "invalid", err)
 	}
-	if _, present, _ := firstRoomReplayStringField(object, nil, "path", "relative_path", "file", "filename"); present {
+	_, present, pathErr := firstRoomReplayStringField(object, nil, "path", "relative_path", "file", "filename")
+	if pathErr != nil && present {
+		return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, field+".path", "", "bundle-relative path", "invalid", pathErr)
+	}
+	if present {
 		return parseRoomReplaySingleInventoryObject(object, raw, field)
 	}
 	keys := make([]string, 0, len(object))
@@ -65,9 +69,9 @@ func parseRoomReplayInventoryObject(raw json.RawMessage, field string) ([]roomRe
 }
 
 func parseRoomReplaySingleInventoryObject(object roomReplayJSONObject, raw json.RawMessage, field string) ([]roomReplayArtifactRef, error) {
-	name, _, _ := firstRoomReplayStringField(object, nil, "name", "id", "key", "role")
-	if name == "" {
-		name, _, _ = firstRoomReplayStringField(object, nil, "path", "relative_path", "file", "filename")
+	name, err := roomReplayInventoryEntryName(object, field)
+	if err != nil {
+		return nil, err
 	}
 	ref, err := parseRoomReplayArtifactRef(raw, field, name)
 	if err != nil {
@@ -85,7 +89,11 @@ func parseRoomReplayInventoryEntry(object roomReplayJSONObject, key, field strin
 		return parseRoomReplayArtifactInventory(value, field+"."+key)
 	}
 	if metadataObject, err := roomReplayObject(value); err == nil {
-		if _, present, _ := firstRoomReplayStringField(metadataObject, nil, "path", "relative_path", "file", "filename"); !present {
+		_, present, pathErr := firstRoomReplayStringField(metadataObject, nil, "path", "relative_path", "file", "filename")
+		if pathErr != nil && present {
+			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, field+"."+key+".path", "", "bundle-relative path", "invalid", pathErr)
+		}
+		if !present {
 			metadataObject["path"] = mustMarshal(key)
 			value = mustMarshal(metadataObject)
 		}
@@ -98,6 +106,22 @@ func parseRoomReplayInventoryEntry(object roomReplayJSONObject, key, field strin
 		ref.Path = key
 	}
 	return []roomReplayArtifactRef{ref}, nil
+}
+
+func roomReplayInventoryEntryName(object roomReplayJSONObject, field string) (string, error) {
+	for _, names := range [][]string{
+		{"name", "id", "key", "role"},
+		{"path", "relative_path", "file", "filename"},
+	} {
+		name, present, err := firstRoomReplayStringField(object, nil, names...)
+		if err != nil && present {
+			return "", newRoomReplayBundleError(RoomReplayBundleMismatch, field, "", "artifact inventory name or path", "invalid", err)
+		}
+		if name != "" {
+			return name, nil
+		}
+	}
+	return "", nil
 }
 
 func mergeRoomReplayArtifactMetadata(inventory, refs []roomReplayArtifactRef) (map[string]roomReplayArtifactRef, error) {

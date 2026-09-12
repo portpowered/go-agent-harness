@@ -20,14 +20,21 @@ type roomReplayTimelineState struct {
 	hasPrevious         bool
 }
 
-func loadRoomReplayTimeline(artifact RoomReplayArtifact, participants map[string]struct{}, declared map[string]RoomReplayArtifact, clockBase, startedAt, endedAt time.Time) ([]RoomReplayTimelineEvent, error) {
+const roomReplayTimelineScannerBufferBytes = 64 * 1024
+
+func loadRoomReplayTimeline(artifact RoomReplayArtifact, participants map[string]struct{}, declared map[string]RoomReplayArtifact, clockBase, startedAt, endedAt time.Time) (events []RoomReplayTimelineEvent, err error) {
 	file, err := os.Open(artifact.AbsolutePath)
 	if err != nil {
 		return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, "room_timeline", artifact.Path, "readable timeline", err.Error(), err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); err == nil && closeErr != nil {
+			events = nil
+			err = newRoomReplayBundleError(RoomReplayBundleMismatch, "room_timeline", artifact.Path, "readable timeline", closeErr.Error(), closeErr)
+		}
+	}()
 	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64*1024), int(roomReplayMaxTimelineLineBytes))
+	scanner.Buffer(make([]byte, roomReplayTimelineScannerBufferBytes), int(roomReplayMaxTimelineLineBytes))
 	result := make([]RoomReplayTimelineEvent, 0)
 	state := roomReplayTimelineState{}
 	var totalBytes int64

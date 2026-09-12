@@ -119,7 +119,7 @@ func parseNestedRoomReplayClockBase(object roomReplayJSONObject) (time.Time, boo
 	}
 	timing, err := roomReplayObject(timingRaw)
 	if err != nil {
-		return time.Time{}, false, nil
+		return time.Time{}, false, err
 	}
 	return roomReplayTimeField(timing, "clock_base")
 }

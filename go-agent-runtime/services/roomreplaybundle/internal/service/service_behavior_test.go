@@ -54,15 +54,15 @@ func TestLoadRoomReplayPlanValidatesCompleteBundleBeforeRuntime(t *testing.T) {
 
 func TestLoadRoomReplayPlanAcceptsInventoryBackedParticipantArtifacts(t *testing.T) {
 	bundle, manifest := writeRoomReplayBundle(t)
-	participants := manifest["participants"].(map[string]any)
-	legacyArtifacts := manifest["artifacts"].(map[string]any)
+	participants := roomReplayTestMap(t, manifest["participants"], "participants")
+	legacyArtifacts := roomReplayTestMap(t, manifest["artifacts"], "artifacts")
 	requiredRoles := roomReplayRequiredParticipantArtifactRoles()
 	inventory := make([]any, 0, len(participants)*len(requiredRoles)+len(participants)+2)
 	for _, participantID := range []string{"alpha", "beta"} {
-		participant := participants[participantID].(map[string]any)
-		participantArtifacts := participant["artifacts"].(map[string]any)
+		participant := roomReplayTestMap(t, participants[participantID], "participant "+participantID)
+		participantArtifacts := roomReplayTestMap(t, participant["artifacts"], "participant artifacts "+participantID)
 		for _, role := range append(append([]string(nil), requiredRoles...), roomReplayArtifactRoleCapture) {
-			original := participantArtifacts[role].(map[string]any)
+			original := roomReplayTestMap(t, participantArtifacts[role], "participant artifact "+participantID+"/"+role)
 			copy := make(map[string]any, len(original)+1)
 			for key, value := range original {
 				copy[key] = value
@@ -73,7 +73,7 @@ func TestLoadRoomReplayPlanAcceptsInventoryBackedParticipantArtifacts(t *testing
 		delete(participant, "artifacts")
 	}
 	for _, role := range []string{"room_timeline", "room_mix"} {
-		original := legacyArtifacts[role].(map[string]any)
+		original := roomReplayTestMap(t, legacyArtifacts[role], "room artifact "+role)
 		copy := make(map[string]any, len(original)+1)
 		for key, value := range original {
 			copy[key] = value
@@ -154,9 +154,10 @@ func TestParseRoomReplayArtifactInventoryAcceptsPathKeyedMetadata(t *testing.T) 
 func TestLoadRoomReplayPlanRejectsUnsafeAndAliasedArtifacts(t *testing.T) {
 	t.Run("traversal", func(t *testing.T) {
 		bundle, manifest := writeRoomReplayBundle(t)
-		participant := manifest["participants"].(map[string]any)["alpha"].(map[string]any)
-		artifacts := participant["artifacts"].(map[string]any)
-		artifacts[roomReplayArtifactRoleSentPCM].(map[string]any)["path"] = "../outside.pcm"
+		participants := roomReplayTestMap(t, manifest["participants"], "participants")
+		participant := roomReplayTestMap(t, participants["alpha"], "participant alpha")
+		artifacts := roomReplayTestMap(t, participant["artifacts"], "participant alpha artifacts")
+		roomReplayTestMap(t, artifacts[roomReplayArtifactRoleSentPCM], "participant alpha sent_pcm")["path"] = "../outside.pcm"
 		writeManifestValue(t, bundle, manifest)
 
 		_, err := LoadRoomReplayPlan(bundle)
@@ -187,10 +188,11 @@ func TestLoadRoomReplayPlanRejectsUnsafeAndAliasedArtifacts(t *testing.T) {
 
 	t.Run("duplicate ownership", func(t *testing.T) {
 		bundle, manifest := writeRoomReplayBundle(t)
-		alpha := manifest["participants"].(map[string]any)["alpha"].(map[string]any)
-		beta := manifest["participants"].(map[string]any)["beta"].(map[string]any)
-		alphaArtifacts := alpha["artifacts"].(map[string]any)
-		betaArtifacts := beta["artifacts"].(map[string]any)
+		participants := roomReplayTestMap(t, manifest["participants"], "participants")
+		alpha := roomReplayTestMap(t, participants["alpha"], "participant alpha")
+		beta := roomReplayTestMap(t, participants["beta"], "participant beta")
+		alphaArtifacts := roomReplayTestMap(t, alpha["artifacts"], "participant alpha artifacts")
+		betaArtifacts := roomReplayTestMap(t, beta["artifacts"], "participant beta artifacts")
 		betaArtifacts[roomReplayArtifactRoleSentPCM] = alphaArtifacts[roomReplayArtifactRoleSentPCM]
 		writeManifestValue(t, bundle, manifest)
 
@@ -313,9 +315,11 @@ func TestLoadRoomReplayPlanAcceptsSchemaV1AndRejectsMalformedManifest(t *testing
 
 func TestLoadRoomReplayPlanRejectsCaptureProviderMismatch(t *testing.T) {
 	bundle, manifest := writeRoomReplayBundle(t)
-	participant := manifest["participants"].(map[string]any)["alpha"].(map[string]any)
-	captureRef := participant["artifacts"].(map[string]any)[roomReplayArtifactRoleCapture].(map[string]any)
-	capturePath := filepath.Join(bundle, filepath.FromSlash(captureRef["path"].(string)))
+	participants := roomReplayTestMap(t, manifest["participants"], "participants")
+	participant := roomReplayTestMap(t, participants["alpha"], "participant alpha")
+	participantArtifacts := roomReplayTestMap(t, participant["artifacts"], "participant alpha artifacts")
+	captureRef := roomReplayTestMap(t, participantArtifacts[roomReplayArtifactRoleCapture], "participant alpha capture")
+	capturePath := filepath.Join(bundle, filepath.FromSlash(roomReplayTestString(t, captureRef["path"], "participant alpha capture path")))
 	capture, err := gwtesting.LoadSessionCapture(capturePath)
 	if err != nil {
 		t.Fatalf("load fixture capture: %v", err)
@@ -408,7 +412,7 @@ func writeRoomReplayBundle(t *testing.T) (string, map[string]any) {
 		"participants":   map[string]any{},
 		"artifacts":      map[string]any{},
 	}
-	participants := manifest["participants"].(map[string]any)
+	participants := roomReplayTestMap(t, manifest["participants"], "participants")
 	for _, participantID := range []string{"alpha", "beta"} {
 		artifactValues := map[string]any{}
 		for role, filename := range map[string]string{
@@ -427,7 +431,7 @@ func writeRoomReplayBundle(t *testing.T) (string, map[string]any) {
 			"id": participantID, "kind": "agent", "provider": "openai", "model": "gpt-realtime", "artifacts": artifactValues,
 		}
 	}
-	artifacts := manifest["artifacts"].(map[string]any)
+	artifacts := roomReplayTestMap(t, manifest["artifacts"], "artifacts")
 	artifacts["room_timeline"] = artifactObject("room-timeline.jsonl", timeline)
 	artifacts["room_mix"] = artifactObject("room-mix.wav", files["room-mix.wav"])
 	writeManifestValue(t, bundle, manifest)
@@ -452,8 +456,27 @@ func writeManifestValue(t *testing.T, bundle string, value map[string]any) {
 
 func updateArtifactDigest(t *testing.T, manifest map[string]any, role string, data []byte) {
 	t.Helper()
-	artifact := manifest["artifacts"].(map[string]any)[role].(map[string]any)
+	artifacts := roomReplayTestMap(t, manifest["artifacts"], "artifacts")
+	artifact := roomReplayTestMap(t, artifacts[role], "artifact "+role)
 	artifact["size"] = len(data)
 	digest := sha256.Sum256(data)
 	artifact["sha256"] = hex.EncodeToString(digest[:])
+}
+
+func roomReplayTestMap(t *testing.T, value any, field string) map[string]any {
+	t.Helper()
+	result, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("test manifest field %q has unexpected type %T", field, value)
+	}
+	return result
+}
+
+func roomReplayTestString(t *testing.T, value any, field string) string {
+	t.Helper()
+	result, ok := value.(string)
+	if !ok {
+		t.Fatalf("test manifest field %q has unexpected type %T", field, value)
+	}
+	return result
 }

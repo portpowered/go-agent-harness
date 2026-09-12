@@ -166,14 +166,7 @@ func TestRoomRunRecordThenReplay_ManifestAudioFormatRoundTrips(t *testing.T) {
 	// This is the real reader's schema-level manifest parser: the same service
 	// Load path calls before it ever validates individual artifacts against the
 	// filesystem. The compatibility test only needs the decoded PCM object.
-	manifestObject, parseErr := roomReplayObject(manifestData)
-	if parseErr != nil {
-		t.Fatalf("replay reader rejected the recorder's own run-manifest.json: %v", parseErr)
-	}
-	pcmFormat, parseErr := parseRoomReplayPCMFormat(manifestObject)
-	if parseErr != nil {
-		t.Fatalf("replay reader rejected the recorder's own pcm_format: %v", parseErr)
-	}
+	pcmFormat := parseRoomReplayPCMForTest(t, manifestData)
 	if pcmFormat.SampleRate <= 0 || pcmFormat.Channels <= 0 {
 		t.Fatalf("parsed replay pcm format = %+v, want positive rate/channels", pcmFormat)
 	}
@@ -328,14 +321,7 @@ func TestRoomRunRecordThenReplay_FullEndToEndReplaySucceeds(t *testing.T) {
 	// first pins that admission genuinely succeeds, before the second run
 	// exercises the full replay execution path.
 	manifestData := readRoomEvidenceFile(t, filepath.Join(outputDir, RoomEvidenceManifestPath))
-	manifestObject, parseErr := roomReplayObject(manifestData)
-	if parseErr != nil {
-		t.Fatalf("replay reader rejected the recorder's own run-manifest.json: %v", parseErr)
-	}
-	pcmFormat, parseErr := parseRoomReplayPCMFormat(manifestObject)
-	if parseErr != nil {
-		t.Fatalf("replay reader rejected the recorder's own pcm_format: %v", parseErr)
-	}
+	pcmFormat := parseRoomReplayPCMForTest(t, manifestData)
 	if err := validateRoomReplayPCMFormat(pcmFormat); err != nil {
 		t.Fatalf("recorder's audio_format failed replay validation: %v", err)
 	}
@@ -488,7 +474,10 @@ func writeRoomReplayBundle(t *testing.T) (string, map[string]any) {
 		"participants":   map[string]any{},
 		"artifacts":      map[string]any{},
 	}
-	participants := manifest["participants"].(map[string]any)
+	participants, ok := manifest["participants"].(map[string]any)
+	if !ok {
+		t.Fatal("test manifest participants field has unexpected type")
+	}
 	for _, participantID := range []string{"alpha", "beta"} {
 		artifactValues := map[string]any{}
 		for role, filename := range map[string]string{
@@ -506,7 +495,10 @@ func writeRoomReplayBundle(t *testing.T) (string, map[string]any) {
 			"id": participantID, "kind": "agent", "provider": "openai", "model": "gpt-realtime", "artifacts": artifactValues,
 		}
 	}
-	artifacts := manifest["artifacts"].(map[string]any)
+	artifacts, ok := manifest["artifacts"].(map[string]any)
+	if !ok {
+		t.Fatal("test manifest artifacts field has unexpected type")
+	}
 	artifacts["room_timeline"] = artifactObject("room-timeline.jsonl", timeline)
 	artifacts["room_mix"] = artifactObject("room-mix.wav", files["room-mix.wav"])
 	writeManifestValue(t, bundle, manifest)
@@ -516,6 +508,19 @@ func writeRoomReplayBundle(t *testing.T) (string, map[string]any) {
 func artifactObject(path string, data []byte) map[string]any {
 	digest := sha256.Sum256(data)
 	return map[string]any{"path": path, "size": len(data), "sha256": hex.EncodeToString(digest[:])}
+}
+
+func parseRoomReplayPCMForTest(t *testing.T, manifestData []byte) RoomReplayPCMFormat {
+	t.Helper()
+	manifestObject, err := roomReplayObject(manifestData)
+	if err != nil {
+		t.Fatalf("replay reader rejected the recorder's own run-manifest.json: %v", err)
+	}
+	pcmFormat, err := parseRoomReplayPCMFormat(manifestObject)
+	if err != nil {
+		t.Fatalf("replay reader rejected the recorder's own pcm_format: %v", err)
+	}
+	return pcmFormat
 }
 
 func writeManifestValue(t *testing.T, bundle string, value map[string]any) {
@@ -531,7 +536,14 @@ func writeManifestValue(t *testing.T, bundle string, value map[string]any) {
 
 func updateArtifactDigest(t *testing.T, manifest map[string]any, role string, data []byte) {
 	t.Helper()
-	artifact := manifest["artifacts"].(map[string]any)[role].(map[string]any)
+	artifacts, ok := manifest["artifacts"].(map[string]any)
+	if !ok {
+		t.Fatal("test manifest artifacts field has unexpected type")
+	}
+	artifact, ok := artifacts[role].(map[string]any)
+	if !ok {
+		t.Fatalf("test manifest artifact %q has unexpected type", role)
+	}
 	artifact["size"] = len(data)
 	digest := sha256.Sum256(data)
 	artifact["sha256"] = hex.EncodeToString(digest[:])

@@ -18,7 +18,10 @@ func errOrDefault(err, fallback error) error {
 }
 
 func mustMarshal(value any) json.RawMessage {
-	data, _ := json.Marshal(value)
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
 	return data
 }
 

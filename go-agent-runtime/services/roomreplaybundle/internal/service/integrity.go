@@ -62,13 +62,18 @@ func resolveRoomReplayBundle(bundle string) (string, string, string, error) {
 	return root, manifestPath, normalized, nil
 }
 
-func readRoomReplayManifest(path string) ([]byte, error) {
+func readRoomReplayManifest(path string) (data []byte, err error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-	data, err := io.ReadAll(io.LimitReader(file, roomReplayMaxManifestBytes+1))
+	defer func() {
+		if closeErr := file.Close(); err == nil && closeErr != nil {
+			data = nil
+			err = closeErr
+		}
+	}()
+	data, err = io.ReadAll(io.LimitReader(file, roomReplayMaxManifestBytes+1))
 	if err != nil {
 		return nil, err
 	}
@@ -156,12 +161,17 @@ func validateRoomReplayInventory(root string, inventory []roomReplayArtifactRef,
 	return nil
 }
 
-func roomReplayFileDigest(filename string) (string, error) {
+func roomReplayFileDigest(filename string) (digest string, err error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); err == nil && closeErr != nil {
+			digest = ""
+			err = closeErr
+		}
+	}()
 	info, err := file.Stat()
 	if err != nil {
 		return "", err

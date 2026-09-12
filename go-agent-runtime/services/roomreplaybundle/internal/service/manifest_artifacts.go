@@ -66,7 +66,10 @@ func parseRoomReplayParticipantArtifactArray(raw json.RawMessage, field string) 
 	}
 	result := make(map[string]roomReplayArtifactRef, len(values))
 	for index, object := range values {
-		role, _, _ := firstRoomReplayStringField(object, nil, "role", "name", "type", "kind")
+		role, present, roleErr := firstRoomReplayStringField(object, nil, "role", "name", "type", "kind")
+		if roleErr != nil && present {
+			return nil, newRoomReplayBundleError(RoomReplayBundleMismatch, fmt.Sprintf("%s[%d].role", field, index), "", "artifact role", "invalid", roleErr)
+		}
 		role = normalizeRoomReplayArtifactRole(role)
 		if role == "" {
 			return nil, newRoomReplayBundleError(RoomReplayBundleIncomplete, fmt.Sprintf("%s[%d].role", field, index), "", "artifact role", "missing", ErrRoomReplayBundleIncomplete)
