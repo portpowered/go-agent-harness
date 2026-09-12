@@ -1406,6 +1406,7 @@ def ci_attribution() -> dict[str, Any]:
                 "owner": "C79/work-task-114",
                 "path": "docs/architecture/architecture-size-baseline.json",
                 "count": 9,
+                "signature": " | ".join(entry["signature"] for entry in stale_entries),
                 "signatures": [entry["signature"] for entry in stale_entries],
             },
             {
@@ -1415,6 +1416,7 @@ def ci_attribution() -> dict[str, Any]:
                 "kind": "candidate-instrumentation-baseline-drift",
                 "owner": "C83/work-task-125 with C79/work-task-114 baseline serialization",
                 "count": 3,
+                "signature": " | ".join(entry["signature"] for entry in instrumentation_drifts),
                 "signatures": [entry["signature"] for entry in instrumentation_drifts],
             },
             {
