@@ -11,9 +11,11 @@ acceptance waiver was used. The admitted task verifier returned:
 
 The isolated worktree is
 `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c63-retire-cli-terminal-outcome`
-on branch `codex/audio-runtime-c63-retire-cli-terminal-outcome`. The candidate
-is clean at `ca241bf50ecd0aba24633c5f3dd00af2b0fbe40e`, five commits ahead of
-freshly fetched `origin/main` `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`.
+on branch `codex/audio-runtime-c63-retire-cli-terminal-outcome`. The
+implementation source is clean at `2f24a8cb17f4d09a4a10f1ae70e7722af87b4781`,
+six commits ahead of freshly fetched `origin/main`
+`d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`; this evidence refresh is a
+documentation-only descendant.
 Startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main,
 and baseline `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` are ancestors.
 
@@ -36,16 +38,16 @@ scripts/wire-packages.txt                         unchanged
 docs/architecture/architecture-size-baseline.json unchanged
 ```
 
-C57's latest board/meta result released its Wire-registry lease, while the top
-implementation handoff still records the older C57 lock. C61 still owns the
-architecture baseline. C63 therefore does not edit either shared file until a
-synchronized handoff or owner-mediated canonical lease amendment authorizes
-the exact downward-only changes.
+The current implementation handoff retains C57's exact Wire-registry lock and
+C61's architecture-baseline ownership. A prior board/meta note recorded a C57
+release, so the state is not treated as authoritative for mutation. C63 does
+not edit either shared file until a synchronized handoff or owner-mediated
+canonical lease amendment authorizes the exact downward-only changes.
 
 ## Final-head hashes
 
 ```text
-952d5a2f302552d9cd585ef96780d119c2d1ef23c1a815518239b64089f79e88  agent-cli/internal/services/internal/agentruntime/session_terminal_outcome.go
+8866a4aedcff9768e957ca5a9755db86702f5696eba29c68a7b14d60617f395d  agent-cli/internal/services/internal/agentruntime/session_terminal_outcome.go
 7a22e03b6d305838f162695c0bf72b974fca7a3c5477246bba6e29da265b83d8  agent-cli/internal/services/internal/agentruntime/session_terminal_outcome_test.go
 453a82f4134fcfe61d82df649de8ee6a645514a5ad930005b2708ec896a57bac  go-agent-runtime/services/terminaloutcome/contract.go
 c329c84f7a7ad478a3fe58618f3f448290c1fa9fae287c10fce2e9941c2514bc  go-agent-runtime/services/terminaloutcome/internal/service/errors.go
@@ -74,12 +76,20 @@ make vet                                                               PASS
 make lint                                                              PASS (pinned golangci-lint 2.9.0)
 make staticcheck                                                       PASS (pinned staticcheck 2026.1)
 private service coverage                                                PASS (96.4%, floor 95.0%)
-make coverage-changed COVERAGE_BASE=d5d6f84363d8569d5dc1a59985f8d45cf50e1d06 PASS (179 registered packages, 7 profiles)
+make coverage-changed COVERAGE_BASE=d5d6f84363d8569d5dc1a59985f8d45cf50e1d06 prior run PASS (179 registered packages, 7 profiles)
 go generate ./services/terminaloutcome/wire (GOWORK=off)                PASS; unchanged output
 forbidden CLI/device import scan                                           PASS; no matches
 caller diff excluding the two owned legacy files                       PASS; no output
 git diff --check                                                        PASS
 ```
+
+The prior complete changed-coverage run is retained for the implementation
+source. A later rerun after the immutable-sentinel repair reached the existing
+integration test `TestSessionToolCallConversationBrowserRecordingParity`,
+which failed once while decoding its generated two-line recording; the exact
+test passed when isolated on the same source, and no C63-owned caller or
+recording path changed. This intermittent base-suite result is not treated as
+C63 evidence or repaired out of lease.
 
 The tests cover ordered fatal/replay/cancellation/observed/duration/fallback
 precedence, all supported stream payload classes and empty values, artifact
@@ -119,7 +129,8 @@ make wire-check
 make architecture-check
   FAIL: generated-file-spoof .../services/terminaloutcome/wire/wire_gen.go
 make size-check
-  FAIL: three baseline-stale entries for the retired legacy file
+  FAIL: four baseline-stale entries for the retired legacy file (file,
+        function, mutable-global, cyclomatic-complexity)
 ```
 
 No limit was raised and no peer finding was absorbed. Exact next action: retain
