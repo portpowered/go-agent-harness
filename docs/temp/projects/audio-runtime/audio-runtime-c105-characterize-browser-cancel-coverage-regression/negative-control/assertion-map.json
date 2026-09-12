@@ -1,0 +1,234 @@
+{
+  "interpretation": "The historical CI state Finalized:true with Cancellation.FinalState empty and a cancel broker call State:canceled/Terminal:false is rejected by both finalized/mechanical and canceled-terminal assertions.",
+  "test_name": "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab",
+  "unchanged_assertion_proof": [
+    {
+      "assertion": "result.Finalized && result.Mechanical.Passed",
+      "end_line": 220,
+      "id": "test-finalized-mechanical",
+      "lines_by_revision": {
+        "c93": [
+          {
+            "line": 219,
+            "text": "\tif !result.Finalized || !result.Mechanical.Passed {"
+          },
+          {
+            "line": 220,
+            "text": "\t\tt.Fatalf(\"result = %+v, want finalized mechanical pass\", result)"
+          }
+        ],
+        "main": [
+          {
+            "line": 219,
+            "text": "\tif !result.Finalized || !result.Mechanical.Passed {"
+          },
+          {
+            "line": 220,
+            "text": "\t\tt.Fatalf(\"result = %+v, want finalized mechanical pass\", result)"
+          }
+        ]
+      },
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner_test.go",
+      "rejects": "any non-finalized or non-mechanical result",
+      "same_text_at_both_revisions": true,
+      "start_line": 219
+    },
+    {
+      "assertion": "cancellation.FinalState == webmcp.InvocationCanceled",
+      "end_line": 224,
+      "id": "test-canceled-terminal",
+      "lines_by_revision": {
+        "c93": [
+          {
+            "line": 222,
+            "text": "\tcancellation := result.Cancellation"
+          },
+          {
+            "line": 223,
+            "text": "\tif !cancellation.Interrupted || !cancellation.Requested || cancellation.InvocationID == \"\" || cancellation.FinalState != webmcp.InvocationCanceled {"
+          },
+          {
+            "line": 224,
+            "text": "\t\tt.Fatalf(\"cancellation = %+v, want interrupted requested canceled invocation\", cancellation)"
+          }
+        ],
+        "main": [
+          {
+            "line": 222,
+            "text": "\tcancellation := result.Cancellation"
+          },
+          {
+            "line": 223,
+            "text": "\tif !cancellation.Interrupted || !cancellation.Requested || cancellation.InvocationID == \"\" || cancellation.FinalState != webmcp.InvocationCanceled {"
+          },
+          {
+            "line": 224,
+            "text": "\t\tt.Fatalf(\"cancellation = %+v, want interrupted requested canceled invocation\", cancellation)"
+          }
+        ]
+      },
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner_test.go",
+      "rejects": "a missing or non-canceled final invocation state",
+      "same_text_at_both_revisions": true,
+      "start_line": 222
+    },
+    {
+      "assertion": "result.Cancellation.FinalState != webmcp.InvocationCanceled",
+      "end_line": 42,
+      "id": "mechanical-interruption-terminal",
+      "lines_by_revision": {
+        "c93": [
+          {
+            "line": 33,
+            "text": "\tif browserConversationHasInterruption(scenario) {"
+          },
+          {
+            "line": 34,
+            "text": "\t\tif !result.Cancellation.Interrupted {"
+          },
+          {
+            "line": 35,
+            "text": "\t\t\tfailures = append(failures, \"cancellation: declared interruption was not observed\")"
+          },
+          {
+            "line": 36,
+            "text": "\t\t}"
+          },
+          {
+            "line": 37,
+            "text": "\t\tif result.Cancellation.InvocationID == \"\" {"
+          },
+          {
+            "line": 38,
+            "text": "\t\t\tfailures = append(failures, \"cancellation: interrupted invocation identity is missing\")"
+          },
+          {
+            "line": 39,
+            "text": "\t\t}"
+          },
+          {
+            "line": 40,
+            "text": "\t\tif result.Cancellation.FinalState != webmcp.InvocationCanceled {"
+          },
+          {
+            "line": 41,
+            "text": "\t\t\tfailures = append(failures, \"cancellation: interrupted invocation did not reach canceled terminal state\")"
+          },
+          {
+            "line": 42,
+            "text": "\t\t}"
+          }
+        ],
+        "main": [
+          {
+            "line": 33,
+            "text": "\tif browserConversationHasInterruption(scenario) {"
+          },
+          {
+            "line": 34,
+            "text": "\t\tif !result.Cancellation.Interrupted {"
+          },
+          {
+            "line": 35,
+            "text": "\t\t\tfailures = append(failures, \"cancellation: declared interruption was not observed\")"
+          },
+          {
+            "line": 36,
+            "text": "\t\t}"
+          },
+          {
+            "line": 37,
+            "text": "\t\tif result.Cancellation.InvocationID == \"\" {"
+          },
+          {
+            "line": 38,
+            "text": "\t\t\tfailures = append(failures, \"cancellation: interrupted invocation identity is missing\")"
+          },
+          {
+            "line": 39,
+            "text": "\t\t}"
+          },
+          {
+            "line": 40,
+            "text": "\t\tif result.Cancellation.FinalState != webmcp.InvocationCanceled {"
+          },
+          {
+            "line": 41,
+            "text": "\t\t\tfailures = append(failures, \"cancellation: interrupted invocation did not reach canceled terminal state\")"
+          },
+          {
+            "line": 42,
+            "text": "\t\t}"
+          }
+        ]
+      },
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
+      "rejects": "an interrupted invocation without canceled terminal state",
+      "same_text_at_both_revisions": true,
+      "start_line": 33
+    },
+    {
+      "assertion": "result.Cancellation.FinalState != webmcp.InvocationCanceled",
+      "end_line": 52,
+      "id": "mechanical-explicit-cancel-terminal",
+      "lines_by_revision": {
+        "c93": [
+          {
+            "line": 47,
+            "text": "\tif browserConversationHasCancel(scenario) {"
+          },
+          {
+            "line": 48,
+            "text": "\t\tif !result.Cancellation.Requested {"
+          },
+          {
+            "line": 49,
+            "text": "\t\t\tfailures = append(failures, \"cancellation: explicit customer cancel was not observed\")"
+          },
+          {
+            "line": 50,
+            "text": "\t\t}"
+          },
+          {
+            "line": 51,
+            "text": "\t\tif result.Cancellation.FinalState != webmcp.InvocationCanceled {"
+          },
+          {
+            "line": 52,
+            "text": "\t\t\tfailures = append(failures, \"cancellation: explicit cancel did not preserve a canceled terminal state\")"
+          }
+        ],
+        "main": [
+          {
+            "line": 47,
+            "text": "\tif browserConversationHasCancel(scenario) {"
+          },
+          {
+            "line": 48,
+            "text": "\t\tif !result.Cancellation.Requested {"
+          },
+          {
+            "line": 49,
+            "text": "\t\t\tfailures = append(failures, \"cancellation: explicit customer cancel was not observed\")"
+          },
+          {
+            "line": 50,
+            "text": "\t\t}"
+          },
+          {
+            "line": 51,
+            "text": "\t\tif result.Cancellation.FinalState != webmcp.InvocationCanceled {"
+          },
+          {
+            "line": 52,
+            "text": "\t\t\tfailures = append(failures, \"cancellation: explicit cancel did not preserve a canceled terminal state\")"
+          }
+        ]
+      },
+      "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
+      "rejects": "an explicit cancel without canceled terminal state",
+      "same_text_at_both_revisions": true,
+      "start_line": 47
+    }
+  ]
+}

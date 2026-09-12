@@ -1,0 +1,29 @@
+{
+  "bad_state": {
+    "cancel_broker_state": "canceled",
+    "cancel_broker_terminal": false,
+    "cancellation_final_state": "",
+    "mechanical_passed": false,
+    "result_finalized": true
+  },
+  "negative_control_sha256": "244bd0ebbd3219ef85f11e83883290a803ff6aa6aeb193dc07955fdff4441af0",
+  "negative_control_source": "https://github.com/portpowered/go-agent-harness/actions/runs/34702885866/job/103577645543",
+  "rejections": [
+    {
+      "assertion_id": "test-finalized-mechanical",
+      "bad_state_rejected": true
+    },
+    {
+      "assertion_id": "test-canceled-terminal",
+      "bad_state_rejected": true
+    },
+    {
+      "assertion_id": "mechanical-interruption-terminal",
+      "bad_state_rejected": true
+    },
+    {
+      "assertion_id": "mechanical-explicit-cancel-terminal",
+      "bad_state_rejected": true
+    }
+  ]
+}

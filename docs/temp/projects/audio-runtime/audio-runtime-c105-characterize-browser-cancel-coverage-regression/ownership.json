@@ -1,0 +1,90 @@
+{
+  "canonical_owner": {
+    "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+    "canonical_feedback": "Static CI found only the unregistered browserrunner Wire file and nine stale C83 baseline entries; browserrunner and external-consumer normal/race tests pass. Repair remains dependent on C79 shared-file ownership and the unmerged C61 prerequisite.",
+    "canonical_record_source": "you --server $FACTORY_SERVER_URL --session ~default --json work show work-task-125",
+    "lease_status": "inactive; C105 does not transfer ownership",
+    "owner_paths": [
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go",
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_fixture_options.go",
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner_test.go",
+      "go-agent-runtime/services/browserrunner/"
+    ],
+    "state": "FAILED",
+    "task_id": "work-task-125",
+    "task_name": "audio-runtime-c83-retire-cli-browser-scenario-runner",
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c83-retire-cli-browser-scenario-runner"
+  },
+  "consumer_not_owner": {
+    "role": "separate contract/evaluation policy owner and dependency; not the observed runner event edge",
+    "state": "FAILED",
+    "task_id": "work-task-34",
+    "task_name": "audio-runtime-c61-retire-cli-browser-scenario-contract"
+  },
+  "exact_event_edge": {
+    "causal_observation": "Cancel records a nonterminal canceled broker call and requested cancellation without a final state; only a later terminal invocation result can fill FinalState, while mechanical evaluation requires that terminal canceled state.",
+    "owner": "C83 preserved browser-scenario runner",
+    "paths_and_symbols": [
+      {
+        "lines": "56-101",
+        "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+        "symbol": "browserConversationInterruptionController.observeInFlight"
+      },
+      {
+        "lines": "228-385",
+        "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go",
+        "symbol": "browserConversationEvidenceTracker.observe/cancelInvocation"
+      },
+      {
+        "lines": "849-912",
+        "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+        "symbol": "browserConversationBroker.Invoke"
+      },
+      {
+        "lines": "914-936",
+        "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+        "symbol": "browserConversationBroker.Cancel"
+      },
+      {
+        "lines": "640-697",
+        "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
+        "symbol": "BrowserConversationRun.RecordCancellation"
+      },
+      {
+        "lines": "27-124",
+        "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
+        "symbol": "evaluateBrowserConversation"
+      },
+      {
+        "lines": "779-792",
+        "path": "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
+        "symbol": "BrowserConversationRun.Finalize"
+      }
+    ]
+  },
+  "one_recommendation": {
+    "dependencies": [
+      "C83 canonical browserrunner ownership must be resumed/leased by the factory",
+      "C79 shared-file ownership and the C61 prerequisite must be resolved before any repair merge",
+      "later executor submits changed head to SCRIPT-owned current-head CI, then independent review and guarded merge"
+    ],
+    "focused_regressions": [
+      "the named test in normal mode",
+      "the named test with -tags=nomicrophone and the admitted coverpkg set"
+    ],
+    "implemented_by_c105": false,
+    "kind": "bounded instrumentation",
+    "preserve_assertions": [
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner_test.go:219-228",
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go:33-53"
+    ],
+    "proposed_paths": [
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go"
+    ],
+    "scope": "retain ordered InvocationID/State/Terminal observations from Cancel through WaitInvocation and RecordCancellation so a missing terminal publication is attributable without inferring completion"
+  }
+}

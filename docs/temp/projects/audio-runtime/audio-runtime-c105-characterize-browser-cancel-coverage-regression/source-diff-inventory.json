@@ -1,0 +1,128 @@
+{
+  "base_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "browser_related_changed_paths": [],
+  "candidate_revision": "35b4752e578dff49744159012982fccfacfb9794",
+  "changed_path_count": 23,
+  "changed_paths": [
+    {
+      "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+      "status": "M"
+    },
+    {
+      "path": "coverage-manifest/go-agent-runtime/services/roommedia/internal/service/package.json",
+      "status": "A"
+    },
+    {
+      "path": "coverage-manifest/go-agent-runtime/services/roommedia/package.json",
+      "status": "A"
+    },
+    {
+      "path": "coverage-manifest/go-agent-runtime/services/roommedia/transports/package.json",
+      "status": "A"
+    },
+    {
+      "path": "coverage-manifest/go-agent-runtime/services/roommedia/wire/package.json",
+      "status": "A"
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/external-consumer/go.mod",
+      "status": "A"
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/external-consumer/go.sum",
+      "status": "A"
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/external-consumer/main.go",
+      "status": "A"
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/external-consumer/main_test.go",
+      "status": "A"
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/pr-body.md",
+      "status": "A"
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/run.py",
+      "status": "A"
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/source-census.md",
+      "status": "A"
+    },
+    {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/verify.py",
+      "status": "A"
+    },
+    {
+      "path": "go-agent-runtime/services/roommedia/contract.go",
+      "status": "A"
+    },
+    {
+      "path": "go-agent-runtime/services/roommedia/internal/service/capture.go",
+      "status": "A"
+    },
+    {
+      "path": "go-agent-runtime/services/roommedia/internal/service/output.go",
+      "status": "A"
+    },
+    {
+      "path": "go-agent-runtime/services/roommedia/internal/service/provider.go",
+      "status": "A"
+    },
+    {
+      "path": "go-agent-runtime/services/roommedia/internal/service/service.go",
+      "status": "A"
+    },
+    {
+      "path": "go-agent-runtime/services/roommedia/internal/service/service_test.go",
+      "status": "A"
+    },
+    {
+      "path": "go-agent-runtime/services/roommedia/transports/adapter.go",
+      "status": "A"
+    },
+    {
+      "path": "go-agent-runtime/services/roommedia/transports/adapter_test.go",
+      "status": "A"
+    },
+    {
+      "path": "go-agent-runtime/services/roommedia/wire/providers.go",
+      "status": "A"
+    },
+    {
+      "path": "go-agent-runtime/services/roommedia/wire/wire_gen.go",
+      "status": "A"
+    }
+  ],
+  "finding": "C93 changes room-media production/coverage evidence paths and does not change the browser scenario runner, tracker, interruption controller, evaluation, or named test paths.",
+  "full_diff_sha256": "0cbd04c61bdbeebd231999772bf6ec67fa40b42234312f9c8aa5e5235e1c9901",
+  "name_status": [
+    "M\tagent-cli/internal/services/internal/agentruntime/session_room_run.go",
+    "A\tcoverage-manifest/go-agent-runtime/services/roommedia/internal/service/package.json",
+    "A\tcoverage-manifest/go-agent-runtime/services/roommedia/package.json",
+    "A\tcoverage-manifest/go-agent-runtime/services/roommedia/transports/package.json",
+    "A\tcoverage-manifest/go-agent-runtime/services/roommedia/wire/package.json",
+    "A\tdocs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/external-consumer/go.mod",
+    "A\tdocs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/external-consumer/go.sum",
+    "A\tdocs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/external-consumer/main.go",
+    "A\tdocs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/external-consumer/main_test.go",
+    "A\tdocs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/pr-body.md",
+    "A\tdocs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/run.py",
+    "A\tdocs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/source-census.md",
+    "A\tdocs/temp/projects/audio-runtime/audio-runtime-c93-retire-cli-room-media-io/verify.py",
+    "A\tgo-agent-runtime/services/roommedia/contract.go",
+    "A\tgo-agent-runtime/services/roommedia/internal/service/capture.go",
+    "A\tgo-agent-runtime/services/roommedia/internal/service/output.go",
+    "A\tgo-agent-runtime/services/roommedia/internal/service/provider.go",
+    "A\tgo-agent-runtime/services/roommedia/internal/service/service.go",
+    "A\tgo-agent-runtime/services/roommedia/internal/service/service_test.go",
+    "A\tgo-agent-runtime/services/roommedia/transports/adapter.go",
+    "A\tgo-agent-runtime/services/roommedia/transports/adapter_test.go",
+    "A\tgo-agent-runtime/services/roommedia/wire/providers.go",
+    "A\tgo-agent-runtime/services/roommedia/wire/wire_gen.go"
+  ],
+  "stat": ".../internal/agentruntime/session_room_run.go      | 304 ++------------\n .../roommedia/internal/service/package.json        |   1 +\n .../services/roommedia/package.json                |   1 +\n .../services/roommedia/transports/package.json     |   4 +\n .../services/roommedia/wire/package.json           |   1 +\n .../external-consumer/go.mod                       |  17 +\n .../external-consumer/go.sum                       |  12 +\n .../external-consumer/main.go                      | 146 +++++++\n .../external-consumer/main_test.go                 |   9 +\n .../pr-body.md                                     |  57 +++\n .../run.py                                         | 381 ++++++++++++++++++\n .../source-census.md                               |  95 +++++\n .../verify.py                                      | 196 +++++++++\n go-agent-runtime/services/roommedia/contract.go    | 213 ++++++++++\n .../services/roommedia/internal/service/capture.go | 131 +++++++\n .../services/roommedia/internal/service/output.go  | 126 ++++++\n .../roommedia/internal/service/provider.go         | 106 +++++\n .../services/roommedia/internal/service/service.go |  66 ++++\n .../roommedia/internal/service/service_test.go     | 436 +++++++++++++++++++++\n .../services/roommedia/transports/adapter.go       | 227 +++++++++++\n .../services/roommedia/transports/adapter_test.go  | 344 ++++++++++++++++\n .../services/roommedia/wire/providers.go           |  27 ++\n .../services/roommedia/wire/wire_gen.go            |  30 ++\n 23 files changed, 2668 insertions(+), 262 deletions(-)"
+}

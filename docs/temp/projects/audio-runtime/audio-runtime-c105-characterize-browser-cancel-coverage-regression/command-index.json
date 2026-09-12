@@ -1,0 +1,15 @@
+{
+  "aggregate_elapsed_seconds": 236.829422,
+  "matrix_command": "python3 docs/temp/projects/audio-runtime/audio-runtime-c105-characterize-browser-cancel-coverage-regression/run_matrix.py --main d4766c3dbbf2c198142047ead4449d58dd47d485 --candidate 35b4752e578dff49744159012982fccfacfb9794 --trials 10 --per-command-timeout 90 --aggregate-timeout 600",
+  "trial_count": 40,
+  "verifier_commands": [
+    "python3 docs/temp/projects/audio-runtime/audio-runtime-c105-characterize-browser-cancel-coverage-regression/verify.py --mode provenance",
+    "python3 docs/temp/projects/audio-runtime/audio-runtime-c105-characterize-browser-cancel-coverage-regression/verify.py --mode negative-control",
+    "python3 docs/temp/projects/audio-runtime/audio-runtime-c105-characterize-browser-cancel-coverage-regression/verify.py --mode matrix",
+    "python3 docs/temp/projects/audio-runtime/audio-runtime-c105-characterize-browser-cancel-coverage-regression/verify.py --mode trial-ledger",
+    "python3 docs/temp/projects/audio-runtime/audio-runtime-c105-characterize-browser-cancel-coverage-regression/verify.py --mode classification",
+    "python3 docs/temp/projects/audio-runtime/audio-runtime-c105-characterize-browser-cancel-coverage-regression/verify.py --mode ownership",
+    "python3 docs/temp/projects/audio-runtime/audio-runtime-c105-characterize-browser-cancel-coverage-regression/verify.py --mode recommendation",
+    "python3 docs/temp/projects/audio-runtime/audio-runtime-c105-characterize-browser-cancel-coverage-regression/verify.py --mode all"
+  ]
+}

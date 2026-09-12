@@ -1,0 +1,18 @@
+{
+  "classification": "named test assertion failure; not timeout, compile failure, or zero-test run",
+  "elapsed": "6m36.472s",
+  "exit_status": 1,
+  "failing_test": "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab",
+  "head_revision": "35b4752e578dff49744159012982fccfacfb9794",
+  "job_id": 103577645543,
+  "literal_failure_excerpt": [
+    "session_browser_scenario_runner_test.go:220: result = {... Finalized:true ... Cancellation:{Interrupted:true Requested:true InvocationID:inv-000002 FinalState: Reason:customer requested stop ...} ... Mechanical:{Passed:false ... interrupted invocation did not reach canceled terminal state ... explicit cancel did not preserve a canceled terminal state ...}}, want finalized mechanical pass",
+    "the preserved broker cancellation observation is State:canceled with Terminal:false; Cancellation.FinalState is empty",
+    "the unchanged test requires result.Finalized && result.Mechanical.Passed and cancellation.FinalState == webmcp.InvocationCanceled"
+  ],
+  "log_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34702885866/job/103577645543",
+  "provenance_note": "The canonical CI log is not rewritten into this task. The immutable job URL and SHA256 preserve the historical negative control without importing bulky log output.",
+  "source": "GitHub Actions coverage job",
+  "source_log_sha256": "244bd0ebbd3219ef85f11e83883290a803ff6aa6aeb193dc07955fdff4441af0",
+  "workflow_run_id": 34702885866
+}

@@ -1,0 +1,14 @@
+{
+  "checked_at": "2026-09-12T17:51:53.687488Z",
+  "error_count": 0,
+  "errors": [],
+  "mode": "all",
+  "passed": true,
+  "task": "audio-runtime-c105-characterize-browser-cancel-coverage-regression",
+  "verifier_environment": {
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c105-characterize-browser-cancel-coverage-regression",
+    "platform": "macOS-15.6-arm64-arm-64bit-Mach-O",
+    "python": "3.14.5 (main, May 10 2026, 10:21:34) [Clang 17.0.0 (clang-1700.6.4.2)]"
+  },
+  "version": 1
+}

@@ -1,0 +1,91 @@
+{
+  "browser_related_changed_paths": [],
+  "c93_product_failure_count": 0,
+  "cells": [
+    {
+      "classification_counts": {
+        "PASS": 10
+      },
+      "infra_count": 0,
+      "mode": "normal",
+      "negative_control_signature_counts": {},
+      "pass_count": 10,
+      "product_failure_count": 0,
+      "revision_label": "main",
+      "terminal_conclusion_counts": {
+        "TERMINAL_CANCELED_ASSERTED": 10
+      },
+      "test_failure_count": 0,
+      "timeout_count": 0,
+      "trial_count": 10
+    },
+    {
+      "classification_counts": {
+        "PASS": 10
+      },
+      "infra_count": 0,
+      "mode": "nomicrophone-coverpkg",
+      "negative_control_signature_counts": {},
+      "pass_count": 10,
+      "product_failure_count": 0,
+      "revision_label": "main",
+      "terminal_conclusion_counts": {
+        "TERMINAL_CANCELED_ASSERTED": 10
+      },
+      "test_failure_count": 0,
+      "timeout_count": 0,
+      "trial_count": 10
+    },
+    {
+      "classification_counts": {
+        "PASS": 10
+      },
+      "infra_count": 0,
+      "mode": "normal",
+      "negative_control_signature_counts": {},
+      "pass_count": 10,
+      "product_failure_count": 0,
+      "revision_label": "c93",
+      "terminal_conclusion_counts": {
+        "TERMINAL_CANCELED_ASSERTED": 10
+      },
+      "test_failure_count": 0,
+      "timeout_count": 0,
+      "trial_count": 10
+    },
+    {
+      "classification_counts": {
+        "PASS": 10
+      },
+      "infra_count": 0,
+      "mode": "nomicrophone-coverpkg",
+      "negative_control_signature_counts": {},
+      "pass_count": 10,
+      "product_failure_count": 0,
+      "revision_label": "c93",
+      "terminal_conclusion_counts": {
+        "TERMINAL_CANCELED_ASSERTED": 10
+      },
+      "test_failure_count": 0,
+      "timeout_count": 0,
+      "trial_count": 10
+    }
+  ],
+  "classification": "INCONCLUSIVE",
+  "evidence_threshold": "The fixed paired observations do not demonstrate an accepted-main recurrence, a necessary environment condition, or a changed browser causal edge sufficient for one of the other classes.",
+  "falsifiers": [
+    "A reproducible candidate-only failure with a changed browser cancellation edge would resolve this as C93_REGRESSION.",
+    "The same failure recurring on accepted main in a matched mode would resolve this as ACCEPTED_MAIN_BROWSER_FLAKE.",
+    "The same failure only under a recorded coverpkg/nomicrophone condition on both revisions would resolve this as ENVIRONMENT_ONLY_TRIGGER."
+  ],
+  "inconclusive_is_not_pass": true,
+  "invalid_cells": [],
+  "main_product_failure_count": 0,
+  "matched_failure_cells": [],
+  "matrix_file": "matrix.json",
+  "negative_control_reproduced": false,
+  "task": "audio-runtime-c105-characterize-browser-cancel-coverage-regression",
+  "test_name": "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab",
+  "trial_ledger_file": "trial-ledger.json",
+  "version": 1
+}
