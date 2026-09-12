@@ -1,0 +1,141 @@
+C68 zero-audio attribution checkpoint ledger
+
+2026-09-11: Admission verified with project-control.py for the single
+audio-runtime task. The isolated branch matches prd.branchName and started at
+the fetched origin/main d5d6f84363d8569d5dc1a59985f8d45cf50e1d06. Startup
+8bdafc7f947a3a2c9856220abdc539437035bd21 and recording baseline ancestry are
+preserved.
+
+2026-09-11: Exact C23 and C56 predecessor task inputs were copied into the
+owned inputs/ path and byte-checked against b2fb41401cd0934378b9ff1bc131532fdc19f614
+and 85710a53a2e9449884fb81f979df0599269ef3b3. Both complete source archives
+were prepared and the unchanged C23 consumer built with -trimpath against
+each source.
+
+2026-09-11: Four canonical positive cases completed: one recording-off and
+one recording-on turn for each source. Provider capture and public PCM each
+contain one non-empty 128-byte frame with SHA
+1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588. Recording
+on remains accepted_audio=0/audio_bytes=0 with a clean drain and missing
+audio/out-000.pcm for both sources. First failure is preserved at
+artifacts/first-failures/recording-observer-admission.json.
+
+2026-09-11: The first-provider-audio negative control was rejected at the
+provider/public audio oracle boundary. C21 normal count=5 and race count=1
+focused regressions passed.
+
+2026-09-11: verify.py --mode all passed provenance, oracle controls, four
+boundaries, attribution, cleanup, and the C21 evidence. Classification is
+C56_RECORDING_DEFECT; no C23 runner/oracle repair is indicated. Next action
+after commit/push/PR is external script CI submission without polling.
+
+2026-09-11: Script CI run 34665087212 rejected PR457 at candidate
+3084b83f469600f8714c875b2b0d0cae7ad6bf5f only in the audio stability race
+step. The exact failure was the unchanged current-main test
+TestVirtualPlaybackCapacityAdversarial/08_waiter_remains_blocked_above_low_watermark
+in go-device-gateway/pkg/devices: capacity wait returned while it should be
+blocked: <nil>. The full job log is identified by SHA-256
+cddf5ac18cfdd77d4445974bc9f8094418417a50604f36a82d3bc2d84068c17b.
+
+2026-09-11: The exact make test-audio-stability-race command passed locally,
+and the named subtest passed 20 focused -race iterations. The candidate diff
+still contains only the owned evidence directory; no production/shared path,
+assertion, timeout or oracle was changed. The failure is retained as
+ci-race-reproduction.json and is not attributed to C68. After this changed
+evidence checkpoint, push PR457 and submit the same task to script CI without
+polling; retain ownership for any exact new rejection.
+
+2026-09-11: Checkpoint 277a120198a0a7b320b0c03bb355d71d0a53f591 was committed
+and pushed to the preserved PR457 branch. The final clean-head verifier passed
+all C68 modes, the branch remains based on accepted origin/main d5d6f843, and
+the diff remains evidence-only. This exact changed head is ready for the
+script-CI gate; CI terminal status is intentionally not polled or claimed.
+
+2026-09-11: Review repair checkpoint 97b4f042869d47705517e651dc97a6ce586cb06a
+added canonical attribution.json, exact Git-archive and extracted-tree
+bindings, recomputed build-input and executable bindings, a two-way sibling
+binary swap rejection guard, fail-closed provider/negative assertions, bounded
+artifact accounting, duplicate-run reservation/history, and process-group
+grandchild cleanup control. No production, shared Wire, baseline, or
+predecessor path changed.
+
+2026-09-11: Fresh admitted-source preparation and builds passed for C23
+b2fb41401cd0934378b9ff1bc131532fdc19f614 and C56
+85710a53a2e9449884fb81f979df0599269ef3b3. The canonical comparison run
+20260912T025041Z-104877000-comparison completed exactly four one-turn
+off/on cases in 11395 ms. Each provider/public boundary contained one
+non-empty 128-byte PCM frame with SHA
+1e587b484cbfe009fae0409678b68a2d80e3576b7aa49e2d43dfca06730dc588; recording
+on remained accepted_audio=0/audio_bytes=0 with no audio/out-000.pcm for both
+sources. The prior comparison was retained in comparison-runs.json.
+
+2026-09-11: The first-provider-audio negative control passed with exact
+returncode=1, one zero-byte provider AUDIO.DELTA, empty public PCM, and the
+intended PCM oracle error. The descendant cleanup probe passed with SIGTERM,
+SIGKILL, parent reaping, pipe reaping, and zero survivors; its predecessor
+probe remains preserved under artifacts/cleanup-control-legacy-97b4.
+
+2026-09-11: C21 normal count=5 and race count=1 passed against candidate
+97b4f042869d47705517e651dc97a6ce586cb06a. verify.py --mode all passed
+provenance, oracle-controls, boundaries, attribution, and cleanup with
+retained artifact usage 748642 bytes. Classification remains exactly one
+C56_RECORDING_DEFECT at recording_observer_admission, with owner action on
+the existing C56 task. Next action is commit/push/update PR457 and submit the
+same candidate to external script CI without polling; retain ownership for
+any exact rejection.
+
+2026-09-11: Review-86 repair checkpoint 597c75cf6ff640febdc8fae192fbd4b533990536
+closed the remaining source-label trust, frozen-input, escaped-grandchild,
+negative-control, and retained-positive-artifact gates. The exact prior
+integration rejection is preserved in ci-integration-rejection.json: run
+34669154964/job 103487069605 lost 6,400 high-rate rendered samples while
+reporting zero dropped samples, an existing C47/C64 residual outside C68's
+evidence-only lease.
+
+2026-09-11: The first fresh four-case comparison under 597c75cf completed as
+20260912T033652Z-807044000-comparison, but the fail-closed verifier rejected
+its own attempt ledger because the optional historical/complete state label
+was included in one artifact digest. No external or production failure was
+introduced. Repair checkpoint 3d93b523eb594fae7cedeecdda2845a582b560bc
+normalizes that ledger-only label while preserving the prior attempt.
+
+2026-09-11: Fresh prepare/build/control evidence under 3d93b523 passed for
+C23 b2fb41401cd0934378b9ff1bc131532fdc19f614 and C56
+85710a53a2e9449884fb81f979df0599269ef3b3. Cleanup reaped the intentionally
+setsid-escaped grandchild with SIGTERM/SIGKILL and zero survivors; the exact
+first-provider-audio negative returned 1 at the PCM oracle. The single fresh
+comparison 20260912T034156Z-264425000-comparison completed exactly four
+one-turn off/on cases and classified C56_RECORDING_DEFECT. Every provider and
+public boundary had one non-empty 128-byte PCM frame; recording on remained
+accepted_audio=0/audio_bytes=0 with no audio/out-000.pcm.
+
+2026-09-11: C21 normal count=5 and race count=1 passed against 3d93b523.
+verify.py --mode all passed provenance, oracle-controls, boundaries,
+attribution, and cleanup with 1,247,696 retained artifact bytes. The ledger
+accounts for every retained positive root and binds the current attempt to
+the normalized artifact inventory. Next action is force-add the generated
+owned evidence, commit, push/update PR457, and return ACCEPTED to the external
+script-CI gate without polling; retain C68 ownership for any exact rejection.
+
+2026-09-12: The canonical current-head rejection for PR457 at candidate
+0efdb49b53cb4bb0edf925f2d3ba1c35d3866760 is preserved in
+ci-integration-rejection-34671293029.json. Full run 34671293029/job
+103493004872 was read; all checks passed except CI (integration), whose
+production-binary TestAgentBinaryTest45HighRateToolAudioRegression trial 03
+and trial 20 each rendered 171191 of 177591 compared samples, losing exactly
+6400 while reporting zero dropped/discarded samples. Playback reported
+underflow/zero-fill, and provider protocol errors were empty. This is the
+existing C47/C64 production owner boundary, outside C68's evidence-only lease;
+no production repair, assertion waiver or timeout change was made. The raw
+job-log capture is bound by 36997 bytes and SHA-256
+89ca4ece5192fd6e9f0b6b5405032315ae1ef9bacf82aaba39c732a397adf167.
+
+2026-09-12: At current head 0efdb49, the task-local verify.py modes
+provenance, oracle-controls, boundaries, attribution, cleanup and all passed.
+The C68 comparison remains exactly four positive one-turn cases and the
+classification remains C56_RECORDING_DEFECT with the existing C56 executor as
+owner. The new rejection record is evidence-only and does not change the
+comparison, executable inputs or C21 evidence. Next action: commit and push
+this changed owned evidence, update PR457, and return ACCEPTED to the
+script-owned CI gate without polling; retain the same task for any exact new
+rejection.
