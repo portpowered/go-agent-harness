@@ -75,3 +75,30 @@ The admitted branch remains clean and pushed at `d6f788a5d487b1a65a1255845cf6066
 
 The current shared-gate observations remain unmodified and actionable: Wire
 reports only the unregistered `go-agent-runtime/services/sessionlive/wire/wire_gen.go`; architecture reports 11 downward/stale entries, consisting of the reduced `session_drain.go` baseline and the 10 reduced/stale `session_live.go` entries. C79 still owns the shared Wire registry and architecture baseline, and C64's reviewed terminal-drain release is still required before final main reconciliation. No CI-green, review, merge, vertical, acoustic, or project-acceptance claim is made.
+
+## Fresh bounded revalidation — 2026-09-12T09:40:38Z
+
+At source `9eac836b4f92fe8151495475fc190550989aa74c`, the focused causal and
+accumulated controls were rerun without changing the shared C64/C79 paths:
+
+- `go test ./go-agent-runtime/services/sessionlive/... -count=5` passed 70
+  tests across 3 packages; the selected service race run passed 39 tests across
+  3 packages; the selected CLI live/scheduled/response run passed 267 tests.
+- The GOWORK=off external consumer passed normal and race at `-count=3`.
+- `verify.py --mode behavior-matrix` and `--mode retirement-and-scope` passed;
+  the latter rechecked the 1,061 + 72 baseline, current 579 + 54 adapter,
+  and 500 retired lines.
+- Both mutation controls passed discovery and positive behavior, then failed
+  for the intended causal assertions: the post-Done mutation reported the
+  missing final text delta, and the deadline-cleanup mutation reported that
+  the deadline timer was not stopped.
+- `COUNT=3 scripts/test-session-ci-regressions.sh all` exited 0 in normal,
+  coverage, and race modes. CLI transport, shipped integration/high-rate and
+  replay-negative controls, simulated-device controls, and composed-provider
+  controls all passed, including the expected negative-control diagnostics.
+
+This remains executor evidence only. C64 terminal-drain ownership and C79
+shared Wire/architecture ownership are still unreleased; the generated Wire
+registration and 11 demonstrated downward/stale architecture entries remain
+deferred. No script-CI, independent-review, guarded-merge, vertical, or
+project-acceptance result is claimed.
