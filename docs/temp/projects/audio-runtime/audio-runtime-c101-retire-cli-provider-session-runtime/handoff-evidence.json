@@ -50,6 +50,19 @@
     "go-agent-runtime/services/providersession/internal/service": "64.4%",
     "go-agent-runtime/services/providersession/wire": "100.0%"
   },
+  "latestVerification": {
+    "sourceRevision": "ddcf156cf8d4b159906bb64bc0cc75e4cd2e5a01",
+    "verifiedAt": "2026-09-12T18:14:45Z",
+    "focused": {
+      "providersessionNormal": "go test ./go-agent-runtime/services/providersession/... -count=1: passed",
+      "providersessionRace": "go test -race ./go-agent-runtime/services/providersession/... -count=3: passed",
+      "agentRuntimeNormal": "go test ./agent-cli/internal/services/internal/agentruntime -run 'ProviderSessionRuntimeService|Replay' -count=1: passed",
+      "agentRuntimeRace": "go test -race ./agent-cli/internal/services/internal/agentruntime -run 'ProviderSessionRuntimeService|Replay' -count=1: passed"
+    },
+    "accumulatedRegressions": "COUNT=1 bash scripts/test-session-ci-regressions.sh all: normal, coverage and race passed, including expected divergence and PCM negative controls",
+    "causalMutations": "verify.py positive-and-three-mutations: positive control and all three intended negative oracles passed",
+    "retirementCensus": "verify.py retirement-and-owned-paths: exact helper diff/caller proof, 130 legacy lines and 253-line reduction passed"
+  },
   "registration": "make coverage-registration: 179 workspace packages checked across 6 modules",
   "localGateStatus": {
     "architectureSizeCheck": "blocked by C79-owned baseline data",
