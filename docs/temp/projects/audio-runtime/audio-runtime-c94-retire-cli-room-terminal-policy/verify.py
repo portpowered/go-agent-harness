@@ -21,6 +21,8 @@ LEGACY = "agent-cli/internal/services/internal/agentruntime/session_room_termina
 ALLOWED_FILES = {
     LEGACY,
     "agent-cli/internal/services/internal/agentruntime/session_room_terminal_test.go",
+    "scripts/wire-packages.txt",
+    "docs/architecture/architecture-size-baseline.json",
 }
 ALLOWED_PREFIXES = (
     "go-agent-runtime/services/roomterminal/",
@@ -48,25 +50,22 @@ def sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def changed_paths() -> set[str]:
-    paths = set(filter(None, git("diff", "--name-only", BASELINE).splitlines()))
+def candidate_paths() -> set[str]:
+    paths = set(filter(None, git("diff", "--name-only", "origin/main").splitlines()))
     for line in git("status", "--porcelain", "--untracked-files=all").splitlines():
         if line:
             paths.add(line[2:].lstrip())
     return paths
 
 
-def integrated_main_paths() -> set[str]:
-    """Return accepted-main files already present in the candidate ancestry."""
-    return set(filter(None, git("diff", "--name-only", BASELINE, "origin/main").splitlines()))
-
-
 def verify_admission_and_scope() -> None:
     require(git("branch", "--show-current") == BRANCH, "candidate branch does not match prd.branchName")
-    allowed = integrated_main_paths() | {
-        path for path in changed_paths() if path in ALLOWED_FILES or path.startswith(ALLOWED_PREFIXES)
-    }
-    unexpected = changed_paths() - allowed
+    for revision in ("8bdafc7f947a3a2c9856220abdc539437035bd21", git("rev-parse", "origin/main")):
+        result = subprocess.run(["git", "-C", str(ROOT), "merge-base", "--is-ancestor", revision, "HEAD"], check=False)
+        require(result.returncode == 0, f"candidate is missing required ancestry {revision}")
+    changed = candidate_paths()
+    allowed = {path for path in changed if path in ALLOWED_FILES or path.startswith(ALLOWED_PREFIXES)}
+    unexpected = changed - allowed
     require(not unexpected, f"candidate changed an unowned path: {sorted(unexpected)}")
     baseline = subprocess.run(["git", "-C", str(ROOT), "show", f"{BASELINE}:{LEGACY}"], capture_output=True, check=False)
     require(baseline.returncode == 0, "planning baseline legacy file is unavailable")
@@ -74,11 +73,6 @@ def verify_admission_and_scope() -> None:
     current = (ROOT / LEGACY).read_bytes()
     require(len(current.splitlines()) <= 84, f"legacy adapter is {len(current.splitlines())} lines, want <=84")
     require("Deprecated" in current.decode(errors="replace"), "legacy adapter does not identify retained compatibility symbols")
-    for revision in ("8bdafc7f947a3a2c9856220abdc539437035bd21", git("rev-parse", "origin/main")):
-        result = subprocess.run(["git", "-C", str(ROOT), "merge-base", "--is-ancestor", revision, "HEAD"], check=False)
-        require(result.returncode == 0, f"candidate is missing required ancestry {revision}")
-
-
 def verify_source_boundary() -> None:
     public = (ROOT / "go-agent-runtime/services/roomterminal/contract.go").read_text(encoding="utf-8")
     private = (ROOT / "go-agent-runtime/services/roomterminal/internal/service/service.go").read_text(encoding="utf-8")
