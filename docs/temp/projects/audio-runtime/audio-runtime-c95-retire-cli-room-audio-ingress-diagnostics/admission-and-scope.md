@@ -25,7 +25,7 @@ The exact admitted predecessor is
 ```text
 baseline physical lines: 472
 baseline SHA-256: 02a7b14d7104329fc71f8f8f97dc59fa26830d2f48dc29283a1a933455dff9c9
-final adapter physical lines: 170
+final adapter physical lines: 168
 ```
 
 The adapter now forwards the public contract through the dedicated runtime
