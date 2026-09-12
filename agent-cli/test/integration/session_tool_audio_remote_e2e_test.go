@@ -42,6 +42,12 @@ var remoteToolAudioNames = []string{
 	"get_state",
 }
 
+// The high-rate trials advance a deterministic device clock from a ticker
+// while each fresh child process owns its own WebSocket and device server.
+// Keep the process-boundary trials concurrent without letting the host
+// scheduler outrun every producer with 40 callback clocks at once.
+var remoteToolAudioHighRateSlots = make(chan struct{}, 2)
+
 type remoteToolAudioCase struct {
 	name            string
 	responseSamples []int
@@ -198,6 +204,8 @@ func TestAgentBinaryTest45HighRateToolAudioRegression(t *testing.T) {
 	for trial := 0; trial < 20; trial++ {
 		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
 			t.Parallel()
+			remoteToolAudioHighRateSlots <- struct{}{}
+			defer func() { <-remoteToolAudioHighRateSlots }()
 			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
 		})
 	}
@@ -216,6 +224,8 @@ func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
 	for trial := 0; trial < 20; trial++ {
 		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
 			t.Parallel()
+			remoteToolAudioHighRateSlots <- struct{}{}
+			defer func() { <-remoteToolAudioHighRateSlots }()
 			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
 		})
 	}
