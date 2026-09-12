@@ -186,10 +186,9 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 	}
 }
 
-// TestAgentBinaryTest45HighRateToolAudioRegression makes the race acceptance
-// criterion explicit: twenty fresh processes replay the full test45 topology.
 func TestAgentBinaryTest45HighRateToolAudioRegression(t *testing.T) {
 	requireRemoteToolAudioStress(t)
+	slots := make(chan struct{}, 2)
 	testCase := remoteToolAudioCase{
 		name:            "test45_high_rate",
 		responseSamples: []int{38400, 0, 66000, 66000, 0, 0, 0, 0, 96000},
@@ -198,16 +197,15 @@ func TestAgentBinaryTest45HighRateToolAudioRegression(t *testing.T) {
 	for trial := 0; trial < 20; trial++ {
 		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
 			t.Parallel()
+			slots <- struct{}{}
+			defer func() { <-slots }()
 			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
 		})
 	}
 }
-
-// TestAgentBinaryTest46HighRateToolAudioRegression gives test46 the same
-// twenty-trial fresh-process acceptance as test45 with its distinct captured
-// lengths; every resampled device sample must be delivered.
 func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
 	requireRemoteToolAudioStress(t)
+	slots := make(chan struct{}, 2)
 	testCase := remoteToolAudioCase{
 		name:            "test46_high_rate",
 		responseSamples: []int{46800, 0, 48000, 55200, 0, 0, 0, 0, 111600},
@@ -216,6 +214,8 @@ func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
 	for trial := 0; trial < 20; trial++ {
 		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
 			t.Parallel()
+			slots <- struct{}{}
+			defer func() { <-slots }()
 			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
 		})
 	}
