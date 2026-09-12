@@ -19,6 +19,7 @@ RUNTIME = ROOT / "go-agent-runtime"
 FACTORY_ROOT = Path(os.environ.get("FACTORY_ROOT", str(ROOT)))
 BASE = "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f"
 INTEGRATION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
+ORIGIN_MAIN = "59af6325614d80173447fe2018a0471e27b4e7b1"
 BRANCH = "codex/audio-runtime-c88-retire-cli-room-tool-capabilities"
 TASK = "audio-runtime-c88-retire-cli-room-tool-capabilities"
 LEGACY = {
@@ -81,7 +82,10 @@ def path_is_owned(path: str) -> bool:
 
 
 def changed_paths() -> list[str]:
-    tracked = [path for path in git("diff", BASE, "--name-only").splitlines() if path]
+    # The candidate is rebased by merge onto the exact current main before
+    # delivery. Compare the C88 delta to that merge baseline so peer changes
+    # already present on main do not look like out-of-lease C88 edits.
+    tracked = [path for path in git("diff", ORIGIN_MAIN, "--name-only").splitlines() if path]
     untracked = []
     for line in current_status().splitlines():
         if line.startswith("?? "):
@@ -92,9 +96,11 @@ def changed_paths() -> list[str]:
 def check_identity_and_ancestry() -> None:
     require(git("branch", "--show-current") == BRANCH, "current branch does not match the admitted C88 branch")
     head = git("rev-parse", "HEAD")
+    require(git("rev-parse", "origin/main") == ORIGIN_MAIN, "origin/main moved after the recorded C88 baseline integration")
     require(ancestor(INTEGRATION, head), f"HEAD {head} lost startup integration ancestry {INTEGRATION}")
     require(ancestor(BASE, head), f"HEAD {head} lost planning main ancestry {BASE}")
-    require(ancestor(BASE, git("rev-parse", "origin/main")), "origin/main is not descended from the admitted planning main")
+    require(ancestor(ORIGIN_MAIN, head), f"HEAD {head} lost current-main ancestry {ORIGIN_MAIN}")
+    require(ancestor(BASE, ORIGIN_MAIN), "origin/main is not descended from the admitted planning main")
     control = FACTORY_ROOT / "factory/scripts/project-control.py"
     result = subprocess.run(
         ["python3", str(control), "verify-work", "--type", "task", "--name", TASK, "--root", str(FACTORY_ROOT)],
@@ -115,7 +121,7 @@ def check_scope() -> None:
     for path in EXCLUDED:
         current = ROOT / path
         require(current.is_file(), f"excluded path disappeared: {path}")
-        require(current.read_bytes() == git_bytes("show", f"{BASE}:{path}"), f"excluded path changed before lease release: {path}")
+        require(current.read_bytes() == git_bytes("show", f"{ORIGIN_MAIN}:{path}"), f"excluded path changed before lease release: {path}")
 
 
 def check_retirement() -> None:
