@@ -583,6 +583,7 @@ def caller_edges(
                         "path": path,
                         "ref": ref,
                         "declaration": {
+                            "ref": ref,
                             "path": path,
                             "line": declaration["span"]["start_line"] if declaration else None,
                             "text": declaration["declaration"] if declaration else "",
@@ -598,6 +599,7 @@ def caller_edges(
                             "path": search_path,
                             "line": caller_span["start_line"],
                             "text": caller["declaration"],
+                            "span": caller_span,
                         },
                     },
                     "caller_symbol": caller["symbol"],
