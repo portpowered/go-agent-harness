@@ -17,6 +17,7 @@ TASK_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TASK_DIR.parents[4]
 RUNTIME_DIR = REPO_ROOT / "go-agent-runtime"
 SERVICE_SOURCE = RUNTIME_DIR / "services/conversationlog/internal/service/service.go"
+OBSERVATION_SOURCE = RUNTIME_DIR / "services/conversationlog/internal/service/observe.go"
 CLI_SOURCE = REPO_ROOT / "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go"
 MAX_OUTPUT_BYTES = 64 * 1024
 
@@ -61,9 +62,9 @@ def focused_control(timeout: float) -> dict[str, Any]:
         [
             "go",
             "test",
-            "./services/conversationlog",
+            "./services/conversationlog/internal/service",
             "-run",
-            "TestPublicServiceCorrelatesLateAndEmptyTranscripts|TestPublicServiceBoundsValuesAndDeeplySnapshotsState",
+            "TestServiceCorrelatesLateAndEmptyTranscripts|TestServiceBoundsValuesAndDeeplySnapshotsState",
             "-count=1",
             "-timeout=90s",
         ],
@@ -99,11 +100,12 @@ def mutation(args: argparse.Namespace, kind: str) -> dict[str, Any]:
             "control": control,
         }
 
-    source = SERVICE_SOURCE.read_text(encoding="utf-8")
+    target = OBSERVATION_SOURCE if kind == "mutation-arrival-order" else SERVICE_SOURCE
+    source = target.read_text(encoding="utf-8")
     if kind == "mutation-arrival-order":
         old = "s.inputOrdinalForItem(transcript.ItemID)"
         replacement = "s.current.inputOrdinal"
-        expected_test = "TestPublicServiceCorrelatesLateAndEmptyTranscripts"
+        expected_test = "TestServiceCorrelatesLateAndEmptyTranscripts"
         expected_reason = "late item transcription is assigned by current/arrival order"
     else:
         replacements = {
@@ -116,7 +118,7 @@ def mutation(args: argparse.Namespace, kind: str) -> dict[str, Any]:
                 return {"mode": kind, "status": "failed", "reason": f"mutation target discovery failed: {old}"}
             mutated = mutated.replace(old, replacement)
         old = replacement = ""
-        expected_test = "TestPublicServiceBoundsValuesAndDeeplySnapshotsState"
+        expected_test = "TestServiceBoundsValuesAndDeeplySnapshotsState"
         expected_reason = "64 KiB argument/result bound is removed"
 
     if kind == "mutation-arrival-order":
@@ -125,18 +127,18 @@ def mutation(args: argparse.Namespace, kind: str) -> dict[str, Any]:
         mutated = source.replace(old, replacement)
 
     with tempfile.TemporaryDirectory(prefix="c73-mutation-") as temporary:
-        mutated_source = Path(temporary) / "service.go"
+        mutated_source = Path(temporary) / target.name
         overlay = Path(temporary) / "overlay.json"
         mutated_source.write_text(mutated, encoding="utf-8")
         overlay.write_text(
-            json.dumps({"Replace": {str(SERVICE_SOURCE): str(mutated_source)}}),
+            json.dumps({"Replace": {str(target): str(mutated_source)}}),
             encoding="utf-8",
         )
         result = command_result(
             [
                 "go",
                 "test",
-                "./services/conversationlog",
+                "./services/conversationlog/internal/service",
                 "-run",
                 expected_test,
                 "-count=1",
