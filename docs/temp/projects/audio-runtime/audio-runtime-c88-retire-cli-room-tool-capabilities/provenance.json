@@ -1,15 +1,17 @@
 {
   "schema": "audio-runtime.c88.provenance/v1",
   "task": "audio-runtime-c88-retire-cli-room-tool-capabilities",
-  "implementation_revision": "a3cc66ecac39af585fad0c89ee0b95b7a98d5852",
+  "implementation_revision": "78649197beb29e1de42e703033ecfe3adeb899e0",
   "source_revision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
   "required_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "origin_main_revision_at_checkpoint": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "origin_main_revision_at_checkpoint": "59af6325614d80173447fe2018a0471e27b4e7b1",
+  "baseline_integration_merge_revision": "d3b53e6ee47d7467de26dcc75eb64484775d32e0",
   "branch": "codex/audio-runtime-c88-retire-cli-room-tool-capabilities",
   "ancestry": {
     "source_is_ancestor": true,
     "required_integration_is_ancestor": true,
-    "origin_main_is_descended_from_source": true
+    "origin_main_is_descended_from_source": true,
+    "origin_main_is_ancestor_of_candidate": true
   },
   "rollback_checkpoint": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
   "retirement": {
@@ -25,6 +27,14 @@
     "generator_command": "GOWORK=off go run -mod=mod github.com/google/wire/cmd/wire",
     "reproducibly_regenerated": true,
     "registry_status": "pending C79 lease release"
+  },
+  "validation": {
+    "source_revision": "78649197beb29e1de42e703033ecfe3adeb899e0",
+    "final_verifier": "passed",
+    "credential_free_runner": "passed",
+    "accumulated_review_regressions": "passed: COUNT=3 normal/coverage/race",
+    "changed_coverage": "passed",
+    "wire_and_architecture": "open: exact C88 generated-Wire registration remains leased behind C79 shared files"
   },
   "scope": {
     "owned_only": true,
