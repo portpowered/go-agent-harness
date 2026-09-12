@@ -135,7 +135,11 @@ func (r *reducer) bindContinuationLocked(index int, id string) sessiondiagnostic
 func (r *reducer) bindPendingContinuationsLocked(index int, id string) {
 	id = strings.TrimSpace(id)
 	for callID, state := range r.continuations {
-		if !state.ResultAccepted || !state.ContinuationRequested || !state.ProviderCallObserved || !state.ToolResponseComplete || state.ContinuationResponseID != "" {
+		// The provider can enqueue the continuation response synchronously from
+		// response.create, before the host records the explicit request event.
+		// Ownership is safe once the accepted provider call and its tool response
+		// are complete; completion/admission still requires ContinuationRequested.
+		if !state.ResultAccepted || !state.ProviderCallObserved || !state.ToolResponseComplete || state.ContinuationResponseID != "" {
 			continue
 		}
 		owner, ok := r.scheduledIndexForLocked(state.ResponseID)
@@ -191,7 +195,7 @@ func (r *reducer) pendingRetryIndexLocked() (int, bool) {
 func (r *reducer) pendingContinuationIndexLocked() (int, bool) {
 	index := -1
 	for _, state := range r.continuations {
-		if !state.ResultAccepted || !state.ContinuationRequested || !state.ProviderCallObserved || !state.ToolResponseComplete || state.ContinuationResponseID != "" {
+		if !state.ResultAccepted || !state.ProviderCallObserved || !state.ToolResponseComplete || state.ContinuationResponseID != "" {
 			continue
 		}
 		owner, ok := r.scheduledIndexForLocked(state.ResponseID)

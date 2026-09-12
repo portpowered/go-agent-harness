@@ -67,6 +67,44 @@ func TestToolContinuationRemainsOneScheduledLifecycle(t *testing.T) {
 	}
 }
 
+func TestToolContinuationBindsBeforeExplicitRequestObservation(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
+		t.Helper()
+		observation, err := service.Apply(ctx, event)
+		if err != nil {
+			t.Fatalf("apply %s: %v", event.Kind, err)
+		}
+		return observation
+	}
+
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventEnsureScheduled, Count: 1})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-tool"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventBindScheduledBoundary, ResponseID: "response-tool"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolCall, ResponseID: "response-tool", CallID: "call-early", ToolName: "lookup"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, ResponseID: "response-tool"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolResultAccepted, CallID: "call-early"})
+
+	// The provider response can arrive from the synchronous response.create
+	// send before the adapter observes EventContinuationRequested.
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-continuation"})
+	var bound sessiondiagnostics.Observation
+	bound = apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventBindScheduledBoundary, ResponseID: "response-continuation"})
+	if !bound.Accepted || !bound.HasScheduledIndex || bound.ScheduledIndex != 0 {
+		t.Fatalf("early continuation ownership = %+v, want scheduled index 0", bound)
+	}
+
+	terminal := &sessiondiagnostics.Terminal{Status: "failed", ErrorCode: "rate_limit_exceeded", ErrorMessage: "Please try again in 0.01s"}
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, ResponseID: "response-continuation", Terminal: terminal})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventNoteScheduledTerminal, ResponseID: "response-continuation", Terminal: terminal})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventRememberRetry, ResponseID: "response-continuation", Terminal: terminal})
+	retry := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventClaimRetry, ResponseID: "response-continuation", Terminal: terminal})
+	if !retry.Retry.Accepted || retry.Retry.Delay != 10*time.Millisecond {
+		t.Fatalf("early continuation retry = %+v, want accepted 10ms retry", retry.Retry)
+	}
+}
+
 func TestUnscheduledToolContinuationAdoptsResponseID(t *testing.T) {
 	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()

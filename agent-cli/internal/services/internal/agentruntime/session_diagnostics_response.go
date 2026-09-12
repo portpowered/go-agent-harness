@@ -131,6 +131,9 @@ func (o *sessionProgressObserver) legacyLifecycleState() *sd.LegacyState {
 	return state
 }
 func (o *sessionProgressObserver) applyLifecycle(ctx context.Context, event sd.Event) (sd.Observation, error) {
+	if o == nil {
+		return sd.Observation{}, sd.ErrClosed
+	}
 	lifecycle := o.ensureLifecycle()
 	if lifecycle == nil {
 		return sd.Observation{}, sd.ErrClosed
@@ -188,7 +191,6 @@ func (o *sessionProgressObserver) projectToolContinuations(states []sd.Continuat
 	defer o.toolStateMu.Unlock()
 	o.ensureToolStateLocked()
 	previous := o.toolContinuations
-	o.toolContinuations = make(map[string]*toolContinuationState, len(states))
 	for _, value := range states {
 		prior := previous[value.CallID]
 		o.toolContinuations[value.CallID] = &toolContinuationState{
