@@ -56,3 +56,11 @@ These were read-only during the census and must remain unchanged by C103:
 - `verify.py --mode positive-and-two-mutations` passed its positive control and both compiling causal mutants failed their intended cleanup-order/typed-error oracles. `verify.py --mode retirement-and-owned-paths` verified the 263-line cap, immutable baseline, and all 10 protected hashes.
 - External consumer passed under `GOWORK=off`; bounded runner passed public RTC hermetic success/failure-identity tests and the shipped-yui credential-free replay. Repository `make architecture-size-check` now reports only the nine shared C79 baseline-stale entries plus generated-file registration; no C103-owned architecture issue remains. Repository `make wire-check` is currently blocked only by the unregistered C103 generated graph because `scripts/wire-packages.txt` remains under C79 ownership.
 - The broad CLI race regex selected the peer C64 device-drain test and reported two exact-sample failures; the same test passed isolated under `-race -count=1`, and the narrower C103 matrix passed without that peer case. No peer-owned file was changed.
+
+## Concurrent-close repair checkpoint
+
+- Revision `f5162a25ee4875475c37945faa90fb5fc2c71c42` retains cleanup errors from an in-progress `Start` when concurrent `Close` cancels the start; typed-nil component returns are also treated as unavailable. Added deterministic normal/race coverage for both causal paths.
+- Focused service tests passed normally and under `-race` (`75` cases in the service package at `-count=5`); CLI C103 normal and race matrices passed (`42` cases each at `-count=3`).
+- Accumulated `COUNT=3 scripts/test-session-ci-regressions.sh all` passed with exit `0` across normal, coverage, and race modes, including the expected negative-control rejections.
+- Rebuilt the shipped artifact from this revision: `artifacts/yui` SHA-256 `664de5ef35aecbfa156613be172663788c2757afffcb0400a38a9cc2d91879fd`; the bounded runner returned `ACCEPTED` for both RTC cases and the shipped-yui replay.
+- Admission was reverified as admitted, the PRD branch still matches the isolated worktree, and local HEAD equals the pushed branch. C79 task `work-task-114` remains `in-review` and still owns the shared Wire registry and architecture baseline; those files remain unchanged.
