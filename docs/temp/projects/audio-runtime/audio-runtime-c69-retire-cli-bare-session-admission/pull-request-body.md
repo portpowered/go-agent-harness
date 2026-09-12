@@ -41,7 +41,7 @@ project acceptance.
 
 ## Latest executor checkpoint
 
-The same admitted task is pushed at `4c1070d4a16dd6828f32c11c81e9301130b9118f`.
+The same admitted task is pushed at `aeed99753bd69c29907235dfd96e98a8976af950`.
 The latest source/evidence checkpoint is documentation-only after the tested
 implementation; no executable inputs changed. The exact Wire registry and
 architecture-baseline leases remain with C57 and C61. No unchanged script-CI
