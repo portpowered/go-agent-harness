@@ -7,9 +7,9 @@
 
 ## Evidence
 
-- Implementation revisions: `b7eb303a8ce9498f44404e8d0baf61c111c43245` plus repairs `fc2a2e30473337503dfd57c5623b351a042f21e6` and `158983c0`.
-- `verify.py --mode positive-and-negative-controls`: accepted; artifact `artifacts/verify-1789252110-68076.json` (SHA256 `d378ad8c94524846615441462b7b85b390b75543f9ef5e58d084fc2be418fae8`).
-- Bounded replay: accepted for missing continuation, corrupt audio delta, and non-tool audio; artifact `artifacts/run-1789249286-88888.json` (SHA256 `f5951c0e856257a917f292cd98908c9c33d92ddc8f42ef372c794486e0c37fc3`).
+- Exact implementation head: `1ccde3e5947850879205536f510676a8d6a2f13b` (implementation `b7eb303a` plus repairs `fc2a2e3` and `158983c0`, with documentation-only provenance updates).
+- `verify.py --mode positive-and-negative-controls` from the exact head: accepted; artifact `artifacts/verify-1789253356-7580.json` (SHA256 `9161a2c24bbb79d8caff7006fee47ab74543d0b59ee0f0b771cac856b6b46dca`).
+- Bounded replay from exact head: accepted for missing continuation, corrupt audio delta, and non-tool audio; artifact `artifacts/run-1789253424-10590.json` (SHA256 `6289994ffccb300d7ab5881845bae06059424b3937afaf9fbbbeadb7b602838e`), with `nomicrophone` yui SHA256 `8df94084bfbb194a476f0efe5d1987ab3d6903f649faa71c98af955f77e0f14a`.
 - The exact failed shipped negative control now passes; the C111 verifier passes runtime contract/race, external `GOWORK=off` consumer, and all four accumulated regressions. Pinned golangci-lint and staticcheck report zero issues.
 
 ## Gate status
