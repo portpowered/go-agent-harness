@@ -437,7 +437,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 		if !received {
 			err = <-errCh
 		}
-		cancel()
+		// A natural engine return has already quiesced its participants.
 		<-forwardDone
 		forwardCancel()
 		return err
