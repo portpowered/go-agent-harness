@@ -1,8 +1,8 @@
 {
   "schema": "audio-runtime-c79-evidence/v1",
   "mode": "static-repair",
-  "candidate": "d181a56fec293fe602d54a39ec23626e3615a3c1",
-  "parent": "6b88640299359ac10000c958a0d6ce20e6a3f7de",
+  "candidate": "1b1ccf4fcfd59732ee00f226d30b1883164cdf9a",
+  "parent": "d181a56fec293fe602d54a39ec23626e3615a3c1",
   "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
   "origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
   "changes": {
