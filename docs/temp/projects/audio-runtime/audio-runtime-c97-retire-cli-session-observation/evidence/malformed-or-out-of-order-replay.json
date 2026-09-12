@@ -1,5 +1,5 @@
 {
-  "aggregate_elapsed_ms": 2041,
+  "aggregate_elapsed_ms": 2593,
   "build": {
     "execution": {
       "cleanup": {
@@ -23,7 +23,7 @@
       "cwd": ".",
       "disk_bounded": true,
       "disk_bytes": 0,
-      "elapsed_ms": 416,
+      "elapsed_ms": 503,
       "label": "build-source-pinned-yui",
       "output_bounded": true,
       "returncode": 0,
@@ -35,7 +35,7 @@
     },
     "sha256": "8099d07cb1a21b71032016c8b8d82814115285f0c6fc8750ff89f7643a37a463"
   },
-  "candidate_revision": "6ceda15c07f984aff249e7fb1548b092e65808c7",
+  "candidate_revision": "cee5b2c3360facb62befe75d7e30b337ec4b636a",
   "classification": {
     "acoustic": "not_attempted",
     "physical_device": "not_attempted",
@@ -69,7 +69,7 @@
     "cwd": ".",
     "disk_bounded": true,
     "disk_bytes": 1017,
-    "elapsed_ms": 434,
+    "elapsed_ms": 466,
     "label": "malformed-or-out-of-order-replay",
     "output_bounded": true,
     "returncode": 1,
