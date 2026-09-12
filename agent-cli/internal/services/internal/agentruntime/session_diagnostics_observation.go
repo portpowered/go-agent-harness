@@ -10,6 +10,8 @@ func (o *sessionProgressObserver) observe(msg messages.StreamMessage) {
 	if o == nil {
 		return
 	}
+	o.lifecycleGate.Lock()
+	defer o.lifecycleGate.Unlock()
 	// Server-VAD providers own these boundaries and report them inbound. Emit
 	// the runtime observations before the general stream callback so room
 	// evidence and package-level test gates see the same accepted boundary.

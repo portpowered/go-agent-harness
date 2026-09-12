@@ -227,7 +227,7 @@ func (o *sessionProgressObserver) resetObservedResponseState() {
 	if o == nil {
 		return
 	}
-	if !o.activeResponse {
+	if !o.activeResponse && !o.hasPendingLifecycleContinuation() {
 		o.lifecycleEvent(sd.Event{Kind: sd.EventReset})
 	}
 	o.toolStateMu.Lock()
@@ -238,6 +238,28 @@ func (o *sessionProgressObserver) resetObservedResponseState() {
 	o.messageEndSeen = false
 	o.toolStateMu.Unlock()
 	o.toolDeltaSeen = false
+}
+
+// hasPendingLifecycleContinuation keeps a late SESSION.OPEN boundary from
+// erasing a tool lifecycle acknowledgement that was already accepted by the
+// provider-facing send path. The model runner may send the result and its
+// response.create before the corresponding provider tool-call delta reaches
+// the observer, so the lifecycle reducer can legitimately contain an
+// acknowledged continuation before the first inbound boundary is consumed.
+func (o *sessionProgressObserver) hasPendingLifecycleContinuation() bool {
+	if o == nil {
+		return false
+	}
+	snapshot := o.ensureLifecycle().Snapshot()
+	for _, state := range snapshot.ContinuationStates {
+		if state.ProviderCallObserved && !state.ResultAccepted {
+			return true
+		}
+		if state.ResultAccepted && !state.ContinuationComplete {
+			return true
+		}
+	}
+	return false
 }
 func (o *sessionProgressObserver) beginObservedResponseForPurpose(id string, purpose messages.ResponsePurpose) bool {
 	if o == nil {
