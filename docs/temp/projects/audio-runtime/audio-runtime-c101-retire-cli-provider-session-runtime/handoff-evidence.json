@@ -19,12 +19,16 @@
     "reducedLines": 253
   },
   "tests": {
-    "providerSession": "go test ./services/providersession/... -count=1: passed in 3 packages",
-    "providerSessionRace": "go test -race ./services/providersession/... -count=1: passed in 3 packages",
-    "providerSessionGOWORKOff": "GOWORK=off go test ./services/providersession/... -count=1: passed",
+    "providerSession": "go test ./go-agent-runtime/services/providersession/... -count=1: 4 passed in 3 packages",
+    "providerSessionRace": "go test -race ./go-agent-runtime/services/providersession/... -count=3: 12 passed in 3 packages",
+    "externalConsumerGOWORKOff": "GOWORK=off go test ./... in the separate external-consumer module: passed",
     "focusedNormal": "agent-cli internal agentruntime focused suite: 59 passed",
     "focusedRace": "agent-cli internal agentruntime focused race suite: 16 passed",
-    "accumulated": "agent-cli internal agentruntime: 1071 passed",
+    "accumulatedRace": "COUNT=1 scripts/test-session-ci-regressions.sh race with task-specific GOCACHE: all packages passed",
+    "causalMutations": "verify.py positive-and-three-mutations: all three mutated candidates failed the causal oracle",
+    "cliProbe": "run.py: OpenAI replay, Grok replay, divergent replay negative, and non-provider smoke passed",
+    "retirementCensus": "verify.py retirement-and-owned-paths: branch, ancestry, manifest baseline, 130 legacy lines and 253-line reduction passed",
+    "lint": "make lint: all modules passed pinned golangci-lint 2.9.0",
     "vet": "go vet agentruntime packages: no issues found",
     "embedding": "make embed-check: passed"
   },
@@ -42,7 +46,8 @@
       "baseline-stale: removed planOpenAIReplayRuntime cyclomatic entry",
       "baseline-stale: removed planOpenAIReplayRuntime function-lines entry"
     ],
-    "wireCheck": "blocked by C79-owned scripts/wire-packages.txt; go-agent-runtime/services/providersession/wire/wire_gen.go is unregistered"
+    "wireCheck": "blocked by C79-owned scripts/wire-packages.txt; go-agent-runtime/services/providersession/wire/wire_gen.go is unregistered",
+    "staticcheck": "blocked by ownership: three U1000 helpers in excluded agent-cli/internal/services/internal/agentruntime/session_replay.go; no active owner found"
   },
-  "nextAction": "After C79 releases its shared baseline and wire registry ownership, update only the demonstrated shared entries, rerun the bounded architecture and wire gates, then submit this same task to script CI."
+  "nextAction": "Resolve ownership for the three dead helpers in excluded session_replay.go, then after C79 releases its shared baseline and wire registry ownership update only demonstrated shared entries, rerun staticcheck/Wire/architecture, and submit this same task to script CI."
 }
