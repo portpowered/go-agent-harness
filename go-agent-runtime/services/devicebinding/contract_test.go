@@ -40,7 +40,7 @@ func TestRequestSelectionUsesPresenceAndOpaqueIDs(t *testing.T) {
 func TestBindingErrorAndNilBindingAreSafe(t *testing.T) {
 	cause := errors.New("device disappeared")
 	err := &devicebinding.BindingError{Flag: "--audio-in-device", Direction: devicegw.DirectionInput, DeviceID: "virtual:gone", Err: cause}
-	if !errors.Is(err, cause) || err.Error() == "" || err.Unwrap() != cause {
+	if !errors.Is(err, cause) || err.Error() == "" || !errors.Is(err.Unwrap(), cause) {
 		t.Fatalf("BindingError lost formatting or cause: %q", err)
 	}
 	if got := (&devicebinding.BindingError{Flag: "--audio-out-device", Direction: devicegw.DirectionOutput, DeviceID: "virtual:gone"}).Error(); got == "" {

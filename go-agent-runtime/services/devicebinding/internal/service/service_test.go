@@ -210,8 +210,7 @@ func (r *duplexRegistry) OpenDuplexWithFormat(inputID devicegw.DeviceID, inputFo
 	}
 	output, err := r.OpenWithFormat(outputID, outputFormat)
 	if err != nil {
-		_ = input.Close()
-		return nil, nil, err
+		return nil, nil, errors.Join(err, input.Close())
 	}
 	return input, output, nil
 }
@@ -232,7 +231,7 @@ func (r *noRenderRegistry) Open(id devicegw.DeviceID) (devicegw.OpenedDevice, er
 	if err != nil {
 		return nil, err
 	}
-	return &noRenderStream{stream: stream.(*devicegw.VirtualStream)}, nil
+	return withoutRenderObserver(stream)
 }
 
 func (r *noRenderRegistry) OpenWithFormat(id devicegw.DeviceID, format audio.DeviceFormat) (devicegw.OpenedDevice, error) {
@@ -240,7 +239,15 @@ func (r *noRenderRegistry) OpenWithFormat(id devicegw.DeviceID, format audio.Dev
 	if err != nil {
 		return nil, err
 	}
-	return &noRenderStream{stream: stream.(*devicegw.VirtualStream)}, nil
+	return withoutRenderObserver(stream)
+}
+
+func withoutRenderObserver(stream devicegw.OpenedDevice) (devicegw.OpenedDevice, error) {
+	virtualStream, ok := stream.(*devicegw.VirtualStream)
+	if !ok {
+		return nil, errors.New("virtual registry returned an unexpected stream")
+	}
+	return &noRenderStream{stream: virtualStream}, nil
 }
 
 type noRenderStream struct{ stream *devicegw.VirtualStream }

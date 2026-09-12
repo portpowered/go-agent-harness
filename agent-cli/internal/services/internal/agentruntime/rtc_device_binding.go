@@ -26,7 +26,6 @@ func (r RTCDeviceBindingRequest) serviceRequest() devicebinding.Request {
 }
 func (r RTCDeviceBindingRequest) inputSelected() bool  { return r.serviceRequest().InputSelected() }
 func (r RTCDeviceBindingRequest) outputSelected() bool { return r.serviceRequest().OutputSelected() }
-func (r RTCDeviceBindingRequest) selected() bool       { return r.serviceRequest().Selected() }
 
 // RTCDeviceBinding is a deprecated concrete compatibility adapter; use devicebinding.Binding.
 type RTCDeviceBinding struct {
@@ -41,10 +40,22 @@ func adaptRTCDeviceBinding(inner *devicebinding.Binding) *RTCDeviceBinding {
 	if inner == nil {
 		return nil
 	}
-	source, _ := inner.Source.(*devicert.RTCDeviceSource)
-	sink, _ := inner.Sink.(*devicert.RTCDeviceSink)
-	capture, _ := inner.Capture.(*devicert.BufferedCapture)
-	feedback, _ := inner.Feedback.(*audio.PCM16FeedbackGate)
+	var source *devicert.RTCDeviceSource
+	if value, ok := inner.Source.(*devicert.RTCDeviceSource); ok {
+		source = value
+	}
+	var sink *devicert.RTCDeviceSink
+	if value, ok := inner.Sink.(*devicert.RTCDeviceSink); ok {
+		sink = value
+	}
+	var capture *devicert.BufferedCapture
+	if value, ok := inner.Capture.(*devicert.BufferedCapture); ok {
+		capture = value
+	}
+	var feedback *audio.PCM16FeedbackGate
+	if value, ok := inner.Feedback.(*audio.PCM16FeedbackGate); ok {
+		feedback = value
+	}
 	return &RTCDeviceBinding{Source: source, Sink: sink, Capture: capture, feedback: feedback, inner: inner}
 }
 func (b *RTCDeviceBinding) Close() error {
@@ -57,7 +68,8 @@ func (b *RTCDeviceBinding) Close() error {
 	return (&devicebinding.Binding{Source: b.Source, Sink: b.Sink, Feedback: b.feedback}).Close()
 }
 
-// Deprecated: use devicebindingwire.NewService().Open.
+// PrepareRTCDeviceBindings is a deprecated compatibility entry point; use
+// devicebindingwire.NewService().Open.
 func PrepareRTCDeviceBindings(request RTCDeviceBindingRequest) (*RTCDeviceBinding, error) {
 	binding, err := devicebindingwire.NewService().Open(request.serviceRequest())
 	if err != nil {
