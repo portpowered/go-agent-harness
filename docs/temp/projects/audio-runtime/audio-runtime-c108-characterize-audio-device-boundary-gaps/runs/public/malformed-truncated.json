@@ -3,11 +3,11 @@
   "acoustic_proof": "OUT_OF_SCOPE_AND_NEVER_PASS",
   "binary_bytes": 50937874,
   "binary_sha256": "2c38b32c2a586fe6c77f72b03510977e1275d064f35ec70cd709683920500ae2",
-  "candidate_revision": "c47e39c143c199e3d4023604d6f30fee750126e1",
+  "candidate_revision": "c75c87547ff52c416e0fadd92385958d4b24cc78",
   "case": "malformed-truncated",
   "clean_shutdown": true,
   "command": [
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-cekrnfdj/yui",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-z05d63bw/yui",
     "session",
     "--replay",
     "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/malformed.session.json",
@@ -30,7 +30,7 @@
   "physical_device_consumption": "UNKNOWN_AND_OUT_OF_SCOPE",
   "process": {
     "argv": [
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-cekrnfdj/yui",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-yui-z05d63bw/yui",
       "session",
       "--replay",
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/malformed.session.json",
@@ -45,13 +45,13 @@
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated"
     ],
     "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated",
-    "elapsed_seconds": 0.547,
+    "elapsed_seconds": 0.566,
     "exit_code": 1,
     "label": "yui-malformed-truncated",
     "output_limited": false,
     "process_group_gone": true,
     "stderr_path": "runs/public/malformed-truncated/yui-malformed-truncated.stderr",
-    "stderr_sha256": "08a4565fffe8304c97180514813611f3616a2869ab2f613acefee0b7c7b28839",
+    "stderr_sha256": "e59dfd9627feed4d6b5dbb1b8dd9ee6b2521f83c3b96616dc2f6b899a2874df3",
     "stdout_path": "runs/public/malformed-truncated/yui-malformed-truncated.stdout",
     "stdout_sha256": "9bd1e7b1b041a4560a027498f6681942f7bcb084c140e3b982723962f26b371d",
     "timed_out": false,

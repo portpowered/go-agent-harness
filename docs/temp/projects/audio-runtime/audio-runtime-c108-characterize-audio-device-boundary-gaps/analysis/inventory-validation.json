@@ -8,10 +8,10 @@
     "sample_rate_or_timing_conversion"
   ],
   "finding_count": 17,
-  "first_run": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-run-1-8raga75z",
+  "first_run": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-run-1-0tpy6yya",
   "passes": true,
   "production_file_count": 871,
   "schema_version": "c108-inventory-validation-v1",
-  "second_run": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-run-2-hbdcjisi",
+  "second_run": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c108-run-2-hb01br87",
   "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
 }
