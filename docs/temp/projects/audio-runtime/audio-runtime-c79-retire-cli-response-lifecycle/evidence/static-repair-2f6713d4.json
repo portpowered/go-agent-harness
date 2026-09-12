@@ -1,10 +1,16 @@
 {
   "schema": "audio-runtime-c79-evidence/v1",
   "mode": "static-repair",
-  "candidate": "1b1ccf4fcfd59732ee00f226d30b1883164cdf9a",
-  "parent": "d181a56fec293fe602d54a39ec23626e3615a3c1",
+  "candidate": "724a2e0b3788920d481fec1e927e4228d7640468",
+  "parent": "66211b7bba2b8af4fdd3599dbcf9f34ebf450e47",
   "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
   "origin_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "source_provenance": {
+    "tested_revision": "724a2e0b3788920d481fec1e927e4228d7640468",
+    "tracked_input_count": 10482,
+    "tracked_input_sha256": "8c85eb963c2c2dfd606b071b8fa3e97713e0e63288686a38e8397cce5b7944a9",
+    "replay_artifact_sha256": "1ff1d25c4fdc7854f7ccce6fe44957d1957feddfb37ea84aa00870b227f33181"
+  },
   "changes": {
     "wire_registry": "go-agent-runtime/services/sessiondiagnostics/wire",
     "architecture_policy_generator": "services/sessiondiagnostics/wire/wire_gen.go",
@@ -27,18 +33,21 @@
     "replay_provenance": "run.py v2 records shipped binary, fixture, source-tree, and executable lifecycle observations",
     "reset_mutex_repair": "Reset reuses the existing mutex and resetLocked state path; TestResetClearsReducerStateWithoutReplacingMutex covers the regression",
     "disposed_slot_repair": "completed and cancelled scheduled slots reject ID/owner rebinding; invalid dispositions return ErrMalformedSequence",
-    "session_open_repair": "SESSION.OPEN dispatches lifecycle.reset before clearing the adapter projection so an untagged response cannot finish a prior response"
+    "session_open_repair": "SESSION.OPEN dispatches lifecycle.reset before clearing the adapter projection so an untagged response cannot finish a prior response",
+    "foreign_response_open_repair": "unmatched response opens are rejected until an explicit boundary; active scheduled dispatch uses a private pending-boundary check",
+    "finish_state_reset": "matching response finish clears purpose, terminal boundary, content, and tool-turn state before the next response",
+    "duplicate_response_end_repair": "duplicate model response ends are rejected before finish while the active response remains owned"
   },
   "gates": {
     "fmt": "pass: affected Go files gofmt-clean",
     "wire_check": "pass: all registered Wire injectors regenerated without drift",
-    "architecture_size": "pass: 189 packages, 1906 files, 28125 functions",
+    "architecture_size": "pass: 189 packages, 1906 files, 28152 functions",
     "coverage_registration": "pass: 179 packages across 6 modules",
     "vet": "pass: current workspace target",
     "lint": "pass: pinned golangci-lint 2.9.0 current workspace target",
     "staticcheck": "pass: pinned staticcheck 2026.1 current workspace target",
     "diff_check": "pass",
-    "coverage_floor": "executor rerun exits in unrelated full agent-cli integration coverage at TestS2SV4DSuppressedTimeoutOutcomeFailsNonVacuously; isolated test and accumulated COUNT=1 coverage controls pass; no peer-owned repair applied"
+    "coverage_floor": "not run locally; full behavioral coverage remains script-CI-owned per implementation handoff; focused causal and accumulated controls pass"
   },
   "causal_regressions": {
     "response_matrix": "pass: reducer, adapter, and GOWORK=off consumer matrix",
@@ -48,16 +57,18 @@
     "mutation_duplicate_scheduled_disposition": "expected failure",
     "cli_normal": "pass: accumulated COUNT=1 normal regressions",
     "cli_race": "pass: accumulated COUNT=1 race regressions",
+    "accumulated_normal": "pass: scripts/test-session-ci-regressions.sh normal COUNT=1 across CLI, integration, simulated devices, and composed OpenAI provider",
+    "accumulated_race": "pass: scripts/test-session-ci-regressions.sh race COUNT=1 across CLI, integration, simulated devices, and composed OpenAI provider",
     "public_scheduled_tool_continuation": "pass",
     "public_terminal_and_malformed": "pass",
     "public_credential_free_audio_tool_replay": "pass"
   },
   "prior_ci_rejection": {
-    "run": "work-review-185",
+    "run": "work-review-225",
     "job": "independent review",
-    "old_head": "d3c4db3427d035b0b9ba7be48084b5843ed1037d",
-    "code_findings": "current candidate repairs mutex-safe reset, disposed-slot rebind/invalid-disposition handling, and SESSION.OPEN reducer reset",
-    "remaining_findings": "standalone full coverage target remains blocked by the exact unrelated integration control recorded in gates.coverage_floor; script CI remains authoritative"
+    "old_head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+    "code_findings": "foreign response-open replacement, stale finish purpose/terminal boundary, and duplicate response-end admission",
+    "remaining_findings": "all three findings repaired in 66211b7b and the lint-clean test repair in 724a2e0b; refreshed evidence is source-pinned to 724a2e0b; script CI remains authoritative"
   },
   "known_scope_helper_limitation": "none; the retirement-and-scope verifier records the handoff-released Wire and architecture leases explicitly",
   "acceptance": "executor evidence only; no script-CI success, review, merge, vertical probe or project acceptance claimed"
