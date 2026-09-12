@@ -1,0 +1,80 @@
+{
+  "full_ci_suite": "not run; script CI owns broad checks",
+  "passes": true,
+  "results": [
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-timeout=120s",
+        "./pkg/audio",
+        "./pkg/clock",
+        "./pkg/mixer"
+      ],
+      "cwd": "go-audio",
+      "elapsed_seconds": 2.017,
+      "exit_code": 0,
+      "label": "go-audio-boundary",
+      "proof_limit": "SIMULATED_CALLBACK_CONSUMPTION_OR_LOWER; no physical/acoustic claim",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "116aa82701da682090a54ef30622f6d2aa33a4987606e64c804b060d3523da44"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-timeout=120s",
+        "./pkg/devices",
+        "./pkg/runtime"
+      ],
+      "cwd": "go-device-gateway",
+      "elapsed_seconds": 2.924,
+      "exit_code": 0,
+      "label": "go-device-gateway-boundary",
+      "proof_limit": "SIMULATED_CALLBACK_CONSUMPTION_OR_LOWER; no physical/acoustic claim",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "06df0ddf14c80934b13c4c4d08d37b0dce57a0880a2902fdec50707944e1fc2b"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-timeout=120s",
+        "./internal/services/internal/agentruntime",
+        "-run",
+        "^(TestStreamSessionAudioInputResamples16kHzAtProviderBoundary|TestRoomProviderInputPCMResamples16kHzMixerTo24kHzContract|TestConvertSessionAudioPCMIdentityAndFailures|TestConvertScheduledAudioInputsUsesDeclaredSourceRate|TestRTCDeviceBoundSessionAcceptedCancelDiscardsQueuedPlayback|TestRTCDeviceBoundSessionRejectedCancelDoesNotDiscardPlayback)$",
+        "-v"
+      ],
+      "cwd": "agent-cli",
+      "elapsed_seconds": 8.865,
+      "exit_code": 0,
+      "label": "agentruntime-causal",
+      "proof_limit": "SIMULATED_CALLBACK_CONSUMPTION_OR_LOWER; no physical/acoustic claim",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "6dd0ed5ed928dc5cd2ffb589a759028b8869eb5cd2b139fbb97a6aeafbf2546a"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-timeout=120s",
+        "./pkg/transport/rtc",
+        "-run",
+        "Test(InboundTrack|OutboundTrack)"
+      ],
+      "cwd": "go-llm-gateway",
+      "elapsed_seconds": 5.585,
+      "exit_code": 0,
+      "label": "rtc-transport-causal",
+      "proof_limit": "SIMULATED_CALLBACK_CONSUMPTION_OR_LOWER; no physical/acoustic claim",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "be097c1e6250a64bf1a8e1e95bf91be30e92488c78efd4bdd0220cc6ba3e1c90"
+    }
+  ],
+  "schema_version": "c108-focused-checks-v1",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+}

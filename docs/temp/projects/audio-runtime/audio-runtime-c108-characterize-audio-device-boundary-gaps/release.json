@@ -1,0 +1,28 @@
+{
+  "branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
+  "candidate_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "immutable_project_criteria": "AUDIO, DEVICE, EMBED, SERVICE, TRACE, REPLAY, FAILURES, QUALITY and PARITY remain OPEN",
+  "independent_review": "not performed by executor",
+  "owned_directory": "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps",
+  "passes": true,
+  "post_merge_vertical_probe": "primary-owned and still required",
+  "production_diff": [],
+  "required_evidence": [
+    "provenance.json",
+    "ownership.json",
+    "canonical-board.json",
+    "analysis/inventory.json",
+    "analysis/classifications.json",
+    "analysis/call-paths.json",
+    "candidates.json",
+    "proof-levels.json",
+    "runs/public/replay.json",
+    "runs/public/malformed-truncated.json",
+    "runs/focused-checks/report.json",
+    "runs/negative-controls/report.json"
+  ],
+  "schema_version": "c108-release-v1",
+  "script_ci": "submit exact HEAD; do not poll or duplicate broad CI",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
+}

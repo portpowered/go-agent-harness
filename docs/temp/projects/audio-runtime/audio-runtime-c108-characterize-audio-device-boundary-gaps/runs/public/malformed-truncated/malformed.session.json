@@ -1,0 +1,284 @@
+{
+  "integrity": {
+    "algorithm": "sha256",
+    "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+    "digest": "87433d700c1a739a2131b6c4192584db79d939b1a694cec829dff5e3102f15bc"
+  },
+  "provider": {
+    "model": "gpt-realtime",
+    "name": "openai"
+  },
+  "records": [
+    {
+      "direction": "client_to_server",
+      "payload": {
+        "session": {
+          "model": "gpt-realtime",
+          "tools": [
+            {
+              "description": "Execute a shell command and return its output. Use with caution.",
+              "name": "exec",
+              "parameters": {
+                "properties": {
+                  "command": {
+                    "description": "The shell command to execute",
+                    "type": "string"
+                  },
+                  "working_dir": {
+                    "description": "Optional working directory for the command",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command"
+                ],
+                "type": "object"
+              },
+              "type": "function"
+            }
+          ],
+          "type": "realtime"
+        },
+        "type": "session.update"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 1,
+      "timestamp_ms": 10,
+      "type": "session.update"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "session": {
+          "id": "sess-c07-audio-tool",
+          "model": "gpt-realtime"
+        },
+        "type": "session.created"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 2,
+      "timestamp_ms": 20,
+      "type": "session.created"
+    },
+    {
+      "direction": "client_to_server",
+      "payload": {
+        "item": {
+          "content": [
+            {
+              "text": "probe PROBE_TOOL_MARKER_9182",
+              "type": "input_text"
+            }
+          ],
+          "role": "user",
+          "type": "message"
+        },
+        "type": "conversation.item.create"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 3,
+      "timestamp_ms": 30,
+      "type": "conversation.item.create"
+    },
+    {
+      "direction": "client_to_server",
+      "payload": {
+        "type": "response.create"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 4,
+      "timestamp_ms": 40,
+      "type": "response.create"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "response": {
+          "id": "resp-c07-tool"
+        },
+        "type": "response.created"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 5,
+      "timestamp_ms": 50,
+      "type": "response.created"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "item": {
+          "call_id": "call-c07-tool",
+          "id": "item-c07-tool",
+          "name": "exec",
+          "type": "function_call"
+        },
+        "type": "response.output_item.added"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 6,
+      "timestamp_ms": 60,
+      "type": "response.output_item.added"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "arguments": "{\"command\":\"echo PROBE_TOOL_MARKER_9182 \\u003e\\u003e \\\"evidence/runs/exec-invocations-v4.log\\\"; echo PROBE_TOOL_MARKER_9182\"}",
+        "call_id": "call-c07-tool",
+        "name": "exec",
+        "type": "response.function_call_arguments.done"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 7,
+      "timestamp_ms": 70,
+      "type": "response.function_call_arguments.done"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "response": {
+          "id": "resp-c07-tool",
+          "status": "completed"
+        },
+        "type": "response.done"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 8,
+      "timestamp_ms": 80,
+      "type": "response.done"
+    },
+    {
+      "direction": "client_to_server",
+      "payload": {
+        "item": {
+          "call_id": "call-c07-tool",
+          "output": "PROBE_TOOL_MARKER_9182\n",
+          "type": "function_call_output"
+        },
+        "type": "conversation.item.create"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 9,
+      "timestamp_ms": 90,
+      "type": "conversation.item.create"
+    },
+    {
+      "direction": "client_to_server",
+      "payload": {
+        "type": "response.create"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 10,
+      "timestamp_ms": 100,
+      "type": "response.create"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "response": {
+          "id": "resp-c07-continuation"
+        },
+        "type": "response.created"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 11,
+      "timestamp_ms": 110,
+      "type": "response.created"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "delta": "AQ==",
+        "format": "pcm16",
+        "item_id": "item-c07-continuation",
+        "response_id": "resp-c07-continuation",
+        "type": "response.output_audio.delta"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 12,
+      "timestamp_ms": 120,
+      "type": "response.output_audio.delta"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "delta": "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",
+        "format": "pcm16",
+        "item_id": "item-c07-continuation",
+        "response_id": "resp-c07-continuation",
+        "type": "response.output_audio.delta"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 13,
+      "timestamp_ms": 130,
+      "type": "response.output_audio.delta"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "item_id": "item-c07-continuation",
+        "response_id": "resp-c07-continuation",
+        "type": "response.output_audio.done"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 14,
+      "timestamp_ms": 140,
+      "type": "response.output_audio.done"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "delta": "strict replay continuation",
+        "item_id": "item-c07-continuation",
+        "response_id": "resp-c07-continuation",
+        "type": "response.output_text.delta"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 15,
+      "timestamp_ms": 150,
+      "type": "response.output_text.delta"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "item_id": "item-c07-continuation",
+        "response_id": "resp-c07-continuation",
+        "type": "response.output_text.done"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 16,
+      "timestamp_ms": 160,
+      "type": "response.output_text.done"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "response": {
+          "id": "resp-c07-continuation",
+          "status": "completed"
+        },
+        "type": "response.done"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 17,
+      "timestamp_ms": 170,
+      "type": "response.done"
+    },
+    {
+      "direction": "server_to_client",
+      "payload": {
+        "reason": "fixture_complete",
+        "session_id": "sess-c07-audio-tool",
+        "type": "session.closed"
+      },
+      "payload_type": "websocket_message",
+      "sequence": 18,
+      "timestamp_ms": 180,
+      "type": "session.closed"
+    }
+  ],
+  "session": {
+    "fixture_provenance": "synthetic",
+    "id": "sess-c07-audio-tool"
+  },
+  "version": 2
+}

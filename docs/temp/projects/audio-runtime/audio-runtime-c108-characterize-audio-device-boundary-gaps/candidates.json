@@ -1,0 +1,174 @@
+{
+  "schema_version": "c108-candidates-v1",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "status": "characterization_only_no_repair_lease",
+  "candidates": [
+    {
+      "id": "C108-CANDIDATE-DEVICE-PUMP",
+      "finding_ids": ["C108-F-DEVICE-PUMP-LIFECYCLE"],
+      "exact_writer_files": ["agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go"],
+      "exact_symbols": ["rtcDeviceBindingInferencer.startPumps", "rtcDeviceBoundSession.DrainPlayback"],
+      "retained_public_callers": [
+        "agent-cli/internal/services/internal/agentruntime/session_live_setup.go:bindRTCDeviceSessionInferencer",
+        "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go:bindRTCDeviceSessionInferencer",
+        "agent-cli/internal/services/internal/agentruntime/session_live_observation.go:DrainPlayback"
+      ],
+      "destination": {
+        "thin_contract": "go-agent-runtime/services/devicepump/contract.go",
+        "private_internal": "go-agent-runtime/services/devicepump/internal",
+        "dedicated_wire_owner": "go-agent-runtime/services/devicepump/internal/wire",
+        "retained_adapter": "agent-cli/internal/services/agentruntime/transports/devicepump"
+      },
+      "positive_control": "Credential-free shipped replay with provider media endpoints and a simulated device sink proves bounded pump startup, terminal close, and separate queue/file receipts.",
+      "causal_negative_control": "Remove the inbound media close before WaitForPump or return a sink error: the focused device-runtime cancellation test must identify the drain failure and leave no survivor.",
+      "accumulated_regression": "audio-runtime-c21 correlated device-consumption replay plus the C50 public replay; queue admission remains distinct from physical consumption.",
+      "retirement_or_device_isolation_effect": "Retire pump lifecycle and drain policy from agent-cli/internal/services/internal/agentruntime; keep physical device construction and worker lifecycle behind go-device-gateway.",
+      "shared_file_serialization": "Do not touch rtc_device_binding.go or shared Wire/baseline files. Recheck preserved C96/C64 context and C79 registry ownership before a future repair admission.",
+      "dependencies": "Requires the provider media contract and the device-gateway runtime contract; no C108 implementation lease is granted.",
+      "peer_intersections": {
+        "C79": "none in exact writer files; shared registry/baseline remains read-only",
+        "C83": "none in exact writer files; recheck retained RTC session orchestration callers",
+        "C84": "none in exact writer files; room lifecycle remains read-only",
+        "C99": "none in exact writer files; room planning remains read-only",
+        "C101": "caller dependency only; provider-session changes remain read-only",
+        "C103": "caller dependency only; RTC session service changes remain read-only",
+        "C104": "close-order dependency only; finalizer changes remain read-only",
+        "C107": "recheck current board before any future lease; no exact writer overlap observed"
+      }
+    },
+    {
+      "id": "C108-CANDIDATE-AUDIO-RATE-CONTRACT",
+      "finding_ids": ["C108-F-AUDIO-RATE-CONTRACT", "C108-F-AUDIO-RATE-NEGOTIATION"],
+      "exact_writer_files": [
+        "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_format.go"
+      ],
+      "exact_symbols": [
+        "convertSessionAudioPCM",
+        "convertScheduledAudioInputs",
+        "resolveSessionAudioSampleRate",
+        "configureSessionAudioContract"
+      ],
+      "retained_public_callers": [
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go:configureSessionAudioContract",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go:convertScheduledAudioInputs",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go:convertSessionAudioPCM",
+        "agent-cli/internal/services/internal/agentruntime/session_room_run.go:convertSessionAudioPCM"
+      ],
+      "destination": {
+        "thin_contract": "go-agent-runtime/services/audiorate/contract.go",
+        "private_internal": "go-agent-runtime/services/audiorate/internal",
+        "dedicated_wire_owner": "go-agent-runtime/services/audiorate/internal/wire",
+        "retained_adapter": "agent-cli/internal/services/agentruntime/transports/audiorate"
+      },
+      "positive_control": "Focused 16 kHz-to-24 kHz replay and negotiated duplex-rate tests preserve exact PCM bytes, frame counts, and provider configuration.",
+      "causal_negative_control": "Odd PCM16 byte length, unsupported 22050 Hz resampling, and conflicting input/output rates must fail with the typed stable errors before provider/device setup.",
+      "accumulated_regression": "C21 rate/consumption fixtures and C50 credential-free replay; no file/audio receipt is upgraded to playback proof.",
+      "retirement_or_device_isolation_effect": "Retire sample-rate conflict/conversion policy from the CLI-internal runtime; core loop receives a negotiated buffer contract and device-edge conversion remains at the gateway boundary.",
+      "shared_file_serialization": "Do not edit session_runtime_plan.go, session_audio_in.go, session_audio_out.go, mixer.go, registries, or baselines. Preserve C59/C92/C26 historical ownership while rechecking C79.",
+      "dependencies": "Requires provider format setters and go-audio resampler contracts; implementation must retain the replay compatibility-rate rule.",
+      "peer_intersections": {
+        "C79": "none in exact writer files; shared baseline remains read-only",
+        "C83": "none in exact writer files; orchestration callers remain read-only",
+        "C84": "none in exact writer files; room lifecycle remains read-only",
+        "C99": "caller dependency only; room planning remains read-only",
+        "C101": "provider configuration dependency only; provider session files remain read-only",
+        "C103": "none in exact writer files; RTC session service remains read-only",
+        "C104": "none in exact writer files; termination remains read-only",
+        "C107": "recheck current board before future lease; no exact writer overlap observed"
+      }
+    },
+    {
+      "id": "C108-CANDIDATE-PROVIDER-MEDIA",
+      "finding_ids": ["C108-F-PROVIDER-MEDIA-OPENAI", "C108-F-PROVIDER-MEDIA-GROK"],
+      "exact_writer_files": [
+        "go-llm-gateway/pkg/providers/openai/session_media.go",
+        "go-llm-gateway/pkg/providers/grok/session_media.go"
+      ],
+      "exact_symbols": [
+        "realtimeSession.writeRTCMediaFrame",
+        "realtimeSession.publishRTCMedia",
+        "decodeOpenAIRealtimeAudioDelta",
+        "grokSession.writeRTCMediaFrame",
+        "grokSession.publishRTCMedia",
+        "decodeGrokAudioDelta"
+      ],
+      "retained_public_callers": [
+        "go-llm-gateway/pkg/providers/openai/session_conn.go:prepareRTCMedia/publishRTCMedia",
+        "go-llm-gateway/pkg/providers/openai/session.go:releaseUnclaimedRTCMedia/currentRTCMedia",
+        "go-llm-gateway/pkg/providers/grok/provider.go:prepareRTCMedia",
+        "go-llm-gateway/pkg/providers/grok/session.go:publishRTCMedia/releaseUnclaimedRTCMedia"
+      ],
+      "destination": {
+        "thin_contract": "go-agent-runtime/services/providermedia/contract.go",
+        "private_internal": "go-agent-runtime/services/providermedia/internal",
+        "dedicated_wire_owner": "go-agent-runtime/services/providermedia/internal/wire",
+        "retained_adapter": "go-llm-gateway/pkg/providers/{openai,grok}/media_adapter.go"
+      },
+      "positive_control": "OpenAI and Grok replay packets decode into shared PCM media, flush at the provider done event, and preserve outbound input frame ordering.",
+      "causal_negative_control": "Mutate one provider audio delta to invalid base64, odd PCM16, or a non-PCM format: the typed provider-media error must be observable and no inbound frame may be accepted.",
+      "accumulated_regression": "C21 audio-tool and interruption replay plus provider package malformed-delta tests; no live credentials or Realtime session are used here.",
+      "retirement_or_device_isolation_effect": "Retire duplicated provider packet/format policy from the provider session types while retaining provider-specific wire event mapping in private adapters.",
+      "shared_file_serialization": "Do not modify provider session.go/session_conn.go in this characterization. Wire generation, registry and baseline ownership remain read-only under C79.",
+      "dependencies": "Requires go-audio MediaSession/PCM16 codec contracts and C101 provider-session caller rechecks.",
+      "peer_intersections": {
+        "C79": "none in exact writer files; Wire and baseline remain read-only",
+        "C83": "none in exact writer files; orchestration remains read-only",
+        "C84": "none in exact writer files; room lifecycle remains read-only",
+        "C99": "none in exact writer files; room planning remains read-only",
+        "C101": "caller dependency only; do not claim provider-session files owned by C101",
+        "C103": "none in exact writer files; RTC session service remains read-only",
+        "C104": "release/close dependency only; finalization remains read-only",
+        "C107": "recheck current board before future lease; no exact writer overlap observed"
+      }
+    },
+    {
+      "id": "C108-CANDIDATE-RTC-TRANSPORT",
+      "finding_ids": ["C108-F-RTC-TRACKS", "C108-F-RTC-TRACKS-OUT"],
+      "exact_writer_files": [
+        "go-llm-gateway/pkg/transport/rtc/track_in.go",
+        "go-llm-gateway/pkg/transport/rtc/track_out.go"
+      ],
+      "exact_symbols": [
+        "NewInboundTrack",
+        "InboundTrack.readLoop",
+        "InboundTrack.ReadFrame",
+        "NewOutboundTrack",
+        "OutboundTrack.WriteFrame"
+      ],
+      "retained_public_callers": [
+        "go-agent-runtime/services/devices/internal/probe/rtc.go:newLiveDeviceProbeMediaLink",
+        "agent-cli/internal/wire/rtc_runtime.go:productionRTCDataPlane.AttachInboundMedia"
+      ],
+      "destination": {
+        "thin_contract": "go-agent-runtime/services/rtctransport/contract.go",
+        "private_internal": "go-agent-runtime/services/rtctransport/internal",
+        "dedicated_wire_owner": "go-agent-runtime/services/rtctransport/internal/wire",
+        "retained_adapter": "agent-cli/internal/wire/rtc_runtime.go"
+      },
+      "positive_control": "Simulated RTP packet/callback tests preserve sequence, jitter, PLC/resample, pacing and clean Close behavior at 16/24/48 kHz.",
+      "causal_negative_control": "Reject non-v2 RTP, SSRC/payload changes, impossible timestamps, invalid rates, odd frame sizes, and canceled writes with the typed transport errors.",
+      "accumulated_regression": "Existing device-probe and external-media transport regression tests; hardware/acoustic proof remains out of scope.",
+      "retirement_or_device_isolation_effect": "Move RTP packet/jitter/codec/pacing policy behind a runtime transport service while retaining device-gateway physical endpoints and CLI presentation adapters.",
+      "shared_file_serialization": "Do not edit device probe, CLI wire, generated registry or baseline in C108. Future repair must serialize with C79 and any C107 device probe ownership.",
+      "dependencies": "Requires Pion RTP/Opus interfaces, go-audio PCMFrame, and caller-level ownership rechecks before implementation.",
+      "peer_intersections": {
+        "C79": "none in exact writer files; shared generated Wire/baseline remains read-only",
+        "C83": "none in exact writer files; orchestration remains read-only",
+        "C84": "none in exact writer files; room lifecycle remains read-only",
+        "C99": "none in exact writer files; room planning remains read-only",
+        "C101": "none in exact writer files; provider session remains read-only",
+        "C103": "caller dependency only; RTC session remains read-only",
+        "C104": "close dependency only; termination remains read-only",
+        "C107": "caller ownership must be rechecked before future lease; no exact writer overlap observed"
+      }
+    }
+  ],
+  "pairwise_disjointness": "exact_writer_files and exact_symbols are disjoint across all four candidates",
+  "excluded_speculation": [
+    "go-audio and go-device-gateway internals",
+    "historical mixer/input/output predecessor files",
+    "native Windows hardware/endpoints and physical acoustics",
+    "any implementation, registry, baseline, or existing peer evidence change"
+  ]
+}

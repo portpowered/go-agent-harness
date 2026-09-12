@@ -1,0 +1,903 @@
+{
+  "paths": [
+    {
+      "finding_id": "C108-F-DEVICE-PUMP-LIFECYCLE",
+      "public_entry_point": "agent-cli/internal/services/internal/agentruntime/session_live_setup.go and session_duration_loop.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (i *sessionInstructionsInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {",
+              "line": 60,
+              "path": "agent-cli/internal/services/internal/agentruntime/session.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "inner, err := i.inner.ConnectSession(ctx)",
+              "line": 61,
+              "path": "agent-cli/internal/services/internal/agentruntime/session.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (i *sessionAudioOutputInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {",
+              "line": 519,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "session, err := i.inner.ConnectSession(context.WithoutCancel(ctx))",
+              "line": 520,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (i *sessionDurationAdmissionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {",
+              "line": 75,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_duration_admission.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "session, err := i.inner.ConnectSession(ctx)",
+              "line": 76,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_duration_admission.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (i *sessionImageInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {",
+              "line": 501,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_image.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "session, err := i.inner.ConnectSession(ctx)",
+              "line": 502,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_image.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (i *observedSessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {",
+              "line": 54,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_live_observation.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "session, err := i.inner.ConnectSession(ctx)",
+              "line": 64,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_live_observation.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (i *sessionDirectoryRecordingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {",
+              "line": 747,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_recording.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "session, err := i.inner.ConnectSession(ctx)",
+              "line": 748,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_recording.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (i *websocketReplaySessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {",
+              "line": 28,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_replay_capability.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "session, err := i.inner.ConnectSession(ctx)",
+              "line": 29,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_replay_capability.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (i *roomConnectTrackingInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {",
+              "line": 1177,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "session, err := i.inner.ConnectSession(ctx)",
+              "line": 1185,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (i *sessionRTCRuntimeInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {",
+              "line": 448,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "session, err := i.inner.ConnectSession(ctx)",
+              "line": 459,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_runtime_rtc.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (i *sessionTextSeedInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {",
+              "line": 84,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_text.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "session, err := i.inner.ConnectSession(ctx)",
+              "line": 85,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_text.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "session, err := s.sessionInferencer.ConnectSession(ctx)",
+              "line": 173,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_turns.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "ConnectSession(ctx context.Context) (Session, error)",
+              "line": 125,
+              "path": "go-agent-loop/pkg/messages/session.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "session, err := r.sessionInferencer.ConnectSession(ctx)",
+              "line": 10,
+              "path": "go-agent-loop/pkg/participants/model_runner_session.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (m *Inferencer) ConnectSession(ctx context.Context) (messages.Session, error) {",
+              "line": 40,
+              "path": "go-agent-loop/test/functional/internal/sessionmock/session.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
+          "symbol": "ConnectSession"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "i.startPumps(ctx, media)",
+              "line": 93,
+              "path": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "i.startPumps()",
+              "line": 191,
+              "path": "go-agent-runtime/services/session/internal/live/invoke.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (i *liveInvocation) startPumps() {",
+              "line": 195,
+              "path": "go-agent-runtime/services/session/internal/live/invoke.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
+          "symbol": "startPumps"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "DrainPlayback(context.Context) error",
+              "line": 158,
+              "path": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "drainErr = s.DrainPlayback(drainCtx)",
+              "line": 342,
+              "path": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "return drainer.DrainPlayback(ctx)",
+              "line": 149,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_live_observation.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
+          "symbol": "DrainPlayback"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-AUDIO-RATE-CONTRACT",
+      "public_entry_point": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go, session_audio_dispatch.go and session_room_run.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "pcm, err := convertSessionAudioPCM(input.PCM, input.SourceSampleRate, opts.InputAudioSampleRate)",
+              "line": 17,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "pcm, err := convertSessionAudioPCM(input.PCM, input.SourceSampleRate, providerRate)",
+              "line": 59,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "converted, err := convertSessionAudioPCM(pcm, sourceRate, providerRate)",
+              "line": 1019,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+          "symbol": "convertSessionAudioPCM"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "plan.audioInputs, err = convertScheduledAudioInputs(plan.audioInputs, plan.inputAudioSampleRate)",
+              "line": 439,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+          "symbol": "convertScheduledAudioInputs"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-AUDIO-RATE-NEGOTIATION",
+      "public_entry_point": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "rate, err := resolveSessionAudioSampleRate(opts, *plan)",
+              "line": 71,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_format.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "rate, rateErr := resolveSessionAudioSampleRate(sessionOptions, sessionRuntimePlan{",
+              "line": 237,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "symbol": "resolveSessionAudioSampleRate"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := configureSessionAudioContract(opts, &plan); err != nil {",
+              "line": 436,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "symbol": "configureSessionAudioContract"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-PROVIDER-MEDIA-OPENAI",
+      "public_entry_point": "go-llm-gateway/pkg/providers/openai/session_conn.go and session.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *grokSession) writeRTCMediaFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {",
+              "line": 83,
+              "path": "go-llm-gateway/pkg/providers/grok/session_media.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/openai/session_media.go",
+          "symbol": "writeRTCMediaFrame"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "_ = s.publishRTCMedia(event)",
+              "line": 285,
+              "path": "go-llm-gateway/pkg/providers/grok/session.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {",
+              "line": 101,
+              "path": "go-llm-gateway/pkg/providers/grok/session_media.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := s.publishRTCMedia(ctx, event); err != nil {",
+              "line": 166,
+              "path": "go-llm-gateway/pkg/providers/openai/session_conn.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/openai/session_media.go",
+          "symbol": "publishRTCMedia"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "data, decodeErr := decodeOpenAIRealtimeAudioDelta(event.Data)",
+              "line": 139,
+              "path": "go-llm-gateway/pkg/providers/openai/session_media.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/openai/session_media.go",
+          "symbol": "decodeOpenAIRealtimeAudioDelta"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-PROVIDER-MEDIA-GROK",
+      "public_entry_point": "go-llm-gateway/pkg/providers/grok/provider.go and session.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *realtimeSession) writeRTCMediaFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {",
+              "line": 83,
+              "path": "go-llm-gateway/pkg/providers/openai/session_media.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/grok/session_media.go",
+          "symbol": "writeRTCMediaFrame"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "_ = s.publishRTCMedia(event)",
+              "line": 285,
+              "path": "go-llm-gateway/pkg/providers/grok/session.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := s.publishRTCMedia(ctx, event); err != nil {",
+              "line": 166,
+              "path": "go-llm-gateway/pkg/providers/openai/session_conn.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.SessionEvent) error {",
+              "line": 109,
+              "path": "go-llm-gateway/pkg/providers/openai/session_media.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/grok/session_media.go",
+          "symbol": "publishRTCMedia"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "data, decodeErr := decodeGrokAudioDelta(event.Data)",
+              "line": 110,
+              "path": "go-llm-gateway/pkg/providers/grok/session_media.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/grok/session_media.go",
+          "symbol": "decodeGrokAudioDelta"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-RTC-TRACKS",
+      "public_entry_point": "go-agent-runtime/services/devices/internal/probe/rtc.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "l.inbound, err = rtc.NewInboundTrack(liveDeviceProbeRTPPacketSource{track: remote}, l.decoder, rtc.InboundTrackConfig{",
+              "line": 66,
+              "path": "go-agent-runtime/services/devices/internal/probe/rtc.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/transport/rtc/track_in.go",
+          "symbol": "NewInboundTrack"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "// Populated by readLoop() after translating from wire events; it is the",
+              "line": 45,
+              "path": "go-llm-gateway/pkg/providers/grok/session.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "go s.readLoop(ctx)",
+              "line": 75,
+              "path": "go-llm-gateway/pkg/providers/grok/session.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *grokSession) readLoop(ctx context.Context) {",
+              "line": 271,
+              "path": "go-llm-gateway/pkg/providers/grok/session.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "go s.readLoop(ctx)",
+              "line": 117,
+              "path": "go-llm-gateway/pkg/providers/openai/session_conn.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *realtimeSession) readLoop(ctx context.Context) {",
+              "line": 122,
+              "path": "go-llm-gateway/pkg/providers/openai/session_conn.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "go t.readLoop()",
+              "line": 179,
+              "path": "go-llm-gateway/pkg/transport/rtc/track_in.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/transport/rtc/track_in.go",
+          "symbol": "readLoop"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (m *PCM16Mixer) ReadFrame(ctx context.Context) ([]byte, error) {",
+              "line": 596,
+              "path": "agent-cli/internal/room/mixer.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := source.source.ReadFrame(context.Background(), frame); err != nil {",
+              "line": 532,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := source.source.ReadFrame(ctx, frame); err != nil {",
+              "line": 795,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := runtime.input.ReadFrame(runtime.ctx, frame); err != nil {",
+              "line": 1049,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *frameAudioSource) ReadFrame(ctx context.Context, buf []int16) error {",
+              "line": 38,
+              "path": "agent-cli/internal/transport/cli/internal/livehost/files.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "return s.source.ReadFrame(ctx, buf)",
+              "line": 42,
+              "path": "agent-cli/internal/transport/cli/internal/livehost/files.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *interruptibleAudioSource) ReadFrame(ctx context.Context, buf []int16) error {",
+              "line": 67,
+              "path": "agent-cli/internal/transport/cli/internal/livehost/files.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "err := s.source.ReadFrame(ctx, buf)",
+              "line": 71,
+              "path": "agent-cli/internal/transport/cli/internal/livehost/files.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (inertAudioSource) ReadFrame(context.Context, []int16) error { return io.EOF }",
+              "line": 69,
+              "path": "agent-cli/internal/wire/audio_ports.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "frame, err := source.ReadFrame(ctx)",
+              "line": 512,
+              "path": "agent-cli/internal/wire/rtc_runtime.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *Source) ReadFrame(_ context.Context, buf []int16) error {",
+              "line": 60,
+              "path": "go-agent-loop/pkg/audiofixture/audiofixture.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (q *frameInbox) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {",
+              "line": 53,
+              "path": "go-agent-runtime/services/devices/internal/composite/frames.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "frame, err := inbound.ReadFrame(ctx)",
+              "line": 130,
+              "path": "go-agent-runtime/services/devices/internal/composite/playback.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := c.source.ReadFrame(ctx, frame); err != nil {",
+              "line": 162,
+              "path": "go-agent-runtime/services/devices/internal/file/capture.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "frame, err := inbound.ReadFrame(ctx)",
+              "line": 81,
+              "path": "go-agent-runtime/services/devices/internal/file/playback.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := source.ReadFrame(ctx, readFrame); err != nil {",
+              "line": 21,
+              "path": "go-agent-runtime/services/devices/internal/probe/capture.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "frame, err := l.inbound.ReadFrame(ctx)",
+              "line": 77,
+              "path": "go-agent-runtime/services/devices/internal/probe/rtc.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if _, err := inbound.ReadFrame(ctx); err != nil {",
+              "line": 37,
+              "path": "go-agent-runtime/services/replay/internal/strict/media.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "frame, err := inbound.ReadFrame(g.ctx)",
+              "line": 200,
+              "path": "go-agent-runtime/services/rooms/internal/lifecycle/graph.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (b bufferedInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {",
+              "line": 63,
+              "path": "go-agent-runtime/services/rooms/internal/lifecycle/graph_media.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "frame, err := source.ReadFrame(ctx)",
+              "line": 264,
+              "path": "go-agent-runtime/services/session/internal/live/mediagate/gate.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (p *inboundPort) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {",
+              "line": 53,
+              "path": "go-agent-runtime/services/session/internal/live/mediagate/ports.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *MediaStream) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {",
+              "line": 269,
+              "path": "go-llm-gateway/pkg/transport/rtc/media_source.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "return s.Inbound.ReadFrame(ctx)",
+              "line": 273,
+              "path": "go-llm-gateway/pkg/transport/rtc/media_source.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/transport/rtc/track_in.go",
+          "symbol": "ReadFrame"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-RTC-TRACKS-OUT",
+      "public_entry_point": "agent-cli/internal/wire/rtc_runtime.go and go-agent-runtime/services/devices/internal/probe/rtc.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "outbound, err := rtc.NewOutboundTrack(rtc.OutboundTrackConfig{",
+              "line": 345,
+              "path": "agent-cli/internal/wire/rtc_runtime.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "outbound, err := rtc.NewOutboundTrack(rtc.OutboundTrackConfig{",
+              "line": 38,
+              "path": "go-agent-runtime/services/devices/internal/probe/rtc.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/transport/rtc/track_out.go",
+          "symbol": "NewOutboundTrack"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *sessionAudioSink) WriteFrame(ctx context.Context, frame []int16) error {",
+              "line": 309,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := s.raw.WriteFrame(ctx, frame); err != nil {",
+              "line": 318,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := sink.WriteFrame(ctx, b.pending[:audio.FrameSize]); err != nil {",
+              "line": 1186,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (s *negotiatedFileSink) WriteFrame(ctx context.Context, samples []int16) error {",
+              "line": 50,
+              "path": "agent-cli/internal/transport/cli/internal/livehost/negotiated_sink.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "return s.sink.WriteFrame(ctx, samples)",
+              "line": 95,
+              "path": "agent-cli/internal/transport/cli/internal/livehost/negotiated_sink.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "WriteFrame(ctx context.Context, samples []int16) error",
+              "line": 26,
+              "path": "agent-cli/internal/wire/audio_ports.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (inertAudioSink) WriteFrame(context.Context, []int16) error { return nil }",
+              "line": 74,
+              "path": "agent-cli/internal/wire/audio_ports.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := outbound.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: frame}); err != nil {",
+              "line": 505,
+              "path": "agent-cli/internal/wire/rtc_runtime.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "return sink.WriteFrame(ctx, samples)",
+              "line": 182,
+              "path": "go-agent-runtime/services/devices/internal/composite/tap.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := outbound.WriteFrame(ctx, frame); err != nil {",
+              "line": 300,
+              "path": "go-agent-runtime/services/devices/internal/file/capture.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := p.sink.WriteFrame(ctx, frame.Samples); err != nil {",
+              "line": 210,
+              "path": "go-agent-runtime/services/devices/internal/file/playback.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := b.sink.WriteFrame(ctx, frame); err != nil {",
+              "line": 222,
+              "path": "go-agent-runtime/services/devices/internal/probe/bridge.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := l.outbound.WriteFrame(ctx, audio.PCMFrame{Samples: samples}); err != nil {",
+              "line": 54,
+              "path": "go-agent-runtime/services/devices/internal/probe/rtc.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := fanout.WriteFrame(g.ctx, frame); err != nil {",
+              "line": 207,
+              "path": "go-agent-runtime/services/rooms/internal/lifecycle/graph.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := output.provider.WriteFrame(g.ctx, frame); err != nil {",
+              "line": 288,
+              "path": "go-agent-runtime/services/rooms/internal/lifecycle/graph.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (f frameFanout) WriteFrame(ctx context.Context, frame audio.PCMFrame) error {",
+              "line": 20,
+              "path": "go-agent-runtime/services/rooms/internal/lifecycle/graph_media.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := target.WriteFrame(ctx, frame); err != nil {",
+              "line": 32,
+              "path": "go-agent-runtime/services/rooms/internal/lifecycle/graph_media.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := target.WriteFrame(ctx, frame); err != nil {",
+              "line": 316,
+              "path": "go-agent-runtime/services/session/internal/live/mediagate/gate.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (p *outboundPort) WriteFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {",
+              "line": 213,
+              "path": "go-agent-runtime/services/session/internal/live/mediagate/ports.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "func (o *loopAudioOutbound) WriteFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {",
+              "line": 247,
+              "path": "go-agent-runtime/services/session/internal/live/replay.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "if err := h.media.Endpoints().Outbound.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: samples}); err != nil {",
+              "line": 338,
+              "path": "go-agent-runtime/services/session/internal/live/replay.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/transport/rtc/track_out.go",
+          "symbol": "WriteFrame"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-NF-DEVICE-CONTRACT",
+      "public_entry_point": "go-agent-runtime/services/devices.Service",
+      "symbol_paths": []
+    },
+    {
+      "finding_id": "C108-NF-CLI-MEDIA-TRANSPORT",
+      "public_entry_point": "agent-cli command composition",
+      "symbol_paths": []
+    },
+    {
+      "finding_id": "C108-NF-CORE-LOOP-QUEUE",
+      "public_entry_point": "agent loop participant/session admission",
+      "symbol_paths": []
+    },
+    {
+      "finding_id": "C108-F-MIXER-HISTORICAL",
+      "public_entry_point": "agent-cli room composition",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "return NewPCM16MixerWithConfig(ctx, config)",
+              "line": 261,
+              "path": "agent-cli/internal/room/mixer.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "return NewPCM16MixerWithConfig(ctx, config)",
+              "line": 266,
+              "path": "agent-cli/internal/room/mixer.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "mixer, mixerErr := room.NewPCM16MixerWithConfig(participantCtx, mixerConfig)",
+              "line": 161,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go"
+            }
+          ],
+          "path": "agent-cli/internal/room/mixer.go",
+          "symbol": "NewPCM16MixerWithConfig"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "_, err := m.WriteContextWithDisposition(ctx, inputID, pcm)",
+              "line": 459,
+              "path": "agent-cli/internal/room/mixer.go"
+            }
+          ],
+          "path": "agent-cli/internal/room/mixer.go",
+          "symbol": "WriteContextWithDisposition"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "mixed, err := runtime.mixer.ReadFrameWithSources(admissionCtx)",
+              "line": 947,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "mixed, err := runtime.mixer.ReadFrameWithSources(runtime.ctx)",
+              "line": 1116,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+            }
+          ],
+          "path": "agent-cli/internal/room/mixer.go",
+          "symbol": "ReadFrameWithSources"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-AUDIO-IN-HISTORICAL",
+      "public_entry_point": "session runtime audio input setup",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "source, err := openSessionAudioInput(input)",
+              "line": 328,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "source, err := openSessionAudioInput(input)",
+              "line": 518,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "audioSource, err := openSessionAudioInput(input)",
+              "line": 213,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_image.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "audioSource, err = openSessionAudioInput(*audioInput)",
+              "line": 286,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_recording.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "audioSource, err = openSessionAudioInput(*audioInput)",
+              "line": 385,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_recording.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+          "symbol": "openSessionAudioInput"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-AUDIO-OUT-HISTORICAL",
+      "public_entry_point": "session runtime audio output setup",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "sink, err := newSessionAudioSinkAtRate(path, out, plan.outputAudioSampleRate)",
+              "line": 219,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
+            },
+            {
+              "evidence": "exact identifier call in pinned production source",
+              "expression": "sink, err := newSessionAudioSinkAtRate(o.devicePath, o.deviceWriter, sampleRate)",
+              "line": 235,
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+          "symbol": "newSessionAudioSinkAtRate"
+        }
+      ]
+    }
+  ],
+  "schema_version": "c108-call-paths-v1",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+}

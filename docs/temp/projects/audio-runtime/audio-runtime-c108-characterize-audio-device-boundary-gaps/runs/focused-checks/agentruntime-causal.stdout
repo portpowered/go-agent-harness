@@ -1,0 +1,14 @@
+=== RUN   TestRTCDeviceBoundSessionAcceptedCancelDiscardsQueuedPlayback
+--- PASS: TestRTCDeviceBoundSessionAcceptedCancelDiscardsQueuedPlayback (0.00s)
+=== RUN   TestRTCDeviceBoundSessionRejectedCancelDoesNotDiscardPlayback
+--- PASS: TestRTCDeviceBoundSessionRejectedCancelDoesNotDiscardPlayback (0.00s)
+=== RUN   TestStreamSessionAudioInputResamples16kHzAtProviderBoundary
+--- PASS: TestStreamSessionAudioInputResamples16kHzAtProviderBoundary (0.00s)
+=== RUN   TestRoomProviderInputPCMResamples16kHzMixerTo24kHzContract
+--- PASS: TestRoomProviderInputPCMResamples16kHzMixerTo24kHzContract (0.00s)
+=== RUN   TestConvertSessionAudioPCMIdentityAndFailures
+--- PASS: TestConvertSessionAudioPCMIdentityAndFailures (0.00s)
+=== RUN   TestConvertScheduledAudioInputsUsesDeclaredSourceRate
+--- PASS: TestConvertScheduledAudioInputsUsesDeclaredSourceRate (0.00s)
+PASS
+ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	0.451s

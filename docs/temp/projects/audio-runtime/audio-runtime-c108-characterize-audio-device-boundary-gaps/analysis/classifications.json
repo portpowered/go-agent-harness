@@ -1,0 +1,97 @@
+{
+  "classes": [
+    {
+      "boundary_class": "DEVICE_EDGE_IO",
+      "finding_id": "C108-F-AUDIO-IN-HISTORICAL",
+      "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "DEVICE_EDGE_IO",
+      "finding_id": "C108-F-AUDIO-OUT-HISTORICAL",
+      "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "CORE_LOOP_BUFFER_POLICY",
+      "finding_id": "C108-F-AUDIO-RATE-CONTRACT",
+      "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "CORE_LOOP_BUFFER_POLICY",
+      "finding_id": "C108-F-AUDIO-RATE-NEGOTIATION",
+      "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "DEVICE_EDGE_IO",
+      "finding_id": "C108-F-DEVICE-PUMP-LIFECYCLE",
+      "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "CORE_LOOP_BUFFER_POLICY",
+      "finding_id": "C108-F-MIXER-HISTORICAL",
+      "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "SERVICE_TRANSPORT_ADAPTATION",
+      "finding_id": "C108-F-PROVIDER-MEDIA-GROK",
+      "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "SERVICE_TRANSPORT_ADAPTATION",
+      "finding_id": "C108-F-PROVIDER-MEDIA-OPENAI",
+      "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "DEVICE_EDGE_IO",
+      "finding_id": "C108-F-RTC-TRACKS",
+      "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "DEVICE_EDGE_IO",
+      "finding_id": "C108-F-RTC-TRACKS-OUT",
+      "judgment": "supported_gap",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "THIN_TRANSPORT_DELEGATION",
+      "finding_id": "C108-NF-CLI-MEDIA-TRANSPORT",
+      "judgment": "correct_boundary",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "CORE_LOOP_BUFFER_POLICY",
+      "finding_id": "C108-NF-CORE-LOOP-QUEUE",
+      "judgment": "correct_boundary",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    },
+    {
+      "boundary_class": "THIN_SERVICE_CONTRACT",
+      "finding_id": "C108-NF-DEVICE-CONTRACT",
+      "judgment": "correct_boundary",
+      "proof_limit": "SOFTWARE_REPLAY_OR_LOWER; no physical/acoustic claim",
+      "reachability": "reachable_production"
+    }
+  ],
+  "schema_version": "c108-classifications-v1",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+}
