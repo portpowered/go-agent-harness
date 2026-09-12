@@ -10,11 +10,13 @@ made on the Darwin validator.
 
 - Admission remains the sole admitted `audio-runtime/audio-runtime-v1` task on
   `codex/audio-runtime-c74-retire-cli-session-config`; startup integration is
-  `8bdafc7f947a3a2c9856220abdc539437035bd21`, accepted/current `origin/main`
-  baseline is `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`, and both ancestry
-  checks pass in this isolated worktree. The worktree is clean before the
-  checkpoint except for the owned implementation, tests, manifests and
-  evidence.
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, the admitted accepted baseline is
+  `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`, and freshly fetched `origin/main`
+  is `84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f`. The isolated worktree
+  integrates that disjoint mainline checkpoint in merge revision
+  `5c7e0ea2076e25982f57c57deea829117dad0f28`; all required ancestry checks
+  pass. The worktree is clean before the checkpoint except for the owned
+  implementation, tests, manifests and evidence.
 - The accepted-main `session_options.go` census is exactly `930` lines. The
   candidate is `619` lines, retiring `311` physical production lines; the
   candidate remains below the `680` limit and above the `250` retirement floor.
