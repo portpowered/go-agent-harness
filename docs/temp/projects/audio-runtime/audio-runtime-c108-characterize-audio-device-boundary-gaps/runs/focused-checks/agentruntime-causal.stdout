@@ -11,4 +11,4 @@
 === RUN   TestConvertScheduledAudioInputsUsesDeclaredSourceRate
 --- PASS: TestConvertScheduledAudioInputsUsesDeclaredSourceRate (0.00s)
 PASS
-ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	0.432s
+ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime	0.476s

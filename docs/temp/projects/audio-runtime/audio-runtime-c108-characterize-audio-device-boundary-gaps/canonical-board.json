@@ -1685,38 +1685,6 @@
       "workTypeName": "idea"
     },
     {
-      "chainingTraceDepth": 21,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-c109-browser-retirement-integration-rehearsal-20260912T1924Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-review-241",
-      "workTypeName": "review"
-    },
-    {
-      "chainingTraceDepth": 10,
-      "currentChainingTraceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
-      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "previousChainingTraceIds": [
-        "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf"
-      ],
-      "requestId": "audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "traceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
-      "workId": "work-review-242",
-      "workTypeName": "review"
-    },
-    {
       "chainingTraceDepth": 5,
       "content": [
         {
@@ -1736,7 +1704,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
-        "_rejection_feedback": "PR #470 head a5d26045b7e39f21a0b5d663826db0394af87b6a has green required checks, but code and evidence block merge. Reducer events.go:55-58 clears messageEndSeen for untagged content; adapter session_diagnostics_response.go:282-292 applies that content boundary before validating response ownership. Independent probe: open/end response A, process untagged content, then duplicate end A; duplicate was incorrectly Accepted/Candidate/Admitted. Fix ownership ordering and add a regression preserving the existing identity, purpose, reset-generation, disposition, continuation-owner, and retry assertions. Evidence is stale: response, retirement, mutation, static, and all replay ledgers identify 724a2e0b, not reviewed head a5d26045; replay metadata records artifact 1ff1d25c.../53103442 while the retained artifacts/yui is f7720680.../53101346. Executor: commit the fix, rebuild yui, rerun run.py for all three cases and verify.py for response-matrix, retirement-and-scope, and both mutation modes with --expect-failure; refresh every ledger and artifact/source digest, commit/push, submit changed-head CI without running ci-wait.py, then request fresh review.",
+        "_rejection_feedback": "CI checks failed for PR #470 at head 34816f5b0bce04cdff768322ba8bc0269ca63d32: required checks failed on current head 34816f5b0bce04cdff768322ba8bc0269ca63d32: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34720884934/job/103626389155). Return this task to the executor with the listed failures.",
         "continue_feedback": "HEAD 1bcccd46 is clean, pushed on PR #470, admitted, and contains required ancestry through origin/main 84c91ee1. Focused normal/race, external consumer, mutation oracles, lint, staticcheck, and diff checks pass. Remaining exact failures are the unregistered sessiondiagnostics Wire path and 12 stale C79 baseline entries. C57 PR449 and C61 PR452 remain open, so their shared leases are unreleased. After release, make only those registry/baseline edits, rerun gates, commit/push PR #470, and submit the same task to script CI without polling."
       },
       "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
@@ -1758,12 +1726,12 @@
       ],
       "requestId": "audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z",
       "state": {
-        "name": "in-review",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"branch\": \"codex/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-        "_rejection_feedback": "PR #494 head 8593f08f has all nine CI checks green, and independent pinned analyzer/public replay passed. However, verify.py:720-782 fails open: removing one symbol row and its edges, then adjusting self-reported totals, still passes with 2,488 instead of 2,489 symbols. verify.py:1007-1029 also accepts subtraction with preserved PR #438 removed (40 instead of 41 checkpoints). Repair verifier completeness checks and add deletion-row regressions; require all active/preserved PR identities, then rerun release evidence, push, and resubmit the exact head to SCRIPT CI without polling. Do not merge 8593f08f."
+        "_rejection_feedback": "PR #494 is at df07c2be with all nine required checks green (run 34719242893), but actionable defects remain. verify.py:714-782 accepts deletion of one symbol when self-reported totals are adjusted (2488 symbols). verify.py:1007-1029 accepts subtraction with preserved PR #438 removed (40 instead of 41 checkpoints). Add canonical completeness checks and deletion-row regressions. Checked-in provenance/release/public/subtraction evidence still pins 8593f08f, not df07c2be. Repair verifier/evidence, regenerate all artifacts and checksums at the final head, commit/push owned C107 changes, submit that exact head to SCRIPT CI without polling, then request fresh review; do not merge."
       },
       "traceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
       "workId": "work-task-218",
@@ -1789,7 +1757,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"branch\": \"codex/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-        "_rejection_feedback": "PR #493 head 336cc2aa7591cbf0b1ffdf35bec29095e4dcf898 changes only the owned evidence directory and reported required CI is green. Independent replay and malformed-PCM runs passed with clean shutdown. Reject: analyze.py:93-115 uses bare-name caller matching and truncates results, producing false cross-provider and unrelated ConnectSession/ReadFrame/WriteFrame caller edges; exact caller ownership is unproven. Inventory omits reachable paths including go-agent-runtime/services/session/internal/live/invoke.go:191-225 pump lifecycle, devices/internal/probe/capture.go:48 and bridge.go:190 resampling, and services/tools/internal/filesystem/tool_filesystem.go:232-233 audioToPCM16k; classify or justify each and regenerate findings/candidates. provenance.json pins 22d7f712 and release.json pins 0ec1ea3, while HEAD is 336cc2a; public artifacts likewise lack a verified final-head equivalence. Refresh provenance, release, hashes, and both public cases at final HEAD, then rerun pristine and causal-negative verification. ownership.json has only prose recheck placeholders for C83/C84/C99/C101/C103/C104/C107 and lacks timestamped live PR/head/diff/writer-path observations; re-query those peers and update intersections. Harden verify.py:168,248,763 to reject committed mutations across all tracked paths and validate actual artifact hashes/effects, not only metadata. Correct candidate Wire destinations from services/X/internal/wire to the required services/X/wire layout. Executor must make these owned-evidence/analyzer/verifier corrections, regenerate evidence, submit the exact new HEAD to script CI, and obtain a fresh review."
+        "_rejection_feedback": "PR #493 at fb826e2a has green CI, but the malformed evidence is invalid. run_public_checks.py:221-233 mutates the audio delta without recomputing the v2 integrity digest; the recorded run exits solely on integrity_checksum_mismatch before audio decoding. Independently re-sealing that fixture produced the intended PCM16 odd-byte rejection and no PCM/WAV receipt. Fix the mutation to reseal the fixture, regenerate malformed reports/release/SHA256SUMS, rerun verification and focused checks, then submit the changed exact head to script CI without polling."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-222",
@@ -1810,12 +1778,12 @@
       ],
       "requestId": "audio-runtime-c109-browser-retirement-integration-rehearsal-20260912T1924Z",
       "state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration\", \"branch\": \"codex/audio-runtime-c109-characterize-browser-retirement-integration\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-        "_rejection_feedback": "PR #495 at 4b0a763d has green current-head CI (run 34716813540), and independent normal plus malformed/canceled public runs passed, but the evidence gate fails. analyze.py truncates git output before parsing refs/worktrees; the report is visibly truncated, omits required C61/C83 refs, and records both preserved worktrees absent while verify.py accepts absent as unchanged. The ledger is heuristic and hand-coded: it lacks exact source spans, callers, conflict kinds, evidence IDs, and live CI/log attribution. The bounded sequence omits required inputs, preconditions, commands, expected observables, timeouts, stop conditions, and rollback checkpoints. run_public_checks.py hard-codes effects, discards the detailed shipped workflow report, accepts arbitrary --tree input, ignores cleanup failures, and has an unbounded timeout-path communicate. The emitted broadGates are not the manifest\u2019s nine exact gate IDs, and fetch failure is not fatal. Amend only the C109 directory: capture structured, complete refs/worktree provenance and fail closed on missing preservation; implement and verify the exact ledger and sequence schema; bind public evidence to the exact synthetic main->C61->C83 tree with retained hashes/effects and bounded cleanup; emit/assert all nine manifest gates OPEN; require successful fetch and current-head identity. Regenerate both orders, determinism, negative fixtures, and both public workflows, commit/push a new PR head, and submit it to the script CI gate. Preserve C61/C83 and C79 ownership; leave all nine project gates open, retain C61 OPEN_RECONCILE_TEST_REWRITTEN, and retain the C83 6400-sample loss as C79/provider-audio evidence."
+        "_rejection_feedback": "PR #495 head e0af439b has all nine required CI checks green in run 34718968843, but actionable evidence defects remain. Independent runs passed: required/reverse analyzer, 12/12 positive checks, 3/3 malformed/canceled checks; however analyzer output records both preserved C61/C83 worktrees as present:false and verify.py still accepts this as unchanged (analyze.py:158-173; verify.py:67-72). git output is truncated before ref/worktree parsing (analyze.py:46-86), and the ledger is hard-coded/heuristic, omitting exact spans, callers, conflict kinds and evidence IDs while matching historical JSON instead of source (analyze.py:181-200,329-375). The sequence lacks required inputs, preconditions, commands, observables, timeouts, stop conditions and rollback/checkpoints (analyze.py:462-498). broadGates emits six non-manifest keys instead of the nine exact manifest gates, and verification only checks values are OPEN (analyze.py:635-642; verify.py:138). run_public_checks.py accepts arbitrary --tree, does not bind/verify the exact main->C61->C83 tree, captures only the shipped child summary instead of its detailed effects/artifact/shutdown report, ignores cleanup failures, and has an unbounded communicate after timeout (run_public_checks.py:44-103,177-240). Fresh required/control verification also failed on mutable unrelated worktree inventory, proving determinism is not normalized. Amend only the C109 directory on the same task/PR: capture complete structured refs and actual preserved-worktree identity, require successful fetch/current-head identity and fail closed on missing preservation; implement the exact symbol/API/conflict/ownership ledger and full bounded sequence; bind public evidence to the exact synthetic tree with retained hashes/effects/cleanup and test discovery; emit/assert all nine gates OPEN; add causal negatives for these failures and regenerate both orders, determinism, attribution and public reports. Preserve C61/C83/C79 ownership, retain C61 OPEN_RECONCILE_TEST_REWRITTEN and the C79/provider-audio 6400-sample loss, then push the changed head and resubmit to SCRIPT CI. Do not merge this head."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-224",
@@ -1836,7 +1804,7 @@
       ],
       "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
       "state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "tags": {
@@ -1865,7 +1833,8 @@
         "type": "PROCESSING"
       },
       "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"branch\": \"codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}"
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"branch\": \"codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+        "continue_feedback": "HEAD 70e2a05 is clean, pushed, and PR #496 is open. Admission, ancestry, 147-line baseline hash, 57-line adapter/90-line retirement, focused normal/race tests, GOWORK=off consumer, four regressions, and both verifier modes pass. make wire-check reports only the expected unregistered sessioncontinuation Wire file. C79 PR #470 remains OPEN/unmerged, so shared registries are unreleased. After guarded merge release, fetch and integrate current origin/main, apply only demonstrated C111 registry/baseline changes, rerun bounded gates, push/update PR #496, and submit to SCRIPT CI without polling."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-236",
@@ -2288,6 +2257,63 @@
       },
       "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
       "workId": "work-review-239",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 21,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c109-browser-retirement-integration-rehearsal-20260912T1924Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #495 head e0af439b has all nine required CI checks green in run 34718968843, but actionable evidence defects remain. Independent runs passed: required/reverse analyzer, 12/12 positive checks, 3/3 malformed/canceled checks; however analyzer output records both preserved C61/C83 worktrees as present:false and verify.py still accepts this as unchanged (analyze.py:158-173; verify.py:67-72). git output is truncated before ref/worktree parsing (analyze.py:46-86), and the ledger is hard-coded/heuristic, omitting exact spans, callers, conflict kinds and evidence IDs while matching historical JSON instead of source (analyze.py:181-200,329-375). The sequence lacks required inputs, preconditions, commands, observables, timeouts, stop conditions and rollback/checkpoints (analyze.py:462-498). broadGates emits six non-manifest keys instead of the nine exact manifest gates, and verification only checks values are OPEN (analyze.py:635-642; verify.py:138). run_public_checks.py accepts arbitrary --tree, does not bind/verify the exact main->C61->C83 tree, captures only the shipped child summary instead of its detailed effects/artifact/shutdown report, ignores cleanup failures, and has an unbounded communicate after timeout (run_public_checks.py:44-103,177-240). Fresh required/control verification also failed on mutable unrelated worktree inventory, proving determinism is not normalized. Amend only the C109 directory on the same task/PR: capture complete structured refs and actual preserved-worktree identity, require successful fetch/current-head identity and fail closed on missing preservation; implement the exact symbol/API/conflict/ownership ledger and full bounded sequence; bind public evidence to the exact synthetic tree with retained hashes/effects/cleanup and test discovery; emit/assert all nine gates OPEN; add causal negatives for these failures and regenerate both orders, determinism, attribution and public reports. Preserve C61/C83/C79 ownership, retain C61 OPEN_RECONCILE_TEST_REWRITTEN and the C79/provider-audio 6400-sample loss, then push the changed head and resubmit to SCRIPT CI. Do not merge this head."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-241",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 10,
+      "currentChainingTraceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "previousChainingTraceIds": [
+        "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf"
+      ],
+      "requestId": "audio-runtime-c107-post-wave-cli-ownership-characterization-20260912T1905Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #494 is at df07c2be with all nine required checks green (run 34719242893), but actionable defects remain. verify.py:714-782 accepts deletion of one symbol when self-reported totals are adjusted (2488 symbols). verify.py:1007-1029 accepts subtraction with preserved PR #438 removed (40 instead of 41 checkpoints). Add canonical completeness checks and deletion-row regressions. Checked-in provenance/release/public/subtraction evidence still pins 8593f08f, not df07c2be. Repair verifier/evidence, regenerate all artifacts and checksums at the final head, commit/push owned C107 changes, submit that exact head to SCRIPT CI without polling, then request fresh review; do not merge."
+      },
+      "traceId": "trace-request-time-4d854060d8969b81f38b8c49a8df7aaf",
+      "workId": "work-review-242",
+      "workTypeName": "review"
+    },
+    {
+      "chainingTraceDepth": 33,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c108-audio-device-boundary-characterization-20260912T1920Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "PR #493 at fb826e2a has green CI, but the malformed evidence is invalid. run_public_checks.py:221-233 mutates the audio delta without recomputing the v2 integrity digest; the recorded run exits solely on integrity_checksum_mismatch before audio decoding. Independently re-sealing that fixture produced the intended PCM16 odd-byte rejection and no PCM/WAV receipt. Fix the mutation to reseal the fixture, regenerate malformed reports/release/SHA256SUMS, rerun verification and focused checks, then submit the changed exact head to script CI without polling."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-review-243",
       "workTypeName": "review"
     },
     {
