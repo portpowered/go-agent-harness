@@ -1576,6 +1576,12 @@ def main() -> int:
     before_refs = ref_snapshot(root)
     before_host_status = status_lines(root)
     require(all(OWNED_PREFIX in line for line in before_host_status), f"unexpected dirty path before analyzer: {before_host_status}")
+    source_status_before = [
+        line
+        for line in before_host_status
+        if any(f"{OWNED_PREFIX}{filename}" in line for filename in source_files)
+    ]
+    require(not source_status_before, f"C109 source scripts were dirty before analyzer: {source_status_before}")
     before_preserved = preserved_snapshot(root)
     fetch_result = run(["git", "fetch", "origin", "main"], cwd=root, check=False, timeout=120)
     require(fetch_result["status"] == "passed" and fetch_result["exit_code"] == 0, "origin/main fetch failed")
@@ -1667,7 +1673,7 @@ def main() -> int:
             "committedHead": source_head,
             "committedTree": source_tree,
             "scripts": source_bindings,
-            "statusBefore": before_host_status,
+            "statusBefore": source_status_before,
             "statusAfter": after_host_status,
             "cleanScripts": True,
         },
