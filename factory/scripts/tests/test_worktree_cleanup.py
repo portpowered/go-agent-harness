@@ -16,6 +16,25 @@ SPEC.loader.exec_module(MODULE)
 
 
 class WorktreeCleanupTests(unittest.TestCase):
+    def test_pressure_mode_skips_healthy_disk_before_factory_observation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with mock.patch.object(MODULE, "_disk_free", return_value=40):
+                with mock.patch.object(MODULE, "_refresh_guard") as refresh:
+                    report = MODULE.execute(
+                        root=root,
+                        you="you",
+                        server="server",
+                        base_ref="origin/main",
+                        apply=True,
+                        pressure_trigger_bytes=32,
+                        pressure_target_bytes=48,
+                    )
+
+            refresh.assert_not_called()
+            self.assertEqual(report["mode"], "pressure-skip")
+            self.assertEqual(report["freeDeltaBytes"], 0)
+
     def test_factory_guard_uses_remote_live_session_snapshot(self):
         calls = []
         response = {

@@ -37,3 +37,10 @@ The default state and report paths are
 `docs/temp/projects/audio-runtime/worktree-cleanup-report.json`. The state is
 written only after an unblocked apply run and records apparent deleted bytes as
 well as measured free-space change; on APFS clones those values can differ.
+
+The factory supervisor also runs this cleanup every 30 minutes while the Data
+volume is under pressure. It starts below 32 GiB free and stops deleting after
+48 GiB is free, so it does not repeatedly scan a healthy disk. A repository
+common-dir lock prevents overlapping manual and automatic runs. Automatic
+reports live under `.git/factory-cleanup/`; active or queued Work names and all
+of the safety checks above remain protected.

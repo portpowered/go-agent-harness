@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -959,6 +960,8 @@ def execute(
     server: str,
     base_ref: str,
     apply: bool,
+    pressure_trigger_bytes: int | None = None,
+    pressure_target_bytes: int | None = None,
     worktree_age_hours: float = WORKTREE_AGE_HOURS,
     now: dt.datetime | None = None,
     runner: CommandRunner = subprocess.run,
@@ -968,6 +971,25 @@ def execute(
     now = now or utc_now()
     root = root.resolve()
     free_before = _disk_free(root)
+    if apply and pressure_trigger_bytes is not None and free_before >= pressure_trigger_bytes:
+        report = _initial_report(
+            root=root,
+            server=server,
+            guard=None,
+            scratch=[],
+            build_caches=[],
+            worktrees=[],
+            mode="pressure-skip",
+            now=now,
+            free_before=free_before,
+        )
+        report["freeAfterBytes"] = free_before
+        report["freeDeltaBytes"] = 0
+        report["pressure"] = {
+            "triggerFreeBytes": pressure_trigger_bytes,
+            "targetFreeBytes": pressure_target_bytes,
+        }
+        return report
     try:
         guard = _refresh_guard(you, server, runner=runner)
     except CleanupBlocked as error:
@@ -1016,6 +1038,11 @@ def execute(
         now=now,
         free_before=free_before,
     )
+    if pressure_trigger_bytes is not None:
+        report["pressure"] = {
+            "triggerFreeBytes": pressure_trigger_bytes,
+            "targetFreeBytes": pressure_target_bytes,
+        }
     if not apply:
         return report
 
@@ -1030,6 +1057,8 @@ def execute(
         report["freeDeltaBytes"] = report["freeAfterBytes"] - free_before
         return report
     for candidate in report["candidates"]:
+        if pressure_target_bytes is not None and _disk_free(root) >= pressure_target_bytes:
+            break
         if not candidate.get("eligible"):
             continue
         try:
@@ -1107,6 +1136,18 @@ def _parser() -> argparse.ArgumentParser:
         help="apply eligible deletions; the default is a dry-run",
     )
     parser.add_argument(
+        "--pressure-trigger-free-gib",
+        type=float,
+        default=None,
+        help="with --apply, skip the audit when free space is at or above this threshold",
+    )
+    parser.add_argument(
+        "--pressure-target-free-gib",
+        type=float,
+        default=None,
+        help="stop deleting after free space reaches this higher hysteresis target",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="explicitly request the default non-mutating mode",
@@ -1122,20 +1163,48 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.worktree_age_hours < 0:
         print("--worktree-age-hours must be non-negative", file=sys.stderr)
         return 2
+    if (args.pressure_trigger_free_gib is None) != (args.pressure_target_free_gib is None):
+        print("pressure trigger and target must be specified together", file=sys.stderr)
+        return 2
+    if args.pressure_trigger_free_gib is not None and (
+        args.pressure_trigger_free_gib < 0
+        or args.pressure_target_free_gib <= args.pressure_trigger_free_gib
+    ):
+        print("pressure target must be greater than the non-negative trigger", file=sys.stderr)
+        return 2
     root = repo_root(args.root)
     state_path = (args.state or root / DEFAULT_STATE).expanduser().resolve()
     report_path = (args.report or root / DEFAULT_REPORT).expanduser().resolve()
-    report = execute(
-        root=root,
-        you=args.you,
-        server=args.server,
-        base_ref=args.base_ref,
-        apply=args.apply,
-        worktree_age_hours=args.worktree_age_hours,
-    )
-    _atomic_json(report_path, report)
-    if args.apply and report.get("blockedReason") is None:
-        _atomic_json(state_path, _state_from_report(report, report_path))
+    common_dir = common_git_dir(root)
+    lock_path = common_dir / "factory-cleanup.lock"
+    with lock_path.open("a+") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print("another factory cleanup is already running", file=sys.stderr)
+            return 3
+        gib = 1024 ** 3
+        report = execute(
+            root=root,
+            you=args.you,
+            server=args.server,
+            base_ref=args.base_ref,
+            apply=args.apply,
+            pressure_trigger_bytes=(
+                int(args.pressure_trigger_free_gib * gib)
+                if args.pressure_trigger_free_gib is not None
+                else None
+            ),
+            pressure_target_bytes=(
+                int(args.pressure_target_free_gib * gib)
+                if args.pressure_target_free_gib is not None
+                else None
+            ),
+            worktree_age_hours=args.worktree_age_hours,
+        )
+        _atomic_json(report_path, report)
+        if args.apply and report.get("blockedReason") is None:
+            _atomic_json(state_path, _state_from_report(report, report_path))
     print(json.dumps(report, indent=2, sort_keys=True))
     if report.get("blockedReason"):
         return 2

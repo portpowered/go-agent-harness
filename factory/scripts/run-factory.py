@@ -9,6 +9,7 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import uuid
 import urllib.request
@@ -20,6 +21,51 @@ from project_contract import ContractError, digest, manifest, read_json, root_pa
 SERVER = "http://127.0.0.1:7439"
 LISTEN = "127.0.0.1:7439"
 _STARTED_PROCESSES = {}
+STORAGE_CHECK_INTERVAL_SECONDS = 30 * 60
+STORAGE_TRIGGER_FREE_GIB = 32
+STORAGE_TARGET_FREE_GIB = 48
+
+
+def storage_pressure_monitor(root, common, binary, stopped):
+    """Periodically reclaim inactive, regenerable outputs under disk pressure."""
+
+    cleanup = root / "factory/scripts/worktree-cleanup.py"
+    evidence = common / "factory-cleanup"
+    evidence.mkdir(mode=0o700, exist_ok=True)
+    command = [
+        sys.executable,
+        str(cleanup),
+        "--root",
+        str(root),
+        "--you",
+        str(binary),
+        "--server",
+        SERVER,
+        "--apply",
+        "--pressure-trigger-free-gib",
+        str(STORAGE_TRIGGER_FREE_GIB),
+        "--pressure-target-free-gib",
+        str(STORAGE_TARGET_FREE_GIB),
+        "--state",
+        str(evidence / "state.json"),
+        "--report",
+        str(evidence / "report.json"),
+    ]
+    while not stopped.is_set():
+        try:
+            subprocess.run(
+                command,
+                cwd=root,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15 * 60,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            # Cleanup is best effort and must never take down the supervisor.
+            pass
+        stopped.wait(STORAGE_CHECK_INTERVAL_SECONDS)
 
 
 def runtime_environment(root):
@@ -177,6 +223,8 @@ def serve(root):
                        FACTORY_PROJECT_MANIFEST=str(root / "factory/projects/audio-runtime/manifest.json"))
     child = None
     stopped = False
+    cleanup_stop = threading.Event()
+    cleanup_thread = None
     def terminate(signum, frame):
         nonlocal stopped
         stopped = True
@@ -227,6 +275,13 @@ def serve(root):
         if previous:
             record["predecessor"] = evidence
         write_record(record_path, record)
+        cleanup_thread = threading.Thread(
+            target=storage_pressure_monitor,
+            args=(root, common, common / "factory-bin/you", cleanup_stop),
+            name="factory-storage-pressure",
+            daemon=True,
+        )
+        cleanup_thread.start()
         result = child.wait()
         record.update(status="stopped" if stopped else "exited", exitCode=result)
     except BaseException as error:
@@ -240,6 +295,9 @@ def serve(root):
         record.update(status="failed", error=str(error))
         raise
     finally:
+        cleanup_stop.set()
+        if cleanup_thread is not None:
+            cleanup_thread.join(timeout=2)
         if recording.is_file():
             record["recordingSha256"] = digest(recording)
         write_record(record_path, record)

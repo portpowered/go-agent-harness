@@ -6,7 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "factory/scripts"))
@@ -16,6 +16,23 @@ launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
 
 class FreshBoardTests(unittest.TestCase):
+    def test_storage_monitor_uses_pressure_hysteresis_and_common_dir_evidence(self):
+        stopped = MagicMock()
+        stopped.is_set.side_effect = [False, True]
+        with patch.object(launcher.subprocess, "run") as run:
+            launcher.storage_pressure_monitor(
+                self.root,
+                self.common,
+                self.common / "factory-bin/you",
+                stopped,
+            )
+
+        command = run.call_args.args[0]
+        self.assertIn("--pressure-trigger-free-gib", command)
+        self.assertIn("--pressure-target-free-gib", command)
+        self.assertIn(str(self.common / "factory-cleanup/report.json"), command)
+        stopped.wait.assert_called_once_with(launcher.STORAGE_CHECK_INTERVAL_SECONDS)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
