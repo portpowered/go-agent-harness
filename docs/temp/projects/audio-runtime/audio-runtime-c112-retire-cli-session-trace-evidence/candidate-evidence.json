@@ -1,0 +1,73 @@
+{
+  "schema": "audio-runtime-c112-session-trace-evidence/v1",
+  "project": "audio-runtime",
+  "task": "audio-runtime-c112-retire-cli-session-trace-evidence",
+  "contractRevision": "audio-runtime-v1",
+  "baseline": {
+    "acceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "originMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "tracePath": "agent-cli/internal/services/internal/agentruntime/trace.go",
+    "traceLines": 119,
+    "traceSha256": "db9fab41dd02578db5e7b024af869eb762b21ec14c48c64442d4ad9ca3149710",
+    "traceSha256Command": "rtk git show HEAD:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
+    "ancestry": "accepted main is origin/main and is an ancestor of the tested source"
+  },
+  "testedSource": {
+    "revision": "ecdf54bc138b58b0454240b519cd1038acd2aec6",
+    "traceLines": 49,
+    "traceSha256": "6abfe4c37125209159d18a28fa9544fbfcb1c7a630a3cf0b193adf6e34aab177",
+    "legacyTraceLinesRetired": 70,
+    "cliSurface": "request/options adaptation and decision-free observer/device glue only",
+    "deviceAndRecordingOwnership": "device callbacks remain in go-device-gateway; trace storage remains in go-audio/pkg/recording"
+  },
+  "callerInventory": [
+    "agent-cli/internal/services/internal/agentruntime/service.go:Dispatcher.Run -> prepareTrace",
+    "agent-cli/internal/services/internal/agentruntime/trace.go:prepareTrace -> sessiontrace/wire.NewService().Prepare",
+    "agent-cli/internal/services/internal/agentruntime/trace.go:traceRun.finish -> Prepared.Finish",
+    "go-agent-runtime/services/sessiontrace/internal/service/service.go:wrapBinding and traceObserver own capture/publication decisions"
+  ],
+  "focusedValidation": {
+    "normal": "passed: 1082 tests in 5 packages",
+    "race": [
+      "passed: 11 tests in 3 sessiontrace packages",
+      "passed: 6 focused CLI trace/retirement tests"
+    ],
+    "privateServiceCoverage": "passed: 91.3% statements",
+    "externalConsumer": "passed: GOWORK=off go test ./... -count=1 and go build .; no agent-cli imports",
+    "accumulatedRegressions": "passed: scripts/test-session-ci-regressions.sh normal (CLI interrupt, integration, simulated device, OpenAI composed groups)",
+    "quality": [
+      "passed: make fmt / final gofmt -d checks",
+      "passed: go vet focused packages",
+      "passed: make lint with pinned golangci-lint 2.9.0",
+      "passed: make staticcheck with pinned staticcheck 2026.1",
+      "passed: make coverage-registration"
+    ]
+  },
+  "shippedYuiProbe": {
+    "binary": "/tmp/yui-c112",
+    "mode": "credential-free fixture replay with --record-dir and --trace-audio",
+    "result": "PASS exit 0; fixture_complete; provider_closed terminal",
+    "observed": [
+      "tool marker completed",
+      "recording/manifest.json and session-log.jsonl published",
+      "recording/audio-trace/timeline.jsonl published with provider-wire and tool events",
+      "recording/audio-trace/speaker-enqueued.wav published",
+      "no physical device or acoustic claim; capture/render WAVs unavailable for this replay"
+    ],
+    "fixture": "audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json"
+  },
+  "sharedGateFindings": [
+    "make architecture-check: generated-file-spoof for sessiontrace/wire/wire_gen.go because scripts/wire-packages.txt is C79-owned",
+    "make wire-check: sessiontrace/wire/wire_gen.go is unregistered because scripts/wire-packages.txt is C79-owned",
+    "make size-check: stale prepareTrace cognitive-complexity entry because docs/architecture/architecture-size-baseline.json is C79-owned"
+  ],
+  "ownership": {
+    "unchanged": [
+      "agent-cli/internal/services/agentruntime/observations.go (C97-owned)",
+      "scripts/wire-packages.txt (C79-owned)",
+      "docs/architecture/architecture-size-baseline.json (C79-owned)"
+    ],
+    "physicalDeviceAndAcousticEvidence": "OUT_OF_SCOPE"
+  },
+  "acceptanceBoundary": "Executor candidate evidence only: script CI, independent review, guarded merge and post-merge vertical acceptance remain required."
+}
