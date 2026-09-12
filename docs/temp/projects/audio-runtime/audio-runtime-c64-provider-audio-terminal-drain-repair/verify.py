@@ -303,6 +303,7 @@ def verify_negative() -> None:
     evidence = load_json(TASK_ROOT / "negative-evidence.json")
     require(evidence.get("schema") == "audio-runtime.c64.negative-evidence.v2", "negative evidence schema changed")
     verify_identity(evidence)
+    candidate_revision = require_revision(evidence.get("candidate_revision"), "candidate revision")
     historical = evidence.get("historical_negative", {})
     require(historical.get("ci_run") == "34638493032", "historical CI run was relabeled")
     trials = historical.get("trials", [])
