@@ -120,11 +120,18 @@ def source_provenance() -> dict:
     tracked = subprocess.run(
         ["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True
     ).stdout.split(b"\0")
+    evidence_prefix = str(EVIDENCE_ROOT.relative_to(ROOT)) + "/"
     digest = hashlib.sha256()
     input_count = 0
     non_file_paths = []
     for raw_path in tracked:
         if not raw_path:
+            continue
+        relative_path = os.fsdecode(raw_path)
+        if relative_path.startswith(evidence_prefix):
+            # These ledgers are outputs of this runner, not inputs to the
+            # executable. Excluding them keeps the source digest stable when
+            # multiple cases refresh their own evidence files.
             continue
         path = ROOT / os.fsdecode(raw_path)
         digest.update(raw_path)
@@ -143,7 +150,7 @@ def source_provenance() -> dict:
             ).stdout
             digest.update(b"gitlink\0")
             digest.update(entry)
-            non_file_paths.append(os.fsdecode(raw_path))
+            non_file_paths.append(relative_path)
         input_count += 1
     go_version = subprocess.run(
         ["go", "version"], cwd=ROOT, check=True, capture_output=True, text=True
