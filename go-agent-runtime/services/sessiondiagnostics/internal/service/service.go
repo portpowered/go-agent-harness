@@ -173,36 +173,28 @@ func (r *reducer) retireKnownResponseIDsLocked() {
 		r.staleIDs = make(map[string]struct{})
 	}
 	for id := range r.completedIDs {
-		if id != "" {
-			r.staleIDs[id] = struct{}{}
-		}
+		r.rememberStaleResponseIDLocked(id)
 	}
 	for id := range r.retiredIDs {
-		if id != "" {
-			r.staleIDs[id] = struct{}{}
-		}
+		r.rememberStaleResponseIDLocked(id)
 	}
-	if r.activeResponseID != "" {
-		r.staleIDs[r.activeResponseID] = struct{}{}
-	}
+	r.rememberStaleResponseIDLocked(r.activeResponseID)
 	for id := range r.scheduledResponseByID {
-		if id != "" {
-			r.staleIDs[id] = struct{}{}
-		}
+		r.rememberStaleResponseIDLocked(id)
 	}
 	for _, scheduled := range r.scheduled {
 		for _, id := range scheduled.ResponseIDs {
-			if id != "" {
-				r.staleIDs[id] = struct{}{}
-			}
+			r.rememberStaleResponseIDLocked(id)
 		}
 	}
 	for _, continuation := range r.continuations {
-		if continuation.ResponseID != "" {
-			r.staleIDs[continuation.ResponseID] = struct{}{}
-		}
-		if continuation.ContinuationResponseID != "" {
-			r.staleIDs[continuation.ContinuationResponseID] = struct{}{}
-		}
+		r.rememberStaleResponseIDLocked(continuation.ResponseID)
+		r.rememberStaleResponseIDLocked(continuation.ContinuationResponseID)
+	}
+}
+
+func (r *reducer) rememberStaleResponseIDLocked(id string) {
+	if id != "" {
+		r.staleIDs[id] = struct{}{}
 	}
 }

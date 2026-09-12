@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -255,6 +256,20 @@ func sessionLivenessErrorChannel(ctx context.Context, observer *sessionProgressO
 	return errorsCh
 }
 
+func forwardSessionErrors(ctx context.Context, merged chan<- error, source <-chan error, stop context.CancelFunc) {
+	for err := range source {
+		if err == nil {
+			continue
+		}
+		select {
+		case merged <- err:
+			stop()
+		case <-ctx.Done():
+		}
+		return
+	}
+}
+
 func mergeSessionErrorChannels(ctx context.Context, first, second <-chan error) <-chan error {
 	if first == nil {
 		return second
@@ -263,40 +278,21 @@ func mergeSessionErrorChannels(ctx context.Context, first, second <-chan error) 
 		return first
 	}
 	merged := make(chan error, 1)
+	mergeContext, stop := context.WithCancel(ctx)
+	var workers sync.WaitGroup
+	workers.Add(2)
 	go func() {
-		defer close(merged)
-		for first != nil || second != nil {
-			select {
-			case err, ok := <-first:
-				if !ok {
-					first = nil
-					continue
-				}
-				if err == nil {
-					continue
-				}
-				select {
-				case merged <- err:
-				case <-ctx.Done():
-				}
-				return
-			case err, ok := <-second:
-				if !ok {
-					second = nil
-					continue
-				}
-				if err == nil {
-					continue
-				}
-				select {
-				case merged <- err:
-				case <-ctx.Done():
-				}
-				return
-			case <-ctx.Done():
-				return
-			}
-		}
+		defer workers.Done()
+		forwardSessionErrors(mergeContext, merged, first, stop)
+	}()
+	go func() {
+		defer workers.Done()
+		forwardSessionErrors(mergeContext, merged, second, stop)
+	}()
+	go func() {
+		workers.Wait()
+		close(merged)
+		stop()
 	}()
 	return merged
 }

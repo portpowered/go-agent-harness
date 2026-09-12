@@ -21,20 +21,26 @@ func (r *reducer) openResponseLocked(rawID string, purpose sessiondiagnostics.Re
 }
 
 func (r *reducer) existingResponseOpenLocked(id string) (sessiondiagnostics.Observation, bool) {
-	if id != "" {
-		if _, ok := r.completedIDs[id]; ok {
-			return sessiondiagnostics.Observation{ResponseID: id}, true
-		}
-		if _, ok := r.retiredIDs[id]; ok {
-			return sessiondiagnostics.Observation{ResponseID: id}, true
-		}
-		if _, ok := r.staleIDs[id]; ok {
-			return sessiondiagnostics.Observation{ResponseID: id}, true
-		}
+	if r.responseIDKnownLocked(id) {
+		return sessiondiagnostics.Observation{ResponseID: id}, true
 	}
 	if !r.activeResponse {
 		return sessiondiagnostics.Observation{}, false
 	}
+	return r.activeResponseOpenLocked(id)
+}
+
+func (r *reducer) responseIDKnownLocked(id string) bool {
+	if id == "" {
+		return false
+	}
+	_, completed := r.completedIDs[id]
+	_, retired := r.retiredIDs[id]
+	_, stale := r.staleIDs[id]
+	return completed || retired || stale
+}
+
+func (r *reducer) activeResponseOpenLocked(id string) (sessiondiagnostics.Observation, bool) {
 	if r.activeResponseID == id {
 		return sessiondiagnostics.Observation{ResponseID: id}, true
 	}
@@ -47,15 +53,13 @@ func (r *reducer) existingResponseOpenLocked(id string) (sessiondiagnostics.Obse
 		// lifecycle, not as a replacement response.
 		return r.adoptResponseLocked(id), true
 	}
-	if r.activeResponseID != "" && id != "" {
-		if !r.canReplaceActiveResponseLocked() {
-			// A foreign open cannot steal an active response. The current
-			// response must first cross its explicit terminal/continuation
-			// boundary (or be finished by the host).
-			return sessiondiagnostics.Observation{ResponseID: id}, true
-		}
-		r.retiredIDs[r.activeResponseID] = struct{}{}
+	if !r.canReplaceActiveResponseLocked() {
+		// A foreign open cannot steal an active response. The current
+		// response must first cross its explicit terminal/continuation
+		// boundary (or be finished by the host).
+		return sessiondiagnostics.Observation{ResponseID: id}, true
 	}
+	r.retiredIDs[r.activeResponseID] = struct{}{}
 	return sessiondiagnostics.Observation{}, false
 }
 
@@ -102,13 +106,7 @@ func (r *reducer) adoptResponseLocked(rawID string) sessiondiagnostics.Observati
 	if id == "" {
 		return sessiondiagnostics.Observation{Accepted: true}
 	}
-	if _, ok := r.completedIDs[id]; ok {
-		return sessiondiagnostics.Observation{ResponseID: id}
-	}
-	if _, ok := r.retiredIDs[id]; ok {
-		return sessiondiagnostics.Observation{ResponseID: id}
-	}
-	if _, ok := r.staleIDs[id]; ok {
+	if r.responseIDKnownLocked(id) {
 		return sessiondiagnostics.Observation{ResponseID: id}
 	}
 	if r.activeScheduledSet && !r.bindScheduledIDLocked(r.activeScheduledIndex, id).Accepted {
@@ -118,13 +116,17 @@ func (r *reducer) adoptResponseLocked(rawID string) sessiondiagnostics.Observati
 	if r.activeScheduledSet {
 		r.setScheduledOwnerLocked(r.activeScheduledIndex, id)
 	}
+	r.adoptContinuationResponseIDLocked(id)
+	return sessiondiagnostics.Observation{Accepted: true, ResponseID: id}
+}
+
+func (r *reducer) adoptContinuationResponseIDLocked(id string) {
 	for callID, state := range r.continuations {
 		if state.ResultAccepted && state.ContinuationRequested && state.ProviderCallObserved && state.ToolResponseComplete && state.ContinuationResponseID == "" {
 			state.ContinuationResponseID = id
 			r.continuations[callID] = state
 		}
 	}
-	return sessiondiagnostics.Observation{Accepted: true, ResponseID: id}
 }
 
 func (r *reducer) responseBelongsLocked(rawID string) bool {
