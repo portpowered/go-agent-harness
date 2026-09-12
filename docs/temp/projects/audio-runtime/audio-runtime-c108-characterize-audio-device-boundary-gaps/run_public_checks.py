@@ -299,6 +299,10 @@ def malformed_truncated(binary: pathlib.Path, run_dir: pathlib.Path, build: dict
         raise RuntimeError("malformed/truncated replay omitted its bounded audio rejection diagnostic")
     if raw_audio.exists() and raw_audio.stat().st_size:
         raise RuntimeError("malformed/truncated replay accepted a PCM playback receipt")
+    if audio_out.exists():
+        if audio_out.stat().st_size > 44:
+            raise RuntimeError("malformed/truncated replay accepted a non-empty WAV playback receipt")
+        audio_out.unlink()
     return {
         "schema_version": "c108-public-malformed-truncated-v1",
         "case": "malformed-truncated",
