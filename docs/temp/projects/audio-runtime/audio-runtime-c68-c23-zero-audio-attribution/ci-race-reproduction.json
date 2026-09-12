@@ -1,0 +1,41 @@
+{
+  "schema": "audio-runtime.c68.ci-race-reproduction.v1",
+  "task": "audio-runtime-c68-c23-zero-audio-attribution",
+  "project": "audio-runtime",
+  "candidate_revision": "3084b83f469600f8714c875b2b0d0cae7ad6bf5f",
+  "pull_request": 457,
+  "base_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+  "hosted_failure": {
+    "run_id": 34665087212,
+    "job_id": 103475251591,
+    "run_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34665087212",
+    "job_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34665087212/job/103475251591",
+    "merge_head": "4ddfa4227ac525586c91b9274760ef2ca00c55b9",
+    "step": "Run audio stability race corpus",
+    "command": "make test-audio-stability-race",
+    "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+    "test": "TestVirtualPlaybackCapacityAdversarial/08_waiter_remains_blocked_above_low_watermark",
+    "message": "capacity wait returned while it should be blocked: <nil>",
+    "log_sha256": "cddf5ac18cfdd77d4445974bc9f8094418417a50604f36a82d3bc2d84068c17b"
+  },
+  "local_reproduction": [
+    {
+      "command": "make test-audio-stability-race",
+      "returncode": 0,
+      "result": "pass"
+    },
+    {
+      "command": "go test -race ./pkg/devices -run '^TestVirtualPlaybackCapacityAdversarial/08_waiter_remains_blocked_above_low_watermark$' -count=20 -timeout=60s",
+      "cwd": "go-device-gateway",
+      "returncode": 0,
+      "result": "pass"
+    }
+  ],
+  "candidate_scope": {
+    "production_source_changed": false,
+    "diff_only_under_owned_evidence_directory": true,
+    "origin_main": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "conclusion": "The hosted race failure is not reproducible on the exact candidate and names an unchanged current-main device-gateway test outside C68 ownership. No production repair, assertion change, timeout change or acceptance waiver is authorized. This changed evidence descendant is submitted to obtain a fresh same-head CI result."
+  },
+  "recorded_at": "2026-09-11T18:39:15-07:00"
+}
