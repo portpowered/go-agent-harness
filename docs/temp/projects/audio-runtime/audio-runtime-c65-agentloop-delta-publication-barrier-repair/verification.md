@@ -96,3 +96,31 @@ The shipped 20-trial high-rate replay reproduced only the C64-owned boundary
 (trial 06 lost 6,400 samples; trial 11 hit `buffer_full`; 18 trials passed).
 That failure is recorded in `ci-34663256624-integration-rejection.md`; no
 C64-owned source or test path was modified.
+
+## Handoff recheck
+
+At `2026-09-12T02:04:55Z`, admission was reverified with
+`project-control.py verify-work --type task --name audio-runtime-c65-agentloop-delta-publication-barrier-repair`.
+The isolated branch remains
+`codex/audio-runtime-c65-agentloop-delta-publication-barrier-repair`, the
+candidate is clean at `1d4fb218a904b508377278da37779743d6b39e67`, and freshly
+fetched `origin/main` remains the accepted `d5d6f84363d8569d5dc1a59985f8d45cf50e1d06`
+ancestor. The existing PR #455 is open at that exact head with no independent
+review findings.
+
+The post-checkpoint bounded recheck passed:
+
+```text
+go test ./go-agent-loop/pkg/agentloop -run '^TestRun(JoinsPublishedDeltasBeforeReturningOnEngineError|CancellationReleasesBlockedDeltaForwarder)$' -count=100 -timeout=120s  # pass, 0.194s
+go test -race ./go-agent-loop/pkg/agentloop -run '^TestRunJoinsPublishedDeltasBeforeReturningOnEngineError$' -count=20 -timeout=120s  # pass, 1.393s
+go test ./go-agent-loop/pkg/agentloop -count=1 -timeout=180s  # pass
+go test ./agent-cli/test/integration -run '^Test(SessionCommand_DefaultRegistryExecRoundTripInStrictOpenAIReplay|AgentBinaryToolContinuationPreservesRemoteDeviceAudio)$' -count=1 -timeout=180s  # pass, 91.576s
+```
+
+C64 remains an unavailable delivery prerequisite: its separate PR #459 is
+still open at `996f69fcb2b1ddb002ff449d810f984b6ac46643` and has not landed on
+accepted main. Do not resubmit this unchanged C65 head to script CI while the
+known C64-owned 6,400-sample integration failure remains in the accepted-main
+line. Next action is to fetch the reviewed/guarded C64 merge once it lands,
+rerun the focused C65 checks and required shipped regression against that exact
+main, then update and submit PR #455 to the script CI gate without polling.
