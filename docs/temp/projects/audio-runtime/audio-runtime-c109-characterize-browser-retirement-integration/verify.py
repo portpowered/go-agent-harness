@@ -66,6 +66,7 @@ def report_bundle(path: Path) -> tuple[dict[str, Any], Path]:
         "ledger": "ledger.json",
         "rehearsal": "merge-orders.json",
         "sequence": "sequence.json",
+        "ciAttribution": "ci-attribution.json",
     }
     for field, filename in companions.items():
         companion = load(directory / filename)
@@ -107,6 +108,7 @@ def validate_preserved(preserved: dict[str, Any]) -> None:
 
 def validate_refs(provenance: dict[str, Any]) -> None:
     refs = provenance.get("refs", {})
+    require(refs.get("complete") is True, "structured ref inventory is incomplete")
     require(refs.get("candidateRefsUnchanged") is True, "candidate ref identity changed")
     before = {item.get("name"): item.get("object") for item in refs.get("before", [])}
     after = {item.get("name"): item.get("object") for item in refs.get("after", [])}
@@ -144,6 +146,25 @@ def validate_inventory(provenance: dict[str, Any]) -> None:
         require(item.get("head") == commit, f"inventory head mismatch for {key}")
         require(item.get("branch") == f"refs/heads/{CANDIDATE_BRANCHES[key]}", f"inventory branch mismatch for {key}")
         require(item.get("prunable", "") == "", f"inventory reports prunable {key} worktree")
+
+
+def validate_source_binding(provenance: dict[str, Any]) -> None:
+    binding = provenance.get("sourceBinding", {})
+    root = current_root()
+    head = subprocess.check_output(["git", "rev-parse", "HEAD^{commit}"], cwd=root, text=True).strip()
+    source_tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=root, text=True).strip()
+    require(binding.get("committedHead") == head, "evidence was not generated from the committed current HEAD")
+    require(binding.get("committedTree") == source_tree, "evidence source tree is not the committed current tree")
+    require(binding.get("cleanScripts") is True and binding.get("statusBefore") == [], "C109 scripts were dirty during evidence generation")
+    scripts = binding.get("scripts", [])
+    require(isinstance(scripts, list) and scripts, "committed C109 source bindings are missing")
+    for item in scripts:
+        path = item.get("path", "")
+        require(path.startswith(OWNED_PREFIX) and (root / path).is_file(), f"source binding path is invalid: {path}")
+        current_sha = __import__("hashlib").sha256((root / path).read_bytes()).hexdigest()
+        require(item.get("working_tree_sha256") == current_sha, f"source binding changed after generation: {path}")
+        blob = subprocess.check_output(["git", "rev-parse", f"HEAD:{path}"], cwd=root, text=True).strip()
+        require(item.get("head_blob") == blob and item.get("matches_committed_head") is True, f"source binding is stale: {path}")
 
 
 def validate_ledger(ledger: dict[str, Any]) -> None:
@@ -202,7 +223,29 @@ def validate_ledger(ledger: dict[str, Any]) -> None:
                 require(declaration.get("ref") and declaration.get("path") == path and isinstance(declaration.get("line"), int) and declaration.get("text") is not None, f"declaration evidence missing: {symbol_id}")
                 require(isinstance(symbol.get("caller_edges"), list), f"caller edges missing: {symbol_id}")
                 for edge in symbol["caller_edges"]:
+                    require(edge.get("kind") == "source-reference" and edge.get("source_derived") == "go-token-v1", f"caller edge is not source-derived: {symbol_id}")
                     require(edge.get("path") and isinstance(edge.get("line"), int) and edge.get("text") is not None, f"caller edge is incomplete: {symbol_id}")
+                    source_span = edge.get("source_span", {})
+                    require(
+                        isinstance(source_span.get("start_line"), int)
+                        and isinstance(source_span.get("end_line"), int)
+                        and isinstance(source_span.get("start_column"), int)
+                        and isinstance(source_span.get("end_column"), int)
+                        and source_span["start_line"] == edge["line"]
+                        and source_span["end_line"] == edge["line"],
+                        f"caller source span is incomplete: {symbol_id}",
+                    )
+                    target = edge.get("target", {})
+                    require(target.get("symbol") == symbol.get("symbol") and target.get("path") == path, f"caller target identity is incomplete: {symbol_id}")
+                    target_declaration = target.get("declaration", {})
+                    require(target_declaration.get("ref") and target_declaration.get("path") == path and target_declaration.get("text") is not None, f"caller target declaration is incomplete: {symbol_id}")
+                    caller = edge.get("caller", {})
+                    require(caller.get("symbol") and caller.get("kind") in {"function", "package"}, f"containing caller symbol is missing: {symbol_id}")
+                    caller_span = caller.get("span", {})
+                    require(isinstance(caller_span.get("start_line"), int) and isinstance(caller_span.get("end_line"), int), f"containing caller span is missing: {symbol_id}")
+                    caller_declaration = caller.get("declaration", {})
+                    require(caller_declaration.get("ref") and caller_declaration.get("path") == edge["path"] and isinstance(caller_declaration.get("line"), int) and caller_declaration.get("text") is not None, f"containing caller declaration is missing: {symbol_id}")
+                    require(edge.get("caller_symbol") == caller["symbol"] and edge.get("caller_span") == caller_span, f"caller projection is incomplete: {symbol_id}")
                 blobs = symbol.get("blob_hashes", {})
                 require(set(blobs) == {"base", "candidate"}, f"symbol blob hashes missing: {symbol_id}")
                 hash_or_none(blobs.get("base"), f"symbol {symbol_id} base")
@@ -220,10 +263,44 @@ def validate_ledger(ledger: dict[str, Any]) -> None:
         judgment = item.get("order_judgment", {})
         require(judgment.get("required_before") is False and judgment.get("mechanically_order_independent") is True, f"file order judgment missing: {path}")
     api = ledger.get("apiConclusion", {})
-    require(api.get("evidence_id") == "api-c83-to-c61-search", "API search evidence missing")
-    require(isinstance(api.get("searched_paths"), list) and isinstance(api.get("edges"), list), "API edge ledger is incomplete")
-    require(api.get("c83_requires_c61_api") is False, "C83 API dependency claim is unsupported")
-    require(api.get("mechanically_order_independent") is True, "API order conclusion is unsupported")
+    require(api.get("schema") == "audio-runtime-c109-api-relationship-v2", "API relationship schema missing")
+    require(api.get("evidence_id") == "api-c83-to-c61-source" and api.get("source_driven") is True, "API source evidence missing")
+    require(api.get("base_ref") == ACCEPTED_MAIN and api.get("c61_ref") == C61 and api.get("c83_ref") == C83, "API relationship refs are stale")
+    searched_paths = api.get("searched_paths")
+    scans = api.get("scans")
+    require(isinstance(searched_paths, list) and searched_paths == sorted(searched_paths) and isinstance(scans, list), "API source scan is incomplete")
+    require([item.get("path") for item in scans] == searched_paths, "API scan path projection is incomplete")
+    require(isinstance(api.get("c61_public_api_paths"), list) and isinstance(api.get("c61_public_import_paths"), list), "C61 API surface is missing")
+    symbols = api.get("c61_only_api_symbols")
+    require(isinstance(symbols, list), "C61-only API symbols are not source-derived")
+    for item in symbols:
+        require(item.get("symbol") and item.get("path") and item.get("ref") == C61 and isinstance(item.get("public_api"), bool), "C61-only symbol identity is incomplete")
+        span = item.get("span", {})
+        require(isinstance(span.get("start_line"), int) and isinstance(span.get("end_line"), int), "C61-only symbol span is missing")
+        declaration = item.get("declaration", {})
+        require(declaration.get("ref") == C61 and declaration.get("path") == item["path"] and isinstance(declaration.get("line"), int) and declaration.get("text") is not None, "C61-only declaration is missing")
+    for scan in scans:
+        require(scan.get("ref") == C83 and scan.get("path") and re.fullmatch(r"[0-9a-f]{40}", scan.get("blob_hash", "")), f"API scan blob is missing: {scan.get('path')}")
+        require(re.fullmatch(r"[0-9a-f]{64}", scan.get("source_sha256", "")) and isinstance(scan.get("token_count"), int), f"API scan source hash is missing: {scan.get('path')}")
+        require(isinstance(scan.get("imports"), list) and isinstance(scan.get("declarations"), list), f"API scan structure is incomplete: {scan.get('path')}")
+    edges = api.get("edges")
+    require(isinstance(edges, list), "API edge ledger is incomplete")
+    for edge in edges:
+        require(edge.get("source_derived") == "go-token-v1" and edge.get("kind") in {"public-import", "qualified-public-symbol", "same-package-c61-symbol"}, "API edge is not source-derived")
+        require(edge.get("path") in searched_paths and edge.get("ref") == C83 and isinstance(edge.get("line"), int), "API edge source identity is incomplete")
+        source_span = edge.get("source_span", {})
+        require(isinstance(source_span.get("start_line"), int) and isinstance(source_span.get("start_column"), int), "API edge span is missing")
+        caller = edge.get("caller", {})
+        require(caller.get("symbol") and caller.get("kind") in {"function", "package"}, "API edge caller symbol is missing")
+        caller_span = caller.get("span", {})
+        require(isinstance(caller_span.get("start_line"), int) and isinstance(caller_span.get("end_line"), int), "API edge caller span is missing")
+        caller_declaration = caller.get("declaration", {})
+        require(caller_declaration.get("ref") == C83 and caller_declaration.get("path") == edge["path"] and isinstance(caller_declaration.get("line"), int), "API edge caller declaration is missing")
+        require(edge.get("caller_symbol") == caller["symbol"] and edge.get("caller_span") == caller_span, "API edge caller projection is incomplete")
+        target = edge.get("target", {})
+        require(target.get("symbol") and target.get("path") and target.get("ref") == C61, "API edge target is incomplete")
+    require(api.get("c83_requires_c61_api") is (len(edges) > 0), "C83 API dependency conclusion is not derived from edges")
+    require(api.get("mechanically_order_independent") is (len(edges) == 0), "API order conclusion is unsupported")
 
 
 def validate_rehearsal(report: dict[str, Any]) -> None:
@@ -295,6 +372,10 @@ def validate_report(report: dict[str, Any], *, expected_role: str | None = None)
     require(provenance.get("branch") == BRANCH, "provenance branch mismatch")
     require(provenance.get("factorySession") == "~default" and provenance.get("factoryServer"), "factory session/server provenance missing")
     require(provenance.get("startupIntegrationRevision") == "8bdafc7f947a3a2c9856220abdc539437035bd21", "startup integration revision missing")
+    require(provenance.get("requestedAcceptedMain") == ACCEPTED_MAIN, "accepted-main provenance is stale")
+    require(provenance.get("fetchedOriginMain") == provenance.get("reviewMain"), "review-time origin/main provenance is incomplete")
+    require(re.fullmatch(r"[0-9a-f]{40}", provenance.get("fetchedOriginMain", "")), "fetched origin/main identity is missing")
+    validate_source_binding(provenance)
     for name, value in provenance.get("candidateTrees", {}).items():
         require(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}", value), f"candidate tree missing: {name}")
     candidates = provenance.get("candidates", {})
@@ -319,16 +400,31 @@ def validate_report(report: dict[str, Any], *, expected_role: str | None = None)
     require(historical.get("fix_is_ancestor_of_review_main") is True and historical.get("focused_test_symbol_evidence"), "accepted-main C61 repair evidence is missing")
     require(historical.get("status") == "OPEN_RECONCILE_TEST_REWRITTEN", "C61 rewritten-test finding was incorrectly claimed resolved")
     require(historical.get("c61_test_blob") != historical.get("review_main_test_blob"), "rewritten-test distinction was not recorded")
-    ci = report.get("c83CIAttribution", {})
+    ci = report.get("ciAttribution", {})
+    require(report.get("c83CIAttribution") == ci, "C83 CI attribution projection differs from the retained artifact")
+    require(ci.get("schema") == "audio-runtime-c109-ci-attribution-v1", "C83 CI attribution schema missing")
     require(ci.get("evidence_id") == "c83-ci-34713381619" and ci.get("run") == "34713381619", "C83 current CI evidence missing")
+    require(ci.get("repository") == "portpowered/go-agent-harness" and ci.get("head", {}).get("sha") == C83 and ci.get("head", {}).get("identity_verified") is True, "C83 CI head identity is missing")
+    require(ci.get("status") == "completed" and ci.get("conclusion") == "failure", "C83 CI outcome was relabeled")
     require(len(ci.get("passing_lanes", [])) == 7, "C83 seven passing lanes were not recorded")
+    passing_jobs = ci.get("passing_jobs", [])
+    require(len(passing_jobs) == 7 and {item.get("name") for item in passing_jobs} == set(ci.get("passing_lanes", [])), "C83 passing job evidence is incomplete")
+    require(all(item.get("conclusion") == "success" and re.fullmatch(r"[0-9]+", item.get("job_id", "")) for item in passing_jobs), "C83 passing job identities are incomplete")
+    failed_jobs = ci.get("failed_jobs", [])
+    require({item.get("name") for item in failed_jobs} == {"CI (static)", "CI (integration)"} and all(item.get("conclusion") == "failure" for item in failed_jobs), "C83 failed job evidence is incomplete")
     static = ci.get("static_findings", {})
-    require(static.get("wire_registration", {}).get("owner") == "C79/work-task-114", "Wire registration owner drifted")
-    require(static.get("stale_downward_baseline_entries", {}).get("count") == 9, "C83 stale-entry count drifted")
-    require(static.get("intentional_instrumentation_drifts", {}).get("count") == 3, "C83 instrumentation drift count drifted")
+    wire = static.get("wire_registration", {})
+    require(wire.get("owner") == "C79/work-task-114" and wire.get("job_id") == "103606090554" and "browserrunner/wire/wire_gen.go" in wire.get("signature", ""), "Wire registration owner/evidence drifted")
+    stale = static.get("stale_downward_baseline_entries", {})
+    require(stale.get("count") == 9 and len(stale.get("entries", [])) == 9 and all(item.get("path") and item.get("kind") and item.get("signature") for item in stale["entries"]), "C83 stale-entry evidence drifted")
+    instrumentation = static.get("intentional_instrumentation_drifts", {})
+    require(instrumentation.get("count") == 3 and len(instrumentation.get("entries", [])) == 3 and all(item.get("path") and item.get("signature") for item in instrumentation["entries"]), "C83 instrumentation drift evidence drifted")
+    failures = ci.get("failures", [])
+    require({item.get("id") for item in failures} == {"c83-static-wire-registration", "c83-static-baseline-nine-entries", "c83-static-instrumentation-three", "c83-integration-provider-audio-loss-6400"}, "C83 failure attribution is incomplete")
+    require(all(item.get("owner") and item.get("signature") and item.get("job_id") for item in failures), "C83 failure signatures or owners are missing")
     loss = ci.get("integration_loss", {})
     require(loss.get("lost_samples") == 6400 and loss.get("total_samples") == 174391, "provider-audio loss evidence drifted")
-    require(loss.get("owner") == "C79/provider-audio" and loss.get("status") == "EXTERNAL_OWNER_DO_NOT_DUPLICATE_REPAIR_OR_RELABEL", "provider-audio loss was relabeled")
+    require(loss.get("rendered_samples") == 167991 and loss.get("owner") == "C79/provider-audio" and loss.get("status") == "EXTERNAL_OWNER_DO_NOT_DUPLICATE_REPAIR_OR_RELABEL", "provider-audio loss was relabeled")
     validate_sequence(report.get("sequence", {}), provenance["reviewMain"])
     claims = report.get("deliveryClaims", {})
     require(claims.get("C61") == {"merged": False, "fixed": False, "probed": False, "accepted": False}, "C61 acceptance claim is forbidden")
@@ -357,10 +453,19 @@ def validate_public_report(data: dict[str, Any], expected_case: str | None = Non
     bounded = data.get("bounded", {})
     require(bounded.get("process_groups_clean") is True and bounded.get("elapsed_seconds", 10**9) <= bounded.get("aggregate_timeout_seconds", 0), "public aggregate bound or process cleanup failed")
     cleanup = data.get("cleanup", {})
-    require(cleanup.get("attempted") is True and cleanup.get("status") == "passed" and cleanup.get("worktree_removed") is True and cleanup.get("temporary_root_removed") is True, "public temporary-tree cleanup is incomplete")
+    require(cleanup.get("attempted") is True and cleanup.get("status") == "passed" and cleanup.get("temporary_root_removed") is True, "public temporary-tree cleanup is incomplete")
+    if cleanup.get("mode") == "task-owned-temporary-tree":
+        require(cleanup.get("worktree_removed") is True, "public temporary worktree was not removed")
+    elif cleanup.get("mode") == "caller-owned-tree-preserved":
+        require(cleanup.get("tree_preserved") is True and cleanup.get("worktree_removed") is False, "caller-owned public tree handling is inconsistent")
+    else:
+        raise VerificationError("public cleanup mode is missing")
+    auxiliary = data.get("auxiliary_cleanup", {})
+    if auxiliary:
+        require(auxiliary.get("attempted") is True and auxiliary.get("status") == "passed" and auxiliary.get("worktree_removed") is True and auxiliary.get("temporary_root_removed") is True, "public auxiliary synthetic-tree cleanup failed")
     require(data.get("credential_free") is True, "public credential-free proof is missing")
     checks = data.get("checks", [])
-    require(checks and all(item.get("status") == "passed" and item.get("exit_code") == 0 and item.get("timed_out") is False and item.get("process_group_gone") is True and item.get("credential_environment_scrubbed") is True and item.get("credential_output_markers_absent") is True for item in checks), "public child evidence is incomplete")
+    require(checks and all(item.get("status") == "passed" and item.get("exit_code") == 0 and item.get("timed_out") is False and item.get("process_group_gone") is True and item.get("credential_environment_scrubbed") is True and item.get("credential_output_markers_absent") is True and item.get("output_capped") is False and item.get("forbidden_markers_scanned_before_truncation") is True and re.fullmatch(r"[0-9a-f]{64}", item.get("raw_output_sha256", "")) and re.fullmatch(r"[0-9a-f]{64}", item.get("retained_output_sha256", "")) for item in checks), "public child evidence is incomplete")
     for item in checks:
         if "go test" in item.get("command", ""):
             discovery = item.get("test_discovery", {})
@@ -374,6 +479,8 @@ def validate_public_report(data: dict[str, Any], expected_case: str | None = Non
         detail = shipped["workflow_report"]
         require(detail.get("result_classification") == "SOFTWARE_LOCAL_PROCESS_ONLY", "shipped workflow classification is invalid")
         require(detail.get("binary_sha256") and detail.get("recorded_pcm_sha256") and detail.get("terminal_manifest"), "shipped artifact/effect hashes are missing")
+        source_binding = shipped.get("synthetic_source_binding", {})
+        require(source_binding.get("synthetic_tree") == synthetic.get("tree") and source_binding.get("source_revision") == synthetic["tree_binding"].get("head"), "shipped workflow source is not bound to the exact synthetic tree")
     else:
         require(effects.get("negative_control") is True, "negative public control classification is missing")
 
@@ -383,7 +490,7 @@ def verify_pair(required_path: Path, control_path: Path) -> tuple[dict[str, Any]
     control, _ = report_bundle(control_path)
     validate_report(required, expected_role="required")
     validate_report(control, expected_role="control")
-    for key in ("project", "task", "contractRevision", "provenance", "ledger", "historicalC61Finding", "c83CIAttribution", "sequence", "deliveryClaims", "broadGates", "claims"):
+    for key in ("project", "task", "contractRevision", "provenance", "ledger", "historicalC61Finding", "ciAttribution", "c83CIAttribution", "sequence", "deliveryClaims", "broadGates", "claims"):
         require(required.get(key) == control.get(key), f"required/control evidence differs for {key}")
     require(required["rehearsal"]["final_tree"] == control["rehearsal"]["final_tree"], "merge orders did not converge to the same tree")
     return required, control, {"required_dir": str(required_dir)}
@@ -398,7 +505,7 @@ def run_analyzer_twice(root: Path) -> None:
         for output in (first, second):
             completed = subprocess.run([*common, "--output-dir", str(output)], cwd=root, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
             require(completed.returncode == 0, f"determinism analyzer run failed: {completed.stdout[-2000:]}")
-        for name in ("provenance.json", "ledger.json", "merge-orders.json", "sequence.json", "report.json", "run-manifest.json"):
+        for name in ("ci-attribution.json", "provenance.json", "ledger.json", "merge-orders.json", "sequence.json", "report.json", "run-manifest.json"):
             require((first / name).read_bytes() == (second / name).read_bytes(), f"nondeterministic evidence: {name}")
 
 
@@ -427,6 +534,18 @@ def mutate_report(report: dict[str, Any], fixture: str) -> dict[str, Any]:
         del mutated["sequence"]["steps"][1]["expected_observables"]
     elif fixture == "non-manifest-gate":
         mutated["broadGates"]["BROWSER"] = "OPEN"
+    elif fixture == "missing-ci-attribution":
+        mutated["ciAttribution"] = {}
+    elif fixture == "missing-caller-identity":
+        for item in mutated["ledger"]["files"]:
+            for hunk in item.get("hunks", []):
+                for symbol in hunk.get("symbols", []):
+                    if symbol.get("caller_edges"):
+                        del symbol["caller_edges"][0]["caller"]["symbol"]
+                        return mutated
+        raise VerificationError("no caller edge available for fixture")
+    elif fixture == "stale-source-head":
+        mutated["provenance"]["sourceBinding"]["committedHead"] = "0" * 40
     else:
         raise VerificationError(f"unknown report negative fixture {fixture}")
     return mutated
@@ -443,6 +562,12 @@ def mutate_public(data: dict[str, Any], fixture: str) -> dict[str, Any]:
             if "go test" in item.get("command", ""):
                 item["test_discovery"]["tests_discovered"] = 0
                 break
+    elif fixture == "truncated-output":
+        for item in mutated["checks"]:
+            item["output_capped"] = True
+            break
+    elif fixture == "auxiliary-cleanup-failure":
+        mutated["auxiliary_cleanup"] = {"attempted": True, "status": "failed", "worktree_removed": False, "temporary_root_removed": False}
     else:
         raise VerificationError(f"unknown public negative fixture {fixture}")
     return mutated
@@ -450,8 +575,8 @@ def mutate_public(data: dict[str, Any], fixture: str) -> dict[str, Any]:
 
 def negative(report: dict[str, Any], public: dict[str, dict[str, Any]], fixture: str) -> dict[str, Any]:
     try:
-        if fixture in {"public-unbound-tree", "cleanup-failure", "zero-test-discovery"}:
-            case = "browser-audio-tool" if fixture != "zero-test-discovery" else "browser-audio-tool"
+        if fixture in {"public-unbound-tree", "cleanup-failure", "zero-test-discovery", "truncated-output", "auxiliary-cleanup-failure"}:
+            case = "browser-audio-tool"
             validate_public_report(mutate_public(public[case], fixture), expected_case=case)
         else:
             validate_report(mutate_report(report, fixture), expected_role="required")
@@ -466,7 +591,7 @@ def main() -> int:
     parser.add_argument("--report", type=Path)
     parser.add_argument("--required", type=Path)
     parser.add_argument("--control", type=Path)
-    parser.add_argument("--fixture", choices=("changed-sha", "reversed-order", "wrong-owner", "forbidden-claim", "missing-conflict", "missing-preserved", "truncated-ref", "heuristic-ledger", "incomplete-sequence", "non-manifest-gate", "public-unbound-tree", "cleanup-failure", "zero-test-discovery"))
+    parser.add_argument("--fixture", choices=("changed-sha", "reversed-order", "wrong-owner", "forbidden-claim", "missing-conflict", "missing-preserved", "truncated-ref", "heuristic-ledger", "missing-ci-attribution", "missing-caller-identity", "stale-source-head", "incomplete-sequence", "non-manifest-gate", "public-unbound-tree", "cleanup-failure", "zero-test-discovery", "truncated-output", "auxiliary-cleanup-failure"))
     parser.add_argument("--write", type=Path)
     args = parser.parse_args()
     root = current_root()
@@ -500,13 +625,13 @@ def main() -> int:
     elif args.mode == "all":
         run_analyzer_twice(root)
         result["checks"].append("determinism")
-        fixtures = ("changed-sha", "reversed-order", "wrong-owner", "forbidden-claim", "missing-conflict", "missing-preserved", "truncated-ref", "heuristic-ledger", "incomplete-sequence", "non-manifest-gate")
+        fixtures = ("changed-sha", "reversed-order", "wrong-owner", "forbidden-claim", "missing-conflict", "missing-preserved", "truncated-ref", "heuristic-ledger", "missing-ci-attribution", "missing-caller-identity", "stale-source-head", "incomplete-sequence", "non-manifest-gate")
         result["negative"] = {fixture: negative(base_report, {}, fixture) for fixture in fixtures}
         public_dir = root / f"{OWNED_PREFIX}runs/final/public"
         for case in ("browser-audio-tool", "malformed-or-canceled"):
             public[case] = load(public_dir / f"{case}.json")
             validate_public_report(public[case], expected_case=case)
-        result["negative"].update({fixture: negative(base_report, public, fixture) for fixture in ("public-unbound-tree", "cleanup-failure", "zero-test-discovery")})
+        result["negative"].update({fixture: negative(base_report, public, fixture) for fixture in ("public-unbound-tree", "cleanup-failure", "zero-test-discovery", "truncated-output", "auxiliary-cleanup-failure")})
         result["checks"].extend(["negative-fixtures", "public-checks"])
     result["status"] = "passed"
     if args.write:

@@ -160,12 +160,13 @@ def bounded(argv: list[str], cwd: Path, timeout: int, *, env_extra: dict[str, st
                 process.stdout.close()
     elapsed = round(time.monotonic() - started, 3)
     process_group_clean = process_group_gone(process.pid)
-    output_bytes = len(output.encode())
+    raw_output = output
+    output_bytes = len(raw_output.encode())
     output_capped = output_bytes > OUTPUT_CAP
-    if output_capped:
-        output = output[-16000:]
+    retained_output = raw_output[-16000:] if output_capped else raw_output
     forbidden_output_markers = ("OPENAI_API_KEY=", "ANTHROPIC_API_KEY=", "C109_SECRET_MARKER", "PROBE_CREDENTIAL_MARKER")
-    discovery = test_discovery(" ".join(argv), output)
+    forbidden_markers_absent = not any(marker in raw_output for marker in forbidden_output_markers)
+    discovery = test_discovery(" ".join(argv), raw_output)
     status = "passed" if process.returncode == 0 and not timed_out and process_group_clean and not output_capped else ("timeout" if timed_out else "failed")
     return {
         "label": label,
@@ -179,13 +180,16 @@ def bounded(argv: list[str], cwd: Path, timeout: int, *, env_extra: dict[str, st
         "process_group_gone": process_group_clean,
         "cleanup": cleanup,
         "output_bytes": output_bytes,
-        "output_sha256": hashlib.sha256(output.encode()).hexdigest(),
+        "raw_output_sha256": hashlib.sha256(raw_output.encode()).hexdigest(),
+        "retained_output_sha256": hashlib.sha256(retained_output.encode()).hexdigest(),
+        "output_sha256": hashlib.sha256(raw_output.encode()).hexdigest(),
         "output_capped": output_capped,
+        "forbidden_markers_scanned_before_truncation": True,
         "credential_environment_scrubbed": True,
         "removed_credential_environment_names": removed,
-        "credential_output_markers_absent": not any(marker in output for marker in forbidden_output_markers),
+        "credential_output_markers_absent": forbidden_markers_absent,
         "test_discovery": discovery,
-        "output": output,
+        "output": retained_output,
     }
 
 
@@ -195,6 +199,12 @@ def merge_parents(tree_root: Path, ref: str) -> list[str]:
 
 
 def synthetic_tree_binding(tree_root: Path, expected_tree: str | None = None) -> dict[str, Any]:
+    registered = {
+        Path(record.split(" ", 1)[1]).resolve()
+        for record in run_command(["git", "worktree", "list", "--porcelain"], cwd=ROOT)["output"].splitlines()
+        if record.startswith("worktree ")
+    }
+    require(tree_root.resolve() in registered, "provided synthetic tree is not a registered repository worktree")
     require(not status_lines(ROOT, cwd=tree_root), "synthetic tree is dirty before public checks")
     head = revision(ROOT, "HEAD", cwd=tree_root)
     final_parents = merge_parents(tree_root, "HEAD")
@@ -289,6 +299,19 @@ def attach_workflow_detail(check: dict[str, Any], tree_root: Path) -> None:
     require(check["observable_effects"]["output_markers"] == list(SHIPPED_OUTPUT_MARKERS), "shipped observable output markers are missing")
 
 
+def bind_workflow_to_synthetic_tree(check: dict[str, Any], synthetic: dict[str, Any]) -> None:
+    detail = check.get("workflow_report", {})
+    require(detail.get("source_revision") == synthetic.get("head"), "shipped workflow source revision is not the synthetic merge HEAD")
+    check["synthetic_source_binding"] = {
+        "base": synthetic["base"],
+        "candidate_commits": synthetic["candidate_commits"],
+        "first_parent_order": synthetic["first_parent_order"],
+        "synthetic_tree": synthetic["final_tree"],
+        "source_revision": detail.get("source_revision"),
+        "source_tree": synthetic["final_tree"],
+    }
+
+
 def command_set(case: str, tree_root: Path, child_timeout: int) -> list[tuple[list[str], Path, dict[str, str], str, int]]:
     runtime = tree_root / "go-agent-runtime"
     cli = tree_root / "agent-cli"
@@ -372,6 +395,7 @@ def main() -> int:
     require(args.child_timeout > 0 and args.aggregate_timeout > 0, "timeouts must be positive")
     temporary_root: Path | None = None
     worktree: Path | None = None
+    auxiliary_cleanup: dict[str, Any] = {}
     checks: list[dict[str, Any]] = []
     started = time.monotonic()
     result: dict[str, Any] = {}
@@ -383,7 +407,8 @@ def main() -> int:
             try:
                 synthetic = synthetic_tree_binding(worktree, expected_tree)
             finally:
-                cleanup_tree(expected_root, expected_worktree)
+                auxiliary_cleanup = cleanup_tree(expected_root, expected_worktree)
+            require(auxiliary_cleanup.get("status") == "passed", "auxiliary synthetic-tree cleanup failed")
         else:
             temporary_root, worktree, expected_tree = create_required_tree()
             synthetic = synthetic_tree_binding(worktree, expected_tree)
@@ -397,6 +422,7 @@ def main() -> int:
             check = bounded(argv, cwd, timeout, env_extra=extra_env, label=label)
             if label == "shipped credential-free browser/audio/tool workflow" and check["status"] == "passed":
                 attach_workflow_detail(check, worktree)
+                bind_workflow_to_synthetic_tree(check, synthetic)
             checks.append(check)
             if time.monotonic() - started > args.aggregate_timeout:
                 break
@@ -427,7 +453,7 @@ def main() -> int:
         result = {
             "schema": "audio-runtime-c109-public-checks-v2",
             "case": args.case,
-            "status": "passed" if passed and process_groups_clean and credential_free and cleanup.get("status") == "passed" and elapsed <= args.aggregate_timeout else "failed",
+            "status": "passed" if passed and process_groups_clean and credential_free and cleanup.get("status") == "passed" and (not auxiliary_cleanup or auxiliary_cleanup.get("status") == "passed") and elapsed <= args.aggregate_timeout else "failed",
             "synthetic": {
                 "base": MAIN,
                 "order": ["c61", "c83"],
@@ -448,6 +474,8 @@ def main() -> int:
             "cleanup": cleanup,
             "checks": checks,
         }
+        if auxiliary_cleanup:
+            result["auxiliary_cleanup"] = auxiliary_cleanup
     except Exception as exc:
         if worktree is not None and temporary_root is not None:
             cleanup_tree(temporary_root, worktree)
