@@ -1,5 +1,5 @@
 {
-  "candidate": "1b1ccf4fcfd59732ee00f226d30b1883164cdf9a",
+  "candidate": "091fc7e585ed916d6393645c22a185eb8c6c37dd",
   "mode": "response-matrix",
   "payload": {
     "checks": [
@@ -13,10 +13,10 @@
           "-count=1",
           "-timeout=180s"
         ],
-        "elapsed_seconds": 0.965,
+        "elapsed_seconds": 0.462,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t0.298s [no tests to run]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.437s\n"
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t0.157s [no tests to run]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.298s\n"
       },
       {
         "argv": [
@@ -28,10 +28,10 @@
           "-count=1",
           "-timeout=210s"
         ],
-        "elapsed_seconds": 8.351,
+        "elapsed_seconds": 6.766,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.451s\n"
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.288s\n"
       },
       {
         "argv": [
@@ -41,7 +41,7 @@
           "-count=1",
           "-timeout=90s"
         ],
-        "elapsed_seconds": 0.358,
+        "elapsed_seconds": 0.316,
         "returncode": 0,
         "stderr": "",
         "stdout": "ok  \texample.com/audio-runtime-c79-sessiondiagnostics-consumer\t0.160s\n"
@@ -51,12 +51,12 @@
       "baseline": 1387,
       "files": {
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": 390,
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 335
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 357
       },
       "maximum": 787,
       "minimum_retired": 600,
-      "retired": 662,
-      "total": 725
+      "retired": 640,
+      "total": 747
     },
     "scope": {
       "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",

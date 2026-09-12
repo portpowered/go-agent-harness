@@ -1,5 +1,5 @@
 {
-  "candidate": "1b1ccf4fcfd59732ee00f226d30b1883164cdf9a",
+  "candidate": "091fc7e585ed916d6393645c22a185eb8c6c37dd",
   "mode": "retirement-and-scope",
   "payload": {
     "diff_check": {
@@ -8,7 +8,7 @@
         "diff",
         "--check"
       ],
-      "elapsed_seconds": 0.111,
+      "elapsed_seconds": 0.034,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
@@ -17,12 +17,12 @@
       "baseline": 1387,
       "files": {
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": 390,
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 335
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 357
       },
       "maximum": 787,
       "minimum_retired": 600,
-      "retired": 662,
-      "total": 725
+      "retired": 640,
+      "total": 747
     },
     "private_state_boundary": {
       "forbidden_tokens": [
