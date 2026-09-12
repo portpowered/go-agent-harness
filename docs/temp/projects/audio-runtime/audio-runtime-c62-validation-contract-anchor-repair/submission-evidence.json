@@ -138,7 +138,7 @@
       "result": "PASS; 6 tests."
     }
   ],
-  "ciRejection": {
+  "priorCiRejection": {
     "run": 34656009510,
     "job": 103448454678,
     "head": "bf768189ccb2a4f61f6413e914567d2756ea7e1d",
@@ -147,8 +147,21 @@
     "diagnostic": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_02 rendered 171191/177591 compared samples, losing exactly 6400; provider/playback accounting reported zero drops, overflows and discards.",
     "scope": "C47-owned shipped audio integration; no C62 factory-script check failed.",
     "acceptedMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "nextAction": "Preserve this earlier external C47-owned rejection as history; do not retry its old head."
+  },
+  "ciRejection": {
+    "run": 34662416663,
+    "job": 103467472637,
+    "head": "923d90705a4876f2908d59a161a20669d02c6445",
+    "failedCheck": "CI (integration)",
+    "result": "REJECTED_EXTERNAL_C47_OWNER",
+    "diagnostic": "TestAgentBinaryTest46HighRateToolAudioRegression/trial_01 rendered 167991/174391 compared samples, losing exactly 6400 (96.3% retained); playback reported DroppedSamples=0, OverflowEvents=0, DiscardedSamples=0, DiscardEvents=0, UnderflowEvents=64, UnderflowSamples=30240, ZeroFilledSamples=30240, and provider reported responsesSent=9, responseCreates=7, toolResults=7, protocolError empty.",
+    "scope": "C47/C64-owned shipped audio integration; no C62 factory-script check failed.",
+    "logCommand": "rtk proxy gh run view 34662416663 --repo portpowered/go-agent-harness --job 103467472637 --log-failed",
+    "logConclusion": "completed failure; exact job log inspected",
+    "acceptedMainRevision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
     "resolution": "The reviewed C64 provider-audio terminal-drain repair is present in fetched origin/main 59af6325614d80173447fe2018a0471e27b4e7b1 and was integrated into this C62 branch by merge 5323b76ef9eda776564a569b0a7f88faf24b24b6.",
-    "nextAction": "Preserve this external C47-owned rejection as history; do not retry its old head. C62 integrated current origin/main, reran its focused and accumulated controls, and is ready to submit the changed same-task head to SCRIPT CI without polling."
+    "nextAction": "Preserve this external C47/C64-owned rejection as history; do not retry its old head. C62 integrated current origin/main, reran its focused and accumulated controls, and is ready to submit the changed same-task head to SCRIPT CI without polling."
   },
   "successorCompletionRegression": {
     "result": "PASS",
