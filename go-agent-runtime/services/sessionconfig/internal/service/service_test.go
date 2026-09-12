@@ -66,7 +66,7 @@ func TestIndependentLiteralTransportMatrix(t *testing.T) {
 		{name: "websocket signaling", request: sessionconfig.Request{Signaling: "loopback"}, fields: []string{"transport", "signaling"}, causes: []error{sessionconfig.ErrSessionSignalingRequiresWebRTC}, text: "session signaling requires WebRTC transport"},
 		{name: "websocket media", request: sessionconfig.Request{MediaSource: "fixture"}, fields: []string{"transport", "media-source"}, causes: []error{sessionconfig.ErrSessionMediaSourceRequiresWebRTC}, text: "session media source requires WebRTC transport"},
 		{name: "webrtc prerequisites", request: sessionconfig.Request{Transport: "webrtc"}, fields: []string{"transport", "signaling", "media-source"}, causes: []error{sessionconfig.ErrSessionWebRTCRequiresSignaling, sessionconfig.ErrSessionWebRTCRequiresMediaSource}, text: "WebRTC session transport requires signaling"},
-		{name: "alias conflict", request: sessionconfig.Request{Signaling: "loopback://one", SignalingEndpoint: "loopback://two"}, fields: []string{"signaling", "signaling-endpoint"}, causes: []error{sessionconfig.ErrSessionRuntimeSelectionConflict}, text: "conflicting session signaling endpoints"},
+		{name: "alias conflict", request: sessionconfig.Request{Transport: "webrtc", Signaling: "loopback://one", SignalingEndpoint: "loopback://two", MediaSource: "fixture://media"}, fields: []string{"signaling", "signaling-endpoint"}, causes: []error{sessionconfig.ErrSessionRuntimeSelectionConflict}, text: "conflicting session signaling endpoints"},
 	}
 
 	service := New(literalCatalog{})
@@ -157,6 +157,41 @@ func TestIndependentLiteralProviderDefaults(t *testing.T) {
 	if err != nil || explicitConfig.Model != "gpt-realtime-2.1" || explicitConfig.APIKey != "override-key" || explicitConfig.BaseURL != "wss://override.test" {
 		t.Fatalf("explicit provider/model = %+v, %v; want literal overrides", explicitConfig, err)
 	}
+
+	for _, testCase := range []struct {
+		name     string
+		request  sessionconfig.Request
+		provider string
+	}{
+		{
+			name: "omitted provider uses session default",
+			request: sessionconfig.Request{Defaults: sessionconfig.Defaults{
+				Session: &sessionconfig.SessionDefaults{Provider: " GROK "},
+			}},
+			provider: sessionconfig.ProviderGrok,
+		},
+		{
+			name: "explicit provider is normalized",
+			request: sessionconfig.Request{Provider: " OPENAI ", ProviderProvided: true, Defaults: sessionconfig.Defaults{
+				Provider: sessionconfig.ProviderGrok,
+			}},
+			provider: sessionconfig.ProviderOpenAI,
+		},
+		{
+			name: "explicit empty provider does not use defaults",
+			request: sessionconfig.Request{ProviderProvided: true, Defaults: sessionconfig.Defaults{
+				Provider: sessionconfig.ProviderGrok,
+				Session:  &sessionconfig.SessionDefaults{Provider: sessionconfig.ProviderGrok},
+			}},
+			provider: "",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := service.ResolveProvider(testCase.request); got != testCase.provider {
+				t.Fatalf("ResolveProvider() = %q, want %q", got, testCase.provider)
+			}
+		})
+	}
 }
 
 func TestIndependentLiteralProviderRejections(t *testing.T) {
@@ -183,18 +218,76 @@ func TestIndependentLiteralProviderRejections(t *testing.T) {
 
 func TestIndependentLiteralGrokResolution(t *testing.T) {
 	service := New(literalCatalog{})
-	grok, err := service.ResolveGrokConfig(sessionconfig.Request{Defaults: sessionconfig.Defaults{Provider: "grok", Grok: &sessionconfig.ProviderConfig{Model: "grok-test", APIKey: "xai-test", BaseURL: "wss://grok.example.test"}}})
-	if err != nil || grok.Model != "grok-test" || grok.APIKey != "xai-test" || grok.BaseURL != "wss://grok.example.test" {
-		t.Fatalf("Grok config = %+v, %v; want copied literal values", grok, err)
+	tests := []struct {
+		name        string
+		request     sessionconfig.Request
+		model       string
+		apiKey      string
+		baseURL     string
+		expectedErr string
+	}{
+		{
+			name: "defaults are copied",
+			request: sessionconfig.Request{Defaults: sessionconfig.Defaults{
+				Provider: sessionconfig.ProviderGrok,
+				Grok:     &sessionconfig.ProviderConfig{Model: "grok-test", APIKey: "xai-test", BaseURL: "wss://grok.example.test"},
+			}},
+			model:   "grok-test",
+			apiKey:  "xai-test",
+			baseURL: "wss://grok.example.test",
+		},
+		{
+			name: "explicit model overrides defaults",
+			request: sessionconfig.Request{Provider: sessionconfig.ProviderGrok, ProviderProvided: true, Model: "grok-explicit", ModelProvided: true, Defaults: sessionconfig.Defaults{
+				Grok: &sessionconfig.ProviderConfig{Model: "grok-default", APIKey: "xai-test"},
+			}},
+			model:  "grok-explicit",
+			apiKey: "xai-test",
+		},
+		{
+			name: "provider mismatch is rejected",
+			request: sessionconfig.Request{Provider: sessionconfig.ProviderOpenAI, ProviderProvided: true, Defaults: sessionconfig.Defaults{
+				Grok: &sessionconfig.ProviderConfig{Model: "grok-test", APIKey: "xai-test"},
+			}},
+			expectedErr: `--record supports provider "grok" only; got "openai"`,
+		},
+		{
+			name: "explicit empty provider is not defaulted",
+			request: sessionconfig.Request{ProviderProvided: true, Defaults: sessionconfig.Defaults{
+				Provider: sessionconfig.ProviderGrok,
+				Grok:     &sessionconfig.ProviderConfig{Model: "grok-default", APIKey: "xai-test"},
+			}},
+			expectedErr: "--record requires --provider grok or --provider openai for live session inference",
+		},
+		{
+			name: "explicit empty model is not defaulted",
+			request: sessionconfig.Request{Provider: sessionconfig.ProviderGrok, ProviderProvided: true, ModelProvided: true, Defaults: sessionconfig.Defaults{
+				Grok: &sessionconfig.ProviderConfig{Model: "grok-default", APIKey: "xai-test"},
+			}},
+			expectedErr: "grok session model is required for live session record mode",
+		},
+		{
+			name: "omitted model remains required",
+			request: sessionconfig.Request{Defaults: sessionconfig.Defaults{
+				Provider: sessionconfig.ProviderGrok,
+				Grok:     &sessionconfig.ProviderConfig{APIKey: "xai-test"},
+			}},
+			expectedErr: "grok session model is required for live session record mode",
+		},
 	}
-	for _, request := range []sessionconfig.Request{
-		{Provider: "openai", Defaults: sessionconfig.Defaults{Grok: &sessionconfig.ProviderConfig{Model: "grok-test", APIKey: "key"}}},
-		{Defaults: sessionconfig.Defaults{Provider: "grok"}},
-		{Defaults: sessionconfig.Defaults{Provider: "grok", Grok: &sessionconfig.ProviderConfig{APIKey: "key"}}},
-	} {
-		if _, err := service.ResolveGrokConfig(request); err != nil {
-			continue
-		}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := service.ResolveGrokConfig(testCase.request)
+			if testCase.expectedErr != "" {
+				if err == nil || !strings.Contains(err.Error(), testCase.expectedErr) {
+					t.Fatalf("Grok config = %+v, error = %v; want error containing %q", got, err, testCase.expectedErr)
+				}
+				return
+			}
+			if err != nil || got.Model != testCase.model || got.APIKey != testCase.apiKey || got.BaseURL != testCase.baseURL {
+				t.Fatalf("Grok config = %+v, %v; want literal values model=%q api_key=%q base_url=%q", got, err, testCase.model, testCase.apiKey, testCase.baseURL)
+			}
+		})
 	}
 }
 

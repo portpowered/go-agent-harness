@@ -22,8 +22,8 @@ CASES: dict[str, tuple[str, int, str]] = {
     "credential-free-replay": ("replay", 0, '"status":"replay-ok"'),
     "credential-free-audio-tool-replay": ("replay", 0, '"status":"replay-ok"'),
     "invalid-model": ("invalid-model", 1, "not realtime-capable"),
-    "invalid-transport": ("invalid-transport", 1, "invalid session runtime selection"),
-    "runner-negative-controls": ("invalid-transport", 1, "invalid session runtime selection"),
+    "invalid-transport": ("invalid-transport", 1, "conflicting session signaling endpoints"),
+    "runner-negative-controls": ("invalid-transport", 1, "conflicting session signaling endpoints"),
 }
 
 

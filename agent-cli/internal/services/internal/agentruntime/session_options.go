@@ -331,7 +331,7 @@ func missingSessionProviderError() error {
 // Deprecated: this edge adapter loads the host config snapshot and delegates
 // provider selection to sessionconfig.Service.
 func effectiveSessionProvider(opts SessionRunOptions) string {
-	if strings.TrimSpace(opts.Provider) != "" {
+	if opts.ProviderProvided || strings.TrimSpace(opts.Provider) != "" {
 		return resolveRealtimeSessionProvider(opts, nil)
 	}
 	if opts.LoadedConfig != nil {

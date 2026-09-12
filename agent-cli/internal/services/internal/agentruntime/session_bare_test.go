@@ -25,6 +25,12 @@ func TestResolveRealtimeSessionProviderPrecedenceAndNormalization(t *testing.T) 
 			provider: config.ProviderGrok,
 		},
 		{
+			name:     "explicit empty CLI provider does not use persisted provider",
+			opts:     SessionRunOptions{ModelCatalog: testModelCatalog(), ProviderProvided: true},
+			config:   &config.Config{Session: &config.SessionConfig{Provider: config.ProviderGrok}, Model: config.ModelConfig{Provider: config.ProviderGrok}},
+			provider: "",
+		},
+		{
 			name:     "session provider wins over model provider",
 			config:   &config.Config{Session: &config.SessionConfig{Provider: "  OPENAI  "}, Model: config.ModelConfig{Provider: config.ProviderGrok}},
 			provider: config.ProviderOpenAI,
@@ -57,6 +63,17 @@ func TestResolveRealtimeSessionProviderPrecedenceAndNormalization(t *testing.T) 
 				t.Fatalf("resolveRealtimeSessionProvider() = %q, want %q", got, testCase.provider)
 			}
 		})
+	}
+}
+
+func TestEffectiveSessionProviderHonorsExplicitEmptyProvider(t *testing.T) {
+	loaded := &config.Config{
+		Session: &config.SessionConfig{Provider: config.ProviderGrok},
+		Model:   config.ModelConfig{Provider: config.ProviderGrok},
+	}
+	got := effectiveSessionProvider(SessionRunOptions{ProviderProvided: true, LoadedConfig: loaded})
+	if got != "" {
+		t.Fatalf("effectiveSessionProvider() = %q, want explicit empty provider", got)
 	}
 }
 

@@ -236,7 +236,11 @@ func isJSONCapturePath(path string) bool {
 }
 
 func (s *Service) ResolveProvider(request sessionconfig.Request) string {
-	if provider := strings.ToLower(strings.TrimSpace(request.Provider)); provider != "" {
+	provider := strings.ToLower(strings.TrimSpace(request.Provider))
+	if request.ProviderProvided {
+		return provider
+	}
+	if provider != "" {
 		return provider
 	}
 	if request.Defaults.Session != nil {
@@ -373,7 +377,7 @@ func applyRequestOverrides(config *sessionconfig.ProviderConfig, request session
 	if request.APIKey != "" {
 		config.APIKey = request.APIKey
 	}
-	if request.Model != "" {
+	if request.ModelProvided || request.Model != "" {
 		config.Model = request.Model
 	}
 	if request.BaseURL != "" {

@@ -9,6 +9,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any
 
@@ -117,7 +118,7 @@ def consumer() -> dict[str, Any]:
     if invalid_model["returncode"] == 0 or "not realtime-capable" not in invalid_model["stdout"] + invalid_model["stderr"]:
         raise VerificationFailure(f"invalid model negative control did not reject causally: {invalid_model}")
     invalid_transport = run(["go", "run", ".", "invalid-transport"], cwd=CONSUMER, env={"GOWORK": "off"})
-    if invalid_transport["returncode"] == 0 or "invalid session runtime selection" not in invalid_transport["stdout"] + invalid_transport["stderr"]:
+    if invalid_transport["returncode"] == 0 or "conflicting session signaling endpoints" not in invalid_transport["stdout"] + invalid_transport["stderr"]:
         raise VerificationFailure(f"invalid transport negative control did not reject causally: {invalid_transport}")
     return {
         "status": "ok",
@@ -168,10 +169,71 @@ def frozen_option_matrix() -> dict[str, Any]:
     }
 
 
+def isolated_mutation(
+    *,
+    control: str,
+    relative_path: str,
+    original: str,
+    mutated: str,
+    oracle: list[str],
+    oracle_label: str,
+    failure_marker: str,
+    positive: dict[str, Any],
+) -> dict[str, Any]:
+    clean_before = require(run(["git", "status", "--porcelain"]), f"{control} clean-tree precondition")
+    if clean_before["stdout"].strip():
+        raise VerificationFailure(f"{control} requires a clean working tree before isolated mutation")
+
+    with tempfile.TemporaryDirectory(prefix=f"audio-runtime-c74-{control}-") as temporary:
+        mutation_root = pathlib.Path(temporary) / "worktree"
+        worktree_added = False
+        try:
+            require(
+                run(["git", "worktree", "add", "--detach", str(mutation_root), "HEAD"]),
+                f"{control} isolated worktree setup",
+            )
+            worktree_added = True
+            source = mutation_root / relative_path
+            source_text = source.read_text(encoding="utf-8")
+            if source_text.count(original) != 1:
+                raise VerificationFailure(f"{control} mutation anchor was not unique in {relative_path}")
+            source.write_text(source_text.replace(original, mutated, 1), encoding="utf-8")
+            changed = require(
+                run(["git", "status", "--porcelain", "--", relative_path], cwd=mutation_root),
+                f"{control} isolated mutation status",
+            )
+            if not changed["stdout"].strip():
+                raise VerificationFailure(f"{control} isolated source mutation was not observed")
+            negative = run(oracle, cwd=mutation_root, timeout=180)
+            output = negative["stdout"] + negative["stderr"]
+            if negative["returncode"] == 0 or failure_marker not in output:
+                raise VerificationFailure(
+                    f"{control} mutation was not rejected by {oracle_label}: {negative}"
+                )
+        finally:
+            if worktree_added:
+                require(
+                    run(["git", "worktree", "remove", "--force", str(mutation_root)]),
+                    f"{control} isolated worktree cleanup",
+                )
+
+    clean_after = require(run(["git", "status", "--porcelain"]), f"{control} clean-tree postcondition")
+    if clean_after["stdout"].strip():
+        raise VerificationFailure(f"{control} left the implementation tree dirty")
+    return {
+        "status": "mutation-rejected",
+        "control": control,
+        "mutated_path": relative_path,
+        "positive": positive,
+        "negative": negative,
+        "tree_clean": True,
+    }
+
+
 def mutation_control(name: str) -> dict[str, Any]:
-    # Keep these controls fail-closed without mutating the working tree. Each
-    # first runs the independent positive row that would fail if the intended
-    # policy mutation survived, then checks the public negative control.
+    # These controls deliberately mutate a temporary detached worktree. The
+    # current implementation tree is clean before and after each mutation;
+    # the independent literal oracle must fail against the mutated policy.
     if name == "mutation-accept-conflicting-transports":
         positive = require(
             run(
@@ -186,10 +248,23 @@ def mutation_control(name: str) -> dict[str, Any]:
             ),
             "conflicting-alias positive oracle",
         )
-        result = run(["go", "run", ".", "invalid-transport"], cwd=CONSUMER, env={"GOWORK": "off"})
-        if result["returncode"] == 0 or "invalid session runtime selection" not in result["stderr"]:
-            raise VerificationFailure("conflicting-transport mutation was not rejected by its causal oracle")
-        return {"status": "mutation-rejected", "control": name, "positive": positive, "result": result}
+        return isolated_mutation(
+            control=name,
+            relative_path="go-agent-runtime/services/sessionconfig/internal/service/service.go",
+            original='\tif signaling != "" && signaling != request.SignalingEndpoint {\n',
+            mutated='\tif false && signaling != "" && signaling != request.SignalingEndpoint {\n',
+            oracle=[
+                "go",
+                "test",
+                "./go-agent-runtime/services/sessionconfig/internal/service",
+                "-run",
+                "TestIndependentLiteralTransportMatrix/alias_conflict$",
+                "-count=1",
+            ],
+            oracle_label="the conflicting-alias literal oracle",
+            failure_marker="alias_conflict",
+            positive=positive,
+        )
     if name == "mutation-alias-turn-detection":
         positive = require(
             run(
@@ -204,11 +279,23 @@ def mutation_control(name: str) -> dict[str, Any]:
             ),
             "turn-detection alias positive oracle",
         )
-        result = require(
-            run(["go", "test", "./go-agent-runtime/services/sessionconfig/internal/service", "-run", "TestIndependentLiteralCloneAndCapabilities$", "-count=1"]),
-            "turn-detection clone oracle",
+        return isolated_mutation(
+            control=name,
+            relative_path="go-agent-runtime/services/sessionconfig/internal/service/service.go",
+            original="\treturn &copy\n",
+            mutated="\treturn policy\n",
+            oracle=[
+                "go",
+                "test",
+                "./go-agent-runtime/services/sessionconfig/internal/service",
+                "-run",
+                "TestIndependentLiteralCloneAndCapabilities$",
+                "-count=1",
+            ],
+            oracle_label="the turn-detection clone literal oracle",
+            failure_marker="turn detection was not deeply cloned",
+            positive=positive,
         )
-        return {"status": "mutation-rejected", "control": name, "positive": positive, "result": result}
     raise VerificationFailure(f"unknown mutation control {name}")
 
 
@@ -246,7 +333,14 @@ def main() -> int:
         elif args.mode == "parity":
             result = parity()
         else:
-            result = {"inventory": inventory(), "consumer": consumer(), "parity": parity()}
+            result = {
+                "frozen_option_matrix": frozen_option_matrix(),
+                "parity": parity(),
+                "mutations": {
+                    "conflicting_transports": mutation_control("mutation-accept-conflicting-transports"),
+                    "turn_detection": mutation_control("mutation-alias-turn-detection"),
+                },
+            }
         print(json.dumps({"status": "ACCEPTED", "mode": args.mode, "result": result}, sort_keys=True))
         return 0
     except (OSError, VerificationFailure) as exc:

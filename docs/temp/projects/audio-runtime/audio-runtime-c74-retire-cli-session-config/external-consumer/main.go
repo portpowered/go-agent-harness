@@ -83,9 +83,14 @@ func invalidModel(service sessionconfig.Service) {
 }
 
 func invalidTransport(service sessionconfig.Service) {
-	_, err := service.ResolveRuntimeSelection(sessionconfig.Request{Transport: "quic"})
+	_, err := service.ResolveRuntimeSelection(sessionconfig.Request{
+		Transport:         sessionconfig.TransportWebRTC,
+		Signaling:         "loopback://first",
+		SignalingEndpoint: "loopback://second",
+		MediaSource:       "fixture://consumer-media",
+	})
 	var typed *sessionconfig.RuntimeSelectionError
-	if err == nil || !errors.Is(err, sessionconfig.ErrInvalidSessionRuntimeSelection) || !errors.As(err, &typed) {
+	if err == nil || !errors.Is(err, sessionconfig.ErrInvalidSessionRuntimeSelection) || !errors.Is(err, sessionconfig.ErrSessionRuntimeSelectionConflict) || !errors.As(err, &typed) || len(typed.Fields) != 2 || typed.Fields[0] != "signaling" || typed.Fields[1] != "signaling-endpoint" {
 		fail(fmt.Errorf("invalid-transport oracle failed: %v", err))
 	}
 	fail(fmt.Errorf("expected invalid-transport rejection: %v", err))
