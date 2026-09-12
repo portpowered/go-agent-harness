@@ -38,6 +38,13 @@ checkpoint. C79 retains the shared `scripts/wire-packages.txt` and
 `docs/architecture/architecture-size-baseline.json` leases; neither is edited
 here.
 
+## Current-head integration checkpoint
+
+- The C91 implementation/evidence checkpoint is `9124660b452097a1517bc8f6a45a2001a66f7a79`.
+- A fresh fetch advanced `origin/main` to `3d3e72786ac6fc1fd47c7e029589e5117674b035`; the isolated branch merged it with `--no-ff` as `508adb5cff3d3f05002ee15f6bd948585b0709c1`.
+- `origin/main`, `8bdafc7f947a3a2c9856220abdc539437035bd21`, and `59af6325614d80173447fe2018a0471e27b4e7b1` are all ancestors of the current candidate. The merge occurred only in this isolated worktree; the running host checkout was not merged or reset.
+- The inherited C65 files are preserved required ancestry. C91 still does not edit the C79-owned Wire registry or architecture-size baseline.
+
 ## Canonical task/review state
 
 The `~default` work list was read with all terminal history. C91 is
