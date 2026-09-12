@@ -50,5 +50,33 @@ post-finalize rejection.
   pass. Repository architecture/Wire gates report only the unowned shared
   registry and downward baseline entries; those files remain unchanged pending
   exact lease release.
-- the next required action after commit/push is script CI on this exact head;
-  CI status is not claimed here and is not polled by the executor.
+- the first current-head script-CI run was PR `#472`, run `34679683562`, at
+  source `05fd938a0eb02fb6f209e56e231ec5ec1a47da54`. Unit, race, coverage,
+  hermetic, WebMCP Chrome, macOS audio release and Windows portable software
+  passed. Static rejected only the demonstrated shared-file boundaries:
+  `make wire-check` reports the C80 generated path
+  `go-agent-runtime/services/roomevidence/wire/wire_gen.go` is unregistered;
+  architecture reports the C80 downward/stale entries for the reduced
+  `session_room_evidence.go` plus its retired `cleanupSetup`,
+  `recordingHealth` and `writeManifest` findings, and the same generated-file
+  registration. `scripts/wire-packages.txt` remains under C57's active lease
+  and `docs/architecture/architecture-size-baseline.json` remains under C61's
+  active lease, so neither was edited or waived.
+- Integration rejected the known C47-owned high-rate audio regression at
+  `TestAgentBinaryTest45HighRateToolAudioRegression/trial_19`: rendered
+  `171191/177591` compared samples, exactly `6400` missing, with zero device
+  drops/discards and `70` underflow events. C80 does not own that transport or
+  audio path and did not weaken the every-sample oracle.
+- Bounded post-CI revalidation at the clean source passed C80 service normal
+  (`6` tests), service race (`12` tests), external `GOWORK=off` consumer,
+  four named negative controls, CLI room/evidence normal (`176` tests),
+  C80-owned CLI race (`18` tests), retirement/scope (`559` retained lines),
+  and the non-room audio/tool replay. A broad agentruntime race run passed
+  `175` tests and reproduced one C75-owned replay-runtime failure; its exact
+  normal test passes. No C80 source repair is justified by that peer result.
+- The next action is dependency-gated: after C57 releases the Wire registry
+  and C61 releases the architecture baseline, integrate the then-current
+  accepted `origin/main`, add only the demonstrated C80 registry entry and
+  downward/deleted C80 baseline entries, rerun the focused gates, and push the
+  same PR for script CI. Current-head CI, independent review, guarded merge
+  and an immutable executable vertical probe remain unclaimed.
