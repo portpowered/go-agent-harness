@@ -186,7 +186,7 @@ def source_provenance() -> dict:
     branch = subprocess.run(
         ["git", "branch", "--show-current"], cwd=ROOT, check=True, capture_output=True, text=True
     ).stdout.strip()
-    prd = json.loads((HERE / "prd.json").read_text(encoding="utf-8"))
+    prd = json.loads((ROOT / "prd.json").read_text(encoding="utf-8"))
     prd_branch = prd.get("branchName", "")
     if branch != prd_branch:
         raise RuntimeError(f"runner branch {branch!r} does not match prd.branchName {prd_branch!r}")
