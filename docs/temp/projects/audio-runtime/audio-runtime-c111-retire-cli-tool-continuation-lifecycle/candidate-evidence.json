@@ -1,0 +1,119 @@
+{
+  "schema": "audio-runtime.c111.candidate-evidence.v1",
+  "task": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "session": "~default",
+  "server": "http://127.0.0.1:7439",
+  "branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+  "implementationRevision": "b7eb303a8ce9498f44404e8d0baf61c111c43245",
+  "admission": {
+    "verifyWork": "admitted",
+    "secondProject": false,
+    "acceptanceWaiver": false,
+    "startupIsAncestor": true,
+    "acceptedMainIsAncestor": true,
+    "prdBranchMatches": true,
+    "baselineRevision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+  },
+  "retirement": {
+    "immutableSourceLines": 147,
+    "immutableSourceSha256": "48000dcd73b85ebbe93fd40a3996529878a99c799b67b0779d60f55dbb43fc1e",
+    "legacyAdapterLines": 57,
+    "netPhysicalProductionLinesRetired": 90,
+    "changedFiles": 17,
+    "changedPathsRemainOwned": true
+  },
+  "checks": [
+    {
+      "command": "make fmt",
+      "result": "passed"
+    },
+    {
+      "command": "env GOWORK=off go test ./services/sessioncontinuation/... -count=1 -timeout=180s",
+      "result": "passed"
+    },
+    {
+      "command": "env GOWORK=off go test -race ./services/sessioncontinuation/... -run 'Immutable|Independent|Concurrent|Join|Precedence|Cancel|ZeroSurvivors|Enrich|Unresolved' -count=3 -timeout=300s",
+      "result": "passed"
+    },
+    {
+      "command": "env GOWORK=off go vet ./services/sessioncontinuation/... and ./internal/services/internal/agentruntime",
+      "result": "passed"
+    },
+    {
+      "command": "targeted golangci-lint --new-from-rev d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "result": "passed: 0 issues"
+    },
+    {
+      "command": "targeted staticcheck for sessioncontinuation and agentruntime",
+      "result": "passed"
+    },
+    {
+      "command": "make coverage-registration",
+      "result": "passed: 179 workspace packages across 6 modules"
+    },
+    {
+      "command": "coveragegate on public and Wire profiles",
+      "result": "passed: 3 registered packages across 2 profiles"
+    },
+    {
+      "command": "verify.py --mode positive-and-negative-controls",
+      "result": "accepted",
+      "artifact": "artifacts/verify-1789249249-88640.json",
+      "sha256": "abbade9bbd931b9c4254210be96409ed4818c6fce2b3bfff49fb516971705a8d"
+    }
+  ],
+  "accumulatedRegressions": {
+    "result": "passed",
+    "tests": [
+      "TestSessionToolResultConversationMissingContinuationIsBounded",
+      "TestSessionToolResultConversationCorruptAudioDeltaIsRejected",
+      "TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose",
+      "TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle"
+    ]
+  },
+  "replay": {
+    "result": "accepted",
+    "artifact": "artifacts/run-1789249286-88888.json",
+    "sha256": "f5951c0e856257a917f292cd98908c9c33d92ddc8f42ef372c794486e0c37fc3",
+    "sourceRevision": "b7eb303a8ce9498f44404e8d0baf61c111c43245",
+    "credentialFree": true,
+    "realtimeSessions": 0,
+    "cases": [
+      "missing-tool-continuation",
+      "corrupt-audio-delta",
+      "non-tool-audio-regression"
+    ],
+    "fixtureSha256": {
+      "audioTool": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "interruption": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206"
+    },
+    "processGroupsReaped": true,
+    "outputCapExceeded": false
+  },
+  "sharedPrerequisites": {
+    "owner": "C79 / work-task-114",
+    "status": "awaiting explicit reviewed guarded-merge release",
+    "wireRegistry": {
+      "path": "scripts/wire-packages.txt",
+      "sha256": "3958443ed08ad6a550fd29ce8191c026d1a4017339e00c0b7406e0dcec7de05b",
+      "gateResult": "make wire-check held: unregistered go-agent-runtime/services/sessioncontinuation/wire/wire_gen.go"
+    },
+    "architectureBaseline": {
+      "path": "docs/architecture/architecture-size-baseline.json",
+      "sha256": "6d61448b83eca374b324335f6a9e2fac768969d073b1091d17d48d45bf3badd1",
+      "changed": false
+    },
+    "diagnosticsObserver": {
+      "path": "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+      "sha256": "0584e3acc16e29b8fb79ece8a19199f0f8690de39099af922f08781edd957eb8",
+      "changed": false
+    }
+  },
+  "handoff": {
+    "ci": "not polled and not claimed green",
+    "review": "not self-reviewed; no C111 review findings were present at admission",
+    "nextAction": "After C79 explicitly releases the shared Wire registry and architecture baseline, fetch current origin/main, preserve startup and accepted-main ancestry, add only demonstrated shared registrations, rerun final gates, then submit this same task to script CI and independent review."
+  }
+}
