@@ -3,12 +3,14 @@
   "candidate_selection": {
     "excluded_configurations": [
       "session-instruction-resolution",
-      "session-trace-evidence"
+      "session-terminal-diagnostics",
+      "session-trace-evidence",
+      "session-failure-projection"
     ],
     "selected_configurations": [
-      "session-terminal-diagnostics",
-      "session-failure-projection",
-      "session-duration-terminal-boundary"
+      "session-duration-terminal-boundary",
+      "session-interactive-tool-policy",
+      "session-room-error-sanitization"
     ],
     "subtraction_owned_source_paths_excluded": [
       "agent-cli/internal/services/internal/agentruntime/metrics_collector.go",
@@ -38,8 +40,10 @@
       "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go",
       "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
       "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
       "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
       "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
       "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
       "agent-cli/internal/services/internal/agentruntime/session_drain.go",
       "agent-cli/internal/services/internal/agentruntime/session_duration.go",
@@ -98,1048 +102,6 @@
     ]
   },
   "candidates": [
-    {
-      "accumulated_credential_free_regression": "scripts/test-session-ci-regressions.sh all, including credential-free replay, interruption, tool-continuation and terminal-error controls",
-      "c107_mutation_lease": false,
-      "causal_negative_control": "drop the final failure or mutate cancellation/output-state precedence; the bounded workflow must reject missing terminal evidence and never silently publish success",
-      "current_file_baseline": [
-        {
-          "bytes": 11824,
-          "path": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-          "physical_lines": 287
-        }
-      ],
-      "current_symbols": [
-        {
-          "caller_edge_status": "exact-static",
-          "class": "business_policy",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:13:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).emitTerminal",
-          "kind": "method",
-          "name": "emitTerminal",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).finish",
-              "column": 2,
-              "confidence": "high",
-              "expression": "o.emitTerminal",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 222,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 143,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-            "line": 13
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "business_policy",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:145:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).emitUserCancelledTerminal",
-          "kind": "method",
-          "name": "emitUserCancelledTerminal",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitTerminal",
-              "column": 4,
-              "confidence": "high",
-              "expression": "o.emitUserCancelledTerminal",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 19,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 184,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-            "line": 145
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "business_policy",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:186:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).userCancellationOutputState",
-          "kind": "method",
-          "name": "userCancellationOutputState",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitUserCancelledTerminal",
-              "column": 45,
-              "confidence": "high",
-              "expression": "o.userCancellationOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 160,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "sessionUserCancelledTerminalMessage",
-              "column": 17,
-              "confidence": "high",
-              "expression": "observer.userCancellationOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_live.go",
-              "line": 404,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).notifyFinalTerminalObservation",
-              "column": 73,
-              "confidence": "high",
-              "expression": "o.userCancellationOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_room_terminal.go",
-              "line": 79,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).notifyFinalTerminalObservation",
-              "column": 73,
-              "confidence": "high",
-              "expression": "o.userCancellationOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_room_terminal.go",
-              "line": 83,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).notifyFinalTerminalObservation",
-              "column": 73,
-              "confidence": "high",
-              "expression": "o.userCancellationOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_room_terminal.go",
-              "line": 110,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 194,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-            "line": 186
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "no-static-caller",
-          "class": "dead_uncertain",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:196:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).finish",
-          "kind": "method",
-          "name": "finish",
-          "production_callers": [],
-          "span": {
-            "end_line": 228,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-            "line": 196
-          },
-          "uncertainty": {
-            "dynamic_reachability": true,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": true,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution",
-              "interface dispatch may bypass direct AST caller resolution",
-              "reflection may bypass direct AST caller resolution",
-              "unresolved static reachability is retained as uncertainty; no caller is inferred"
-            ],
-            "reflection": true
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "business_policy",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:233:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).finalAccounting",
-          "kind": "method",
-          "name": "finalAccounting",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).finish",
-              "column": 59,
-              "confidence": "high",
-              "expression": "o.finalAccounting",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 225,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 248,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-            "line": 233
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "business_policy",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go:255:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).emitMetricsMatrix",
-          "kind": "method",
-          "name": "emitMetricsMatrix",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).finish",
-              "column": 2,
-              "confidence": "high",
-              "expression": "o.emitMetricsMatrix",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 223,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 287,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-            "line": 255
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        }
-      ],
-      "current_writer_paths": [
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go"
-      ],
-      "decision": "independently executable residual boundary; characterization grants no mutation lease",
-      "destination": {
-        "private_internal": "go-agent-runtime/services/sessionterminal/internal/service/: terminal precedence, failure facts, continuation metadata and final accounting",
-        "public_contract": "go-agent-runtime/services/sessionterminal/contract.go: terminal classification, output state, cancellation and metrics projections",
-        "wire": "go-agent-runtime/services/sessionterminal/wire/: dedicated terminal-observation construction with typed diagnostics and clock-independent counters"
-      },
-      "expected_observable_effects": "retain terminal precedence, provider/error classification, output-state semantics, unresolved continuation metadata, cancellation identity and final token/audio accounting",
-      "external_consumer_check": "GOWORK=off Go consumer imports services/sessionterminal and checks typed terminal classifications, output states and error identity without agent-cli",
-      "focused_normal_checks": [
-        "TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic",
-        "TestSessionProgressObserver_IgnoresNonTerminalProviderDiagnostic",
-        "TestSessionCancellation_RecordsTerminalDiagnosticOnce"
-      ],
-      "focused_race_checks": [
-        "terminal failure, cancellation and metrics publication controls under -race"
-      ],
-      "id": "session-terminal-diagnostics",
-      "public_workflow": "credential-free yui session replay and cancellation/error workflows that publish one terminal diagnostic and metrics record",
-      "rank": 1,
-      "reliance_on_future_peer_deletion": false,
-      "remaining_immutable_criteria": [
-        "SERVICE",
-        "TRACE",
-        "REPLAY",
-        "FAILURES",
-        "QUALITY",
-        "PARITY"
-      ],
-      "retirement_accounting": {
-        "counted_scope": "only removed accepted-main agentruntime production files/physical lines",
-        "excluded_from_credit": [
-          "new runtime lines",
-          "generated Wire",
-          "tests",
-          "fixtures",
-          "evidence",
-          "wrapper-only movement"
-        ],
-        "legacy_physical_lines_removed_floor": 180,
-        "legacy_production_files_removed_floor": 1
-      },
-      "shared_file_dependencies": [
-        "scripts/wire-packages.txt",
-        "docs/architecture/architecture-size-baseline.json"
-      ],
-      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
-    },
-    {
-      "accumulated_credential_free_regression": "scripts/test-session-ci-regressions.sh all, including credential-free replay, interruption and terminal-error controls",
-      "c107_mutation_lease": false,
-      "causal_negative_control": "drop terminal failure facts or convert cancellation into failure; the bounded workflow must reject missing/error-classified terminal evidence",
-      "current_file_baseline": [
-        {
-          "bytes": 8306,
-          "path": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-          "physical_lines": 246
-        }
-      ],
-      "current_symbols": [
-        {
-          "caller_edge_status": "no-static-caller",
-          "class": "dead_uncertain",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:12:type:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.failureFacts",
-          "kind": "type",
-          "name": "failureFacts",
-          "production_callers": [],
-          "span": {
-            "end_line": 20,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 12
-          },
-          "uncertainty": {
-            "dynamic_reachability": true,
-            "function_value": false,
-            "generated": false,
-            "interface_dispatch": true,
-            "notes": [
-              "interface dispatch may bypass direct AST caller resolution",
-              "reflection may bypass direct AST caller resolution",
-              "unresolved static reachability is retained as uncertainty; no caller is inferred"
-            ],
-            "reflection": true
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:22:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).failureSnapshot",
-          "kind": "method",
-          "name": "failureSnapshot",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "sessionSIGINTObserverFailureOnly",
-              "column": 13,
-              "confidence": "high",
-              "expression": "observer.failureSnapshot",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_cancellation.go",
-              "line": 73,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitTerminal",
-              "column": 8,
-              "confidence": "high",
-              "expression": "o.failureSnapshot",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 35,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 35,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 22
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:37:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).clearFailure",
-          "kind": "method",
-          "name": "clearFailure",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).finish",
-              "column": 3,
-              "confidence": "high",
-              "expression": "o.clearFailure",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 205,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 44,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 37
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:48:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).captureFailureFromError",
-          "kind": "method",
-          "name": "captureFailureFromError",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).observe",
-              "column": 3,
-              "confidence": "high",
-              "expression": "o.captureFailureFromError",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
-              "line": 291,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 69,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 48
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:73:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.factsFromErrorValue",
-          "kind": "function",
-          "name": "factsFromErrorValue",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).captureFailureFromError",
-              "column": 11,
-              "confidence": "high",
-              "expression": "factsFromErrorValue",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-              "line": 61,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "factsFromSessionRunError",
-              "column": 9,
-              "confidence": "high",
-              "expression": "factsFromErrorValue",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-              "line": 110,
-              "resolution": "same-package AST CallExpr"
-            }
-          ],
-          "span": {
-            "end_line": 96,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 73
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": false,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:102:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.factsFromSessionRunError",
-          "kind": "function",
-          "name": "factsFromSessionRunError",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitTerminal",
-              "column": 8,
-              "confidence": "high",
-              "expression": "factsFromSessionRunError",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 57,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).notifyFinalTerminalObservation",
-              "column": 12,
-              "confidence": "high",
-              "expression": "factsFromSessionRunError",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_room_terminal.go",
-              "line": 87,
-              "resolution": "same-package AST CallExpr"
-            }
-          ],
-          "span": {
-            "end_line": 111,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 102
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": false,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:113:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).acceptFailureObservation",
-          "kind": "method",
-          "name": "acceptFailureObservation",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).captureFailureFromError",
-              "column": 6,
-              "confidence": "high",
-              "expression": "o.acceptFailureObservation",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-              "line": 66,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).captureFailureFromClose",
-              "column": 6,
-              "confidence": "high",
-              "expression": "o.acceptFailureObservation",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-              "line": 170,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).notifyFinalTerminalObservation",
-              "column": 3,
-              "confidence": "high",
-              "expression": "o.acceptFailureObservation",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_room_terminal.go",
-              "line": 101,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 130,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 113
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:137:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).captureFailureFromClose",
-          "kind": "method",
-          "name": "captureFailureFromClose",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).observe",
-              "column": 3,
-              "confidence": "high",
-              "expression": "o.captureFailureFromClose",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
-              "line": 296,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 173,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 137
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:175:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).unresolvedToolResultFailureFacts",
-          "kind": "method",
-          "name": "unresolvedToolResultFailureFacts",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitTerminal",
-              "column": 8,
-              "confidence": "high",
-              "expression": "o.unresolvedToolResultFailureFacts",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 42,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitTerminal",
-              "column": 9,
-              "confidence": "high",
-              "expression": "o.unresolvedToolResultFailureFacts",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 61,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 183,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 175
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:185:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).imageContinuationFailureFacts",
-          "kind": "method",
-          "name": "imageContinuationFailureFacts",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitTerminal",
-              "column": 8,
-              "confidence": "high",
-              "expression": "o.imageContinuationFailureFacts",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 45,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitTerminal",
-              "column": 9,
-              "confidence": "high",
-              "expression": "o.imageContinuationFailureFacts",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 65,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 193,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 185
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:195:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).toolContinuationFailureFacts",
-          "kind": "method",
-          "name": "toolContinuationFailureFacts",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitTerminal",
-              "column": 8,
-              "confidence": "high",
-              "expression": "o.toolContinuationFailureFacts",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 48,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitTerminal",
-              "column": 9,
-              "confidence": "high",
-              "expression": "o.toolContinuationFailureFacts",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 63,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 203,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 195
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:205:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).scheduledAudioFailureFacts",
-          "kind": "method",
-          "name": "scheduledAudioFailureFacts",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitTerminal",
-              "column": 8,
-              "confidence": "high",
-              "expression": "o.scheduledAudioFailureFacts",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 51,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 213,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 205
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:218:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(sessionProgressObserver).emitToolCallRecord",
-          "kind": "method",
-          "name": "emitToolCallRecord",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).observe",
-              "column": 4,
-              "confidence": "high",
-              "expression": "o.emitToolCallRecord",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
-              "line": 227,
-              "resolution": "typed receiver method AST CallExpr; exact method declaration"
-            }
-          ],
-          "span": {
-            "end_line": 232,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 218
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": true,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [
-              "function values/closures may bypass direct AST caller resolution"
-            ],
-            "reflection": false
-          }
-        },
-        {
-          "caller_edge_status": "exact-static",
-          "class": "reusable_runtime_behavior",
-          "id": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go:237:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.deriveOutputState",
-          "kind": "function",
-          "name": "deriveOutputState",
-          "production_callers": [
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).captureFailureFromClose",
-              "column": 19,
-              "confidence": "high",
-              "expression": "deriveOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-              "line": 168,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).unresolvedToolResultFailureFacts",
-              "column": 19,
-              "confidence": "high",
-              "expression": "deriveOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-              "line": 180,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).imageContinuationFailureFacts",
-              "column": 19,
-              "confidence": "high",
-              "expression": "deriveOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-              "line": 190,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).toolContinuationFailureFacts",
-              "column": 19,
-              "confidence": "high",
-              "expression": "deriveOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-              "line": 200,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).scheduledAudioFailureFacts",
-              "column": 19,
-              "confidence": "high",
-              "expression": "deriveOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-              "line": 210,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).emitTerminal",
-              "column": 22,
-              "confidence": "high",
-              "expression": "deriveOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
-              "line": 79,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(roomCoordinator).finishParticipant",
-              "column": 30,
-              "confidence": "high",
-              "expression": "deriveOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
-              "line": 696,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(roomParticipantLifecycle).recordFailureLocked",
-              "column": 27,
-              "confidence": "high",
-              "expression": "deriveOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
-              "line": 425,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(roomParticipantLifecycle).recordDisconnectedLocked",
-              "column": 27,
-              "confidence": "high",
-              "expression": "deriveOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
-              "line": 440,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "finalizeRoomParticipantResults",
-              "column": 31,
-              "confidence": "high",
-              "expression": "deriveOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
-              "line": 638,
-              "resolution": "same-package AST CallExpr"
-            },
-            {
-              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-              "caller_package": "agentruntime",
-              "caller_symbol": "(sessionProgressObserver).notifyFinalTerminalObservation",
-              "column": 21,
-              "confidence": "high",
-              "expression": "deriveOutputState",
-              "file": "agent-cli/internal/services/internal/agentruntime/session_room_terminal.go",
-              "line": 97,
-              "resolution": "same-package AST CallExpr"
-            }
-          ],
-          "span": {
-            "end_line": 246,
-            "file": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
-            "line": 237
-          },
-          "uncertainty": {
-            "dynamic_reachability": false,
-            "function_value": false,
-            "generated": false,
-            "interface_dispatch": false,
-            "notes": [],
-            "reflection": false
-          }
-        }
-      ],
-      "current_writer_paths": [
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go"
-      ],
-      "decision": "independently executable residual boundary; characterization grants no mutation lease",
-      "destination": {
-        "private_internal": "go-agent-runtime/services/sessionfailure/internal/service/: provider/session failure normalization and cancellation-safe publication",
-        "public_contract": "go-agent-runtime/services/sessionfailure/contract.go: typed failure facts, terminal reason and output-state projection",
-        "wire": "go-agent-runtime/services/sessionfailure/wire/: dedicated constructor for failure projection and diagnostic sinks"
-      },
-      "expected_observable_effects": "retain failure classification, terminal reason/provenance, output state, cancellation boundaries and the original provider error",
-      "external_consumer_check": "GOWORK=off Go consumer imports services/sessionfailure and verifies typed failure projection without agent-cli",
-      "focused_normal_checks": [
-        "TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic",
-        "TestSessionCancellation_RecordsTerminalDiagnosticOnce"
-      ],
-      "focused_race_checks": [
-        "failure observation, cancellation and terminal publication controls under -race"
-      ],
-      "id": "session-failure-projection",
-      "public_workflow": "credential-free yui session replay and provider/session failure workflows that publish typed terminal evidence",
-      "rank": 2,
-      "reliance_on_future_peer_deletion": false,
-      "remaining_immutable_criteria": [
-        "SERVICE",
-        "TRACE",
-        "REPLAY",
-        "FAILURES",
-        "QUALITY",
-        "PARITY"
-      ],
-      "retirement_accounting": {
-        "counted_scope": "only removed accepted-main agentruntime production files/physical lines",
-        "excluded_from_credit": [
-          "new runtime lines",
-          "generated Wire",
-          "tests",
-          "fixtures",
-          "evidence",
-          "wrapper-only movement"
-        ],
-        "legacy_physical_lines_removed_floor": 160,
-        "legacy_production_files_removed_floor": 1
-      },
-      "shared_file_dependencies": [
-        "scripts/wire-packages.txt",
-        "docs/architecture/architecture-size-baseline.json"
-      ],
-      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
-    },
     {
       "accumulated_credential_free_regression": "scripts/test-session-ci-regressions.sh all, including credential-free replay, max-duration and interruption controls",
       "c107_mutation_lease": false,
@@ -1536,7 +498,7 @@
       ],
       "id": "session-duration-terminal-boundary",
       "public_workflow": "credential-free yui session --max-duration replay and bounded provider-close workflows",
-      "rank": 3,
+      "rank": 1,
       "reliance_on_future_peer_deletion": false,
       "remaining_immutable_criteria": [
         "SERVICE",
@@ -1556,6 +518,1663 @@
           "wrapper-only movement"
         ],
         "legacy_physical_lines_removed_floor": 90,
+        "legacy_production_files_removed_floor": 1
+      },
+      "shared_file_dependencies": [
+        "scripts/wire-packages.txt",
+        "docs/architecture/architecture-size-baseline.json"
+      ],
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+    },
+    {
+      "accumulated_credential_free_regression": "scripts/test-session-ci-regressions.sh all, including credential-free tool continuation and cancellation controls",
+      "c107_mutation_lease": false,
+      "causal_negative_control": "accept an unbounded or invalid tool policy; the consumer and replay controls must reject it before tool execution",
+      "current_file_baseline": [
+        {
+          "bytes": 6336,
+          "path": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+          "physical_lines": 155
+        }
+      ],
+      "current_symbols": [
+        {
+          "caller_edge_status": "no-static-caller",
+          "class": "dead_uncertain",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:15:type:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.InteractiveToolClass",
+          "kind": "type",
+          "name": "InteractiveToolClass",
+          "production_callers": [],
+          "span": {
+            "end_line": 15,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 15
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": true,
+            "notes": [
+              "interface dispatch may bypass direct AST caller resolution",
+              "reflection may bypass direct AST caller resolution",
+              "unresolved static reachability is retained as uncertainty; no caller is inferred"
+            ],
+            "reflection": true
+          }
+        },
+        {
+          "caller_edge_status": "no-static-caller",
+          "class": "dead_uncertain",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:18:const:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.InteractiveToolClassFastRead",
+          "kind": "const",
+          "name": "InteractiveToolClassFastRead",
+          "production_callers": [],
+          "span": {
+            "end_line": 18,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 18
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": true,
+            "notes": [
+              "interface dispatch may bypass direct AST caller resolution",
+              "reflection may bypass direct AST caller resolution",
+              "unresolved static reachability is retained as uncertainty; no caller is inferred"
+            ],
+            "reflection": true
+          }
+        },
+        {
+          "caller_edge_status": "no-static-caller",
+          "class": "dead_uncertain",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:19:const:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.InteractiveToolClassBoundedLongRunning",
+          "kind": "const",
+          "name": "InteractiveToolClassBoundedLongRunning",
+          "production_callers": [],
+          "span": {
+            "end_line": 19,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 19
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": true,
+            "notes": [
+              "interface dispatch may bypass direct AST caller resolution",
+              "reflection may bypass direct AST caller resolution",
+              "unresolved static reachability is retained as uncertainty; no caller is inferred"
+            ],
+            "reflection": true
+          }
+        },
+        {
+          "caller_edge_status": "no-static-caller",
+          "class": "dead_uncertain",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:25:type:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.InteractiveToolPolicy",
+          "kind": "type",
+          "name": "InteractiveToolPolicy",
+          "production_callers": [],
+          "span": {
+            "end_line": 31,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 25
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": true,
+            "notes": [
+              "interface dispatch may bypass direct AST caller resolution",
+              "reflection may bypass direct AST caller resolution",
+              "unresolved static reachability is retained as uncertainty; no caller is inferred"
+            ],
+            "reflection": true
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "business_policy",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:36:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicy",
+          "kind": "function",
+          "name": "NewInteractiveToolPolicy",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "ResolveInteractiveToolPolicy",
+              "column": 10,
+              "confidence": "high",
+              "expression": "NewInteractiveToolPolicy",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+              "line": 72,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "ResolveInteractiveToolPolicy",
+              "column": 9,
+              "confidence": "high",
+              "expression": "NewInteractiveToolPolicy",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+              "line": 74,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntentAndDiagnostics",
+              "column": 25,
+              "confidence": "high",
+              "expression": "NewInteractiveToolPolicy",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_tools.go",
+              "line": 163,
+              "resolution": "same-package AST CallExpr"
+            }
+          ],
+          "span": {
+            "end_line": 38,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 36
+          },
+          "uncertainty": {
+            "dynamic_reachability": false,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [],
+            "reflection": false
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "business_policy",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:48:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.NewInteractiveToolPolicyForSession",
+          "kind": "function",
+          "name": "NewInteractiveToolPolicyForSession",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "NewInteractiveToolPolicy",
+              "column": 9,
+              "confidence": "high",
+              "expression": "NewInteractiveToolPolicyForSession",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+              "line": 37,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "resolveSessionInteractiveToolPolicy",
+              "column": 9,
+              "confidence": "high",
+              "expression": "NewInteractiveToolPolicyForSession",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
+              "line": 559,
+              "resolution": "same-package AST CallExpr"
+            }
+          ],
+          "span": {
+            "end_line": 66,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 48
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [],
+            "reflection": false
+          }
+        },
+        {
+          "caller_edge_status": "no-static-caller",
+          "class": "dead_uncertain",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:70:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.ResolveInteractiveToolPolicy",
+          "kind": "function",
+          "name": "ResolveInteractiveToolPolicy",
+          "production_callers": [],
+          "span": {
+            "end_line": 75,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 70
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": true,
+            "notes": [
+              "interface dispatch may bypass direct AST caller resolution",
+              "reflection may bypass direct AST caller resolution",
+              "unresolved static reachability is retained as uncertainty; no caller is inferred"
+            ],
+            "reflection": true
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "business_policy",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:79:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(InteractiveToolPolicy).Clone",
+          "kind": "method",
+          "name": "Clone",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "planSessionRuntimeWithFactory",
+              "column": 20,
+              "confidence": "high",
+              "expression": "interactivePolicy.Clone",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
+              "line": 424,
+              "resolution": "typed receiver method AST CallExpr; exact method declaration"
+            }
+          ],
+          "span": {
+            "end_line": 85,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 79
+          },
+          "uncertainty": {
+            "dynamic_reachability": false,
+            "function_value": true,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [
+              "function values/closures may bypass direct AST caller resolution"
+            ],
+            "reflection": false
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "business_policy",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:92:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(InteractiveToolPolicy).ClassForTool",
+          "kind": "method",
+          "name": "ClassForTool",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(InteractiveToolPolicy).TimeoutForTool",
+              "column": 5,
+              "confidence": "high",
+              "expression": "p.ClassForTool",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+              "line": 104,
+              "resolution": "typed receiver method AST CallExpr; exact method declaration"
+            }
+          ],
+          "span": {
+            "end_line": 97,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 92
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": true,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [
+              "function values/closures may bypass direct AST caller resolution"
+            ],
+            "reflection": false
+          }
+        },
+        {
+          "caller_edge_status": "no-static-caller",
+          "class": "dead_uncertain",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:100:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(InteractiveToolPolicy).TimeoutForTool",
+          "kind": "method",
+          "name": "TimeoutForTool",
+          "production_callers": [],
+          "span": {
+            "end_line": 108,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 100
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": true,
+            "generated": false,
+            "interface_dispatch": true,
+            "notes": [
+              "function values/closures may bypass direct AST caller resolution",
+              "interface dispatch may bypass direct AST caller resolution",
+              "reflection may bypass direct AST caller resolution",
+              "unresolved static reachability is retained as uncertainty; no caller is inferred"
+            ],
+            "reflection": true
+          }
+        },
+        {
+          "caller_edge_status": "no-static-caller",
+          "class": "dead_uncertain",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:112:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(InteractiveToolPolicy).Validate",
+          "kind": "method",
+          "name": "Validate",
+          "production_callers": [],
+          "span": {
+            "end_line": 121,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 112
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": true,
+            "generated": false,
+            "interface_dispatch": true,
+            "notes": [
+              "function values/closures may bypass direct AST caller resolution",
+              "interface dispatch may bypass direct AST caller resolution",
+              "reflection may bypass direct AST caller resolution",
+              "unresolved static reachability is retained as uncertainty; no caller is inferred"
+            ],
+            "reflection": true
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "business_policy",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:123:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.interactiveToolPolicySettings",
+          "kind": "function",
+          "name": "interactiveToolPolicySettings",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "NewInteractiveToolPolicyForSession",
+              "column": 29,
+              "confidence": "high",
+              "expression": "interactiveToolPolicySettings",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+              "line": 56,
+              "resolution": "same-package AST CallExpr"
+            }
+          ],
+          "span": {
+            "end_line": 129,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 123
+          },
+          "uncertainty": {
+            "dynamic_reachability": false,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [],
+            "reflection": false
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "business_policy",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:131:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.newInteractiveToolPolicyCompatibilityValue",
+          "kind": "function",
+          "name": "newInteractiveToolPolicyCompatibilityValue",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "NewInteractiveToolPolicyForSession",
+              "column": 9,
+              "confidence": "high",
+              "expression": "newInteractiveToolPolicyCompatibilityValue",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+              "line": 65,
+              "resolution": "same-package AST CallExpr"
+            }
+          ],
+          "span": {
+            "end_line": 139,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 131
+          },
+          "uncertainty": {
+            "dynamic_reachability": false,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [],
+            "reflection": false
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "business_policy",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go:143:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.browserLongRunningToolNames",
+          "kind": "function",
+          "name": "browserLongRunningToolNames",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "NewInteractiveToolPolicyForSession",
+              "column": 29,
+              "confidence": "high",
+              "expression": "browserLongRunningToolNames",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+              "line": 59,
+              "resolution": "same-package AST CallExpr"
+            }
+          ],
+          "span": {
+            "end_line": 155,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go",
+            "line": 143
+          },
+          "uncertainty": {
+            "dynamic_reachability": false,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [],
+            "reflection": false
+          }
+        }
+      ],
+      "current_writer_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_interactive_policy.go"
+      ],
+      "decision": "independently executable residual boundary; characterization grants no mutation lease",
+      "destination": {
+        "private_internal": "go-agent-runtime/services/sessioninteractive/internal/service/: policy validation, cloning and runtime compatibility conversion",
+        "public_contract": "go-agent-runtime/services/sessioninteractive/contract.go: per-session tool class, timeout and acknowledgement policy",
+        "wire": "go-agent-runtime/services/sessioninteractive/wire/: injected interactive policy construction and browser tool-name mapping"
+      },
+      "expected_observable_effects": "preserve request-scoped tool classes, timeout bounds, acknowledgement thresholds, validation and browser-tool mapping",
+      "external_consumer_check": "GOWORK=off Go consumer imports services/sessioninteractive and validates policy settings without agent-cli",
+      "focused_normal_checks": [
+        "TestInteractiveToolPolicyDefaultsAndClassSelection",
+        "TestInteractiveToolPolicyHonorsOverrides",
+        "TestInteractiveToolExecutorUsesIndependentSessionBudgets"
+      ],
+      "focused_race_checks": [
+        "per-session policy cloning and tool timeout decisions under -race"
+      ],
+      "id": "session-interactive-tool-policy",
+      "public_workflow": "credential-free yui tool replay with fast-read and bounded-long-running tool calls",
+      "rank": 2,
+      "reliance_on_future_peer_deletion": false,
+      "remaining_immutable_criteria": [
+        "SERVICE",
+        "REPLAY",
+        "QUALITY",
+        "PARITY"
+      ],
+      "retirement_accounting": {
+        "counted_scope": "only removed accepted-main agentruntime production files/physical lines",
+        "excluded_from_credit": [
+          "new runtime lines",
+          "generated Wire",
+          "tests",
+          "fixtures",
+          "evidence",
+          "wrapper-only movement"
+        ],
+        "legacy_physical_lines_removed_floor": 100,
+        "legacy_production_files_removed_floor": 1
+      },
+      "shared_file_dependencies": [
+        "scripts/wire-packages.txt",
+        "docs/architecture/architecture-size-baseline.json"
+      ],
+      "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+    },
+    {
+      "accumulated_credential_free_regression": "scripts/test-session-ci-regressions.sh all, including credential-free room failure and interruption controls",
+      "c107_mutation_lease": false,
+      "causal_negative_control": "publish a raw secret or erase participant failure identity; the room replay verifier must reject the result",
+      "current_file_baseline": [
+        {
+          "bytes": 2960,
+          "path": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+          "physical_lines": 114
+        }
+      ],
+      "current_symbols": [
+        {
+          "caller_edge_status": "exact-static",
+          "class": "reusable_runtime_behavior",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go:9:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.roomParticipantFailure",
+          "kind": "function",
+          "name": "roomParticipantFailure",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(roomCoordinator).forceBoundShutdown",
+              "column": 22,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+              "line": 205,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(roomCoordinator).finishParticipant",
+              "column": 35,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+              "line": 739,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 15,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 124,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 21,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 163,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 23,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 186,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 23,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 194,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "buildRoomParticipantPlansWithContext",
+              "column": 22,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 126,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "buildRoomReplayParticipantPlans",
+              "column": 23,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 268,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "buildRoomReplayParticipantPlans",
+              "column": 23,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 280,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "buildRoomReplayParticipantPlans",
+              "column": 23,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 301,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "buildRoomReplayParticipantPlans",
+              "column": 23,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 304,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "awaitRoomParticipantConnections",
+              "column": 51,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 369,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "awaitRoomParticipantConnections",
+              "column": 53,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 475,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "awaitRoomParticipantConnections",
+              "column": 48,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 485,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "roomParticipantReadyForAdmission",
+              "column": 18,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 506,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "roomParticipantReadyForAdmission",
+              "column": 18,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 524,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "roomParticipantReadyForAdmission",
+              "column": 17,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 526,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomParticipant",
+              "column": 41,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 199,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomParticipant",
+              "column": 14,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 278,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomParticipant",
+              "column": 14,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 367,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomParticipant",
+              "column": 57,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 373,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "observeRoomParticipantStream",
+              "column": 49,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 476,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "observeRoomParticipantStream",
+              "column": 50,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 514,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "observeRoomParticipantStream",
+              "column": 59,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 531,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "collectRoomParticipantResults",
+              "column": 38,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 763,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "pumpRoomMixer",
+              "column": 57,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 933,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "pumpRoomMixer",
+              "column": 58,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 952,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "pumpRoomMixer",
+              "column": 58,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 958,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "pumpRoomMixer",
+              "column": 58,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 975,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "pumpRoomMixer",
+              "column": 59,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 992,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomHumanCapture",
+              "column": 15,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 1053,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomHumanCapture",
+              "column": 15,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 1059,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomHumanCapture",
+              "column": 17,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 1076,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomHumanCapture",
+              "column": 17,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 1084,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "pumpRoomHumanOutput",
+              "column": 58,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 1121,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "pumpRoomHumanOutput",
+              "column": 58,
+              "confidence": "high",
+              "expression": "roomParticipantFailure",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 1132,
+              "resolution": "same-package AST CallExpr"
+            }
+          ],
+          "span": {
+            "end_line": 19,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+            "line": 9
+          },
+          "uncertainty": {
+            "dynamic_reachability": false,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [],
+            "reflection": false
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "reusable_runtime_behavior",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go:26:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.roomParticipantFailureReason",
+          "kind": "function",
+          "name": "roomParticipantFailureReason",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(roomCoordinator).failParticipant",
+              "column": 44,
+              "confidence": "high",
+              "expression": "roomParticipantFailureReason",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+              "line": 326,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(roomCoordinator).finishParticipant",
+              "column": 34,
+              "confidence": "high",
+              "expression": "roomParticipantFailureReason",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+              "line": 705,
+              "resolution": "same-package AST CallExpr"
+            }
+          ],
+          "span": {
+            "end_line": 46,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+            "line": 26
+          },
+          "uncertainty": {
+            "dynamic_reachability": false,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [],
+            "reflection": false
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "reusable_runtime_behavior",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go:48:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.roomParticipantFailureCause",
+          "kind": "function",
+          "name": "roomParticipantFailureCause",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "roomParticipantFailureReason",
+              "column": 14,
+              "confidence": "high",
+              "expression": "roomParticipantFailureCause",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+              "line": 27,
+              "resolution": "same-package AST CallExpr"
+            }
+          ],
+          "span": {
+            "end_line": 61,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+            "line": 48
+          },
+          "uncertainty": {
+            "dynamic_reachability": false,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [],
+            "reflection": false
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "reusable_runtime_behavior",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go:63:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.roomFailureResult",
+          "kind": "function",
+          "name": "roomFailureResult",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 13,
+              "confidence": "high",
+              "expression": "roomFailureResult",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 46,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 13,
+              "confidence": "high",
+              "expression": "roomFailureResult",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 50,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 14,
+              "confidence": "high",
+              "expression": "roomFailureResult",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 61,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 14,
+              "confidence": "high",
+              "expression": "roomFailureResult",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 70,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 13,
+              "confidence": "high",
+              "expression": "roomFailureResult",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 91,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 13,
+              "confidence": "high",
+              "expression": "roomFailureResult",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 96,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 14,
+              "confidence": "high",
+              "expression": "roomFailureResult",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 126,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 14,
+              "confidence": "high",
+              "expression": "roomFailureResult",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 167,
+              "resolution": "same-package AST CallExpr"
+            }
+          ],
+          "span": {
+            "end_line": 70,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+            "line": 63
+          },
+          "uncertainty": {
+            "dynamic_reachability": false,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [],
+            "reflection": false
+          }
+        },
+        {
+          "caller_edge_status": "no-static-caller",
+          "class": "dead_uncertain",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go:72:type:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.roomSafeError",
+          "kind": "type",
+          "name": "roomSafeError",
+          "production_callers": [],
+          "span": {
+            "end_line": 77,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+            "line": 72
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": true,
+            "notes": [
+              "interface dispatch may bypass direct AST caller resolution",
+              "reflection may bypass direct AST caller resolution",
+              "unresolved static reachability is retained as uncertainty; no caller is inferred"
+            ],
+            "reflection": true
+          }
+        },
+        {
+          "caller_edge_status": "no-static-caller",
+          "class": "dead_uncertain",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go:79:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(roomSafeError).Error",
+          "kind": "method",
+          "name": "Error",
+          "production_callers": [],
+          "span": {
+            "end_line": 87,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+            "line": 79
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": true,
+            "generated": false,
+            "interface_dispatch": true,
+            "notes": [
+              "function values/closures may bypass direct AST caller resolution",
+              "interface dispatch may bypass direct AST caller resolution",
+              "reflection may bypass direct AST caller resolution",
+              "unresolved static reachability is retained as uncertainty; no caller is inferred"
+            ],
+            "reflection": true
+          }
+        },
+        {
+          "caller_edge_status": "no-static-caller",
+          "class": "dead_uncertain",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go:89:method:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.(roomSafeError).Unwrap",
+          "kind": "method",
+          "name": "Unwrap",
+          "production_callers": [],
+          "span": {
+            "end_line": 94,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+            "line": 89
+          },
+          "uncertainty": {
+            "dynamic_reachability": true,
+            "function_value": true,
+            "generated": false,
+            "interface_dispatch": true,
+            "notes": [
+              "function values/closures may bypass direct AST caller resolution",
+              "interface dispatch may bypass direct AST caller resolution",
+              "reflection may bypass direct AST caller resolution",
+              "unresolved static reachability is retained as uncertainty; no caller is inferred"
+            ],
+            "reflection": true
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "reusable_runtime_behavior",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go:96:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.sanitizeRoomError",
+          "kind": "function",
+          "name": "sanitizeRoomError",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(roomCoordinator).finishParticipant",
+              "column": 27,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+              "line": 720,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(roomCoordinator).recordParticipantError",
+              "column": 18,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+              "line": 796,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "roomParticipantFailureReason",
+              "column": 34,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+              "line": 31,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "roomParticipantFailureCause",
+              "column": 27,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+              "line": 60,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "roomFailureResult",
+              "column": 22,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+              "line": 67,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(roomSafeError).Error",
+              "column": 27,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+              "line": 86,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "roomRecordingStatus",
+              "column": 30,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_evidence.go",
+              "line": 286,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(roomEvidence).recordingHealth",
+              "column": 43,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_evidence.go",
+              "line": 329,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(roomEvidence).recordingHealth",
+              "column": 85,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_evidence.go",
+              "line": 342,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(roomEvidence).writeManifest",
+              "column": 29,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_evidence.go",
+              "line": 858,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 18,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 275,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "notifyRoomTerminated",
+              "column": 17,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 415,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "finalizeRoomParticipantResults",
+              "column": 28,
+              "confidence": "high",
+              "expression": "sanitizeRoomError",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 672,
+              "resolution": "same-package AST CallExpr"
+            }
+          ],
+          "span": {
+            "end_line": 107,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+            "line": 96
+          },
+          "uncertainty": {
+            "dynamic_reachability": false,
+            "function_value": true,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [
+              "function values/closures may bypass direct AST caller resolution"
+            ],
+            "reflection": false
+          }
+        },
+        {
+          "caller_edge_status": "exact-static",
+          "class": "reusable_runtime_behavior",
+          "id": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go:109:function:github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime.secretsForPlan",
+          "kind": "function",
+          "name": "secretsForPlan",
+          "production_callers": [
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "(roomCoordinator).forceBoundShutdown",
+              "column": 83,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_coordinator.go",
+              "line": 205,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 126,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 186,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "RunRoomWithResult",
+              "column": 75,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+              "line": 194,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "awaitRoomParticipantConnections",
+              "column": 152,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 369,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "awaitRoomParticipantConnections",
+              "column": 157,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 475,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "roomParticipantReadyForAdmission",
+              "column": 31,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go",
+              "line": 500,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomParticipant",
+              "column": 139,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 199,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomParticipant",
+              "column": 75,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 278,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomParticipant",
+              "column": 112,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 367,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "runRoomParticipant",
+              "column": 114,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 373,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "observeRoomParticipantStream",
+              "column": 152,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 476,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "observeRoomParticipantStream",
+              "column": 102,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 514,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "observeRoomParticipantStream",
+              "column": 182,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 531,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "finalizeRoomParticipantResults",
+              "column": 62,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 672,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "collectRoomParticipantResults",
+              "column": 81,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 763,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "collectRoomParticipantResults",
+              "column": 53,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 766,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "pumpRoomMixer",
+              "column": 160,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 933,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "pumpRoomMixer",
+              "column": 119,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 958,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "pumpRoomMixer",
+              "column": 146,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 975,
+              "resolution": "same-package AST CallExpr"
+            },
+            {
+              "caller_import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+              "caller_package": "agentruntime",
+              "caller_symbol": "pumpRoomMixer",
+              "column": 150,
+              "confidence": "high",
+              "expression": "secretsForPlan",
+              "file": "agent-cli/internal/services/internal/agentruntime/session_room_run.go",
+              "line": 992,
+              "resolution": "same-package AST CallExpr"
+            }
+          ],
+          "span": {
+            "end_line": 114,
+            "file": "agent-cli/internal/services/internal/agentruntime/session_room_errors.go",
+            "line": 109
+          },
+          "uncertainty": {
+            "dynamic_reachability": false,
+            "function_value": false,
+            "generated": false,
+            "interface_dispatch": false,
+            "notes": [],
+            "reflection": false
+          }
+        }
+      ],
+      "current_writer_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_room_errors.go"
+      ],
+      "decision": "independently executable residual boundary; characterization grants no mutation lease",
+      "destination": {
+        "private_internal": "go-agent-runtime/services/sessionroomerrors/internal/service/: secret-aware error unwrapping and termination mapping",
+        "public_contract": "go-agent-runtime/services/sessionroomerrors/contract.go: participant failure identity, sanitized cause and room result",
+        "wire": "go-agent-runtime/services/sessionroomerrors/wire/: room failure projection and credential-free diagnostic construction"
+      },
+      "expected_observable_effects": "retain participant identity and termination reason while sanitizing secrets, preserving error identity and projecting a stable room result",
+      "external_consumer_check": "GOWORK=off Go consumer imports services/sessionroomerrors and verifies sanitized failure identity without agent-cli",
+      "focused_normal_checks": [
+        "TestRunRoom_PreservesFailedEvidenceAndRedactsSecrets",
+        "TestRoomEvidence_RecordingHealthRetainsFirstSanitizedFailure"
+      ],
+      "focused_race_checks": [
+        "participant failure projection and room result publication under -race"
+      ],
+      "id": "session-room-error-sanitization",
+      "public_workflow": "credential-free multi-participant yui session failure and disconnect replay",
+      "rank": 3,
+      "reliance_on_future_peer_deletion": false,
+      "remaining_immutable_criteria": [
+        "SERVICE",
+        "FAILURES",
+        "QUALITY",
+        "PARITY"
+      ],
+      "retirement_accounting": {
+        "counted_scope": "only removed accepted-main agentruntime production files/physical lines",
+        "excluded_from_credit": [
+          "new runtime lines",
+          "generated Wire",
+          "tests",
+          "fixtures",
+          "evidence",
+          "wrapper-only movement"
+        ],
+        "legacy_physical_lines_removed_floor": 70,
         "legacy_production_files_removed_floor": 1
       },
       "shared_file_dependencies": [

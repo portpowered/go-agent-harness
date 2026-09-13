@@ -9,25 +9,25 @@
   "ancestry": {
     "accepted_source": {
       "ancestor": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "descendant": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
+      "descendant": "b24182557a39371c71f8e46a212108dbbd38d946",
       "exit_code": 0,
       "passed": true
     },
     "baseline": {
       "ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
-      "descendant": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
+      "descendant": "b24182557a39371c71f8e46a212108dbbd38d946",
       "exit_code": 0,
       "passed": true
     },
     "current_origin_main": {
       "ancestor": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
-      "descendant": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
+      "descendant": "b24182557a39371c71f8e46a212108dbbd38d946",
       "exit_code": 0,
       "passed": true
     },
     "startup_integration": {
       "ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-      "descendant": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
+      "descendant": "b24182557a39371c71f8e46a212108dbbd38d946",
       "exit_code": 0,
       "passed": true
     }
@@ -44,16 +44,22 @@
   "candidate_pr": {
     "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
     "base_branch": "main",
-    "head": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
+    "head": "b24182557a39371c71f8e46a212108dbbd38d946",
     "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "number": 494,
     "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
     "task_work_id": "work-task-218"
   },
-  "candidate_revision": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
+  "candidate_revision": "b24182557a39371c71f8e46a212108dbbd38d946",
   "contract_revision": "audio-runtime-v1",
   "credentials": "not used; command environment for public replay removes credential variables",
   "current_origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+  "evidence_binding": {
+    "executable_input_equivalence": "final-binding compares the tested parent and final HEAD outside the owned C107 evidence directory",
+    "final_head_verification": "run verify.py --mode final-binding after committing this evidence; final HEAD must be one direct owned-evidence descendant",
+    "mode": "evidence-only-direct-descendant",
+    "tested_candidate_revision": "b24182557a39371c71f8e46a212108dbbd38d946"
+  },
   "factory_server": "http://127.0.0.1:7439",
   "factory_session": "~default",
   "fetch": {
@@ -67,7 +73,7 @@
     "stderr_sha256": "54b759e2f9e31c5995466467866508754527b8f2fd6fc1d047eb9db48c604c61",
     "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
-  "observed_at": "2026-09-13T03:40:51Z",
+  "observed_at": "2026-09-13T04:20:22Z",
   "prd_identity": {
     "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "project": "audio-runtime"

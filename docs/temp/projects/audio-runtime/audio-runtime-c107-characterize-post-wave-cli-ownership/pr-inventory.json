@@ -54,7 +54,9 @@
     499,
     500,
     501,
-    503
+    503,
+    504,
+    505
   ],
   "all_open_retirement_pr_numbers": [
     365,
@@ -111,7 +113,9 @@
     499,
     500,
     501,
-    503
+    503,
+    504,
+    505
   ],
   "commands": [
     [
@@ -128,7 +132,7 @@
       "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
     ]
   ],
-  "observed_at": "2026-09-13T03:40:50Z",
+  "observed_at": "2026-09-13T04:20:20Z",
   "prs": [
     {
       "accepted_main_changed_production_paths": [],
@@ -2133,7 +2137,7 @@
         "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
         "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
       ],
-      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
       "base_branch": "main",
       "draft": false,
       "files": [
@@ -2141,6 +2145,7 @@
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_test.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
         "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
         "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
@@ -2181,7 +2186,7 @@
         "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
         "scripts/wire-packages.txt"
       ],
-      "head": "a9099ec555644517fc10f0d4ecbddd3f3cf7c56b",
+      "head": "99bc9500634676182e987711e21da805b8837ead",
       "head_branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
       "is_retirement_checkpoint": true,
       "number": 470,
@@ -4032,6 +4037,7 @@
       "files": [
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/README.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/SHA256SUMS",
+        "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/__pycache__/verify.cpython-314.pyc",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/analysis/analysis-run.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/analysis/call-paths.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/analysis/classifications.json",
@@ -4092,7 +4098,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verification-summary.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py"
       ],
-      "head": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
+      "head": "b24182557a39371c71f8e46a212108dbbd38d946",
       "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "is_retirement_checkpoint": true,
       "number": 494,
@@ -4140,7 +4146,7 @@
     },
     {
       "accepted_main_changed_production_paths": [],
-      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
       "base_branch": "main",
       "draft": false,
       "files": [
@@ -4149,6 +4155,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/ci-rejection-34731461393.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/ci-rejection-34732547786.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/revalidation-20260912-v2.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/revalidation-20260912.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/revalidation-20260913.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
@@ -4172,7 +4179,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/test_analyze.py",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py"
       ],
-      "head": "786c615ada701357e778ed131e7e0a0b8c1ac228",
+      "head": "0c31a7b01581a1fed95fecabed97558762d3e32a",
       "head_branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
       "is_retirement_checkpoint": true,
       "number": 495,
@@ -4336,7 +4343,7 @@
         "go-agent-runtime/services/sessioninstructions/wire/wire.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go"
       ],
-      "head": "9ccbbe06273f986b644d363bdf624e32779d3c41",
+      "head": "d9bdc5dfa1fe99bba3f3a7ca2b4efc10dca4c6ff",
       "head_branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
       "is_retirement_checkpoint": true,
       "number": 497,
@@ -4552,7 +4559,7 @@
     },
     {
       "accepted_main_changed_production_paths": [],
-      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
       "base_branch": "main",
       "draft": false,
       "files": [
@@ -4563,6 +4570,12 @@
         "coverage-manifest/go-agent-runtime/services/rtctransport/internal/service/package.json",
         "coverage-manifest/go-agent-runtime/services/rtctransport/package.json",
         "coverage-manifest/go-agent-runtime/services/rtctransport/wire/package.json",
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/probe_v9_webrtc_device_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_in.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_in_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_out.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_out_test.go.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/evidence.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/external-consumer/consumer_test.go",
         "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/external-consumer/go.mod",
@@ -4589,7 +4602,7 @@
         "go-llm-gateway/pkg/transport/rtc/track_out.go",
         "go-llm-gateway/pkg/transport/rtc/track_out_test.go"
       ],
-      "head": "cd1ba0ed59e09045814757db5f9c974a4f09b308",
+      "head": "c84e3e7ebadef9cf88a7c1a8e708dc14dc7c8134",
       "head_branch": "codex/audio-runtime-c116-centralize-rtc-track-transport",
       "is_retirement_checkpoint": true,
       "number": 500,
@@ -4629,7 +4642,7 @@
       "task_name": "audio-runtime-c116-centralize-rtc-track-transport",
       "task_state": {
         "name": "init",
-        "type": "PROCESSING"
+        "type": "INITIAL"
       },
       "task_work_id": "work-task-265",
       "title": "feat(runtime): centralize RTC track transport policy",
@@ -4637,7 +4650,7 @@
     },
     {
       "accepted_main_changed_production_paths": [],
-      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
       "base_branch": "main",
       "draft": true,
       "files": [
@@ -4648,7 +4661,9 @@
         "coverage-manifest/go-agent-runtime/services/audiocodec/internal/service/package.json",
         "coverage-manifest/go-agent-runtime/services/audiocodec/package.json",
         "coverage-manifest/go-agent-runtime/services/audiocodec/wire/package.json",
+        "docs/architecture/architecture-policy.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-04934ed.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-0c6529c.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-5b23b484.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-6c4f340.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-7c4fbd5.md",
@@ -4677,7 +4692,7 @@
         "go-agent-runtime/services/tools/wire/wire.go",
         "go-agent-runtime/services/tools/wire/wire_gen.go"
       ],
-      "head": "f78f92bd99b7c068c22ce24fb1eea37084055929",
+      "head": "2ee68033b877b0492a5c63cfbbd6c5c72c30227e",
       "head_branch": "codex/audio-runtime-c115-centralize-filesystem-audio-codec",
       "is_retirement_checkpoint": true,
       "number": 501,
@@ -4716,7 +4731,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c115-centralize-filesystem-audio-codec",
       "task_state": {
-        "name": "init",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-262",
@@ -4729,7 +4744,7 @@
       "base_branch": "main",
       "draft": false,
       "files": [
-        "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go",
+        "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/SHA256SUMS",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py",
@@ -4740,10 +4755,11 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/pre-c112-scope.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/reproduce_c113.py",
         "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/c113-reproduction.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/package-budget-repair.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/pre-c112-test.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/verify.py"
       ],
-      "head": "424f6e5988f0f4e2966d969796d31a9a79058826",
+      "head": "120ee5dba44e7e1a450b6ef65b5f28678a9b0878",
       "head_branch": "codex/audio-runtime-c117-repair-c113-public-trace-publication",
       "is_retirement_checkpoint": true,
       "number": 503,
@@ -4783,11 +4799,182 @@
       "task_name": "audio-runtime-c117-repair-c113-public-trace-publication",
       "task_state": {
         "name": "init",
-        "type": "INITIAL"
+        "type": "PROCESSING"
       },
       "task_work_id": "work-task-268",
       "title": "test(audio): pin C113 trace publication gap",
       "url": "https://github.com/portpowered/go-agent-harness/pull/503"
+    },
+    {
+      "accepted_main_changed_production_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
+        "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go"
+      ],
+      "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+      "base_branch": "main",
+      "draft": false,
+      "files": [
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal_adapter.go",
+        "agent-cli/internal/services/internal/agentruntime/session_runtime_factory_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go",
+        "coverage-manifest/go-agent-runtime/services/sessionterminal/internal/service/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessionterminal/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessionterminal/wire/package.json",
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/README.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/candidate-evidence.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/external-consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/external-consumer/go.sum",
+        "docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/external-consumer/main_test.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/inventory.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/run.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/verify.py",
+        "go-agent-runtime/services/sessionterminal/internal/service/public_contract_test.go",
+        "go-agent-runtime/services/sessionterminal/internal/service/records.go",
+        "go-agent-runtime/services/sessionterminal/internal/service/service.go",
+        "go-agent-runtime/services/sessionterminal/internal/service/service_test.go",
+        "go-agent-runtime/services/sessionterminal/internal/service/terminal_failure.go",
+        "go-agent-runtime/services/sessionterminal/service.go",
+        "go-agent-runtime/services/sessionterminal/wire/wire.go",
+        "go-agent-runtime/services/sessionterminal/wire/wire_gen.go",
+        "go-agent-runtime/services/sessionterminal/wire/wire_test.go"
+      ],
+      "head": "4b59e09b4b04163392f0ae04a7ef4e20ac9d23bd",
+      "head_branch": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+      "is_retirement_checkpoint": true,
+      "number": 504,
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "504",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
+          "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
+      "state": "OPEN",
+      "task_name": "audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+      "task_state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "task_work_id": "work-task-277",
+      "title": "refactor(runtime): retire CLI session terminal diagnostics",
+      "url": "https://github.com/portpowered/go-agent-harness/pull/504"
+    },
+    {
+      "accepted_main_changed_production_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go"
+      ],
+      "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+      "base_branch": "main",
+      "draft": false,
+      "files": [
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
+        "agent-cli/internal/services/internal/agentruntime/session_failure_projection_adapter.go",
+        "agent-cli/internal/services/internal/agentruntime/session_failure_projection_test.go",
+        "coverage-manifest/go-agent-runtime/services/sessionfailure/internal/service/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessionfailure/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessionfailure/wire/package.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/admission.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/census.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/external-consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/external-consumer/go.sum",
+        "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/external-consumer/main.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/external-consumer/main_test.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/pr-body.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/run.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/verify.py",
+        "go-agent-runtime/services/sessionfailure/contract.go",
+        "go-agent-runtime/services/sessionfailure/internal/service/service.go",
+        "go-agent-runtime/services/sessionfailure/internal/service/service_test.go",
+        "go-agent-runtime/services/sessionfailure/wire/providers.go",
+        "go-agent-runtime/services/sessionfailure/wire/wire_gen.go",
+        "go-agent-runtime/services/sessionfailure/wire/wire_test.go"
+      ],
+      "head": "ef7fc8fc102f49253f6dd850f8f02ca8dcf754d1",
+      "head_branch": "codex/audio-runtime-c119-retire-cli-session-failure-projection",
+      "is_retirement_checkpoint": true,
+      "number": 505,
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "505",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
+      "state": "OPEN",
+      "task_name": "audio-runtime-c119-retire-cli-session-failure-projection",
+      "task_state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "task_work_id": "work-task-281",
+      "title": "refactor: retire CLI session failure projection",
+      "url": "https://github.com/portpowered/go-agent-harness/pull/505"
     }
   ],
   "schema_version": "c107-open-pr-inventory-v1"

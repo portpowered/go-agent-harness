@@ -1,24 +1,30 @@
 {
   "active_task_count": 10,
   "board_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/canonical-board.json",
-  "board_sha256": "b828c44492ae77570cdaea28e70d49f11b05ae5b438bc20119d7da4e66f4ccc4",
+  "board_sha256": "9db4d0535e97d0ed403928b429dad26883d0cc859eca70f12077b7ab52ec74d4",
   "candidate_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-  "candidate_head": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
+  "candidate_head": "b24182557a39371c71f8e46a212108dbbd38d946",
   "candidate_pr": {
     "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
     "base_branch": "main",
-    "head": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
+    "head": "b24182557a39371c71f8e46a212108dbbd38d946",
     "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "number": 494,
     "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
     "task_work_id": "work-task-218"
   },
   "contract_revision": "audio-runtime-v1",
-  "observed_at": "2026-09-13T03:40:50Z",
-  "open_pr_count": 55,
-  "open_retirement_pr_count": 55,
+  "evidence_binding": {
+    "executable_input_equivalence": "final-binding compares the tested parent and final HEAD outside the owned C107 evidence directory",
+    "final_head_verification": "run verify.py --mode final-binding after committing this evidence; final HEAD must be one direct owned-evidence descendant",
+    "mode": "evidence-only-direct-descendant",
+    "tested_candidate_revision": "b24182557a39371c71f8e46a212108dbbd38d946"
+  },
+  "observed_at": "2026-09-13T04:20:20Z",
+  "open_pr_count": 57,
+  "open_retirement_pr_count": 57,
   "pr_inventory_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/pr-inventory.json",
-  "pr_inventory_sha256": "a036d9750cf5d002e7db9c84d04571c86b2f92e320bd240e29bd33a84a66b78d",
+  "pr_inventory_sha256": "f9e24bd5682a117353214a182c3f87e954c2114fbbc9b2f8e82373ec10702acc",
   "prd_identity": {
     "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "project": "audio-runtime"
@@ -28,5 +34,5 @@
   "server": "http://127.0.0.1:7439",
   "session": "~default",
   "subtraction_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json",
-  "subtraction_sha256": "4e27a34e589fc3cea08f64991f4685bd832ec9d8b90e629c86fe519c1706fc01"
+  "subtraction_sha256": "02da5fa620dc7cf4dc19e2cfccfff0856c9ff229334d0e63281d1ba54c86b15c"
 }
