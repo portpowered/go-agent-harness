@@ -89,11 +89,22 @@ func (r *reducer) canReplaceActiveResponseLocked() bool {
 }
 
 func (r *reducer) adoptUnscheduledContinuationIDLocked(id string, purpose sessiondiagnostics.ResponsePurpose) {
-	if id == "" || purpose == sessiondiagnostics.ResponsePurposeToolAcknowledgement || len(r.scheduled) != 0 {
+	if id == "" || purpose == sessiondiagnostics.ResponsePurposeToolAcknowledgement {
 		return
 	}
+	// A continuation response can arrive before the adapter has bound the
+	// preceding tool response to a scheduled slot. The accepted result and
+	// completed tool response are still an unambiguous ownership chain, so the
+	// new response ID must be recorded on that continuation even when scheduled
+	// state exists elsewhere in the reducer.
 	for callID, state := range r.continuations {
 		if state.ResultAccepted && state.ContinuationRequested && state.ProviderCallObserved && state.ToolResponseComplete && state.ContinuationResponseID == "" {
+			if state.ContinuationScheduledSet {
+				continue
+			}
+			if _, scheduled := r.scheduledIndexForLocked(state.ResponseID); scheduled {
+				continue
+			}
 			state.ContinuationResponseID = id
 			r.continuations[callID] = state
 		}

@@ -489,6 +489,36 @@ func TestToolContinuationBindsBeforeExplicitRequestObservation(t *testing.T) {
 	}
 }
 
+func TestToolContinuationRetainsTerminalMetadataWhenOriginalResponseWasUnbound(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
+		t.Helper()
+		observation, err := service.Apply(ctx, event)
+		if err != nil {
+			t.Fatalf("apply %s: %v", event.Kind, err)
+		}
+		return observation
+	}
+
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventEnsureScheduled, Count: 1})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-tool"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolCall, ResponseID: "response-tool", CallID: "call-unbound", ToolName: "lookup"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, ResponseID: "response-tool"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventToolResultAccepted, CallID: "call-unbound"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventContinuationRequested})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, Role: sessiondiagnostics.RoleTool, CallID: "call-unbound"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-continuation"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, ResponseID: "response-continuation", Terminal: &sessiondiagnostics.Terminal{
+		Status: "failed", ErrorCode: "server_error", StatusDetails: "reason=error, code=server_error",
+	}})
+
+	states := service.Snapshot().ContinuationStates
+	if len(states) != 1 || states[0].ContinuationResponseID != "response-continuation" || states[0].ContinuationErrorCode != "server_error" {
+		t.Fatalf("unbound continuation state = %+v, want response ID and provider code", states)
+	}
+}
+
 func TestUnscheduledToolContinuationAdoptsResponseID(t *testing.T) {
 	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()
