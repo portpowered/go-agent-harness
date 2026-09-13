@@ -1,0 +1,87 @@
+{
+  "acceptance_waiver": "none",
+  "accepted_source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "admission": {
+    "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+    "project": "audio-runtime",
+    "status": "admitted"
+  },
+  "ancestry": {
+    "accepted_source": {
+      "ancestor": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "descendant": "b24182557a39371c71f8e46a212108dbbd38d946",
+      "exit_code": 0,
+      "passed": true
+    },
+    "baseline": {
+      "ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+      "descendant": "b24182557a39371c71f8e46a212108dbbd38d946",
+      "exit_code": 0,
+      "passed": true
+    },
+    "current_origin_main": {
+      "ancestor": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+      "descendant": "b24182557a39371c71f8e46a212108dbbd38d946",
+      "exit_code": 0,
+      "passed": true
+    },
+    "startup_integration": {
+      "ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+      "descendant": "b24182557a39371c71f8e46a212108dbbd38d946",
+      "exit_code": 0,
+      "passed": true
+    }
+  },
+  "authority_file_sha256": {
+    "factory/factory/projects/audio-runtime/acceptance.md": "edd1f5cbca1de8b49f96cdf8f039732d28a0082ef3718015e10535ff2e6a441a",
+    "factory/factory/projects/audio-runtime/manifest.json": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
+    "factory/factory/projects/audio-runtime/request.md": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
+    "factory/factory/projects/audio-runtime/source-plan.md": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
+    "worktree/prd.json": "47fdb4a9516cfd200aa6f3dbfed3017c7bf541cf1a343f85b5d172eb41860eca"
+  },
+  "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
+  "candidate_pr": {
+    "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+    "base_branch": "main",
+    "head": "b24182557a39371c71f8e46a212108dbbd38d946",
+    "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
+    "number": 494,
+    "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+    "task_work_id": "work-task-218"
+  },
+  "candidate_revision": "b24182557a39371c71f8e46a212108dbbd38d946",
+  "contract_revision": "audio-runtime-v1",
+  "credentials": "not used; command environment for public replay removes credential variables",
+  "current_origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+  "evidence_binding": {
+    "executable_input_equivalence": "final-binding compares the tested parent and final HEAD outside the owned C107 evidence directory",
+    "final_head_verification": "run verify.py --mode final-binding after committing this evidence; final HEAD must be one direct owned-evidence descendant",
+    "mode": "evidence-only-direct-descendant",
+    "tested_candidate_revision": "b24182557a39371c71f8e46a212108dbbd38d946"
+  },
+  "factory_server": "http://127.0.0.1:7439",
+  "factory_session": "~default",
+  "fetch": {
+    "command": [
+      "git",
+      "fetch",
+      "origin",
+      "main"
+    ],
+    "exit_code": 0,
+    "stderr_sha256": "54b759e2f9e31c5995466467866508754527b8f2fd6fc1d047eb9db48c604c61",
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "observed_at": "2026-09-13T04:20:22Z",
+  "prd_identity": {
+    "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
+    "project": "audio-runtime"
+  },
+  "project": "audio-runtime",
+  "project_completion": "not claimed; C107 is scoped characterization only",
+  "realtime": "not used",
+  "schema_version": "c107-provenance-v1",
+  "source_archive_sha256": "d3d02949213d8822047a7d723a487e692f153c6bfe8ca5eb6b927823ee90dbf4",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
+}
