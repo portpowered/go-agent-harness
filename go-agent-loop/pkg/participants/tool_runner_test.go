@@ -336,6 +336,56 @@ func (e acknowledgementGateExecutor) Execute(ctx context.Context, call messages.
 	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: call.Name + " result"}, nil
 }
 
+type dispatchStartGateExecutor struct {
+	started   chan struct{}
+	release   chan struct{}
+	startOnce sync.Once
+}
+
+func (e *dispatchStartGateExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	e.startOnce.Do(func() { close(e.started) })
+	select {
+	case <-e.release:
+		return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: "started"}, nil
+	case <-ctx.Done():
+		return messages.ToolCallResponse{}, ctx.Err()
+	}
+}
+
+func TestToolRunner_WaitForCallsStartedUsesExecutorBoundary(t *testing.T) {
+	exec := &dispatchStartGateExecutor{started: make(chan struct{}), release: make(chan struct{})}
+	runner := NewToolRunner(exec, 8)
+	ap := NewActiveParticipant(messages.Tool, runner)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ap.Start(ctx)
+	defer ap.Stop()
+
+	call := messages.ToolCall{ID: "dispatch-boundary-call", Name: "slow"}
+	if ok := runner.Inbox.Write(ctx, messages.ToolBatchRequest{Calls: []messages.ToolCall{call}}); !ok {
+		t.Fatal("tool batch was not admitted into the runner inbox")
+	}
+
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- runner.WaitForCallsStarted(ctx, []messages.ToolCall{call}) }()
+	select {
+	case <-exec.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("executor did not cross the dispatch boundary")
+	}
+	select {
+	case err := <-waitDone:
+		if err != nil {
+			t.Fatalf("WaitForCallsStarted: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForCallsStarted did not observe executor start")
+	}
+
+	close(exec.release)
+}
+
 func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 	release := make(chan struct{})
 	acknowledgements := make(chan []messages.ToolCall, 2)

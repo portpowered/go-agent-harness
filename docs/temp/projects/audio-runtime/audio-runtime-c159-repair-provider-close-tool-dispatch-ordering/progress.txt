@@ -1,0 +1,84 @@
+# C159 implementation checkpoint
+
+## Admission and ancestry
+
+- Admitted task: `audio-runtime-c159-repair-provider-close-tool-dispatch-ordering`.
+- Branch: `codex/audio-runtime-c159-repair-provider-close-tool-dispatch-ordering`.
+- Starting and fetched `origin/main`: `4a1c399ccbb3d780be95eb04316e84b8f11a6646`.
+- Review-time fetched `origin/main`: `97d3dcfb1e97a2611aa26b203a7f893442db4768`, merged without conflict at source checkpoint `bec1957d861d9381afa37ff9cd7cc2a5b28b098c`.
+- Required startup integration: `8bdafc7f947a3a2c9856220abdc539437035bd21`.
+- Preserved predecessor C148 source/report and PR 510; no predecessor checkout was reset or merged.
+
+## Causal repair
+
+C148 identified the first owned boundary as provider-close terminal publication
+overtaking the tool batch's executor start. C159 now starts the tool and kernel
+participants before the provider-facing model runner, and the hot-loop engine
+waits after Coordinator tool-batch creation until every newly admitted non-empty
+call ID crosses the ToolRunner executor-start boundary. Tool execution remains
+parallel; duplicate admission remains exactly once; manual ticks retain their
+nonblocking behavior.
+
+## Focused evidence
+
+- `go test ./go-agent-loop/pkg/participants ./go-agent-loop/pkg/engine`: passed, including the new executor-start and engine-barrier tests.
+- Provider-close oracle, unchanged: `-count=10` passed at `GOMAXPROCS=1`, `2`, and `4`.
+- Coverage passed at 6.6% aggregate over the requested coverpkg set and retained
+  `provider-close.cover.out`; the exact provider-close race passed 20/20.
+- Focused live normal/race passed 850/340 tests; focused engine/tool-runner
+  normal/race passed 800/320 tests.
+- On the merged candidate, the provider-close oracle passed 10/10 at each
+  GOMAXPROCS 1/2/4, coverpkg passed at 6.6%, and the exact race oracle passed
+  20/20.
+- The broader prescribed integration race also ran the C159 controls cleanly,
+  but two long-prior-input remote audio-device subcases failed at the external
+  playback `advance` boundary with zero rendered PCM. This is retained as an
+  unrelated environmental regression; the normal counterpart passed 66/66 and
+  the credential-free C159 replay controls passed in the race run.
+
+## CI repair
+
+- Script CI rejected initial candidate `172f8705da36ef44309008e83a9525b537e1730f`
+  only at `CI (static)`, job `103802577340`, step `make architecture-size-check`.
+- The exact failures were two `executeBatch` baseline drifts, excessive
+  `WaitForCallsStarted` cognitive complexity, and 430/441-line production files.
+- The repair reduced the dispatch helpers, kept the executor-start barrier
+  unchanged, and removed the two stale `executeBatch` baseline entries required
+  by the gate. Local architecture-size-check now passes: 202 packages, 1,941
+  files, and 28,778 functions checked.
+- Post-repair engine/participant focused tests passed 800/800 normal and 320/320
+  race; the same PR is ready for script-gate resubmission after commit and push.
+
+## Current-main stale-head recovery
+
+- The canonical prior rejection named CI run `34787330204`: the exact candidate
+  passed its independent focused checks, but the run completed before PR #517
+  advanced `origin/main` from `97d3dcfb1e97a2611aa26b203a7f893442db4768` to
+  `2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`. The rejection is retained; it is
+  not treated as a product failure or waived.
+- Fetched current `origin/main=2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`
+  and merged it without conflict at source checkpoint
+  `2bc009cb9b3e1587a740e9ab692ef3fd420ad698`. Required baseline, startup,
+  planning-main and current-main ancestry checks pass. The candidate delta from
+  current main remains limited to C159 engine/tool-runner code and tests, the
+  owned architecture entry, and this evidence folder; protected C148/C129/PR
+  510 paths remain unchanged.
+- Refreshed causal evidence on the merged source: provider-close unresolved
+  passes 10/10 at GOMAXPROCS 1, 2 and 4; coverpkg passes at 6.6%; the exact race
+  oracle passes 10/10; focused live and engine/tool-runner normal/race selectors
+  pass at COUNT=50/20; and the credential-free accumulated selector exits 0 in
+  250.600s at COUNT=3. The earlier remote-device `test45/test46` race failures
+  remain retained as the recorded external playback `advance` regression.
+- Current structural checks pass: architecture-size reports 202 packages,
+  1,942 files and 28,795 functions; Wire regeneration is unchanged; focused vet
+  and `git diff --check` pass. The worktree is clean after the merged-source
+  verification.
+- Delivery checkpoint `b6f28cd1a059d79def3292107835669301f3bca0` was pushed on the
+  same branch and PR #518 was updated against base
+  `main@2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`. The PR update records the
+  current-main merge, exact bounded checks, and the retained remote-device race
+  failures. The subsequent closeout commits are evidence-only; executable
+  source inputs remain pinned to the recorded source checkpoint.
+- Next action: return `ACCEPTED` to SCRIPT-owned CI for the changed pushed head
+  without polling. No review, merge, vertical probe or project acceptance is
+  claimed here; actionable CI rejection returns to this same task.
