@@ -145,6 +145,25 @@ func TestResolveAttributesLoaderFailuresAndBounds(t *testing.T) {
 	})
 	assertResolutionError(t, err, sessioninstructions.PhaseValidation, sessioninstructions.ErrMalformedInstruction)
 
+	for _, testCase := range []struct {
+		name  string
+		data  []byte
+		cause error
+	}{
+		{name: "malformed file", data: []byte{'a', 0, 'b'}, cause: sessioninstructions.ErrMalformedInstruction},
+		{name: "oversized file", data: []byte(strings.Repeat("x", sessioninstructions.MaxInstructionBytes+1)), cause: sessioninstructions.ErrInstructionTooLarge},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			loader := &recordingLoader{files: map[string][]byte{"/workspace/prompt.md": testCase.data}}
+			_, err := New().Resolve(context.Background(), sessioninstructions.InstructionRequest{
+				Prompt:       "/workspace/prompt.md",
+				WorkspaceDir: "/workspace",
+				Loader:       loader,
+			})
+			assertResolutionError(t, err, sessioninstructions.PhasePromptRead, testCase.cause)
+		})
+	}
+
 	_, err = New().Resolve(context.Background(), sessioninstructions.InstructionRequest{WorkspaceDir: "/workspace"})
 	assertResolutionError(t, err, sessioninstructions.PhaseValidation, sessioninstructions.ErrLoaderRequired)
 }
