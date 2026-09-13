@@ -76,6 +76,22 @@ This is credential-free software/file replay evidence. Native Windows hardware,
 physical devices, and physical/acoustic claims are OUT OF SCOPE and are never
 represented as PASS.
 
+## Fresh local gate checkpoint — 2026-09-13T10:32:10Z
+
+On the exact clean documentation head `c8cd6a550e1780a440bd8520198e83a90309e6c6`,
+the owned `verify.py --mode all` passed admission, startup/accepted/current-main
+ancestry, owned-path scope, sessiontrace normal/race tests, CLI adapter
+normal/race tests, the `GOWORK=off` external consumer build/test, and all three
+causal mutation controls. The mutation controls failed for their intended
+assertions and were accepted by the fail-closed verifier.
+
+The accumulated command
+`COUNT=1 bash scripts/test-session-ci-regressions.sh all` passed in normal,
+coverage, and race modes: CLI interruption, shipped replay/continuation and
+duplex controls, simulated-device controls, composed OpenAI tool lifecycle, and
+the strict 20-trial high-rate control. The final owned-path scope check and
+`git diff --check` also pass.
+
 ## Handoff
 
 The prior review rejection is preserved in `candidate-evidence.json`. It required

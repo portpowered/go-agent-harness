@@ -172,6 +172,20 @@
     "scope": "C47 remote high-rate device playback; no C112-owned source path or causal C112 defect was implicated, and native hardware/physical acoustics remain out of C112 scope",
     "executorAction": "Exact job logs were inspected. Do not claim CI green or waive the rejection; await the C47 owner/accepted-main repair, then fetch origin/main, preserve ancestry, rerun C112 gates, and resubmit PR #498 as the same task."
   },
+  "freshLocalValidation": {
+    "revision": "c8cd6a550e1780a440bd8520198e83a90309e6c6",
+    "timestamp": "2026-09-13T10:32:10Z",
+    "commands": [
+      "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/verify.py --mode all",
+      "rtk proxy env COUNT=1 bash scripts/test-session-ci-regressions.sh all",
+      "rtk proxy git diff --check"
+    ],
+    "results": {
+      "ownedVerifier": "PASS: admission, required ancestry, owned-path scope, sessiontrace normal/race, CLI adapter normal/race, GOWORK=off external consumer test/build, and three intended causal mutation failures",
+      "accumulatedRegressions": "PASS: normal, coverage, and race; CLI interruption, shipped replay/continuation/duplex, simulated-device, composed OpenAI tool lifecycle, and strict 20-trial high-rate controls",
+      "diff": "PASS: owned path scope and whitespace"
+    }
+  },
   "ownership": {
     "manifestOwnedPaths": [
       "agent-cli/internal/services/internal/agentruntime/trace.go",
