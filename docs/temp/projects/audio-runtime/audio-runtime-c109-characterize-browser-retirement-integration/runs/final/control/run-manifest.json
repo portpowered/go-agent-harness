@@ -1,0 +1,23 @@
+{
+  "commands": {
+    "control": "analyze.py --order c83-c61 --expect-control",
+    "required": "analyze.py --order c61-c83",
+    "verification": "verify.py --mode all"
+  },
+  "outputSha256": {
+    "ci-attribution.json": "9f56545e46910ccd87970823f0aa094b361f407880e67268ecc0de738fa05e69",
+    "ledger.json": "687d9b14ffb5c268afca5d8249990bf541bf240615e23d5ba5540e2fecaac414",
+    "merge-orders.json": "774be9b078a622fb82ccd0652685034f5638894ebdeddc1bc2c8b5a269fe071a",
+    "provenance.json": "8ed7f69396f6ae0bcddb3ac42e1c120a42b5c20d5fc3193779aed26fabb31b3d",
+    "report.json": "99327d983520206c236e490e15a63d124d90e2fd03b4428f5915c8c6f56f223f",
+    "sequence.json": "5ff0b283d1d138e29f031eb3cca96d0743be27077950981bab2768c175cd4aad"
+  },
+  "schema": "audio-runtime-c109-run-manifest-v2",
+  "source": {
+    "acceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "c61": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+    "c83": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+    "main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "reviewMain": "09c70f51243caeaf1184c4806b99bbf7749e3044"
+  }
+}

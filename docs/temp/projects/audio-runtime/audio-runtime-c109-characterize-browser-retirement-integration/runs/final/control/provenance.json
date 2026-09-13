@@ -1,0 +1,254 @@
+{
+  "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
+  "candidateTrees": {
+    "acceptedMain": "dded566273b27f7146c4e630a0f23fb9402198da",
+    "c61": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2",
+    "c83": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048",
+    "reviewMain": "0b6788f21e2ac72a26d9422c974cb8db7240724a"
+  },
+  "candidates": {
+    "c61": {
+      "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+      "branch_ref": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+      "commit": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "name": "C61/work-task-34",
+      "parent_commits": [
+        "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+        "8cb47a099bae93cb0f7915675eb321b8633a5a6b"
+      ],
+      "ref": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "remote_ref": "refs/remotes/origin/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+      "status": "preserved-readonly-ref",
+      "tree": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2"
+    },
+    "c83": {
+      "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+      "branch_ref": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+      "commit": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "name": "C83/work-task-125",
+      "parent_commits": [
+        "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+        "6a884e1aa009aa28cf3c5f7718c5212f8268eb38"
+      ],
+      "ref": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "remote_ref": "refs/remotes/origin/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+      "status": "preserved-readonly-ref",
+      "tree": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048"
+    }
+  },
+  "contractRevision": "audio-runtime-v1",
+  "factoryServer": "http://127.0.0.1:7439",
+  "factorySession": "~default",
+  "fetch": {
+    "command": "git fetch origin main",
+    "exit_code": 0,
+    "output_retained": false,
+    "reason": "fetch transport output is mutable; commit/ref identity is retained instead",
+    "resolved_origin_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+    "status": "passed"
+  },
+  "fetchedOriginMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+  "hostCheckout": {
+    "afterStatus": [],
+    "beforeStatus": [],
+    "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
+    "changedStatusLines": [],
+    "head": "5eb90be6eeafeb5ea63e3e192ccd0544eed7da0c",
+    "scopeClean": true
+  },
+  "newerMainFetchedAndIntegrated": true,
+  "preservedWorktrees": {
+    "after": {
+      "complete": true,
+      "worktrees": {
+        "c61": {
+          "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+          "branch_ref": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+          "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+          "path": ".claude/worktrees/audio-runtime-c61-retire-cli-browser-scenario-contract",
+          "present": true,
+          "registered": true,
+          "status": [],
+          "tree": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2"
+        },
+        "c83": {
+          "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+          "branch_ref": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+          "head": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+          "path": ".claude/worktrees/audio-runtime-c83-retire-cli-browser-scenario-runner",
+          "present": true,
+          "registered": true,
+          "status": [],
+          "tree": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048"
+        }
+      }
+    },
+    "before": {
+      "complete": true,
+      "worktrees": {
+        "c61": {
+          "branch": "codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+          "branch_ref": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+          "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+          "path": ".claude/worktrees/audio-runtime-c61-retire-cli-browser-scenario-contract",
+          "present": true,
+          "registered": true,
+          "status": [],
+          "tree": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2"
+        },
+        "c83": {
+          "branch": "codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+          "branch_ref": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+          "head": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+          "path": ".claude/worktrees/audio-runtime-c83-retire-cli-browser-scenario-runner",
+          "present": true,
+          "registered": true,
+          "status": [],
+          "tree": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048"
+        }
+      }
+    },
+    "unchanged": true
+  },
+  "project": "audio-runtime",
+  "refs": {
+    "after": [
+      {
+        "name": "refs/heads/c109-c61-readonly",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/heads/c109-c83-readonly",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/remotes/origin/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/remotes/origin/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/remotes/origin/main",
+        "object": "09c70f51243caeaf1184c4806b99bbf7749e3044"
+      }
+    ],
+    "before": [
+      {
+        "name": "refs/heads/c109-c61-readonly",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/heads/c109-c83-readonly",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/remotes/origin/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "object": "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      },
+      {
+        "name": "refs/remotes/origin/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "object": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      },
+      {
+        "name": "refs/remotes/origin/main",
+        "object": "09c70f51243caeaf1184c4806b99bbf7749e3044"
+      }
+    ],
+    "candidateRefsUnchanged": true,
+    "complete": true
+  },
+  "refsUnchanged": true,
+  "requestedAcceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "reviewMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+  "schema": "audio-runtime-c109-provenance-v2",
+  "sourceBinding": {
+    "cleanScripts": true,
+    "committedHead": "5eb90be6eeafeb5ea63e3e192ccd0544eed7da0c",
+    "committedTree": "ed6a0f16583a02102be8e19db2c0a7c02021c77d",
+    "scripts": [
+      {
+        "head_blob": "46605eb4beb1d026b2e4b1b81a57b2fa83e08a69",
+        "matches_committed_head": true,
+        "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/analyze.py",
+        "working_blob": "46605eb4beb1d026b2e4b1b81a57b2fa83e08a69",
+        "working_tree_sha256": "a79a6ff47e2e25cb5c2b28fad9255cb98f412e13243fa470ffe04fdeee6c1961"
+      },
+      {
+        "head_blob": "c92f3effe8e33bdeb6a3417b9741e2eabc450436",
+        "matches_committed_head": true,
+        "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py",
+        "working_blob": "c92f3effe8e33bdeb6a3417b9741e2eabc450436",
+        "working_tree_sha256": "0afd5eb44b4fbbf21d6f8e149d6831dfe763329bf21f0f928d8378e9ef9a432f"
+      },
+      {
+        "head_blob": "d69245d1bf1f80b788b954b942bec69c8cd56e33",
+        "matches_committed_head": true,
+        "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
+        "working_blob": "d69245d1bf1f80b788b954b942bec69c8cd56e33",
+        "working_tree_sha256": "b452a1f63c2f357fecd98886c751ce9e0012caa8a34de08d280d016b3b09de33"
+      },
+      {
+        "head_blob": "50be94d4afb489d941eb91c2c675bd3a496e58d5",
+        "matches_committed_head": true,
+        "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/test_analyze.py",
+        "working_blob": "50be94d4afb489d941eb91c2c675bd3a496e58d5",
+        "working_tree_sha256": "b9e53dc7b41dcac11182d23bed2444b4cb23fc01f834535a702daaefd2e6eb54"
+      }
+    ],
+    "statusAfter": [],
+    "statusBefore": []
+  },
+  "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "task": "audio-runtime-c109-characterize-browser-retirement-integration",
+  "worktreeInventory": {
+    "complete": true,
+    "normalization": "complete porcelain was parsed; unrelated mutable worktrees are omitted from deterministic evidence",
+    "records": [
+      {
+        "branch": "refs/heads/codex/audio-runtime-c109-characterize-browser-retirement-integration",
+        "detached": false,
+        "head": "5eb90be6eeafeb5ea63e3e192ccd0544eed7da0c",
+        "locked": false,
+        "path": ".claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration",
+        "prunable": "",
+        "scope": "current"
+      },
+      {
+        "branch": "refs/heads/codex/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "detached": false,
+        "head": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+        "locked": false,
+        "path": ".claude/worktrees/audio-runtime-c61-retire-cli-browser-scenario-contract",
+        "prunable": "",
+        "scope": "preserved-c61"
+      },
+      {
+        "branch": "refs/heads/codex/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "detached": false,
+        "head": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+        "locked": false,
+        "path": ".claude/worktrees/audio-runtime-c83-retire-cli-browser-scenario-runner",
+        "prunable": "",
+        "scope": "preserved-c83"
+      }
+    ]
+  }
+}

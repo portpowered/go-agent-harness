@@ -1,0 +1,669 @@
+#!/usr/bin/env python3
+"""Run bounded software-only C109 checks in an exact synthetic merge tree."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import selectors
+import signal
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from typing import Any
+
+from analyze import C61, C83, FIXED_DATE, run as run_command, revision, status_lines, tree
+
+
+ROOT = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()).resolve()
+MAIN = "d4766c3dbbf2c198142047ead4449d58dd47d485"
+AGENT_LOOP_MODULE = "github.com/portpowered/go-agent-harness/go-agent-loop"
+AGENT_RUNTIME_MODULE = "github.com/portpowered/go-agent-harness/go-agent-runtime"
+AGENT_CLI_MODULE = "github.com/portpowered/go-agent-harness/agent-cli"
+C61_DIR = "docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract"
+C83_DIR = "docs/temp/projects/audio-runtime/audio-runtime-c83-retire-cli-browser-scenario-runner"
+SHIPPED_REPORT = f"{C61_DIR}/runs/shipped-yui-browser-audio-tool-replay.json"
+RUNNER_RELATIVE = "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py"
+FIXTURE_RELATIVE = "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json"
+OUTPUT_CAP = 2 * 1024 * 1024
+OUTPUT_RETAINED_TAIL = 16 * 1024
+OUTPUT_READ_CHUNK = 64 * 1024
+SHIPPED_OUTPUT_MARKERS = ("PROBE_TOOL_MARKER_9182", "strict replay continuation")
+
+
+class PublicCheckError(RuntimeError):
+    pass
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise PublicCheckError(message)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def safe_environment(extra: dict[str, str] | None = None) -> tuple[dict[str, str], list[str]]:
+    markers = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "OPENAI", "ANTHROPIC")
+    env = {
+        name: value
+        for name, value in os.environ.items()
+        if not any(marker in name.upper() for marker in markers)
+    }
+    removed = sorted(set(os.environ) - set(env))
+    if extra:
+        require(not any(any(marker in name.upper() for marker in markers) for name in extra), "credential-bearing override is forbidden")
+        env.update(extra)
+    return env, removed
+
+
+def terminate_group(process: subprocess.Popen[Any], *, force: bool = False) -> dict[str, Any]:
+    result = {"term_sent": False, "kill_sent": False, "wait_status": "not-needed"}
+    if process.poll() is not None and not force:
+        result["wait_status"] = "already-exited"
+        return result
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+        result["term_sent"] = True
+    except ProcessLookupError:
+        result["wait_status"] = "group-already-gone"
+        return result
+    try:
+        process.wait(timeout=1)
+        result["wait_status"] = "terminated-after-term"
+    except subprocess.TimeoutExpired:
+        pass
+    if not force or process_group_gone(process.pid):
+        return result
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+        result["kill_sent"] = True
+    except ProcessLookupError:
+        result["wait_status"] = "group-gone-before-kill"
+        return result
+    try:
+        process.wait(timeout=2)
+        result["wait_status"] = "terminated-after-kill"
+    except subprocess.TimeoutExpired:
+        result["wait_status"] = "wait-timeout"
+    return result
+
+
+def process_group_gone(pid: int) -> bool:
+    try:
+        os.killpg(pid, 0)
+    except ProcessLookupError:
+        return True
+    except OSError as exc:
+        return exc.errno == 3
+    return False
+
+
+def test_discovery(command: str, output: str) -> dict[str, Any]:
+    required = "go test" in command or "test-session-ci-regressions.sh" in command
+    if not required:
+        return {"required": False, "tests_discovered": None, "package_ok_lines": 0, "pass_lines": 0, "valid": True}
+    package_ok_lines = len(re.findall(r"(?m)^ok\s+\S+", output))
+    pass_lines = len(re.findall(r"(?m)^--- PASS:", output))
+    no_test_packages = len(re.findall(r"(?m)^\?\s+\S+.*\[no test files\]", output))
+    no_tests_run = len(re.findall(r"(?m)^ok\s+\S+.*\[no tests to run\]\s*$", output))
+    discovered = pass_lines or max(0, package_ok_lines - no_tests_run)
+    return {
+        "required": True,
+        "tests_discovered": discovered,
+        "package_ok_lines": package_ok_lines,
+        "pass_lines": pass_lines,
+        "no_test_packages": no_test_packages,
+        "no_tests_run": no_tests_run,
+        "valid": discovered > 0,
+    }
+
+
+def bounded(argv: list[str], cwd: Path, timeout: int, *, env_extra: dict[str, str] | None = None, label: str) -> dict[str, Any]:
+    env, removed = safe_environment(env_extra)
+    started = time.monotonic()
+    process = subprocess.Popen(
+        argv,
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    if process.stdout is None:
+        raise PublicCheckError("bounded child did not expose stdout")
+    stream = process.stdout
+    stream_fd = stream.fileno()
+    os.set_blocking(stream_fd, False)
+    selector = selectors.DefaultSelector()
+    selector.register(stream, selectors.EVENT_READ)
+    retained = bytearray()
+    output_digest = hashlib.sha256()
+    output_bytes = 0
+    output_capped = False
+    forbidden_output_markers = ("OPENAI_API_KEY=", "ANTHROPIC_API_KEY=", "C109_SECRET_MARKER", "PROBE_CREDENTIAL_MARKER")
+    forbidden_marker_bytes = tuple(marker.encode() for marker in forbidden_output_markers)
+    marker_scan_tail = b""
+    forbidden_markers_absent = True
+    timed_out = False
+    cleanup = {"term_sent": False, "kill_sent": False, "wait_status": "not-needed", "drain_status": "not-needed"}
+
+    def record(chunk: bytes) -> None:
+        nonlocal output_bytes, output_capped, marker_scan_tail, forbidden_markers_absent
+        output_digest.update(chunk)
+        output_bytes += len(chunk)
+        scan = marker_scan_tail + chunk
+        if any(marker in scan for marker in forbidden_marker_bytes):
+            forbidden_markers_absent = False
+        max_marker_length = max(map(len, forbidden_marker_bytes))
+        marker_scan_tail = scan[-(max_marker_length - 1) :]
+        if output_capped:
+            retained.extend(chunk)
+            del retained[:-OUTPUT_RETAINED_TAIL]
+            return
+        retained.extend(chunk)
+        if len(retained) > OUTPUT_CAP:
+            output_capped = True
+            del retained[:-OUTPUT_RETAINED_TAIL]
+
+    def read_ready() -> bool:
+        try:
+            chunk = os.read(stream_fd, OUTPUT_READ_CHUNK)
+        except BlockingIOError:
+            return False
+        except OSError:
+            chunk = b""
+        if not chunk:
+            try:
+                selector.unregister(stream)
+            except KeyError:
+                pass
+            return False
+        record(chunk)
+        return True
+
+    deadline = time.monotonic() + max(1, timeout)
+    pipe_drain_deadline: float | None = None
+    try:
+        while True:
+            now = time.monotonic()
+            if process.poll() is not None and selector.get_map() and pipe_drain_deadline is None:
+                pipe_drain_deadline = min(deadline, now + 1)
+            effective_deadline = pipe_drain_deadline or deadline
+            remaining = effective_deadline - now
+            if remaining <= 0:
+                timed_out = True
+                cleanup.update(terminate_group(process, force=True))
+                drain_deadline = time.monotonic() + 1
+                while selector.get_map() and time.monotonic() < drain_deadline:
+                    for _key, _mask in selector.select(max(0, drain_deadline - time.monotonic())):
+                        while read_ready():
+                            pass
+                cleanup["drain_status"] = "drained-after-termination" if not selector.get_map() else "bounded-drain-timeout"
+                break
+            if process.poll() is not None and not selector.get_map():
+                break
+            if selector.get_map():
+                for _key, _mask in selector.select(min(0.1, remaining)):
+                    while read_ready():
+                        pass
+            else:
+                time.sleep(min(0.05, remaining))
+    finally:
+        selector.close()
+        stream.close()
+    if process.poll() is None:
+        cleanup.update(terminate_group(process, force=True))
+        timed_out = True
+    elapsed = round(time.monotonic() - started, 3)
+    process_group_clean = process_group_gone(process.pid)
+    retained_output = bytes(retained).decode(errors="replace")
+    discovery = test_discovery(" ".join(argv), retained_output)
+    status = "passed" if process.returncode == 0 and not timed_out and process_group_clean and not output_capped and discovery["valid"] else ("timeout" if timed_out else "failed")
+    return {
+        "label": label,
+        "command": " ".join(argv),
+        "working_tree": "synthetic-required-merge-tree",
+        "status": status,
+        "exit_code": process.returncode,
+        "timeout_seconds": timeout,
+        "elapsed_seconds": elapsed,
+        "timed_out": timed_out,
+        "process_group_gone": process_group_clean,
+        "cleanup": cleanup,
+        "output_bytes": output_bytes,
+        "raw_output_sha256": output_digest.hexdigest(),
+        "retained_output_sha256": hashlib.sha256(bytes(retained)).hexdigest(),
+        "output_sha256": output_digest.hexdigest(),
+        "output_capped": output_capped,
+        "forbidden_markers_scanned_before_truncation": True,
+        "credential_environment_scrubbed": True,
+        "removed_credential_environment_names": removed,
+        "credential_output_markers_absent": forbidden_markers_absent,
+        "test_discovery": discovery,
+        "output": retained_output,
+    }
+
+
+def merge_parents(tree_root: Path, ref: str) -> list[str]:
+    result = run_command(["git", "rev-list", "--parents", "-n", "1", ref], cwd=tree_root)
+    return result["output"].strip().split()
+
+
+def synthetic_tree_binding(tree_root: Path, expected_tree: str | None = None) -> dict[str, Any]:
+    registered = {
+        Path(record.split(" ", 1)[1]).resolve()
+        for record in run_command(["git", "worktree", "list", "--porcelain"], cwd=ROOT)["output"].splitlines()
+        if record.startswith("worktree ")
+    }
+    require(tree_root.resolve() in registered, "provided synthetic tree is not a registered repository worktree")
+    require(not status_lines(ROOT, cwd=tree_root), "synthetic tree is dirty before public checks")
+    head = revision(ROOT, "HEAD", cwd=tree_root)
+    final_parents = merge_parents(tree_root, "HEAD")
+    require(len(final_parents) == 3, "synthetic HEAD is not the second merge commit")
+    c61_merge = final_parents[1]
+    c83_parents = final_parents
+    first_parents = merge_parents(tree_root, c61_merge)
+    require(len(first_parents) == 3, "synthetic first merge is not a merge commit")
+    require(first_parents[1] == MAIN and first_parents[2] == C61, "synthetic first merge does not bind main then C61")
+    require(c83_parents[1] == c61_merge and c83_parents[2] == C83, "synthetic second merge does not bind C83 after C61")
+    actual_tree = tree(ROOT, "HEAD", cwd=tree_root)
+    if expected_tree is not None:
+        require(actual_tree == expected_tree, "provided tree is not the exact required synthetic tree")
+    return {
+        "valid": True,
+        "base": MAIN,
+        "candidate_commits": [C61, C83],
+        "first_parent_order": ["main", "c61", "c83"],
+        "head": head,
+        "merge_commits": [c61_merge, head],
+        "parents": {"c61_merge": first_parents, "c83_merge": final_parents},
+        "final_tree": actual_tree,
+    }
+
+
+def tree_observation(tree_root: Path) -> dict[str, Any]:
+    return {
+        "head": revision(ROOT, "HEAD", cwd=tree_root),
+        "tree": tree(ROOT, "HEAD", cwd=tree_root),
+        "status": status_lines(ROOT, cwd=tree_root),
+    }
+
+
+def tree_identity_unchanged(tree_root: Path, expected: dict[str, Any]) -> bool:
+    observed = tree_observation(tree_root)
+    return (
+        observed["head"] == expected["head"]
+        and observed["tree"] == expected["final_tree"]
+        and observed["status"] == expected.get("status", [])
+    )
+
+
+def source_binding() -> dict[str, str]:
+    runner = Path(__file__).resolve()
+    fixture = ROOT / FIXTURE_RELATIVE
+    require(runner == ROOT / RUNNER_RELATIVE, "public runner path escaped the admitted C109 directory")
+    require(fixture.is_file(), "public negative fixture is missing")
+    return {
+        "runner_path": RUNNER_RELATIVE,
+        "runner_sha256": sha256_file(runner),
+        "fixture_path": FIXTURE_RELATIVE,
+        "fixture_sha256": sha256_file(fixture),
+    }
+
+
+def create_required_tree() -> tuple[Path, Path, str]:
+    temporary_root = Path(tempfile.mkdtemp(prefix="c109-public-")).resolve()
+    worktree = temporary_root / "tree"
+    fixed_env = {
+        "GIT_AUTHOR_NAME": "C109 Rehearsal",
+        "GIT_AUTHOR_EMAIL": "c109-rehearsal@example.invalid",
+        "GIT_COMMITTER_NAME": "C109 Rehearsal",
+        "GIT_COMMITTER_EMAIL": "c109-rehearsal@example.invalid",
+        "GIT_AUTHOR_DATE": FIXED_DATE,
+        "GIT_COMMITTER_DATE": FIXED_DATE,
+        "GIT_MERGE_AUTOEDIT": "no",
+        "LC_ALL": "C",
+    }
+    try:
+        result = run_command(["git", "worktree", "add", "--detach", str(worktree), MAIN], cwd=ROOT)
+        require(result["status"] == "passed", "cannot create public synthetic tree")
+        for ref, label in ((C61, "c61"), (C83, "c83")):
+            run_command(["git", "merge", "--no-ff", "--no-commit", ref], cwd=worktree, env=fixed_env)
+            run_command(["git", "commit", "--no-verify", "-m", f"C109 public required merge {label}"], cwd=worktree, env=fixed_env)
+        binding = synthetic_tree_binding(worktree)
+        return temporary_root, worktree, binding["final_tree"]
+    except Exception:
+        if worktree.exists():
+            run_command(["git", "merge", "--abort"], cwd=worktree, check=False)
+            run_command(["git", "worktree", "remove", "--force", str(worktree)], cwd=ROOT, check=False)
+        if temporary_root.exists():
+            for child in temporary_root.iterdir():
+                if child.is_dir():
+                    shutil.rmtree(child, ignore_errors=True)
+            try:
+                temporary_root.rmdir()
+            except OSError:
+                pass
+        raise
+
+
+def normalize_detail(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: normalize_detail(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [normalize_detail(item) for item in value]
+    if isinstance(value, str):
+        value = re.sub(r"/(?:[^/\\\s]+/)*audio-runtime-c61-yui-[^/\\\s]+", "/<replay-temp>", value)
+    return value
+
+
+def attach_workflow_detail(check: dict[str, Any], tree_root: Path) -> None:
+    report_path = tree_root / SHIPPED_REPORT
+    require(report_path.is_file(), "shipped workflow did not emit its detailed report")
+    detail = normalize_detail(json.loads(report_path.read_text(encoding="utf-8")))
+    serialized = json.dumps(detail, sort_keys=True)
+    forbidden = ("OPENAI_API_KEY=", "ANTHROPIC_API_KEY=", "C109_SECRET_MARKER", "PROBE_CREDENTIAL_MARKER")
+    require(not any(marker in serialized for marker in forbidden), "shipped detailed report contains a credential marker")
+    check["workflow_report"] = detail
+    check["workflow_report_sha256"] = hashlib.sha256(serialized.encode()).hexdigest()
+    check["observable_effects"] = {
+        "output_markers": list(SHIPPED_OUTPUT_MARKERS),
+        "output_markers_asserted_by": "C61 run.py replay assertions before report emission",
+        "recorded_audio_bytes": detail.get("recorded_pcm_bytes"),
+        "recorded_audio_sha256": detail.get("recorded_pcm_sha256"),
+        "rendered_audio_bytes": detail.get("audio_bytes"),
+        "rendered_audio_sha256": detail.get("audio_sha256"),
+        "terminal": detail.get("terminal_manifest"),
+        "process_group_gone": detail.get("replay", {}).get("process_group_gone"),
+        "classification": detail.get("result_classification"),
+    }
+    require(check["observable_effects"]["output_markers"] == list(SHIPPED_OUTPUT_MARKERS), "shipped observable output markers are missing")
+
+
+def bind_workflow_to_synthetic_tree(check: dict[str, Any], synthetic: dict[str, Any]) -> None:
+    detail = check.get("workflow_report", {})
+    require(detail.get("source_revision") == synthetic.get("head"), "shipped workflow source revision is not the synthetic merge HEAD")
+    check["synthetic_source_binding"] = {
+        "base": synthetic["base"],
+        "candidate_commits": synthetic["candidate_commits"],
+        "first_parent_order": synthetic["first_parent_order"],
+        "synthetic_tree": synthetic["final_tree"],
+        "source_revision": detail.get("source_revision"),
+        "source_tree": synthetic["final_tree"],
+    }
+
+
+def command_set(case: str, tree_root: Path, child_timeout: int) -> list[tuple[list[str], Path, dict[str, str], str, int]]:
+    runtime = tree_root / "go-agent-runtime"
+    cli = tree_root / "agent-cli"
+    loop = tree_root / "go-agent-loop"
+    c61 = tree_root / C61_DIR
+    c83 = tree_root / C83_DIR / "external-consumer"
+    package_pattern = "Browser|Scenario|Runner|Order|Interrupt|Cancel|Terminal"
+    coverpkg = ",".join(
+        (
+            f"{AGENT_CLI_MODULE}/internal/services/internal/agentruntime",
+            f"{AGENT_RUNTIME_MODULE}/services/browserscenario/...",
+            f"{AGENT_RUNTIME_MODULE}/services/browserrunner/...",
+        )
+    )
+    race_integration_stress = "^(TestAgentBinaryTest46HighRateToolAudioRegression|TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM)$"
+    race_integration_lifecycle = "^(TestSessionToolResultConversationMissingContinuationIsBounded|TestShippedSessionProcessFamilyBCorrection|TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl|TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle|TestSessionConfigToolFilterThroughRealCLI|TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess|TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries|TestReadImageSpokenFailedContinuationIsActionable|TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated|TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle|TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI|TestSessionToolResultConversationCorruptAudioDeltaIsRejected|TestShippedSessionProcessDuplexConversation|TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl|TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch)$"
+    if case == "browser-audio-tool":
+        return [
+            (["python3", f"{C61_DIR}/run.py", "--mode", "shipped-yui-browser-audio-tool-replay"], tree_root, {}, "shipped credential-free browser/audio/tool workflow", 180),
+            (["go", "test", "./services/browserscenario/...", "./services/browserrunner/...", "-run", package_pattern, "-count=1", "-timeout=300s"], runtime, {}, "browserrunner+browserscenario normal", 300),
+            (["go", "test", "-race", "./services/browserscenario/...", "./services/browserrunner/...", "-run", package_pattern, "-count=1", "-timeout=420s"], runtime, {}, "browserrunner+browserscenario race", 420),
+            (["go", "test", "./...", "-count=1", "-timeout=180s"], c61 / "consumer", {"GOWORK": "off"}, "C61 external consumer normal GOWORK=off", 180),
+            (["go", "test", "-race", "./...", "-count=1", "-timeout=240s"], c61 / "consumer", {"GOWORK": "off"}, "C61 external consumer race GOWORK=off", 240),
+            (["go", "test", "./...", "-count=1", "-timeout=180s"], c83, {"GOWORK": "off"}, "C83 external consumer normal GOWORK=off", 180),
+            (["go", "test", "-race", "./...", "-count=1", "-timeout=240s"], c83, {"GOWORK": "off"}, "C83 external consumer race GOWORK=off", 240),
+            (["go", "test", "./pkg/agentloop", "-run", "^TestRunJoinsPublishedDeltasBeforeReturningOnEngineError$", "-count=3", "-timeout=120s"], loop, {}, "accepted-main delta barrier regression", 120),
+            (["go", "test", "./internal/services/internal/agentruntime", "-run", "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation", "-count=3", "-timeout=180s"], cli, {}, "CLI cancellation normal", 180),
+            (["go", "test", "-race", "./internal/services/internal/agentruntime", "-run", "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation", "-count=3", "-timeout=240s"], cli, {}, "CLI cancellation race", 240),
+            (["go", "test", "-tags=nomicrophone", "-count=10", "-timeout=300s", f"-coverpkg={coverpkg}", "./internal/services/internal/agentruntime", "-run", "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation"], cli, {"CGO_ENABLED": "0", "GOWORK": "off"}, "nomicrophone cross-module coverpkg cancellation", 300),
+            (["bash", "scripts/test-session-ci-regressions.sh", "normal"], tree_root, {"COUNT": "1"}, "accumulated session CI regressions normal", 90),
+            (["bash", "scripts/test-session-ci-regressions.sh", "coverage"], tree_root, {"COUNT": "1"}, "accumulated session CI regressions coverage", 90),
+            (["go", "run", "./cmd/testtimeout", "--timeout", "480s", "--", "go", "test", "./internal/transport/cli", "-tags=nomicrophone", "-timeout", "480s", "-race", "-count=1", "-run", "^TestSessionCommandAudioInterruptOrdering$", "-v"], cli, {"CGO_ENABLED": "1", "YUI_AUDIO_STRESS": "1"}, "accumulated session CI regressions race transport", 90),
+            (["go", "run", "./cmd/testtimeout", "--timeout", "480s", "--", "go", "test", "./test/integration", "-tags=nomicrophone", "-timeout", "480s", "-race", "-count=1", "-run", race_integration_stress, "-v"], cli, {"CGO_ENABLED": "1", "YUI_AUDIO_STRESS": "1"}, "accumulated session CI regressions race integration stress", 90),
+            (["go", "run", "./cmd/testtimeout", "--timeout", "480s", "--", "go", "test", "./test/integration", "-tags=nomicrophone", "-timeout", "480s", "-race", "-count=1", "-run", race_integration_lifecycle, "-v"], cli, {"CGO_ENABLED": "1", "YUI_AUDIO_STRESS": "1"}, "accumulated session CI regressions race integration lifecycle", 90),
+            (["go", "test", "./pkg/devices", "-timeout", "480s", "-race", "-count=1", "-run", "^TestSimulated", "-v"], tree_root / "go-device-gateway", {"CGO_ENABLED": "1"}, "accumulated session CI regressions race devices", 90),
+            (["go", "test", "./pkg/providers/openai", "-timeout", "300s", "-race", "-count=1", "-run", "^TestComposed", "-v"], tree_root / "go-llm-gateway", {"CGO_ENABLED": "1"}, "accumulated session CI regressions race openai", 90),
+        ]
+    if case == "malformed-or-canceled":
+        return [
+            (["go", "run", f"{C61_DIR}/verify.go", "--mode", "malformed-credential-overflow-timeout-cleanup"], tree_root, {}, "malformed credential overflow timeout cleanup", 180),
+            (["go", "test", "./internal/services/internal/agentruntime", "-run", "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation", "-count=3", "-timeout=180s"], cli, {}, "canceled browser scenario normal", 180),
+            (["go", "test", "-race", "./internal/services/internal/agentruntime", "-run", "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation", "-count=3", "-timeout=240s"], cli, {}, "canceled browser scenario race", 240),
+        ]
+    raise PublicCheckError(f"unsupported case: {case}")
+
+
+def cleanup_tree(
+    temporary_root: Path | None,
+    worktree: Path,
+    *,
+    expected_binding: dict[str, Any] | None = None,
+    status_before_cleanup: list[str] | None = None,
+) -> dict[str, Any]:
+    if temporary_root is None:
+        preserved = worktree.exists()
+        identity_unchanged = preserved and expected_binding is not None and tree_identity_unchanged(worktree, expected_binding)
+        return {
+            "attempted": True,
+            "status": "passed" if identity_unchanged else "failed",
+            "mode": "caller-owned-tree-preserved",
+            "worktree_removed": False,
+            "temporary_root_removed": True,
+            "tree_preserved": preserved,
+            "identity_unchanged": identity_unchanged,
+            "status_before_cleanup": status_before_cleanup or [],
+        }
+    remove = run_command(["git", "worktree", "remove", "--force", str(worktree)], cwd=ROOT, check=False)
+    worktree_removed = not worktree.exists()
+    temporary_root_removed = False
+    if temporary_root.exists():
+        try:
+            temporary_root.rmdir()
+            temporary_root_removed = True
+        except OSError:
+            temporary_root_removed = False
+    else:
+        temporary_root_removed = True
+    status = "passed" if remove["status"] == "passed" and worktree_removed and temporary_root_removed else "failed"
+    return {
+        "attempted": True,
+        "status": status,
+        "mode": "task-owned-temporary-tree",
+        "remove_command": "git worktree remove --force <temporary-worktree>",
+        "remove_exit_code": remove["exit_code"],
+        "worktree_removed": worktree_removed,
+        "temporary_root_removed": temporary_root_removed,
+        "tree_preserved": False,
+        "identity_unchanged": status_before_cleanup == [] if status_before_cleanup is not None else None,
+    }
+
+
+def write_result(path: Path | None, result: dict[str, Any]) -> None:
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--case", choices=("browser-audio-tool", "malformed-or-canceled"), required=True)
+    parser.add_argument("--tree", type=Path, help="caller-provided exact main -> C61 -> C83 tree; arbitrary trees are rejected")
+    parser.add_argument("--child-timeout", type=int, default=90)
+    parser.add_argument("--aggregate-timeout", type=int, default=300)
+    parser.add_argument("--output", type=Path, help="optional JSON report path; stdout remains the status channel when omitted")
+    args = parser.parse_args()
+    require(args.child_timeout > 0 and args.aggregate_timeout > 0, "timeouts must be positive")
+    temporary_root: Path | None = None
+    worktree: Path | None = None
+    auxiliary_cleanup: dict[str, Any] = {}
+    checks: list[dict[str, Any]] = []
+    runner_binding = source_binding()
+    synthetic: dict[str, Any] = {}
+    tree_observed_before_cleanup: dict[str, Any] = {}
+    tree_violation: dict[str, Any] | None = None
+    started = time.monotonic()
+    result: dict[str, Any] = {}
+    caller_binding: dict[str, Any] | None = None
+    try:
+        if args.tree:
+            worktree = args.tree.resolve()
+            require(worktree.is_dir(), f"provided synthetic tree does not exist: {worktree}")
+            caller_observed = tree_observation(worktree)
+            caller_binding = {
+                "head": caller_observed["head"],
+                "final_tree": caller_observed["tree"],
+                "status": caller_observed["status"],
+            }
+            expected_root, expected_worktree, expected_tree = create_required_tree()
+            try:
+                synthetic = synthetic_tree_binding(worktree, expected_tree)
+            finally:
+                auxiliary_cleanup = cleanup_tree(expected_root, expected_worktree)
+            require(auxiliary_cleanup.get("status") == "passed", "auxiliary synthetic-tree cleanup failed")
+        else:
+            temporary_root, worktree, expected_tree = create_required_tree()
+            synthetic = synthetic_tree_binding(worktree, expected_tree)
+        require(worktree is not None, "synthetic tree was not created")
+        require(tree_identity_unchanged(worktree, synthetic), "synthetic tree is not clean and unchanged before public checks")
+        for argv, cwd, extra_env, label, command_timeout in command_set(args.case, worktree, args.child_timeout):
+            remaining = args.aggregate_timeout - (time.monotonic() - started)
+            if remaining <= 0:
+                checks.append({"label": label, "status": "skipped-aggregate-timeout", "command": " ".join(argv), "timed_out": True, "process_group_gone": True, "credential_environment_scrubbed": True, "credential_output_markers_absent": True, "test_discovery": {"required": "go test" in " ".join(argv) or "test-session-ci-regressions.sh" in " ".join(argv), "tests_discovered": 0, "valid": False}})
+                continue
+            timeout = max(1, min(command_timeout, args.child_timeout, int(remaining)))
+            check = bounded(argv, cwd, timeout, env_extra=extra_env, label=label)
+            if label == "shipped credential-free browser/audio/tool workflow" and check["status"] == "passed":
+                attach_workflow_detail(check, worktree)
+                bind_workflow_to_synthetic_tree(check, synthetic)
+            checks.append(check)
+            tree_observation_after_check = tree_observation(worktree)
+            if (
+                tree_observation_after_check["head"] != synthetic["head"]
+                or tree_observation_after_check["tree"] != synthetic["final_tree"]
+                or tree_observation_after_check["status"]
+            ):
+                tree_violation = {"label": label, "observation": tree_observation_after_check}
+                break
+            if time.monotonic() - started > args.aggregate_timeout:
+                break
+        tree_observed_before_cleanup = tree_observation(worktree)
+        tree_status_before_cleanup = tree_observed_before_cleanup["status"]
+        tree_unchanged = (
+            tree_observed_before_cleanup["head"] == synthetic["head"]
+            and tree_observed_before_cleanup["tree"] == synthetic["final_tree"]
+            and tree_status_before_cleanup == []
+            and tree_violation is None
+        )
+        cleanup = cleanup_tree(
+            temporary_root,
+            worktree,
+            expected_binding=synthetic,
+            status_before_cleanup=tree_status_before_cleanup,
+        )
+        elapsed = round(time.monotonic() - started, 3)
+        passed = bool(checks) and all(item.get("status") == "passed" for item in checks)
+        process_groups_clean = all(item.get("process_group_gone", False) for item in checks)
+        credential_free = all(item.get("credential_environment_scrubbed", False) and item.get("credential_output_markers_absent", False) for item in checks)
+        effects: dict[str, Any] = {
+            "workflow": "local synthetic fixture/process only",
+            "external_browser_or_microphone": False,
+            "observable_output": sorted({marker for item in checks for marker in item.get("observable_effects", {}).get("output_markers", [])}),
+            "artifacts": [
+                {
+                    "kind": "shipped-workflow-report",
+                    "sha256": item["workflow_report_sha256"],
+                    "classification": item["workflow_report"].get("result_classification"),
+                }
+                for item in checks
+                if "workflow_report_sha256" in item
+            ],
+            "negative_control": args.case == "malformed-or-canceled",
+            "cleanup_claim": cleanup.get("status") == "passed" and tree_unchanged,
+        }
+        if not effects["artifacts"]:
+            effects["artifacts"].append({"kind": "negative-control-output", "sha256": hashlib.sha256("\n".join(item.get("output", "") for item in checks).encode()).hexdigest(), "classification": "SOFTWARE_LOCAL_PROCESS_ONLY"})
+        result = {
+            "schema": "audio-runtime-c109-public-checks-v2",
+            "case": args.case,
+            "status": "passed" if passed and process_groups_clean and credential_free and tree_unchanged and cleanup.get("status") == "passed" and (not auxiliary_cleanup or auxiliary_cleanup.get("status") == "passed") and elapsed <= args.aggregate_timeout else "failed",
+            "runner": runner_binding,
+            "synthetic": {
+                "base": MAIN,
+                "order": ["c61", "c83"],
+                "tree": synthetic["final_tree"],
+                "status": tree_status_before_cleanup,
+                "software_only": True,
+                "hardware_or_acoustic_claim": False,
+                "tree_binding": synthetic,
+            },
+            "bounded": {
+                "child_timeout_seconds": args.child_timeout,
+                "aggregate_timeout_seconds": args.aggregate_timeout,
+                "elapsed_seconds": elapsed,
+                "process_groups_clean": process_groups_clean,
+            },
+            "credential_free": credential_free,
+            "tree_integrity": {
+                "expected_head": synthetic["head"],
+                "expected_tree": synthetic["final_tree"],
+                "observed_before_cleanup": tree_observed_before_cleanup,
+                "unchanged": tree_unchanged,
+                "violation": tree_violation,
+            },
+            "effects": effects,
+            "cleanup": cleanup,
+            "checks": checks,
+        }
+        if auxiliary_cleanup:
+            result["auxiliary_cleanup"] = auxiliary_cleanup
+    except Exception as exc:
+        exception_cleanup: dict[str, Any] | None = None
+        if worktree is not None:
+            expected_binding = synthetic or caller_binding
+            exception_cleanup = cleanup_tree(
+                temporary_root,
+                worktree,
+                expected_binding=expected_binding,
+                status_before_cleanup=(expected_binding or {}).get("status", []),
+            )
+        result = {
+            "schema": "audio-runtime-c109-public-checks-v2",
+            "case": args.case,
+            "status": "failed",
+            "runner": runner_binding,
+            "error": str(exc),
+            "checks": checks,
+        }
+        if exception_cleanup is not None:
+            result["cleanup"] = exception_cleanup
+        if auxiliary_cleanup:
+            result["auxiliary_cleanup"] = auxiliary_cleanup
+        write_result(args.output, result)
+        print(json.dumps({"case": args.case, "status": "failed", "error": str(exc)}, sort_keys=True))
+        return 2
+    write_result(args.output, result)
+    print(json.dumps({"case": args.case, "status": result["status"], "output": str(args.output) if args.output else None}, sort_keys=True))
+    return 0 if result["status"] == "passed" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

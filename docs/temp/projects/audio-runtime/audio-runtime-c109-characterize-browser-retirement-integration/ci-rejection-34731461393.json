@@ -1,0 +1,89 @@
+{
+  "schema": "audio-runtime-c109-ci-rejection-v1",
+  "repository": "portpowered/go-agent-harness",
+  "pull_request": 495,
+  "run": "34731461393",
+  "event": "pull_request",
+  "head": {
+    "sha": "a2fc31af4f59c2aa8b7c3ee6d4e61b6231c597c2",
+    "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration"
+  },
+  "run_status": "completed",
+  "run_conclusion": "failure",
+  "run_completed_at": "2026-09-13T02:03:51Z",
+  "passing_jobs": [
+    {"name": "CI (coverage)", "job_id": "103654899551", "conclusion": "success"},
+    {"name": "CI (hermetic)", "job_id": "103654899554", "conclusion": "success"},
+    {"name": "CI (unit)", "job_id": "103654899559", "conclusion": "success"},
+    {"name": "CI (static)", "job_id": "103654899571", "conclusion": "success"},
+    {"name": "CI (race)", "job_id": "103654899573", "conclusion": "success"},
+    {"name": "CI (WebMCP Chrome)", "job_id": "103654899608", "conclusion": "success"},
+    {"name": "CI (macOS audio release)", "job_id": "103654899609", "conclusion": "success"},
+    {"name": "CI (Windows audio portable)", "job_id": "103654899606", "conclusion": "success"}
+  ],
+  "failed_job": {
+    "name": "CI (integration)",
+    "job_id": "103654899503",
+    "conclusion": "failure",
+    "completed_at": "2026-09-13T01:58:27Z",
+    "log_url": "https://github.com/portpowered/go-agent-harness/actions/runs/34731461393/job/103654899503",
+    "command": "make test-integration",
+    "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
+    "duration_seconds": 311.821,
+    "failure": {
+      "test": "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst",
+      "source": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:183",
+      "signature": "remote playback did not reach final PCM marker before the scenario deadline: context deadline exceeded",
+      "expected_pcm": 174391,
+      "rendered_pcm": 462720,
+      "nonzero_pcm": 138391,
+      "final_marker": false,
+      "playback": {
+        "queued": 0,
+        "dropped": 0,
+        "overflow": 0,
+        "discarded": 0,
+        "discard_events": 0,
+        "callbacks": 964,
+        "rendered": 462720
+      },
+      "capture": {"queued": 0, "captured": 462720, "dropped": 0},
+      "provider": {
+        "responses_sent": 9,
+        "response_creates": 7,
+        "tool_results": 7,
+        "input_samples_seen": 694079,
+        "protocol_error": ""
+      },
+      "trace_last": {
+        "tap": "capture",
+        "sequence": 963,
+        "sample_rate": 16000,
+        "start_sample": 462240,
+        "sample_count": 480,
+        "queue_before": 0,
+        "queue_after": 480,
+        "payload_sha256": "3dc463a76fc170607c07b104c3cb531362ce7d6e10c1a34e0c0f370aeae08ce8"
+      },
+      "child": "still running at timeout"
+    }
+  },
+  "expected_negative_diagnostics": "The replay mismatch, missing-key, invalid-voice, and malformed-fixture lines preceding the failure are intentional integration negative controls; they are not C109 failures.",
+  "ownership": {
+    "kind": "provider-audio-terminal-drain",
+    "owner": "C79/provider-audio",
+    "status": "EXTERNAL_OWNER_DO_NOT_DUPLICATE_REPAIR_OR_RELABEL",
+    "related_historical_evidence": "c83-integration-provider-audio-loss-6400",
+    "c109_mutated_paths": [],
+    "c109_repair_authorized": false,
+    "reason": "The rejected assertion is the existing process-boundary remote test46/provider_burst family at an unowned integration path. C109's evidence-only lease does not include provider, device, transport, or integration source, and the retained 6400-sample terminal-drain finding remains with C79."
+  },
+  "local_control": {
+    "command": "rtk proxy sh -c 'cd agent-cli && CGO_ENABLED=0 go test ./test/integration -run ^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio$/test46/provider_burst$ -count=1 -timeout=150s'",
+    "status": "passed",
+    "exit_code": 0,
+    "elapsed_seconds": 15.867,
+    "interpretation": "The exact inherited failure did not reproduce locally; this is not a C109 fix or a waiver of the CI failure."
+  },
+  "next_action": "Preserve this negative evidence and route the provider-audio terminal-drain repair to C79. Resubmit only the changed C109 evidence head to the script CI gate; do not edit or relabel the C79-owned source, shared registry, or architecture baseline."
+}

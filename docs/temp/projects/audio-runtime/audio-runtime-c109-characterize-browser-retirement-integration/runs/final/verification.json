@@ -1,0 +1,145 @@
+{
+  "caller_tree_mutation_control": {
+    "child_status": "passed",
+    "cleanup": {
+      "attempted": true,
+      "identity_unchanged": null,
+      "mode": "task-owned-temporary-tree",
+      "remove_command": "git worktree remove --force <temporary-worktree>",
+      "remove_exit_code": 0,
+      "status": "passed",
+      "temporary_root_removed": true,
+      "tree_preserved": false,
+      "worktree_removed": true
+    },
+    "status": "rejected-as-required",
+    "tree_unchanged": false
+  },
+  "checks": [
+    "provenance-and-scope",
+    "merge-orders",
+    "behavior-and-attribution",
+    "handoff-sequence",
+    "determinism",
+    "negative-fixtures",
+    "caller-tree-mutation-control",
+    "public-checks"
+  ],
+  "mode": "all",
+  "negative": {
+    "auxiliary-cleanup-failure": {
+      "diagnostic": "public auxiliary synthetic-tree cleanup failed",
+      "fixture": "auxiliary-cleanup-failure",
+      "status": "rejected-as-required"
+    },
+    "caller-tree-mutation": {
+      "diagnostic": "public synthetic tree changed during checks",
+      "fixture": "caller-tree-mutation",
+      "status": "rejected-as-required"
+    },
+    "changed-sha": {
+      "diagnostic": "changed C61 SHA",
+      "fixture": "changed-sha",
+      "status": "rejected-as-required"
+    },
+    "cleanup-failure": {
+      "diagnostic": "public temporary-tree cleanup is incomplete",
+      "fixture": "cleanup-failure",
+      "status": "rejected-as-required"
+    },
+    "forbidden-claim": {
+      "diagnostic": "C61 acceptance claim is forbidden",
+      "fixture": "forbidden-claim",
+      "status": "rejected-as-required"
+    },
+    "heuristic-ledger": {
+      "diagnostic": "caller edges missing: c61-hunk-128b1b1976-001-symbol-01",
+      "fixture": "heuristic-ledger",
+      "status": "rejected-as-required"
+    },
+    "incomplete-sequence": {
+      "diagnostic": "sequence expected_observables is missing at step 2",
+      "fixture": "incomplete-sequence",
+      "status": "rejected-as-required"
+    },
+    "missing-caller-identity": {
+      "diagnostic": "containing caller symbol is missing: c83-hunk-47ed5e87fc-004-symbol-01",
+      "fixture": "missing-caller-identity",
+      "status": "rejected-as-required"
+    },
+    "missing-ci-attribution": {
+      "diagnostic": "C83 CI attribution projection differs from the retained artifact",
+      "fixture": "missing-ci-attribution",
+      "status": "rejected-as-required"
+    },
+    "missing-conflict": {
+      "diagnostic": "complete conflict path evidence is missing",
+      "fixture": "missing-conflict",
+      "status": "rejected-as-required"
+    },
+    "missing-preserved": {
+      "diagnostic": "preserved predecessor before/after identities differ",
+      "fixture": "missing-preserved",
+      "status": "rejected-as-required"
+    },
+    "non-manifest-gate": {
+      "diagnostic": "manifest gate set was silently changed or closed",
+      "fixture": "non-manifest-gate",
+      "status": "rejected-as-required"
+    },
+    "public-unbound-tree": {
+      "diagnostic": "public tree hash is detached from its binding",
+      "fixture": "public-unbound-tree",
+      "status": "rejected-as-required"
+    },
+    "reversed-order": {
+      "diagnostic": "rehearsal order is reversed or missing",
+      "fixture": "reversed-order",
+      "status": "rejected-as-required"
+    },
+    "stale-source-head": {
+      "diagnostic": "evidence source commit is unavailable",
+      "fixture": "stale-source-head",
+      "status": "rejected-as-required"
+    },
+    "truncated-output": {
+      "diagnostic": "public child evidence is incomplete",
+      "fixture": "truncated-output",
+      "status": "rejected-as-required"
+    },
+    "truncated-ref": {
+      "diagnostic": "worktree porcelain inventory is incomplete",
+      "fixture": "truncated-ref",
+      "status": "rejected-as-required"
+    },
+    "wrong-owner": {
+      "diagnostic": "candidate path was incorrectly attributed to C109: agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
+      "fixture": "wrong-owner",
+      "status": "rejected-as-required"
+    },
+    "zero-test-discovery": {
+      "diagnostic": "zero-test discovery accepted: browserrunner+browserscenario normal",
+      "fixture": "zero-test-discovery",
+      "status": "rejected-as-required"
+    }
+  },
+  "source_bindings": {
+    "analyzer_tests": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/test_analyze.py",
+      "sha256": "b9e53dc7b41dcac11182d23bed2444b4cb23fc01f834535a702daaefd2e6eb54"
+    },
+    "negative_fixture": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json",
+      "sha256": "0f51a143cf809d20df04bbf4350473a14961979f7ffc854eff1f7fea6b9b3840"
+    },
+    "public_runner": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
+      "sha256": "b452a1f63c2f357fecd98886c751ce9e0012caa8a34de08d280d016b3b09de33"
+    },
+    "verifier": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py",
+      "sha256": "0afd5eb44b4fbbf21d6f8e149d6831dfe763329bf21f0f928d8378e9ef9a432f"
+    }
+  },
+  "status": "passed"
+}
