@@ -1,68 +1,46 @@
 package agentruntime
 
 import (
-	"errors"
-	"fmt"
+	"context"
 
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate"
+	audioratewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate/wire"
 )
 
-var ErrSessionAudioPCM16Truncated = errors.New("session PCM16 audio has a truncated sample")
+// Deprecated: use audiorate.ErrPCM16Truncated at the public boundary.
+var ErrSessionAudioPCM16Truncated = audiorate.ErrPCM16Truncated
 
-// convertSessionAudioPCM converts little-endian mono PCM16 at the provider
-// boundary. A zero source rate is the explicit injected/replay contract: the
-// bytes already use the resolved provider rate. The identity path validates
-// the rate but returns the original bytes without copying.
+// Deprecated: retained as a source-compatible adapter for the session caller.
 func convertSessionAudioPCM(pcm []byte, sourceRate, providerRate int) ([]byte, error) {
-	if providerRate == 0 {
-		if sourceRate > 0 {
-			providerRate = sourceRate
-		} else {
-			providerRate = audio.SampleRate
-		}
-	}
-	if sourceRate == 0 {
-		if _, err := wavio.Resample(nil, providerRate, providerRate); err != nil {
-			return nil, fmt.Errorf("validate injected session input at provider rate %d Hz: %w", providerRate, err)
-		}
-		return pcm, nil
-	}
-	if len(pcm)%2 != 0 {
-		return nil, fmt.Errorf("%w: %d bytes at %d Hz", ErrSessionAudioPCM16Truncated, len(pcm), sourceRate)
-	}
-	if _, err := wavio.Resample(nil, sourceRate, providerRate); err != nil {
-		return nil, fmt.Errorf("convert session input from %d Hz to provider rate %d Hz: %w", sourceRate, providerRate, err)
-	}
-	if sourceRate == providerRate {
-		return pcm, nil
-	}
-
-	samples, err := codec.DecodePCM16WithLimit(pcm, len(pcm))
-	if err != nil {
-		return nil, fmt.Errorf("decode session input PCM16: %w", err)
-	}
-	converted, err := wavio.Resample(samples, sourceRate, providerRate)
-	if err != nil {
-		return nil, fmt.Errorf("convert session input from %d Hz to provider rate %d Hz: %w", sourceRate, providerRate, err)
-	}
-	return codec.EncodePCM16(converted), nil
+	return audioratewire.NewService().ConvertPCM(context.Background(), pcm, sourceRate, providerRate)
 }
 
+// Deprecated: retained as a source-compatible scheduled-input adapter.
 func convertScheduledAudioInputs(inputs []ScheduledAudioInput, providerRate int) ([]ScheduledAudioInput, error) {
 	if inputs == nil {
 		return nil, nil
 	}
-	converted := make([]ScheduledAudioInput, len(inputs))
+	request := make([]audiorate.ScheduledAudioInput, len(inputs))
 	for index, input := range inputs {
-		pcm, err := convertSessionAudioPCM(input.PCM, input.SourceSampleRate, providerRate)
-		if err != nil {
-			return nil, fmt.Errorf("convert scheduled audio input %d: %w", index+1, err)
+		request[index] = audiorate.ScheduledAudioInput{
+			AfterCompletedTurns: input.AfterCompletedTurns,
+			PCM:                 input.PCM,
+			SourceSampleRate:    input.SourceSampleRate,
+			EndOfTurn:           input.EndOfTurn,
 		}
-		converted[index] = input
-		converted[index].PCM = pcm
-		converted[index].SourceSampleRate = providerRate
 	}
-	return converted, nil
+	converted, err := audioratewire.NewService().ConvertScheduledAudioInputs(context.Background(), request, providerRate)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]ScheduledAudioInput, len(converted))
+	for index, input := range converted {
+		result[index] = ScheduledAudioInput{
+			AfterCompletedTurns: input.AfterCompletedTurns,
+			PCM:                 input.PCM,
+			SourceSampleRate:    input.SourceSampleRate,
+			EndOfTurn:           input.EndOfTurn,
+		}
+	}
+	return result, nil
 }
