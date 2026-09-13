@@ -16,6 +16,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
+const fakeExecutable = "fake"
+
 type fakeRunner struct {
 	result runResult
 	err    error
@@ -184,14 +186,14 @@ func TestProcessRunnerClassifiesLookupStartWaitDecodeAndBounds(t *testing.T) {
 	t.Run("canceled before lookup", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		runner := newProcessRunner("fake")
+		runner := newProcessRunner(fakeExecutable)
 		if _, err := runner.run(ctx, input, defaultLimits()); !errors.Is(err, audiocodec.ErrCanceled) || !errors.Is(err, context.Canceled) {
 			t.Fatalf("canceled process error = %v", err)
 		}
 	})
 	t.Run("input", func(t *testing.T) {
-		runner := newProcessRunner("fake")
-		runner.lookPath = func(string) (string, error) { return "fake", nil }
+		runner := newProcessRunner(fakeExecutable)
+		runner.lookPath = func(string) (string, error) { return fakeExecutable, nil }
 		runner.command = func(context.Context, string, ...string) command { return &testCommand{} }
 		if _, err := runner.run(context.Background(), t.TempDir()+"/missing", defaultLimits()); !errors.Is(err, audiocodec.ErrInputFile) {
 			t.Fatalf("input error = %v", err)
@@ -215,6 +217,14 @@ func TestProcessRunnerClassifiesLookupStartWaitDecodeAndBounds(t *testing.T) {
 			t.Fatalf("decode error = %v", err)
 		}
 	})
+	t.Run("decode diagnostics", func(t *testing.T) {
+		runner := testProcessRunner(&testCommand{waitErr: commandExitError(t), stderrData: []byte("invalid header")})
+		_, err := runner.run(context.Background(), input, defaultLimits())
+		var typed *audiocodec.Error
+		if !errors.As(err, &typed) || !errors.Is(err, audiocodec.ErrDecode) || !bytes.Contains([]byte(typed.Detail), []byte("invalid header")) {
+			t.Fatalf("decode diagnostic error = %v", err)
+		}
+	})
 	t.Run("stdout bound", func(t *testing.T) {
 		limits := defaultLimits()
 		limits.MaxOutputBytes = 2
@@ -231,6 +241,36 @@ func TestProcessRunnerClassifiesLookupStartWaitDecodeAndBounds(t *testing.T) {
 			t.Fatalf("stderr bound error = %v", err)
 		}
 	})
+}
+
+const execCommandHelperEnv = "AUDIOCODEC_EXEC_COMMAND_HELPER"
+
+func TestProcessRunnerUsesExecCommandWithoutHostDecoder(t *testing.T) {
+	input := writeRunnerInput(t)
+	runner := newProcessRunner(fakeExecutable)
+	runner.lookPath = func(string) (string, error) { return fakeExecutable, nil }
+	runner.command = func(ctx context.Context, _ string, _ ...string) command {
+		child := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestExecCommandHelper$")
+		child.Env = append(os.Environ(), execCommandHelperEnv+"=1")
+		return &execCommand{cmd: child}
+	}
+	result, err := runner.run(context.Background(), input, defaultLimits())
+	if err != nil {
+		t.Fatalf("exec command runner error = %v", err)
+	}
+	if !bytes.Equal(result.stdout, []byte{0, 0}) {
+		t.Fatalf("exec command stdout = %x, want 0000", result.stdout)
+	}
+}
+
+func TestExecCommandHelper(t *testing.T) {
+	if os.Getenv(execCommandHelperEnv) != "1" {
+		return
+	}
+	if _, err := os.Stdout.Write([]byte{0, 0}); err != nil {
+		os.Exit(1)
+	}
+	os.Exit(0)
 }
 
 func TestBoundedBufferRejectsWritesAfterLimit(t *testing.T) {
@@ -273,8 +313,8 @@ func writeRunnerInput(t *testing.T) string {
 }
 
 func testProcessRunner(process *testCommand) *processRunner {
-	runner := newProcessRunner("fake")
-	runner.lookPath = func(string) (string, error) { return "fake", nil }
+	runner := newProcessRunner(fakeExecutable)
+	runner.lookPath = func(string) (string, error) { return fakeExecutable, nil }
 	runner.command = func(context.Context, string, ...string) command { return process }
 	return runner
 }
