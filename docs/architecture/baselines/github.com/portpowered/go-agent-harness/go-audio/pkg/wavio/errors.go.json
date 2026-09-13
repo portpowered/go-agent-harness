@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrEmpty",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrEmptyData",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrEmptySamples",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrMalformed",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrSize",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrStream",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrTruncated",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrUnsupported",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrUnsupportedBitDepth",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrUnsupportedChannels",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrUnsupportedFormat",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-audio",
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/wavio",
+      "file": "pkg/wavio/errors.go",
+      "symbol": "ErrUnsupportedRate",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "TestDeviceMetadataValidationAndIDs",
+      "value": 36,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "TestDeviceRegistryErrorContracts",
+      "value": 22,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "TestDeviceMetadataValidationAndIDs",
+      "value": 32,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "TestDeviceRegistryErrorContracts",
+      "value": 21,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "ErrAmbiguousDeviceName",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "ErrDeviceInUse",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "ErrDeviceNotFound",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "ErrNoDefaultDevice",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "NewAmbiguousDeviceNameError",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "NewDevice",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "NewDeviceInUseError",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "NewDeviceNotFoundError",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "NewNoDefaultDeviceError",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_conformance_test.go",
+      "symbol": "ValidateDirection",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/track_out.go",
+      "symbol": "*OutboundTrack.WriteFrame",
+      "value": 16,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "file-lines",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/track_out.go",
+      "value": 418,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/track_out.go",
+      "symbol": "ErrOutboundClosed",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/track_out.go",
+      "symbol": "ErrOutboundEmptyFrame",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/track_out.go",
+      "symbol": "ErrOutboundEmptyPayload",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/track_out.go",
+      "symbol": "ErrOutboundFrameTooLarge",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/track_out.go",
+      "symbol": "ErrOutboundNilEncoder",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/track_out.go",
+      "symbol": "ErrOutboundNilWriter",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    }
+  ]
+}
