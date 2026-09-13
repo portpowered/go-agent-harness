@@ -24,6 +24,9 @@ func CloneLiveRequest(request session.LiveRequest) session.LiveRequest {
 	if request.Capabilities != nil {
 		binding := *request.Capabilities
 		binding.Definitions = CloneToolDefinitions(binding.Definitions)
+		if binding.InteractiveToolPolicy != nil {
+			binding.InteractiveToolPolicy = binding.InteractiveToolPolicy.Clone()
+		}
 		request.Capabilities = &binding
 	}
 	if request.ReplayPlan != nil {

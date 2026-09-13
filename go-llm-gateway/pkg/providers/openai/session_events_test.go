@@ -39,6 +39,7 @@ func TestRealtimeOutboundEvents_ToolAcknowledgementCarriesInstructions(t *testin
 	}
 	var payload struct {
 		Response struct {
+			Conversation string `json:"conversation"`
 			Instructions string `json:"instructions"`
 		} `json:"response"`
 	}
@@ -47,6 +48,9 @@ func TestRealtimeOutboundEvents_ToolAcknowledgementCarriesInstructions(t *testin
 	}
 	if payload.Response.Instructions != messages.ToolAcknowledgementInstructions {
 		t.Fatalf("acknowledgement instructions = %q, want %q", payload.Response.Instructions, messages.ToolAcknowledgementInstructions)
+	}
+	if payload.Response.Conversation != "none" {
+		t.Fatalf("acknowledgement conversation = %q, want out-of-band conversation %q", payload.Response.Conversation, "none")
 	}
 }
 

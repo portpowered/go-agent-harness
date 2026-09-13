@@ -214,6 +214,21 @@ func NewResponseCreateEventWithInstructions(instructions string) SessionEvent {
 	return SessionEvent{Type: SessionEventResponseCreate, Data: data}
 }
 
+// NewResponseCreateEventOutOfBandWithInstructions creates a response request
+// that does not reserve the provider's default conversation response slot.
+// This is used for provider-supported progress acknowledgements that may run
+// while a tool-call response remains active.
+func NewResponseCreateEventOutOfBandWithInstructions(instructions string) SessionEvent {
+	response := map[string]string{"conversation": "none"}
+	if instructions != "" {
+		response["instructions"] = instructions
+	}
+	data, _ := json.Marshal(map[string]any{
+		"response": response,
+	})
+	return SessionEvent{Type: SessionEventResponseCreate, Data: data}
+}
+
 // NewResponseCancelEvent creates an event that cancels an in-progress response.
 func NewResponseCancelEvent() SessionEvent {
 	return SessionEvent{Type: SessionEventResponseCancel}

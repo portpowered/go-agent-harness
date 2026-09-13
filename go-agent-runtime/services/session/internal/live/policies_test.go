@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
@@ -236,6 +239,156 @@ func TestTimedToolExecutorUsesSchedulerDeadline(t *testing.T) {
 		t.Fatal("timed out waiting for tool deadline")
 	}
 }
+
+func TestLiveInteractivePolicyRoutesAcknowledgement(t *testing.T) {
+	provider := newTestSession()
+	for _, message := range []messages.StreamMessage{
+		{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("provider-session", "audio_inference")},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-tool", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, ResponseID: "response-tool", ToolCallId: "call-policy", Value: messages.NewToolCallStartValue("call-policy", "exec")},
+		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ResponseID: "response-tool", ToolCallId: "call-policy", Value: messages.NewToolCallEndValue("call-policy", "exec", `{}`)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-tool", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		if !provider.receive.Write(context.Background(), message) {
+			t.Fatal("queue provider interactive-policy messages")
+		}
+	}
+	policy, err := runtimeToolsWire.NewInteractiveToolPolicy().Resolve(runtimeTools.InteractiveToolPolicyRequest{
+		Settings: runtimeTools.InteractiveToolPolicySettings{
+			FastReadTimeout:          50 * time.Millisecond,
+			LongRunningTimeout:       200 * time.Millisecond,
+			AcknowledgementThreshold: 20 * time.Millisecond,
+		},
+		Definitions: []messages.ToolDefinition{{Name: "exec"}},
+	})
+	if err != nil {
+		t.Fatalf("resolve interactive policy: %v", err)
+	}
+	tool := blockingTool{started: make(chan struct{})}
+	service := New(Dependencies{
+		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+			return &testInferencer{session: provider}, nil
+		},
+		Scheduler: platformclock.Real{},
+	})
+	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
+		SessionID: "interactive-policy-live",
+		Capabilities: &session.LiveCapabilities{
+			Executor:              tool,
+			Definitions:           []messages.ToolDefinition{{Name: "exec"}},
+			InteractiveToolPolicy: policy,
+		},
+	})
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() {
+		handle.Cancel(context.Canceled)
+		_ = handle.Wait()
+	}()
+	select {
+	case <-tool.started:
+	case <-time.After(time.Second):
+		t.Fatal("interactive-policy tool did not start")
+	}
+	deadline := time.After(time.Second)
+	for {
+		provider.mu.Lock()
+		sent := append([]messages.StreamMessage(nil), provider.sent...)
+		provider.mu.Unlock()
+		for _, message := range sent {
+			if message.Type != messages.StreamTypeResponseCreate {
+				continue
+			}
+			value, ok := message.Value.(*messages.ResponseCreateValue)
+			if ok && value.IsToolAcknowledgement() {
+				return
+			}
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("interactive-policy acknowledgement was not sent; outbound=%v", sent)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+}
+
+func TestInteractivePolicyToolExecutorCorrelatesClassBudgetExpiry(t *testing.T) {
+	clock := platformclock.NewDeterministic(time.Unix(700, 0), time.Millisecond)
+	policy, err := runtimeToolsWire.NewInteractiveToolPolicy().Resolve(runtimeTools.InteractiveToolPolicyRequest{
+		Settings: runtimeTools.InteractiveToolPolicySettings{
+			FastReadTimeout:          3 * time.Millisecond,
+			LongRunningTimeout:       9 * time.Millisecond,
+			AcknowledgementThreshold: time.Millisecond,
+		},
+		Definitions: []messages.ToolDefinition{{Name: "exec"}},
+	})
+	if err != nil {
+		t.Fatalf("resolve interactive policy: %v", err)
+	}
+	tool := blockingTool{started: make(chan struct{})}
+	executor := newInteractivePolicyToolExecutor(tool, clock, policy, 0)
+	result := make(chan struct {
+		response messages.ToolCallResponse
+		err      error
+	}, 1)
+	go func() {
+		response, executeErr := executor.Execute(context.Background(), messages.ToolCall{ID: "call-policy-timeout", Name: "exec"})
+		result <- struct {
+			response messages.ToolCallResponse
+			err      error
+		}{response: response, err: executeErr}
+	}()
+	select {
+	case <-tool.started:
+	case <-time.After(time.Second):
+		t.Fatal("policy-wrapped tool did not start")
+	}
+	clock.AdvanceBy(9 * time.Millisecond)
+	select {
+	case outcome := <-result:
+		if outcome.err != nil {
+			t.Fatalf("policy-wrapped tool error = %v, want correlated timeout result", outcome.err)
+		}
+		if outcome.response.ToolCallID != "call-policy-timeout" || outcome.response.Name != "exec" {
+			t.Fatalf("timeout response correlation = %#v", outcome.response)
+		}
+		if !strings.Contains(outcome.response.Content, "classification="+runtimeTools.InteractiveToolTimeoutClassification) || !strings.Contains(outcome.response.Content, "after 9ms") {
+			t.Fatalf("timeout response content = %q", outcome.response.Content)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for policy deadline result")
+	}
+}
+
+func TestInteractivePolicyToolExecutorPreservesUnadvertisedExecutorMarker(t *testing.T) {
+	inner := unadvertisedTestToolExecutor{}
+	policy, err := runtimeToolsWire.NewInteractiveToolPolicy().Resolve(runtimeTools.InteractiveToolPolicyRequest{
+		Definitions: []messages.ToolDefinition{{Name: "known"}},
+	})
+	if err != nil {
+		t.Fatalf("resolve interactive policy: %v", err)
+	}
+	wrapper := newInteractivePolicyToolExecutor(inner, platformclock.Real{}, policy, 0)
+	replacement, ok := wrapper.(interface{ AllowUnadvertisedTools() bool })
+	if !ok || !replacement.AllowUnadvertisedTools() {
+		t.Fatalf("policy wrapper marker = (%v, %v), want true", ok, ok && replacement.AllowUnadvertisedTools())
+	}
+	if restricted := restrictToolExecutor(wrapper, []messages.ToolDefinition{{Name: "known"}}, true); restricted != wrapper {
+		t.Fatal("policy wrapper was unexpectedly restricted despite the explicit replacement marker")
+	}
+}
+
+type unadvertisedTestToolExecutor struct{}
+
+func (unadvertisedTestToolExecutor) Execute(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: "ok"}, nil
+}
+
+func (unadvertisedTestToolExecutor) AllowUnadvertisedTools() bool { return true }
 
 type blockingTool struct{ started chan struct{} }
 type observingScheduler struct {

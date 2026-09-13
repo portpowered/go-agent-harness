@@ -21,6 +21,7 @@ import (
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/spf13/cobra"
 )
@@ -32,6 +33,9 @@ import (
 type SessionToolCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
+	// InteractiveToolPolicy is the host-resolved public runtime snapshot
+	// carried with the same request-scoped executor and definitions.
+	InteractiveToolPolicy runtimeTools.InteractiveToolPolicy
 	// BrowserCapabilityState is the session-owned browser state used to
 	// compose model-facing grounding. It is independent from whether the
 	// current definition snapshot happens to contain first-class page tools.

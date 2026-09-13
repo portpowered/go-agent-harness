@@ -324,6 +324,9 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 		if !ok || v == nil {
 			return nil, false
 		}
+		if v.IsToolAcknowledgement() {
+			return []models.SessionEvent{models.NewResponseCreateEventOutOfBandWithInstructions(v.Instructions)}, true
+		}
 		return []models.SessionEvent{models.NewResponseCreateEventWithInstructions(v.Instructions)}, true
 	case messages.StreamTypeTextDelta:
 		v, ok := msg.Value.(*messages.TextDeltaValue)

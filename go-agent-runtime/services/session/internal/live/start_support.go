@@ -41,7 +41,7 @@ func (h *handle) validateTimingPolicy() error {
 	return nil
 }
 func (h *handle) requiresScheduler() bool {
-	return h.request.MaxDuration > 0 || h.request.RequireSessionUpdated || h.firstTurnPolicyEnabled() || h.rateLimitRetryEnabled() || h.request.ToolExecutionTimeout > 0 || h.providerLivenessEnabled()
+	return h.request.MaxDuration > 0 || h.request.RequireSessionUpdated || h.firstTurnPolicyEnabled() || h.rateLimitRetryEnabled() || h.request.ToolExecutionTimeout > 0 || h.providerLivenessEnabled() || (h.request.Capabilities != nil && h.request.Capabilities.InteractiveToolPolicy != nil)
 }
 func cloneLiveTerminalValue(value *messages.SessionCloseValue) *messages.SessionCloseValue {
 	if value == nil {
@@ -166,6 +166,23 @@ func (h *handle) admitCapabilities(ctx context.Context) (messages.ToolExecutor, 
 	}
 	if binding == nil {
 		return executor, definitions, nil
+	}
+	if binding.InteractiveToolPolicy != nil {
+		policy := binding.InteractiveToolPolicy.Clone()
+		if policy == nil {
+			return nil, nil, closeFailedCapability(binding, errors.New("interactive tool policy clone returned nil"))
+		}
+		if err := policy.Validate(); err != nil {
+			return nil, nil, closeFailedCapability(binding, fmt.Errorf("validate interactive tool policy: %w", err))
+		}
+		binding.InteractiveToolPolicy = policy
+	}
+	effectiveExecutor := executor
+	if !binding.InheritDefaults {
+		effectiveExecutor = binding.Executor
+	}
+	if binding.InteractiveToolPolicy != nil && effectiveExecutor != nil && h.scheduler == nil {
+		return nil, nil, closeFailedCapability(binding, fmt.Errorf("%w: interactive tool policy requires a scheduler", session.ErrLiveSchedulerUnavailable))
 	}
 	normalizeCapabilityLifecycle(binding)
 	if binding.Initialize != nil {

@@ -247,6 +247,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		options.ToolExecutor = capabilities.Executor
 		options.ToolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
 		options.ToolDefinitionBase = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+		options.InteractiveToolPolicy = capabilities.InteractiveToolPolicy
 		options.RefreshToolDefinitions = capabilities.RefreshDefinitionsWithError
 		options.BrowserWatch, options.BrowserEventWatch = capabilities.BrowserWatch, capabilities.BrowserEventWatch
 		options.BrowserCapabilityState, options.CapabilityClose = capabilities.BrowserCapabilityState, capabilities.Close

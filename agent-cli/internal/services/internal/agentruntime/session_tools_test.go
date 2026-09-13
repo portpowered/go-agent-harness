@@ -204,7 +204,7 @@ func TestRunAgentLoopSession_ScreenTimeoutDeniedRecheckDeliversOneContinuation(t
 	settings := config.DefaultInteractiveToolConfig()
 	settings.FastReadTimeout = 15 * time.Millisecond
 	definitions := []messages.ToolDefinition{{Name: cliTools.ScreenToolID}}
-	policy, err := NewInteractiveToolPolicy(settings, definitions)
+	policy, err := newTestInteractiveToolPolicy(settings, definitions)
 	if err != nil {
 		t.Fatalf("NewInteractiveToolPolicy: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestRunAgentLoopSession_ScreenTimeoutDeniedRecheckDeliversOneContinuation(t
 		WaitForClose:          true,
 		ToolExecutor:          executor,
 		ToolDefinitions:       definitions,
-		InteractiveToolPolicy: &policy,
+		InteractiveToolPolicy: policy,
 		toolDiagnostics: SessionToolDiagnosticFunc(func(got SessionToolDiagnostic) {
 			diagnostic = got
 			diagnosticCalls++
@@ -398,7 +398,7 @@ func TestSessionToolExecutor_CooperativeWorkerExitsAfterTimeout(t *testing.T) {
 func TestSessionToolExecutor_InteractivePolicyTimeoutClassifiesAndCancels(t *testing.T) {
 	settings := config.DefaultInteractiveToolConfig()
 	settings.FastReadTimeout = 15 * time.Millisecond
-	policy, err := NewInteractiveToolPolicy(settings, []messages.ToolDefinition{{Name: "policy_slow_read"}})
+	policy, err := newTestInteractiveToolPolicy(settings, []messages.ToolDefinition{{Name: "policy_slow_read"}})
 	if err != nil {
 		t.Fatalf("NewInteractiveToolPolicy: %v", err)
 	}
@@ -411,7 +411,7 @@ func TestSessionToolExecutor_InteractivePolicyTimeoutClassifiesAndCancels(t *tes
 		<-ctx.Done()
 		return messages.ToolCallResponse{}, ctx.Err()
 	})
-	executor := newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(inner, &policy, 0, nil, nil)
+	executor := newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(inner, policy, 0, nil, nil)
 	call := messages.ToolCall{ID: "policy-timeout-call", Name: "policy_slow_read", Arguments: `{}`}
 
 	startedAt := time.Now()
@@ -740,7 +740,7 @@ func TestRunAgentLoopSession_InteractivePolicyTimeoutDeliversOneCorrelatedContin
 	settings := config.DefaultInteractiveToolConfig()
 	settings.FastReadTimeout = 15 * time.Millisecond
 	definitions := []messages.ToolDefinition{{Name: toolName}}
-	policy, err := NewInteractiveToolPolicy(settings, definitions)
+	policy, err := newTestInteractiveToolPolicy(settings, definitions)
 	if err != nil {
 		t.Fatalf("NewInteractiveToolPolicy: %v", err)
 	}
@@ -762,7 +762,7 @@ func TestRunAgentLoopSession_InteractivePolicyTimeoutDeliversOneCorrelatedContin
 		WaitForClose:          true,
 		ToolExecutor:          executor,
 		ToolDefinitions:       definitions,
-		InteractiveToolPolicy: &policy,
+		InteractiveToolPolicy: policy,
 	})
 	elapsed := time.Since(startedAt)
 	if err != nil {
@@ -836,7 +836,7 @@ func TestRunAgentLoopSession_InteractiveTimeoutPreservesParallelSiblingResults(t
 	settings := config.DefaultInteractiveToolConfig()
 	settings.FastReadTimeout = 15 * time.Millisecond
 	definitions := []messages.ToolDefinition{{Name: slowName}, {Name: fastName}}
-	policy, err := NewInteractiveToolPolicy(settings, definitions)
+	policy, err := newTestInteractiveToolPolicy(settings, definitions)
 	if err != nil {
 		t.Fatalf("NewInteractiveToolPolicy: %v", err)
 	}
@@ -869,7 +869,7 @@ func TestRunAgentLoopSession_InteractiveTimeoutPreservesParallelSiblingResults(t
 		WaitForClose:          true,
 		ToolExecutor:          executor,
 		ToolDefinitions:       definitions,
-		InteractiveToolPolicy: &policy,
+		InteractiveToolPolicy: policy,
 	})
 	if err != nil {
 		t.Fatalf("runAgentLoopSession: %v\noutput:\n%s", err, out.String())

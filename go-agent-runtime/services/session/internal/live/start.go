@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -68,6 +69,7 @@ func (h *handle) prepareStart(runCtx context.Context) (messages.ToolExecutor, []
 }
 
 func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, toolDefinitions []messages.ToolDefinition) (*agentloop.AgentLoop, error) {
+	interactivePolicy := h.interactiveToolPolicy()
 	capturing := &capturingInferencer{
 		inner:             inferencer,
 		media:             h.media,
@@ -95,7 +97,9 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		options = append(options, agentloop.WithToolExecutionDisabled())
 		return agentloop.New(options...)
 	}
-	if h.request.ToolExecutionTimeout > 0 {
+	if interactivePolicy != nil {
+		toolExecutor = newInteractivePolicyToolExecutor(toolExecutor, h.scheduler, interactivePolicy, h.request.ToolExecutionTimeout)
+	} else if h.request.ToolExecutionTimeout > 0 {
 		toolExecutor = newTimedToolExecutor(toolExecutor, h.scheduler, h.request.ToolExecutionTimeout)
 	}
 	if h.providerLivenessEnabled() {
@@ -118,6 +122,14 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 			Instructions: h.request.Instructions,
 			Model:        h.request.Model,
 			Tools:        toolDefinitions,
+		}))
+	}
+	if interactivePolicy != nil {
+		options = append(options, agentloop.WithToolAcknowledgementPolicy(agentloop.ToolAcknowledgementPolicy{
+			Threshold: interactivePolicy.Settings().AcknowledgementThreshold,
+			IsLongRunning: func(name string) bool {
+				return interactivePolicy.ClassForTool(name) == runtimeTools.InteractiveToolClassBoundedLongRunning
+			},
 		}))
 	}
 	return agentloop.New(options...)

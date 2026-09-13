@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 // LiveInferencerFactory constructs the provider session at Start time. Keeping
@@ -34,6 +35,11 @@ type LiveTurnDetection struct {
 type LiveCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
+	// InteractiveToolPolicy is the immutable request-scoped policy snapshot
+	// paired with Executor and Definitions. The live owner uses it for
+	// class-specific deadlines and acknowledgement eligibility without
+	// importing host configuration or transport types.
+	InteractiveToolPolicy runtimeTools.InteractiveToolPolicy
 	// BrowserCapabilityState is the host's normalized browser lifecycle
 	// snapshot used while composing the initial provider instructions. It is
 	// independent from whether the current definition snapshot contains page

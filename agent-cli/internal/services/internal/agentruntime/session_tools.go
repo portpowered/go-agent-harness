@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -28,7 +27,7 @@ const (
 	// for an interactive tool deadline. It is deliberately distinct from a
 	// transport or enclosing-session timeout: the model can recover from this
 	// one failed call and continue the voice turn.
-	SessionToolTimeoutClassification = "interactive_tool_timeout"
+	SessionToolTimeoutClassification = runtimeTools.InteractiveToolTimeoutClassification
 	// SessionPageSightUnavailableErrorCode classifies a page-sight failure
 	// produced by the session adapter when the underlying page executor returns
 	// a Go error instead of its normal WebMCP envelope.
@@ -89,7 +88,7 @@ var (
 type sessionToolExecutor struct {
 	inner              messages.ToolExecutor
 	timeout            time.Duration
-	interactivePolicy  *InteractiveToolPolicy
+	interactivePolicy  runtimeTools.InteractiveToolPolicy
 	observer           sessionToolLifecycleObserver
 	cancellationIntent *SessionCancellationIntent
 	diagnostics        SessionToolDiagnosticSink
@@ -143,7 +142,7 @@ func newSessionToolExecutorWithTimeoutAndObserverAndCancellationIntent(
 
 func newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent(
 	inner messages.ToolExecutor,
-	policy *InteractiveToolPolicy,
+	policy runtimeTools.InteractiveToolPolicy,
 	timeoutOverride time.Duration,
 	observer sessionToolLifecycleObserver,
 	cancellationIntent *SessionCancellationIntent,
@@ -153,22 +152,15 @@ func newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntent
 
 func newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntentAndDiagnostics(
 	inner messages.ToolExecutor,
-	policy *InteractiveToolPolicy,
+	policy runtimeTools.InteractiveToolPolicy,
 	timeoutOverride time.Duration,
 	observer sessionToolLifecycleObserver,
 	cancellationIntent *SessionCancellationIntent,
 	diagnostics SessionToolDiagnosticSink,
 ) *sessionToolExecutor {
-	if policy == nil {
-		defaultPolicy, err := NewInteractiveToolPolicy(config.DefaultInteractiveToolConfig(), nil)
-		if err == nil {
-			policy = &defaultPolicy
-		}
-	}
-	var policySnapshot *InteractiveToolPolicy
+	var policySnapshot runtimeTools.InteractiveToolPolicy
 	if policy != nil {
-		clone := policy.Clone()
-		policySnapshot = &clone
+		policySnapshot = policy.Clone()
 	}
 	return &sessionToolExecutor{
 		inner:              inner,

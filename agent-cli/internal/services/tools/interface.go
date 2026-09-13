@@ -9,6 +9,7 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 // CapabilityStatus is the lifecycle snapshot for an optional browser
@@ -44,8 +45,12 @@ type BrowserFactory func(config.BrowserConfig, string) (BrowserCapability, error
 // Capabilities is the session-facing tool surface produced from one config
 // snapshot. All callbacks retain ownership of their request-scoped resources.
 type Capabilities struct {
-	Executor                    messages.ToolExecutor
-	Definitions                 []messages.ToolDefinition
+	Executor    messages.ToolExecutor
+	Definitions []messages.ToolDefinition
+	// InteractiveToolPolicy is the host-resolved, request-scoped runtime
+	// snapshot. The capability service carries the public contract across the
+	// CLI adapter; policy decisions remain owned by go-agent-runtime/services/tools.
+	InteractiveToolPolicy       runtimeTools.InteractiveToolPolicy
 	BrowserCapabilityState      webmcp.BrowserCapabilityState
 	DisplayCapability           cliTools.DisplayCapability
 	RefreshDefinitions          func(context.Context) []messages.ToolDefinition

@@ -20,6 +20,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -282,11 +283,11 @@ type SessionRunOptions struct {
 	// When present, provider resolution reuses it instead of loading config a
 	// second time during runtime planning.
 	LoadedConfig *config.Config
-	// InteractiveToolPolicy optionally supplies an already-resolved policy
-	// snapshot. When nil, runtime planning resolves one from LoadedConfig, an
-	// existing ConfigDir file, or the documented defaults before provider
-	// construction.
-	InteractiveToolPolicy *InteractiveToolPolicy
+	// InteractiveToolPolicy is the host-resolved, request-scoped runtime
+	// snapshot. Runtime planning clones it before handing it to the loop and
+	// executor; a nil value selects the public runtime defaults for direct
+	// service callers that do not have a host capability adapter.
+	InteractiveToolPolicy runtimeTools.InteractiveToolPolicy
 
 	// CapabilityClose is the optional cleanup hook transferred from the CLI
 	// session capability factory. The service wraps it in one shared

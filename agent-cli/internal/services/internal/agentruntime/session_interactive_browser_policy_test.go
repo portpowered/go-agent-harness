@@ -9,6 +9,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
 // Gate probe 11 regression: first-class page tools on a pre-selected tab died
@@ -26,33 +28,58 @@ func TestInteractivePolicyAdmitsBrowserToolsAsLongRunning(t *testing.T) {
 		messages.ToolDefinition{Name: "get_cube_state"},
 		messages.ToolDefinition{Name: "queue_cube_moves"},
 	)
-	policy, err := NewInteractiveToolPolicyForSession(config.DefaultInteractiveToolConfig(), full, base, true)
+	policy, err := runtimeToolsWire.NewInteractiveToolPolicy().Resolve(runtimeTools.InteractiveToolPolicyRequest{
+		Settings:                 interactiveToolPolicySettings(config.DefaultInteractiveToolConfig()),
+		Definitions:              full,
+		BaseDefinitions:          base,
+		ExplicitLongRunningNames: browserLongRunningToolNamesForTest(),
+		DynamicLongRunning:       true,
+	})
 	if err != nil {
 		t.Fatalf("policy: %v", err)
 	}
 	for _, name := range []string{"get_cube_state", "queue_cube_moves", webmcp.SelectTabToolName, webmcp.InvokeToolName} {
-		if class := policy.ClassForTool(name); class != InteractiveToolClassBoundedLongRunning {
+		if class := policy.ClassForTool(name); class != runtimeTools.InteractiveToolClassBoundedLongRunning {
 			t.Fatalf("class(%s) = %s, want bounded long-running", name, class)
 		}
-		if timeout := policy.TimeoutForTool(name); timeout != config.DefaultInteractiveLongRunningTimeout {
+		if timeout := policy.TimeoutForTool(name); timeout != runtimeTools.DefaultInteractiveLongRunningTimeout {
 			t.Fatalf("timeout(%s) = %s, want the long-running budget", name, timeout)
 		}
 	}
-	if class := policy.ClassForTool("read_file"); class != InteractiveToolClassFastRead {
+	if class := policy.ClassForTool("read_file"); class != runtimeTools.InteractiveToolClassFastRead {
 		t.Fatalf("class(read_file) = %s, want fast/read", class)
 	}
 	// A page tool registered mid-session (dynamic publisher) is not in the
 	// snapshot; browser sessions keep it on the bounded budget.
-	if class := policy.ClassForTool("create_document"); class != InteractiveToolClassBoundedLongRunning {
+	if class := policy.ClassForTool("create_document"); class != runtimeTools.InteractiveToolClassBoundedLongRunning {
 		t.Fatalf("class(mid-session page tool) = %s, want bounded long-running", class)
 	}
 	// Without browser dynamics the unknown-name fallback stays fast/read.
-	staticPolicy, err := NewInteractiveToolPolicyForSession(config.DefaultInteractiveToolConfig(), base, base, false)
+	staticPolicy, err := runtimeToolsWire.NewInteractiveToolPolicy().Resolve(runtimeTools.InteractiveToolPolicyRequest{
+		Settings:                 interactiveToolPolicySettings(config.DefaultInteractiveToolConfig()),
+		Definitions:              base,
+		BaseDefinitions:          base,
+		ExplicitLongRunningNames: browserLongRunningToolNamesForTest(),
+	})
 	if err != nil {
 		t.Fatalf("static policy: %v", err)
 	}
-	if class := staticPolicy.ClassForTool("mystery"); class != InteractiveToolClassFastRead {
+	if class := staticPolicy.ClassForTool("mystery"); class != runtimeTools.InteractiveToolClassFastRead {
 		t.Fatalf("static fallback = %s, want fast/read", class)
+	}
+}
+
+func browserLongRunningToolNamesForTest() []string {
+	return []string{
+		webmcp.SelectTabToolName,
+		webmcp.InvokeToolName,
+		webmcp.ListToolsToolName,
+		webmcp.ListTabsToolName,
+		webmcp.GetContextToolName,
+		webmcp.CancelToolName,
+		webmcp.ListCastDevicesToolName,
+		webmcp.CastTabToolName,
+		webmcp.StopCastingToolName,
 	}
 }
 
