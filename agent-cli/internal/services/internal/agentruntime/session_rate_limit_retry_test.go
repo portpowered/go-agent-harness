@@ -426,14 +426,12 @@ func TestSessionProgressObserverRateLimitRetryKeepsToolContinuationOwner(t *test
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-continuation-replacement", Value: messages.NewTextDeltaValue("grounded answer")})
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: "response-continuation-replacement", Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"}})
 
-	observer.toolStateMu.Lock()
-	state := observer.toolContinuations["call-once"]
-	complete := state != nil && state.continuationComplete
+	state, ok := observer.continuationState("call-once")
+	complete := ok && state.ContinuationComplete
 	owner := ""
-	if state != nil {
-		owner = state.continuationResponseID
+	if ok {
+		owner = state.ContinuationResponseID
 	}
-	observer.toolStateMu.Unlock()
 	if !complete || owner != "response-continuation-replacement" {
 		t.Fatalf("replacement continuation state = complete:%t owner:%q, want true/new response", complete, owner)
 	}
