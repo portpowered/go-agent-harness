@@ -550,9 +550,10 @@ def validate_public_report(data: dict[str, Any], expected_case: str | None = Non
     require(binding.get("first_parent_order") == ["main", "c61", "c83"], "public tree binding order is incomplete")
     bounded = data.get("bounded", {})
     expected_bounds = {"browser-audio-tool": (90, 300), "malformed-or-canceled": (60, 180)}
-    if data.get("case") in expected_bounds:
-        expected_child, expected_aggregate = expected_bounds[data["case"]]
-        require(bounded.get("child_timeout_seconds") == expected_child and bounded.get("aggregate_timeout_seconds") == expected_aggregate, "public evidence does not use the admitted timeout bounds")
+    require(data.get("case") in expected_bounds, "unsupported public check case")
+    expected_child, expected_aggregate = expected_bounds[data["case"]]
+    require(bounded.get("child_timeout_seconds") == expected_child and bounded.get("aggregate_timeout_seconds") == expected_aggregate, "public evidence does not use the admitted timeout bounds")
+    validate_public_check_set(data)
     require(bounded.get("process_groups_clean") is True and bounded.get("elapsed_seconds", 10**9) <= bounded.get("aggregate_timeout_seconds", 0), "public aggregate bound or process cleanup failed")
     integrity = data.get("tree_integrity", {})
     require(integrity.get("unchanged") is True, "public synthetic tree changed during checks")
@@ -592,6 +593,23 @@ def validate_public_report(data: dict[str, Any], expected_case: str | None = Non
         require(source_binding.get("synthetic_tree") == synthetic.get("tree") and source_binding.get("source_revision") == synthetic["tree_binding"].get("head"), "shipped workflow source is not bound to the exact synthetic tree")
     else:
         require(effects.get("negative_control") is True, "negative public control classification is missing")
+
+
+def validate_public_check_set(data: dict[str, Any]) -> None:
+    """Require the report to contain exactly the checks declared by the runner."""
+    from run_public_checks import command_set
+
+    case = data.get("case")
+    child_timeouts = {"browser-audio-tool": 90, "malformed-or-canceled": 60}
+    require(case in child_timeouts, "unsupported public check case")
+    checks = data.get("checks")
+    require(isinstance(checks, list), "public check list is missing")
+    expected = [
+        (label, " ".join(argv))
+        for argv, _cwd, _env, label, _command_timeout in command_set(case, Path("."), child_timeouts[case])
+    ]
+    actual = [(item.get("label"), item.get("command")) for item in checks if isinstance(item, dict)]
+    require(len(actual) == len(checks) and actual == expected, "public check set is incomplete or does not match command_set")
 
 
 def verify_pair(required_path: Path, control_path: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -720,6 +738,8 @@ def mutate_public(data: dict[str, Any], fixture: str) -> dict[str, Any]:
         mutated["auxiliary_cleanup"] = {"attempted": True, "status": "failed", "worktree_removed": False, "temporary_root_removed": False}
     elif fixture == "caller-tree-mutation":
         mutated.setdefault("tree_integrity", {})["unchanged"] = False
+    elif fixture == "incomplete-public-report":
+        mutated["checks"] = mutated.get("checks", [])[:1]
     else:
         raise VerificationError(f"unknown public negative fixture {fixture}")
     return mutated
@@ -727,7 +747,7 @@ def mutate_public(data: dict[str, Any], fixture: str) -> dict[str, Any]:
 
 def negative(report: dict[str, Any], public: dict[str, dict[str, Any]], fixture: str) -> dict[str, Any]:
     try:
-        if fixture in {"public-unbound-tree", "cleanup-failure", "zero-test-discovery", "truncated-output", "auxiliary-cleanup-failure", "caller-tree-mutation"}:
+        if fixture in {"public-unbound-tree", "cleanup-failure", "zero-test-discovery", "truncated-output", "auxiliary-cleanup-failure", "caller-tree-mutation", "incomplete-public-report"}:
             case = "browser-audio-tool"
             validate_public_report(mutate_public(public[case], fixture), expected_case=case)
         else:
@@ -743,7 +763,7 @@ def main() -> int:
     parser.add_argument("--report", type=Path)
     parser.add_argument("--required", type=Path)
     parser.add_argument("--control", type=Path)
-    parser.add_argument("--fixture", choices=("changed-sha", "reversed-order", "wrong-owner", "forbidden-claim", "missing-conflict", "missing-preserved", "truncated-ref", "heuristic-ledger", "missing-ci-attribution", "missing-caller-identity", "stale-source-head", "incomplete-sequence", "non-manifest-gate", "public-unbound-tree", "cleanup-failure", "zero-test-discovery", "truncated-output", "auxiliary-cleanup-failure", "caller-tree-mutation"))
+    parser.add_argument("--fixture", choices=("changed-sha", "reversed-order", "wrong-owner", "forbidden-claim", "missing-conflict", "missing-preserved", "truncated-ref", "heuristic-ledger", "missing-ci-attribution", "missing-caller-identity", "stale-source-head", "incomplete-sequence", "non-manifest-gate", "public-unbound-tree", "cleanup-failure", "zero-test-discovery", "truncated-output", "auxiliary-cleanup-failure", "caller-tree-mutation", "incomplete-public-report"))
     parser.add_argument("--write", type=Path)
     args = parser.parse_args()
     root = current_root()
@@ -783,7 +803,7 @@ def main() -> int:
         for case in ("browser-audio-tool", "malformed-or-canceled"):
             public[case] = load(public_dir / f"{case}.json")
             validate_public_report(public[case], expected_case=case)
-        result["negative"].update({fixture: negative(base_report, public, fixture) for fixture in ("public-unbound-tree", "cleanup-failure", "zero-test-discovery", "truncated-output", "auxiliary-cleanup-failure", "caller-tree-mutation")})
+        result["negative"].update({fixture: negative(base_report, public, fixture) for fixture in ("public-unbound-tree", "cleanup-failure", "zero-test-discovery", "truncated-output", "auxiliary-cleanup-failure", "caller-tree-mutation", "incomplete-public-report")})
         result["caller_tree_mutation_control"] = run_caller_tree_mutation_control()
         require(result["caller_tree_mutation_control"].get("status") == "rejected-as-required", "caller-tree mutation control did not fail closed")
         result["checks"].extend(["negative-fixtures", "caller-tree-mutation-control", "public-checks"])

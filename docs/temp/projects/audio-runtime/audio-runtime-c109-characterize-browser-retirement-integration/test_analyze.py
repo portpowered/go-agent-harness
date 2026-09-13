@@ -24,6 +24,12 @@ assert RUNNER_SPEC is not None and RUNNER_SPEC.loader is not None
 RUNNER = importlib.util.module_from_spec(RUNNER_SPEC)
 RUNNER_SPEC.loader.exec_module(RUNNER)
 
+VERIFY_PATH = PUBLIC_RUNNER_PATH.with_name("verify.py")
+VERIFY_SPEC = importlib.util.spec_from_file_location("c109_verify", VERIFY_PATH)
+assert VERIFY_SPEC is not None and VERIFY_SPEC.loader is not None
+VERIFY = importlib.util.module_from_spec(VERIFY_SPEC)
+VERIFY_SPEC.loader.exec_module(VERIFY)
+
 
 def git(root: Path, *args: str) -> str:
     result = subprocess.run(
@@ -176,6 +182,13 @@ class PublicRunnerArgumentTests(unittest.TestCase):
             self.assertIn("provided synthetic tree does not exist", completed.stdout)
             self.assertNotIn("the following arguments are required: --output", completed.stdout)
 
+    def test_output_path_inside_caller_tree_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="c109-public-runner-tree-") as temporary:
+            caller_tree = Path(temporary) / "tree"
+            output = caller_tree / "report.json"
+            with self.assertRaises(RUNNER.PublicCheckError):
+                RUNNER.validate_output_path(output, caller_tree)
+
 
 class PublicRunnerCleanupTests(unittest.TestCase):
     def test_cleanup_reaps_surviving_group_after_leader_closes_stdout(self) -> None:
@@ -193,6 +206,20 @@ class PublicRunnerCleanupTests(unittest.TestCase):
         self.assertTrue(result["timed_out"])
         self.assertTrue(result["cleanup"]["term_sent"] or result["cleanup"]["kill_sent"])
         self.assertTrue(result["process_group_gone"])
+
+
+class PublicReportValidationTests(unittest.TestCase):
+    def test_incomplete_public_report_is_rejected(self) -> None:
+        child_timeout = 90
+        expected = RUNNER.command_set("browser-audio-tool", Path("."), child_timeout)
+        report = {
+            "case": "browser-audio-tool",
+            "bounded": {"child_timeout_seconds": child_timeout, "aggregate_timeout_seconds": 300},
+            "checks": [{"label": label, "command": " ".join(argv)} for argv, _cwd, _env, label, _timeout in expected],
+        }
+        mutated = VERIFY.mutate_public(report, "incomplete-public-report")
+        with self.assertRaises(VERIFY.VerificationError):
+            VERIFY.validate_public_check_set(mutated)
 
 
 if __name__ == "__main__":

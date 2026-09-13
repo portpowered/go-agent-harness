@@ -339,6 +339,21 @@ def source_binding() -> dict[str, str]:
     }
 
 
+def validate_output_path(output: Path | None, caller_tree: Path | None) -> Path | None:
+    if output is None:
+        return None
+    resolved_output = output.resolve()
+    if caller_tree is not None:
+        resolved_tree = caller_tree.resolve()
+        try:
+            resolved_output.relative_to(resolved_tree)
+        except ValueError:
+            pass
+        else:
+            raise PublicCheckError("--output must be outside the caller-owned synthetic tree")
+    return resolved_output
+
+
 def create_required_tree() -> tuple[Path, Path, str]:
     temporary_root = Path(tempfile.mkdtemp(prefix="c109-public-")).resolve()
     worktree = temporary_root / "tree"
@@ -539,7 +554,9 @@ def main() -> int:
     started = time.monotonic()
     result: dict[str, Any] = {}
     caller_binding: dict[str, Any] | None = None
+    output_path: Path | None = None
     try:
+        output_path = validate_output_path(args.output, args.tree)
         if args.tree:
             worktree = args.tree.resolve()
             require(worktree.is_dir(), f"provided synthetic tree does not exist: {worktree}")
@@ -673,11 +690,11 @@ def main() -> int:
             result["cleanup"] = exception_cleanup
         if auxiliary_cleanup:
             result["auxiliary_cleanup"] = auxiliary_cleanup
-        write_result(args.output, result)
+        write_result(output_path, result)
         print(json.dumps({"case": args.case, "status": "failed", "error": str(exc)}, sort_keys=True))
         return 2
-    write_result(args.output, result)
-    print(json.dumps({"case": args.case, "status": result["status"], "output": str(args.output) if args.output else None}, sort_keys=True))
+    write_result(output_path, result)
+    print(json.dumps({"case": args.case, "status": result["status"], "output": str(output_path) if output_path else None}, sort_keys=True))
     return 0 if result["status"] == "passed" else 1
 
 
