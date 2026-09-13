@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/pion/rtp"
 	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
@@ -187,6 +188,47 @@ func TestOutboundTransportCommitsTimelineOnlyAfterSuccessfulWrite(t *testing.T) 
 	}
 	if packets[1].SequenceNumber != 30 || packets[1].Timestamp != 4000 || !packets[1].Marker {
 		t.Fatalf("retry RTP header = %+v, want initial committed state", packets[1].Header)
+	}
+}
+
+func TestOutboundTransportRejectsPartialFramesAndBoundsConcurrentWriters(t *testing.T) {
+	started := make(chan struct{})
+	var startedOnce sync.Once
+	track, err := rtctransportwire.NewService().NewOutboundTrack(rtctransport.OutboundTrackConfig{
+		SourceRate: 48000,
+		QueueDepth: 1,
+		Encoder: rtctransport.OpusEncoderFunc(func(context.Context, []int16) ([]byte, error) {
+			return []byte{1}, nil
+		}),
+		Writer: rtctransport.RTPWriterFunc(func(context.Context, *rtp.Packet) error { return nil }),
+		Pacer: rtctransport.PacerFunc(func(ctx context.Context, _ uint64) error {
+			startedOnce.Do(func() { close(started) })
+			<-ctx.Done()
+			return context.Cause(ctx)
+		}),
+	})
+	if err != nil {
+		t.Fatalf("NewOutboundTrack() error = %v", err)
+	}
+	frame := sharedaudio.PCMFrame{Samples: make([]int16, 960)}
+	if writeErr := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: make([]int16, 959)}); !errors.Is(writeErr, rtctransport.ErrOutboundFrameSize) {
+		t.Fatalf("partial WriteFrame() error = %v, want frame-size identity", writeErr)
+	}
+	firstDone := make(chan error, 1)
+	go func() { firstDone <- track.WriteFrame(context.Background(), frame) }()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("first writer did not reach the pacer")
+	}
+	if writeErr := track.WriteFrame(context.Background(), frame); !errors.Is(writeErr, rtctransport.ErrOutboundQueueOverflow) {
+		t.Fatalf("saturated WriteFrame() error = %v, want queue overflow identity", writeErr)
+	}
+	if closeErr := track.Close(); closeErr != nil {
+		t.Fatalf("Close() error = %v", closeErr)
+	}
+	if writeErr := <-firstDone; !errors.Is(writeErr, rtctransport.ErrOutboundClosed) {
+		t.Fatalf("canceled first WriteFrame() error = %v, want closed identity", writeErr)
 	}
 }
 

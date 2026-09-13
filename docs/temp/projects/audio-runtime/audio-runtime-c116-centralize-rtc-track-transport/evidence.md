@@ -52,15 +52,29 @@ baseline lease. Those files were deliberately not edited in this checkpoint.
 
 The following completed successfully:
 
-- `go test ./services/rtctransport/...` — 9 tests across the public, private,
+- `go test ./services/rtctransport/...` — 10 tests across the public, private,
   and Wire packages.
 - `go test ./internal/wire` and the owned runtime transport package — 93 CLI
   wire tests plus the runtime package tests.
-- `GOWORK=off go test ./...` from `consumer/` — independent public-contract
+- `GOWORK=off go test ./...` from `external-consumer/` — independent public-contract
   consumer passed.
-- `GOWORK=off go list -deps ./...` from `consumer/` — no `agent-cli` or
+- `GOWORK=off go list -deps ./...` from `external-consumer/` — no `agent-cli` or
   `go-llm-gateway/pkg/transport/rtc` dependency.
+- `verify.py --mode module-boundary` — passed module lists, dependency census,
+  no reverse import, and the independent consumer.
+- `verify.py --mode inbound-positive-and-causal-negatives` — passed the
+  reorder/loss/PLC and packet-validation cases.
+- `verify.py --mode outbound-positive-and-causal-negatives` — passed the
+  resample/timeline, ownership, commit, frame-size, and bounded queue/
+  cancellation cases.
+- `run.py` bounded cases — RTC transport, CLI external media, v9 software
+  device probe, C21 simulated consumption, and credential-free audio-tool
+  regressions all passed.
 - `git diff --check` — clean.
+
+The retirement verifier is intentionally still red at this checkpoint: the
+gateway source files are still the accepted-main 453+418-line compatibility
+implementations, so the strict `<871` retirement target is not claimed.
 
 ## Next action
 

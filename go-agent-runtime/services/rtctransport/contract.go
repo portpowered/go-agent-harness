@@ -37,14 +37,18 @@ var (
 	ErrInboundTrackDecode        = errors.New("inbound Opus decode failed")
 	ErrInboundTrackResample      = errors.New("inbound PCM resample failed")
 	ErrInboundTrackFrame         = errors.New("inbound PCM frame has invalid size")
+	ErrInboundTrackQueueOverflow = errors.New("inbound RTP audio track queue is full")
 	ErrInboundTrackClosed        = errors.New("inbound RTP audio track is closed")
 
-	ErrOutboundClosed        = errors.New("rtc outbound track is closed")
-	ErrOutboundEmptyFrame    = errors.New("rtc outbound PCM frame is empty")
-	ErrOutboundNilEncoder    = errors.New("rtc outbound Opus encoder is nil")
-	ErrOutboundNilWriter     = errors.New("rtc outbound RTP writer is nil")
-	ErrOutboundEmptyPayload  = errors.New("rtc outbound encoder produced an empty payload")
-	ErrOutboundFrameTooLarge = errors.New("rtc outbound PCM frame is too large")
+	ErrInvalidOutboundTrackConfig = errors.New("invalid outbound RTP audio track configuration")
+	ErrOutboundClosed             = errors.New("rtc outbound track is closed")
+	ErrOutboundEmptyFrame         = errors.New("rtc outbound PCM frame is empty")
+	ErrOutboundFrameSize          = errors.New("rtc outbound PCM frame has invalid size")
+	ErrOutboundNilEncoder         = errors.New("rtc outbound Opus encoder is nil")
+	ErrOutboundNilWriter          = errors.New("rtc outbound RTP writer is nil")
+	ErrOutboundEmptyPayload       = errors.New("rtc outbound encoder produced an empty payload")
+	ErrOutboundFrameTooLarge      = errors.New("rtc outbound PCM frame is too large")
+	ErrOutboundQueueOverflow      = errors.New("rtc outbound track queue is full")
 )
 
 // InboundTrackError adds a stable operation and error kind while preserving
@@ -69,6 +73,7 @@ func (e *InboundTrackError) Is(target error) bool {
 // pacer, RTP writer, or encoder closer while adding the failed operation.
 type OutboundOperationError struct {
 	Operation string
+	Kind      error
 	Err       error
 }
 
@@ -77,6 +82,10 @@ func (e *OutboundOperationError) Error() string {
 }
 
 func (e *OutboundOperationError) Unwrap() error { return e.Err }
+
+func (e *OutboundOperationError) Is(target error) bool {
+	return target == e.Kind || errors.Is(e.Err, target)
+}
 
 // OpusDecoder is the narrow decoder seam required by inbound RTP policy.
 // DecodePLC is called exactly once for each admitted missing packet.
@@ -152,10 +161,12 @@ func (f PacerFunc) Wait(ctx context.Context, mediaSampleOffset uint64) error {
 
 // OutboundTrackConfig configures one caller-owned PCM-to-RTP track.
 type OutboundTrackConfig struct {
-	SourceRate int
-	Encoder    OpusEncoder
-	Writer     RTPWriter
-	Pacer      Pacer
+	SourceRate    int
+	FrameDuration time.Duration
+	QueueDepth    int
+	Encoder       OpusEncoder
+	Writer        RTPWriter
+	Pacer         Pacer
 
 	PayloadType           uint8
 	SSRC                  uint32

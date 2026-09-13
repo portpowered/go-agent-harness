@@ -25,7 +25,6 @@ func TestPublicWireTransportIsEmbeddableWithoutCLI(t *testing.T) {
 	if err != nil || len(frame.Samples) != 960 {
 		t.Fatalf("ReadFrame() = %d samples, %v; want one 20ms frame", len(frame.Samples), err)
 	}
-
 	if _, err := service.NewInboundTrack(nil, decoder, rtctransport.DefaultInboundTrackConfig()); !errors.Is(err, rtctransport.ErrNilInboundRTPTrack) {
 		t.Fatalf("nil source error = %v", err)
 	}

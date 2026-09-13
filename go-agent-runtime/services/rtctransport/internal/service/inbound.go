@@ -222,6 +222,8 @@ func (t *InboundTrack) emit(samples []int16) error {
 		return nil
 	case <-t.done:
 		return rtctransport.ErrInboundTrackClosed
+	default:
+		return inboundTrackError(rtctransport.ErrInboundTrackQueueOverflow, "queue", errors.New("inbound frame delivery queue is full"))
 	}
 }
 

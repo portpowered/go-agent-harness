@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -12,17 +13,20 @@ import (
 )
 
 const (
-	defaultOpusPayloadType uint8  = 111
-	defaultOutboundSSRC    uint32 = 1
+	defaultOpusPayloadType    uint8  = 111
+	defaultOutboundSSRC       uint32 = 1
+	defaultOutboundQueueDepth        = 8
+	maxOutboundQueueDepth            = 64
 )
 
 var _ rtctransport.OutboundTrack = (*OutboundTrack)(nil)
 
 type OutboundTrack struct {
-	encoder    rtctransport.OpusEncoder
-	writer     rtctransport.RTPWriter
-	pacer      rtctransport.Pacer
-	sourceRate int
+	encoder       rtctransport.OpusEncoder
+	writer        rtctransport.RTPWriter
+	pacer         rtctransport.Pacer
+	sourceRate    int
+	sourceSamples int
 
 	payloadType uint8
 	ssrc        uint32
@@ -31,6 +35,7 @@ type OutboundTrack struct {
 
 	mediaSamples uint64
 	writeGate    chan struct{}
+	queueSlots   chan struct{}
 
 	lifecycleMu sync.Mutex
 	lifeCtx     context.Context
@@ -50,8 +55,16 @@ func (s *Service) NewOutboundTrack(config rtctransport.OutboundTrackConfig) (rtc
 	if config.Writer == nil {
 		return nil, rtctransport.ErrOutboundNilWriter
 	}
-	if _, err := wavio.Resample(nil, config.SourceRate, rtctransport.OutboundRTPClockRate); err != nil {
-		return nil, wrapOutbound("configure source rate", err)
+	sourceSamples, err := normalizeOutboundFrame(config)
+	if err != nil {
+		return nil, err
+	}
+	queueDepth := config.QueueDepth
+	if queueDepth == 0 {
+		queueDepth = defaultOutboundQueueDepth
+	}
+	if queueDepth < 1 || queueDepth > maxOutboundQueueDepth {
+		return nil, outboundConfigError("queue depth", queueDepth, "want a bounded value from 1 through 64")
 	}
 	if config.PayloadType == 0 {
 		config.PayloadType = defaultOpusPayloadType
@@ -65,13 +78,32 @@ func (s *Service) NewOutboundTrack(config rtctransport.OutboundTrackConfig) (rtc
 	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
 	track := &OutboundTrack{
 		encoder: config.Encoder, writer: config.Writer, pacer: config.Pacer,
-		sourceRate: config.SourceRate, payloadType: config.PayloadType,
-		ssrc: config.SSRC, sequence: config.InitialSequenceNumber,
+		sourceRate: config.SourceRate, sourceSamples: sourceSamples,
+		payloadType: config.PayloadType,
+		ssrc:        config.SSRC, sequence: config.InitialSequenceNumber,
 		timestamp: config.InitialTimestamp, lifeCtx: lifeCtx, lifeCancel: lifeCancel,
-		writeGate: make(chan struct{}, 1),
+		writeGate: make(chan struct{}, 1), queueSlots: make(chan struct{}, queueDepth),
 	}
 	track.writeGate <- struct{}{}
 	return track, nil
+}
+
+func normalizeOutboundFrame(config rtctransport.OutboundTrackConfig) (int, error) {
+	if _, err := wavio.Resample(nil, config.SourceRate, rtctransport.OutboundRTPClockRate); err != nil {
+		return 0, outboundConfigError("source rate", config.SourceRate, err.Error())
+	}
+	duration := config.FrameDuration
+	if duration == 0 {
+		duration = 20 * time.Millisecond
+	}
+	if !validInboundDuration(duration) {
+		return 0, outboundConfigError("frame duration", duration, "want a legal Opus duration from 2.5 ms through 60 ms")
+	}
+	samples := int64(config.SourceRate) * int64(duration) / int64(time.Second)
+	if samples <= 0 || samples > int64(^uint(0)>>1) {
+		return 0, outboundConfigError("frame duration", duration, "produces an unrepresentable source frame")
+	}
+	return int(samples), nil
 }
 
 func (t *OutboundTrack) WriteFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
@@ -80,6 +112,13 @@ func (t *OutboundTrack) WriteFrame(ctx context.Context, frame sharedaudio.PCMFra
 		return err
 	}
 	defer finish()
+	if len(frame.Samples) == 0 {
+		return rtctransport.ErrOutboundEmptyFrame
+	}
+	if len(frame.Samples) != t.sourceSamples {
+		return wrapOutboundWithKind("frame", rtctransport.ErrOutboundFrameSize,
+			fmt.Errorf("got %d samples, want %d", len(frame.Samples), t.sourceSamples))
+	}
 
 	select {
 	case <-operationCtx.Done():
@@ -90,9 +129,6 @@ func (t *OutboundTrack) WriteFrame(ctx context.Context, frame sharedaudio.PCMFra
 
 	if err := contextCauseIfDone(operationCtx); err != nil {
 		return wrapOutbound("write", err)
-	}
-	if len(frame.Samples) == 0 {
-		return rtctransport.ErrOutboundEmptyFrame
 	}
 	resampled, err := wavio.Resample(frame.Samples, t.sourceRate, rtctransport.OutboundRTPClockRate)
 	if err != nil {
@@ -167,11 +203,22 @@ func (t *OutboundTrack) beginWrite(ctx context.Context) (context.Context, func()
 	t.active++
 	lifeCtx := t.lifeCtx
 	t.lifecycleMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		t.endWrite()
+		return nil, nil, err
+	}
+	select {
+	case t.queueSlots <- struct{}{}:
+	default:
+		t.endWrite()
+		return nil, nil, rtctransport.ErrOutboundQueueOverflow
+	}
 	operationCtx, cancel := context.WithCancelCause(ctx)
 	stopLifeHook := context.AfterFunc(lifeCtx, func() { cancel(context.Cause(lifeCtx)) })
 	finish := func() {
 		stopLifeHook()
 		cancel(nil)
+		<-t.queueSlots
 		t.endWrite()
 	}
 	return operationCtx, finish, nil
@@ -191,6 +238,18 @@ func wrapOutbound(operation string, err error) error {
 		return nil
 	}
 	return &rtctransport.OutboundOperationError{Operation: operation, Err: err}
+}
+
+func wrapOutboundWithKind(operation string, kind, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &rtctransport.OutboundOperationError{Operation: operation, Kind: kind, Err: err}
+}
+
+func outboundConfigError(field string, observed any, reason string) error {
+	return wrapOutboundWithKind("configuration", rtctransport.ErrInvalidOutboundTrackConfig,
+		fmt.Errorf("%s: got %v (%s)", field, observed, reason))
 }
 
 func contextCauseIfDone(ctx context.Context) error {
