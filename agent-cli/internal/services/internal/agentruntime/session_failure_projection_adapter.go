@@ -15,10 +15,6 @@ func ff(v sf.Facts) *failureFacts {
 	}
 	return &failureFacts{v.Classification, v.TerminalReason, v.Provenance, v.OutputState, v.ErrorType, v.Code, v.FailingEvent}
 }
-func pf(f *failureFacts) sf.Facts {
-	return sf.Facts{Classification: f.classification, TerminalReason: f.terminalReason, Provenance: f.provenance, OutputState: f.outputState, ErrorType: f.errorType, Code: f.code, FailingEvent: f.failingEvent}
-}
-func progress(o *observer) sf.Progress { return sfw.Progress(o.sawSessionOpen, o.turnsCompleted) }
 func (o *observer) failureSnapshot() *failureFacts {
 	if o == nil {
 		return nil
@@ -34,12 +30,13 @@ func (o *observer) clearFailure()                           { fi(o).Failure.Clea
 func (o *observer) captureFailureFromError(v *m.ErrorValue) { fi(o).Failure.AcceptError(v) }
 func factsFromSessionRunError(err error) *failureFacts      { return ff(sfw.RunFacts(err)) }
 func (o *observer) acceptFailureObservation(f *failureFacts, err error) bool {
-	return o != nil && f != nil && fi(o).Failure.Accept(pf(f), err)
+	return o != nil && f != nil && fi(o).Failure.Accept(sf.Facts{Classification: f.classification, TerminalReason: f.terminalReason, Provenance: f.provenance, OutputState: f.outputState, ErrorType: f.errorType, Code: f.code, FailingEvent: f.failingEvent}, err)
 }
 func (o *observer) captureFailureFromClose(v *m.SessionCloseValue) {
-	if o != nil {
-		fi(o).Failure.AcceptClose(v, progress(o))
+	if o == nil || v == nil {
+		return
 	}
+	fi(o).Failure.AcceptClose(v, sfw.Progress(o.sawSessionOpen, o.turnsCompleted))
 }
 
 const u, i, t, a = sf.ProjectionUnresolvedTool, sf.ProjectionImageContinuation, sf.ProjectionToolContinuation, sf.ProjectionScheduledAudio
@@ -48,7 +45,7 @@ func p(o *observer, kind sf.Projection, e string) *failureFacts {
 	if o == nil {
 		return nil
 	}
-	return ff(sfw.Facts(kind, e, progress(o)))
+	return ff(sfw.Facts(kind, e, sfw.Progress(o.sawSessionOpen, o.turnsCompleted)))
 }
 func (o *observer) unresolvedToolResultFailureFacts(e string) *failureFacts { return p(o, u, e) }
 func (o *observer) imageContinuationFailureFacts(e string) *failureFacts    { return p(o, i, e) }
@@ -80,6 +77,9 @@ func fi(o *observer) *sfw.Invocation {
 	return holder
 }
 func setFailure(o *observer, f *failureFacts) {
+	if o == nil {
+		return
+	}
 	o.livenessMu.Lock()
 	defer o.livenessMu.Unlock()
 	o.failure = f
