@@ -134,11 +134,11 @@
     },
     "public_runner": {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
-      "sha256": "772837b115432c2eb54251a8cbdfd6e05b97bcc1503d7cefb61828597fb15780"
+      "sha256": "b452a1f63c2f357fecd98886c751ce9e0012caa8a34de08d280d016b3b09de33"
     },
     "verifier": {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py",
-      "sha256": "3bfc5db9e3f47cad93cc3920299a48f608355488a5b67e27826a153dde1f5a03"
+      "sha256": "0afd5eb44b4fbbf21d6f8e149d6831dfe763329bf21f0f928d8378e9ef9a432f"
     }
   },
   "status": "passed"

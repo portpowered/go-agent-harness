@@ -4,7 +4,7 @@
     "acceptedMain": "dded566273b27f7146c4e630a0f23fb9402198da",
     "c61": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2",
     "c83": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048",
-    "reviewMain": "485cce92e8eaf914f236b059a5afe2641d223c3c"
+    "reviewMain": "0b6788f21e2ac72a26d9422c974cb8db7240724a"
   },
   "candidates": {
     "c61": {
@@ -44,16 +44,16 @@
     "exit_code": 0,
     "output_retained": false,
     "reason": "fetch transport output is mutable; commit/ref identity is retained instead",
-    "resolved_origin_main": "1a8467246c6607a06ffc7289075da2595724ce8b",
+    "resolved_origin_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
     "status": "passed"
   },
-  "fetchedOriginMain": "1a8467246c6607a06ffc7289075da2595724ce8b",
+  "fetchedOriginMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
   "hostCheckout": {
     "afterStatus": [],
     "beforeStatus": [],
     "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
     "changedStatusLines": [],
-    "head": "b9f6f0742131a78618df8bfcfe93eb8b78461364",
+    "head": "5eb90be6eeafeb5ea63e3e192ccd0544eed7da0c",
     "scopeClean": true
   },
   "newerMainFetchedAndIntegrated": true,
@@ -139,7 +139,7 @@
       },
       {
         "name": "refs/remotes/origin/main",
-        "object": "1a8467246c6607a06ffc7289075da2595724ce8b"
+        "object": "09c70f51243caeaf1184c4806b99bbf7749e3044"
       }
     ],
     "before": [
@@ -169,7 +169,7 @@
       },
       {
         "name": "refs/remotes/origin/main",
-        "object": "1a8467246c6607a06ffc7289075da2595724ce8b"
+        "object": "09c70f51243caeaf1184c4806b99bbf7749e3044"
       }
     ],
     "candidateRefsUnchanged": true,
@@ -177,33 +177,33 @@
   },
   "refsUnchanged": true,
   "requestedAcceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-  "reviewMain": "1a8467246c6607a06ffc7289075da2595724ce8b",
+  "reviewMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
   "schema": "audio-runtime-c109-provenance-v2",
   "sourceBinding": {
     "cleanScripts": true,
-    "committedHead": "b9f6f0742131a78618df8bfcfe93eb8b78461364",
-    "committedTree": "52012ca8e4e09ceca2d6b667f63076f8d95c4e8c",
+    "committedHead": "5eb90be6eeafeb5ea63e3e192ccd0544eed7da0c",
+    "committedTree": "ed6a0f16583a02102be8e19db2c0a7c02021c77d",
     "scripts": [
       {
-        "head_blob": "e47e5fa8d24b3b11e9466cb70d7fb76d3b86d1a0",
+        "head_blob": "46605eb4beb1d026b2e4b1b81a57b2fa83e08a69",
         "matches_committed_head": true,
         "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/analyze.py",
-        "working_blob": "e47e5fa8d24b3b11e9466cb70d7fb76d3b86d1a0",
-        "working_tree_sha256": "7aeb42aef22d74c7703c27659487d6a02fda822097b8cef3a2e6e259de068b70"
+        "working_blob": "46605eb4beb1d026b2e4b1b81a57b2fa83e08a69",
+        "working_tree_sha256": "a79a6ff47e2e25cb5c2b28fad9255cb98f412e13243fa470ffe04fdeee6c1961"
       },
       {
-        "head_blob": "c6d54856a1e7719b85bf28367e9140fe7f20adc7",
+        "head_blob": "c92f3effe8e33bdeb6a3417b9741e2eabc450436",
         "matches_committed_head": true,
         "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py",
-        "working_blob": "c6d54856a1e7719b85bf28367e9140fe7f20adc7",
-        "working_tree_sha256": "3bfc5db9e3f47cad93cc3920299a48f608355488a5b67e27826a153dde1f5a03"
+        "working_blob": "c92f3effe8e33bdeb6a3417b9741e2eabc450436",
+        "working_tree_sha256": "0afd5eb44b4fbbf21d6f8e149d6831dfe763329bf21f0f928d8378e9ef9a432f"
       },
       {
-        "head_blob": "691dd79a5558aaf79dcc24f330f0bbb74ae7d29f",
+        "head_blob": "d69245d1bf1f80b788b954b942bec69c8cd56e33",
         "matches_committed_head": true,
         "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
-        "working_blob": "691dd79a5558aaf79dcc24f330f0bbb74ae7d29f",
-        "working_tree_sha256": "772837b115432c2eb54251a8cbdfd6e05b97bcc1503d7cefb61828597fb15780"
+        "working_blob": "d69245d1bf1f80b788b954b942bec69c8cd56e33",
+        "working_tree_sha256": "b452a1f63c2f357fecd98886c751ce9e0012caa8a34de08d280d016b3b09de33"
       },
       {
         "head_blob": "50be94d4afb489d941eb91c2c675bd3a496e58d5",
@@ -225,7 +225,7 @@
       {
         "branch": "refs/heads/codex/audio-runtime-c109-characterize-browser-retirement-integration",
         "detached": false,
-        "head": "b9f6f0742131a78618df8bfcfe93eb8b78461364",
+        "head": "5eb90be6eeafeb5ea63e3e192ccd0544eed7da0c",
         "locked": false,
         "path": ".claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration",
         "prunable": "",

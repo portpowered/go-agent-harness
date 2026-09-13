@@ -11,7 +11,7 @@ The preserved candidate revisions are C61
 `8e8177c031a7b3b9322d712af19970e13fa7a1bc` and C83
 `22cc6769aaf06d1e2c1275b064cc7ec29de3e371`.
 The final provenance also records fetched `origin/main`
-`1a8467246c6607a06ffc7289075da2595724ce8b` as the newer integrated review
+`09c70f51243caeaf1184c4806b99bbf7749e3044` as the newer integrated review
 main; the branch diff relative to that review main remains C109-owned only.
 The required and control synthetic rehearsals intentionally remain based on
 the admitted accepted main, as required by the PRD.  Because the newer review
@@ -63,7 +63,7 @@ matched to their exact imported package, same-name symbols in another package
 are not treated as dependencies, and public module paths are not duplicated.
 The checked-in `test_analyze.py` regressions cover those cases plus the admitted
 public-command argument contract.  The final evidence source checkpoint is
-`b9f6f0742131a78618df8bfcfe93eb8b78461364`.
+`5eb90be6eeafeb5ea63e3e192ccd0544eed7da0c`.
 
 ## Review repair and current-main integration
 
@@ -157,3 +157,34 @@ non-waiver only. The failure remains the C79/provider-audio terminal-drain
 family, with no C109 repair authorization. The current C109 candidate stays
 evidence-only and must be resubmitted to script CI after this evidence
 checkpoint; C61, C83 and all nine project gates remain unmerged/open.
+
+## Review repair checkpoint — current main and bounded cleanup
+
+The next independent review returned the same admitted task because live
+`origin/main` had advanced to `09c70f51243caeaf1184c4806b99bbf7749e3044`, and
+the evidence runner had three fail-closed defects: conflict abort results and
+post-abort cleanliness were not retained, caller-owned trees were not reported
+on exception, and `communicate()` captured unbounded child output before the
+2 MiB cap. Merge commit `4f913fca8a` integrates that review main into the
+isolated branch without resetting the host checkout or touching peer paths.
+
+Commit `5eb90be6eeafeb5ea63e3e192ccd0544eed7da0c` repairs the owned analyzer,
+public runner, and verifier. Child output is streamed with incremental
+credential-marker scanning and full-stream hashing; a bounded control observed
+2,097,153 bytes, retained 16 KiB, failed closed, and reaped the process group.
+The caller-owned exception control preserved the pre-existing host files and
+recorded `identity_unchanged: true`. Current-main compatibility rehearsals
+record modify/delete conflicts with successful `git merge --abort` and empty
+post-abort status.
+
+Fresh required and reverse analyzer runs pass with unchanged C61/C83 refs and
+predecessor worktrees. `verify.py --mode all` passes all eight checks,
+determinism, 19 negative fixtures, caller-tree mutation control, and both public
+reports. The current public positive report is 18/18 in 268.871s under 90/300
+seconds; malformed/canceled is 3/3 in 29.092s under 60/180 seconds. Final
+hashes are verification `428b51023f41139de5286101084533980de95af8ad768728f8f1b58c111c8f89`,
+positive `ae9e8e718d50457b15892281d9dfe6c0d1ca2942e7141eb39ae6ba7bc46efbe5`,
+and negative `29d86a3d783de76a04558560c26208c9a6908820f9eb0b3aa60b58bb678431d2`.
+This remains evidence-only: no CI-green, review, merge, vertical probe,
+candidate acceptance, hardware/acoustic proof, or project completion claim is
+made.
