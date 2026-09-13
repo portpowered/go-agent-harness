@@ -124,7 +124,7 @@
       "returncode": 1,
       "source": "go-agent-runtime/services/sessionroomerrors/internal/service/service.go",
       "stderr": "",
-      "stdout": "--- FAIL: TestParticipantFailureCopiesSecretsAndRedactsNestedCredentials (0.00s)\n    service_test.go:57: failure leaked credential=<redacted> participant \\\"agent-a\\\": authorization: Bearer long-short-secret and short-secret\"\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/internal/service\t0.150s\nFAIL\n",
+      "stdout": "--- FAIL: TestParticipantFailureCopiesSecretsAndRedactsNestedCredentials (0.00s)\n    service_test.go:57: failure leaked credential=<redacted> participant \\\"agent-a\\\": authorization: Bearer long-short-secret and short-secret\"\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/internal/service\t0.146s\nFAIL\n",
       "test": "TestParticipantFailureCopiesSecretsAndRedactsNestedCredentials"
     },
     {
@@ -134,7 +134,7 @@
       "returncode": 1,
       "source": "go-agent-runtime/services/sessionroomerrors/internal/service/service.go",
       "stderr": "",
-      "stdout": "--- FAIL: TestParticipantFailurePreservesIdentityAndCause (0.00s)\n    service_test.go:28: participant failure lost errors.Is identity\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/internal/service\t0.150s\nFAIL\n",
+      "stdout": "--- FAIL: TestParticipantFailurePreservesIdentityAndCause (0.00s)\n    service_test.go:28: participant failure lost errors.Is identity\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/internal/service\t0.152s\nFAIL\n",
       "test": "TestParticipantFailurePreservesIdentityAndCause"
     },
     {
@@ -144,7 +144,7 @@
       "returncode": 1,
       "source": "agent-cli/internal/services/internal/agentruntime/session_room_evidence.go",
       "stderr": "",
-      "stdout": "--- FAIL: TestRoomEvidence_RecordingHealthRetainsFirstSanitizedFailure (0.00s)\n    session_room_evidence_test.go:302: room recording reason = \"participant \\\"participant\\\" evidence artifact agent-participant.wav: later recording failure\", want first sanitized failure\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.439s\nFAIL\n",
+      "stdout": "--- FAIL: TestRoomEvidence_RecordingHealthRetainsFirstSanitizedFailure (0.00s)\n    session_room_evidence_test.go:302: room recording reason = \"participant \\\"participant\\\" evidence artifact agent-participant.wav: later recording failure\", want first sanitized failure\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.434s\nFAIL\n",
       "test": "TestRoomEvidence_RecordingHealthRetainsFirstSanitizedFailure"
     },
     {
@@ -154,7 +154,7 @@
       "returncode": 1,
       "source": "go-agent-runtime/services/sessionroomerrors/internal/service/service.go",
       "stderr": "",
-      "stdout": "--- FAIL: TestParticipantFailureReasonUsesStableFallbackPrecedence (0.00s)\n    --- FAIL: TestParticipantFailureReasonUsesStableFallbackPrecedence/transport (0.00s)\n        service_test.go:97: reason = \"participant disconnected\", want \"transport disconnected\"\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/internal/service\t0.162s\nFAIL\n",
+      "stdout": "--- FAIL: TestParticipantFailureReasonUsesStableFallbackPrecedence (0.00s)\n    --- FAIL: TestParticipantFailureReasonUsesStableFallbackPrecedence/transport (0.00s)\n        service_test.go:97: reason = \"participant disconnected\", want \"transport disconnected\"\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/internal/service\t0.165s\nFAIL\n",
       "test": "TestParticipantFailureReasonUsesStableFallbackPrecedence"
     }
   ],
@@ -168,7 +168,7 @@
     ],
     "returncode": 0,
     "stderr": "",
-    "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors\t0.287s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/internal/service\t0.149s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/wire\t0.423s\n",
+    "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors\t0.420s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/internal/service\t0.283s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionroomerrors/wire\t0.149s\n",
     "timed_out": false
   },
   "scope": {
