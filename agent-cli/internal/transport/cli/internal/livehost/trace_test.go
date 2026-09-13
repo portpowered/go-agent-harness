@@ -4,14 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync/atomic"
-	"testing"
-	"time"
-
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
@@ -24,6 +16,14 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"io"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
 )
 
 func TestLiveTraceRecorderRoundTripsProviderAndPCM(t *testing.T) {
@@ -47,13 +47,11 @@ func TestLiveTraceRecorderRoundTripsProviderAndPCM(t *testing.T) {
 	if err := traced.Finalize(context.Background(), nil); err != nil {
 		t.Fatalf("Finalize: %v", err)
 	}
-
 	assertTraceReplay(t, filepath.Join(bundle, "audio-trace"), wantSamples)
 	if inner.finalized != 1 {
 		t.Fatalf("inner finalization count = %d, want 1", inner.finalized)
 	}
 }
-
 func assertTraceReplay(t *testing.T, path string, wantSamples []int16) {
 	t.Helper()
 	replay, err := recording.OpenReplay(path)
@@ -85,7 +83,6 @@ func assertTraceReplay(t *testing.T, path string, wantSamples []int16) {
 		t.Fatalf("provider wire count = %d, want 3", providerWires)
 	}
 }
-
 func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {
 	t.Helper()
 	if frame == nil || len(frame.Samples) != len(wantSamples) {
@@ -97,7 +94,6 @@ func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []in
 		}
 	}
 }
-
 func TestLiveTraceRecorderRetainsTraceWhenProviderEvidenceIsMissing(t *testing.T) {
 	root := t.TempDir()
 	bundle := filepath.Join(root, "bundle")
@@ -118,7 +114,6 @@ func TestLiveTraceRecorderRetainsTraceWhenProviderEvidenceIsMissing(t *testing.T
 		t.Fatalf("retained trace timeline: %v", statErr)
 	}
 }
-
 func TestLiveTraceRecorderRetainsTraceWhenProviderEvidenceIsCorrupt(t *testing.T) {
 	root := t.TempDir()
 	bundle := filepath.Join(root, "bundle")
@@ -148,20 +143,16 @@ type traceTestRecorder struct {
 func (r *traceTestRecorder) RecordMessage(context.Context, runtimeSession.LiveRecord) error {
 	return nil
 }
-
 func (r *traceTestRecorder) RecordAudio(context.Context, runtimeSession.LiveAudioRecord) error {
 	return nil
 }
-
 func (r *traceTestRecorder) RecordEvent(context.Context, runtimeSession.LiveEvent) error {
 	return nil
 }
-
 func (r *traceTestRecorder) Finalize(context.Context, error) error {
 	r.finalized++
 	return os.MkdirAll(r.destination, 0o755)
 }
-
 func writeTraceProviderCapture(t *testing.T, path string) {
 	t.Helper()
 	websocket := func(sequence int, direction gatewaytesting.SessionEventDirection, event string) gatewaytesting.CapturedSessionEvent {
@@ -191,7 +182,6 @@ func writeTraceProviderCapture(t *testing.T, path string) {
 		t.Fatalf("write provider capture: %v", err)
 	}
 }
-
 func eventType(payload string) string {
 	var value struct {
 		Type string `json:"type"`
@@ -217,7 +207,6 @@ func TestTraceRequiredFailsClosedWithoutPublicService(t *testing.T) {
 			probe := &traceHostProbe{}
 			recording := &traceRecordingProbe{}
 			request := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, "bundle")}
-
 			err := Run(context.Background(), nil, request, Dependencies{
 				LiveService: probe,
 				BuildRequest: func(context.Context, serviceSession.Request, *runtimeReplay.CaptureInspection) (runtimeSession.LiveRequest, error) {
@@ -251,7 +240,6 @@ func TestTraceRequiredFailsClosedWithoutPublicService(t *testing.T) {
 		})
 	}
 }
-
 func TestTraceFailClosedKeepsTraceDisabledBehavior(t *testing.T) {
 	wantErr := errors.New("trace-disabled runner result")
 	probe := &traceHostProbe{runErr: wantErr}
@@ -272,7 +260,6 @@ func TestTraceFailClosedKeepsTraceDisabledBehavior(t *testing.T) {
 		t.Fatalf("live runner calls = %d, want 1", got)
 	}
 }
-
 func TestPublicSessionTracePublishesRedactedRuntimeAndAudioAfterRecording(t *testing.T) {
 	root := t.TempDir()
 	bundle := filepath.Join(root, "bundle")
@@ -281,49 +268,7 @@ func TestPublicSessionTracePublishesRedactedRuntimeAndAudioAfterRecording(t *tes
 	playback := &tracePlaybackProbe{renderSupported: true}
 	devices := &traceDeviceProbe{handle: &traceDeviceHandle{ports: runtimeDevices.MediaPorts{Capture: capture, Playback: playback}}}
 	probe := &traceHostProbe{run: func(options runtimeSession.LiveRunOptions) error {
-		if options.Recorder == nil {
-			t.Fatal("live options recorder is nil")
-		}
-		handle, err := options.Devices.Open(context.Background(), options.DeviceRequest)
-		if err != nil {
-			return err
-		}
-		defer handle.Close()
-		capture.emitPreGate(16_000, []int16{11, -12, 13})
-		capture.emitUploaded(16_000, []int16{14, -15, 16})
-		if err := playback.emitEnqueued(context.Background(), 16_000, []int16{17, -18, 19}); err != nil {
-			return err
-		}
-		playback.emitRendered(16_000, []int16{20, -21, 22})
-		message := messages.StreamMessage{
-			Type:  messages.StreamTypeResponseCreate,
-			Value: &messages.ResponseCreateValue{Type: "response_create", Instructions: secret},
-		}
-		if err := options.Recorder.RecordMessage(context.Background(), runtimeSession.LiveRecord{Direction: runtimeSession.LiveRecordAgent, Timestamp: time.Unix(1, 0), Message: message}); err != nil {
-			return err
-		}
-		if err := options.Recorder.RecordAudio(context.Background(), runtimeSession.LiveAudioRecord{
-			Direction: runtimeSession.LiveRecordClient, Admission: runtimeSession.LiveAudioQueueAdmitted,
-			Frame: audio.PCMFrame{Format: audio.PCM16DeviceFormat(16_000), Samples: []int16{1, -2, 3}},
-		}); err != nil {
-			return err
-		}
-		if err := options.Recorder.RecordAudio(context.Background(), runtimeSession.LiveAudioRecord{
-			Direction: runtimeSession.LiveRecordClient, Admission: runtimeSession.LiveAudioMediaBridged,
-			Frame: audio.PCMFrame{Format: audio.PCM16DeviceFormat(16_000), Samples: []int16{4, -5, 6}},
-		}); err != nil {
-			return err
-		}
-		if err := options.Recorder.RecordAudio(context.Background(), runtimeSession.LiveAudioRecord{
-			Direction: runtimeSession.LiveRecordAgent, Admission: runtimeSession.LiveAudioMediaBridged,
-			Frame: audio.PCMFrame{Format: audio.PCM16DeviceFormat(16_000), Samples: []int16{7, -8, 9}},
-		}); err != nil {
-			return err
-		}
-		if err := options.Recorder.RecordEvent(context.Background(), runtimeSession.LiveEvent{Kind: string(runtimeSession.LiveEventTerminal)}); err != nil {
-			return err
-		}
-		return options.Recorder.Finalize(context.Background(), nil)
+		return runPublicTraceScenario(t, capture, playback, secret, options)
 	}}
 	recording := &traceRecordingProbe{}
 	err := Run(context.Background(), nil, serviceSession.Request{TraceAudio: true, RecordDirectory: bundle, AudioInputDevicePresent: true, AudioOutputDevicePresent: true}, Dependencies{
@@ -339,6 +284,50 @@ func TestPublicSessionTracePublishesRedactedRuntimeAndAudioAfterRecording(t *tes
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
+	assertPublicTraceBundle(t, bundle, secret, capture, playback)
+}
+func runPublicTraceScenario(t *testing.T, capture *traceCaptureProbe, playback *tracePlaybackProbe, secret string, options runtimeSession.LiveRunOptions) error {
+	if options.Recorder == nil {
+		t.Fatal("live options recorder is nil")
+	}
+	handle, err := options.Devices.Open(context.Background(), options.DeviceRequest)
+	if err != nil {
+		return err
+	}
+	defer handle.Close()
+	capture.emitPreGate(16_000, []int16{11, -12, 13})
+	capture.emitUploaded(16_000, []int16{14, -15, 16})
+	if err := playback.emitEnqueued(context.Background(), 16_000, []int16{17, -18, 19}); err != nil {
+		return err
+	}
+	playback.emitRendered(16_000, []int16{20, -21, 22})
+	message := messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: &messages.ResponseCreateValue{Type: "response_create", Instructions: secret}}
+	if err := options.Recorder.RecordMessage(context.Background(), runtimeSession.LiveRecord{Direction: runtimeSession.LiveRecordAgent, Timestamp: time.Unix(1, 0), Message: message}); err != nil {
+		return err
+	}
+	if err := recordPublicTraceAudio(options.Recorder); err != nil {
+		return err
+	}
+	if err := options.Recorder.RecordEvent(context.Background(), runtimeSession.LiveEvent{Kind: string(runtimeSession.LiveEventTerminal)}); err != nil {
+		return err
+	}
+	return options.Recorder.Finalize(context.Background(), nil)
+}
+func recordPublicTraceAudio(recorder runtimeSession.LiveRecorder) error {
+	frames := []runtimeSession.LiveAudioRecord{
+		{Direction: runtimeSession.LiveRecordClient, Admission: runtimeSession.LiveAudioQueueAdmitted, Frame: audio.PCMFrame{Format: audio.PCM16DeviceFormat(16_000), Samples: []int16{1, -2, 3}}},
+		{Direction: runtimeSession.LiveRecordClient, Admission: runtimeSession.LiveAudioMediaBridged, Frame: audio.PCMFrame{Format: audio.PCM16DeviceFormat(16_000), Samples: []int16{4, -5, 6}}},
+		{Direction: runtimeSession.LiveRecordAgent, Admission: runtimeSession.LiveAudioMediaBridged, Frame: audio.PCMFrame{Format: audio.PCM16DeviceFormat(16_000), Samples: []int16{7, -8, 9}}},
+	}
+	for _, frame := range frames {
+		if err := recorder.RecordAudio(context.Background(), frame); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func assertPublicTraceBundle(t *testing.T, bundle, secret string, capture *traceCaptureProbe, playback *tracePlaybackProbe) {
+	t.Helper()
 	timelinePath := filepath.Join(bundle, "audio-trace", "timeline.jsonl")
 	timeline, err := os.ReadFile(timelinePath)
 	if err != nil {
@@ -373,7 +362,6 @@ func TestPublicSessionTracePublishesRedactedRuntimeAndAudioAfterRecording(t *tes
 		t.Fatalf("rendered callback samples = %v, want callback payload", got)
 	}
 }
-
 func TestPublicSessionTraceMarksUnsupportedRenderBoundary(t *testing.T) {
 	root := t.TempDir()
 	bundle := filepath.Join(root, "bundle")
@@ -411,7 +399,6 @@ func TestPublicSessionTraceMarksUnsupportedRenderBoundary(t *testing.T) {
 		t.Fatalf("unsupported render unexpectedly published speaker-rendered.wav: %v", err)
 	}
 }
-
 func TestPublicSessionTraceDoesNotOverwriteExistingDestination(t *testing.T) {
 	root := t.TempDir()
 	bundle := filepath.Join(root, "bundle")
@@ -450,7 +437,6 @@ type traceHostProbe struct {
 func (p *traceHostProbe) OpenLive(context.Context, runtimeSession.LiveRequest) (runtimeSession.LiveHandle, error) {
 	return nil, errors.New("trace host probe does not open handles")
 }
-
 func (p *traceHostProbe) RunLive(_ context.Context, options runtimeSession.LiveRunOptions) error {
 	p.runs.Add(1)
 	if p.run != nil {
@@ -468,7 +454,6 @@ type traceRecordingProbe struct {
 func (p *traceRecordingProbe) TrackSession(messages.SessionInferencer, runtimeRecording.Writer, string) (runtimeRecording.SessionCapture, error) {
 	return nil, nil
 }
-
 func (p *traceRecordingProbe) OpenLiveEvidence(options runtimeRecording.LiveEvidenceOptions) (runtimeSession.LiveRecorder, error) {
 	p.opened.Add(1)
 	if err := os.MkdirAll(options.Destination, 0o755); err != nil {
@@ -485,7 +470,6 @@ func (p *traceRecordingProbe) OpenLiveEvidence(options runtimeRecording.LiveEvid
 	}
 	return &traceRecorderProbe{destination: options.Destination}, nil
 }
-
 func (p *traceRecordingProbe) OpenLiveSemanticEvidence(string) (runtimeSession.LiveRecorder, error) {
 	p.opened.Add(1)
 	return &traceRecorderProbe{}, nil
@@ -496,15 +480,10 @@ type traceRecorderProbe struct{ destination string }
 func (*traceRecorderProbe) RecordMessage(context.Context, runtimeSession.LiveRecord) error {
 	return nil
 }
-
 func (*traceRecorderProbe) RecordAudio(context.Context, runtimeSession.LiveAudioRecord) error {
 	return nil
 }
-
-func (*traceRecorderProbe) RecordEvent(context.Context, runtimeSession.LiveEvent) error {
-	return nil
-}
-
+func (*traceRecorderProbe) RecordEvent(context.Context, runtimeSession.LiveEvent) error { return nil }
 func (r *traceRecorderProbe) Finalize(context.Context, error) error {
 	if r == nil || r.destination == "" {
 		return nil
@@ -532,7 +511,6 @@ func (h *traceDeviceHandle) Media() runtimeDevices.MediaPorts {
 	}
 	return h.ports
 }
-
 func (*traceDeviceHandle) Close() error { return nil }
 
 type traceCaptureProbe struct {
@@ -544,33 +522,27 @@ type traceCaptureProbe struct {
 
 func (*traceCaptureProbe) Pump(context.Context, audio.OutboundMedia) error { return nil }
 func (*traceCaptureProbe) Close() error                                    { return nil }
-
 func (p *traceCaptureProbe) SetPreGateSamplesObserver(observer func(int, []int16)) {
 	p.preGate = observer
 }
-
 func (p *traceCaptureProbe) SetUploadedSamplesObserver(observer func(int, []int16)) {
 	p.uploaded = observer
 }
-
 func (p *traceCaptureProbe) emitPreGate(rate int, samples []int16) {
 	p.preGateSeen = append([]int16(nil), samples...)
 	if p.preGate != nil {
 		p.preGate(rate, append([]int16(nil), samples...))
 	}
 }
-
 func (p *traceCaptureProbe) emitUploaded(rate int, samples []int16) {
 	p.uploadedSeen = append([]int16(nil), samples...)
 	if p.uploaded != nil {
 		p.uploaded(rate, append([]int16(nil), samples...))
 	}
 }
-
 func (p *traceCaptureProbe) preGateSamples() []int16 {
 	return append([]int16(nil), p.preGateSeen...)
 }
-
 func (p *traceCaptureProbe) uploadedSamples() []int16 {
 	return append([]int16(nil), p.uploadedSeen...)
 }
@@ -585,16 +557,13 @@ type tracePlaybackProbe struct {
 
 func (*tracePlaybackProbe) Pump(context.Context, audio.InboundMedia) error { return nil }
 func (*tracePlaybackProbe) Close() error                                   { return nil }
-
 func (p *tracePlaybackProbe) SetPlaybackSamplesObserver(observer func(context.Context, int, []int16) error) {
 	p.enqueued = observer
 }
-
 func (p *tracePlaybackProbe) SetRenderedSamplesObserver(observer func(int, []int16)) bool {
 	p.rendered = observer
 	return p.renderSupported
 }
-
 func (p *tracePlaybackProbe) emitEnqueued(ctx context.Context, rate int, samples []int16) error {
 	p.enqueuedSeen = append([]int16(nil), samples...)
 	if p.enqueued == nil {
@@ -602,32 +571,20 @@ func (p *tracePlaybackProbe) emitEnqueued(ctx context.Context, rate int, samples
 	}
 	return p.enqueued(ctx, rate, append([]int16(nil), samples...))
 }
-
 func (p *tracePlaybackProbe) emitRendered(rate int, samples []int16) {
 	p.renderedSeen = append([]int16(nil), samples...)
 	if p.rendered != nil {
 		p.rendered(rate, append([]int16(nil), samples...))
 	}
 }
-
 func (p *tracePlaybackProbe) enqueuedSamples() []int16 {
 	return append([]int16(nil), p.enqueuedSeen...)
 }
-
 func (p *tracePlaybackProbe) renderedSamples() []int16 {
 	return append([]int16(nil), p.renderedSeen...)
 }
-
 func equalTraceSamples(got, want []int16) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	for index := range want {
-		if got[index] != want[index] {
-			return false
-		}
-	}
-	return true
+	return slices.Equal(got, want)
 }
 
 var _ runtimeSession.LiveService = (*traceHostProbe)(nil)
