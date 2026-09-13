@@ -64,6 +64,136 @@ func TestPreparedTracePoliciesAndNilDeviceCallbacks(t *testing.T) {
 	}
 }
 
+func TestFinishCanceledClosePrecedence(t *testing.T) {
+	t.Run("pre-canceled-before-close", func(t *testing.T) {
+		release := make(chan struct{})
+		started := make(chan struct{})
+		closeCalls := 0
+		prepared := &prepared{
+			path: t.TempDir(), timeout: time.Second, closed: make(chan struct{}),
+			closeTrace: func() error {
+				closeCalls++
+				close(started)
+				<-release
+				return errors.New("trace close sentinel")
+			},
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		result := make(chan error, 1)
+		go func() { result <- prepared.Finish(ctx, "", false) }()
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("closeTrace did not start")
+		}
+		select {
+		case err := <-result:
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("pre-canceled finish error = %v", err)
+			}
+			if !strings.Contains(err.Error(), prepared.StagedPath()) {
+				t.Fatalf("pre-canceled finish lost staged path: %v", err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("pre-canceled finish did not return")
+		}
+		close(release)
+		select {
+		case <-prepared.closed:
+		case <-time.After(time.Second):
+			t.Fatal("closeTrace did not complete")
+		}
+		if closeCalls != 1 {
+			t.Fatalf("closeTrace calls = %d, want one", closeCalls)
+		}
+	})
+
+	t.Run("simultaneous-ready", func(t *testing.T) {
+		const trials = 100
+		missingCancellation := 0
+		missingCloseCause := 0
+		missingStagedPath := 0
+		for trial := 0; trial < trials; trial++ {
+			closeCause := errors.New("trace close sentinel")
+			closeCalls := 0
+			prepared := &prepared{
+				path: t.TempDir(), timeout: time.Second, closed: make(chan struct{}),
+				closeTrace: func() error {
+					closeCalls++
+					return closeCause
+				},
+			}
+			if err := prepared.Finish(context.Background(), "", false); !errors.Is(err, closeCause) {
+				t.Fatalf("trial %d initial finish lost close cause: %v", trial, err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			err := prepared.Finish(ctx, "", false)
+			if !errors.Is(err, context.Canceled) {
+				missingCancellation++
+			}
+			if !errors.Is(err, closeCause) {
+				missingCloseCause++
+			}
+			if err == nil || !strings.Contains(err.Error(), prepared.StagedPath()) {
+				missingStagedPath++
+			}
+			if closeCalls != 1 {
+				t.Fatalf("trial %d closeTrace calls = %d, want one", trial, closeCalls)
+			}
+			cancel()
+		}
+		if missingCancellation != 0 || missingCloseCause != 0 || missingStagedPath != 0 {
+			t.Fatalf("simultaneous-ready failures: cancellation=%d/%d close-cause=%d/%d staged-path=%d/%d", missingCancellation, trials, missingCloseCause, trials, missingStagedPath, trials)
+		}
+	})
+
+	t.Run("cancellation-at-completion", func(t *testing.T) {
+		release := make(chan struct{})
+		started := make(chan struct{})
+		closeCause := errors.New("trace close sentinel")
+		closeCalls := 0
+		prepared := &prepared{
+			path: t.TempDir(), timeout: time.Second, closed: make(chan struct{}),
+			closeTrace: func() error {
+				closeCalls++
+				close(started)
+				<-release
+				return closeCause
+			},
+		}
+		firstResult := make(chan error, 1)
+		go func() { firstResult <- prepared.Finish(context.Background(), "", false) }()
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("closeTrace did not start")
+		}
+		close(release)
+		select {
+		case <-prepared.closed:
+		case <-time.After(time.Second):
+			t.Fatal("closeTrace did not complete")
+		}
+		if err := <-firstResult; !errors.Is(err, closeCause) {
+			t.Fatalf("initial completion lost close cause: %v", err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		err := prepared.Finish(ctx, "", false)
+		if !errors.Is(err, context.Canceled) || !errors.Is(err, closeCause) {
+			t.Fatalf("canceled completion error = %v", err)
+		}
+		if err == nil || !strings.Contains(err.Error(), prepared.StagedPath()) {
+			t.Fatalf("canceled completion lost staged path: %v", err)
+		}
+		if closeCalls != 1 {
+			t.Fatalf("closeTrace calls = %d, want one", closeCalls)
+		}
+	})
+}
+
 func TestFinishCloseTimeoutRetainsStagedPath(t *testing.T) {
 	release := make(chan struct{})
 	completion := make(chan struct{})
