@@ -362,6 +362,7 @@ def command_set(case: str, tree_root: Path, child_timeout: int) -> list[tuple[li
     race_integration_lifecycle = "^(TestSessionToolResultConversationMissingContinuationIsBounded|TestShippedSessionProcessFamilyBCorrection|TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl|TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle|TestSessionConfigToolFilterThroughRealCLI|TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess|TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries|TestReadImageSpokenFailedContinuationIsActionable|TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated|TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle|TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI|TestSessionToolResultConversationCorruptAudioDeltaIsRejected|TestShippedSessionProcessDuplexConversation|TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl|TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch)$"
     if case == "browser-audio-tool":
         return [
+            (["python3", f"{C61_DIR}/run.py", "--mode", "shipped-yui-browser-audio-tool-replay"], tree_root, {}, "shipped credential-free browser/audio/tool workflow", 180),
             (["go", "test", "./services/browserscenario/...", "./services/browserrunner/...", "-run", package_pattern, "-count=1", "-timeout=300s"], runtime, {}, "browserrunner+browserscenario normal", 300),
             (["go", "test", "-race", "./services/browserscenario/...", "./services/browserrunner/...", "-run", package_pattern, "-count=1", "-timeout=420s"], runtime, {}, "browserrunner+browserscenario race", 420),
             (["go", "test", "./...", "-count=1", "-timeout=180s"], c61 / "consumer", {"GOWORK": "off"}, "C61 external consumer normal GOWORK=off", 180),
@@ -379,7 +380,6 @@ def command_set(case: str, tree_root: Path, child_timeout: int) -> list[tuple[li
             (["go", "run", "./cmd/testtimeout", "--timeout", "480s", "--", "go", "test", "./test/integration", "-tags=nomicrophone", "-timeout", "480s", "-race", "-count=1", "-run", race_integration_lifecycle, "-v"], cli, {"CGO_ENABLED": "1", "YUI_AUDIO_STRESS": "1"}, "accumulated session CI regressions race integration lifecycle", 90),
             (["go", "test", "./pkg/devices", "-timeout", "480s", "-race", "-count=1", "-run", "^TestSimulated", "-v"], tree_root / "go-device-gateway", {"CGO_ENABLED": "1"}, "accumulated session CI regressions race devices", 90),
             (["go", "test", "./pkg/providers/openai", "-timeout", "300s", "-race", "-count=1", "-run", "^TestComposed", "-v"], tree_root / "go-llm-gateway", {"CGO_ENABLED": "1"}, "accumulated session CI regressions race openai", 90),
-            (["python3", f"{C61_DIR}/run.py", "--mode", "shipped-yui-browser-audio-tool-replay"], tree_root, {}, "shipped credential-free browser/audio/tool workflow", 180),
         ]
     if case == "malformed-or-canceled":
         return [
