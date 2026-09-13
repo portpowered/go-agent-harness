@@ -1,0 +1,98 @@
+{
+  "ci_polling": "not performed",
+  "evidence_binding": {
+    "executable_input_equivalence": "final-binding compares the tested parent and final HEAD outside the owned C107 evidence directory",
+    "final_head_verification": "run verify.py --mode final-binding after committing this evidence; final HEAD must be one direct owned-evidence descendant",
+    "mode": "evidence-only-direct-descendant",
+    "tested_candidate_revision": "b24182557a39371c71f8e46a212108dbbd38d946"
+  },
+  "results": [
+    {
+      "aggregate_deadline_seconds": 600,
+      "argv": [
+        "go",
+        "test",
+        "./internal/services/internal/agentruntime",
+        "-tags=nomicrophone",
+        "-count=1",
+        "-timeout=120s",
+        "-run",
+        "^(TestSessionReplayRejectsCorruptCaptureBeforeAudioSinkOrProviderSetup|TestSessionDirectoryRecordingWritesConversationSessionLog|TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration)$",
+        "-v"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/agent-cli",
+      "deadline_seconds": 150,
+      "elapsed_seconds": 2.489592,
+      "environment": {
+        "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+        "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+        "GOWORK": "",
+        "HOME": "/Users/abdifamily",
+        "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0fitETh:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+        "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
+      },
+      "exit_code": 0,
+      "expected_tests": [
+        "TestSessionReplayRejectsCorruptCaptureBeforeAudioSinkOrProviderSetup",
+        "TestSessionDirectoryRecordingWritesConversationSessionLog",
+        "TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration"
+      ],
+      "label": "agentruntime-normal",
+      "output_limited": false,
+      "process_group_gone": true,
+      "process_group_id": 66392,
+      "schema_version": "c107-command-run-v1",
+      "stderr_bytes": 0,
+      "stderr_path": "runs/focused-regressions/agentruntime-normal.stderr",
+      "stdout_bytes": 1899,
+      "stdout_path": "runs/focused-regressions/agentruntime-normal.stdout",
+      "termination": null,
+      "timed_out": false
+    },
+    {
+      "aggregate_deadline_seconds": 600,
+      "argv": [
+        "go",
+        "test",
+        "./internal/services/internal/agentruntime",
+        "-tags=nomicrophone",
+        "-count=1",
+        "-timeout=120s",
+        "-run",
+        "^(TestSessionReplayRejectsCorruptCaptureBeforeAudioSinkOrProviderSetup|TestSessionDirectoryRecordingWritesConversationSessionLog|TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration)$",
+        "-v",
+        "-race"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/agent-cli",
+      "deadline_seconds": 150,
+      "elapsed_seconds": 3.773602,
+      "environment": {
+        "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
+        "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
+        "GOWORK": "",
+        "HOME": "/Users/abdifamily",
+        "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0fitETh:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+        "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
+      },
+      "exit_code": 0,
+      "expected_tests": [
+        "TestSessionReplayRejectsCorruptCaptureBeforeAudioSinkOrProviderSetup",
+        "TestSessionDirectoryRecordingWritesConversationSessionLog",
+        "TestValidateSessionRunOptionsAdmitsSessionsWithoutCaptureConfiguration"
+      ],
+      "label": "agentruntime-race",
+      "output_limited": false,
+      "process_group_gone": true,
+      "process_group_id": 66532,
+      "schema_version": "c107-command-run-v1",
+      "stderr_bytes": 0,
+      "stderr_path": "runs/focused-regressions/agentruntime-race.stderr",
+      "stdout_bytes": 1899,
+      "stdout_path": "runs/focused-regressions/agentruntime-race.stdout",
+      "termination": null,
+      "timed_out": false
+    }
+  ],
+  "schema_version": "c107-focused-regressions-v1",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+}

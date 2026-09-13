@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "*sessionAudioReader.Read",
+      "value": 25,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration",
+      "value": 18,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "StartSessionAudioInterruptionsOnBrowserTool",
+      "value": 25,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "func-literal@65:5",
+      "value": 18,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "openSessionAudioInput",
+      "value": 22,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "shouldStopAudioInputSessionLoop",
+      "value": 18,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "streamSessionAudioInput",
+      "value": 51,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "*sessionAudioReader.Read",
+      "value": 16,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "shouldStopAudioInputSessionLoop",
+      "value": 16,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "streamSessionAudioInput",
+      "value": 21,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "file-lines",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "value": 1033,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "streamSessionAudioInput",
+      "value": 94,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "streamSessionAudioInput",
+      "value": 60,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "ErrSessionAudioInputClose",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "ErrSessionAudioInputConflict",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "ErrSessionAudioInputEmpty",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "ErrSessionAudioInputEndOfTurnLost",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "ErrSessionAudioInputFormat",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "ErrSessionAudioInputMissing",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "ErrSessionAudioInputRead",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "ErrSessionAudioInputSend",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "ErrSessionAudioInputUninterruptible",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_audio_in.go",
+      "symbol": "ErrSessionAudioInputUnreadable",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    }
+  ]
+}
