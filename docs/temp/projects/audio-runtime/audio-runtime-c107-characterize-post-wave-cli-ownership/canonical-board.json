@@ -12,8 +12,40 @@
     "500",
     "--all"
   ],
-  "observed_at": "2026-09-13T02:35:40Z",
+  "observed_at": "2026-09-13T02:50:15Z",
   "results": [
+    {
+      "chainingTraceDepth": 34,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+          "targetWorkId": "work-thoughts-275",
+          "targetWorkName": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z",
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "tags": {
+        "_parent_request_id": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+        "_parent_work_id": "work-thoughts-275",
+        "_source_dispatch_id": "05f14603-af65-457f-bb46-1b5d6f675ffc",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+        "_work_type": "idea"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z-audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+      "workTypeName": "idea"
+    },
     {
       "chainingTraceDepth": 1,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
@@ -30,22 +62,6 @@
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "batch-admit-audio-runtime-audio-runtime-v1-audio-runtime",
       "workTypeName": "project"
-    },
-    {
-      "chainingTraceDepth": 6,
-      "currentChainingTraceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
-      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-      "previousChainingTraceIds": [
-        "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309"
-      ],
-      "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
-      "state": {
-        "name": "init",
-        "type": "INITIAL"
-      },
-      "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
-      "workId": "work-review-278",
-      "workTypeName": "review"
     },
     {
       "chainingTraceDepth": 22,
@@ -1840,6 +1856,54 @@
       "workTypeName": "idea"
     },
     {
+      "chainingTraceDepth": 34,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c119-retire-cli-session-failure-projection",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c119-retire-cli-session-failure-projection",
+          "targetWorkId": "work-thoughts-275",
+          "targetWorkName": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_parent_request_id": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+        "_parent_work_id": "work-thoughts-275",
+        "_source_dispatch_id": "05f14603-af65-457f-bb46-1b5d6f675ffc",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c119-retire-cli-session-failure-projection",
+        "_work_type": "idea"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z-audio-runtime-c119-retire-cli-session-failure-projection",
+      "workTypeName": "idea"
+    },
+    {
+      "chainingTraceDepth": 6,
+      "currentChainingTraceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309"
+      ],
+      "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "workId": "work-review-278",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 5,
       "content": [
         {
@@ -1907,7 +1971,7 @@
       ],
       "requestId": "audio-runtime-c109-browser-retirement-integration-rehearsal-20260912T1924Z",
       "state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "tags": {
@@ -1949,32 +2013,6 @@
       "chainingTraceDepth": 36,
       "content": [
         {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c114-retire-cli-audio-rate-contract\", \"branch\": \"codex/audio-runtime-c114-retire-cli-audio-rate-contract\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
-          "type": "text"
-        }
-      ],
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c114-retire-cli-audio-rate-contract",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-c113-c116-c108-probe-and-boundary-repairs-20260913T0025Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c114-retire-cli-audio-rate-contract\", \"branch\": \"codex/audio-runtime-c114-retire-cli-audio-rate-contract\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
-        "continue_feedback": "Revision 008ad4a44c4d956b64c1ed4c76acb672e8d0328d is committed and pushed; PR #499 is open. Admission, branch, ancestry, clean-tree, focused normal/race tests, accumulated regressions, GOWORK=off consumer, verifier modes, replay cases, yui build, fmt/vet/lint/staticcheck, coverage registration, and size checks pass. The sole remaining gate is the unregistered audiorate Wire graph in C79-owned scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json; C79 remains active/init after review-270 failure. After C79 guarded merge and explicit release, fetch origin/main, verify ancestry, apply only the demonstrated registry/baseline changes, rerun bounded gates, push PR #499, and submit the changed head to script CI without polling."
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-task-260",
-      "workTypeName": "task"
-    },
-    {
-      "chainingTraceDepth": 36,
-      "content": [
-        {
           "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c115-centralize-filesystem-audio-codec\", \"branch\": \"codex/audio-runtime-c115-centralize-filesystem-audio-codec\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
           "type": "text"
         }
@@ -1991,7 +2029,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c115-centralize-filesystem-audio-codec\", \"branch\": \"codex/audio-runtime-c115-centralize-filesystem-audio-codec\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
-        "continue_feedback": "Revision ffdb8879 pushed to PR #501. Admission, ancestry, normal/race tests, 91.6% coverage, consumer, lint, staticcheck, vet, and registration checks pass. Remaining blockers are C79 ownership of shared Wire registry/baseline and the unauthorized filesystem-to-Wire composition seam. After C79 guarded release or authorized replan, implement the legal seam, rerun scoped gates, and submit the same PR to script CI without polling."
+        "continue_feedback": "Checkpoint bc585f78 pushed to PR #501; implementation f5b6b2a0 removes the filesystem peer-Wire seam and injects public audiocodec.Service through composition. Focused/race tests 379/379, CLI tests 1869/1869, standalone consumer, regressions, fmt, vet, Staticcheck, lint, and coverage registration pass. Architecture reports only C79-owned audiocodec Wire registration. Next: after C79 guarded merge and lease release, fetch origin/main, apply only released registry/baseline edits, rerun gates, push the same PR, and submit to script CI without polling."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-262",
@@ -2042,7 +2080,8 @@
         "type": "PROCESSING"
       },
       "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication\", \"branch\": \"codex/audio-runtime-c117-repair-c113-public-trace-publication\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}"
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication\", \"branch\": \"codex/audio-runtime-c117-repair-c113-public-trace-publication\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+        "continue_feedback": "C117 checkpoint pushed as PR #503 at 7f116013. C113 reproduction passes exact hashes and confirms exit 0 with no timeline; C108 provenance, ownership, negative controls and checksums pass. Host tests compile but intentionally fail closed pending C112. Next: after C112 PR #498 (rejected head 8b298333) receives green SCRIPT CI, independent approval and guarded merge, fetch/integrate accepted main, compose public sessiontrace, rerun focused checks, and update PR #503."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-268",
@@ -2072,22 +2111,6 @@
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-277",
       "workTypeName": "task"
-    },
-    {
-      "chainingTraceDepth": 33,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "work-thoughts-275",
-      "workTypeName": "thoughts"
     },
     {
       "chainingTraceDepth": 22,
@@ -3849,6 +3872,36 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-26",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 36,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c114-retire-cli-audio-rate-contract\", \"branch\": \"codex/audio-runtime-c114-retire-cli-audio-rate-contract\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "failureDetail": {
+        "message": "runner returned failed outcome",
+        "reason": "unknown"
+      },
+      "name": "audio-runtime-c114-retire-cli-audio-rate-contract",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c113-c116-c108-probe-and-boundary-repairs-20260913T0025Z",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c114-retire-cli-audio-rate-contract\", \"branch\": \"codex/audio-runtime-c114-retire-cli-audio-rate-contract\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+        "continue_feedback": "Revision 008ad4a44c4d956b64c1ed4c76acb672e8d0328d is committed and pushed; PR #499 is open. Admission, branch, ancestry, clean-tree, focused normal/race tests, accumulated regressions, GOWORK=off consumer, verifier modes, replay cases, yui build, fmt/vet/lint/staticcheck, coverage registration, and size checks pass. The sole remaining gate is the unregistered audiorate Wire graph in C79-owned scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json; C79 remains active/init after review-270 failure. After C79 guarded merge and explicit release, fetch origin/main, verify ancestry, apply only the demonstrated registry/baseline changes, rerun bounded gates, push PR #499, and submit the changed head to script CI without polling."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-260",
       "workTypeName": "task"
     },
     {
@@ -8131,6 +8184,56 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-thoughts-274",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 33,
+      "content": [
+        {
+          "text": "{\"request\":{\"requestId\":\"audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c119-retire-cli-session-failure-projection\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI session failure projection policy\",\"requestedOutcome\":\"Against accepted origin/main 3963bc3566da24f8214634c17a9d0f79a6724171, independently re-inventory every caller and move the typed provider/session failure normalization, cancellation exclusion, terminal-reason/provenance/output-state defaults, first-accepted observation publication and original-error preservation now implemented in the 246-line agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go behind a thin public go-agent-runtime/services/sessionfailure contract, private internal implementation and dedicated Wire construction. Delete the owned legacy production file and retire at least 160 accepted-main physical production lines; new runtime code, generated Wire, tests, fixtures, evidence and wrapper-only movement do not count. Keep required legacy call sites compiling through a new decision-free Deprecated adapter owned by this vertical. C107 is characterization evidence only and grants no mutation lease. Do not edit C118's session_diagnostics_terminal.go or its tests/service, C111/C112 paths, any other active retirement path, or the shared Wire registry and architecture baseline while C79 owns them. Checkpoint the disjoint service, adapter and tests now; after C79 guarded-merges, reconcile accepted main and apply only demonstrated sessionfailure Wire registration and downward/stale architecture entries before changed-head script CI.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go\",\"agent-cli/internal/services/internal/agentruntime/session_failure_projection_adapter.go\",\"agent-cli/internal/services/internal/agentruntime/session_failure_projection_test.go\",\"go-agent-runtime/services/sessionfailure/\",\"coverage-manifest/go-agent-runtime/services/sessionfailure/\",\"docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/\"],\"verification\":\"Pin the accepted-main file hash and 246-line baseline; inventory failureFacts, failureSnapshot, clearFailure, captureFailureFromError, factsFromErrorValue, factsFromSessionRunError, acceptFailureObservation, captureFailureFromClose, the unresolved/image/tool/scheduled failure projections, emitToolCallRecord and deriveOutputState, including exact static callers and explicit dynamic/interface uncertainty. Prove the public service from a separate GOWORK=off consumer with no CLI imports, flags, terminal globals, devices, credentials, environment reads or hidden initialization. Add focused normal/race tables for typed provider ERROR and synthesized transport close, public-taxonomy defaults, nonterminal diagnostics, clean close, cancellation exclusion, provider/session provenance, no-output versus partial-output state, first-accepted observation, callback reentrancy, error identity and concurrent snapshot/clear. Preserve TestSessionProgressObserver_IgnoresNonTerminalProviderDiagnostic, TestSessionDiagnostics_ConnectPhaseFailureEmitsOneCanonicalRecord, TestSessionDiagnostics_MidStreamFailureEmitsOneCanonicalRecord, TestSessionDiagnostics_DrainPhaseFailureEmitsOneCanonicalRecord, TestSessionDiagnostics_CleanCloseProducesNoFailureRecord, TestSessionSIGINTCancellationDoesNotSuppressIndependentFailure and the room/provider failure regressions without claiming ownership of their files. Add causal mutations that drop terminal failure facts and convert cancellation into failure; each must fail its intended oracle after the positive control passes. Build and launch shipped yui for credential-free provider/session failure replay, require typed terminal evidence, correct reason/provenance/output state, original error identity, observable output, bounded clean process-group shutdown and zero survivors, then rerun an existing healthy audio/tool-continuation replay. Enforce exact owned paths, deletion of the legacy file and at least 160 retired accepted-main physical lines without baseline growth. Keep shared Wire/baseline checks truthfully blocked until C79 releases ownership; then integrate accepted main, update only demonstrated entries, run current-head script CI, obtain fresh independent review and guarded merge. After merge the meta-planner must send a fresh immutable-executable Luna engineering scope=vertical probe for SERVICE, TRACE, REPLAY, FAILURES, QUALITY and PARITY covering the changed public failure workflow, its cancellation negative path, observable effects and clean shutdown, plus the healthy audio/tool regression.\",\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}},{\"name\":\"audio-runtime-c120-retire-cli-session-duration-terminal-boundary\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI session duration terminal boundary\",\"requestedOutcome\":\"Against accepted origin/main 3963bc3566da24f8214634c17a9d0f79a6724171, independently re-inventory every caller and move the provider-terminal versus loop-close precedence, bounded max-duration terminal admission, output-state projection, terminal replay artifact and joined lifecycle-error behavior now implemented in the 131-line agent-cli/internal/services/internal/agentruntime/session_duration_terminal.go behind a thin public go-agent-runtime/services/sessionduration contract, private internal implementation and dedicated Wire construction. Delete the owned legacy production file and retire at least 90 accepted-main physical production lines; new runtime code, generated Wire, tests, fixtures, evidence and wrapper-only movement do not count. Keep session_duration_loop.go and other current callers unchanged through a new decision-free Deprecated adapter owned by this vertical. C107 is characterization evidence only and grants no mutation lease. Do not edit C118/C119 diagnostics paths or services, C104 finalization paths, any other active retirement path, or the shared Wire registry and architecture baseline while C79 owns them. Checkpoint the disjoint service, adapter and tests now; after C79 guarded-merges, reconcile accepted main and apply only demonstrated sessionduration Wire registration and downward/stale architecture entries before changed-head script CI.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_duration_terminal.go\",\"agent-cli/internal/services/internal/agentruntime/session_duration_terminal_adapter.go\",\"agent-cli/internal/services/internal/agentruntime/session_duration_terminal_service_test.go\",\"go-agent-runtime/services/sessionduration/\",\"coverage-manifest/go-agent-runtime/services/sessionduration/\",\"docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/\"],\"verification\":\"Pin the accepted-main file hash and 131-line baseline; inventory sessionDurationTerminalState, newSessionDurationTerminalState and every method/caller, retaining explicit dynamic/interface uncertainty and proving session_duration_loop.go plus C104/C118/C119 source stays unchanged. Prove the public service from a separate GOWORK=off consumer with no CLI imports, flags, terminal globals, devices, credentials, environment reads or hidden initialization. Add focused normal/race tables for explicit provider terminal, synthesized provider-close, loop shutdown close, max-duration cancellation, output none/partial/complete, first-cause precedence, replay artifact publication, joined lifecycle errors, nil/duplicate observations, bounded close and zero goroutine survivors. Preserve TestRunSessionWithMaxDuration_PreservesProviderTerminalDuringShutdown, TestRunAgentLoopSessionWithDuration_ProviderDoneDrainsAcceptedOutput, TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity, TestRunSessionDurationPlan_PreservesFlushAndFinalizeFailures and both duration/live terminal-drain regressions without claiming ownership of their files. Add causal mutations that admit a loop-shutdown close as provider evidence and drop the bounded terminal artifact; each must fail its intended oracle after the positive control passes. Build and launch shipped yui for a credential-free --max-duration replay and bounded provider-close workflow, require the correct public terminal/output/error effects, preserved replay artifact, observable output, bounded clean process-group shutdown and zero survivors, then rerun an existing healthy audio/tool-continuation replay. Enforce exact owned paths, deletion of the legacy file and at least 90 retired accepted-main physical lines without baseline growth. Keep shared Wire/baseline checks truthfully blocked until C79 releases ownership; then integrate accepted main, update only demonstrated entries, run current-head script CI, obtain fresh independent review and guarded merge. After merge the meta-planner must send a fresh immutable-executable Luna engineering scope=vertical probe for SERVICE, REPLAY, FAILURES, QUALITY and PARITY covering the changed public max-duration workflow, its loop-close negative path, observable effects and clean shutdown, plus the healthy audio/tool regression.\",\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"request\":{\"requestId\":\"audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c119-retire-cli-session-failure-projection\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI session failure projection policy\",\"requestedOutcome\":\"Against accepted origin/main 3963bc3566da24f8214634c17a9d0f79a6724171, independently re-inventory every caller and move the typed provider/session failure normalization, cancellation exclusion, terminal-reason/provenance/output-state defaults, first-accepted observation publication and original-error preservation now implemented in the 246-line agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go behind a thin public go-agent-runtime/services/sessionfailure contract, private internal implementation and dedicated Wire construction. Delete the owned legacy production file and retire at least 160 accepted-main physical production lines; new runtime code, generated Wire, tests, fixtures, evidence and wrapper-only movement do not count. Keep required legacy call sites compiling through a new decision-free Deprecated adapter owned by this vertical. C107 is characterization evidence only and grants no mutation lease. Do not edit C118's session_diagnostics_terminal.go or its tests/service, C111/C112 paths, any other active retirement path, or the shared Wire registry and architecture baseline while C79 owns them. Checkpoint the disjoint service, adapter and tests now; after C79 guarded-merges, reconcile accepted main and apply only demonstrated sessionfailure Wire registration and downward/stale architecture entries before changed-head script CI.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go\",\"agent-cli/internal/services/internal/agentruntime/session_failure_projection_adapter.go\",\"agent-cli/internal/services/internal/agentruntime/session_failure_projection_test.go\",\"go-agent-runtime/services/sessionfailure/\",\"coverage-manifest/go-agent-runtime/services/sessionfailure/\",\"docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/\"],\"verification\":\"Pin the accepted-main file hash and 246-line baseline; inventory failureFacts, failureSnapshot, clearFailure, captureFailureFromError, factsFromErrorValue, factsFromSessionRunError, acceptFailureObservation, captureFailureFromClose, the unresolved/image/tool/scheduled failure projections, emitToolCallRecord and deriveOutputState, including exact static callers and explicit dynamic/interface uncertainty. Prove the public service from a separate GOWORK=off consumer with no CLI imports, flags, terminal globals, devices, credentials, environment reads or hidden initialization. Add focused normal/race tables for typed provider ERROR and synthesized transport close, public-taxonomy defaults, nonterminal diagnostics, clean close, cancellation exclusion, provider/session provenance, no-output versus partial-output state, first-accepted observation, callback reentrancy, error identity and concurrent snapshot/clear. Preserve TestSessionProgressObserver_IgnoresNonTerminalProviderDiagnostic, TestSessionDiagnostics_ConnectPhaseFailureEmitsOneCanonicalRecord, TestSessionDiagnostics_MidStreamFailureEmitsOneCanonicalRecord, TestSessionDiagnostics_DrainPhaseFailureEmitsOneCanonicalRecord, TestSessionDiagnostics_CleanCloseProducesNoFailureRecord, TestSessionSIGINTCancellationDoesNotSuppressIndependentFailure and the room/provider failure regressions without claiming ownership of their files. Add causal mutations that drop terminal failure facts and convert cancellation into failure; each must fail its intended oracle after the positive control passes. Build and launch shipped yui for credential-free provider/session failure replay, require typed terminal evidence, correct reason/provenance/output state, original error identity, observable output, bounded clean process-group shutdown and zero survivors, then rerun an existing healthy audio/tool-continuation replay. Enforce exact owned paths, deletion of the legacy file and at least 160 retired accepted-main physical lines without baseline growth. Keep shared Wire/baseline checks truthfully blocked until C79 releases ownership; then integrate accepted main, update only demonstrated entries, run current-head script CI, obtain fresh independent review and guarded merge. After merge the meta-planner must send a fresh immutable-executable Luna engineering scope=vertical probe for SERVICE, TRACE, REPLAY, FAILURES, QUALITY and PARITY covering the changed public failure workflow, its cancellation negative path, observable effects and clean shutdown, plus the healthy audio/tool regression.\",\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}},{\"name\":\"audio-runtime-c120-retire-cli-session-duration-terminal-boundary\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI session duration terminal boundary\",\"requestedOutcome\":\"Against accepted origin/main 3963bc3566da24f8214634c17a9d0f79a6724171, independently re-inventory every caller and move the provider-terminal versus loop-close precedence, bounded max-duration terminal admission, output-state projection, terminal replay artifact and joined lifecycle-error behavior now implemented in the 131-line agent-cli/internal/services/internal/agentruntime/session_duration_terminal.go behind a thin public go-agent-runtime/services/sessionduration contract, private internal implementation and dedicated Wire construction. Delete the owned legacy production file and retire at least 90 accepted-main physical production lines; new runtime code, generated Wire, tests, fixtures, evidence and wrapper-only movement do not count. Keep session_duration_loop.go and other current callers unchanged through a new decision-free Deprecated adapter owned by this vertical. C107 is characterization evidence only and grants no mutation lease. Do not edit C118/C119 diagnostics paths or services, C104 finalization paths, any other active retirement path, or the shared Wire registry and architecture baseline while C79 owns them. Checkpoint the disjoint service, adapter and tests now; after C79 guarded-merges, reconcile accepted main and apply only demonstrated sessionduration Wire registration and downward/stale architecture entries before changed-head script CI.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_duration_terminal.go\",\"agent-cli/internal/services/internal/agentruntime/session_duration_terminal_adapter.go\",\"agent-cli/internal/services/internal/agentruntime/session_duration_terminal_service_test.go\",\"go-agent-runtime/services/sessionduration/\",\"coverage-manifest/go-agent-runtime/services/sessionduration/\",\"docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/\"],\"verification\":\"Pin the accepted-main file hash and 131-line baseline; inventory sessionDurationTerminalState, newSessionDurationTerminalState and every method/caller, retaining explicit dynamic/interface uncertainty and proving session_duration_loop.go plus C104/C118/C119 source stays unchanged. Prove the public service from a separate GOWORK=off consumer with no CLI imports, flags, terminal globals, devices, credentials, environment reads or hidden initialization. Add focused normal/race tables for explicit provider terminal, synthesized provider-close, loop shutdown close, max-duration cancellation, output none/partial/complete, first-cause precedence, replay artifact publication, joined lifecycle errors, nil/duplicate observations, bounded close and zero goroutine survivors. Preserve TestRunSessionWithMaxDuration_PreservesProviderTerminalDuringShutdown, TestRunAgentLoopSessionWithDuration_ProviderDoneDrainsAcceptedOutput, TestRunAgentLoopSessionWithDuration_PreservesFailureIdentity, TestRunSessionDurationPlan_PreservesFlushAndFinalizeFailures and both duration/live terminal-drain regressions without claiming ownership of their files. Add causal mutations that admit a loop-shutdown close as provider evidence and drop the bounded terminal artifact; each must fail its intended oracle after the positive control passes. Build and launch shipped yui for a credential-free --max-duration replay and bounded provider-close workflow, require the correct public terminal/output/error effects, preserved replay artifact, observable output, bounded clean process-group shutdown and zero survivors, then rerun an existing healthy audio/tool-continuation replay. Enforce exact owned paths, deletion of the legacy file and at least 90 retired accepted-main physical lines without baseline growth. Keep shared Wire/baseline checks truthfully blocked until C79 releases ownership; then integrate accepted main, update only demonstrated entries, run current-head script CI, obtain fresh independent review and guarded merge. After merge the meta-planner must send a fresh immutable-executable Luna engineering scope=vertical probe for SERVICE, REPLAY, FAILURES, QUALITY and PARITY covering the changed public max-duration workflow, its loop-close negative path, observable effects and clean shutdown, plus the healthy audio/tool regression.\",\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-275",
+      "workTypeName": "thoughts"
+    },
+    {
+      "chainingTraceDepth": 37,
+      "content": [
+        {
+          "text": "Reconciled wake `audio-runtime-c114-retire-cli-audio-rate-contract`.\n\n- C114 is preserved at clean PR #499 head `59edd9e1`; failure is an expected dependency checkpoint, not a runtime failure.\n- C79 retains the shared Wire/baseline lease and is awaiting fresh review with nine green checks.\n- All eight executor slots are allocated; C119/C120 fill the backlog to ten admitted items.\n- No duplicate Work, unsafe state move, or validation was emitted.\n- Updated [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md).\n\nNext decision: after C79’s reviewed guarded merge, resume the same C114 task for its demonstrated registry/baseline changes, CI, review, merge, and immutable vertical probe.",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c114-retire-cli-audio-rate-contract",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c113-c116-c108-probe-and-boundary-repairs-20260913T0025Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "Reconciled wake `audio-runtime-c114-retire-cli-audio-rate-contract`.\n\n- C114 is preserved at clean PR #499 head `59edd9e1`; failure is an expected dependency checkpoint, not a runtime failure.\n- C79 retains the shared Wire/baseline lease and is awaiting fresh review with nine green checks.\n- All eight executor slots are allocated; C119/C120 fill the backlog to ten admitted items.\n- No duplicate Work, unsafe state move, or validation was emitted.\n- Updated [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md).\n\nNext decision: after C79’s reviewed guarded merge, resume the same C114 task for its demonstrated registry/baseline changes, CI, review, merge, and immutable vertical probe."
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-thoughts-279",
       "workTypeName": "thoughts"
     },
     {

@@ -11,8 +11,8 @@
         "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership"
       },
       "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "checkpoint_sha": "8853510dad106948b4594aa657866ac05ccec3e2",
-      "head": "8853510dad106948b4594aa657866ac05ccec3e2",
+      "checkpoint_sha": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+      "head": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
       "lease_paths": [],
       "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
       "observation_command": "canonical board row + gh pr view --json files",
@@ -35,14 +35,14 @@
         "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration"
       },
       "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
-      "checkpoint_sha": "0185f03afbd2bf81e6d2cdb32d3a1586576aad7d",
-      "head": "0185f03afbd2bf81e6d2cdb32d3a1586576aad7d",
+      "checkpoint_sha": "509a3a8df8ed0ae4027a5177cabeb1bc2f1b2649",
+      "head": "509a3a8df8ed0ae4027a5177cabeb1bc2f1b2649",
       "lease_paths": [],
       "name": "audio-runtime-c109-characterize-browser-retirement-integration",
       "observation_command": "canonical board row + gh pr view --json files",
       "pr_number": 495,
       "state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "work_id": "work-task-224",
@@ -77,36 +77,6 @@
       "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution"
     },
     {
-      "accepted_main_changed_paths": [
-        "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
-        "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go"
-      ],
-      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
-      "board_checkpoint": {
-        "baseRevision": "3963bc3566da24f8214634c17a9d0f79a6724171",
-        "branch": "codex/audio-runtime-c114-retire-cli-audio-rate-contract",
-        "head": "NONE",
-        "pr_number": "NONE",
-        "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c114-retire-cli-audio-rate-contract"
-      },
-      "branch": "codex/audio-runtime-c114-retire-cli-audio-rate-contract",
-      "checkpoint_sha": "59edd9e15b8cf631e7230959f31c4a5faf64e56f",
-      "head": "59edd9e15b8cf631e7230959f31c4a5faf64e56f",
-      "lease_paths": [
-        "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
-        "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go"
-      ],
-      "name": "audio-runtime-c114-retire-cli-audio-rate-contract",
-      "observation_command": "canonical board row + gh pr view --json files",
-      "pr_number": 499,
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "work_id": "work-task-260",
-      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c114-retire-cli-audio-rate-contract"
-    },
-    {
       "accepted_main_changed_paths": [],
       "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "board_checkpoint": {
@@ -117,8 +87,8 @@
         "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c115-centralize-filesystem-audio-codec"
       },
       "branch": "codex/audio-runtime-c115-centralize-filesystem-audio-codec",
-      "checkpoint_sha": "ffdb887949c802e887b3b0e0e7f5ef744b60472a",
-      "head": "ffdb887949c802e887b3b0e0e7f5ef744b60472a",
+      "checkpoint_sha": "bc585f787e001f92f2da797f8d0f64f58b1520bc",
+      "head": "bc585f787e001f92f2da797f8d0f64f58b1520bc",
       "lease_paths": [],
       "name": "audio-runtime-c115-centralize-filesystem-audio-codec",
       "observation_command": "canonical board row + gh pr view --json files",
@@ -364,10 +334,10 @@
     503
   ],
   "candidate_rule": "a candidate path must be an accepted-main production path with zero path_owners and must not be a shared path dependency",
-  "canonical_board_sha256": "b8b153751b8b2577a14b1e5b3699b53fdab5d71b929cb505bf39119542772dd1",
-  "captured_at": "2026-09-13T02:36:10Z",
+  "canonical_board_sha256": "a001782581027ea73c5eb18d1882aa6c45b4562679602f0f8cf2a9397f32cdb2",
+  "captured_at": "2026-09-13T02:50:45Z",
   "contract_revision": "audio-runtime-v1",
-  "open_pr_inventory_sha256": "464a47a80574fb3b077fef94dcbae17d26e5295fc6baef2065fb199fd1689500",
+  "open_pr_inventory_sha256": "b195bf42aacec08ea8a97c2aff6d9a518b8bb1356786af23aeda9982da108996",
   "path_owners": {
     "agent-cli/internal/services/internal/agentruntime/capability_alias.go": [],
     "agent-cli/internal/services/internal/agentruntime/metrics_collector.go": [
@@ -658,7 +628,7 @@
         "owner": "audio-runtime-c114-retire-cli-audio-rate-contract",
         "pr_number": 499,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-260"
       },
       {
@@ -827,7 +797,7 @@
         "owner": "audio-runtime-c114-retire-cli-audio-rate-contract",
         "pr_number": 499,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-260"
       },
       {
@@ -6144,7 +6114,7 @@
       "accepted_main_changed_paths": [],
       "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "head": "8853510dad106948b4594aa657866ac05ccec3e2",
+      "head": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
       "observation_commands": [
         [
           "gh",
@@ -6180,7 +6150,7 @@
       "accepted_main_changed_paths": [],
       "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
-      "head": "0185f03afbd2bf81e6d2cdb32d3a1586576aad7d",
+      "head": "509a3a8df8ed0ae4027a5177cabeb1bc2f1b2649",
       "observation_commands": [
         [
           "gh",
@@ -6364,7 +6334,7 @@
       "owner": "audio-runtime-c114-retire-cli-audio-rate-contract",
       "pr_number": 499,
       "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "state": "active-task",
+      "state": "preserved-unmerged-pr",
       "work_id": "work-task-260"
     },
     {
@@ -6407,7 +6377,7 @@
       "accepted_main_changed_paths": [],
       "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "branch": "codex/audio-runtime-c115-centralize-filesystem-audio-codec",
-      "head": "ffdb887949c802e887b3b0e0e7f5ef744b60472a",
+      "head": "bc585f787e001f92f2da797f8d0f64f58b1520bc",
       "observation_commands": [
         [
           "gh",

@@ -1,7 +1,7 @@
 # C107 accepted-main ownership inventory
 
-Source revision: `d4766c3dbbf2c198142047ead4449d58dd47d485`  
-Source archive SHA-256: `d3d02949213d8822047a7d723a487e692f153c6bfe8ca5eb6b927823ee90dbf4`  
+Source revision: `d4766c3dbbf2c198142047ead4449d58dd47d485`
+Source archive SHA-256: `d3d02949213d8822047a7d723a487e692f153c6bfe8ca5eb6b927823ee90dbf4`
 Target root: `agent-cli/internal/services/internal/agentruntime`
 
 The report is generated from a pinned source archive. It is a census, not a migration percentage or acceptance waiver.

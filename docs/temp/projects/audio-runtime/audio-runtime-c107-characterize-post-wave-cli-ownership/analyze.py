@@ -403,8 +403,8 @@ def markdown(inventory: dict[str, Any]) -> str:
     lines = [
         "# C107 accepted-main ownership inventory",
         "",
-        f"Source revision: `{inventory['source_revision']}`  ",
-        f"Source archive SHA-256: `{inventory['source_archive_sha256']}`  ",
+        f"Source revision: `{inventory['source_revision']}`",
+        f"Source archive SHA-256: `{inventory['source_archive_sha256']}`",
         f"Target root: `{inventory['target_root']}`",
         "",
         "The report is generated from a pinned source archive. It is a census, not a migration percentage or acceptance waiver.",

@@ -225,7 +225,7 @@
       "name": "audio-runtime-c109-characterize-browser-retirement-integration",
       "rejection_feedback": "CI checks failed for PR #495 at head 0185f03afbd2bf81e6d2cdb32d3a1586576aad7d: required checks failed on current head 0185f03afbd2bf81e6d2cdb32d3a1586576aad7d: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34732547786/job/103657892852). Return this task to the executor with the listed failures.",
       "state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "work_id": "work-task-224",
@@ -280,8 +280,8 @@
       "name": "audio-runtime-c114-retire-cli-audio-rate-contract",
       "rejection_feedback": "",
       "state": {
-        "name": "init",
-        "type": "PROCESSING"
+        "name": "failed",
+        "type": "FAILED"
       },
       "work_id": "work-task-260",
       "work_type": "task"
@@ -1057,6 +1057,6 @@
       "work_type": "task"
     }
   ],
-  "observed_at": "2026-09-13T02:36:10Z",
+  "observed_at": "2026-09-13T02:50:45Z",
   "schema_version": "c107-previous-review-findings-v1"
 }
