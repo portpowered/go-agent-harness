@@ -16,3 +16,24 @@ Static rejection repair checkpoint:
 - Focused, race, scheduler, package, gateway, vet and diff checks passed.
 - Implementation checkpoint 87c38b48d7cec36ecb476ac44f0f27fcf97b05f0 was committed and pushed; PR #516 was opened from that exact head.
 - The evidence-only follow-up commit records this handoff without changing production behavior. The final pushed head is the exact SHA returned in the task response; script CI must run that head, including Windows portable, and owns all polling.
+
+# C155 current-head causal regression recheck 2026-09-13
+
+- After a fresh `git fetch origin main`, `origin/main` remains
+  `97d3dcfb1e97a2611aa26b203a7f893442db4768`. The current pushed source was
+  clean at `c54129831c4c4e48e96d6d5912a608358309ea89`; accepted main
+  `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current `origin/main` are
+  all ancestors. The owned diff remains limited to the adversarial test and
+  C155 evidence; `device_virtual.go` and `device_virtual_test.go` are
+  unchanged.
+- Fresh bounded controls on the current source all exited 0: causal subtest
+  `200` normal, `100` race, `100` with `GOMAXPROCS=1`, and `100` with
+  `GOMAXPROCS=8`; adversarial scenarios `04`-`20` `900` normal and `420`
+  race; and typed/loopback regressions `80`. `git diff --check` is clean.
+- This remains executor handoff evidence only. No script-CI, independent
+  review, guarded merge, vertical acceptance, physical/acoustic proof or
+  project completion is claimed. Exact next action is to commit/push this
+  evidence checkpoint, keep PR `#516` bound to the exact head, and return
+  `ACCEPTED` to the script-owned current-head gate without polling; retain
+  ownership through `CONTINUE` for any exact rejection or actionable repair.
