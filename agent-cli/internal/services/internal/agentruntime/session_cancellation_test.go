@@ -11,6 +11,15 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+func TestSessionSIGINTErrorOnlyAdapter(t *testing.T) {
+	if !sessionSIGINTErrorOnly(context.Canceled) {
+		t.Fatal("context cancellation was not classified as SIGINT-safe")
+	}
+	if sessionSIGINTErrorOnly(errors.New("provider failure")) {
+		t.Fatal("provider failure was classified as SIGINT-safe")
+	}
+}
+
 func TestSessionSIGINTCancellationResolvesPendingObligations(t *testing.T) {
 	sink := &diagnosticRecordSink{}
 	observer := newSessionProgressObserver(sink, nil, "openai", "gpt-realtime")

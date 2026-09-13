@@ -1,0 +1,183 @@
+{
+  "status": "pass",
+  "binary": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c104-retire-cli-session-finalization-boundary/artifacts/yui",
+    "sha256": "70700965577d5cb6eb499ca6e36e6d36a90b287679358f424266c22503183179",
+    "bytes": 53034578,
+    "candidate_revision": "8569f92ad04ed4fdaf70fd0c7357d646140fa3a6"
+  },
+  "credential_environment_removed": [],
+  "cases": [
+    {
+      "label": "success",
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary/docs/temp/projects/audio-runtime/audio-runtime-c104-retire-cli-session-finalization-boundary/artifacts/yui",
+        "--config-dir",
+        "$TMP/success/config",
+        "--workdir",
+        "$TMP/success/workdir",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary/go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
+        "--audio-out",
+        "$TMP/success/assistant.wav"
+      ],
+      "cwd": "$TMP/success/workdir",
+      "removed_credentials": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "cleanup_timed_out": false,
+      "termination_signals": [],
+      "descendants_reaped": true,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "stdout_bytes": 636,
+      "stderr_bytes": 0,
+      "elapsed_seconds": 0.433144,
+      "stdout": "Filesystem scope: workdir=$TMP/success/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\nAssistant: Hello thereSecond turn reply\n\n[session closed: healthy_complete]\n[session terminal: classification=transport terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+      "stderr": "",
+      "markers": [
+        "Assistant: Hello there",
+        "healthy_complete"
+      ],
+      "markers_present": true,
+      "audio_files": [
+        {
+          "path": "$TMP/success/assistant.wav",
+          "bytes": 48
+        }
+      ]
+    },
+    {
+      "label": "sigint-cancellation",
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary/docs/temp/projects/audio-runtime/audio-runtime-c104-retire-cli-session-finalization-boundary/artifacts/yui",
+        "--config-dir",
+        "$TMP/sigint-cancellation/config",
+        "--workdir",
+        "$TMP/sigint-cancellation/workdir",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-interruption.session.json",
+        "--replay-timing",
+        "recorded",
+        "--audio-out",
+        "$TMP/sigint-cancellation/assistant.pcm"
+      ],
+      "cwd": "$TMP/sigint-cancellation/workdir",
+      "removed_credentials": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "cleanup_timed_out": false,
+      "termination_signals": [
+        "SIGINT"
+      ],
+      "descendants_reaped": true,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "stdout_bytes": 563,
+      "stderr_bytes": 0,
+      "elapsed_seconds": 0.13146,
+      "stdout": "Filesystem scope: workdir=$TMP/sigint-cancellation/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n[session terminal: classification=user_cancelled terminal_reason=cancellation terminal_provenance=cli output_state=partial]\n",
+      "stderr": "",
+      "markers": [
+        "classification=user_cancelled",
+        "terminal_reason=cancellation"
+      ],
+      "markers_present": true,
+      "audio_files": []
+    },
+    {
+      "label": "cleanup-failure",
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary/docs/temp/projects/audio-runtime/audio-runtime-c104-retire-cli-session-finalization-boundary/artifacts/yui",
+        "--config-dir",
+        "$TMP/cleanup-failure/config",
+        "--workdir",
+        "$TMP/cleanup-failure/workdir",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-interruption.session.json",
+        "--replay-timing",
+        "recorded",
+        "--record-dir",
+        "$TMP/cleanup-failure/recording",
+        "--audio-out",
+        "$TMP/cleanup-failure/assistant.wav"
+      ],
+      "cwd": "$TMP/cleanup-failure/workdir",
+      "removed_credentials": [],
+      "exit_code": 1,
+      "timed_out": false,
+      "cleanup_timed_out": false,
+      "termination_signals": [],
+      "descendants_reaped": true,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "stdout_bytes": 594,
+      "stderr_bytes": 181,
+      "elapsed_seconds": 0.194082,
+      "stdout": "Filesystem scope: workdir=$TMP/cleanup-failure/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: none\n\n[session terminal: classification=replay_complete terminal_reason=replay_complete terminal_provenance=replay output_state=complete]\n[session replay complete]\n",
+      "stderr": "Error: transcript: recording use destination $TMP/cleanup-failure/recording: transcript: invalid recording destination\n",
+      "injection": {
+        "barrier": "recording-directory-claim-sidecar",
+        "claim_observed": true,
+        "destination_replaced": true,
+        "claim_released": true
+      },
+      "markers": [
+        "recording",
+        "destination"
+      ],
+      "markers_present": true,
+      "audio_files": [
+        {
+          "path": "$TMP/cleanup-failure/assistant.wav",
+          "bytes": 3404
+        }
+      ]
+    },
+    {
+      "label": "audio-tool-continuation-replay",
+      "argv": [
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary/docs/temp/projects/audio-runtime/audio-runtime-c104-retire-cli-session-finalization-boundary/artifacts/yui",
+        "--config-dir",
+        "$TMP/audio-tool-continuation-replay/config",
+        "--workdir",
+        "$TMP/audio-tool-continuation-replay/workdir",
+        "session",
+        "--replay",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+        "--replay-timing",
+        "recorded",
+        "--audio-out",
+        "$TMP/audio-tool-continuation-replay/assistant.wav"
+      ],
+      "cwd": "$TMP/audio-tool-continuation-replay/workdir",
+      "removed_credentials": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "cleanup_timed_out": false,
+      "termination_signals": [],
+      "descendants_reaped": true,
+      "stdout_truncated": false,
+      "stderr_truncated": false,
+      "stdout_bytes": 699,
+      "stderr_bytes": 0,
+      "elapsed_seconds": 0.20108,
+      "stdout": "Filesystem scope: workdir=$TMP/audio-tool-continuation-replay/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+      "stderr": "",
+      "markers": [
+        "PROBE_TOOL_MARKER_9182",
+        "strict replay continuation"
+      ],
+      "markers_present": true,
+      "audio_files": [
+        {
+          "path": "$TMP/audio-tool-continuation-replay/assistant.wav",
+          "bytes": 3244
+        }
+      ]
+    }
+  ]
+}

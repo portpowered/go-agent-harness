@@ -118,7 +118,7 @@ func TestSessionStragglerDrainFrozenClockHasWallSafety(t *testing.T) {
 	}
 	clock := platformclock.NewDeterministic(time.Unix(0, 0).UTC(), time.Second)
 	start := time.Now()
-	if err := waitForSessionLoopStragglersWithContext(context.Background(), io.Discard, loop, defaultSessionStragglerDrainPolicy, nil, clock); err != nil {
+	if err := waitForSessionLoopStragglersWithContext(context.Background(), io.Discard, loop, sessionStragglerDrainPolicy{quietPeriod: sessionStragglerDrainQuietPeriod}, nil, clock); err != nil {
 		t.Fatalf("frozen-clock straggler drain: %v", err)
 	}
 	if elapsed := time.Since(start); elapsed >= time.Second {
@@ -137,7 +137,7 @@ func TestSessionStragglerDrainCancellationWinsImmediately(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	start := time.Now()
-	if err := waitForSessionLoopStragglersWithContext(ctx, io.Discard, loop, defaultSessionStragglerDrainPolicy, nil, clock); err != nil {
+	if err := waitForSessionLoopStragglersWithContext(ctx, io.Discard, loop, sessionStragglerDrainPolicy{quietPeriod: sessionStragglerDrainQuietPeriod}, nil, clock); err != nil {
 		t.Fatalf("cancelled straggler drain: %v", err)
 	}
 	if elapsed := time.Since(start); elapsed >= 100*time.Millisecond {
