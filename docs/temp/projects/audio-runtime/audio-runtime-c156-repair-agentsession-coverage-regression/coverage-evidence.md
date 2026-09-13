@@ -162,7 +162,8 @@ After fetching and merging review-time `origin/main` `97d3dcfb1e97a2611aa26b203a
 - The bounded repair keeps the public behavior assertions intact, factors
   barge and invalid-voice checks into small assertion helpers, uses
   `errors.Is` for wrapped-error identity, and names the shared mutation value
-  as a test constant. No production behavior or acceptance threshold changed.
+  as a test constant. Repair commit: `d704a2aa1101023740c95cefdaf09ccd0c57b6c9`.
+  No production behavior or acceptance threshold changed.
 - Post-repair validation before the evidence update: focused C156 normal
   `-count=50` and race `-count=20` pass; full agentsession normal `-count=10`
   and race `-count=5` pass; the candidate package profile is `76/76`
