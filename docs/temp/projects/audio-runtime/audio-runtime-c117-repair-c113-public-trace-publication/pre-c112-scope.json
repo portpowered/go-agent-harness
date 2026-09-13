@@ -1,0 +1,34 @@
+{
+  "admission": "admitted",
+  "baseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+  "branch": "codex/audio-runtime-c117-repair-c113-public-trace-publication",
+  "c112_consumption": "withheld",
+  "c113_reproduction": {
+    "passes": true,
+    "report": "runs/c113-reproduction.json",
+    "timeline_present": false
+  },
+  "c79_shared_paths": "unchanged",
+  "changed_paths": [
+    "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go"
+  ],
+  "contract_revision": "audio-runtime-v1",
+  "head": "3963bc3566da24f8214634c17a9d0f79a6724171",
+  "origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
+  "passes": true,
+  "physical_device_and_acoustic_proof": "OUT_OF_SCOPE_AND_NEVER_PASS",
+  "planning_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
+  "pre_c112_test": {
+    "expected_red": true,
+    "report": "runs/pre-c112-test.json"
+  },
+  "project": "audio-runtime",
+  "required_ancestry": {
+    "3963bc3566da24f8214634c17a9d0f79a6724171": true,
+    "8bdafc7f947a3a2c9856220abdc539437035bd21": true
+  },
+  "schema_version": "audio-runtime-c117-pre-c112-scope-v1",
+  "startup_integration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "work": "audio-runtime-c117-repair-c113-public-trace-publication",
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication"
+}
