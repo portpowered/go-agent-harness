@@ -6,7 +6,7 @@
   "session": "~default",
   "server": "http://127.0.0.1:7439",
   "branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
-  "implementationRevision": "6aa2442c062616074af3d15a6cd2cf51216e26d2",
+  "implementationRevision": "b5f6e422883397f5a3b07a3c80a583f0d8003fd8",
   "admission": {
     "verifyWork": "admitted",
     "secondProject": false,
@@ -21,7 +21,7 @@
     "immutableSourceSha256": "48000dcd73b85ebbe93fd40a3996529878a99c799b67b0779d60f55dbb43fc1e",
     "legacyAdapterLines": 57,
     "netPhysicalProductionLinesRetired": 90,
-    "changedFiles": 20,
+    "changedFiles": 21,
     "changedPathsRemainOwned": true
   },
   "checks": [
@@ -64,9 +64,9 @@
     {
       "command": "verify.py --mode positive-and-negative-controls",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789260812-28873.json",
-      "sha256": "14c57e832c3a640c94d6beb4f1f69b6986596d4ba5c0723c0a177a53403952fc",
-      "sourceRevision": "6aa2442c062616074af3d15a6cd2cf51216e26d2"
+      "artifact": "artifacts/verify-1789262697-68153.json",
+      "sha256": "1db547c8af9903ab3769af3257a55021df89e1c438e90a137fc7db8038fc4d05",
+      "sourceRevision": "b5f6e422883397f5a3b07a3c80a583f0d8003fd8"
     }
   ],
   "accumulatedRegressions": {
@@ -80,9 +80,9 @@
   },
   "replay": {
     "result": "accepted",
-    "artifact": "artifacts/run-1789260847-29785.json",
-    "sha256": "e8fd048b90a569f76f32a29c622030736ceaf5794d6e70020e50439cf677fdbd",
-    "sourceRevision": "6aa2442c062616074af3d15a6cd2cf51216e26d2",
+    "artifact": "artifacts/run-1789262735-68621.json",
+    "sha256": "1a2d294b18e2604f3409bf804be0d54f980b37f12164aab12d0f2f73421bd7d3",
+    "sourceRevision": "b5f6e422883397f5a3b07a3c80a583f0d8003fd8",
     "binary": {
       "bytes": 50992114,
       "sha256": "8df94084bfbb194a476f0efe5d1987ab3d6903f649faa71c98af955f77e0f14a"
@@ -120,8 +120,50 @@
       "changed": false
     }
   },
+  "currentOriginMain": {
+    "revision": "3963bc3566da24f8214634c17a9d0f79a6724171",
+    "integrated": false,
+    "reason": "C79/work-task-114 still owns the shared registry and architecture baseline"
+  },
+  "coverageCharacterization": {
+    "priorRun": "34723920469",
+    "priorHead": "9712ed8b2a7879d08dd620eb0a64a895b7309e24",
+    "priorFailure": "go-agent-runtime/services/session expected 80.00%, actual 76.80%, delta -3.20%",
+    "currentRun": "34729269748",
+    "currentHead": "b5f6e422883397f5a3b07a3c80a583f0d8003fd8",
+    "currentResult": "coverage gate passed: 179 registered packages across 7 profiles",
+    "floorChanged": false
+  },
+  "causalCharacterization": {
+    "command": "GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v",
+    "result": "passed",
+    "durationSeconds": 24.991,
+    "subtestDurationSeconds": 12.39,
+    "sourceRevision": "b5f6e422883397f5a3b07a3c80a583f0d8003fd8",
+    "priorFailureReproduced": false,
+    "repair": "none; no C111-owned cause demonstrated",
+    "dependency": "preserve the prior playback-drain observation as separate C64 terminal-drain evidence if it recurs",
+    "evidence": "bounded-causal-characterization-b5f6e422.md"
+  },
+  "currentHeadCI": {
+    "run": "34729269748",
+    "head": "b5f6e422883397f5a3b07a3c80a583f0d8003fd8",
+    "passed": [
+      "unit",
+      "race",
+      "integration",
+      "coverage",
+      "hermetic",
+      "WebMCP Chrome",
+      "macOS audio release",
+      "Windows audio portable"
+    ],
+    "static": "blocked only by C79-owned sessioncontinuation Wire registration and generated-file-spoof architecture check",
+    "observedCompletedRun": true,
+    "claimedGreen": false
+  },
   "handoff": {
-    "ci": "not polled and not claimed green",
+    "ci": "completed run 34729269748 inspected for exact failure; not claimed green",
     "review": "not self-reviewed; no C111 review findings were present at admission",
     "nextAction": "After C79 explicitly releases the shared Wire registry and architecture baseline, fetch current origin/main, preserve startup and accepted-main ancestry, add only demonstrated shared registrations, rerun final gates, then submit this same task to script CI and independent review."
   }
