@@ -558,6 +558,45 @@ def capture_pr_inventory(source_paths: set[str], board_results: list[dict[str, A
     return capture, path
 
 
+def validate_current_pr_identity(prs: dict[str, Any]) -> dict[str, Any]:
+    """Require the captured open PR to be the exact local submitted head.
+
+    Evidence is only reviewable when the checked-in PR inventory describes the
+    branch being handed to the script gate.  Cached inventory from a previous
+    evidence commit must fail closed instead of allowing a clean-but-stale
+    release to be submitted.
+    """
+    candidate = str(git("rev-parse", "HEAD"))
+    branch = str(git("branch", "--show-current"))
+    matches = [
+        row
+        for row in prs.get("prs", [])
+        if isinstance(row, dict) and (row.get("task_name") == WORK or row.get("head_branch") == BRANCH)
+    ]
+    if len(matches) != 1:
+        raise EvidenceFailure(f"expected exactly one open PR for {WORK}, found {len(matches)}")
+    row = matches[0]
+    if row.get("task_name") != WORK or row.get("head_branch") != BRANCH:
+        raise EvidenceFailure(f"candidate PR identity is not bound to {WORK}: {row!r}")
+    if row.get("state") != "OPEN" or row.get("base_branch") != "main":
+        raise EvidenceFailure(f"candidate PR is not an open main PR: {row!r}")
+    if row.get("head") != candidate:
+        raise EvidenceFailure(
+            f"candidate PR head {row.get('head')} does not match local HEAD {candidate}; push the exact submitted head before release"
+        )
+    if branch != BRANCH:
+        raise EvidenceFailure(f"candidate PR branch mismatch: {branch!r} != {BRANCH!r}")
+    return {
+        "number": row.get("number"),
+        "head": row.get("head"),
+        "base": row.get("base"),
+        "head_branch": row.get("head_branch"),
+        "base_branch": row.get("base_branch"),
+        "task_name": row.get("task_name"),
+        "task_work_id": row.get("task_work_id"),
+    }
+
+
 def active_task_rows(board_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows = []
     for row in board_results:
@@ -774,6 +813,7 @@ def capture_state() -> dict[str, Any]:
     board, board_path = capture_board()
     source = set(source_production_paths())
     prs, pr_path = capture_pr_inventory(source, board["results"])
+    candidate_pr = validate_current_pr_identity(prs)
     subtraction = build_subtraction(board, prs, source)
     write_json(HERE / "factory-status.json", {"schema_version": "c107-factory-status-v1", "observed_at": now(), "status": sanitize(status), "admission": admission})
     write_json(HERE / "previous-review-findings.json", review_findings(board["results"]))
@@ -796,6 +836,7 @@ def capture_state() -> dict[str, Any]:
         "open_retirement_pr_count": len([pr for pr in prs["prs"] if pr.get("is_retirement_checkpoint")]),
         "candidate_head": str(git("rev-parse", "HEAD")),
         "candidate_branch": str(git("branch", "--show-current")),
+        "candidate_pr": candidate_pr,
         "prd_identity": admitted_prd_identity(),
     }
     write_json(HERE / "state-capture.json", capture)
@@ -827,6 +868,8 @@ def provenance() -> dict[str, Any]:
     if not all(check["passed"] for check in checks.values()):
         raise EvidenceFailure("candidate is missing required startup/baseline/current-main ancestry; integrate current origin/main in this isolated worktree")
     source_archive = git("archive", "--format=tar", SOURCE_REVISION, text=False)
+    pr_inventory = read_json(HERE / "pr-inventory.json")
+    candidate_pr = validate_current_pr_identity(pr_inventory)
     source_plan = FACTORY_ROOT / "factory/projects/audio-runtime/source-plan.md"
     request = FACTORY_ROOT / "factory/projects/audio-runtime/request.md"
     acceptance = FACTORY_ROOT / "factory/projects/audio-runtime/acceptance.md"
@@ -843,6 +886,7 @@ def provenance() -> dict[str, Any]:
         "prd_identity": admitted_prd_identity(),
         "branch": branch,
         "candidate_revision": candidate,
+        "candidate_pr": candidate_pr,
         "accepted_source_revision": SOURCE_REVISION,
         "current_origin_main": origin,
         "startup_integration_revision": STARTUP_INTEGRATION,
