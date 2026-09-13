@@ -32,12 +32,12 @@
       "SHA256SUMS"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps",
-    "elapsed_seconds": 0.083,
+    "elapsed_seconds": 0.066,
     "exit_code": 0,
     "timed_out": false
   },
   "current_descendant": "9c0f19c9323cee11e71bcc6a57483fab14f52ad6",
-  "head": "f573593fe5a97414ba92289bd630ae5740130527",
+  "head": "73a8bd6cfa5b2d389cc6ddc8c152a22ab7f904f6",
   "integrated_base": "3963bc3566da24f8214634c17a9d0f79a6724171",
   "native_windows_hardware_and_acoustics": "OUT_OF_SCOPE_AND_NEVER_PASS",
   "negative_controls": "preserved; validated by the C108 verifier without rewriting C108 evidence on the C117 successor branch",
