@@ -11,3 +11,27 @@
 - No host checkout, predecessor worktree, predecessor PR, or shared registry/baseline file was reset, merged, rewritten, or otherwise modified. No CI handoff or green-CI claim has been made.
 
 Next action: recheck the admitted board and exact C110/C119 lease state. Once those owners release the paths and the smallest explicit transfer is recorded, fetch `origin/main` again, merge it non-rewriting, change exactly the one captureclaim Wire registration and three stale baseline entries, rerun the focused and accumulated gates, commit, and push the same implementation to PR514's existing C139 head branch. Submit that changed head once to script CI without polling; if CI rejects, inspect the exact failed checks and repair/resubmit the same task.
+
+## C151 verifier namespace repair and fresh bounded evidence
+
+- The inherited C91 verifier's fail-closed scope allowlist omitted the admitted
+  C151 evidence directory. The minimal owned-path repair added that one prefix
+  and changed no runtime code, predecessor branch, shared registry, or
+  architecture baseline.
+- On the preserved candidate, `verify.py --mode all` now passes. Fresh focused
+  service normal/race checks pass 105 tests in three packages each; focused CLI
+  normal checks pass 99 tests and CLI race checks pass 26 tests; the isolated
+  `GOWORK=off` consumer passes. `COUNT=1` accumulated session regressions pass
+  in normal, coverage, and race modes, including their expected negative
+  diagnostics.
+- `make wire-check` regenerates stable output for all registered packages. The
+  architecture gate remains fail-closed with exactly the four documented shared
+  findings: three stale `acquireSessionRecordingClaim` baseline entries and
+  the unregistered captureclaim `wire_gen.go`. No shared file was edited and no
+  threshold was raised.
+
+Next action remains unchanged: obtain the primary's explicit smallest-path
+ownership transfer after the C110/C119 shared leases release, fetch and merge
+the then-current `origin/main`, apply only the one captureclaim Wire registry
+entry and three downward baseline deletions, rerun clean gates, then push PR514
+and submit the changed head once to script CI without polling.

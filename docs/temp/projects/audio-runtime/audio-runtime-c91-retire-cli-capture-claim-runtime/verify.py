@@ -38,6 +38,7 @@ LEGACY_SHA256 = "1747b40578f4788b1b698495652f7e8f85abbff278eab904581cd38edcc8b6c
 EVIDENCE_PREFIXES = (
     "docs/temp/projects/audio-runtime/audio-runtime-c91-retire-cli-capture-claim-runtime/",
     "docs/temp/projects/audio-runtime/audio-runtime-c139-recover-c91-capture-claim-runtime/",
+    "docs/temp/projects/audio-runtime/audio-runtime-c151-recover-c139-c91-capture-claim-runtime/",
 )
 CAPTURE_PREFIX = "go-agent-runtime/services/captureclaim/"
 COVERAGE_PREFIX = "coverage-manifest/go-agent-runtime/services/captureclaim/"
