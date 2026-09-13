@@ -6,7 +6,7 @@
   "branchName": "codex/audio-runtime-c127-repair-current-main-terminal-drain-regression",
   "workId": "work-task-3",
   "session": "~default",
-  "candidateImplementationRevision": "53bf5739f47412d33e2a8cd7165287f55839a752",
+  "candidateImplementationRevision": "abad266fb092b78ca141afc050b86018f1aba216",
   "source": {
     "currentMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
     "fetchedOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",

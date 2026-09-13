@@ -10,20 +10,22 @@
     "pinnedCurrentMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
     "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
     "acceptedC64Merge": "59af6325614d80173447fe2018a0471e27b4e7b1",
-    "candidateImplementationRevision": "53bf5739f47412d33e2a8cd7165287f55839a752",
-    "candidateTree": "a48110f7992180480f5b7057c348757786ac38a4",
-    "candidateDiffSha256": "83c5ffbe201d9d55aa85e2a170055923c4efe5f5ccb768edc1efa353af2f9c46",
+    "candidateImplementationRevision": "abad266fb092b78ca141afc050b86018f1aba216",
+    "candidateTree": "9e233c33877bdd2317d78bb881f5ca26f8071b87",
+    "candidateDiffSha256": "9f18f34801f9fac910fdd314a28a27ffaa757237466e2f084e469be35673eda0",
     "candidateContainsFetchedOriginMain": true,
     "changedSourcePaths": [
       "go-agent-runtime/services/session/internal/live/replay.go",
       "go-agent-runtime/services/session/internal/live/service.go",
       "go-agent-runtime/services/session/internal/live/service_test.go",
+      "go-agent-runtime/services/session/internal/live/terminal_drain_test.go",
       "go-agent-runtime/services/session/internal/live/start_support.go"
     ],
     "sourceFileSha256": {
       "go-agent-runtime/services/session/internal/live/replay.go": "da4803d80af025d2fa201a45b196863bd8957b0c1b7fc1058318bb8f24e03b18",
       "go-agent-runtime/services/session/internal/live/service.go": "9132ba85910ccd565ac5c380b6afacdb77e3796b192a1d538a8cb21009750f25",
-      "go-agent-runtime/services/session/internal/live/service_test.go": "c6faa17ccb7cc7079cb555646d035d086de303bcf4676ca33c690de12ef41329",
+      "go-agent-runtime/services/session/internal/live/service_test.go": "65da2982119c3a19204c87ed317ae4a019632c233cbc08fd465ad46a470403e0",
+      "go-agent-runtime/services/session/internal/live/terminal_drain_test.go": "9de9a08e00841c3bc2e5781ac4568c945758d293ed93c71c5e193dddf63f5e47",
       "go-agent-runtime/services/session/internal/live/start_support.go": "00636eeee7a98205ab2b72d524ffdee721128789ac0496229d0c3e00c47e0b2f"
     }
   },

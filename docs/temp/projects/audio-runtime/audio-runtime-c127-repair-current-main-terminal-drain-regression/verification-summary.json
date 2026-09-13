@@ -1,6 +1,6 @@
 {
   "schema": "audio-runtime.c127.verification-summary.v2",
-  "candidateImplementationRevision": "53bf5739f47412d33e2a8cd7165287f55839a752",
+  "candidateImplementationRevision": "abad266fb092b78ca141afc050b86018f1aba216",
   "pinnedCurrentMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
   "fetchedOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
   "checks": [
@@ -14,7 +14,7 @@
       "name": "ordered causal verifier",
       "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c127-repair-current-main-terminal-drain-regression/verify.py --mode first-divergence --require-current-unmodified --require-matched-control --base 09c70f51243caeaf1184c4806b99bbf7749e3044",
       "exit": 0,
-      "output": "first divergence=rtc_forwarding; candidate source=53bf5739f47412d33e2a8cd7165287f55839a752; origin/main=bd6a1289218d1bef1a3af36e64e9d4496062416f"
+      "output": "first divergence=rtc_forwarding; candidate source=abad266fb092b78ca141afc050b86018f1aba216; origin/main=bd6a1289218d1bef1a3af36e64e9d4496062416f"
     },
     {
       "name": "live package normal",
@@ -129,6 +129,12 @@
       "command": "rtk proxy python3 -m py_compile run.py verify.py",
       "exit": 0,
       "output": "compiled successfully"
+    },
+    {
+      "name": "static rejection repair",
+      "command": "rtk proxy make architecture-size-check",
+      "exit": 0,
+      "output": "architecture-size-check passed after isolating terminal_drain_test.go (218 lines) from service_test.go (600 lines); TestTerminalDrainOrderedBoundaryTrace complexity is within the 20-point limits"
     }
   ],
   "publicReplay": {

@@ -2,7 +2,7 @@
 
 This evidence belongs to the admitted `audio-runtime` / `audio-runtime-v1`
 task `audio-runtime-c127-repair-current-main-terminal-drain-regression`.
-The implementation candidate is source checkpoint `53bf5739f47412d33e2a8cd7165287f55839a752`
+The implementation candidate is source checkpoint `abad266fb092b78ca141afc050b86018f1aba216`
 on branch
 `codex/audio-runtime-c127-repair-current-main-terminal-drain-regression`.
 The isolated worktree is the worktree containing this file. The immutable
@@ -36,7 +36,7 @@ drain policy, cancellation identity, interruption behavior, or assertion was
 weakened.
 
 The paired source regression is recorded in
-`service_test.go:603-771`: a provider fake records an explicit six-boundary
+`terminal_drain_test.go:205-218`: a provider fake records an explicit six-boundary
 sequence with monotonic-process timing and 6,400-sample ranges. On unmodified
 current main the temporary causal test fails with
 `provider media admitted during Receive: context deadline exceeded`; after the
@@ -90,6 +90,14 @@ under broad instrumentation. That exact test passes on both fetched
 is outside the C127 lease, so the failure remains executor-owned rather than a
 C127 product result. The exact commands, exits, and output summaries are in
 `verification-summary.json`.
+
+The subsequent SCRIPT CI run `34759672383` also rejected the candidate: static
+reported the new causal test's 772-line file and its 26/28 cyclomatic/cognitive
+complexity, while coverage failed the out-of-lease
+`TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab`.
+The static finding is repaired by the current isolated test file and helper
+split; the browser failure remains preserved as an external ownership finding,
+not a C127 runtime result.
 
 The source-pinned `nomicrophone` YUI build from the candidate has SHA256
 `8e8db1f19527d10cc7ea53653db95a790f6852199784efe10e011be5f238ab1d`
