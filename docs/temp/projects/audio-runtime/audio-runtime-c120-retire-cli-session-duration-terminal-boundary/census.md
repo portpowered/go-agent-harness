@@ -57,6 +57,24 @@ C120 owns only the target terminal file replacement, the new
 matching coverage manifests, and this task's evidence directory. The duration
 loop and all listed peer paths remain unchanged.
 
+## Public probe inputs
+
+The immutable C38 audio/tool continuation fixture is used as a source-pinned
+offline input, not as a second project or acceptance authority:
+
+- `c16-audio-tool.session.json` SHA-256:
+  `38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169`.
+- `c16-interruption.session.json` SHA-256:
+  `154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206`.
+
+The task-owned `run.py` builds no network session and removes provider
+credentials from its child environment. It launches the exact yui artifact in
+its own process group, caps captured output, applies a child and aggregate
+deadline, and checks for zero remaining group members. It records terminal
+manifest metadata and PCM/tool artifacts under ignored `runs/` output. The
+four cases are max-duration replay, provider-close replay, a loop-close
+negative control, and the healthy audio/tool continuation.
+
 ## Prior review and project boundary
 
 Canonical Factory work listing for the C120 name contained only the idea, plan,

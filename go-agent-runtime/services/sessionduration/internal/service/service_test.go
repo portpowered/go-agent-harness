@@ -147,7 +147,7 @@ func TestServicePublishesMaxDurationMetadata(t *testing.T) {
 	if !ok || value == nil {
 		t.Fatalf("max duration value = %T, want session close", written.Value)
 	}
-	if value.Reason != string(sessionduration.MaxDurationReason) || value.Classification != string(sessionduration.MaxDurationReason) || value.TerminalReason != sessionduration.MaxDurationReason || value.TerminalProvenance != messages.TerminalProvenanceLoop || value.OutputState != messages.TerminalOutputPartial {
+	if value.Reason != "max_duration" || value.Classification != "max_duration" || value.TerminalReason != messages.TerminalReason("max_duration") || value.TerminalProvenance != messages.TerminalProvenanceLoop || value.OutputState != messages.TerminalOutputPartial {
 		t.Fatalf("max duration metadata = %+v", value)
 	}
 }

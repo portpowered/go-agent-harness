@@ -11,9 +11,6 @@ func TestContractTypesRemainHostNeutral(t *testing.T) {
 	var _ ArtifactWriter = artifactProbe{}
 	var _ State = stateProbe{}
 	var _ Service = serviceProbe{}
-	if MaxDurationReason != messages.TerminalReason("max_duration") {
-		t.Fatalf("max duration reason = %q", MaxDurationReason)
-	}
 }
 
 type artifactProbe struct{}

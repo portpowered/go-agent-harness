@@ -6,10 +6,6 @@ package sessionduration
 
 import "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 
-// MaxDurationReason is the stable reason for a loop-synthesized duration
-// terminal.
-const MaxDurationReason messages.TerminalReason = "max_duration"
-
 // TerminalSource supplies the provider observation facts needed to distinguish
 // a provider-authored close from a loop shutdown request.
 type TerminalSource struct {

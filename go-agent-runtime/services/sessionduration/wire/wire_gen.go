@@ -11,9 +11,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration/internal/service"
 )
 
+// Injectors from wire.go:
+
 // NewService assembles the terminal-boundary implementation behind its public
 // host-neutral contract.
 func NewService() sessionduration.Service {
-	service := service.New()
-	return service
+	serviceService := service.New()
+	return serviceService
 }

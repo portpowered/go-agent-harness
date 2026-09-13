@@ -12,6 +12,8 @@ import (
 // Service is the private implementation of the sessionduration contract.
 type Service struct{}
 
+const maxDurationReason messages.TerminalReason = "max_duration"
+
 func New() *Service { return &Service{} }
 
 func (s *Service) NewState(source sessionduration.TerminalSource) sessionduration.State {
@@ -23,9 +25,9 @@ func (s *Service) PublishMaxDuration(publication sessionduration.Publication, ou
 		Type: messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValueWithTerminal(
 			"",
-			string(sessionduration.MaxDurationReason),
-			string(sessionduration.MaxDurationReason),
-			sessionduration.MaxDurationReason,
+			string(maxDurationReason),
+			string(maxDurationReason),
+			maxDurationReason,
 			messages.TerminalProvenanceLoop,
 			output,
 		),

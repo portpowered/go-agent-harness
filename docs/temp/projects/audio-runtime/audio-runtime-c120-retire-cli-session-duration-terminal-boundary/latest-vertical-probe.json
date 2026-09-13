@@ -1,0 +1,235 @@
+{
+  "status": "pass",
+  "decision": "VERTICAL_PROBE_PASS",
+  "source_revision": "450eefccc228896cd3811da96cbb4074b727eefd",
+  "artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/artifacts/yui",
+  "artifact_sha256": "6bdb855bf6d60308637a1408d14541788136ffeabb47d149bc209c76a987eb61",
+  "fixture_hashes": {
+    "audio_tool": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+    "interruption": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206"
+  },
+  "cases": [
+    {
+      "case": "max-duration-replay",
+      "terminal": {
+        "reason": "max_duration",
+        "classification": "max_duration",
+        "terminal_reason": "max_duration",
+        "terminal_provenance": "loop",
+        "output_state": "partial"
+      },
+      "process": {
+        "label": "max-duration-replay",
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/max-duration-replay/config",
+          "--workdir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/max-duration-replay/workdir",
+          "--allow-path",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/max-duration-replay/workdir",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
+          "--prompt",
+          "probe PROBE_TOOL_MARKER_9182",
+          "--replay-timing",
+          "recorded",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/max-duration-replay/rendered.pcm",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/max-duration-replay/bundle",
+          "--max-duration",
+          "45ms",
+          "--trace-audio"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/max-duration-replay/workdir",
+        "deadline_seconds": 60.0,
+        "elapsed_seconds": 0.179028,
+        "exit_code": 1,
+        "timed_out": false,
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/max-duration-replay/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\n[session terminal: classification=max_duration terminal_reason=max_duration terminal_provenance=loop output_state=partial]\nlive session terminated: live session exceeded maximum duration\n",
+        "stderr": "Error: live session audio trace retained at /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/max-duration-replay/.session-audio-trace-1665320934\n",
+        "stdout_bytes": 826,
+        "stderr_bytes": 371,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "cleanup": {
+          "sigterm_sent": false,
+          "sigkill_sent": false,
+          "surviving_process_group_pids": []
+        },
+        "credential_free_environment": true
+      },
+      "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/max-duration-replay/bundle/manifest.json",
+      "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
+      "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+    },
+    {
+      "case": "bounded-provider-close",
+      "terminal": {
+        "reason": "fixture_complete",
+        "classification": "provider_close",
+        "terminal_reason": "provider_close",
+        "terminal_provenance": "provider",
+        "output_state": "not_applicable"
+      },
+      "process": {
+        "label": "bounded-provider-close",
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/bounded-provider-close/config",
+          "--workdir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/bounded-provider-close/workdir",
+          "--allow-path",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/bounded-provider-close/workdir",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
+          "--prompt",
+          "probe PROBE_TOOL_MARKER_9182",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/bounded-provider-close/rendered.pcm",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/bounded-provider-close/bundle",
+          "--max-duration",
+          "60s",
+          "--trace-audio"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/bounded-provider-close/workdir",
+        "deadline_seconds": 60.0,
+        "elapsed_seconds": 0.112643,
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/bounded-provider-close/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+        "stderr": "",
+        "stdout_bytes": 891,
+        "stderr_bytes": 0,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "cleanup": {
+          "sigterm_sent": false,
+          "sigkill_sent": false,
+          "surviving_process_group_pids": []
+        },
+        "credential_free_environment": true
+      },
+      "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/bounded-provider-close/bundle/manifest.json",
+      "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
+      "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+    },
+    {
+      "case": "loop-close-negative",
+      "terminal": {
+        "reason": "max_duration",
+        "classification": "max_duration",
+        "terminal_reason": "max_duration",
+        "terminal_provenance": "loop",
+        "output_state": "partial"
+      },
+      "process": {
+        "label": "loop-close-negative",
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/loop-close-negative/config",
+          "--workdir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/loop-close-negative/workdir",
+          "--allow-path",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/loop-close-negative/workdir",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
+          "--prompt",
+          "probe PROBE_TOOL_MARKER_9182",
+          "--replay-timing",
+          "recorded",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/loop-close-negative/rendered.pcm",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/loop-close-negative/bundle",
+          "--max-duration",
+          "45ms",
+          "--trace-audio"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/loop-close-negative/workdir",
+        "deadline_seconds": 60.0,
+        "elapsed_seconds": 0.162138,
+        "exit_code": 1,
+        "timed_out": false,
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/loop-close-negative/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\n[session terminal: classification=max_duration terminal_reason=max_duration terminal_provenance=loop output_state=partial]\nlive session terminated: live session exceeded maximum duration\n",
+        "stderr": "Error: live session audio trace retained at /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/loop-close-negative/.session-audio-trace-2739641797\n",
+        "stdout_bytes": 826,
+        "stderr_bytes": 371,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "cleanup": {
+          "sigterm_sent": false,
+          "sigkill_sent": false,
+          "surviving_process_group_pids": []
+        },
+        "credential_free_environment": true
+      },
+      "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/loop-close-negative/bundle/manifest.json",
+      "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
+      "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+    },
+    {
+      "case": "healthy-audio-tool-continuation",
+      "terminal": {
+        "reason": "fixture_complete",
+        "classification": "provider_close",
+        "terminal_reason": "provider_close",
+        "terminal_provenance": "provider",
+        "output_state": "not_applicable"
+      },
+      "process": {
+        "label": "healthy-audio-tool-continuation",
+        "argv": [
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/artifacts/yui",
+          "-C",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/healthy-audio-tool-continuation/config",
+          "--workdir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/healthy-audio-tool-continuation/workdir",
+          "--allow-path",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/healthy-audio-tool-continuation/workdir",
+          "session",
+          "--replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
+          "--prompt",
+          "probe PROBE_TOOL_MARKER_9182",
+          "--audio-out",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/healthy-audio-tool-continuation/rendered.pcm",
+          "--record-dir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/healthy-audio-tool-continuation/bundle",
+          "--max-duration",
+          "60s",
+          "--trace-audio"
+        ],
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/healthy-audio-tool-continuation/workdir",
+        "deadline_seconds": 60.0,
+        "elapsed_seconds": 0.109152,
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/healthy-audio-tool-continuation/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+        "stderr": "",
+        "stdout_bytes": 900,
+        "stderr_bytes": 0,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "cleanup": {
+          "sigterm_sent": false,
+          "sigkill_sent": false,
+          "surviving_process_group_pids": []
+        },
+        "credential_free_environment": true
+      },
+      "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/runs/vertical-20260913T044140Z-93670/healthy-audio-tool-continuation/bundle/manifest.json",
+      "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
+      "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+    }
+  ],
+  "elapsed_seconds": 0.643946,
+  "aggregate_timeout_seconds": 300.0
+}
