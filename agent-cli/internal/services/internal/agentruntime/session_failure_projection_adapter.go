@@ -7,7 +7,6 @@ import (
 )
 
 type failureFacts struct{ classification, terminalReason, provenance, outputState, errorType, code, failingEvent string } // Deprecated: forwarding compatibility only.
-
 func failureFactsFromPublic(f sf.Facts) *failureFacts {
 	return &failureFacts{f.Classification, f.TerminalReason, f.Provenance, f.OutputState, f.ErrorType, f.Code, f.FailingEvent}
 }
@@ -29,8 +28,7 @@ func (o *sessionProgressObserver) clearFailure() {
 	o.livenessMu.Unlock()
 }
 func (o *sessionProgressObserver) captureFailureFromError(v *m.ErrorValue) {
-	s := newFailureService(o)
-	f, err := s.NormalizeErrorValue(v)
+	f, err := newFailureService(o).NormalizeErrorValue(v)
 	o.acceptFailureObservation(failureFactsFromPublic(f), err)
 }
 func factsFromSessionRunError(err error) *failureFacts {
@@ -44,8 +42,7 @@ func (o *sessionProgressObserver) acceptFailureObservation(f *failureFacts, err 
 	return newFailureService(o).Accept(publicFailureFacts(f), err)
 }
 func (o *sessionProgressObserver) captureFailureFromClose(v *m.SessionCloseValue) {
-	s := newFailureService(o)
-	o.acceptFailureObservation(failureFactsFromPublic(s.NormalizeClose(v, sf.Progress{SessionOpened: o.sawSessionOpen, TurnsCompleted: o.turnsCompleted})), nil)
+	o.acceptFailureObservation(failureFactsFromPublic(newFailureService(o).NormalizeClose(v, sf.Progress{SessionOpened: o.sawSessionOpen, TurnsCompleted: o.turnsCompleted})), nil)
 }
 func (o *sessionProgressObserver) unresolvedToolResultFailureFacts(e string) *failureFacts {
 	return failureFactsFromPublic(newFailureService(nil).Projection(sf.ProjectionUnresolvedTool, e, sf.Progress{SessionOpened: o.sawSessionOpen, TurnsCompleted: o.turnsCompleted}))
@@ -76,11 +73,14 @@ func publishFailure(o *sessionProgressObserver, ob sf.Observation) bool {
 		o.failure = f
 	}
 	o.livenessMu.Unlock()
-	return accepted && o.notifyFailureObservation(sessionTerminalObservationFromFailure(f, ob.Err))
-}
-func diagnosticFailure(o *sessionProgressObserver, r sf.DiagnosticRecord) {
-	o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: r.Event, Fields: r.Fields})
+	ok := accepted && o.notifyFailureObservation(sessionTerminalObservationFromFailure(f, ob.Err))
+	if accepted && !ok {
+		o.clearFailure()
+	}
+	return ok
 }
 func newFailureService(o *sessionProgressObserver) sf.Service {
-	return w.NewService(sf.Dependencies{Publish: func(ob sf.Observation) bool { return publishFailure(o, ob) }, Sink: sf.DiagnosticSinkFunc(func(r sf.DiagnosticRecord) { diagnosticFailure(o, r) })})
+	return w.NewService(sf.Dependencies{Publish: func(ob sf.Observation) bool { return publishFailure(o, ob) }, Sink: sf.DiagnosticSinkFunc(func(r sf.DiagnosticRecord) {
+		o.sink.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: r.Event, Fields: r.Fields})
+	})})
 }
