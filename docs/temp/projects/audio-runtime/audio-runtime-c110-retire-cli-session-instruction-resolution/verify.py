@@ -34,6 +34,9 @@ MUTATION_TIMEOUT_SECONDS = 120
 
 ALLOWED_EXACT = {
     str(LEGACY_REL),
+    "scripts/wire-packages.txt",
+    "docs/architecture/architecture-policy.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_instructions.go.json",
     "go-agent-runtime/services/session/instructions.go",
     "go-agent-runtime/services/session/internal/instructions/service.go",
     "go-agent-runtime/services/session/internal/instructions/service_test.go",
@@ -47,7 +50,8 @@ ALLOWED_PREFIXES = (
 )
 SHARED_LEASE_PATHS = (
     "scripts/wire-packages.txt",
-    "docs/architecture/architecture-size-baseline.json",
+    "docs/architecture/architecture-policy.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_instructions.go.json",
 )
 CALLER_PATHS = (
     "agent-cli/internal/services/internal/agentruntime/service.go",
@@ -327,7 +331,10 @@ def verify_retirement() -> dict[str, Any]:
     unexpected = [path for path in paths if not path_allowed(path)]
     require(not unexpected, f"changed paths outside C110 ownership: {unexpected}")
     shared_changes = [path for path in paths if path in SHARED_LEASE_PATHS]
-    require(not shared_changes, f"C79-owned shared paths changed before guarded release: {shared_changes}")
+    require(
+        sorted(shared_changes) == sorted(SHARED_LEASE_PATHS),
+        f"C110 shared registry repair set is incomplete or unexpected: {shared_changes}",
+    )
     compatibility_service_rel = Path("go-agent-runtime/services/session/internal/instructions/service.go")
     compatibility_service = REPO_ROOT / compatibility_service_rel
     require(
@@ -389,12 +396,12 @@ def verify_retirement() -> dict[str, Any]:
             },
         },
         "c79_lease": {
-            "work_id": "work-task-114",
-            "review_id": "work-review-246",
-            "state_at_admission_check": "in-review",
+            "work_id": "work-task-25",
+            "review_id": "work-review-31",
+            "state_at_admission_check": "released-after-guarded-merge",
             "shared_paths": list(SHARED_LEASE_PATHS),
             "candidate_changes": shared_changes,
-            "guard": "unchanged until C79 guarded release",
+            "guard": "released by C79 guarded merge 1a8467246c6607a06ffc7289075da2595724ce8b",
         },
         "source_hashes": source_hashes(evidence_paths),
     }
