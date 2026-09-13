@@ -1,0 +1,32 @@
+{
+  "build": {
+    "argv": [
+      "go",
+      "build",
+      "-tags=nomicrophone",
+      "-trimpath",
+      "-o",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c115-centralize-filesystem-audio-codec/docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/artifacts/yui",
+      "./agent-cli/cmd/yui"
+    ],
+    "artifact_bytes": 51013874,
+    "artifact_path": "artifacts/yui",
+    "artifact_sha256": "10eaff438b75efdfb2d5d6c6d83ae690e41c5f78725520794bf4d736809664fe",
+    "cwd": ".",
+    "elapsed_seconds": 0.294,
+    "exit_code": 0,
+    "label": "build-yui",
+    "output_limited": false,
+    "process_group_gone": true,
+    "stderr_path": "runs/20260913T045935Z-19850/build/build-yui.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_path": "runs/20260913T045935Z-19850/build/build-yui.stdout",
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "timed_out": false,
+    "timeout_seconds": 60
+  },
+  "bytes": 51013874,
+  "path": "artifacts/yui",
+  "sha256": "10eaff438b75efdfb2d5d6c6d83ae690e41c5f78725520794bf4d736809664fe",
+  "source_revision": "984dea63f49e9c942f150fa211b4638e3ae1a89e"
+}
