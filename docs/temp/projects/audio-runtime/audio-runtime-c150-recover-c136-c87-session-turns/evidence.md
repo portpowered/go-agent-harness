@@ -223,6 +223,30 @@ deletions while preserving peer entries, rerun the focused/accumulated gates,
 commit and push the changed PR #513 head, and submit it once to SCRIPT CI
 without polling.
 
+## Fresh focused and accumulated recheck — 2026-09-13T22:03:52Z
+
+After the documentation-only checkpoint, the exact inherited implementation
+was rechecked at `7f49b379cffea4474d6140843be237fc5afd0026`. The three C136
+verifier modes passed; the separate `GOWORK=off` consumer passed; sessionturns
+normal and race each passed `48` tests in three packages; and deprecated CLI
+compatibility passed `6` normal and `2` race tests. The accumulated session
+regression script passed normal, coverage, and race modes, including all `20`
+high-rate trials and the retained expected replay/audio/transcript negative
+controls. `git diff --check` remained clean.
+
+These checks do not clear the architecture gate: the exact thirteen deferred
+findings remain owned by the shared/dependency paths (twelve stale downward
+session-turns entries and the unregistered sessionturns generated Wire file).
+No source, shared registry, policy, or peer path was changed, and the WebMCP
+TempDir cleanup failure remains preserved as an out-of-lease,
+non-reproduced classification.
+
+Exact next action remains to wait for C110/C111/C119 guarded merges, then fetch
+and integrate the then-current main, apply only the sessionturns Wire registry
+entry and twelve demonstrated downward baseline deletions, rerun bounded gates,
+commit/push the changed PR #513 head, and submit once to SCRIPT CI without
+polling.
+
 ## Exact lease and PR recheck — 2026-09-13T21:25:51Z
 
 Admission was reverified with `project-control.py verify-work --type task
