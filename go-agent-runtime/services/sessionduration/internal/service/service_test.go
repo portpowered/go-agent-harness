@@ -216,7 +216,10 @@ type artifactFunc func(messages.StreamMessage) error
 func (f artifactFunc) Accept(msg messages.StreamMessage) error { return f(msg) }
 
 func providerSource(provider messages.StreamMessage) sessionduration.TerminalSource {
-	value := provider.Value.(*messages.SessionCloseValue)
+	value, ok := provider.Value.(*messages.SessionCloseValue)
+	if !ok {
+		panic("provider test message is not a session close")
+	}
 	return sessionduration.TerminalSource{
 		Message: func() (messages.StreamMessage, bool) { return provider, true },
 		Matches: func(msg messages.StreamMessage) bool {

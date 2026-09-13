@@ -75,6 +75,15 @@ manifest metadata and PCM/tool artifacts under ignored `runs/` output. The
 four cases are max-duration replay, provider-close replay, a loop-close
 negative control, and the healthy audio/tool continuation.
 
+## Post-fetch static reconciliation
+
+After the fresh fetch, `origin/main` had migrated Wire checking to
+auto-discovery and architecture debt to owner fragments. The architecture gate
+still requires generated-file provenance, so the only demonstrated shared
+reconciliation is the one `go-agent-runtime/services/sessionduration/wire`
+entry added to `docs/architecture/architecture-policy.json`. No old Wire
+registry, architecture baseline, loop, or peer retirement path was edited.
+
 ## Prior review and project boundary
 
 Canonical Factory work listing for the C120 name contained only the idea, plan,

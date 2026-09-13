@@ -26,7 +26,7 @@ ADAPTER = "agent-cli/internal/services/internal/agentruntime/session_duration_te
 TARGET_SHA256 = "82917c1a30ceed01da41109e368c2c6851b2ed6c5e5b689959f9d8faa5f88b88"
 LOOP_SHA256 = "2bf32471d10af9117600c5006d453fb12beb6a134e0461f0e6b895005270591f"
 
-ALLOWED_EXACT = {TARGET, ADAPTER, "agent-cli/internal/services/internal/agentruntime/session_duration_terminal_service_test.go"}
+ALLOWED_EXACT = {TARGET, ADAPTER, "agent-cli/internal/services/internal/agentruntime/session_duration_terminal_service_test.go", "docs/architecture/architecture-policy.json"}
 ALLOWED_PREFIXES = (
     "go-agent-runtime/services/sessionduration/",
     "coverage-manifest/go-agent-runtime/services/sessionduration/",

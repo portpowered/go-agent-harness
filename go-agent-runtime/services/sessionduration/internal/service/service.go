@@ -108,6 +108,39 @@ func (s *terminalState) observe(msg messages.StreamMessage) {
 		}
 	case messages.StreamTypeMessageEnd:
 		s.responseComplete = true
+	case messages.StreamTypeTextStart,
+		messages.StreamTypeTextEnd,
+		messages.StreamTypeToolCallStart,
+		messages.StreamTypeAudioStart,
+		messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart,
+		messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart,
+		messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart,
+		messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart,
+		messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart,
+		messages.StreamTypeReasoningEnd,
+		messages.StreamTypeVADSpeechStarted,
+		messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart,
+		messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeInputItemAdded,
+		messages.StreamTypePong,
+		messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionClose,
+		messages.StreamTypeSessionCreated,
+		messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate,
+		messages.StreamTypeResponseCancel,
+		messages.StreamTypeResponseCreate,
+		messages.StreamTypeLoopEnd,
+		messages.StreamTypeUsageInfo,
+		messages.StreamTypeError,
+		messages.StreamTypeSystemFullMessage:
+		// These events do not change the accepted assistant-output projection.
 	}
 }
 
