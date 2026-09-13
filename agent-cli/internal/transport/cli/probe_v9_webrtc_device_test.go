@@ -23,13 +23,13 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
+	rtctransportwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 const deviceProbeExpectedTranscript = "device round trip"
-
 const deviceProbeScenarioPath = "testdata/probe-scenarios/s2s-v9-webrtc-device-roundtrip.scenario.json"
 
 // TestS2SV9WebRTCDeviceProbeIsReachableThroughPublicCLI proves the device-tier
@@ -138,11 +138,11 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create RTC Opus encoder: %v", err)
 	}
-	track, err := rtc.NewOutboundTrack(rtc.OutboundTrackConfig{
+	track, err := rtctransportwire.NewService().NewOutboundTrack(rtctransport.OutboundTrackConfig{
 		SourceRate: audio.SampleRate,
 		Encoder:    encoder,
 		Writer:     deviceProbeRTPWriter{track: peers.localTrack},
-		Pacer:      rtc.PacerFunc(func(context.Context, uint64) error { return nil }),
+		Pacer:      rtctransport.PacerFunc(func(context.Context, uint64) error { return nil }),
 	})
 	if err != nil {
 		t.Fatalf("create outbound RTC track: %v", err)
@@ -199,7 +199,7 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	// Pion exposes RTP attributes alongside the packet; the harness seam
 	// deliberately keeps those protocol details out of InboundTrack.
 	// deviceProbeRTPPacketSource performs that boundary adaptation.
-	inbound, err := rtc.NewInboundTrack(deviceProbeRTPPacketSource{track: remote}, decoder, rtc.InboundTrackConfig{
+	inbound, err := rtctransportwire.NewService().NewInboundTrack(deviceProbeRTPPacketSource{track: remote}, decoder, rtctransport.InboundTrackConfig{
 		SampleRate:    audio.SampleRate,
 		FrameDuration: codec.OpusFrameDuration,
 		JitterDepth:   codec.OpusFrameDuration,
@@ -503,7 +503,7 @@ func newDeviceProbePeerPair(t *testing.T) (*deviceProbePeerPair, error) {
 	codec := webrtc.RTPCodecParameters{
 		RTPCodecCapability: webrtc.RTPCodecCapability{
 			MimeType:    webrtc.MimeTypeOpus,
-			ClockRate:   rtc.OutboundRTPClockRate,
+			ClockRate:   rtctransport.OutboundRTPClockRate,
 			Channels:    1,
 			SDPFmtpLine: "minptime=10;useinbandfec=1",
 		},

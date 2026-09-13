@@ -167,7 +167,7 @@ func newProductionRTCDataPlane(ctx context.Context, offerer, answerer *rtc.Loopb
 	codec := webrtc.RTPCodecParameters{
 		RTPCodecCapability: webrtc.RTPCodecCapability{
 			MimeType:    webrtc.MimeTypeOpus,
-			ClockRate:   rtc.OutboundRTPClockRate,
+			ClockRate:   rtctransport.OutboundRTPClockRate,
 			Channels:    1,
 			SDPFmtpLine: "minptime=10;useinbandfec=1",
 		},
@@ -322,7 +322,7 @@ func (p *productionRTCDataPlane) AttachInboundMedia(ctx context.Context, source 
 	}
 	capability := webrtc.RTPCodecCapability{
 		MimeType:    webrtc.MimeTypeOpus,
-		ClockRate:   rtc.OutboundRTPClockRate,
+		ClockRate:   rtctransport.OutboundRTPClockRate,
 		Channels:    1,
 		SDPFmtpLine: "minptime=10;useinbandfec=1",
 	}
