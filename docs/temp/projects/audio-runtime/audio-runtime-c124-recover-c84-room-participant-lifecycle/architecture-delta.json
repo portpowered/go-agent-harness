@@ -3,7 +3,7 @@
   "gate": {
     "exit_code": 0,
     "stderr": "",
-    "stdout": "architecture gate passed: 192 package(s), 1914 file(s), 28549 function(s) checked\n"
+    "stdout": "architecture gate passed: 195 package(s), 1922 file(s), 28598 function(s) checked\n"
   },
   "removed_stale_symbols": [
     "*roomConnectTrackingInferencer.ConnectSession",

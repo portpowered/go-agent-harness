@@ -395,26 +395,14 @@ func TestParticipantTrackerPreservesFirstSpecificFailure(t *testing.T) {
 	lifecycle := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{})
 	lifecycle.MarkConnected(errors.New("fallback provider failure"))
 	firstCause := errors.New("first specific provider failure")
-	if !lifecycle.ObserveTerminal(rooms.SessionTerminalObservation{
-		Classification:     "transport",
-		TerminalReason:     string(messages.TerminalReasonTerminalFailure),
-		TerminalProvenance: string(messages.TerminalProvenanceProvider),
-		OutputState:        string(messages.TerminalOutputPartial),
-		Err:                firstCause,
-		Failure:            true,
-	}) {
+	first := rooms.SessionTerminalObservation{Classification: "transport", TerminalReason: string(messages.TerminalReasonTerminalFailure), TerminalProvenance: string(messages.TerminalProvenanceProvider), OutputState: string(messages.TerminalOutputPartial), Err: firstCause, Failure: true}
+	if !lifecycle.ObserveTerminal(first) {
 		t.Fatal("first specific failure was not observed")
 	}
 	before := lifecycle.TerminalObservationSnapshot()
 	lateCause := errors.New("late duplicate provider failure")
-	if lifecycle.ObserveTerminal(rooms.SessionTerminalObservation{
-		Classification:     "transport",
-		TerminalReason:     string(messages.TerminalReasonProviderClose),
-		TerminalProvenance: string(messages.TerminalProvenanceCLI),
-		OutputState:        string(messages.TerminalOutputNone),
-		Err:                lateCause,
-		Failure:            true,
-	}) {
+	late := rooms.SessionTerminalObservation{Classification: first.Classification, TerminalReason: string(messages.TerminalReasonProviderClose), TerminalProvenance: string(messages.TerminalProvenanceCLI), OutputState: string(messages.TerminalOutputNone), Err: lateCause, Failure: true}
+	if lifecycle.ObserveTerminal(late) {
 		t.Fatal("duplicate specific failure was accepted")
 	}
 	after := lifecycle.TerminalObservationSnapshot()

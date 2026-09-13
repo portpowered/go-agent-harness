@@ -18,7 +18,7 @@
     ],
     "exit_code": 1,
     "stderr": "",
-    "stdout": "--- FAIL: TestExternalConsumerOwnsParticipantLifecycle (0.00s)\n    participant_lifecycle_test.go:99: underlying close calls = 2, want one\nFAIL\nFAIL\texample.com/audio-runtime-c124-external-consumer\t0.157s\nFAIL\n",
+    "stdout": "--- FAIL: TestExternalConsumerOwnsParticipantLifecycle (0.00s)\n    participant_lifecycle_test.go:99: underlying close calls = 2, want one\nFAIL\nFAIL\texample.com/audio-runtime-c124-external-consumer\t0.331s\nFAIL\n",
     "timed_out": false
   },
   "positive": {
@@ -34,7 +34,7 @@
     ],
     "exit_code": 0,
     "stderr": "",
-    "stdout": "ok  \texample.com/audio-runtime-c124-external-consumer\t0.167s\n",
+    "stdout": "ok  \texample.com/audio-runtime-c124-external-consumer\t0.484s\n",
     "timed_out": false
   },
   "restored": {
@@ -50,7 +50,7 @@
     ],
     "exit_code": 0,
     "stderr": "",
-    "stdout": "ok  \texample.com/audio-runtime-c124-external-consumer\t0.174s\n",
+    "stdout": "ok  \texample.com/audio-runtime-c124-external-consumer\t0.175s\n",
     "timed_out": false
   }
 }

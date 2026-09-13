@@ -1,6 +1,6 @@
 {
   "accepted_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
-  "baseline": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+  "baseline": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
   "changed_paths": [],
   "checked_paths": [
     "agent-cli/internal/services/internal/agentruntime/capability_alias.go",
