@@ -155,7 +155,11 @@ def owner_and_dag() -> dict:
     require(len(re.findall(r"^func NewInboundTrack\(", source, re.MULTILINE)) == 1, "core inbound construction is not unique")
     require(len(re.findall(r"^func NewOutboundTrack\(", source, re.MULTILINE)) == 1, "core outbound construction is not unique")
     runtime_service = ROOT / "go-agent-runtime/services/rtctransport/internal/service"
-    runtime_files = sorted(relative(path) for path in runtime_service.glob("*.go"))
+    runtime_files = sorted(
+        relative(path)
+        for path in runtime_service.glob("*.go")
+        if not path.name.endswith("_test.go")
+    )
     require(runtime_files == ["go-agent-runtime/services/rtctransport/internal/service/service.go"], f"runtime private shell contains extra implementation files: {runtime_files}")
     require("go-audio/pkg/rtctransport" in (runtime_service / "service.go").read_text(encoding="utf-8"), "runtime shell does not delegate to core")
     require("go-agent-runtime" not in "\n".join(path.read_text(encoding="utf-8") for path in core.glob("*.go")), "core imports runtime")
