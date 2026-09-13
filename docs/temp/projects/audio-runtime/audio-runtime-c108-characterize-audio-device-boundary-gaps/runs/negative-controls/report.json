@@ -1,0 +1,33 @@
+{
+  "all_rejected": true,
+  "mutations": [
+    {
+      "diagnostic": "NEGATIVE_CALLER: caller evidence missing for C108-F-DEVICE-PUMP-LIFECYCLE:ConnectSession",
+      "mutation": "delete one caller edge",
+      "rejected": true
+    },
+    {
+      "diagnostic": "NEGATIVE_PROOF: proof level cannot be upgraded from software evidence: PHYSICAL_DEVICE_CONSUMPTION",
+      "mutation": "upgrade SOFTWARE_REPLAY to PHYSICAL_DEVICE_CONSUMPTION",
+      "rejected": true
+    },
+    {
+      "diagnostic": "NEGATIVE_PEER_PATH: peer-owned candidate path: scripts/wire-packages.txt",
+      "mutation": "insert C79-owned writer path",
+      "rejected": true
+    },
+    {
+      "diagnostic": "NEGATIVE_COMMITTED_PATH: mutation outside owned C108 directory: README.md",
+      "mutation": "insert committed outside-owned tracked path",
+      "rejected": true
+    },
+    {
+      "diagnostic": "mutation outside owned C108 directory",
+      "mutation": "write outside owned directory",
+      "rejected": true
+    }
+  ],
+  "passes": true,
+  "schema_version": "c108-negative-controls-v1",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+}

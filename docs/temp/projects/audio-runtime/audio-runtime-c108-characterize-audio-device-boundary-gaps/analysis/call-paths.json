@@ -1,0 +1,632 @@
+{
+  "paths": [
+    {
+      "finding_id": "C108-F-DEVICE-PUMP-LIFECYCLE",
+      "public_entry_point": "agent-cli/internal/services/internal/agentruntime/session_live_setup.go and session_duration_loop.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "exact binding call installs rtcDeviceBindingInferencer before interface dispatch",
+              "expression": "inferencer, pumpErrors := bindRTCDeviceSessionInferencer(inferencer, opts.rtcDeviceBinding)",
+              "line": 31,
+              "match": "wrapper_installation_chain",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_live_setup.go"
+            },
+            {
+              "evidence": "exact messages.SessionInferencer dispatch reached by the binding installed above",
+              "expression": "session, err := s.sessionInferencer.ConnectSession(ctx)",
+              "line": 173,
+              "match": "interface_method_dispatch",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_turns.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
+          "symbol": "ConnectSession"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "i.startPumps(ctx, media)",
+              "line": 93,
+              "match": "typed_method_selector",
+              "path": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
+              "resolved_receiver": "i"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
+          "symbol": "startPumps"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "drainErr = s.DrainPlayback(drainCtx)",
+              "line": 342,
+              "match": "typed_method_selector",
+              "path": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
+              "resolved_receiver": "s"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
+          "symbol": "DrainPlayback"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-LIVE-SERVICE-PUMP-LIFECYCLE",
+      "public_entry_point": "go-agent-runtime/services/session/internal/live/invoke.go:liveInvocation.start",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "newLiveInvocation returns the concrete *liveInvocation used by RunLive",
+              "expression": "if err := invocation.start(); err != nil {",
+              "line": 29,
+              "match": "constructor_result_method_dispatch",
+              "path": "go-agent-runtime/services/session/internal/live/invoke.go"
+            }
+          ],
+          "path": "go-agent-runtime/services/session/internal/live/invoke.go",
+          "symbol": "start"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "i.startPumps()",
+              "line": 191,
+              "match": "typed_method_selector",
+              "path": "go-agent-runtime/services/session/internal/live/invoke.go",
+              "resolved_receiver": "i"
+            }
+          ],
+          "path": "go-agent-runtime/services/session/internal/live/invoke.go",
+          "symbol": "startPumps"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "i.startCapturePump()",
+              "line": 199,
+              "match": "typed_method_selector",
+              "path": "go-agent-runtime/services/session/internal/live/invoke.go",
+              "resolved_receiver": "i"
+            }
+          ],
+          "path": "go-agent-runtime/services/session/internal/live/invoke.go",
+          "symbol": "startCapturePump"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "i.startPlaybackPump()",
+              "line": 200,
+              "match": "typed_method_selector",
+              "path": "go-agent-runtime/services/session/internal/live/invoke.go",
+              "resolved_receiver": "i"
+            }
+          ],
+          "path": "go-agent-runtime/services/session/internal/live/invoke.go",
+          "symbol": "startPlaybackPump"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-DEVICE-PROBE-CAPTURE-RATE",
+      "public_entry_point": "go-agent-runtime/services/devices/internal/probe/capture.go:captureLiveDeviceProbeInput",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "pending, frameCount, err = forwardProbeFrames(ctx, pending, link, runner, frameCount)",
+              "line": 32,
+              "match": "same_package_unqualified_call",
+              "path": "go-agent-runtime/services/devices/internal/probe/capture.go"
+            }
+          ],
+          "path": "go-agent-runtime/services/devices/internal/probe/capture.go",
+          "symbol": "forwardProbeFrames"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-DEVICE-PROBE-PLAYBACK-RATE",
+      "public_entry_point": "go-agent-runtime/services/devices/internal/probe/bridge.go:liveDeviceProbeSessionBridge.handleOutput",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "if err := b.writeOutputFrame(ctx, providerFrame); err != nil {",
+              "line": 179,
+              "match": "typed_method_selector",
+              "path": "go-agent-runtime/services/devices/internal/probe/bridge.go",
+              "resolved_receiver": "b"
+            }
+          ],
+          "path": "go-agent-runtime/services/devices/internal/probe/bridge.go",
+          "symbol": "writeOutputFrame"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-AUDIO-RATE-CONTRACT",
+      "public_entry_point": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go, session_audio_dispatch.go and session_room_run.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "pcm, err := convertSessionAudioPCM(input.PCM, input.SourceSampleRate, opts.InputAudioSampleRate)",
+              "line": 17,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_dispatch.go"
+            },
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "pcm, err := convertSessionAudioPCM(input.PCM, input.SourceSampleRate, providerRate)",
+              "line": 59,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go"
+            },
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "converted, err := convertSessionAudioPCM(pcm, sourceRate, providerRate)",
+              "line": 1019,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+          "symbol": "convertSessionAudioPCM"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "plan.audioInputs, err = convertScheduledAudioInputs(plan.audioInputs, plan.inputAudioSampleRate)",
+              "line": 439,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+          "symbol": "convertScheduledAudioInputs"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-AUDIO-RATE-NEGOTIATION",
+      "public_entry_point": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "rate, err := resolveSessionAudioSampleRate(opts, *plan)",
+              "line": 71,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_format.go"
+            },
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "rate, rateErr := resolveSessionAudioSampleRate(sessionOptions, sessionRuntimePlan{",
+              "line": 237,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_planning.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "symbol": "resolveSessionAudioSampleRate"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "if err := configureSessionAudioContract(opts, &plan); err != nil {",
+              "line": 436,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "symbol": "configureSessionAudioContract"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-PROVIDER-MEDIA-OPENAI",
+      "public_entry_point": "go-llm-gateway/pkg/providers/openai/session_conn.go and session.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "s.media = sharedaudio.NewSessionMediaAtRateWithOptions(s.writeRTCMediaFrame, s.mediaSampleRate, options)",
+              "line": 42,
+              "match": "typed_method_selector",
+              "path": "go-llm-gateway/pkg/providers/openai/session_media.go",
+              "resolved_receiver": "s"
+            },
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)",
+              "line": 58,
+              "match": "typed_method_selector",
+              "path": "go-llm-gateway/pkg/providers/openai/session_media.go",
+              "resolved_receiver": "s"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/openai/session_media.go",
+          "symbol": "writeRTCMediaFrame"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "if err := s.publishRTCMedia(ctx, event); err != nil {",
+              "line": 166,
+              "match": "typed_method_selector",
+              "path": "go-llm-gateway/pkg/providers/openai/session_conn.go",
+              "resolved_receiver": "s"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/openai/session_media.go",
+          "symbol": "publishRTCMedia"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "data, decodeErr := decodeOpenAIRealtimeAudioDelta(event.Data)",
+              "line": 139,
+              "match": "same_package_unqualified_call",
+              "path": "go-llm-gateway/pkg/providers/openai/session_media.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/openai/session_media.go",
+          "symbol": "decodeOpenAIRealtimeAudioDelta"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-PROVIDER-MEDIA-GROK",
+      "public_entry_point": "go-llm-gateway/pkg/providers/grok/provider.go and session.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "s.media = sharedaudio.NewSessionMediaAtRateWithOptions(s.writeRTCMediaFrame, s.mediaSampleRate, options)",
+              "line": 42,
+              "match": "typed_method_selector",
+              "path": "go-llm-gateway/pkg/providers/grok/session_media.go",
+              "resolved_receiver": "s"
+            },
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)",
+              "line": 58,
+              "match": "typed_method_selector",
+              "path": "go-llm-gateway/pkg/providers/grok/session_media.go",
+              "resolved_receiver": "s"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/grok/session_media.go",
+          "symbol": "writeRTCMediaFrame"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "_ = s.publishRTCMedia(event)",
+              "line": 285,
+              "match": "typed_method_selector",
+              "path": "go-llm-gateway/pkg/providers/grok/session.go",
+              "resolved_receiver": "s"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/grok/session_media.go",
+          "symbol": "publishRTCMedia"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "data, decodeErr := decodeGrokAudioDelta(event.Data)",
+              "line": 110,
+              "match": "same_package_unqualified_call",
+              "path": "go-llm-gateway/pkg/providers/grok/session_media.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/providers/grok/session_media.go",
+          "symbol": "decodeGrokAudioDelta"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-TOOL-AUDIO-CONVERSION",
+      "public_entry_point": "go-agent-runtime/services/tools/internal/filesystem/tool_file_tools.go:readFileMedia",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "pcmBytes, err := audioToPCM16k(ctx, content)",
+              "line": 81,
+              "match": "same_package_unqualified_call",
+              "path": "go-agent-runtime/services/tools/internal/filesystem/tool_file_tools.go"
+            }
+          ],
+          "path": "go-agent-runtime/services/tools/internal/filesystem/tool_filesystem.go",
+          "symbol": "audioToPCM16k"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-RTC-TRACKS",
+      "public_entry_point": "go-agent-runtime/services/devices/internal/probe/rtc.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "qualified call resolves through the exact imported source package",
+              "expression": "l.inbound, err = rtc.NewInboundTrack(liveDeviceProbeRTPPacketSource{track: remote}, l.decoder, rtc.InboundTrackConfig{",
+              "import_alias": "rtc",
+              "import_path": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+              "line": 66,
+              "match": "qualified_import_call",
+              "path": "go-agent-runtime/services/devices/internal/probe/rtc.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/transport/rtc/track_in.go",
+          "symbol": "NewInboundTrack"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "go t.readLoop()",
+              "line": 179,
+              "match": "typed_method_selector",
+              "path": "go-llm-gateway/pkg/transport/rtc/track_in.go",
+              "resolved_receiver": "t"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/transport/rtc/track_in.go",
+          "symbol": "readLoop"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "frame, err := l.inbound.ReadFrame(ctx)",
+              "line": 77,
+              "match": "typed_method_selector",
+              "path": "go-agent-runtime/services/devices/internal/probe/rtc.go",
+              "resolved_receiver": "l.inbound"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/transport/rtc/track_in.go",
+          "symbol": "ReadFrame"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-RTC-TRACKS-OUT",
+      "public_entry_point": "agent-cli/internal/wire/rtc_runtime.go and go-agent-runtime/services/devices/internal/probe/rtc.go",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "qualified call resolves through the exact imported source package",
+              "expression": "outbound, err := rtc.NewOutboundTrack(rtc.OutboundTrackConfig{",
+              "import_alias": "rtc",
+              "import_path": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+              "line": 345,
+              "match": "qualified_import_call",
+              "path": "agent-cli/internal/wire/rtc_runtime.go"
+            },
+            {
+              "evidence": "qualified call resolves through the exact imported source package",
+              "expression": "outbound, err := rtc.NewOutboundTrack(rtc.OutboundTrackConfig{",
+              "import_alias": "rtc",
+              "import_path": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+              "line": 38,
+              "match": "qualified_import_call",
+              "path": "go-agent-runtime/services/devices/internal/probe/rtc.go"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/transport/rtc/track_out.go",
+          "symbol": "NewOutboundTrack"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "if err := outbound.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: frame}); err != nil {",
+              "line": 505,
+              "match": "typed_method_selector",
+              "path": "agent-cli/internal/wire/rtc_runtime.go",
+              "resolved_receiver": "outbound"
+            },
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "if err := l.outbound.WriteFrame(ctx, audio.PCMFrame{Samples: samples}); err != nil {",
+              "line": 54,
+              "match": "typed_method_selector",
+              "path": "go-agent-runtime/services/devices/internal/probe/rtc.go",
+              "resolved_receiver": "l.outbound"
+            }
+          ],
+          "path": "go-llm-gateway/pkg/transport/rtc/track_out.go",
+          "symbol": "WriteFrame"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-NF-DEVICE-CONTRACT",
+      "public_entry_point": "go-agent-runtime/services/devices.Service",
+      "symbol_paths": []
+    },
+    {
+      "finding_id": "C108-NF-CLI-MEDIA-TRANSPORT",
+      "public_entry_point": "agent-cli command composition",
+      "symbol_paths": []
+    },
+    {
+      "finding_id": "C108-NF-CORE-LOOP-QUEUE",
+      "public_entry_point": "agent loop participant/session admission",
+      "symbol_paths": []
+    },
+    {
+      "finding_id": "C108-F-MIXER-HISTORICAL",
+      "public_entry_point": "agent-cli room composition",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "return NewPCM16MixerWithConfig(ctx, config)",
+              "line": 261,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/room/mixer.go"
+            },
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "return NewPCM16MixerWithConfig(ctx, config)",
+              "line": 266,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/room/mixer.go"
+            },
+            {
+              "evidence": "qualified call resolves through the exact imported source package",
+              "expression": "mixer, mixerErr := room.NewPCM16MixerWithConfig(participantCtx, mixerConfig)",
+              "import_alias": "room",
+              "import_path": "github.com/portpowered/go-agent-harness/agent-cli/internal/room",
+              "line": 161,
+              "match": "qualified_import_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go"
+            }
+          ],
+          "path": "agent-cli/internal/room/mixer.go",
+          "symbol": "NewPCM16MixerWithConfig"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "method selector is tied to the declared receiver type in pinned production source",
+              "expression": "_, err := m.WriteContextWithDisposition(ctx, inputID, pcm)",
+              "line": 459,
+              "match": "typed_method_selector",
+              "path": "agent-cli/internal/room/mixer.go",
+              "resolved_receiver": "m"
+            }
+          ],
+          "path": "agent-cli/internal/room/mixer.go",
+          "symbol": "WriteContextWithDisposition"
+        },
+        {
+          "callers": [
+            {
+              "evidence": "runtime.mixer is the *room.PCM16Mixer field declared in session_room_lifecycle.go:74",
+              "expression": "mixed, err := runtime.mixer.ReadFrameWithSources(admissionCtx)",
+              "line": 947,
+              "match": "typed_field_selector",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+            },
+            {
+              "evidence": "runtime.mixer is the *room.PCM16Mixer field declared in session_room_lifecycle.go:74",
+              "expression": "mixed, err := runtime.mixer.ReadFrameWithSources(runtime.ctx)",
+              "line": 1116,
+              "match": "typed_field_selector",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_room_run.go"
+            }
+          ],
+          "path": "agent-cli/internal/room/mixer.go",
+          "symbol": "ReadFrameWithSources"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-AUDIO-IN-HISTORICAL",
+      "public_entry_point": "session runtime audio input setup",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "source, err := openSessionAudioInput(input)",
+              "line": 328,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go"
+            },
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "source, err := openSessionAudioInput(input)",
+              "line": 518,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go"
+            },
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "audioSource, err := openSessionAudioInput(input)",
+              "line": 213,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_image.go"
+            },
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "audioSource, err = openSessionAudioInput(*audioInput)",
+              "line": 286,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_recording.go"
+            },
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "audioSource, err = openSessionAudioInput(*audioInput)",
+              "line": 385,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_recording.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+          "symbol": "openSessionAudioInput"
+        }
+      ]
+    },
+    {
+      "finding_id": "C108-F-AUDIO-OUT-HISTORICAL",
+      "public_entry_point": "session runtime audio output setup",
+      "symbol_paths": [
+        {
+          "callers": [
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "sink, err := newSessionAudioSinkAtRate(path, out, plan.outputAudioSampleRate)",
+              "line": 219,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
+            },
+            {
+              "evidence": "unqualified call is confined to the exact source package directory",
+              "expression": "sink, err := newSessionAudioSinkAtRate(o.devicePath, o.deviceWriter, sampleRate)",
+              "line": 235,
+              "match": "same_package_unqualified_call",
+              "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go"
+            }
+          ],
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_out.go",
+          "symbol": "newSessionAudioSinkAtRate"
+        }
+      ]
+    }
+  ],
+  "schema_version": "c108-call-paths-v1",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+}
