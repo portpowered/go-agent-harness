@@ -1,7 +1,7 @@
 {
   "boundary": {
     "forbidden_new_package_tokens": [],
-    "legacy_lines": 86
+    "legacy_lines": 87
   },
   "consumer": {
     "imports": {
@@ -51,148 +51,47 @@
       "status": "accepted"
     }
   },
-  "mode": "retirement-and-owned-paths",
-  "retirement": {
-    "agentruntime_production_lines": {
-      "candidate": 41017,
-      "origin_main": 41208,
-      "retired_lines": 191
-    },
-    "ancestry": {
-      "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "head": "8b7b71bb9c9e547049f8549b25a6547c78568584",
-      "origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
-      "required_ancestors": {
-        "accepted_main": {
-          "is_ancestor": true,
-          "revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
-        },
-        "origin_main": {
-          "is_ancestor": true,
-          "revision": "3963bc3566da24f8214634c17a9d0f79a6724171"
-        },
-        "startup_ancestor": {
-          "is_ancestor": true,
-          "revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
-        }
+  "guard_mutations": {
+    "none_literal_guard": {
+      "killed": true,
+      "mutant": "if false && value == \"none\"",
+      "result": {
+        "argv": [
+          "go",
+          "run",
+          ".",
+          "--mode",
+          "positive"
+        ],
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c110-guard-mutants-x3wb2qcv/repo/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer",
+        "elapsed_seconds": 0.660614,
+        "exit_code": 1,
+        "stderr": "exit status 1\n",
+        "stdout": "{\"cli_imports\":false,\"credentials\":false,\"error\":\"none resolution = \\\"none\\\", err=\\u003cnil\\u003e\",\"hidden_global_io\":false,\"mode\":\"positive\",\"private_imports\":false,\"status\":\"rejected\"}\n",
+        "timed_out": false
       }
     },
-    "c79_lease": {
-      "candidate_changes": [],
-      "guard": "unchanged until C79 guarded release",
-      "review_id": "work-review-246",
-      "shared_paths": [
-        "scripts/wire-packages.txt",
-        "docs/architecture/architecture-size-baseline.json"
-      ],
-      "state_at_admission_check": "in-review",
-      "work_id": "work-task-114"
+    "post_legacy_skills_cancellation_guard": {
+      "killed": true,
+      "mutant": "removed post-skills checkContext guard",
+      "result": {
+        "argv": [
+          "go",
+          "test",
+          "./services/sessioninstructions/internal/service",
+          "-run",
+          "TestResolveChecksCancellationAfterLegacyLoaderCalls/skills$"
+        ],
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c110-guard-mutants-x3wb2qcv/repo/go-agent-runtime",
+        "elapsed_seconds": 0.477456,
+        "exit_code": 1,
+        "stderr": "",
+        "stdout": "--- FAIL: TestResolveChecksCancellationAfterLegacyLoaderCalls (0.00s)\n    --- FAIL: TestResolveChecksCancellationAfterLegacyLoaderCalls/skills (0.00s)\n        service_test.go:194: error instruction resolution skills-summary /workspace: load skills summary: summary completed after cancellation does not unwrap context canceled\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/internal/service\t0.176s\nFAIL\n",
+        "timed_out": false
+      }
     },
-    "changed_paths": [
-      "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
-      "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
-      "coverage-manifest/go-agent-runtime/services/sessioninstructions/internal/service/package.json",
-      "coverage-manifest/go-agent-runtime/services/sessioninstructions/package.json",
-      "coverage-manifest/go-agent-runtime/services/sessioninstructions/wire/package.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/README.md",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/admission.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/artifacts/yui-build.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/baseline.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/go.mod",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/main.go",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/provenance.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-positive-and-guard-mutations.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-public-contract.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-retirement-and-owned-paths.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py",
-      "go-agent-runtime/services/session/instructions.go",
-      "go-agent-runtime/services/session/internal/instructions/service.go",
-      "go-agent-runtime/services/session/internal/instructions/service_test.go",
-      "go-agent-runtime/services/session/wire/providers.go",
-      "go-agent-runtime/services/session/wire/wire_gen.go",
-      "go-agent-runtime/services/sessioninstructions/contract.go",
-      "go-agent-runtime/services/sessioninstructions/contract_test.go",
-      "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
-      "go-agent-runtime/services/sessioninstructions/internal/service/service_test.go",
-      "go-agent-runtime/services/sessioninstructions/service.go",
-      "go-agent-runtime/services/sessioninstructions/wire/wire.go",
-      "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go"
-    ],
-    "legacy": {
-      "baseline_lines": 277,
-      "baseline_sha256": "57a1e2b77f282e8c7a8351b3b1bf966baacf1d4674764b92542a9b2cfc6e8adc",
-      "candidate_lines": 86,
-      "candidate_sha256": "38ea95be89eb667ddcdfd695026e81064f74ecfce2f3f0cb37090aade88970eb",
-      "retired_lines": 191
-    },
-    "ownership": {
-      "allowed_exact": [
-        "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
-        "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
-        "go-agent-runtime/services/session/instructions.go",
-        "go-agent-runtime/services/session/internal/instructions/service.go",
-        "go-agent-runtime/services/session/internal/instructions/service_test.go",
-        "go-agent-runtime/services/session/wire/providers.go",
-        "go-agent-runtime/services/session/wire/wire_gen.go"
-      ],
-      "allowed_prefixes": [
-        "go-agent-runtime/services/sessioninstructions/",
-        "coverage-manifest/go-agent-runtime/services/sessioninstructions/",
-        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/"
-      ],
-      "caller_evidence": [
-        {
-          "path": "agent-cli/internal/services/internal/agentruntime/service.go",
-          "sha256": "d3a1650dfb0a50b8cfcdf9376422d1e054f747a00e4b1951753cff6f9fca82b0",
-          "symbols": [
-            "RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration",
-            "RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration"
-          ]
-        },
-        {
-          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
-          "sha256": "3fbd1ff188f7d22f53727ea16543bb7fe249dd7050917ae3f170eeace47b5a24",
-          "symbols": [
-            "RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration",
-            "RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration",
-            "RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration"
-          ]
-        },
-        {
-          "path": "agent-cli/internal/services/internal/agentruntime/session_image.go",
-          "sha256": "b3ad86a6259a59c789f6b758b9fffacee672f0cb9f2bce6ab5be3e59e6372436",
-          "symbols": [
-            "RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration"
-          ]
-        },
-        {
-          "path": "agent-cli/internal/services/internal/agentruntime/session_recording.go",
-          "sha256": "a48ca98b269ee9df2197c2e91e34ff6c0a805f85189f28a10ace8189c1086e5d",
-          "symbols": [
-            "RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration"
-          ]
-        }
-      ],
-      "compatibility_api": {
-        "constructor": "NewInstructionService",
-        "delegates_to": "sessioninstructions.Factory{}.Build",
-        "path": "go-agent-runtime/services/session/wire/providers.go"
-      },
-      "unexpected": []
-    },
-    "source_hashes": {
-      "agent-cli/internal/services/internal/agentruntime/session_instructions.go": "38ea95be89eb667ddcdfd695026e81064f74ecfce2f3f0cb37090aade88970eb",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py": "4b6d9fb9abccf3fb00fc9d6250742c0f423040b493b4c0f6aa8ff780daaa0fb4",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py": "49ffc6c4ffe37d1a53dccfe5d58435d9985b82b8a52baf1a90a2c0c122f24fe5",
-      "go-agent-runtime/services/session/wire/providers.go": "12bc273963372c52e13aa40edb8e7452f958b31adba21b021392a856d4739a6f",
-      "go-agent-runtime/services/session/wire/wire_gen.go": "68c9ef7000bf2542e9676c2cd5674ffb946108221d095f39f058856dee7e812b",
-      "go-agent-runtime/services/sessioninstructions/contract.go": "b1c39771fd9d3757499ea0137c1dc6efc55db1145af1a03294c1bfcc317e8001",
-      "go-agent-runtime/services/sessioninstructions/internal/service/service.go": "c9db21817142ca2e05450b4d3ee9a5f6c2862a7577b382c4b700650a6fbd247e",
-      "go-agent-runtime/services/sessioninstructions/service.go": "acc2b61e1fbdc8e2d5f6aa67dc69777205d5abda7b8317afb04951b0a0bed05d",
-      "go-agent-runtime/services/sessioninstructions/wire/wire.go": "838410e1f09036c75792b2031b3530509c02bc6e1b93f9d0ef74df8faeb78978",
-      "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go": "b69e8fe21fb582d60388b2f0773988993a830e1ef875fe91bb67ab4a8172d1f9"
-    }
+    "status": "accepted"
   },
+  "mode": "positive-and-guard-mutations",
   "status": "accepted"
 }

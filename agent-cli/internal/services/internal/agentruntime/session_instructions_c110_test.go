@@ -58,7 +58,7 @@ func TestC110LegacyInstructionFileIsThinDeprecatedAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read legacy adapter: %v", err)
 	}
-	if lines := 1 + strings.Count(string(data), "\n"); lines > 87 {
+	if lines := len(strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")); lines > 87 {
 		t.Fatalf("legacy session_instructions.go has %d lines, want <= 87", lines)
 	}
 	if !strings.Contains(string(data), "sessioninstructionswire.NewInstructionService") {

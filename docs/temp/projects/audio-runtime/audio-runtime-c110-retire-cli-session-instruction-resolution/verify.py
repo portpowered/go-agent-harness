@@ -159,6 +159,7 @@ def verify_legacy_boundary() -> dict[str, Any]:
     text = LEGACY.read_text(encoding="utf-8")
     lines = len(text.splitlines())
     require(lines <= 87, f"legacy file has {lines} lines, want <= 87")
+    require("Deprecated" in text, "legacy file is missing the required Deprecated marker")
     require("sessioninstructionswire.NewInstructionService" in text, "legacy file does not use dedicated instruction Wire")
     require("Tool-grounding requirements:" not in text, "legacy file retains policy text")
     require("os.ReadFile" not in text, "legacy file retains unbounded file loading")

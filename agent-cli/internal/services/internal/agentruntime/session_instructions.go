@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+// C110 Deprecated adapter: use the host-neutral sessioninstructions service for new integrations.
 func RunSessionWithInstructions(ctx context.Context, out io.Writer, opts SessionRunOptions, systemPrompt string) error {
 	return runWithResolvedInstructions(ctx, opts, systemPrompt, func(opts SessionRunOptions) error { return RunSession(ctx, out, opts) })
 }
