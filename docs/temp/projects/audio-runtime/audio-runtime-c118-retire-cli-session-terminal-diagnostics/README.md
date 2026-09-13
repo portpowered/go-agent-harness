@@ -3,8 +3,9 @@
 `inventory.json` records the admitted project, immutable source baseline, dual
 ancestry, caller census, peer lease exclusions, and the current task-board
 CI/review provenance. The current task is `work-task-23`. Accepted peer repair
-main `915ed982d` is integrated by merge `d2cda1b28`; the tested source and
-source-pinned artifact are `675f8918`. The independent review finding about
+main `915ed982d` and the subsequent accepted main `b8650efd` are integrated by
+merge `020f665f6`; the tested source and source-pinned artifact are
+`020f665f6`. The independent review finding about
 scheduled-incomplete nil/context failures was repaired in `4b4b10c1`, with the
 architecture-budget repair in `9cf7a04`.
 
@@ -21,15 +22,15 @@ generated Wire constructor, and the public provider taxonomy. It verifies typed
 error identity, deterministic continuation metadata, accounting,
 cancellation/output-state policy, and independent service construction.
 
-The committed retirement verifier measures 39,391 candidate CLI production lines
-versus 41,208 at the pinned baseline, a 1,817-line net reduction; the deleted
+The committed retirement verifier measures 39,329 candidate CLI production lines
+versus 41,208 at the pinned baseline, a 1,879-line net reduction; the deleted
 policy source is pinned at 287 lines and its recorded SHA-256.
 
 The bounded `run.py` runner builds no provider connection and executes the
-source-pinned shipped YUI from tested source `675f8918` with a credential-free
-environment. Report `runs/session-terminal-zk2c6z1n/report.json` passes all four
-required cases with YUI SHA-256
-`c418314d97a635879b54afa3916129cc5ba887c6ec556c6ff972eab7f749846d`:
+source-pinned shipped YUI from tested source `020f665f6` with a credential-free
+environment. Report `runs/session-terminal-izq_fvua/report.json` passes all
+four required cases with YUI SHA-256
+`908f7744c0bb7ec4678f721f875e3ee91621ef7922443be4fed7fdb47ec59c00`:
 
 - replay completion: exit 0, `replay_complete/replay/complete`, two accounting
   records, rendered PCM 3,360 bytes with the healthy 2,400-byte tail;
@@ -44,18 +45,18 @@ required cases with YUI SHA-256
 All cases reaped their process groups. The credential-free external consumer,
 both causal mutants, named normal/race tests, retirement verifier, accumulated
 normal/coverage/race session regression matrix at `COUNT=3`, coverage
-registration (189 packages), Wire, architecture-size (199 packages, 1,931
-files, 28,675 functions), vet, pinned staticcheck, pinned lint, formatting and
+registration (192 packages), Wire, architecture-size (202 packages, 1,940
+files, 28,756 functions), vet, pinned staticcheck, pinned lint, formatting and
 diff checks pass at the tested source.
 
 The preserved exact-head rejection `ci-rejection-34748383831.json` recorded
 eight green checks and one `CI (integration)` failure in the peer production
 audio-device drain path: `test45/trial_05` lost 6,400 of 177,591 compared
 samples with 16 underflows and 7,360 zero-filled samples. C127 repaired that
-peer path in accepted main `915ed982d`; C118 integrated it and reran its
-bounded gates. No current-head script CI result, independent review, guarded
-merge, post-merge vertical probe, physical/acoustic proof or project acceptance
-is claimed.
+peer path in accepted main `915ed982d`; C118 integrated accepted main through
+`b8650efd` and reran its bounded gates. No current-head script CI result,
+independent review, guarded merge, post-merge vertical probe, physical/acoustic
+proof or project acceptance is claimed.
 
 Next action: commit and push this refreshed same-task candidate, update PR #504
 with the exact merge, coverage-registration repair, test and artifact evidence,

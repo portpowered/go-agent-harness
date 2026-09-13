@@ -13,8 +13,8 @@
     "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
     "branch": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
     "prdBranchName": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
-    "head": "675f891820f9c3e2318f28fff6c57c832fab54a6",
-    "originMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+    "head": "020f665f6ba66db645282e70b24e959d50316e3b",
+    "originMain": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
     "baseRevision": "3c5c69f96924bd6c7bbb8fdf12cfedaee7878291",
     "requiredIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
     "ancestryChecks": [
@@ -31,9 +31,9 @@
       "scope": "accepted current main; prior C118 implementation and evidence preserved"
     },
     "latestFreshMainIntegration": {
-      "from": "4d5e0801c9df7c4f33a2498d0a20acf947b03992",
-      "originMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
-      "merge": "d2cda1b28c59ff5cfe16f4121b4c50a84d2aad82",
+      "from": "2786fbd4858556217a73afb126e4c6b1715e77fb",
+      "originMain": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
+      "merge": "020f665f6ba66db645282e70b24e959d50316e3b",
       "strategy": "no-ff",
       "scope": "accepted C127-repaired current main; predecessor C118 checkpoints and unrelated changes preserved"
     }
@@ -115,9 +115,9 @@
     ]
   },
   "implementationCheckpoint": {
-    "testedSourceRevision": "675f891820f9c3e2318f28fff6c57c832fab54a6",
-    "sourceArtifactRevision": "675f891820f9c3e2318f28fff6c57c832fab54a6",
-    "evidenceRunnerRevision": "675f891820f9c3e2318f28fff6c57c832fab54a6",
+    "testedSourceRevision": "020f665f6ba66db645282e70b24e959d50316e3b",
+    "sourceArtifactRevision": "020f665f6ba66db645282e70b24e959d50316e3b",
+    "evidenceRunnerRevision": "020f665f6ba66db645282e70b24e959d50316e3b",
     "commits": [
       "360d2a973d01e572daa9c1725b370474a88bb429",
       "26365f5383d2e9ddad27e7920240d9c837d8ebc0",
@@ -132,12 +132,13 @@
       "a949546b612010767dde0e036bc1975cde7b7fd7",
       "5c423b654c5702d966516dedd590555f07e96636",
       "d2cda1b28c59ff5cfe16f4121b4c50a84d2aad82",
-      "675f891820f9c3e2318f28fff6c57c832fab54a6"
+      "675f891820f9c3e2318f28fff6c57c832fab54a6",
+      "020f665f6ba66db645282e70b24e959d50316e3b"
     ],
-    "retirementLineReduction": 1817,
+    "retirementLineReduction": 1879,
     "focusedValidation": "candidate-evidence.json",
-    "shippedYuiEvidence": "passed: runs/session-terminal-zk2c6z1n/report.json at tested source 675f8918; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI SHA-256 c418314d97a635879b54afa3916129cc5ba887c6ec556c6ff972eab7f749846d; no surviving process groups",
-    "sharedGateStatus": "coverage registration (189 packages), Wire, architecture-size (199 packages, 1931 files, 28675 functions), vet, pinned staticcheck and pinned lint pass at tested source; the released C127 causal test-only package is registered; full local make coverage remains represented by the preserved unrelated macOS SIGINT timing evidence",
-    "latestCiStatus": "run 34748383831 rejected at pre-merge head a949546b: eight required checks passed and CI (integration) failed only in production-binary audio-device replay; C127 repaired that peer path in accepted main 915ed982, C118 integrated it and reran bounded gates"
+    "shippedYuiEvidence": "passed: runs/session-terminal-izq_fvua/report.json at tested source 020f665f; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI SHA-256 908f7744c0bb7ec4678f721f875e3ee91621ef7922443be4fed7fdb47ec59c00; no surviving process groups",
+    "sharedGateStatus": "coverage registration (192 packages), Wire, architecture-size (202 packages, 1940 files, 28756 functions), vet, pinned staticcheck and pinned lint pass at tested source; the released C127 causal test-only package is registered; full local make coverage remains represented by the preserved unrelated macOS SIGINT timing evidence",
+    "latestCiStatus": "run 34748383831 rejected at pre-merge head a949546b: eight required checks passed and CI (integration) failed only in production-binary audio-device replay; C127 repaired that peer path in accepted main 915ed982, C118 integrated accepted main through b8650efd and reran bounded gates"
   }
 }
