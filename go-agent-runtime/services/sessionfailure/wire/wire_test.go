@@ -19,6 +19,8 @@ func TestNewServiceBindsPublicContract(t *testing.T) {
 }
 
 func TestInvocationHelpersDelegateToIsolatedService(t *testing.T) {
+	const partialOutput = "partial"
+
 	invocation := NewInvocation(nil, sessionfailure.Dependencies{})
 	if invocation == nil || invocation.Service != nil || invocation.Failure == nil {
 		t.Fatalf("invocation = %#v", invocation)
@@ -28,15 +30,15 @@ func TestInvocationHelpersDelegateToIsolatedService(t *testing.T) {
 	if progress != (sessionfailure.Progress{SessionOpened: true, TurnsCompleted: 3}) {
 		t.Fatalf("progress = %#v", progress)
 	}
-	if got := OutputStateForProgress(true, 3); got != "partial" {
+	if got := OutputStateForProgress(true, 3); got != partialOutput {
 		t.Fatalf("OutputStateForProgress = %q", got)
 	}
-	if got := OutputState(progress); got != "partial" {
+	if got := OutputState(progress); got != partialOutput {
 		t.Fatalf("OutputState = %q", got)
 	}
 
 	facts := Facts(sessionfailure.ProjectionToolContinuation, "tool_continuation", progress)
-	if facts.Classification != sessionfailure.ClassificationToolContinuation || facts.FailingEvent != "tool_continuation" || facts.OutputState != "partial" {
+	if facts.Classification != sessionfailure.ClassificationToolContinuation || facts.FailingEvent != "tool_continuation" || facts.OutputState != partialOutput {
 		t.Fatalf("Facts = %#v", facts)
 	}
 	if got := RunFacts(nil); got != (sessionfailure.Facts{}) {
