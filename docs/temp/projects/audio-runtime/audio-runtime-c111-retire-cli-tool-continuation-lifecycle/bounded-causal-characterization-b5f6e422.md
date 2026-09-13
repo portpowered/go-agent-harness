@@ -77,3 +77,26 @@ Script CI run `34763400175` rejected candidate head `bf05d90c64b556f68834d7dfa31
 The same run's coverage job completed all package profiles and failed its unchanged floor gate on `github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession` at `61.80%` versus `80.00%`. A bounded local `GOWORK=off go test ./internal/services/agentsession -cover -count=1 -timeout=120s` reports the package's direct `0.0%` coverage, and `git diff origin/main...HEAD -- agent-cli/internal/services/agentsession` is empty; no C111 coverage or floor repair is demonstrated.
 
 The exact local stress characterization `GOWORK=off YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 120s -- go test ./test/integration -run '^TestAgentBinaryTest46HighRateToolAudioRegression/trial_10$' -count=1 -timeout 120s -v` passed in `11.193s` (subtest `1.40s`). It did not reproduce the remote loss and does not transfer C127 ownership or establish a C111 repair. Fresh C111 verifier modes and the source-pinned three-case replay also pass at `bf05d90c`; the candidate is ready for a changed evidence handoff to Script CI.
+
+## Current-head hermetic rejection
+
+The canonical board returned the same C111 task after Script CI run `34764898583`
+at head `c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db`. The failed completed job was
+`CI (hermetic)`, job `103744017535`, step `Run hermetic test pipeline` from
+`make test-hermetic`; its 400-line log is retained by the exact SHA-256
+`60ed135f47794a0acfab2c0109343e3926867183a05fd9e1d69a813469e45663` in
+`ci-rejection-34764898583.json`. The only shown assertion failure was the
+unchanged peer test
+`agent-cli/internal/services/internal/agentruntime/session_audio_out_test.go:146`
+(`TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas`), which
+observed `14` bytes instead of the exact `974`-byte PCM16 stream. The broad
+integration package completed successfully before the hermetic target exited
+nonzero; coverage was still in progress when this failed job was inspected.
+
+The C111 diff against the PR base `bd6a1289218d1bef1a3af36e64e9d4496062416f`
+contains only `session_tool_lifecycle.go`; neither the audio-output implementation
+nor its test changed. The exact test passed `20/20` under `CGO_ENABLED=0` with
+`-tags=nomicrophone`, and `20/20` under the same bounded `-race` selector. No
+C111-owned cause is demonstrated, so no peer source, assertion, timeout, or
+ownership was changed. This rejection remains non-green Script CI evidence;
+submit the changed C111 evidence head to the same task gate without polling.

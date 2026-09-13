@@ -1,0 +1,55 @@
+{
+  "schema": "audio-runtime.c111.ci-rejection.v1",
+  "run": 34764898583,
+  "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34764898583",
+  "head": "c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db",
+  "overallStatusAtInspection": "in_progress",
+  "failedJob": {
+    "job": 103744017535,
+    "name": "CI (hermetic)",
+    "conclusion": "failure",
+    "failedStep": "Run hermetic test pipeline",
+    "command": "make test-hermetic",
+    "logLines": 400,
+    "logSha256": "60ed135f47794a0acfab2c0109343e3926867183a05fd9e1d69a813469e45663",
+    "failure": {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "test": "TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas",
+      "source": "agent-cli/internal/services/internal/agentruntime/session_audio_out_test.go:146",
+      "actualBytes": 14,
+      "expectedBytes": 974,
+      "message": "split-delta raw output = 14 bytes, want exact 974-byte PCM16 stream"
+    },
+    "logEvidence": [
+      "agent-cli/test/integration completed successfully in 299.699s before the hermetic command exited 1",
+      "the failed test was the only assertion failure shown in the 400-line job log",
+      "the make target ended with agent-cli test command exit status 1 and Makefile:456 test-hermetic exit code 2"
+    ]
+  },
+  "scope": {
+    "prBase": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "c111ChangedPathsAgainstPrBase": [
+      "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go"
+    ],
+    "audioOutputImplementationChanged": false,
+    "audioOutputTestChanged": false,
+    "c111Owned": false,
+    "action": "Preserve the exact hermetic failure as non-C111 evidence; do not edit the unchanged audio-output test or implementation, transfer ownership, or weaken its exact PCM assertion."
+  },
+  "localCharacterization": [
+    {
+      "command": "GOWORK=off CGO_ENABLED=0 go test ./internal/services/internal/agentruntime -tags=nomicrophone -run '^TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas$' -count=20 -timeout=120s",
+      "result": "passed",
+      "trials": 20,
+      "exitCode": 0
+    },
+    {
+      "command": "GOWORK=off CGO_ENABLED=0 go test -race ./internal/services/internal/agentruntime -tags=nomicrophone -run '^TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas$' -count=20 -timeout=240s",
+      "result": "passed",
+      "trials": 20,
+      "exitCode": 0
+    }
+  ],
+  "claimedGreen": false,
+  "nextAction": "Commit this owned evidence checkpoint, push the same C111 branch and update PR 496. Return the changed head to the script-owned CI gate without polling; if a C111-owned check rejects, inspect its exact completed log and repair this same task."
+}
