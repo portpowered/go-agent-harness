@@ -129,7 +129,10 @@ const SessionDiagnosticFieldUnresolvedToolResultCount = impl.SessionDiagnosticFi
 
 type SessionDiagnosticRecord = impl.SessionDiagnosticRecord
 type SessionDurationTimer = impl.SessionDurationTimer
-type SessionImageContinuationError = runtimeContinuation.ImageContinuationError
+
+// Keep the test seam's historical view so both legacy session errors and the
+// new public contract's compatibility projection remain discoverable.
+type SessionImageContinuationError = runtimeSession.LiveImageContinuationError
 
 const SessionMaxDurationReason = impl.SessionMaxDurationReason
 
@@ -141,7 +144,7 @@ type SessionScheduledAudioIncompleteError = runtimeSession.LiveScheduledAudioInc
 
 const SessionSilentProviderTimeoutClassification = impl.SessionSilentProviderTimeoutClassification
 
-type SessionToolContinuationError = runtimeContinuation.ToolContinuationError
+type SessionToolContinuationError = runtimeSession.LiveToolContinuationError
 type SessionToolDiagnostic = impl.SessionToolDiagnostic
 
 const SessionTransportWebRTC = impl.SessionTransportWebRTC

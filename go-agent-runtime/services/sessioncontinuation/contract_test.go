@@ -60,6 +60,32 @@ func TestContinuationSentinelsRetainLiveRuntimeIdentity(t *testing.T) {
 	}
 }
 
+func TestLiveRuntimeContinuationErrorsMatchPublicSentinels(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		target error
+	}{
+		{
+			name:   "image",
+			err:    &runtimesession.LiveImageContinuationError{CallIDs: []string{"image-call"}},
+			target: sessioncontinuation.ErrImageContinuationIncomplete,
+		},
+		{
+			name:   "tool",
+			err:    &runtimesession.LiveToolContinuationError{CallIDs: []string{"tool-call"}},
+			target: sessioncontinuation.ErrToolContinuationIncomplete,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if !errors.Is(test.err, test.target) {
+				t.Fatalf("live runtime error %v does not match public sentinel %v", test.err, test.target)
+			}
+		})
+	}
+}
+
 func TestContinuationErrorsExposeLegacyRuntimeViews(t *testing.T) {
 	image := &sessioncontinuation.ImageContinuationError{CallIDs: []string{"image-call"}}
 	var legacyImage *runtimesession.LiveImageContinuationError
