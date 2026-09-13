@@ -42,18 +42,18 @@ func (o *observer) captureFailureFromClose(v *m.SessionCloseValue) {
 	}
 }
 
-var projectionKinds = [...]sf.Projection{sf.ProjectionUnresolvedTool, sf.ProjectionImageContinuation, sf.ProjectionToolContinuation, sf.ProjectionScheduledAudio}
+const u, i, t, a = sf.ProjectionUnresolvedTool, sf.ProjectionImageContinuation, sf.ProjectionToolContinuation, sf.ProjectionScheduledAudio
 
-func p(o *observer, kind int, e string) *failureFacts {
+func p(o *observer, kind sf.Projection, e string) *failureFacts {
 	if o == nil {
 		return nil
 	}
-	return ff(sfw.Facts(projectionKinds[kind], e, progress(o)))
+	return ff(sfw.Facts(kind, e, progress(o)))
 }
-func (o *observer) unresolvedToolResultFailureFacts(e string) *failureFacts { return p(o, 0, e) }
-func (o *observer) imageContinuationFailureFacts(e string) *failureFacts    { return p(o, 1, e) }
-func (o *observer) toolContinuationFailureFacts(e string) *failureFacts     { return p(o, 2, e) }
-func (o *observer) scheduledAudioFailureFacts(e string) *failureFacts       { return p(o, 3, e) }
+func (o *observer) unresolvedToolResultFailureFacts(e string) *failureFacts { return p(o, u, e) }
+func (o *observer) imageContinuationFailureFacts(e string) *failureFacts    { return p(o, i, e) }
+func (o *observer) toolContinuationFailureFacts(e string) *failureFacts     { return p(o, t, e) }
+func (o *observer) scheduledAudioFailureFacts(e string) *failureFacts       { return p(o, a, e) }
 func (o *observer) emitToolCallRecord(v *m.ToolCallEndValue) {
 	if o != nil && o.sink != nil && v != nil {
 		fi(o).Failure.EmitUnsupportedTool(sf.ToolCall{Name: v.Name, ID: v.ToolCallID, TurnIndex: o.turnsCompleted + 1})
