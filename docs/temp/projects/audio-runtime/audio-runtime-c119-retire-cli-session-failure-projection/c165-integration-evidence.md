@@ -32,7 +32,7 @@ implementation branch was created.
 ## Focused causal and accumulated verification
 
 - `verify.py --mode final` exited `0` with accepted artifact
-  `artifacts/verify-52696.json`: service normal and race repetitions, the
+  `artifacts/verify-78496.json`: service normal and race repetitions, the
   isolated `GOWORK=off` external consumer, unchanged CLI caller regressions,
   and both causal mutants passed their required oracles. The
   `drop-terminal-facts` and `convert-cancellation-to-failure` mutants both
