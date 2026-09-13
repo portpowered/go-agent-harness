@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -278,4 +279,87 @@ func TestToolTraceRedactsCredentialsWithoutMutatingCaller(t *testing.T) {
 	if !found {
 		t.Fatal("tool result missing")
 	}
+}
+
+// TraceRuntimeObserver preserves the pre-C112 test fixture surface. Runtime
+// production code uses go-agent-runtime/services/sessiontrace instead.
+type TraceRuntimeObserver struct {
+	Trace      *recording.Trace
+	Redactions []string
+}
+
+func (o TraceRuntimeObserver) ObserveSessionRuntime(event SessionRuntimeObservation) {
+	if len(o.Redactions) > 0 {
+		if runtimePayloadNeedsRedaction(event.Kind) {
+			event.Payload = append([]byte(nil), event.Payload...)
+		}
+		for _, secret := range o.Redactions {
+			if secret == "" {
+				continue
+			}
+			event.Error = strings.ReplaceAll(event.Error, secret, "[REDACTED]")
+			if runtimePayloadNeedsRedaction(event.Kind) {
+				event.Payload = bytes.ReplaceAll(event.Payload, []byte(secret), []byte("[REDACTED]"))
+			}
+		}
+	}
+	o.Trace.ObserveRuntime(recording.RuntimeEvent{Kind: string(event.Kind), Tick: event.Tick, InputCommit: event.InputCommit, ResponseID: event.ResponseID, ResponsePurpose: string(event.ResponsePurpose), StreamID: event.StreamID, LoopPassID: event.LoopPassID, Epoch: event.Epoch, TurnsCompleted: event.TurnsCompleted, Clean: event.Clean, Error: event.Error, Payload: event.Payload})
+}
+
+func runtimePayloadNeedsRedaction(kind SessionRuntimeObservationKind) bool {
+	switch kind {
+	case "tool_call", "tool_result", "provider_wire_send", "provider_wire_receive":
+		return true
+	default:
+		return false
+	}
+}
+
+type sessionRuntimeObserverFanout []SessionRuntimeObserver
+
+func (f sessionRuntimeObserverFanout) ObserveSessionRuntime(observation SessionRuntimeObservation) {
+	for _, observer := range f {
+		if observer != nil {
+			observer.ObserveSessionRuntime(observation)
+		}
+	}
+}
+
+func CombineSessionRuntimeObservers(observers ...SessionRuntimeObserver) SessionRuntimeObserver {
+	filtered := make(sessionRuntimeObserverFanout, 0, len(observers))
+	for _, observer := range observers {
+		if observer != nil {
+			filtered = append(filtered, observer)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
+}
+
+func (TraceRuntimeObserver) ObserveProviderBoundaries() bool { return true }
+
+func (f sessionRuntimeObserverFanout) ObserveProviderBoundaries() bool {
+	for _, observer := range f {
+		if preference, ok := observer.(interface{ ObserveProviderBoundaries() bool }); ok && preference.ObserveProviderBoundaries() {
+			return true
+		}
+	}
+	return false
+}
+
+func (TraceRuntimeObserver) RetainCommitPayload() bool { return false }
+
+func (f sessionRuntimeObserverFanout) RetainCommitPayload() bool {
+	for _, observer := range f {
+		if observer == nil {
+			continue
+		}
+		preference, ok := observer.(interface{ RetainCommitPayload() bool })
+		if !ok || preference.RetainCommitPayload() {
+			return true
+		}
+	}
+	return false
 }
