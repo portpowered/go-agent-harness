@@ -143,3 +143,50 @@ exact paths, fetch the then-current `origin/main`, integrate it while
 preserving C136, apply only the sessionturns Wire registration and twelve
 demonstrated downward baseline deletions, rerun bounded gates, commit/push
 the same PR `#513`, and return `ACCEPTED` to Script CI without polling.
+
+## Fresh bounded causal recheck and lease hold — 2026-09-13T21:20:08Z
+
+Admission was reverified with
+`factory/scripts/project-control.py verify-work --type task --name
+audio-runtime-c150-recover-c136-c87-session-turns --root "$FACTORY_ROOT"`;
+the sole `audio-runtime/audio-runtime-v1` project remains admitted. The
+isolated branch still matches `prd.json.branchName`, the worktree is clean at
+`0af1423458f4a33967c696083caae5a7a8c01b4d`, and startup
+`8bdafc7f947a3a2c9856220abdc539437035bd21`, inherited C136
+`7268f46a8c23cea480aecba621d49c01e4a30aac`, fresh main
+`4a1c399ccbb3d780be95eb04316e84b8f11a6646`, and `origin/main` all remain
+ancestors. `git diff --check` is clean.
+
+Fresh focused evidence at this exact head passes: sessionturns normal/race
+`48/48` tests, CLI compatibility normal/race `6/2`, the separate
+`GOWORK=off` consumer, all three inherited verifiers, both credential-free
+public cases (`3/3` each, bounded output, reaped children and no survivors),
+and `COUNT=1 bash scripts/test-session-ci-regressions.sh all` in normal,
+coverage and race modes. The expected replay/audio/transcript negative
+controls and all 20 high-rate trials remain green.
+
+`make architecture-size-check` still fails closed with exactly the previously
+demonstrated 13 findings: twelve stale downward `session_turns.go`/test
+entries (`ErrEmptyTurn`, `ErrInvalidTurnDirection`, `ErrInvalidTurnTick`,
+`ErrMissingTurnInferencer`, `ErrSessionClosed`,
+`ErrSessionEndedWithActiveTurn`, `ErrTurnAlreadyActive`,
+`ErrTurnEndWithoutStart`, `ErrTurnMismatch`, `readTurnResponse`,
+`TestSessionTurns_FiveTurnsUseOnePersistentSessionAndExactLifecycle`, and
+`noTurnSetup`) plus the unregistered generated
+`go-agent-runtime/services/sessionturns/wire/wire_gen.go`. No shared path was
+edited.
+
+Canonical `work-task-35` remains `init/PROCESSING`. PR #497 is open with its
+Windows portable lane failed, PR #496 is open with its coverage lane failed,
+and PR #505 is open with integration, coverage and hermetic lanes still
+pending; none has a guarded merge releasing the shared registry/policy paths.
+PR #513 remains open/draft at the inherited C136 head with no independent
+review findings. The external WebMCP TempDir failure remains preserved,
+out-of-lease and non-reproduced; C150 made no WebMCP change.
+
+Exact next action: retain C150 ownership until C110/C111/C119 guarded merges
+release the exact shared paths, then fetch and integrate the accepted current
+main, apply only the sessionturns generated-Wire registration and twelve
+demonstrated downward baseline deletions while preserving peers, rerun bounded
+gates, commit/push the changed same PR #513 head, and return `ACCEPTED` to
+SCRIPT CI without polling.
