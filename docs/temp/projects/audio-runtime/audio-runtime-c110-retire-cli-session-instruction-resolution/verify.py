@@ -26,7 +26,7 @@ REPORTS = ROOT / "reports"
 LEGACY_REL = Path("agent-cli/internal/services/internal/agentruntime/session_instructions.go")
 LEGACY = REPO_ROOT / LEGACY_REL
 NEW_PACKAGE = REPO_ROOT / "go-agent-runtime/services/sessioninstructions"
-SERVICE = NEW_PACKAGE / "service.go"
+SERVICE = NEW_PACKAGE / "internal/service/service.go"
 BASELINE = ROOT / "baseline.json"
 RUNNER = ROOT / "run.py"
 MAX_OUTPUT_BYTES = 1 << 20
@@ -166,6 +166,13 @@ def verify_legacy_boundary() -> dict[str, Any]:
     require("sessioninstructionswire.NewInstructionService" in text, "legacy file does not use dedicated instruction Wire")
     require("Tool-grounding requirements:" not in text, "legacy file retains policy text")
     require("os.ReadFile" not in text, "legacy file retains unbounded file loading")
+    require(not (NEW_PACKAGE / "service.go").exists(), "public sessioninstructions package retains an implementation file")
+    contract = (NEW_PACKAGE / "contract.go").read_text(encoding="utf-8")
+    require("type Service interface" in contract, "public sessioninstructions contract is missing Service")
+    require("type Factory" not in contract and ".Build()" not in contract, "public sessioninstructions contract retains a construction bypass")
+    private = SERVICE.read_text(encoding="utf-8")
+    require("func New()" in private, "private instruction service constructor is missing")
+    require("sessioninstructions.Service" in private, "private instruction service is not bound to the public contract")
     source = "\n".join(
         path.read_text(encoding="utf-8")
         for path in NEW_PACKAGE.rglob("*.go")
@@ -193,6 +200,7 @@ def verify_consumer() -> dict[str, Any]:
     for mode in ("positive", "invalid", "print"):
         result = json_command(["go", "run", ".", "--mode", mode], CONSUMER)
         require(result.get("status") == "accepted", f"consumer {mode} status={result}")
+        require(result.get("service_instances") == 2, f"consumer {mode} did not construct two service instances: {result}")
         report[mode] = result
     return report
 
@@ -211,7 +219,7 @@ def copy_mutation_workspace(destination: Path) -> tuple[Path, Path]:
 def mutate_and_kill() -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="c110-guard-mutants-") as temporary:
         mutation_root, consumer_copy = copy_mutation_workspace(Path(temporary) / "repo")
-        mutant_none = mutation_root / "go-agent-runtime/services/sessioninstructions/service.go"
+        mutant_none = mutation_root / "go-agent-runtime/services/sessioninstructions/internal/service/service.go"
         source = mutant_none.read_text(encoding="utf-8")
         needle = 'if value == "none" {'
         require(source.count(needle) == 1, "none guard mutant anchor is not unique")
@@ -219,7 +227,7 @@ def mutate_and_kill() -> dict[str, Any]:
         consumer_result = run(["go", "run", ".", "--mode", "positive"], consumer_copy, timeout=MUTATION_TIMEOUT_SECONDS)
         require(consumer_result["exit_code"] != 0 and not consumer_result["timed_out"], f"none mutant survived: {consumer_result}")
 
-        mutant_cancel = mutation_root / "go-agent-runtime/services/sessioninstructions/service.go"
+        mutant_cancel = mutation_root / "go-agent-runtime/services/sessioninstructions/internal/service/service.go"
         source = mutant_cancel.read_text(encoding="utf-8")
         guard = (
             "\tsummary, summaryErr := skillsSummary(ctx, loader)\n"
@@ -357,22 +365,21 @@ def verify_retirement() -> dict[str, Any]:
         "session Wire compatibility constructor is missing",
     )
     require(
-        "sessioninstructions.Factory{}.Build()" in compatibility_text,
-        "session Wire compatibility constructor does not delegate to the canonical instruction factory",
+        "sessioninstructionswire.NewInstructionService()" in compatibility_text,
+        "session Wire compatibility constructor does not delegate to the dedicated instruction Wire",
     )
     require(
         "session/internal/instructions" not in compatibility_text,
         "session Wire compatibility constructor still imports the duplicate instruction implementation",
     )
     require(
-        "sessioninstructions/wire" not in compatibility_text,
-        "session Wire compatibility constructor crosses into the peer instruction Wire",
+        "sessioninstructions.Factory{}.Build()" not in compatibility_text,
+        "session Wire compatibility constructor retains the removed public factory bypass",
     )
 
     evidence_paths = [
         str(LEGACY_REL),
         "go-agent-runtime/services/sessioninstructions/contract.go",
-        "go-agent-runtime/services/sessioninstructions/service.go",
         "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go",
@@ -406,8 +413,8 @@ def verify_retirement() -> dict[str, Any]:
             "compatibility_api": {
                 "path": str(compatibility.relative_to(REPO_ROOT)),
                 "constructor": "NewInstructionService",
-                "reason": "compatibility constructor delegates to the canonical instruction factory",
-                "delegates_to": "sessioninstructions.Factory{}.Build",
+                "reason": "compatibility constructor delegates to the dedicated instruction Wire",
+                "delegates_to": "sessioninstructionswire.NewInstructionService",
             },
         },
         "c79_lease": {

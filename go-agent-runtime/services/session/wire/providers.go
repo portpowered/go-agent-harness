@@ -16,7 +16,7 @@ import (
 	agent "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
 	persistence "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/service"
-	sessioninstructions "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions"
+	sessioninstructionswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -51,7 +51,7 @@ func NewInstructionService() session.InstructionService {
 }
 
 func newInstructionService() session.InstructionService {
-	return sessioninstructions.Factory{}.Build()
+	return sessioninstructionswire.NewInstructionService()
 }
 
 // NewFileStoreFactory assembles the built-in durable store factory. The
