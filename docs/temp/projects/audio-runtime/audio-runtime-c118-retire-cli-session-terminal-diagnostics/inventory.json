@@ -88,5 +88,15 @@
       "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go retirement and compatibility adapter",
       "this task evidence directory"
     ]
+  },
+  "implementationCheckpoint": {
+    "testedSourceRevision": "26365f5383d2e9ddad27e7920240d9c837d8ebc0",
+    "commits": [
+      "360d2a973d01e572daa9c1725b370474a88bb429",
+      "26365f5383d2e9ddad27e7920240d9c837d8ebc0"
+    ],
+    "retirementLineReduction": 227,
+    "focusedValidation": "candidate-evidence.json",
+    "sharedGateStatus": "only C79-owned Wire registry and architecture baseline findings remain"
   }
 }

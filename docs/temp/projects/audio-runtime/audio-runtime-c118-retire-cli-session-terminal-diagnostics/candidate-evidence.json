@@ -1,0 +1,80 @@
+{
+  "schema": "audio-runtime-c118-session-terminal-diagnostics/v1",
+  "candidate_revision": "26365f5383d2e9ddad27e7920240d9c837d8ebc0",
+  "baseline_revision": "3963bc3566da24f8214634c17a9d0f79a6724171",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
+  "admission": {
+    "project": "audio-runtime",
+    "task": "audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+    "work_id": "work-task-277",
+    "session": "~default",
+    "server": "http://127.0.0.1:7439",
+    "branch": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+    "prd_branch_matches_worktree": true,
+    "verify_work": "admitted"
+  },
+  "implementation": {
+    "commits": [
+      "360d2a973d01e572daa9c1725b370474a88bb429",
+      "26365f5383d2e9ddad27e7920240d9c837d8ebc0"
+    ],
+    "public_contract": "go-agent-runtime/services/sessionterminal",
+    "private_implementation": "go-agent-runtime/services/sessionterminal/internal/service",
+    "wire": "go-agent-runtime/services/sessionterminal/wire",
+    "legacy_source_deleted": true,
+    "baseline_source": {
+      "path": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
+      "revision": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "line_count": 287,
+      "sha256": "4608c5c35277c97375c89e989e8a9c88dc6376968239ee66d713a0ee3f65b369"
+    },
+    "cli_production_lines": {
+      "baseline": 41208,
+      "candidate": 40981,
+      "net_reduction": 227,
+      "required_minimum": 180
+    }
+  },
+  "validation": {
+    "full_agentruntime": "passed: 1071 tests",
+    "focused_cli_normal": "passed: 12 tests across 3 repeats",
+    "focused_cli_race": "passed: 4 tests",
+    "service_normal": "passed: 8 tests in 3 packages",
+    "service_race": "passed: 8 tests in 3 packages",
+    "external_consumer": "passed: GOWORK=off go test ./... -count=1 -timeout=120s",
+    "session_ci_regressions": "passed: scripts/test-session-ci-regressions.sh all; normal, coverage, race; count=3",
+    "pinned_golangci_lint": "passed: 0 issues in go-agent-runtime and agent-cli working-tree scans",
+    "scoped_staticcheck": "passed: go-agent-runtime and agentruntime packages",
+    "scoped_vet": "passed: sessionterminal and agentruntime packages",
+    "wire_generation": "passed: GOWORK=off go generate; generated output unchanged",
+    "diff_check": "passed: git diff --check",
+    "positive_and_causal_mutations": {
+      "status": "passed",
+      "positive_suites": 2,
+      "mutants_rejected": [
+        {"mutant": "drop-final-failure-record", "exit": 1},
+        {"mutant": "erase-cancellation-partial-output", "exit": 1}
+      ]
+    },
+    "retirement_callers_and_owned_paths": "passed: old source absent, adapter delegates, Wire present, pinned baseline, 227-line reduction"
+  },
+  "shared_gate_boundary": {
+    "wire_check": "deferred: unregistered go-agent-runtime/services/sessionterminal/wire/wire_gen.go",
+    "architecture_size_check": "deferred: 10 findings, all shared C79-owned baseline or generated-Wire registration",
+    "owner": "C79/work-task-114; work-review-239; PR470",
+    "shared_files_not_modified": [
+      "scripts/wire-packages.txt",
+      "docs/architecture/architecture-size-baseline.json"
+    ],
+    "no_local_c118_findings_remain": true
+  },
+  "handoff": {
+    "script_ci": "not submitted yet",
+    "ci_polling": "not performed",
+    "review": "not claimed; independent review remains external",
+    "merge": "not claimed",
+    "vertical_probe": "not claimed"
+  }
+}

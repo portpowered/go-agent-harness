@@ -10,7 +10,14 @@ generated Wire constructor, and the public provider taxonomy. It verifies
 typed error identity, deterministic continuation metadata, accounting,
 cancellation/output-state policy, and independent service construction.
 
-The evidence is vertical only. Shared Wire registration and architecture-size
-baseline edits remain deferred until the C79 lease is released. Script CI,
-independent review, guarded merge, and the post-merge probe remain external
-handoff gates.
+Implementation checkpoints are `360d2a9` and `26365f5`. The committed
+retirement verifier measures 40,981 candidate CLI production lines versus
+41,208 at baseline, a 227-line net reduction; the deleted policy source is
+pinned at 287 lines and its recorded SHA-256.
+
+The evidence is vertical only. Focused normal/race tests, the accumulated
+session regression matrix, pinned lint/staticcheck/vet, Wire generation, the
+external consumer, and both causal mutants pass. Shared Wire registration and
+architecture-size baseline edits remain deferred until the C79 lease is
+released. Script CI, independent review, guarded merge, and the post-merge
+probe remain external handoff gates.
