@@ -3626,6 +3626,62 @@
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/verify.py"
     },
     {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/README.md"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/architecture-delta.json"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/delta-classification.json"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/excluded-path-byte-check.json"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/go.mod"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/go.sum"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/participant_lifecycle_test.go"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-double-close.json"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-post-bound-tool.json"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/positive-replay-oracle-first-failure.json"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/provenance.json"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/retirement-and-owned-paths.json"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/run.py"
+    },
+    {
+      "classification": "evidence relocation/refresh",
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/verify.py"
+    },
+    {
       "classification": "accepted-main integration",
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json"
     },
@@ -3814,19 +3870,6 @@
     "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
     "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go",
     "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go.json",
-    "go-agent-runtime/services/rooms/internal/lifecycle/browser_validation_test.go",
-    "go-agent-runtime/services/rooms/internal/lifecycle/graph_media.go",
-    "go-agent-runtime/services/rooms/internal/lifecycle/media.go",
-    "go-agent-runtime/services/rooms/internal/lifecycle/participant.go",
-    "go-agent-runtime/services/rooms/internal/lifecycle/participant_session.go",
-    "go-agent-runtime/services/rooms/internal/lifecycle/participant_tracker.go",
-    "go-agent-runtime/services/rooms/internal/lifecycle/participant_tracker_test.go",
-    "go-agent-runtime/services/rooms/internal/lifecycle/result.go",
-    "go-agent-runtime/services/rooms/participant_lifecycle.go",
-    "go-agent-runtime/services/rooms/wire/participant_lifecycle.go"
-  ],
-  "contract_revision": "audio-runtime-v1",
-  "current_paths": [
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/README.md",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/architecture-delta.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/delta-classification.json",
@@ -3840,8 +3883,20 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/provenance.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/retirement-and-owned-paths.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/run.py",
-    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/verify.py"
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/verify.py",
+    "go-agent-runtime/services/rooms/internal/lifecycle/browser_validation_test.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/graph_media.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/media.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/participant.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/participant_session.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/participant_tracker.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/participant_tracker_test.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/result.go",
+    "go-agent-runtime/services/rooms/participant_lifecycle.go",
+    "go-agent-runtime/services/rooms/wire/participant_lifecycle.go"
   ],
+  "contract_revision": "audio-runtime-v1",
+  "current_paths": [],
   "diff_check": "passed",
   "final_paths": [
     "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",

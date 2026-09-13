@@ -3624,6 +3624,62 @@
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c120-retire-cli-session-duration-terminal-boundary/verify.py"
   },
   {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/README.md"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/architecture-delta.json"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/delta-classification.json"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/excluded-path-byte-check.json"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/go.mod"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/go.sum"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/participant_lifecycle_test.go"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-double-close.json"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-post-bound-tool.json"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/positive-replay-oracle-first-failure.json"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/provenance.json"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/retirement-and-owned-paths.json"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/run.py"
+  },
+  {
+    "classification": "evidence relocation/refresh",
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/verify.py"
+  },
+  {
     "classification": "accepted-main integration",
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json"
   },
