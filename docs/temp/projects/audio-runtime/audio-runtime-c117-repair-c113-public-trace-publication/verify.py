@@ -33,11 +33,15 @@ C79_PR = 470
 C117_TEST = "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go"
 C117_REL = str(HERE.relative_to(ROOT))
 C108_REL = "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps"
+C108_PROVENANCE = f"{C108_REL}/provenance.json"
+C108_VERIFIER = f"{C108_REL}/verify.py"
+C108_SUMS = f"{C108_REL}/SHA256SUMS"
 REPRODUCTION = HERE / "runs" / "c113-reproduction.json"
 PRE_TEST_REPORT = HERE / "runs" / "pre-c112-test.json"
 ADMISSION_REPORT = HERE / "admission.json"
 CENSUS_REPORT = HERE / "census.json"
 SCOPE_REPORT = HERE / "pre-c112-scope.json"
+C108_SCOPE_REPORT = HERE / "c108-source-base-and-checksums.json"
 MANIFEST = FACTORY_ROOT / "factory/projects/audio-runtime/manifest.json"
 
 
@@ -327,6 +331,65 @@ def run_expected_red_test() -> dict[str, Any]:
     return bounded
 
 
+def validate_c117_allowed_paths(paths: list[str]) -> None:
+    allowed = {C117_TEST, C108_PROVENANCE, C108_VERIFIER, C108_SUMS}
+    outside = [path for path in sorted(set(paths)) if path not in allowed and not path.startswith(C117_REL + "/")]
+    if outside:
+        raise EvidenceFailure("C117 candidate changed an unowned path: " + ", ".join(outside))
+
+
+def c108_source_base_and_checksums() -> dict[str, Any]:
+    branch = git("rev-parse", "--abbrev-ref", "HEAD")
+    head = git("rev-parse", "HEAD")
+    worktree = pathlib.Path(git("rev-parse", "--show-toplevel")).resolve()
+    if branch != BRANCH or read_json(ROOT / "prd.json").get("branchName") != BRANCH:
+        raise EvidenceFailure("C117 branch/PRD identity is not exact")
+    if worktree != ROOT:
+        raise EvidenceFailure(f"isolated worktree mismatch: {worktree} != {ROOT}")
+    origin_main = git("rev-parse", "origin/main")
+    for revision in (STARTUP_INTEGRATION, PLANNING_MAIN, origin_main):
+        if not exact_ancestor(revision, head):
+            raise EvidenceFailure(f"C117 candidate is missing required ancestry {revision}")
+    validate_c117_allowed_paths(changed_paths(PLANNING_MAIN, head) + status_paths())
+    provenance_path = ROOT / C108_PROVENANCE
+    provenance = read_json(provenance_path)
+    if provenance.get("accepted_source_revision") != C108_SOURCE or provenance.get("integrated_base_revision") != PLANNING_MAIN:
+        raise EvidenceFailure("C108 provenance does not separate immutable source and integrated base")
+    if provenance.get("origin_main_revision") != origin_main or provenance.get("startup_integration_revision") != STARTUP_INTEGRATION:
+        raise EvidenceFailure("C108 provenance does not pin the fetched current main and startup integration")
+    current_descendant = provenance.get("current_descendant_revision")
+    if not current_descendant or not exact_ancestor(current_descendant, head):
+        raise EvidenceFailure("C108 provenance current descendant is not an ancestor of the candidate")
+    if provenance.get("successor_unexpected_paths") != [] or provenance.get("source_equivalence", {}).get("immutable_source_to_integrated_base_production_diff") != []:
+        raise EvidenceFailure("C108 provenance records an unexpected source or successor drift")
+    if provenance.get("source_equivalence", {}).get("analyzed_candidate_to_integrated_base") is not True:
+        raise EvidenceFailure("C108 analyzed candidate lacks explicit integrated-base equivalence")
+    checksum = command_result(["shasum", "-a", "256", "-c", "SHA256SUMS"], provenance_path.parent, 120)
+    if checksum["exit_code"] != 0 or checksum["timed_out"]:
+        raise EvidenceFailure("C108 SHA256SUMS does not exactly validate the retained evidence")
+    report = {
+        "schema_version": "audio-runtime-c117-c108-source-base-checksums-v1",
+        "work": WORK,
+        "branch": branch,
+        "worktree": str(worktree),
+        "head": head,
+        "origin_main": origin_main,
+        "baseline": BASELINE,
+        "startup_integration": STARTUP_INTEGRATION,
+        "analyzed_source": C108_SOURCE,
+        "integrated_base": PLANNING_MAIN,
+        "current_descendant": current_descendant,
+        "changed_paths": sorted(set(changed_paths(PLANNING_MAIN, head) + status_paths())),
+        "c108_owned_changes": [C108_VERIFIER, C108_PROVENANCE, C108_SUMS],
+        "checksum": {key: value for key, value in checksum.items() if key not in {"stdout", "stderr"}},
+        "negative_controls": "preserved; validated by the C108 verifier without rewriting C108 evidence on the C117 successor branch",
+        "native_windows_hardware_and_acoustics": "OUT_OF_SCOPE_AND_NEVER_PASS",
+        "passes": True,
+    }
+    write_json(C108_SCOPE_REPORT, report)
+    return report
+
+
 def pre_c112_scope() -> dict[str, Any]:
     branch = git("rev-parse", "--abbrev-ref", "HEAD")
     head = git("rev-parse", "HEAD")
@@ -404,6 +467,8 @@ def main() -> int:
     try:
         if args.mode == "pre-c112-scope":
             result = pre_c112_scope()
+        elif args.mode == "c108-source-base-and-checksums":
+            result = c108_source_base_and_checksums()
         else:
             raise EvidenceFailure(f"{args.mode} remains gated on C112 merge and final runtime evidence")
         print(json.dumps({"status": "ok", "mode": args.mode, "passes": bool(result.get("passes"))}, sort_keys=True))
