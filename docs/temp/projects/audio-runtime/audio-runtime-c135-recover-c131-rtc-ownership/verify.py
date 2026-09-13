@@ -34,6 +34,8 @@ GATEWAY_FILES = (
     ROOT / "go-llm-gateway/pkg/transport/rtc/track_out.go",
 )
 OWNED_PREFIXES = (
+    "agent-cli/internal/transport/cli/probe_v9_webrtc_device_test.go",
+    "agent-cli/internal/wire/rtc_runtime.go",
     "go-llm-gateway/pkg/transport/rtc/track_in.go",
     "go-llm-gateway/pkg/transport/rtc/track_in_test.go",
     "go-llm-gateway/pkg/transport/rtc/track_out.go",
