@@ -2,15 +2,17 @@
 
 - Extracts unresolved tool-result and image/ordinary tool-continuation snapshot construction, normalization, metadata, and typed error joining into the public `go-agent-runtime/services/sessioncontinuation` contract with a private implementation and dedicated Wire package.
 - Leaves the CLI lifecycle file as a 57-line Deprecated compatibility adapter; the immutable baseline was 147 lines.
+- Covers the legacy runtime error view from the extracted contract, including empty, populated, and annotation-free deterministic formatting paths.
 - Adds a credential-free external consumer, bounded causal/replay evidence, and coverage registrations for the new packages.
 - Preserves sentinel and typed-error compatibility with the reusable live runtime while exposing the extracted public error types.
 
 ## Evidence
 
-- Exact implementation head: `1ccde3e5947850879205536f510676a8d6a2f13b` (implementation `b7eb303a` plus repairs `fc2a2e3` and `158983c0`, with documentation-only provenance updates).
-- `verify.py --mode positive-and-negative-controls` from the exact head: accepted; artifact `artifacts/verify-1789253356-7580.json` (SHA256 `9161a2c24bbb79d8caff7006fee47ab74543d0b59ee0f0b771cac856b6b46dca`).
-- Bounded replay from exact head: accepted for missing continuation, corrupt audio delta, and non-tool audio; artifact `artifacts/run-1789253424-10590.json` (SHA256 `6289994ffccb300d7ab5881845bae06059424b3937afaf9fbbbeadb7b602838e`), with `nomicrophone` yui SHA256 `8df94084bfbb194a476f0efe5d1987ab3d6903f649faa71c98af955f77e0f14a`.
+- Exact implementation head: `6aa2442c062616074af3d15a6cd2cf51216e26d2` (implementation `b7eb303a` plus repairs `fc2a2e3` and `158983c0`, documentation-only provenance updates, and the compatibility regression).
+- `verify.py --mode positive-and-negative-controls` from the exact head: accepted; artifact `artifacts/verify-1789260812-28873.json` (SHA256 `14c57e832c3a640c94d6beb4f1f69b6986596d4ba5c0723c0a177a53403952fc`).
+- Bounded replay from exact head: accepted for missing continuation, corrupt audio delta, and non-tool audio; artifact `artifacts/run-1789260847-29785.json` (SHA256 `e8fd048b90a569f76f32a29c622030736ceaf5794d6e70020e50439cf677fdbd`), with `nomicrophone` yui SHA256 `8df94084bfbb194a476f0efe5d1987ab3d6903f649faa71c98af955f77e0f14a`.
 - The exact failed shipped negative control now passes; the C111 verifier passes runtime contract/race, external `GOWORK=off` consumer, and all four accumulated regressions. Pinned golangci-lint and staticcheck report zero issues.
+- Full `make coverage` passes with `go-agent-runtime/services/session` at 48/56 weighted statements (85.7%), after the compatibility regression restored the three legacy formatting paths identified by accepted-main comparison.
 
 ## Gate status
 

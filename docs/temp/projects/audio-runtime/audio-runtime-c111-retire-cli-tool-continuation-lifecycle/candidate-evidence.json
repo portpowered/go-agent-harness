@@ -6,7 +6,7 @@
   "session": "~default",
   "server": "http://127.0.0.1:7439",
   "branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
-  "implementationRevision": "1ccde3e5947850879205536f510676a8d6a2f13b",
+  "implementationRevision": "6aa2442c062616074af3d15a6cd2cf51216e26d2",
   "admission": {
     "verifyWork": "admitted",
     "secondProject": false,
@@ -21,7 +21,7 @@
     "immutableSourceSha256": "48000dcd73b85ebbe93fd40a3996529878a99c799b67b0779d60f55dbb43fc1e",
     "legacyAdapterLines": 57,
     "netPhysicalProductionLinesRetired": 90,
-    "changedFiles": 17,
+    "changedFiles": 20,
     "changedPathsRemainOwned": true
   },
   "checks": [
@@ -34,7 +34,7 @@
       "result": "passed"
     },
     {
-      "command": "env GOWORK=off go test -race ./services/sessioncontinuation/... -run 'Immutable|Independent|Concurrent|Join|Precedence|Cancel|ZeroSurvivors|Enrich|Unresolved' -count=3 -timeout=300s",
+      "command": "env GOWORK=off CGO_ENABLED=0 go test -race ./services/sessioncontinuation/... -count=1 -timeout=300s",
       "result": "passed"
     },
     {
@@ -42,27 +42,31 @@
       "result": "passed"
     },
     {
-      "command": "targeted golangci-lint --new-from-rev d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "result": "passed: 0 issues"
+      "command": "make lint",
+      "result": "passed: pinned golangci-lint 2.9.0, 0 issues across 15 modules"
     },
     {
-      "command": "targeted staticcheck for sessioncontinuation and agentruntime",
-      "result": "passed"
+      "command": "make staticcheck",
+      "result": "passed: pinned staticcheck 2026.1 across 15 modules"
     },
     {
       "command": "make coverage-registration",
       "result": "passed: 179 workspace packages across 6 modules"
     },
     {
-      "command": "coveragegate on public and Wire profiles",
-      "result": "passed: 3 registered packages across 2 profiles"
+      "command": "make coverage",
+      "result": "passed: coveragegate checked 179 registered packages across 7 profiles; go-agent-runtime/services/session 48/56 weighted"
+    },
+    {
+      "command": "make architecture-size-check",
+      "result": "held: only C79-owned generated Wire registration remains; architecture baseline unchanged"
     },
     {
       "command": "verify.py --mode positive-and-negative-controls",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789253356-7580.json",
-      "sha256": "9161a2c24bbb79d8caff7006fee47ab74543d0b59ee0f0b771cac856b6b46dca",
-      "sourceRevision": "1ccde3e5947850879205536f510676a8d6a2f13b"
+      "artifact": "artifacts/verify-1789260812-28873.json",
+      "sha256": "14c57e832c3a640c94d6beb4f1f69b6986596d4ba5c0723c0a177a53403952fc",
+      "sourceRevision": "6aa2442c062616074af3d15a6cd2cf51216e26d2"
     }
   ],
   "accumulatedRegressions": {
@@ -76,9 +80,9 @@
   },
   "replay": {
     "result": "accepted",
-    "artifact": "artifacts/run-1789253424-10590.json",
-    "sha256": "6289994ffccb300d7ab5881845bae06059424b3937afaf9fbbbeadb7b602838e",
-    "sourceRevision": "1ccde3e5947850879205536f510676a8d6a2f13b",
+    "artifact": "artifacts/run-1789260847-29785.json",
+    "sha256": "e8fd048b90a569f76f32a29c622030736ceaf5794d6e70020e50439cf677fdbd",
+    "sourceRevision": "6aa2442c062616074af3d15a6cd2cf51216e26d2",
     "binary": {
       "bytes": 50992114,
       "sha256": "8df94084bfbb194a476f0efe5d1987ab3d6903f649faa71c98af955f77e0f14a"
