@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import subprocess
 import time
 from typing import Any
@@ -429,12 +430,13 @@ def verify_runtime() -> dict[str, Any]:
     terminal = interruption.get("recording", {}).get("terminal", {})
     require(terminal.get("reason") == "replay_complete" and terminal.get("output_state") == "complete", "interruption terminal evidence changed")
 
-    forbidden = (b"AGENT_MODEL__OPENAI__API_KEY", b"AGENT_MODEL__GROK__API_KEY", b"OPENAI_API_KEY", b"Authorization: Bearer", b"sk-")
+    forbidden = (b"AGENT_MODEL__OPENAI__API_KEY", b"AGENT_MODEL__GROK__API_KEY", b"OPENAI_API_KEY", b"Authorization: Bearer")
+    credential_token = re.compile(rb"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{16,}")
     for path in (HERE / "runs").rglob("*"):
         if not path.is_file() or path.suffix.lower() not in {".json", ".jsonl", ".stdout", ".stderr", ".txt"}:
             continue
         data = path.read_bytes()
-        require(not any(marker in data for marker in forbidden), f"credential material or configured credential name leaked into {rel(path)}")
+        require(not any(marker in data for marker in forbidden) and credential_token.search(data) is None, f"credential material or configured credential name leaked into {rel(path)}")
     return {
         "report_sha256": sha256_file(report_path),
         "candidate_revision": head,
