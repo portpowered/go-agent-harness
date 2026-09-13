@@ -124,6 +124,13 @@ def verify_ownership() -> None:
     required = ("runtime := combineObservers(request.RuntimeObserver, observer)", "copyObservation.Payload = append([]byte(nil), observation.Payload...)", "audio evidence retained at %s")
     if any(needle not in service for needle in required):
         raise VerificationFailure("sessiontrace service is missing a required ownership seam")
+    runner = (evidence / "run.py").read_text(encoding="utf-8")
+    runner_required = (
+        "AGENT_MODEL__", "credential_environment_names", "removed_credential_environment_names",
+        "microphone_pre_gate", "provider_wire_types", "derived_fixture_sha256", "rendered_sha256",
+    )
+    if any(needle not in runner for needle in runner_required):
+        raise VerificationFailure("bounded replay runner is missing credential, audio-edge, or provenance assertions")
 
 
 def go_tests() -> None:

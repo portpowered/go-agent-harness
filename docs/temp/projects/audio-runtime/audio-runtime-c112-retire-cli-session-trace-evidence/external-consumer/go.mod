@@ -11,6 +11,7 @@ require (
 	github.com/google/wire v0.7.0 // indirect
 	github.com/pion/opus v0.1.1-0.20260814200708-161621adf560 // indirect
 	github.com/portpowered/go-agent-harness/go-agent-loop v0.0.3 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 )
 
 replace github.com/portpowered/go-agent-harness/go-agent-runtime => ../../../../../../go-agent-runtime

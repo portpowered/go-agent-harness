@@ -4,16 +4,19 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from dataclasses import dataclass
 import hashlib
 import json
 import os
 from pathlib import Path
+import struct
 import signal
 import subprocess
 import sys
 import threading
 import time
+import wave
 from typing import Any
 
 
@@ -24,12 +27,16 @@ CASES = {
     "trace-audio-tool-replay": {
         "fixture": FIXTURES / "c16-audio-tool.session.json", "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
         "provider_bytes": 4800, "provider_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
-        "rendered_bytes": 3200, "rendered_sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805", "runtime_min": 1, "required_taps": {"speaker_enqueued"},
+        "rendered_bytes": 3200, "rendered_sha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805", "runtime_min": 1,
+        "audio_input": True, "audio_input_sha256": "db9ac5111b2173f5f0e7909539a7dea70134b5736d4f2582c99e25705aab6148", "derived_fixture_sha256": "62835dcb8270ab1dba865d078e79b13a3c6c3c89454c65f5eb7f5bb42586a714",
+        "required_taps": {"microphone_pre_gate", "speaker_enqueued"},
+        "required_runtime_kinds": {"provider_wire_receive", "provider_wire_send"}, "required_provider_wire_types": {"input_audio_buffer.append", "input_audio_buffer.commit"},
     },
     "interruption-replay": {
         "fixture": FIXTURES / "c16-interruption.session.json", "fixture_sha256": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206",
         "provider_bytes": 3840, "provider_sha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
-        "rendered_bytes": 3360, "rendered_sha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff", "runtime_min": 1, "required_taps": {"speaker_enqueued"},
+        "rendered_bytes": 3360, "rendered_sha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff", "runtime_min": 1,
+        "required_taps": {"speaker_enqueued"}, "required_runtime_kinds": {"provider_wire_receive", "provider_wire_send"}, "required_provider_wire_types": set(),
     },
 }
 SECRET_ENV_NAMES = ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "GROK_API_KEY", "ANTHROPIC_API_KEY")
@@ -73,6 +80,14 @@ def read_stream(stream: Any, output: CappedOutput) -> None:
         output.append(chunk)
 
 
+def is_credential_environment_name(name: str) -> bool:
+    return name in SECRET_ENV_NAMES or (name.startswith("AGENT_MODEL__") and name.endswith("__API_KEY"))
+
+
+def credential_environment_names(environment: dict[str, str]) -> list[str]:
+    return sorted(name for name in environment if is_credential_environment_name(name))
+
+
 def surviving_group(pgid: int) -> list[int]:
     try:
         result = subprocess.run(["ps", "-eo", "pid=,pgid="], capture_output=True, text=True, check=True, timeout=2)
@@ -84,7 +99,8 @@ def surviving_group(pgid: int) -> list[int]:
 def run_child(label: str, argv: list[str], cwd: Path, output_dir: Path, timeout: float) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     environment = dict(os.environ, GOWORK="off")
-    for name in SECRET_ENV_NAMES:
+    removed_credentials = credential_environment_names(environment)
+    for name in removed_credentials:
         environment.pop(name, None)
     stdout, stderr = CappedOutput(bytearray()), CappedOutput(bytearray())
     started = time.monotonic()
@@ -135,7 +151,8 @@ def run_child(label: str, argv: list[str], cwd: Path, output_dir: Path, timeout:
         "stdout": stdout.text(), "stderr": stderr.text(), "stdout_bytes": stdout.total, "stderr_bytes": stderr.total,
         "stdout_truncated": stdout.truncated, "stderr_truncated": stderr.truncated,
         "cleanup": {"sigterm_sent": sigterm_sent, "sigkill_sent": sigkill_sent, "surviving_process_group_pids": surviving_group(process.pid)},
-        "credential_free_environment": all(name not in environment for name in SECRET_ENV_NAMES),
+        "removed_credential_environment_names": removed_credentials,
+        "credential_free_environment": not credential_environment_names(environment),
     }
     (output_dir / "process.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return result
@@ -150,14 +167,79 @@ def require_clean(result: dict[str, Any]) -> None:
         raise EvidenceFailure(f"{result['label']} exceeded output cap")
 
 
-def replay_argv(artifact: Path, fixture: Path, case_dir: Path) -> list[str]:
+def deterministic_audio_pcm() -> bytes:
+    return b"".join(struct.pack("<h", ((index * 911) % 24000) - 12000) for index in range(720))
+
+
+def write_audio_input(path: Path, pcm: bytes) -> None:
+    with wave.open(str(path), "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(2)
+        output.setframerate(24000)
+        output.writeframes(pcm)
+
+
+def seal_derived_fixture(capture: dict[str, Any]) -> None:
+    coverage = {
+        "version": capture["version"], "provider": capture["provider"], "session": capture["session"],
+        "records": capture["records"],
+    }
+    if capture.get("ends_with_disconnect"):
+        coverage["ends_with_disconnect"] = True
+    encoded = json.dumps(coverage, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    capture["integrity"] = {
+        "algorithm": "sha256", "coverage": "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
+        "digest": hashlib.sha256(encoded).hexdigest(),
+    }
+
+
+def derive_audio_fixture(source: Path, target: Path, pcm: bytes) -> None:
+    capture = json.loads(source.read_text(encoding="utf-8"))
+    append_payload = {"type": "input_audio_buffer.append", "audio": base64.b64encode(pcm).decode("ascii")}
+    commit_payload = {"type": "input_audio_buffer.commit"}
+    response_payload = {"type": "response.create"}
+    derived: list[dict[str, Any]] = []
+    replaced = False
+    skip_response_create = False
+    for record in capture["records"]:
+        if not replaced and record["direction"] == "client_to_server" and record["type"] == "conversation.item.create":
+            base = {"direction": "client_to_server", "timestamp_ms": record["timestamp_ms"], "payload_type": record["payload_type"]}
+            derived.extend([
+                dict(base, type="input_audio_buffer.append", payload=append_payload),
+                dict(base, type="input_audio_buffer.commit", payload=commit_payload),
+                dict(base, type="response.create", payload=response_payload),
+            ])
+            replaced = True
+            skip_response_create = True
+            continue
+        if skip_response_create and record["direction"] == "client_to_server" and record["type"] == "response.create":
+            skip_response_create = False
+            continue
+        derived.append(record)
+    if not replaced or skip_response_create:
+        raise EvidenceFailure(f"audio fixture source has no unambiguous opening text turn: {source}")
+    for sequence, record in enumerate(derived, 1):
+        normalized = {
+            "sequence": sequence, "direction": record["direction"], "timestamp_ms": sequence * 10,
+            "type": record["type"], "payload_type": record["payload_type"], "payload": record["payload"],
+        }
+        derived[sequence - 1] = normalized
+    capture["records"] = derived
+    seal_derived_fixture(capture)
+    target.write_text(json.dumps(capture, indent=2) + "\n", encoding="utf-8")
+
+
+def replay_argv(artifact: Path, fixture: Path, case_dir: Path, audio_input: Path | None = None) -> list[str]:
     workdir = case_dir / "workdir"
     (workdir / "evidence/runs").mkdir(parents=True, exist_ok=True)
     (case_dir / "config").mkdir(parents=True, exist_ok=True)
-    return [
-        str(artifact), "-C", str(case_dir / "config"), "--workdir", str(workdir), "--allow-path", str(workdir), "session",
+    argv = [
+        str(artifact), "-C", str(case_dir / "config"), "--workdir", str(workdir), "--allow-path", str(case_dir), "session",
         "--replay", str(fixture), "--audio-out", str(case_dir / "rendered.pcm"), "--record-dir", str(case_dir / "bundle"), "--trace-audio",
     ]
+    if audio_input is not None:
+        argv.extend(["--audio-in-turn", str(audio_input)])
+    return argv
 
 
 def read_timeline(path: Path) -> list[dict[str, Any]]:
@@ -167,15 +249,44 @@ def read_timeline(path: Path) -> list[dict[str, Any]]:
         raise EvidenceFailure(f"invalid timeline {path}: {error}") from error
 
 
+def provider_wire_types(events: list[dict[str, Any]]) -> set[str]:
+    types: set[str] = set()
+    for event in events:
+        if event.get("kind") != "runtime" or event.get("runtime_kind") not in {"provider_wire_receive", "provider_wire_send"}:
+            continue
+        try:
+            envelope = json.loads(base64.b64decode(event.get("payload", "")))
+            payload = envelope.get("payload", {})
+            if isinstance(payload, dict) and isinstance(payload.get("type"), str):
+                types.add(payload["type"])
+        except (ValueError, TypeError, json.JSONDecodeError):
+            continue
+    return types
+
+
 def run_case(name: str, artifact: Path, run_dir: Path, timeout: float, deadline: float) -> dict[str, Any]:
     if time.monotonic() >= deadline:
         raise EvidenceFailure(f"aggregate deadline exceeded before {name}")
     expected = CASES[name]
-    fixture = expected["fixture"]
-    if not fixture.is_file() or sha256_file(fixture) != expected["fixture_sha256"]:
-        raise EvidenceFailure(f"fixture identity changed: {fixture}")
+    source_fixture = expected["fixture"]
+    if not source_fixture.is_file() or sha256_file(source_fixture) != expected["fixture_sha256"]:
+        raise EvidenceFailure(f"fixture identity changed: {source_fixture}")
     case_dir = run_dir / name
-    result = run_child(name, replay_argv(artifact, fixture, case_dir), case_dir / "workdir", case_dir / "process", min(timeout, deadline - time.monotonic()))
+    fixture = source_fixture
+    audio_input = None
+    audio_pcm = b""
+    if expected.get("audio_input"):
+        audio_pcm = deterministic_audio_pcm()
+        audio_input = case_dir / "input-turn.wav"
+        audio_input.parent.mkdir(parents=True, exist_ok=True)
+        write_audio_input(audio_input, audio_pcm)
+        if sha256_file(audio_input) != expected["audio_input_sha256"]:
+            raise EvidenceFailure(f"deterministic audio input changed: {audio_input}")
+        fixture = case_dir / "audio-replay.session.json"
+        derive_audio_fixture(source_fixture, fixture, audio_pcm)
+        if sha256_file(fixture) != expected["derived_fixture_sha256"]:
+            raise EvidenceFailure(f"derived replay fixture changed: {fixture}")
+    result = run_child(name, replay_argv(artifact, fixture, case_dir, audio_input), case_dir / "workdir", case_dir / "process", min(timeout, deadline - time.monotonic()))
     require_clean(result)
     combined = result["stdout"] + "\n" + result["stderr"]
     if "replay mismatch" in combined.lower() or not any(marker in combined for marker in ("[session closed:", "[session replay complete]")):
@@ -201,8 +312,18 @@ def run_case(name: str, artifact: Path, run_dir: Path, timeout: float, deadline:
     events = read_timeline(timeline)
     taps = {event.get("tap") for event in events if event.get("kind") == "audio"}
     runtimes = [event for event in events if event.get("kind") == "runtime"]
-    if not expected["required_taps"].issubset(taps) or len(runtimes) < expected["runtime_min"]:
-        raise EvidenceFailure(f"{name} trace did not retain its replay-visible audio edge and runtime evidence")
+    runtime_kinds = {event.get("runtime_kind") for event in runtimes}
+    wire_types = provider_wire_types(events)
+    if (
+        not expected["required_taps"].issubset(taps)
+        or not expected["required_runtime_kinds"].issubset(runtime_kinds)
+        or not expected["required_provider_wire_types"].issubset(wire_types)
+        or len(runtimes) < expected["runtime_min"]
+    ):
+        raise EvidenceFailure(
+            f"{name} trace did not retain its required audio edges and runtime evidence: "
+            f"taps={sorted(taps)}, runtime_kinds={sorted(runtime_kinds)}, wire_types={sorted(wire_types)}"
+        )
     try:
         manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -210,11 +331,14 @@ def run_case(name: str, artifact: Path, run_dir: Path, timeout: float, deadline:
     if not manifest_value.get("artifacts"):
         raise EvidenceFailure(f"{name} manifest has no artifacts")
     return {
-        "case": name, "fixture": str(fixture), "fixture_sha256": expected["fixture_sha256"], "process": result,
+        "case": name, "source_fixture": str(source_fixture), "source_fixture_sha256": expected["fixture_sha256"],
+        "fixture": str(fixture), "fixture_sha256": sha256_file(fixture), "process": result,
         "manifest": str(manifest), "manifest_sha256": sha256_file(manifest), "timeline": str(timeline),
         "timeline_events": len(events), "runtime_events": len(runtimes), "provider_bytes": provider.stat().st_size,
         "provider_sha256": sha256_file(provider), "rendered_bytes": rendered.stat().st_size, "rendered_sha256": sha256_file(rendered),
-        "speaker_trace_bytes": speaker.stat().st_size, "speaker_trace_sha256": sha256_file(speaker),
+        "speaker_trace_bytes": speaker.stat().st_size, "speaker_trace_sha256": sha256_file(speaker), "audio_taps": sorted(taps),
+        "runtime_kinds": sorted(runtime_kinds), "provider_wire_types": sorted(wire_types), "audio_input_bytes": len(audio_pcm),
+        "audio_input_sha256": sha256_file(audio_input) if audio_input is not None else None,
     }
 
 

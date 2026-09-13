@@ -279,6 +279,36 @@ func TestFinishRejectsExistingAttachmentClaim(t *testing.T) {
 	}
 }
 
+func TestFinishDoesNotOverwriteConcurrentDestination(t *testing.T) {
+	preparedValue, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle := t.TempDir()
+	destination := filepath.Join(bundle, "audio-trace")
+	preparedImpl := preparedValue.(*prepared)
+	preparedImpl.rename = func(oldPath, newPath string) error {
+		if err := os.Mkdir(newPath, 0o700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(newPath, "sentinel"), []byte("keep"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return renameNoReplace(oldPath, newPath)
+	}
+
+	err = preparedValue.Finish(context.Background(), bundle, true)
+	if !errors.Is(err, sessiontrace.ErrDestinationExists) {
+		t.Fatalf("concurrent destination error = %v", err)
+	}
+	if data, readErr := os.ReadFile(filepath.Join(destination, "sentinel")); readErr != nil || string(data) != "keep" {
+		t.Fatalf("concurrent destination was overwritten: %q, %v", data, readErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(preparedValue.StagedPath(), "timeline.jsonl")); statErr != nil {
+		t.Fatalf("concurrent destination lost staged trace: %v", statErr)
+	}
+}
+
 func TestFinishHonorsCancellationAndCanCompleteLater(t *testing.T) {
 	prepared, err := New().Prepare(sessiontrace.Request{TraceAudio: true, RecordDirectory: filepath.Join(t.TempDir(), "requested"), Clock: clock.Real{}})
 	if err != nil {

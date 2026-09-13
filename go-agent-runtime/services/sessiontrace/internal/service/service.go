@@ -70,6 +70,7 @@ type prepared struct {
 	closed     chan struct{}
 	closeErr   error
 	closeTrace func() error
+	rename     func(string, string) error
 }
 
 func (p *prepared) DeviceBinding() sessiontrace.DeviceBinding     { return p.binding }
@@ -104,12 +105,14 @@ func (p *prepared) Finish(ctx context.Context, bundle string, published bool) er
 		return p.retain(bundle, err)
 	}
 	defer removeClaim(claimPath)
-	if _, err := os.Lstat(destination); err == nil {
-		return p.retain(bundle, sessiontrace.ErrDestinationExists)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return p.retain(bundle, err)
+	rename := p.rename
+	if rename == nil {
+		rename = renameNoReplace
 	}
-	if err := os.Rename(p.path, destination); err != nil {
+	if err := rename(p.path, destination); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return p.retain(bundle, sessiontrace.ErrDestinationExists)
+		}
 		return p.retain(bundle, fmt.Errorf("attach audio trace to bundle: %w", err))
 	}
 	return nil
