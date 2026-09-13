@@ -1,0 +1,1 @@
+{"package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roommedia", "exception": "Contract declarations and Wire-facing service boundary; executable behavior is covered by the private implementation package."}
