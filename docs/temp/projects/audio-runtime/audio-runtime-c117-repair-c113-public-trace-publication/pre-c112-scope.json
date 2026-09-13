@@ -25,7 +25,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/verify.py"
   ],
   "contract_revision": "audio-runtime-v1",
-  "head": "aedfb8fcfad94bb8725ee029f2f43b55fe75615e",
+  "head": "0c15bfd2451236127775fd95de8df1c2f3f08a15",
   "origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
   "passes": true,
   "physical_device_and_acoustic_proof": "OUT_OF_SCOPE_AND_NEVER_PASS",

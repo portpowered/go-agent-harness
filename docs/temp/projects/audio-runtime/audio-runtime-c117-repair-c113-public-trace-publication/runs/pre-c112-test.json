@@ -9,10 +9,10 @@
     "-timeout=180s"
   ],
   "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication",
-  "elapsed_seconds": 1.06,
+  "elapsed_seconds": 0.891,
   "exit_code": 1,
   "expected_red": true,
   "stderr": "",
-  "stdout": "--- FAIL: TestTraceRequiredFailsClosedWithoutPublicService (0.00s)\n    --- FAIL: TestTraceRequiredFailsClosedWithoutPublicService/trace_audio (0.00s)\n        run_trace_test.go:46: Run error = <nil>, want fail-closed public trace-service diagnostic\n    --- FAIL: TestTraceRequiredFailsClosedWithoutPublicService/record_directory (0.00s)\n        run_trace_test.go:46: Run error = <nil>, want fail-closed public trace-service diagnostic\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost\t0.198s\nFAIL\n",
+  "stdout": "--- FAIL: TestTraceRequiredFailsClosedWithoutPublicService (0.00s)\n    --- FAIL: TestTraceRequiredFailsClosedWithoutPublicService/trace_audio (0.00s)\n        run_trace_test.go:46: Run error = <nil>, want fail-closed public trace-service diagnostic\n    --- FAIL: TestTraceRequiredFailsClosedWithoutPublicService/record_directory (0.00s)\n        run_trace_test.go:46: Run error = <nil>, want fail-closed public trace-service diagnostic\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost\t0.197s\nFAIL\n",
   "timed_out": false
 }

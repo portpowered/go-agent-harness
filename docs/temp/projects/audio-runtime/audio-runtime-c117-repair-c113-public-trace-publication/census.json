@@ -15,7 +15,7 @@
       "500",
       "--all"
     ],
-    "payload_sha256": "39d62d70ccb3a2c836f0949d5468222193f0b1a199a855175b9d5c4d69f285cb",
+    "payload_sha256": "d13bbb27582748ee51a01ddeb18c788c688c7f868dc82b3a7dbc73214e624e1a",
     "rows": [
       {
         "baseRevision": null,
@@ -782,7 +782,7 @@
     },
     "work": "audio-runtime-c79-retire-cli-response-lifecycle"
   },
-  "current_head": "aedfb8fcfad94bb8725ee029f2f43b55fe75615e",
+  "current_head": "0c15bfd2451236127775fd95de8df1c2f3f08a15",
   "host_source_and_test_paths": {
     "c108_artifacts_at_planning_main": [
       {
@@ -808,14 +808,14 @@
       {
         "exit_code": 0,
         "needle": "NewSessionCommandWithLive",
-        "stdout": "agent-cli/internal/wire/wire.go:337:\tcli.NewSessionCommandWithLive,\nagent-cli/internal/wire/wire_gen.go:101:\tsessionCommand := cli.NewSessionCommandWithLive(askFlags, globalFlags, agentsessionSessionService, selfplayService, liveService, replayService, devicesService, fileDeviceService, sessionToolCapabilitiesFactory, liveCredentialReference, fileStoreFactory, recordingService, modelAdmission)\nagent-cli/internal/wire/wire_gen.go:387:\tprovideSessionRTCRuntimeFactory, cli.NewSessionToolCapabilitiesFactoryFromService, cli.NewSessionCommandWithLive, wire2.SelfPlaySet, cli.NewSessionReplayCommand, cli.NewRoomRunCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,\nagent-cli/internal/transport/cli/session_observability.go:61:// NewSessionCommandWithLive adds the reusable continuous-session and device\nagent-cli/internal/transport/cli/session_observability.go:65:func NewSessionCommandWithLive(\n",
-        "stdout_sha256": "e1ccfaffc51f0ce126b07e243f36411818d11aa439d1ad25139d9a057dce6ce9"
+        "stdout": "agent-cli/internal/wire/wire.go:337:\tcli.NewSessionCommandWithLive,\nagent-cli/internal/transport/cli/session_observability.go:61:// NewSessionCommandWithLive adds the reusable continuous-session and device\nagent-cli/internal/transport/cli/session_observability.go:65:func NewSessionCommandWithLive(\nagent-cli/internal/wire/wire_gen.go:101:\tsessionCommand := cli.NewSessionCommandWithLive(askFlags, globalFlags, agentsessionSessionService, selfplayService, liveService, replayService, devicesService, fileDeviceService, sessionToolCapabilitiesFactory, liveCredentialReference, fileStoreFactory, recordingService, modelAdmission)\nagent-cli/internal/wire/wire_gen.go:387:\tprovideSessionRTCRuntimeFactory, cli.NewSessionToolCapabilitiesFactoryFromService, cli.NewSessionCommandWithLive, wire2.SelfPlaySet, cli.NewSessionReplayCommand, cli.NewRoomRunCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,\n",
+        "stdout_sha256": "ffdaab8a1969baaf1e2dcb9a095480700f3ccde468951f9e4a3fb3ec139dde5d"
       },
       {
         "exit_code": 0,
         "needle": "TraceAudio",
-        "stdout": "agent-cli/internal/transport/cli/session.go:486:\t\t\t\tTraceAudio: traceAudio, Transport: transport, Signaling: signaling,\nagent-cli/internal/transport/cli/internal/livehost/run_trace_test.go:31:\t\t\trequest := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, \"bundle\")}\nagent-cli/internal/transport/cli/internal/livehost/run.go:172:\t\tif err != nil || !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/run.go:210:\tif !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:66:\t\t\tassertTraceAudioFrame(t, frame, wantSamples)\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:80:func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {\nagent-cli/internal/transport/cli/session_observability.go:145:\t\trequest.TraceAudio,\nagent-cli/internal/transport/cli/session_command_support.go:63:\tTraceAudio           bool\nagent-cli/internal/transport/cli/session_command_support.go:141:\t\tTraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed(\"prompt\")},\n",
-        "stdout_sha256": "c1791f0019678949c750d3a1484ef788267210fef4d23d6f9bd39ce61b1fa609"
+        "stdout": "agent-cli/internal/transport/cli/session_observability.go:145:\t\trequest.TraceAudio,\nagent-cli/internal/transport/cli/session_command_support.go:63:\tTraceAudio           bool\nagent-cli/internal/transport/cli/session_command_support.go:141:\t\tTraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed(\"prompt\")},\nagent-cli/internal/transport/cli/internal/livehost/run_trace_test.go:31:\t\t\trequest := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, \"bundle\")}\nagent-cli/internal/transport/cli/session.go:486:\t\t\t\tTraceAudio: traceAudio, Transport: transport, Signaling: signaling,\nagent-cli/internal/transport/cli/internal/livehost/run.go:172:\t\tif err != nil || !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/run.go:210:\tif !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:66:\t\t\tassertTraceAudioFrame(t, frame, wantSamples)\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:80:func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {\n",
+        "stdout_sha256": "6c8279f4cd90b231e1b1dde316d8edb791151097bb10ffb01141e603aea26864"
       },
       {
         "exit_code": 1,
