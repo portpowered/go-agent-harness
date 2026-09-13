@@ -1,0 +1,155 @@
+{
+  "inputs": {
+    "accepted_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "c61": {
+      "commit": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "pr": 452,
+      "task": "work-task-34"
+    },
+    "c83": {
+      "commit": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "pr": 473,
+      "task": "work-task-125"
+    },
+    "shared_owner": "work-task-114"
+  },
+  "max_total_timeout_seconds": 1200,
+  "prohibited": [
+    "merge either candidate from C109",
+    "repair candidate source or shared C79 files",
+    "claim C61/C83/project acceptance",
+    "claim hardware, microphone, acoustic, or vertical-probe coverage",
+    "relabel the 6400-sample provider-audio loss"
+  ],
+  "schema": "audio-runtime-c109-bounded-sequence-v2",
+  "status": "bounded-and-procedural",
+  "steps": [
+    {
+      "checkpoint": "C79 review and guarded merge release the shared paths",
+      "commands": [
+        "reconcile only the demonstrated C83 Wire/baseline findings",
+        "diagnose the owned provider-audio terminal-drain loss"
+      ],
+      "expected_observables": [
+        "shared registry and baseline changes are limited to demonstrated findings",
+        "provider-audio attribution remains C79-owned"
+      ],
+      "gate": "C79 task/review/CI; C109 does not edit or relabel these findings",
+      "id": "release-shared-registries",
+      "inputs": [
+        "scripts/wire-packages.txt",
+        "docs/architecture/architecture-size-baseline.json",
+        "c83-integration-provider-audio-loss-6400"
+      ],
+      "number": 1,
+      "owner": "C79/work-task-114",
+      "preconditions": [
+        "C79 lease is active",
+        "the exact C83 static/integration findings are reproduced"
+      ],
+      "rollback": "retain the C79 checkpoint and return the same task with exact failed evidence",
+      "stop_conditions": [
+        "any candidate source or C109 evidence path is requested",
+        "loss attribution cannot be demonstrated"
+      ],
+      "timeout_seconds": 300
+    },
+    {
+      "checkpoint": "push the same C61 PR and submit its exact HEAD to script CI",
+      "commands": [
+        "integrate accepted origin/main",
+        "reconcile OPEN_RECONCILE_TEST_REWRITTEN",
+        "run the named focused normal/race and script-CI gates"
+      ],
+      "expected_observables": [
+        "the historical test remains unchanged or its repair is proved by C61",
+        "C61 branch and PR identity are retained"
+      ],
+      "gate": "independent C61 review and script CI; C109 makes no C61 acceptance claim",
+      "id": "reconcile-c61",
+      "inputs": [
+        "PR #452 head 8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+        "accepted main d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "c61-historical-delta-barrier-reconciliation"
+      ],
+      "number": 2,
+      "owner": "C61/work-task-34",
+      "preconditions": [
+        "C79 shared lease is released or the C61 changes do not touch its paths",
+        "the same work-task-34 is explicitly returned"
+      ],
+      "rollback": "preserve the existing C61 checkpoint and return the exact failed check to work-task-34",
+      "stop_conditions": [
+        "the focused test is rewritten without evidence",
+        "a C109 or C83 path is mutated"
+      ],
+      "timeout_seconds": 300
+    },
+    {
+      "checkpoint": "push the same C83 PR and submit its changed HEAD to script CI",
+      "commands": [
+        "integrate accepted origin/main",
+        "apply only demonstrated C83 Wire/baseline changes",
+        "run focused/race/external-consumer/browser regressions and script CI"
+      ],
+      "expected_observables": [
+        "C83 owns its instrumentation reconciliation",
+        "the 6,400-sample loss remains with C79/provider-audio",
+        "no C61 API dependency is invented"
+      ],
+      "gate": "independent C83 review, guarded merge and later immutable vertical probe; C109 does not accept C83",
+      "id": "reconcile-c83",
+      "inputs": [
+        "PR #473 head 22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+        "accepted main d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "c83-ci-34713381619",
+        "c83-integration-provider-audio-loss-6400"
+      ],
+      "number": 3,
+      "owner": "C83/work-task-125",
+      "preconditions": [
+        "C79 shared findings are released",
+        "C61 task disposition is recorded",
+        "C83 preserves its tracker/interruption checkpoint"
+      ],
+      "rollback": "preserve the C83 checkpoint and return the exact failed check to work-task-125",
+      "stop_conditions": [
+        "a shared registry is edited without C79 release",
+        "provider-audio loss is relabeled or duplicated",
+        "browser cancellation ordering regresses"
+      ],
+      "timeout_seconds": 420
+    },
+    {
+      "checkpoint": "fresh independent engineering scope=vertical probe after guarded merge",
+      "commands": [
+        "commit only the C109 evidence directory",
+        "push the same admitted branch",
+        "submit exact HEAD to script CI without polling"
+      ],
+      "expected_observables": [
+        "current-head CI is delegated to the script gate",
+        "fresh review and guarded merge remain external",
+        "C61/C83/project acceptance claims remain false"
+      ],
+      "gate": "C109 delivery handoff only; all nine project gates remain OPEN",
+      "id": "c109-handoff",
+      "inputs": [
+        "this evidence directory",
+        "required merge order main -> 8e8177c031a7b3b9322d712af19970e13fa7a1bc -> 22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      ],
+      "number": 4,
+      "owner": "C109/work-task-224",
+      "preconditions": [
+        "analyzer and verifier pass from clean temporary roots",
+        "both candidate refs/worktrees remain unchanged"
+      ],
+      "rollback": "retain the predecessor checkpoint and repair the same task; never reset the host checkout",
+      "stop_conditions": [
+        "CI rejects an exact C109 check",
+        "review identifies an actionable evidence defect"
+      ],
+      "timeout_seconds": 180
+    }
+  ]
+}
