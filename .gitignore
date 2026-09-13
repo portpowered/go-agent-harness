@@ -17,6 +17,7 @@
 # Code coverage profiles and other test artifacts
 *.out
 coverage.*
+!docs/architecture/baselines/**
 *.coverprofile
 profile.cov
 
