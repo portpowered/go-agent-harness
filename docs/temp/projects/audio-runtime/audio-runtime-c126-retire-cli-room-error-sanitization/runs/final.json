@@ -14,7 +14,7 @@
   },
   "ancestry": {
     "accepted_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
-    "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+    "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
     "startup": "8bdafc7f947a3a2c9856220abdc539437035bd21"
   },
   "branch": "codex/audio-runtime-c126-retire-cli-room-error-sanitization",
@@ -22,103 +22,103 @@
     "agent-cli/internal/services/internal/agentruntime/session_audio_format.go": {
       "actual": "086ecad62dcb61fd98ac8884da2fcaf79b5d5b8a967c6f03a5592f5373dac114",
       "current_main_sha256": "086ecad62dcb61fd98ac8884da2fcaf79b5d5b8a967c6f03a5592f5373dac114",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "086ecad62dcb61fd98ac8884da2fcaf79b5d5b8a967c6f03a5592f5373dac114"
     },
     "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go": {
       "actual": "4b4d0e9ff4d9bc150ad68a4ea55b74f3d538f4069fe09a84d5a3eeecfb50d3f3",
       "current_main_sha256": "4b4d0e9ff4d9bc150ad68a4ea55b74f3d538f4069fe09a84d5a3eeecfb50d3f3",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "4b4d0e9ff4d9bc150ad68a4ea55b74f3d538f4069fe09a84d5a3eeecfb50d3f3"
     },
     "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go": {
       "actual": "100f1c71990f868c2c0c20797e8f7b78b215c7cfb5781c8fdf4715feef239443",
       "current_main_sha256": "100f1c71990f868c2c0c20797e8f7b78b215c7cfb5781c8fdf4715feef239443",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "100f1c71990f868c2c0c20797e8f7b78b215c7cfb5781c8fdf4715feef239443"
     },
     "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": {
       "actual": "9e191c8b5e4e3bc688e01c3766dd92a8082a8ebdd6de7cb1ab85cda65d6f7229",
       "current_main_sha256": "9e191c8b5e4e3bc688e01c3766dd92a8082a8ebdd6de7cb1ab85cda65d6f7229",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "9e191c8b5e4e3bc688e01c3766dd92a8082a8ebdd6de7cb1ab85cda65d6f7229"
     },
     "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go": {
       "actual": "c6531d0c2a0f3556c2bc478f911a1687242456fd6ba920f370aa51eb0e7ecfd6",
       "current_main_sha256": "c6531d0c2a0f3556c2bc478f911a1687242456fd6ba920f370aa51eb0e7ecfd6",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "c6531d0c2a0f3556c2bc478f911a1687242456fd6ba920f370aa51eb0e7ecfd6"
     },
     "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go": {
       "actual": "4608c5c35277c97375c89e989e8a9c88dc6376968239ee66d713a0ee3f65b369",
       "current_main_sha256": "4608c5c35277c97375c89e989e8a9c88dc6376968239ee66d713a0ee3f65b369",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "4608c5c35277c97375c89e989e8a9c88dc6376968239ee66d713a0ee3f65b369"
     },
     "agent-cli/internal/services/internal/agentruntime/session_instructions.go": {
       "actual": "57a1e2b77f282e8c7a8351b3b1bf966baacf1d4674764b92542a9b2cfc6e8adc",
       "current_main_sha256": "57a1e2b77f282e8c7a8351b3b1bf966baacf1d4674764b92542a9b2cfc6e8adc",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "57a1e2b77f282e8c7a8351b3b1bf966baacf1d4674764b92542a9b2cfc6e8adc"
     },
     "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go": {
-      "actual": "33acf07ea4f4a71fcf332674efbcecf70a0a01c067c626c5b85fae625e8903ec",
-      "current_main_sha256": "33acf07ea4f4a71fcf332674efbcecf70a0a01c067c626c5b85fae625e8903ec",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "actual": "cf98859b463e6f01181ab15c73789410338fe434a75aaa5a8a0aedeba020a126",
+      "current_main_sha256": "cf98859b463e6f01181ab15c73789410338fe434a75aaa5a8a0aedeba020a126",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "33acf07ea4f4a71fcf332674efbcecf70a0a01c067c626c5b85fae625e8903ec"
     },
     "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle_test.go": {
       "actual": "07f0267db33da187b8737f515f24e9d74cd4f55445a1299ea5d3db869d2bce14",
       "current_main_sha256": "07f0267db33da187b8737f515f24e9d74cd4f55445a1299ea5d3db869d2bce14",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "07f0267db33da187b8737f515f24e9d74cd4f55445a1299ea5d3db869d2bce14"
     },
     "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go": {
-      "actual": "ea402342ea744b44d68f35bd8c10514287dce444fbbe2abc3b4aa9444fc5ba44",
-      "current_main_sha256": "ea402342ea744b44d68f35bd8c10514287dce444fbbe2abc3b4aa9444fc5ba44",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "actual": "34a96f4701a188e8f8edf1fb52d4544eee84ab1cd2faccdeec690ba365933eee",
+      "current_main_sha256": "34a96f4701a188e8f8edf1fb52d4544eee84ab1cd2faccdeec690ba365933eee",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "ea402342ea744b44d68f35bd8c10514287dce444fbbe2abc3b4aa9444fc5ba44"
     },
     "agent-cli/internal/services/internal/agentruntime/session_runtime_observation.go": {
       "actual": "5aadc4bc459cd0391e2bb26bc191e36f07dc68634a94dc813d459e4291091592",
       "current_main_sha256": "5aadc4bc459cd0391e2bb26bc191e36f07dc68634a94dc813d459e4291091592",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "5aadc4bc459cd0391e2bb26bc191e36f07dc68634a94dc813d459e4291091592"
     },
     "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go": {
       "actual": "48000dcd73b85ebbe93fd40a3996529878a99c799b67b0779d60f55dbb43fc1e",
       "current_main_sha256": "48000dcd73b85ebbe93fd40a3996529878a99c799b67b0779d60f55dbb43fc1e",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "48000dcd73b85ebbe93fd40a3996529878a99c799b67b0779d60f55dbb43fc1e"
     },
     "agent-cli/internal/services/internal/agentruntime/trace.go": {
       "actual": "db9fab41dd02578db5e7b024af869eb762b21ec14c48c64442d4ad9ca3149710",
       "current_main_sha256": "db9fab41dd02578db5e7b024af869eb762b21ec14c48c64442d4ad9ca3149710",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "db9fab41dd02578db5e7b024af869eb762b21ec14c48c64442d4ad9ca3149710"
     },
     "agent-cli/internal/wire/rtc_runtime.go": {
       "actual": "18853bc72a2d865f5776f951bfa8ca2169cfb99a5ce06770e6c183471db6eef7",
       "current_main_sha256": "18853bc72a2d865f5776f951bfa8ca2169cfb99a5ce06770e6c183471db6eef7",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "311dd12a8236735340c654d99561920d5ac7a46952ec9fd85844bc7e7859ce2c"
     },
     "go-llm-gateway/pkg/transport/rtc/track_in.go": {
       "actual": "f814f0fc4d41717dfec6ce146e5707fc7731b0e1e95436f7cc443e38baeadb8e",
       "current_main_sha256": "f814f0fc4d41717dfec6ce146e5707fc7731b0e1e95436f7cc443e38baeadb8e",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "0e3c85debcd522cf165a4eeac1c12e36e56df81f1dc9faa43dc610d594abc17d"
     },
     "go-llm-gateway/pkg/transport/rtc/track_out.go": {
       "actual": "0e7ef5b95b711836dc2259acfe1b936a9dd96e078fe414cb6b0f209a68ff586a",
       "current_main_sha256": "0e7ef5b95b711836dc2259acfe1b936a9dd96e078fe414cb6b0f209a68ff586a",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "7ebbe790ac32bbfa7fbf7e496793bfc93513574132847bc8715486ac77f67b1d"
     }
   },
   "handoff": {
     "accepted_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
-    "candidate_head": "bc1ec636266fa395d5de14287c4af747d310a290",
+    "candidate_head": "82086b1d9c015a199700333547f736992c71591e",
     "ci_polling": "not performed by executor",
     "review": "not performed by executor",
     "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
@@ -195,14 +195,14 @@
       "actual": "0de50452b80d43ef162c0ffdf531a3af70e9beab6e6d346da7f63fa903bab90f",
       "candidate_delta": "unchanged",
       "current_main_sha256": "0de50452b80d43ef162c0ffdf531a3af70e9beab6e6d346da7f63fa903bab90f",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "adf54079f83e3fcb95cd0aac71ca890ade4841badec6da3a4cc24e73ab73bf07"
     },
     "scripts/wire-packages.txt": {
       "actual": "9968129c3bdc2b3df8233b8d9faf34feb709502c96ea855c0e383256bdf31a2b",
       "candidate_delta": "unchanged",
       "current_main_sha256": "9968129c3bdc2b3df8233b8d9faf34feb709502c96ea855c0e383256bdf31a2b",
-      "current_origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+      "current_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "pre_edit_expected": "c9030f776592dc306f74a0900b564be5d3cd841aecae98c188540d98d478626d"
     }
   },
