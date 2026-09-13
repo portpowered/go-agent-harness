@@ -1,0 +1,41 @@
+{
+  "schema": "audio-runtime.c97.ordered-replay-characterization.v1",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "candidate_revision": "d848cf85ee3eece37e804c833e1f426024446d40",
+  "inputs": {
+    "capture_sha256": "49feab183f1222b5f2e866d130703cd468d49c95c4d5edd2d364d44e8e9ddd52",
+    "config_sha256": "24758d877b369728e37e7bbcc1b1c82ac402d126966fbe43397d6a16f66e7e29",
+    "fixture_sha256": "599117c498e17771619deb9c63f9be5d79329384f5dfa8375663dc1806cd6a4d",
+    "manifest_sha256": "1e0adfb75f2d3c3895026a70276c974d7172ed8b7e79a6e3f071a4de2a93b191",
+    "source_audio_sha256": "6bb5a07350bbe1a874b4a28fcc79f7575f272a38a6338aa223c6fa9a99e6b5c6",
+    "binary_sha256": "8099d07cb1a21b71032016c8b8d82814115285f0c6fc8750ff89f7643a37a463"
+  },
+  "first_attempt": {
+    "runner_exit_code": 1,
+    "failure": "ordered replay PCM oracle changed",
+    "replay_return_code": 0,
+    "timed_out": false,
+    "group_alive_after": false,
+    "audio_bytes": 2400,
+    "audio_sha256": "ce2b9a756d4c71c1e3d07e5302edaae9bf786a58eb3d53dc02ea559565c35df0",
+    "expected_audio_bytes": 9120,
+    "expected_audio_sha256": "9495487706f4a3001922c10d4dd496e7cd29fff9815a76f2f842f8e970725cc9"
+  },
+  "bounded_followup": {
+    "launches": 6,
+    "passing_launches": 6,
+    "replay_return_code": 0,
+    "timed_out": false,
+    "group_alive_after": false,
+    "audio_bytes": 9120,
+    "audio_sha256": "9495487706f4a3001922c10d4dd496e7cd29fff9815a76f2f842f8e970725cc9",
+    "elapsed_ms": [138, 154, 161, 174, 205, 235]
+  },
+  "classification": {
+    "result": "first mismatch was not reproduced by six bounded identical-input launches",
+    "source_changed": false,
+    "oracle_changed": false,
+    "causal_environment_failure_demonstrated": false,
+    "action": "retain the mismatch and passing controls; do not weaken or rewrite the oracle"
+  }
+}

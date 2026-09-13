@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 type recordingSessionRuntimeObserver struct {
@@ -27,6 +28,22 @@ type failingMetricsRecorder struct{}
 
 func (failingMetricsRecorder) Record(metrics.Direction, metrics.Modality, int64) error {
 	return errors.New("recorder is intentionally unavailable")
+}
+
+func TestSessionRuntimeObservationZeroValueRecorderIsInert(t *testing.T) {
+	var recorder sessionRuntimeObservationRecorder
+
+	recorder.audioOutputMessage([]byte{1, 2}, messages.StreamMessage{})
+	recorder.audioPlaybackReceipt(audio.PlaybackReceipt{CommandID: 1})
+	recorder.audioInput([]byte{3, 4})
+	recorder.providerAudioSent([]byte{5, 6})
+	recorder.inputCommit()
+	recorder.providerInputCommit()
+	recorder.responseCreate(messages.StreamMessage{})
+	recorder.turnCompleted(1)
+	recorder.terminalWithAccounting(1, nil, nil)
+	recorder.observeToolCall(messages.ToolCall{})
+	recorder.observeToolResult(messages.ToolCall{}, messages.ToolCallResponse{}, false)
 }
 
 func TestSessionRuntimeObservationFinalAccountingIsTerminalCumulativeAndComplete(t *testing.T) {

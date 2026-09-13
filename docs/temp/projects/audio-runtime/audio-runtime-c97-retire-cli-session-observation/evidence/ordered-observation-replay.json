@@ -1,0 +1,138 @@
+{
+  "aggregate_elapsed_ms": 1150,
+  "audio_output": {
+    "bytes": 9120,
+    "path": "artifacts/ordered-observation-replay/healthy-tail.pcm",
+    "sha256": "9495487706f4a3001922c10d4dd496e7cd29fff9815a76f2f842f8e970725cc9"
+  },
+  "build": {
+    "execution": {
+      "cleanup": {
+        "group_alive_after": false,
+        "group_alive_before": true,
+        "kill_sent": false,
+        "parent_reaped": true,
+        "reader_threads_joined": true,
+        "setup_error": "",
+        "term_sent": false
+      },
+      "command": [
+        "go",
+        "build",
+        "-mod=readonly",
+        "-trimpath",
+        "-o",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c97-retire-cli-session-observation/docs/temp/projects/audio-runtime/audio-runtime-c97-retire-cli-session-observation/artifacts/bin/yui",
+        "./agent-cli/cmd/yui"
+      ],
+      "cwd": ".",
+      "disk_bounded": true,
+      "disk_bytes": 0,
+      "elapsed_ms": 366,
+      "label": "build-source-pinned-yui",
+      "output_bounded": true,
+      "returncode": 0,
+      "stderr": "artifacts/ordered-observation-replay/build/stderr.log",
+      "stderr_bytes": 0,
+      "stdout": "artifacts/ordered-observation-replay/build/stdout.log",
+      "stdout_bytes": 0,
+      "timed_out": false
+    },
+    "sha256": "8099d07cb1a21b71032016c8b8d82814115285f0c6fc8750ff89f7643a37a463"
+  },
+  "candidate_revision": "3ab091b2c54edbfaa6542fef8ffc83835032d565",
+  "classification": {
+    "acoustic": "not_attempted",
+    "audio_tool_interruption_order": "proved",
+    "physical_device": "not_attempted",
+    "provider_edge": "credential-free shipped replay"
+  },
+  "execution": {
+    "cleanup": {
+      "group_alive_after": false,
+      "group_alive_before": true,
+      "kill_sent": false,
+      "parent_reaped": true,
+      "reader_threads_joined": true,
+      "setup_error": "",
+      "term_sent": false
+    },
+    "command": [
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c97-retire-cli-session-observation/docs/temp/projects/audio-runtime/audio-runtime-c97-retire-cli-session-observation/artifacts/bin/yui",
+      "-C",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization/docs/temp/projects/audio-runtime/audio-runtime-c23-long-session-tool-characterization/artifacts/runs/20260910T234434Z-shipped-regressions/config",
+      "session",
+      "--replay",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization/docs/temp/projects/audio-runtime/audio-runtime-c23-long-session-tool-characterization/artifacts/runs/20260910T234434Z-shipped-regressions/test6.session.json",
+      "--replay-timing",
+      "recorded",
+      "--prompt",
+      "test6 customer barge in",
+      "--audio-out",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c97-retire-cli-session-observation/docs/temp/projects/audio-runtime/audio-runtime-c97-retire-cli-session-observation/artifacts/ordered-observation-replay/healthy-tail.pcm",
+      "--no-terminal-tools"
+    ],
+    "cwd": ".",
+    "disk_bounded": true,
+    "disk_bytes": 619,
+    "elapsed_ms": 546,
+    "label": "ordered-observation-replay",
+    "output_bounded": true,
+    "returncode": 0,
+    "stderr": "artifacts/ordered-observation-replay/process/stderr.log",
+    "stderr_bytes": 0,
+    "stdout": "artifacts/ordered-observation-replay/process/stdout.log",
+    "stdout_bytes": 619,
+    "timed_out": false
+  },
+  "inputs": {
+    "capture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization/docs/temp/projects/audio-runtime/audio-runtime-c23-long-session-tool-characterization/artifacts/runs/20260910T234434Z-shipped-regressions/test6.session.json",
+    "capture_sha256": "49feab183f1222b5f2e866d130703cd468d49c95c4d5edd2d364d44e8e9ddd52",
+    "config_sha256": "24758d877b369728e37e7bbcc1b1c82ac402d126966fbe43397d6a16f66e7e29",
+    "fixture_sha256": "599117c498e17771619deb9c63f9be5d79329384f5dfa8375663dc1806cd6a4d",
+    "manifest_audio_output": {
+      "bytes": 9120,
+      "expected_bytes": 9120,
+      "expected_sha256": "9495487706f4a3001922c10d4dd496e7cd29fff9815a76f2f842f8e970725cc9",
+      "healthy_tail_bytes": 2400,
+      "healthy_tail_sha256": "ce2b9a756d4c71c1e3d07e5302edaae9bf786a58eb3d53dc02ea559565c35df0",
+      "path": "artifacts/runs/20260910T234434Z-shipped-regressions/healthy-tail.pcm",
+      "prefix_bytes": 6720,
+      "sha256": "9495487706f4a3001922c10d4dd496e7cd29fff9815a76f2f842f8e970725cc9"
+    },
+    "manifest_sha256": "1e0adfb75f2d3c3895026a70276c974d7172ed8b7e79a6e3f071a4de2a93b191",
+    "ordered_event_types": [
+      "session.update",
+      "session.created",
+      "conversation.item.create",
+      "response.create",
+      "response.created",
+      "response.output_audio.delta",
+      "input_audio_buffer.speech_started",
+      "conversation.item.truncate",
+      "conversation.item.truncated",
+      "response.output_audio.done",
+      "response.done",
+      "response.created",
+      "response.output_audio.delta",
+      "response.output_audio.done",
+      "response.done"
+    ],
+    "record_count": 15,
+    "source_audio_sha256": "6bb5a07350bbe1a874b4a28fcc79f7575f272a38a6338aa223c6fa9a99e6b5c6"
+  },
+  "passed": true,
+  "peer": {
+    "branch": "codex/audio-runtime-c23-long-session-tool-characterization",
+    "capture_sha256": "49feab183f1222b5f2e866d130703cd468d49c95c4d5edd2d364d44e8e9ddd52",
+    "config_sha256": "24758d877b369728e37e7bbcc1b1c82ac402d126966fbe43397d6a16f66e7e29",
+    "fixture_sha256": "599117c498e17771619deb9c63f9be5d79329384f5dfa8375663dc1806cd6a4d",
+    "head": "b2fb41401cd0934378b9ff1bc131532fdc19f614",
+    "manifest_sha256": "1e0adfb75f2d3c3895026a70276c974d7172ed8b7e79a6e3f071a4de2a93b191",
+    "status": "clean",
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization"
+  },
+  "schema": "audio-runtime.c97.ordered-observation-replay.v1",
+  "source_pinned": true,
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+}
