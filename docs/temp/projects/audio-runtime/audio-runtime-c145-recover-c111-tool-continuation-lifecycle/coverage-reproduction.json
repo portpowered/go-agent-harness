@@ -1,0 +1,52 @@
+{
+  "schema": "audio-runtime.c145.coverage-reproduction.v1",
+  "task": "audio-runtime-c145-recover-c111-tool-continuation-lifecycle",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "implementationBranch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+  "sourceRevision": "a560583edb816b07d45ea16b3d995d864688a90f",
+  "freshOriginMain": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+  "requiredStartupRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "command": "rtk make coverage",
+  "result": "failed",
+  "exitStatus": 2,
+  "profilesCompleted": true,
+  "coverageGate": {
+    "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession",
+    "expectedMinimum": "80.00%",
+    "actual": "61.80%",
+    "delta": "-18.20%",
+    "message": "coverage gate found coverage floor violations",
+    "makeResult": "make: *** [coverage] Error 1"
+  },
+  "causalAttribution": {
+    "peerOwned": true,
+    "ownedPathDiffIsEmpty": true,
+    "coverageFloorChanged": false,
+    "agentsessionChanged": false,
+    "c145OwnedCauseDemonstrated": false,
+    "waived": false,
+    "repairTaken": false,
+    "reason": "The candidate changes sessioncontinuation and its decision-free adapter only; the failing agentsession package and its 80.00% floor are outside the admitted paths."
+  },
+  "sourceDiffEvidence": {
+    "command": "git diff origin/main...HEAD -- agent-cli/internal/services/agentsession",
+    "result": "empty",
+    "dirtyPredecessorFile": "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/candidate-evidence.json",
+    "dirtyPredecessorSha256AfterRun": "47e845bf3fdf9fa9d5e338d8f159be0cf4983beeec1a52ed9ca36c44eba463c9"
+  },
+  "fullLog": {
+    "run": 34771659715,
+    "job": 103762236978,
+    "logLines": 491,
+    "logSha256": "0209917850a83a92c5479422ee02175e2f84cc360b2011b3bd478657b2c05d2a",
+    "remoteFailureExcerpt": [
+      "coverage gate found coverage floor violations:",
+      "- github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession: expected minimum 80.00%, actual 61.80%, delta -18.20%",
+      "exit status 1",
+      "make: *** [Makefile:303: coverage] Error 1"
+    ]
+  },
+  "decision": "CONTINUE",
+  "nextAction": "Retain the same task and candidate. The project/meta owner or the owner of agent-cli/internal/services/agentsession must land the demonstrated coverage repair or release an accepted current-main dependency; then rerun make coverage once on the changed candidate. Do not edit that package, lower its floor, or retry the unchanged code."
+}
