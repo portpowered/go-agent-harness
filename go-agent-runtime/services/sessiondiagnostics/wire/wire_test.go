@@ -235,6 +235,43 @@ func TestResetClearsReducerStateWithoutReplacingMutex(t *testing.T) {
 	}
 }
 
+func TestResetRejectsStaleIDFromRebindingScheduledLifecycle(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
+		t.Helper()
+		observation, err := service.Apply(ctx, event)
+		if err != nil {
+			t.Fatalf("apply %s: %v", event.Kind, err)
+		}
+		return observation
+	}
+
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventEnsureScheduled, Count: 1})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-old"})
+	bound := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventBindScheduledBoundary, ResponseID: "response-old"})
+	if !bound.Accepted {
+		t.Fatalf("initial scheduled binding = %+v, want accepted", bound)
+	}
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventReset})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventEnsureScheduled, Count: 1})
+
+	lateBoundary := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventBindScheduledBoundary, ResponseID: "response-old"})
+	lateOwner := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventSetScheduledOwner, Index: 0, ResponseID: "response-old"})
+	if lateBoundary.Accepted || lateOwner.Accepted {
+		t.Fatalf("stale response ID rebound after reset: boundary=%+v owner=%+v", lateBoundary, lateOwner)
+	}
+	snapshot := service.Snapshot()
+	if len(snapshot.Scheduled) != 1 || snapshot.Scheduled[0].Bound || len(snapshot.Scheduled[0].ResponseIDs) != 0 || snapshot.ActiveScheduledSet {
+		t.Fatalf("stale scheduled binding mutated reset lifecycle: %+v", snapshot)
+	}
+
+	fresh := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventBindScheduledBoundary, ResponseID: "response-new"})
+	if !fresh.Accepted || !fresh.HasScheduledIndex || fresh.ScheduledIndex != 0 {
+		t.Fatalf("fresh scheduled ID after stale rejection = %+v", fresh)
+	}
+}
+
 func TestScheduledLifecycleRejectsInvalidDispositionAndDisposedRebind(t *testing.T) {
 	for _, terminalDisposition := range []sessiondiagnostics.Disposition{
 		sessiondiagnostics.DispositionCompleted,
