@@ -11,7 +11,7 @@ The preserved candidate revisions are C61
 `8e8177c031a7b3b9322d712af19970e13fa7a1bc` and C83
 `22cc6769aaf06d1e2c1275b064cc7ec29de3e371`.
 The final provenance also records fetched `origin/main`
-`b7d25ca6f0e9b94c62b193059160dfbf446ef1d6` as the newer integrated review
+`ea53be13ce5e4ef14fd8c89c695c21744a1f7686` as the newer integrated review
 main; the branch diff relative to that review main remains C109-owned only.
 The required and control synthetic rehearsals intentionally remain based on
 the admitted accepted main, as required by the PRD.  Because the newer review
@@ -61,8 +61,27 @@ The analyzer resolves API references from complete package/module identity:
 anonymous function bodies do not become declarations, qualified imports are
 matched to their exact imported package, same-name symbols in another package
 are not treated as dependencies, and public module paths are not duplicated.
-The checked-in `test_analyze.py` regressions cover those cases.  The current
-source checkpoint is `652453bfea05b0d09e5257c7cfbd65c38e54f93f`.
+The checked-in `test_analyze.py` regressions cover those cases.  The final
+evidence source checkpoint is `629132f33a584dbf026c3a33296cd5d97958f031`.
+
+## Aggregate-budget runner repair
+
+The first fresh current-source public run after the latest CI rejection passed
+17/18 checks but exhausted the 300-second aggregate budget before the shipped
+credential-free workflow could finish: all preceding checks passed, the final
+child received only four seconds, terminated cleanly, and left no descendants.
+This was an owned evidence-runner scheduling defect, not a C61/C83 or provider
+audio failure. Commit `34a4a9404e1238b840c83c7acf7b93c14fa1abca` schedules the
+required shipped workflow first without changing its command, assertions,
+credential scrubbing, child timeout, or aggregate timeout.
+
+The repaired runner passes the exact positive case 18/18 in 265.785 seconds
+under 90/300 bounds and the malformed/canceled case 3/3 in 35.286 seconds under
+60/180 bounds. The regenerated final public reports are bound to runner SHA-256
+`04161bdc2d5f838b9af54b58c6b95f37fb5e1c515cffbb0693908b194fcc694a`, and the
+final verifier passes all eight checks and 19 negative controls. This remains
+software-only evidence; no C61/C83 merge, review, probe, acceptance, hardware,
+acoustic proof, or broad project gate is claimed.
 
 ## Current script-CI rejection
 

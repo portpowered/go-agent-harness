@@ -18414,7 +18414,7 @@
         "go-agent-runtime/services/browserscenario/service.go",
         "go-agent-runtime/services/browserscenario/wire/wire.go"
       ],
-      "reviewMain": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+      "reviewMain": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
       "source_driven": true
     },
     "failClosedRules": [
@@ -324232,7 +324232,7 @@
       "acceptedMain": "dded566273b27f7146c4e630a0f23fb9402198da",
       "c61": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2",
       "c83": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048",
-      "reviewMain": "edad3366bbf37adf68de1e121c009a000389f02f"
+      "reviewMain": "81f41ed86a99802c589481beb79a66e95952b897"
     },
     "candidates": {
       "c61": {
@@ -324272,16 +324272,16 @@
       "exit_code": 0,
       "output_retained": false,
       "reason": "fetch transport output is mutable; commit/ref identity is retained instead",
-      "resolved_origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+      "resolved_origin_main": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
       "status": "passed"
     },
-    "fetchedOriginMain": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+    "fetchedOriginMain": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
     "hostCheckout": {
       "afterStatus": [],
       "beforeStatus": [],
       "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
       "changedStatusLines": [],
-      "head": "652453bfea05b0d09e5257c7cfbd65c38e54f93f",
+      "head": "629132f33a584dbf026c3a33296cd5d97958f031",
       "scopeClean": true
     },
     "newerMainFetchedAndIntegrated": true,
@@ -324367,7 +324367,7 @@
         },
         {
           "name": "refs/remotes/origin/main",
-          "object": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6"
+          "object": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686"
         }
       ],
       "before": [
@@ -324397,7 +324397,7 @@
         },
         {
           "name": "refs/remotes/origin/main",
-          "object": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6"
+          "object": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686"
         }
       ],
       "candidateRefsUnchanged": true,
@@ -324405,12 +324405,12 @@
     },
     "refsUnchanged": true,
     "requestedAcceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-    "reviewMain": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+    "reviewMain": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
     "schema": "audio-runtime-c109-provenance-v2",
     "sourceBinding": {
       "cleanScripts": true,
-      "committedHead": "652453bfea05b0d09e5257c7cfbd65c38e54f93f",
-      "committedTree": "ff7c6f539c62014720850c96cebff15bc54b94b4",
+      "committedHead": "629132f33a584dbf026c3a33296cd5d97958f031",
+      "committedTree": "c7bad62a8035da2a9b32db444412035f720f5e61",
       "scripts": [
         {
           "head_blob": "e47e5fa8d24b3b11e9466cb70d7fb76d3b86d1a0",
@@ -324427,11 +324427,11 @@
           "working_tree_sha256": "3bfc5db9e3f47cad93cc3920299a48f608355488a5b67e27826a153dde1f5a03"
         },
         {
-          "head_blob": "31628a158f5233c574e7e8d51e307bbb22023700",
+          "head_blob": "f75c3d749f8e15a84da016e60cc1144b52a0bc67",
           "matches_committed_head": true,
           "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
-          "working_blob": "31628a158f5233c574e7e8d51e307bbb22023700",
-          "working_tree_sha256": "f2bdc990fc710f8baddb9766837f101a0c08f32d0386cc29117a826a08a83cef"
+          "working_blob": "f75c3d749f8e15a84da016e60cc1144b52a0bc67",
+          "working_tree_sha256": "04161bdc2d5f838b9af54b58c6b95f37fb5e1c515cffbb0693908b194fcc694a"
         },
         {
           "head_blob": "c17e813487e7f34aae6bc45aa23d02912228b3ee",
@@ -324453,7 +324453,7 @@
         {
           "branch": "refs/heads/codex/audio-runtime-c109-characterize-browser-retirement-integration",
           "detached": false,
-          "head": "652453bfea05b0d09e5257c7cfbd65c38e54f93f",
+          "head": "629132f33a584dbf026c3a33296cd5d97958f031",
           "locked": false,
           "path": ".claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration",
           "prunable": "",
@@ -324568,10 +324568,10 @@
     "worktree_path_recorded": "temporary path intentionally omitted from normalized evidence"
   },
   "reviewMainCompatibility": {
-    "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+    "base": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
     "control": {
-      "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
-      "base_tree": "edad3366bbf37adf68de1e121c009a000389f02f",
+      "base": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+      "base_tree": "81f41ed86a99802c589481beb79a66e95952b897",
       "cleanup": {
         "temporary_root_removed": true,
         "worktree_remove_command": "git worktree remove --force <temporary-worktree>",
@@ -324584,7 +324584,7 @@
       "merges": [
         {
           "command": "git merge --no-ff --no-commit 22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
-          "commit": "11c08ba3dbbdf2ef1129ffa0b38924ceeddebbc9",
+          "commit": "f778fef44d8d99bd69e9e499b44aef18df2a7bae",
           "commit_command": "git commit --no-verify -m C109 review-main-control merge c83",
           "conflict_kind": "none",
           "conflict_resolution": "not-needed",
@@ -324599,12 +324599,12 @@
           "output": "Auto-merging docs/architecture/architecture-policy.json\nAutomatic merge went well; stopped before committing as requested\n",
           "output_sha256": "35c94f1b3e9a37644a52a7a985688c2c67dbf252afe6caa39bba34d3bd75740b",
           "parents": [
-            "11c08ba3dbbdf2ef1129ffa0b38924ceeddebbc9",
-            "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+            "f778fef44d8d99bd69e9e499b44aef18df2a7bae",
+            "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
             "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
           ],
           "post_status": [],
-          "pre_merge_head": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+          "pre_merge_head": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
           "ref": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
           "resolution": {
             "owner": "C109/none",
@@ -324612,7 +324612,7 @@
           },
           "status": "passed",
           "step": 1,
-          "tree": "d5d2dbe1f3e5a6a2ff7560193efdb2dbdb62a503"
+          "tree": "3339cc58db432e28f2184f146a6f021751810ab3"
         },
         {
           "command": "git merge --no-ff --no-commit 8e8177c031a7b3b9322d712af19970e13fa7a1bc",
@@ -324705,7 +324705,7 @@
             "A  go-agent-runtime/services/browserscenario/service.go",
             "A  go-agent-runtime/services/browserscenario/wire/wire.go"
           ],
-          "pre_merge_head": "11c08ba3dbbdf2ef1129ffa0b38924ceeddebbc9",
+          "pre_merge_head": "f778fef44d8d99bd69e9e499b44aef18df2a7bae",
           "ref": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
           "resolution": {
             "owner": "C61/work-task-34 or C83/work-task-125",
@@ -324725,8 +324725,8 @@
     },
     "purpose": "Supplemental current-main compatibility evidence; it is not the admitted C109 synthetic delivery tree.",
     "required": {
-      "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
-      "base_tree": "edad3366bbf37adf68de1e121c009a000389f02f",
+      "base": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+      "base_tree": "81f41ed86a99802c589481beb79a66e95952b897",
       "cleanup": {
         "temporary_root_removed": true,
         "worktree_remove_command": "git worktree remove --force <temporary-worktree>",
@@ -324828,7 +324828,7 @@
             "A  go-agent-runtime/services/browserscenario/service.go",
             "A  go-agent-runtime/services/browserscenario/wire/wire.go"
           ],
-          "pre_merge_head": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+          "pre_merge_head": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
           "ref": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
           "resolution": {
             "owner": "C61/work-task-34 or C83/work-task-125",
