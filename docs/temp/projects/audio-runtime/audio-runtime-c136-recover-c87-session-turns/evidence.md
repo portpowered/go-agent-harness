@@ -102,3 +102,30 @@ owner/primary while C110/C111/C112/C119 release their shared leases. Then fetch
 and integrate the released accepted main, add only the demonstrated sessionturns
 registry/baseline entries, rerun the bounded gates, and submit one changed head
 to script CI without polling.
+
+## Exact-head C136 script-CI rejection — run 34767963599
+
+The first changed-head C136 script-CI run evaluated
+e47a94277350c0e4e325a6a6da1758f57e32a5cb. Eight required checks passed: unit,
+integration, coverage, race, hermetic, WebMCP Chrome, macOS audio release, and
+Windows audio portable. The static job failed only at
+make architecture-size-check with the following 13 deferred
+shared/dependency findings:
+
+- twelve stale downward C87 baseline entries for ErrEmptyTurn,
+  ErrInvalidTurnDirection, ErrInvalidTurnTick, ErrMissingTurnInferencer,
+  ErrSessionClosed, ErrSessionEndedWithActiveTurn, ErrTurnAlreadyActive,
+  ErrTurnEndWithoutStart, ErrTurnMismatch, readTurnResponse,
+  TestSessionTurns_FiveTurnsUseOnePersistentSessionAndExactLifecycle, and
+  noTurnSetup;
+- one unregistered generated-file finding for
+  go-agent-runtime/services/sessionturns/wire/wire_gen.go.
+
+The complete failed-step output is preserved in
+ci-run-34767963599-static.log; the exact run metadata is preserved in
+ci-run-34767963599.json. No C136-owned source or test failure was reported,
+and no shared registry/baseline path was changed. This is not a CI-green,
+review, merge, vertical-probe, or acceptance result. The next action remains
+to retain C136 while C110/C111/C112/C119 release the shared paths and the
+C127-owned coverage-manifest residual is resolved, then integrate the released
+accepted main and apply only the demonstrated C136 registry/baseline changes.
