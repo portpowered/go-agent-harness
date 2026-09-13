@@ -1,6 +1,7 @@
 import datetime as dt
 import importlib.util
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -16,6 +17,51 @@ SPEC.loader.exec_module(MODULE)
 
 
 class WorktreeCleanupTests(unittest.TestCase):
+    def test_global_cache_prunes_old_entries_and_preserves_recent_entries(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_root = root / "Caches"
+            cache = cache_root / MODULE.GO_BUILD_CACHE_NAME
+            bucket = cache / "ab"
+            bucket.mkdir(parents=True)
+            (cache / "README").write_text(MODULE.GO_BUILD_CACHE_MARKER)
+            old = bucket / ("a" * MODULE.CACHE_KEY_LENGTH + "-d")
+            recent = bucket / ("b" * MODULE.CACHE_KEY_LENGTH + "-a")
+            old.write_bytes(b"old-entry")
+            recent.write_bytes(b"recent-entry")
+            now = dt.datetime(2026, 9, 13, tzinfo=dt.timezone.utc)
+            os.utime(old, (now.timestamp() - 3 * 3600,) * 2)
+            os.utime(recent, (now.timestamp() - 30 * 60,) * 2)
+
+            with mock.patch.dict(
+                MODULE.os.environ,
+                {"FACTORY_GOCACHE": str(cache)},
+                clear=False,
+            ):
+                candidates = MODULE.global_cache_candidates(
+                    root,
+                    now=now,
+                    minimum_age_hours=2,
+                    cache_root=cache_root,
+                )
+
+                go_cache = candidates[0]
+                self.assertTrue(go_cache["eligible"])
+                self.assertEqual(go_cache["sizeBytes"], len(b"old-entry"))
+                self.assertEqual(go_cache["totalSizeBytes"], len(b"old-entry") + len(b"recent-entry"))
+                self.assertEqual(go_cache["reclaimableEntryCount"], 1)
+                reclaimed = MODULE._remove_global_cache(
+                    cache,
+                    "go-build",
+                    now=now,
+                    minimum_age_hours=2,
+                    cache_root=cache_root,
+                )
+
+            self.assertEqual(reclaimed, len(b"old-entry"))
+            self.assertFalse(old.exists())
+            self.assertTrue(recent.exists())
+
     def test_pressure_mode_skips_healthy_disk_before_factory_observation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

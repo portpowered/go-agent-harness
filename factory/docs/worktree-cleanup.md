@@ -44,7 +44,12 @@ volume is under pressure. It starts below 32 GiB free and stops deleting after
 common-dir lock prevents overlapping manual and automatic runs. Automatic
 reports live under `.git/factory-cleanup/`; active or queued Work names and all
 of the safety checks above remain protected. Under pressure only, the pass also
-removes the shared Go build and staticcheck caches after validating their exact
-paths under `~/Library/Caches` and Go's regeneration marker. Module downloads,
+prunes only content-addressed `-a` and `-d` entries older than two hours from
+the shared Go build and staticcheck caches. Recent entries remain available to
+concurrent workers, and the Go regeneration marker and cache root are checked
+again immediately before pruning. The factory supervisor pins one resolved
+`GOCACHE` and `GOMODCACHE` in its process environment (optionally through
+`FACTORY_GOCACHE` and `FACTORY_GOMODCACHE`) so every worker reuses the same
+cache. `GOTMPDIR` stays process-local and is not retained. Module downloads,
 local models, session history, source, recordings, and acceptance evidence stay
 outside the deletion boundary.

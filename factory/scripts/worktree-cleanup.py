@@ -22,6 +22,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -53,6 +54,9 @@ GO_BUILD_CACHE_NAME = "go-build"
 GO_BUILD_CACHE_MARKER = "cached build artifacts from the Go build system"
 GO_TOOLS_CACHE_NAME = "go-tools"
 STATICCHECK_CACHE_NAME = "staticcheck"
+GLOBAL_CACHE_RETENTION_HOURS = 2
+CACHE_KEY_LENGTH = 64
+CACHE_ENTRY_SUFFIXES = ("-a", "-d")
 OUTPUT_COVERAGE_PREFIX = "coverage"
 SAFE_WORKTREE_PREFIXES = ("/private/tmp/", "/tmp/")
 ACTIVE_WORKER_STATES = frozenset({"RESERVED", "STARTING", "RUNNING", "PAUSED"})
@@ -437,6 +441,89 @@ def _latest_mtime(path: Path) -> float:
     return latest
 
 
+def _is_cache_entry(path: Path) -> bool:
+    """Recognize content-addressed Go-style cache entries only."""
+
+    name = path.name
+    if len(name) != CACHE_KEY_LENGTH + 2 or name[-2:] not in CACHE_ENTRY_SUFFIXES:
+        return False
+    return all(character in "0123456789abcdefABCDEF" for character in name[:-2])
+
+
+def _cache_entries(path: Path) -> Iterable[Path]:
+    """Yield cache entries without following symlinked buckets or entries."""
+
+    if path.is_symlink() or not path.is_dir():
+        raise CleanupBlocked(f"global cache changed before inspection: {path}")
+    try:
+        buckets = list(path.iterdir())
+    except OSError as error:
+        raise CleanupBlocked(f"could not inspect global cache {path}: {error}") from error
+    for bucket in buckets:
+        if (
+            bucket.is_symlink()
+            or not bucket.is_dir()
+            or len(bucket.name) != 2
+            or any(character not in "0123456789abcdefABCDEF" for character in bucket.name)
+        ):
+            continue
+        try:
+            entries = list(bucket.iterdir())
+        except OSError as error:
+            raise CleanupBlocked(f"could not inspect global cache bucket {bucket}: {error}") from error
+        for entry in entries:
+            if _is_cache_entry(entry) and not entry.is_symlink():
+                yield entry
+
+
+def _cache_entry_size(path: Path, file_info: os.stat_result) -> int:
+    """Measure one cache entry without following a symlink at its root."""
+
+    if stat.S_ISREG(file_info.st_mode):
+        return file_info.st_size
+    if stat.S_ISDIR(file_info.st_mode):
+        return _apparent_size(path)
+    return 0
+
+
+def _cache_entry_stats(
+    path: Path,
+    *,
+    now: dt.datetime,
+    minimum_age_hours: float,
+) -> dict[str, int]:
+    """Return total and safely reclaimable bytes in one shared cache."""
+
+    if minimum_age_hours < 0:
+        raise ValueError("minimum cache age must be non-negative")
+    cutoff = now.timestamp() - (minimum_age_hours * 3600)
+    total_bytes = 0
+    reclaimable_bytes = 0
+    reclaimable_count = 0
+    entry_count = 0
+    for entry in _cache_entries(path):
+        try:
+            file_info = entry.lstat()
+            size = _cache_entry_size(entry, file_info)
+        except FileNotFoundError:
+            # Go may complete a concurrent cache write between enumeration and
+            # inspection.  The next cleanup pass will see the final entry.
+            continue
+        except OSError as error:
+            raise CleanupBlocked(f"could not inspect cache entry {entry}: {error}") from error
+        entry_count += 1
+        total_bytes += size
+        if file_info.st_mtime < cutoff:
+            reclaimable_bytes += size
+            reclaimable_count += 1
+    return {
+        "totalBytes": total_bytes,
+        "reclaimableBytes": reclaimable_bytes,
+        "reclaimableCount": reclaimable_count,
+        "entryCount": entry_count,
+    }
+
+
 def _ignored_clean(path: Path, root: Path, *, runner: CommandRunner = subprocess.run) -> tuple[bool, str]:
     """Require an ignored candidate with no tracked, untracked, or symlink files."""
 
@@ -719,19 +806,32 @@ def build_cache_candidates(
 
 
 def global_cache_candidates(
-    root: Path, *, runner: CommandRunner = subprocess.run
+    root: Path,
+    *,
+    now: dt.datetime | None = None,
+    minimum_age_hours: float = GLOBAL_CACHE_RETENTION_HOURS,
+    cache_root: Path | None = None,
+    runner: CommandRunner = subprocess.run,
 ) -> list[dict[str, Any]]:
-    """Find only known regenerable caches in the operator's cache directory."""
+    """Find old entries in known regenerable caches under the approved root."""
 
-    cache_root = Path.home() / "Library" / "Caches"
-    go_cache_result = _run(["go", "env", "GOCACHE"], cwd=root, runner=runner)
+    now = now or utc_now()
+    approved_root = (cache_root or (Path.home() / "Library" / "Caches")).resolve()
+    configured_go_cache = os.environ.get("FACTORY_GOCACHE") or os.environ.get("GOCACHE")
+    if configured_go_cache:
+        go_cache_value = configured_go_cache
+    else:
+        go_cache_result = _run(["go", "env", "GOCACHE"], cwd=root, runner=runner)
+        go_cache_value = (
+            go_cache_result.stdout.strip() if go_cache_result.returncode == 0 else ""
+        )
     paths: list[tuple[Path, str]] = []
-    if go_cache_result.returncode == 0 and go_cache_result.stdout.strip():
-        paths.append((Path(go_cache_result.stdout.strip()), "go-build"))
-    paths.append((cache_root / STATICCHECK_CACHE_NAME, "staticcheck"))
+    if go_cache_value:
+        paths.append((Path(go_cache_value), "go-build"))
+    paths.append((approved_root / STATICCHECK_CACHE_NAME, "staticcheck"))
     candidates: list[dict[str, Any]] = []
-    for path, output_type in paths:
-        path = path.expanduser().resolve()
+    for raw_path, output_type in paths:
+        path = raw_path.expanduser().resolve()
         entry = {
             "kind": "global-build-cache",
             "outputType": output_type,
@@ -739,21 +839,49 @@ def global_cache_candidates(
             "sizeBytes": 0,
             "eligible": False,
         }
-        if path.parent != cache_root.resolve() or path.name not in {
+        if raw_path.expanduser().is_symlink():
+            entry["reason"] = "cache is symlinked"
+        elif path.parent != approved_root or path.name not in {
             GO_BUILD_CACHE_NAME,
             STATICCHECK_CACHE_NAME,
         }:
             entry["reason"] = "cache path is outside the approved user cache root"
-        elif not path.is_dir() or path.is_symlink():
-            entry["reason"] = "cache is absent or symlinked"
-        elif output_type == "go-build" and GO_BUILD_CACHE_MARKER not in (
-            path / "README"
-        ).read_text(encoding="utf-8", errors="replace"):
-            entry["reason"] = "cache lacks the Go regeneration marker"
-        else:
-            entry["sizeBytes"] = _apparent_size(path)
-            entry["eligible"] = True
-            entry["reason"] = f"regenerable shared {output_type} cache under disk pressure"
+        elif not path.is_dir():
+            entry["reason"] = "cache is absent or not a directory"
+        elif output_type == "go-build":
+            try:
+                marker = (path / "README").read_text(encoding="utf-8", errors="replace")
+            except OSError as error:
+                entry["reason"] = f"could not read the Go regeneration marker: {error}"
+            else:
+                if GO_BUILD_CACHE_MARKER not in marker:
+                    entry["reason"] = "cache lacks the Go regeneration marker"
+        if "reason" not in entry:
+            try:
+                stats = _cache_entry_stats(
+                    path,
+                    now=now,
+                    minimum_age_hours=minimum_age_hours,
+                )
+            except (CleanupBlocked, OSError, ValueError) as error:
+                entry["reason"] = f"inspection failed: {error}"
+            else:
+                entry["sizeBytes"] = stats["reclaimableBytes"]
+                entry["totalSizeBytes"] = stats["totalBytes"]
+                entry["cacheEntryCount"] = stats["entryCount"]
+                entry["reclaimableEntryCount"] = stats["reclaimableCount"]
+                entry["retentionHours"] = minimum_age_hours
+                if stats["reclaimableCount"]:
+                    entry["eligible"] = True
+                    entry["reason"] = (
+                        f"prune {stats['reclaimableCount']} unused {output_type} "
+                        f"entries older than {minimum_age_hours:g}h under disk pressure"
+                    )
+                else:
+                    entry["reason"] = (
+                        f"no {output_type} entries older than "
+                        f"{minimum_age_hours:g}h"
+                    )
         candidates.append(entry)
     return candidates
 
@@ -913,23 +1041,57 @@ def _remove_build_cache(
     shutil.rmtree(path)
 
 
-def _remove_global_cache(path: Path, output_type: str) -> None:
-    cache_root = (Path.home() / "Library" / "Caches").resolve()
-    path = path.resolve()
+def _remove_global_cache(
+    path: Path,
+    output_type: str,
+    *,
+    now: dt.datetime | None = None,
+    minimum_age_hours: float = GLOBAL_CACHE_RETENTION_HOURS,
+    cache_root: Path | None = None,
+) -> int:
+    """Prune old entries from one shared cache while retaining recent entries."""
+
+    approved_root = (cache_root or (Path.home() / "Library" / "Caches")).resolve()
+    raw_path = path.expanduser()
+    if raw_path.is_symlink():
+        raise CleanupBlocked(f"global cache changed to a symlink: {path}")
+    path = raw_path.resolve()
     expected_name = GO_BUILD_CACHE_NAME if output_type == "go-build" else STATICCHECK_CACHE_NAME
-    if path.parent != cache_root or path.name != expected_name:
+    if path.parent != approved_root or path.name != expected_name:
         raise CleanupBlocked(f"global cache escaped its approved root: {path}")
-    if path.is_symlink() or not path.is_dir():
-        raise CleanupBlocked(f"global cache changed before removal: {path}")
+    if not path.is_dir():
+        raise CleanupBlocked(f"global cache changed before pruning: {path}")
     if output_type == "go-build":
-        marker = (path / "README").read_text(encoding="utf-8", errors="replace")
+        try:
+            marker = (path / "README").read_text(encoding="utf-8", errors="replace")
+        except OSError as error:
+            raise CleanupBlocked(f"could not recheck Go build cache marker: {error}") from error
         if GO_BUILD_CACHE_MARKER not in marker:
             raise CleanupBlocked("Go build cache regeneration marker changed")
-    quarantine = path.with_name(f".{path.name}.factory-cleanup-{os.getpid()}")
-    if quarantine.exists():
-        raise CleanupBlocked(f"global cache quarantine already exists: {quarantine}")
-    os.replace(path, quarantine)
-    shutil.rmtree(quarantine)
+    now = now or utc_now()
+    cutoff = now.timestamp() - (minimum_age_hours * 3600)
+    reclaimed_bytes = 0
+    for entry in list(_cache_entries(path)):
+        try:
+            file_info = entry.lstat()
+            if file_info.st_mtime >= cutoff:
+                continue
+            size = _cache_entry_size(entry, file_info)
+            if stat.S_ISDIR(file_info.st_mode):
+                shutil.rmtree(entry)
+            elif stat.S_ISREG(file_info.st_mode):
+                entry.unlink()
+            else:
+                continue
+        except FileNotFoundError:
+            # Concurrent Go writers may finish or replace an entry between
+            # the snapshot and removal.  Never turn that normal race into a
+            # factory-wide cleanup failure.
+            continue
+        except OSError as error:
+            raise CleanupBlocked(f"could not prune cache entry {entry}: {error}") from error
+        reclaimed_bytes += size
+    return reclaimed_bytes
 
 
 def _remove_worktree(path: Path, root: Path, *, runner: CommandRunner = subprocess.run) -> None:
@@ -1069,7 +1231,12 @@ def execute(
 
     common_dir = common_git_dir(root, runner=runner)
     global_caches = (
-        global_cache_candidates(root, runner=runner)
+        global_cache_candidates(
+            root,
+            now=now,
+            minimum_age_hours=GLOBAL_CACHE_RETENTION_HOURS,
+            runner=runner,
+        )
         if pressure_trigger_bytes is not None
         else []
     )
@@ -1132,11 +1299,23 @@ def execute(
             report["blockedReason"] = str(error)
             break
         path = Path(candidate["path"])
+        reclaimed_size: int | None = None
         try:
             if candidate["kind"] == "scratch":
                 _remove_scratch(path, root, runner=runner)
             elif candidate["kind"] == "global-build-cache":
-                _remove_global_cache(path, candidate["outputType"])
+                reclaimed_size = _remove_global_cache(
+                    path,
+                    candidate["outputType"],
+                    now=now,
+                    minimum_age_hours=GLOBAL_CACHE_RETENTION_HOURS,
+                )
+                if reclaimed_size == 0:
+                    candidate["eligible"] = False
+                    candidate["reason"] = (
+                        "no eligible old cache entries remained before pruning"
+                    )
+                    continue
             elif candidate["kind"] == "build-cache":
                 _remove_build_cache(
                     path,
@@ -1151,6 +1330,8 @@ def execute(
             candidate["eligible"] = False
             candidate["reason"] = str(error)
             continue
+        if reclaimed_size is not None:
+            candidate["sizeBytes"] = reclaimed_size
         report["deleted"].append(
             {
                 "kind": candidate["kind"],
