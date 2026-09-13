@@ -28,6 +28,8 @@ AGENT_CLI_MODULE = "github.com/portpowered/go-agent-harness/agent-cli"
 C61_DIR = "docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract"
 C83_DIR = "docs/temp/projects/audio-runtime/audio-runtime-c83-retire-cli-browser-scenario-runner"
 SHIPPED_REPORT = f"{C61_DIR}/runs/shipped-yui-browser-audio-tool-replay.json"
+RUNNER_RELATIVE = "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py"
+FIXTURE_RELATIVE = "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json"
 OUTPUT_CAP = 2 * 1024 * 1024
 SHIPPED_OUTPUT_MARKERS = ("PROBE_TOOL_MARKER_9182", "strict replay continuation")
 
@@ -113,18 +115,22 @@ def process_group_gone(pid: int) -> bool:
 
 
 def test_discovery(command: str, output: str) -> dict[str, Any]:
-    required = "go test" in command
+    required = "go test" in command or "test-session-ci-regressions.sh" in command
     if not required:
-        return {"required": False, "tests_discovered": None, "package_ok_lines": 0, "pass_lines": 0}
+        return {"required": False, "tests_discovered": None, "package_ok_lines": 0, "pass_lines": 0, "valid": True}
     package_ok_lines = len(re.findall(r"(?m)^ok\s+\S+", output))
     pass_lines = len(re.findall(r"(?m)^--- PASS:", output))
     no_test_packages = len(re.findall(r"(?m)^\?\s+\S+.*\[no test files\]", output))
+    no_tests_run = len(re.findall(r"(?m)^ok\s+\S+.*\[no tests to run\]\s*$", output))
+    discovered = pass_lines or max(0, package_ok_lines - no_tests_run)
     return {
         "required": True,
-        "tests_discovered": pass_lines or package_ok_lines,
+        "tests_discovered": discovered,
         "package_ok_lines": package_ok_lines,
         "pass_lines": pass_lines,
         "no_test_packages": no_test_packages,
+        "no_tests_run": no_tests_run,
+        "valid": discovered > 0,
     }
 
 
@@ -167,7 +173,7 @@ def bounded(argv: list[str], cwd: Path, timeout: int, *, env_extra: dict[str, st
     forbidden_output_markers = ("OPENAI_API_KEY=", "ANTHROPIC_API_KEY=", "C109_SECRET_MARKER", "PROBE_CREDENTIAL_MARKER")
     forbidden_markers_absent = not any(marker in raw_output for marker in forbidden_output_markers)
     discovery = test_discovery(" ".join(argv), raw_output)
-    status = "passed" if process.returncode == 0 and not timed_out and process_group_clean and not output_capped else ("timeout" if timed_out else "failed")
+    status = "passed" if process.returncode == 0 and not timed_out and process_group_clean and not output_capped and discovery["valid"] else ("timeout" if timed_out else "failed")
     return {
         "label": label,
         "command": " ".join(argv),
@@ -227,6 +233,32 @@ def synthetic_tree_binding(tree_root: Path, expected_tree: str | None = None) ->
         "merge_commits": [c61_merge, head],
         "parents": {"c61_merge": first_parents, "c83_merge": final_parents},
         "final_tree": actual_tree,
+    }
+
+
+def tree_observation(tree_root: Path) -> dict[str, Any]:
+    return {
+        "head": revision(ROOT, "HEAD", cwd=tree_root),
+        "tree": tree(ROOT, "HEAD", cwd=tree_root),
+        "status": status_lines(ROOT, cwd=tree_root),
+    }
+
+
+def tree_identity_unchanged(tree_root: Path, expected: dict[str, Any]) -> bool:
+    observed = tree_observation(tree_root)
+    return observed["head"] == expected["head"] and observed["tree"] == expected["final_tree"] and observed["status"] == []
+
+
+def source_binding() -> dict[str, str]:
+    runner = Path(__file__).resolve()
+    fixture = ROOT / FIXTURE_RELATIVE
+    require(runner == ROOT / RUNNER_RELATIVE, "public runner path escaped the admitted C109 directory")
+    require(fixture.is_file(), "public negative fixture is missing")
+    return {
+        "runner_path": RUNNER_RELATIVE,
+        "runner_sha256": sha256_file(runner),
+        "fixture_path": FIXTURE_RELATIVE,
+        "fixture_sha256": sha256_file(fixture),
     }
 
 
@@ -326,6 +358,8 @@ def command_set(case: str, tree_root: Path, child_timeout: int) -> list[tuple[li
             f"{AGENT_RUNTIME_MODULE}/services/browserrunner/...",
         )
     )
+    race_integration_stress = "^(TestAgentBinaryTest46HighRateToolAudioRegression|TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM)$"
+    race_integration_lifecycle = "^(TestSessionToolResultConversationMissingContinuationIsBounded|TestShippedSessionProcessFamilyBCorrection|TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl|TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle|TestSessionConfigToolFilterThroughRealCLI|TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess|TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries|TestReadImageSpokenFailedContinuationIsActionable|TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated|TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle|TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI|TestSessionToolResultConversationCorruptAudioDeltaIsRejected|TestShippedSessionProcessDuplexConversation|TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl|TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch)$"
     if case == "browser-audio-tool":
         return [
             (["go", "test", "./services/browserscenario/...", "./services/browserrunner/...", "-run", package_pattern, "-count=1", "-timeout=300s"], runtime, {}, "browserrunner+browserscenario normal", 300),
@@ -338,7 +372,13 @@ def command_set(case: str, tree_root: Path, child_timeout: int) -> list[tuple[li
             (["go", "test", "./internal/services/internal/agentruntime", "-run", "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation", "-count=3", "-timeout=180s"], cli, {}, "CLI cancellation normal", 180),
             (["go", "test", "-race", "./internal/services/internal/agentruntime", "-run", "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation", "-count=3", "-timeout=240s"], cli, {}, "CLI cancellation race", 240),
             (["go", "test", "-tags=nomicrophone", "-count=10", "-timeout=300s", f"-coverpkg={coverpkg}", "./internal/services/internal/agentruntime", "-run", "TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation"], cli, {"CGO_ENABLED": "0", "GOWORK": "off"}, "nomicrophone cross-module coverpkg cancellation", 300),
-            (["bash", "scripts/test-session-ci-regressions.sh", "all"], tree_root, {"COUNT": "1"}, "accumulated session CI regressions all", 480),
+            (["bash", "scripts/test-session-ci-regressions.sh", "normal"], tree_root, {"COUNT": "1"}, "accumulated session CI regressions normal", 90),
+            (["bash", "scripts/test-session-ci-regressions.sh", "coverage"], tree_root, {"COUNT": "1"}, "accumulated session CI regressions coverage", 90),
+            (["go", "run", "./cmd/testtimeout", "--timeout", "480s", "--", "go", "test", "./internal/transport/cli", "-tags=nomicrophone", "-timeout", "480s", "-race", "-count=1", "-run", "^TestSessionCommandAudioInterruptOrdering$", "-v"], cli, {"CGO_ENABLED": "1", "YUI_AUDIO_STRESS": "1"}, "accumulated session CI regressions race transport", 90),
+            (["go", "run", "./cmd/testtimeout", "--timeout", "480s", "--", "go", "test", "./test/integration", "-tags=nomicrophone", "-timeout", "480s", "-race", "-count=1", "-run", race_integration_stress, "-v"], cli, {"CGO_ENABLED": "1", "YUI_AUDIO_STRESS": "1"}, "accumulated session CI regressions race integration stress", 90),
+            (["go", "run", "./cmd/testtimeout", "--timeout", "480s", "--", "go", "test", "./test/integration", "-tags=nomicrophone", "-timeout", "480s", "-race", "-count=1", "-run", race_integration_lifecycle, "-v"], cli, {"CGO_ENABLED": "1", "YUI_AUDIO_STRESS": "1"}, "accumulated session CI regressions race integration lifecycle", 90),
+            (["go", "test", "./pkg/devices", "-timeout", "480s", "-race", "-count=1", "-run", "^TestSimulated", "-v"], tree_root / "go-device-gateway", {"CGO_ENABLED": "1"}, "accumulated session CI regressions race devices", 90),
+            (["go", "test", "./pkg/providers/openai", "-timeout", "300s", "-race", "-count=1", "-run", "^TestComposed", "-v"], tree_root / "go-llm-gateway", {"CGO_ENABLED": "1"}, "accumulated session CI regressions race openai", 90),
             (["python3", f"{C61_DIR}/run.py", "--mode", "shipped-yui-browser-audio-tool-replay"], tree_root, {}, "shipped credential-free browser/audio/tool workflow", 180),
         ]
     if case == "malformed-or-canceled":
@@ -350,15 +390,25 @@ def command_set(case: str, tree_root: Path, child_timeout: int) -> list[tuple[li
     raise PublicCheckError(f"unsupported case: {case}")
 
 
-def cleanup_tree(temporary_root: Path | None, worktree: Path) -> dict[str, Any]:
+def cleanup_tree(
+    temporary_root: Path | None,
+    worktree: Path,
+    *,
+    expected_binding: dict[str, Any] | None = None,
+    status_before_cleanup: list[str] | None = None,
+) -> dict[str, Any]:
     if temporary_root is None:
+        preserved = worktree.exists()
+        identity_unchanged = preserved and expected_binding is not None and tree_identity_unchanged(worktree, expected_binding)
         return {
             "attempted": True,
-            "status": "passed" if worktree.exists() else "failed",
+            "status": "passed" if identity_unchanged else "failed",
             "mode": "caller-owned-tree-preserved",
             "worktree_removed": False,
             "temporary_root_removed": True,
-            "tree_preserved": worktree.exists(),
+            "tree_preserved": preserved,
+            "identity_unchanged": identity_unchanged,
+            "status_before_cleanup": status_before_cleanup or [],
         }
     remove = run_command(["git", "worktree", "remove", "--force", str(worktree)], cwd=ROOT, check=False)
     worktree_removed = not worktree.exists()
@@ -381,6 +431,7 @@ def cleanup_tree(temporary_root: Path | None, worktree: Path) -> dict[str, Any]:
         "worktree_removed": worktree_removed,
         "temporary_root_removed": temporary_root_removed,
         "tree_preserved": False,
+        "identity_unchanged": status_before_cleanup == [] if status_before_cleanup is not None else None,
     }
 
 
@@ -388,8 +439,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=("browser-audio-tool", "malformed-or-canceled"), required=True)
     parser.add_argument("--tree", type=Path, help="caller-provided exact main -> C61 -> C83 tree; arbitrary trees are rejected")
-    parser.add_argument("--child-timeout", type=int, default=480)
-    parser.add_argument("--aggregate-timeout", type=int, default=900)
+    parser.add_argument("--child-timeout", type=int, default=90)
+    parser.add_argument("--aggregate-timeout", type=int, default=300)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     require(args.child_timeout > 0 and args.aggregate_timeout > 0, "timeouts must be positive")
@@ -397,6 +448,10 @@ def main() -> int:
     worktree: Path | None = None
     auxiliary_cleanup: dict[str, Any] = {}
     checks: list[dict[str, Any]] = []
+    runner_binding = source_binding()
+    synthetic: dict[str, Any] = {}
+    tree_observed_before_cleanup: dict[str, Any] = {}
+    tree_violation: dict[str, Any] | None = None
     started = time.monotonic()
     result: dict[str, Any] = {}
     try:
@@ -413,10 +468,11 @@ def main() -> int:
             temporary_root, worktree, expected_tree = create_required_tree()
             synthetic = synthetic_tree_binding(worktree, expected_tree)
         require(worktree is not None, "synthetic tree was not created")
+        require(tree_identity_unchanged(worktree, synthetic), "synthetic tree is not clean and unchanged before public checks")
         for argv, cwd, extra_env, label, command_timeout in command_set(args.case, worktree, args.child_timeout):
             remaining = args.aggregate_timeout - (time.monotonic() - started)
             if remaining <= 0:
-                checks.append({"label": label, "status": "skipped-aggregate-timeout", "command": " ".join(argv), "timed_out": True, "process_group_gone": True, "credential_environment_scrubbed": True, "credential_output_markers_absent": True, "test_discovery": {"required": "go test" in " ".join(argv), "tests_discovered": 0}})
+                checks.append({"label": label, "status": "skipped-aggregate-timeout", "command": " ".join(argv), "timed_out": True, "process_group_gone": True, "credential_environment_scrubbed": True, "credential_output_markers_absent": True, "test_discovery": {"required": "go test" in " ".join(argv) or "test-session-ci-regressions.sh" in " ".join(argv), "tests_discovered": 0, "valid": False}})
                 continue
             timeout = max(1, min(command_timeout, args.child_timeout, int(remaining)))
             check = bounded(argv, cwd, timeout, env_extra=extra_env, label=label)
@@ -424,10 +480,30 @@ def main() -> int:
                 attach_workflow_detail(check, worktree)
                 bind_workflow_to_synthetic_tree(check, synthetic)
             checks.append(check)
+            tree_observation_after_check = tree_observation(worktree)
+            if (
+                tree_observation_after_check["head"] != synthetic["head"]
+                or tree_observation_after_check["tree"] != synthetic["final_tree"]
+                or tree_observation_after_check["status"]
+            ):
+                tree_violation = {"label": label, "observation": tree_observation_after_check}
+                break
             if time.monotonic() - started > args.aggregate_timeout:
                 break
-        tree_status_before_cleanup = status_lines(ROOT, cwd=worktree)
-        cleanup = cleanup_tree(temporary_root, worktree)
+        tree_observed_before_cleanup = tree_observation(worktree)
+        tree_status_before_cleanup = tree_observed_before_cleanup["status"]
+        tree_unchanged = (
+            tree_observed_before_cleanup["head"] == synthetic["head"]
+            and tree_observed_before_cleanup["tree"] == synthetic["final_tree"]
+            and tree_status_before_cleanup == []
+            and tree_violation is None
+        )
+        cleanup = cleanup_tree(
+            temporary_root,
+            worktree,
+            expected_binding=synthetic,
+            status_before_cleanup=tree_status_before_cleanup,
+        )
         elapsed = round(time.monotonic() - started, 3)
         passed = bool(checks) and all(item.get("status") == "passed" for item in checks)
         process_groups_clean = all(item.get("process_group_gone", False) for item in checks)
@@ -446,14 +522,15 @@ def main() -> int:
                 if "workflow_report_sha256" in item
             ],
             "negative_control": args.case == "malformed-or-canceled",
-            "cleanup_claim": cleanup.get("status") == "passed" and not tree_status_before_cleanup,
+            "cleanup_claim": cleanup.get("status") == "passed" and tree_unchanged,
         }
         if not effects["artifacts"]:
             effects["artifacts"].append({"kind": "negative-control-output", "sha256": hashlib.sha256("\n".join(item.get("output", "") for item in checks).encode()).hexdigest(), "classification": "SOFTWARE_LOCAL_PROCESS_ONLY"})
         result = {
             "schema": "audio-runtime-c109-public-checks-v2",
             "case": args.case,
-            "status": "passed" if passed and process_groups_clean and credential_free and cleanup.get("status") == "passed" and (not auxiliary_cleanup or auxiliary_cleanup.get("status") == "passed") and elapsed <= args.aggregate_timeout else "failed",
+            "status": "passed" if passed and process_groups_clean and credential_free and tree_unchanged and cleanup.get("status") == "passed" and (not auxiliary_cleanup or auxiliary_cleanup.get("status") == "passed") and elapsed <= args.aggregate_timeout else "failed",
+            "runner": runner_binding,
             "synthetic": {
                 "base": MAIN,
                 "order": ["c61", "c83"],
@@ -470,6 +547,13 @@ def main() -> int:
                 "process_groups_clean": process_groups_clean,
             },
             "credential_free": credential_free,
+            "tree_integrity": {
+                "expected_head": synthetic["head"],
+                "expected_tree": synthetic["final_tree"],
+                "observed_before_cleanup": tree_observed_before_cleanup,
+                "unchanged": tree_unchanged,
+                "violation": tree_violation,
+            },
             "effects": effects,
             "cleanup": cleanup,
             "checks": checks,
@@ -483,6 +567,7 @@ def main() -> int:
             "schema": "audio-runtime-c109-public-checks-v2",
             "case": args.case,
             "status": "failed",
+            "runner": runner_binding,
             "error": str(exc),
             "checks": checks,
         }

@@ -19,7 +19,8 @@
     {"name": "cleanup-failure", "mutation": "mark public temporary-tree cleanup failed", "expected": "reject"},
     {"name": "zero-test-discovery", "mutation": "erase discovered Go tests from a passing check", "expected": "reject"},
     {"name": "truncated-output", "mutation": "mark a capped output capture as complete", "expected": "reject"},
-    {"name": "auxiliary-cleanup-failure", "mutation": "mark the --tree validation worktree cleanup failed", "expected": "reject"}
+    {"name": "auxiliary-cleanup-failure", "mutation": "mark the --tree validation worktree cleanup failed", "expected": "reject"},
+    {"name": "caller-tree-mutation", "mutation": "mark a caller-owned synthetic tree as changed", "expected": "reject"}
   ],
   "execution": "verify.py --mode all",
   "result": "see ../runs/final/verification.json"
