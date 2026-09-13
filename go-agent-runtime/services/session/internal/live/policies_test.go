@@ -16,10 +16,20 @@ import (
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
-type schedulerAdmissionPolicy struct {
-	runtimeTools.InteractiveToolPolicy
-}
+type schedulerAdmissionPolicy struct{ validationErr error }
 
+func (schedulerAdmissionPolicy) Settings() runtimeTools.InteractiveToolPolicySettings {
+	return runtimeTools.InteractiveToolPolicySettings{
+		FastReadTimeout: 5 * time.Second, LongRunningTimeout: 20 * time.Second, AcknowledgementThreshold: 2 * time.Second,
+	}
+}
+func (schedulerAdmissionPolicy) ClassForTool(string) runtimeTools.InteractiveToolClass {
+	return runtimeTools.InteractiveToolClassFastRead
+}
+func (policy schedulerAdmissionPolicy) TimeoutForTool(string) time.Duration {
+	return policy.Settings().FastReadTimeout
+}
+func (policy schedulerAdmissionPolicy) Validate() error                           { return policy.validationErr }
 func (policy schedulerAdmissionPolicy) Clone() runtimeTools.InteractiveToolPolicy { return policy }
 
 func TestLiveInteractiveToolPolicyRequiresSchedulerBeforeProvider(t *testing.T) {
@@ -37,6 +47,78 @@ func TestLiveInteractiveToolPolicyRequiresSchedulerBeforeProvider(t *testing.T) 
 	}
 	if providerCalls != 0 {
 		t.Fatalf("provider calls = %d, want no provider setup before scheduler admission", providerCalls)
+	}
+}
+
+func TestLiveFactoryInteractiveToolPolicyRequiresSchedulerBeforeProvider(t *testing.T) {
+	capabilityCalls := 0
+	providerCalls := 0
+	service := New(Dependencies{
+		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+			providerCalls++
+			return &testInferencer{session: newTestSession()}, nil
+		},
+		CapabilityFactory: func(context.Context, session.LiveRequest) (session.LiveCapabilities, error) {
+			capabilityCalls++
+			return session.LiveCapabilities{
+				Definitions:           []messages.ToolDefinition{{Name: "exec"}},
+				InteractiveToolPolicy: schedulerAdmissionPolicy{},
+			}, nil
+		},
+	})
+	handle, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "factory-policy-without-scheduler"})
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); !errors.Is(err, session.ErrLiveSchedulerUnavailable) {
+		t.Fatalf("Start = %v, want ErrLiveSchedulerUnavailable", err)
+	}
+	if capabilityCalls != 1 {
+		t.Fatalf("capability factory calls = %d, want one admission", capabilityCalls)
+	}
+	if providerCalls != 0 {
+		t.Fatalf("provider calls = %d, want no provider setup before factory-policy admission", providerCalls)
+	}
+}
+
+func TestLiveFactoryInteractivePolicyValidationClosesHandle(t *testing.T) {
+	validationErr := errors.New("factory interactive policy is invalid")
+	capability := &testLiveCapabilityHandle{
+		initialized: make(chan struct{}), closed: make(chan struct{}), events: make(chan session.LiveCapabilityEvent),
+	}
+	providerCalls := 0
+	service := New(Dependencies{
+		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+			providerCalls++
+			return &testInferencer{session: newTestSession()}, nil
+		},
+		CapabilityFactory: func(context.Context, session.LiveRequest) (session.LiveCapabilities, error) {
+			return session.LiveCapabilities{Handle: capability, InteractiveToolPolicy: schedulerAdmissionPolicy{validationErr: validationErr}}, nil
+		},
+		Scheduler: platformclock.Real{},
+	})
+	handle, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "factory-invalid-policy"})
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); !errors.Is(err, validationErr) {
+		t.Fatalf("Start = %v, want factory policy validation error", err)
+	}
+	select {
+	case <-capability.closed:
+	case <-time.After(time.Second):
+		t.Fatal("factory capability handle was not closed after policy validation failed")
+	}
+	if capability.closeCalls != 1 {
+		t.Fatalf("capability handle close calls = %d, want exactly one", capability.closeCalls)
+	}
+	select {
+	case <-capability.initialized:
+		t.Fatal("factory capability handle initialized before policy validation")
+	default:
+	}
+	if providerCalls != 0 {
+		t.Fatalf("provider calls = %d, want no provider setup after policy validation failed", providerCalls)
 	}
 }
 
