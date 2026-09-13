@@ -122,12 +122,12 @@ def verify_repaired_baseline() -> None:
         if line.startswith(("-", "+")) and not line.startswith(("---", "+++"))
     ]
     expected = [
-        '-      "value": 534',
-        '+      "value": 533',
-        '-      "value": 285',
-        '+      "value": 284',
-        '-      "value": 203',
-        '+      "value": 202',
+        '-      "value": 534,',
+        '+      "value": 533,',
+        '-      "value": 285,',
+        '+      "value": 284,',
+        '-      "value": 203,',
+        '+      "value": 202,',
     ]
     if actual != expected:
         raise VerificationFailure(f"duration baseline diff is not the authorized downward repair: {actual}")
