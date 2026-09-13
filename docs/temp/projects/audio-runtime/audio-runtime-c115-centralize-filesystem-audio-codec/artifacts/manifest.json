@@ -11,22 +11,22 @@
     ],
     "artifact_bytes": 51013874,
     "artifact_path": "artifacts/yui",
-    "artifact_sha256": "10eaff438b75efdfb2d5d6c6d83ae690e41c5f78725520794bf4d736809664fe",
+    "artifact_sha256": "2454c63cddab4a3979beaa7658f1ad91cd2726def3a0437fbca21f51bc8a1122",
     "cwd": ".",
-    "elapsed_seconds": 0.34,
+    "elapsed_seconds": 0.245,
     "exit_code": 0,
     "label": "build-yui",
     "output_limited": false,
     "process_group_gone": true,
-    "stderr_path": "runs/20260913T050702Z-35571/build/build-yui.stderr",
+    "stderr_path": "runs/20260913T052551Z-73854/build/build-yui.stderr",
     "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "stdout_path": "runs/20260913T050702Z-35571/build/build-yui.stdout",
+    "stdout_path": "runs/20260913T052551Z-73854/build/build-yui.stdout",
     "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "timed_out": false,
     "timeout_seconds": 60
   },
   "bytes": 51013874,
   "path": "artifacts/yui",
-  "sha256": "10eaff438b75efdfb2d5d6c6d83ae690e41c5f78725520794bf4d736809664fe",
-  "source_revision": "9674d3b3407a16990ce3d0e1305a0a5db27b671d"
+  "sha256": "2454c63cddab4a3979beaa7658f1ad91cd2726def3a0437fbca21f51bc8a1122",
+  "source_revision": "459a5b74c5db68a1b5a884baa3aabd337c23e2d7"
 }
