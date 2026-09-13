@@ -6,7 +6,6 @@ import (
 	"errors"
 	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
 )
 
 func TestFilesystemValidationAndMediaErrorContracts(t *testing.T) {
@@ -131,7 +131,7 @@ func assertValidationMediaAndReadTools(t *testing.T, workspace string) {
 	if err := os.WriteFile(textPath, []byte("text result"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	readTool := NewReadFileTool("", false)
+	readTool := NewReadFileToolWithAudioCodec("", false, filesystemTestAudioCodec{})
 	assertReadToolContracts(t, ctx, readTool, textPath, workspace)
 	t.Run("audio read when ffmpeg is available", func(t *testing.T) { assertAudioReadContract(t, ctx, readTool, workspace) })
 	assertWriteAndListContracts(t, ctx, workspace, textPath)
@@ -153,9 +153,6 @@ func assertReadToolContracts(t *testing.T, ctx context.Context, readTool core.To
 
 func assertAudioReadContract(t *testing.T, ctx context.Context, readTool core.Tool, workspace string) {
 	t.Helper()
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skipf("ffmpeg is required for WAV conversion assertion: %v", err)
-	}
 	wavPath := filepath.Join(workspace, "tone.wav")
 	if err := os.WriteFile(wavPath, minimalWAV(), 0o644); err != nil {
 		t.Fatal(err)
@@ -168,6 +165,21 @@ func assertAudioReadContract(t *testing.T, ctx context.Context, readTool core.To
 	if !ok || audio.MediaType != "audio/pcm" || len(audio.Bytes) == 0 {
 		t.Fatalf("audio result = %#v; want non-empty PCM audio", msgs[0].ContentParts[0])
 	}
+}
+
+type filesystemTestAudioCodec struct{}
+
+func (filesystemTestAudioCodec) Convert(ctx context.Context, request audiocodec.Request) (audiocodec.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return audiocodec.Result{}, err
+	}
+	return audiocodec.Result{
+		PCM16:       []byte{0, 0, 1, 0},
+		InputFormat: audiocodec.FormatWAV,
+		SampleRate:  audiocodec.PCM16SampleRate,
+		Channels:    audiocodec.PCM16Channels,
+		Encoding:    audiocodec.PCM16Encoding,
+	}, nil
 }
 
 func assertWriteAndListContracts(t *testing.T, ctx context.Context, workspace, textPath string) {

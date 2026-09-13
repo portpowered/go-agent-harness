@@ -2,14 +2,12 @@ package filesystem
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"image"
 	_ "image/gif"
 	"image/jpeg"
 	"image/png"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -227,35 +225,4 @@ func imageToNative(path string, content []byte) ([]byte, string, error) {
 		}
 		return out.Bytes(), imageJPEGMediaType, nil
 	}
-}
-
-// audioToPCM16k converts audio file content to PCM 16kHz mono (s16le) using ffmpeg.
-func audioToPCM16k(ctx context.Context, content []byte) ([]byte, error) {
-	tmp, err := os.CreateTemp("", "agent-cli-audio-*")
-	if err != nil {
-		return nil, fmt.Errorf("create temp file: %w", err)
-	}
-	tmpPath := tmp.Name()
-	defer removeFileIfPresent(tmpPath)
-
-	if _, err := tmp.Write(content); err != nil {
-		if closeErr := tmp.Close(); closeErr != nil {
-			return nil, fmt.Errorf("write temp file: %w (close temp file: %w)", err, closeErr)
-		}
-		return nil, fmt.Errorf("write temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return nil, fmt.Errorf("close temp file: %w", err)
-	}
-
-	// ffmpeg -i input -f s16le -ac 1 -ar 16000 - (stdout = raw PCM 16kHz mono)
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", tmpPath, "-f", "s16le", "-ac", "1", "-ar", "16000", "-")
-	cmd.Stdin = nil
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("ffmpeg convert to PCM 16kHz: %w (stderr: %s)", err, stderr.String())
-	}
-	return stdout.Bytes(), nil
 }

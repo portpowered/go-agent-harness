@@ -13,7 +13,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
-	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -427,12 +426,13 @@ type toolDefaults struct {
 // newToolDefaults resolves the reusable runtime's built-in surface at the CLI
 // composition edge. The CLI owns the process working directory resolution;
 // the reusable service never infers host paths from ambient process state.
+// Its codec is composed by the same host boundary.
 func newToolDefaults() (toolDefaults, error) {
 	workdir, err := hostServices.ResolveCLIWorkDir(flags.NewGlobalFlags())
 	if err != nil {
 		return toolDefaults{}, fmt.Errorf("resolve tool working directory: %w", err)
 	}
-	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+	capability, err := newComposedRuntimeToolService().Resolve(context.Background(), runtimeTools.Request{
 		WorkDir:        workdir,
 		UseDefaultTool: true,
 	})

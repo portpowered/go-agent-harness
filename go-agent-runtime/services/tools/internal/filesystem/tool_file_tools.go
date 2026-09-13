@@ -7,21 +7,35 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
 	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 )
 
 type ReadFileTool struct {
-	fs fileSystem
+	fs         fileSystem
+	audioCodec audiocodec.Service
 }
 
 func NewReadFileTool(workspace string, restrict bool) *ReadFileTool {
 	return &ReadFileTool{fs: newLegacyFileSystem(workspace, restrict)}
 }
 
+// NewReadFileToolWithAudioCodec constructs a legacy-path read tool with the
+// host-neutral codec dependency supplied by the service composition boundary.
+func NewReadFileToolWithAudioCodec(workspace string, restrict bool, codec audiocodec.Service) *ReadFileTool {
+	return &ReadFileTool{fs: newLegacyFileSystem(workspace, restrict), audioCodec: codec}
+}
+
 // NewReadFileToolWithPolicy constructs a read tool confined to the supplied
 // filesystem policy.
 func NewReadFileToolWithPolicy(policy *FilesystemPolicy) *ReadFileTool {
 	return &ReadFileTool{fs: newSandboxFs(policy)}
+}
+
+// NewReadFileToolWithPolicyAndAudioCodec constructs a policy-confined read
+// tool with the host-neutral codec dependency supplied by composition.
+func NewReadFileToolWithPolicyAndAudioCodec(policy *FilesystemPolicy, codec audiocodec.Service) *ReadFileTool {
+	return &ReadFileTool{fs: newSandboxFs(policy), audioCodec: codec}
 }
 
 func (t *ReadFileTool) Name() string {
@@ -78,7 +92,7 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) ([]mess
 		}
 		return []messages.Message{msg}, nil
 	case mediaAudio:
-		pcmBytes, err := audioToPCM16k(ctx, content)
+		pcmBytes, err := audioToPCM16k(ctx, t.audioCodec, content)
 		if err != nil {
 			return core.ErrorAsToolMessage(fmt.Errorf("read audio: %w", err))
 		}
@@ -90,6 +104,30 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) ([]mess
 	default:
 		return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(content))}, nil
 	}
+}
+
+// audioToPCM16k adapts the filesystem read result to the public codec
+// contract. Filesystem policy and tool-message construction remain local to
+// this package; decoding, bounds, and typed conversion failures belong to the
+// injected codec service.
+func audioToPCM16k(ctx context.Context, codec audiocodec.Service, content []byte) ([]byte, error) {
+	if codec == nil {
+		return nil, fmt.Errorf("audio codec service is not configured")
+	}
+	result, err := codec.Convert(ctx, audiocodec.Request{
+		Input:      content,
+		FormatHint: "",
+		Limits: audiocodec.Limits{
+			MaxInputBytes:  audiocodec.DefaultMaxInputBytes,
+			MaxOutputBytes: audiocodec.DefaultMaxOutputBytes,
+			MaxStderrBytes: audiocodec.DefaultMaxStderrBytes,
+			MaxDuration:    audiocodec.DefaultMaxDuration,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ffmpeg convert to PCM 16kHz: %w", err)
+	}
+	return result.PCM16, nil
 }
 
 type WriteFileTool struct {
