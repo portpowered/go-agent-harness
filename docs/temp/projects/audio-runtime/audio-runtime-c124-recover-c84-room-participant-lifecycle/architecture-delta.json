@@ -1,0 +1,32 @@
+{
+  "baseline_path": "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go.json",
+  "gate": {
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "architecture gate passed: 192 package(s), 1914 file(s), 28549 function(s) checked\n"
+  },
+  "removed_stale_symbols": [
+    "*roomConnectTrackingInferencer.ConnectSession",
+    "*roomParticipantLifecycle.markCoordinatorStopping",
+    "*roomParticipantLifecycle.observe",
+    "*roomParticipantLifecycle.observeTerminal",
+    "*roomParticipantLifecycle.terminalObservationSnapshot"
+  ],
+  "retained_entries": [
+    [
+      "cognitive-complexity",
+      "roomParticipantOutstandingWork",
+      21
+    ],
+    [
+      "cyclomatic-complexity",
+      "roomParticipantOutstandingWork",
+      21
+    ],
+    [
+      "file-lines",
+      null,
+      427
+    ]
+  ]
+}

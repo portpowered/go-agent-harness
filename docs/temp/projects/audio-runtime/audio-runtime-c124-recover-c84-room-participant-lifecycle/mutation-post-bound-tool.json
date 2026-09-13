@@ -1,0 +1,56 @@
+{
+  "mutation": {
+    "new": "return false",
+    "old": "return s.lifecycle != nil && s.lifecycle.AdmitCompleteToolResultAfterBound(msg)",
+    "source": "go-agent-runtime/services/rooms/internal/lifecycle/participant_session.go"
+  },
+  "name": "mutation-post-bound-tool",
+  "negative": {
+    "command": [
+      "rtk",
+      "proxy",
+      "go",
+      "test",
+      "-mod=readonly",
+      "./...",
+      "-count=1",
+      "-timeout=90s"
+    ],
+    "exit_code": 1,
+    "stderr": "",
+    "stdout": "--- FAIL: TestExternalConsumerOwnsParticipantLifecycle (0.00s)\n    participant_lifecycle_test.go:76: public lifecycle rejected a pending complete tool result\nFAIL\nFAIL\texample.com/audio-runtime-c124-external-consumer\t0.165s\nFAIL\n",
+    "timed_out": false
+  },
+  "positive": {
+    "command": [
+      "rtk",
+      "proxy",
+      "go",
+      "test",
+      "-mod=readonly",
+      "./...",
+      "-count=1",
+      "-timeout=90s"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "ok  \texample.com/audio-runtime-c124-external-consumer\t0.171s\n",
+    "timed_out": false
+  },
+  "restored": {
+    "command": [
+      "rtk",
+      "proxy",
+      "go",
+      "test",
+      "-mod=readonly",
+      "./...",
+      "-count=1",
+      "-timeout=90s"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "ok  \texample.com/audio-runtime-c124-external-consumer\t0.169s\n",
+    "timed_out": false
+  }
+}
