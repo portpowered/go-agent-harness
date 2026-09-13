@@ -43,6 +43,7 @@ SOURCE_FILES = (
     "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go",
     "go-agent-runtime/services/session/wire/providers.go",
     "go-agent-runtime/services/session/wire/wire_gen.go",
+    "coverage-manifest/go-agent-runtime/services/session/internal/live/causal/package.json",
     "agent-cli/internal/transport/cli/internal/livehost/request.go",
     "agent-cli/internal/transport/cli/internal/livehost/request_test.go",
     "agent-cli/internal/transport/cli/session_observability.go",
