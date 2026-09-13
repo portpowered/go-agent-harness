@@ -313,6 +313,13 @@ func (o *sessionProgressObserver) observeProviderToolCallStartForResponse(callID
 	}
 	toolCall := o.lifecycleEvent(sd.Event{Kind: sd.EventToolCall, CallID: callID, ToolName: name, ResponseID: responseID})
 	if !toolCall.Accepted {
+		// Terminal buffer recovery can replay a provider tool call after its
+		// response has already been finished. The reducer correctly rejects that
+		// stale envelope; do not turn a continuation whose result was already
+		// accepted into a new generic unresolved obligation.
+		if o.continuationResultAccepted(callID) {
+			return
+		}
 		// Keep a rejected provider call visible to termination diagnostics without
 		// projecting it into the reducer as an owned continuation.
 		o.toolStateMu.Lock()
