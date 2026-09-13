@@ -293,7 +293,11 @@ func (o *sessionProgressObserver) responseEventBelongsToActive(id string) bool {
 	contentBoundary := o.messageEndSeen
 	o.toolStateMu.Unlock()
 	if contentBoundary {
-		o.lifecycleEvent(sd.Event{Kind: sd.EventResponseContent})
+		contentID := strings.TrimSpace(id)
+		if contentID == "" {
+			_, contentID = o.observedResponseProjection()
+		}
+		o.lifecycleEvent(sd.Event{Kind: sd.EventResponseContentBoundary, ResponseID: contentID})
 	}
 	return true
 }

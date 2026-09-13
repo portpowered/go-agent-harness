@@ -14,6 +14,7 @@ func (r *reducer) applyLocked(event sessiondiagnostics.Event) (sessiondiagnostic
 		sessiondiagnostics.EventResponseBelongs,
 		sessiondiagnostics.EventResponseOwnsEnd,
 		sessiondiagnostics.EventResponseContent,
+		sessiondiagnostics.EventResponseContentBoundary,
 		sessiondiagnostics.EventResponseEnd,
 		sessiondiagnostics.EventResponseFinish:
 		return r.applyResponseLocked(event)
@@ -53,9 +54,19 @@ func (r *reducer) applyResponseLocked(event sessiondiagnostics.Event) (sessiondi
 		owns := r.ownsResponseEndLocked(event.ResponseID)
 		return sessiondiagnostics.Observation{Accepted: owns, OwnsResponse: owns}, 0, false, nil
 	case sessiondiagnostics.EventResponseContent:
+		if !r.responseContentBelongsLocked(event.ResponseID) {
+			return sessiondiagnostics.Observation{ResponseID: strings.TrimSpace(event.ResponseID)}, 0, false, nil
+		}
 		r.responseContentSeen = true
 		r.messageEndSeen = false
 		return sessiondiagnostics.Observation{Accepted: true}, 0, false, nil
+	case sessiondiagnostics.EventResponseContentBoundary:
+		if !r.responseGenerationBoundaryBelongsLocked(event.ResponseID) {
+			return sessiondiagnostics.Observation{ResponseID: strings.TrimSpace(event.ResponseID)}, 0, false, nil
+		}
+		r.responseContentSeen = true
+		r.messageEndSeen = false
+		return sessiondiagnostics.Observation{Accepted: true, ResponseID: r.activeResponseID}, 0, false, nil
 	case sessiondiagnostics.EventResponseEnd:
 		return r.endResponseLocked(event)
 	case sessiondiagnostics.EventResponseFinish:

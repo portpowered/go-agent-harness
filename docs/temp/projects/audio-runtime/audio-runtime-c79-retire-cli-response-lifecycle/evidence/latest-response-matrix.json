@@ -1,5 +1,5 @@
 {
-  "candidate": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
+  "candidate": "e78f96443527ea5cae78fcb811f40002a72351b9",
   "mode": "response-matrix",
   "payload": {
     "checks": [
@@ -13,10 +13,10 @@
           "-count=1",
           "-timeout=180s"
         ],
-        "elapsed_seconds": 0.796,
+        "elapsed_seconds": 0.799,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t0.150s [no tests to run]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.276s\n"
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics\t0.309s [no tests to run]\n?   \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/internal/service\t[no test files]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiondiagnostics/wire\t0.169s\n"
       },
       {
         "argv": [
@@ -28,10 +28,10 @@
           "-count=1",
           "-timeout=210s"
         ],
-        "elapsed_seconds": 8.039,
+        "elapsed_seconds": 11.551,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.256s\n"
+        "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t5.232s\n"
       },
       {
         "argv": [
@@ -41,22 +41,22 @@
           "-count=1",
           "-timeout=90s"
         ],
-        "elapsed_seconds": 0.34,
+        "elapsed_seconds": 0.395,
         "returncode": 0,
         "stderr": "",
-        "stdout": "ok  \texample.com/audio-runtime-c79-sessiondiagnostics-consumer\t0.169s\n"
+        "stdout": "ok  \texample.com/audio-runtime-c79-sessiondiagnostics-consumer\t0.175s\n"
       }
     ],
     "lines": {
       "baseline": 1387,
       "files": {
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": 400,
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 363
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 367
       },
       "maximum": 787,
       "minimum_retired": 600,
-      "retired": 624,
-      "total": 763
+      "retired": 620,
+      "total": 767
     },
     "scope": {
       "base": "3963bc3566da24f8214634c17a9d0f79a6724171",

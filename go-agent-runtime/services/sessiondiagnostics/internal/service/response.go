@@ -142,6 +142,39 @@ func (r *reducer) responseBelongsLocked(rawID string) bool {
 	return id == ""
 }
 
+// responseContentBelongsLocked keeps content in the active, still-open
+// response generation. It intentionally rejects content after the terminal
+// marker; a host that observed a new generation must submit the explicit
+// content-boundary event after validating its response ownership.
+func (r *reducer) responseContentBelongsLocked(rawID string) bool {
+	if !r.activeResponse {
+		return false
+	}
+	if r.messageEndSeen {
+		return false
+	}
+	id := strings.TrimSpace(rawID)
+	if r.activeResponseID != "" {
+		return id == r.activeResponseID || id == ""
+	}
+	return id == ""
+}
+
+func (r *reducer) responseGenerationBoundaryBelongsLocked(rawID string) bool {
+	id := strings.TrimSpace(rawID)
+	if !r.activeResponse {
+		// A legacy provider can expose a tool-call response without a response
+		// ID. Its first terminal leaves the reducer between generations while
+		// continuation ownership is still pending; the adapter has already
+		// validated the untagged stream boundary before submitting this event.
+		return id == "" && r.messageEndSeen
+	}
+	if r.activeResponseID != "" {
+		return id == r.activeResponseID
+	}
+	return id == ""
+}
+
 func (r *reducer) ownsResponseEndLocked(rawID string) bool {
 	id := strings.TrimSpace(rawID)
 	if r.activeResponse {

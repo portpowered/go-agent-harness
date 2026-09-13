@@ -158,6 +158,45 @@ func TestResponseEndRejectsDuplicateBeforeFinish(t *testing.T) {
 	}
 }
 
+func TestResponseContentRejectsUntaggedBoundaryAfterEnd(t *testing.T) {
+	service := NewService(sessiondiagnostics.Options{})
+	ctx := context.Background()
+	apply := func(event sessiondiagnostics.Event) sessiondiagnostics.Observation {
+		t.Helper()
+		observation, err := service.Apply(ctx, event)
+		if err != nil {
+			t.Fatalf("apply %s: %v", event.Kind, err)
+		}
+		return observation
+	}
+
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: testResponseA})
+	first := apply(sessiondiagnostics.Event{
+		Kind:       sessiondiagnostics.EventResponseEnd,
+		ResponseID: testResponseA,
+		Output:     true,
+		Terminal:   &sessiondiagnostics.Terminal{Status: "completed", Reason: "provider_authored_completion"},
+	})
+	if !first.Candidate || !first.Admitted {
+		t.Fatalf("first response end = %+v, want admitted candidate", first)
+	}
+
+	content := apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseContent})
+	if content.Accepted || content.Candidate || content.Admitted {
+		t.Fatalf("untagged content reopened the terminal response generation: %+v", content)
+	}
+
+	duplicate := apply(sessiondiagnostics.Event{
+		Kind:       sessiondiagnostics.EventResponseEnd,
+		ResponseID: testResponseA,
+		Output:     true,
+		Terminal:   &sessiondiagnostics.Terminal{Status: "completed", Reason: "provider_authored_completion"},
+	})
+	if duplicate.Accepted || duplicate.Candidate || duplicate.Admitted || !service.Snapshot().ActiveResponse {
+		t.Fatalf("duplicate response end was admitted or changed ownership: observation=%+v snapshot=%+v", duplicate, service.Snapshot())
+	}
+}
+
 func TestToolAcknowledgementCannotBeAdmittedAsAssistantTurn(t *testing.T) {
 	service := NewService(sessiondiagnostics.Options{})
 	ctx := context.Background()

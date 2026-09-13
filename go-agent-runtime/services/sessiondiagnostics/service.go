@@ -43,6 +43,7 @@ const (
 	EventResponseBelongs           EventKind = "response.belongs"
 	EventResponseOwnsEnd           EventKind = "response.owns_end"
 	EventResponseContent           EventKind = "response.content"
+	EventResponseContentBoundary   EventKind = "response.content_boundary"
 	EventResponseEnd               EventKind = "response.end"
 	EventResponseFinish            EventKind = "response.finish"
 	EventBindScheduledBoundary     EventKind = "scheduled.bind_boundary"
