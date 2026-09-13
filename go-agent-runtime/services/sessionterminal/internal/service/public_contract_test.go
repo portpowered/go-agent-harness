@@ -1,4 +1,4 @@
-package sessionterminal_test
+package service
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
-	terminalwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal/wire"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
@@ -25,7 +24,7 @@ func TestFinalizeProviderErrorPreservesTypedCauseAndFields(t *testing.T) {
 		Code:               "invalid_api_key",
 		Err:                cause,
 	}
-	result := terminalwire.NewService().Finalize(sessionterminal.Request{
+	result := New().Finalize(sessionterminal.Request{
 		RunError:       &engine.StreamDeltaError{Value: streamValue},
 		Provider:       "openai",
 		Model:          "gpt-realtime",
@@ -50,7 +49,7 @@ func TestFinalizeProviderErrorPreservesTypedCauseAndFields(t *testing.T) {
 
 func TestFinalizeLifecycleHintsOrderMetadataAndErrorIdentity(t *testing.T) {
 	cause := errors.New("provider stopped after tool result")
-	result := terminalwire.NewService().Finalize(sessionterminal.Request{
+	result := New().Finalize(sessionterminal.Request{
 		RunError:       cause,
 		Provider:       "provider",
 		Model:          "model",
@@ -87,8 +86,7 @@ func TestFinalizeLifecycleHintsOrderMetadataAndErrorIdentity(t *testing.T) {
 }
 
 func TestFinalizeCancellationAndRoomBoundPrecedence(t *testing.T) {
-	service := terminalwire.NewService()
-	cancelled := service.Finalize(sessionterminal.Request{
+	cancelled := New().Finalize(sessionterminal.Request{
 		UserCancelled:  true,
 		Provider:       "provider",
 		Model:          "model",
@@ -114,7 +112,7 @@ func TestFinalizeCancellationAndRoomBoundPrecedence(t *testing.T) {
 		t.Fatalf("cancelled continuation IDs = %q", got)
 	}
 
-	roomBound := service.Finalize(sessionterminal.Request{
+	roomBound := New().Finalize(sessionterminal.Request{
 		RunError:              context.Canceled,
 		RoomBoundCancellation: true,
 		RoomCancellationOnly:  true,
@@ -128,7 +126,6 @@ func TestFinalizeCancellationAndRoomBoundPrecedence(t *testing.T) {
 }
 
 func TestFinalizeOutputStateAndAccountingAreIndependentAndDeepCopied(t *testing.T) {
-	service := terminalwire.NewService()
 	metricsSnapshot := metrics.Snapshot{
 		HistogramBounds: []int64{1, 2},
 		Series: []metrics.SeriesSnapshot{{
@@ -149,7 +146,8 @@ func TestFinalizeOutputStateAndAccountingAreIndependentAndDeepCopied(t *testing.
 		Usage:          sessionterminal.TokenSnapshot{PromptTokens: 11, CompletionTokens: 13, TotalTokens: 24, Seen: true},
 		Metrics:        metricsSnapshot,
 	}
-	result := service.Finalize(request)
+	result := New().Finalize(request)
+	service := New()
 	if got := service.CancellationOutputState(sessionterminal.OutputSnapshot{}); got != messages.TerminalOutputNone {
 		t.Fatalf("empty output state = %q", got)
 	}
