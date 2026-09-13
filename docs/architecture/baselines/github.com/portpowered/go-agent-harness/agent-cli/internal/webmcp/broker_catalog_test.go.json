@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp",
+      "file": "internal/webmcp/broker_catalog_test.go",
+      "symbol": "TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor",
+      "value": 37,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp",
+      "file": "internal/webmcp/broker_catalog_test.go",
+      "symbol": "TestStatefulBrokerNavigationStormRetiresRefsAndLateResponses",
+      "value": 37,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp",
+      "file": "internal/webmcp/broker_catalog_test.go",
+      "symbol": "TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor",
+      "value": 41,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp",
+      "file": "internal/webmcp/broker_catalog_test.go",
+      "symbol": "TestStatefulBrokerNavigationStormRetiresRefsAndLateResponses",
+      "value": 30,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp",
+      "file": "internal/webmcp/broker_catalog_test.go",
+      "symbol": "TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor",
+      "value": 155,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp",
+      "file": "internal/webmcp/broker_catalog_test.go",
+      "symbol": "TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor",
+      "value": 105,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    }
+  ]
+}

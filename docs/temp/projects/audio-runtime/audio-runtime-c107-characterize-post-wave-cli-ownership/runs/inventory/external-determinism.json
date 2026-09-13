@@ -1,0 +1,29 @@
+{
+  "comparisons": {
+    "call-paths.json": {
+      "byte_identical_after_run_timestamp_normalization": true,
+      "first_sha256": "1e9b38039aeab449b0aae29b3e10339524e8fd15c215a55c5e40594cb6d4957b",
+      "second_sha256": "1e9b38039aeab449b0aae29b3e10339524e8fd15c215a55c5e40594cb6d4957b"
+    },
+    "classifications.json": {
+      "byte_identical_after_run_timestamp_normalization": true,
+      "first_sha256": "ca9c25e0f862ef11644deeecd413ef7c5a788cd3bd84260b71fd6849fb9cbe19",
+      "second_sha256": "ca9c25e0f862ef11644deeecd413ef7c5a788cd3bd84260b71fd6849fb9cbe19"
+    },
+    "inventory.json": {
+      "byte_identical_after_run_timestamp_normalization": true,
+      "first_sha256": "52023ea9d32683e27c5c37623f33175854c1afdad2839f7fd62c1c4d76487f42",
+      "second_sha256": "52023ea9d32683e27c5c37623f33175854c1afdad2839f7fd62c1c4d76487f42"
+    },
+    "inventory.md": {
+      "byte_identical_after_run_timestamp_normalization": true,
+      "first_sha256": "c1a7b07723bdd1672cafd676d7fc281798f6b49f949ee562a6d8e936837f1f01",
+      "second_sha256": "c1a7b07723bdd1672cafd676d7fc281798f6b49f949ee562a6d8e936837f1f01"
+    }
+  },
+  "first_directory": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/tmp.QqVdXnNkWg/one",
+  "normalization": "remove only run_timestamp keys; wall durations remain in analysis-run.json",
+  "schema_version": "c107-determinism-v1",
+  "second_directory": "/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/tmp.QqVdXnNkWg/two",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+}

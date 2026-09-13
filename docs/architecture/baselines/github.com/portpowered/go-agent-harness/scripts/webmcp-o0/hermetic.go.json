@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/scripts/webmcp-o0",
+      "package": "github.com/portpowered/go-agent-harness/scripts/webmcp-o0",
+      "file": "hermetic.go",
+      "symbol": "runHermeticProbe",
+      "value": 16,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/scripts/webmcp-o0",
+      "package": "github.com/portpowered/go-agent-harness/scripts/webmcp-o0",
+      "file": "hermetic.go",
+      "symbol": "runHermeticProbe",
+      "value": 22,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/scripts/webmcp-o0",
+      "package": "github.com/portpowered/go-agent-harness/scripts/webmcp-o0",
+      "file": "hermetic.go",
+      "symbol": "runHermeticProbe",
+      "value": 91,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/scripts/webmcp-o0",
+      "package": "github.com/portpowered/go-agent-harness/scripts/webmcp-o0",
+      "file": "hermetic.go",
+      "symbol": "runHermeticProbe",
+      "value": 53,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    }
+  ]
+}
