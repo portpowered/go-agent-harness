@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run bounded C114 software replay and caller regression cases."""
+"""Run bounded C134 recovery software replay and caller regression cases."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[4]
-RUNS = HERE / "runs"
+RUNS = HERE / "runs" / "c134-recovery"
 CASES = {
     "c21-rate-consumption": [
         "go", "test", "./go-agent-runtime/services/audiorate/...", "./go-device-gateway/pkg/runtime", "./go-device-gateway/pkg/devices",

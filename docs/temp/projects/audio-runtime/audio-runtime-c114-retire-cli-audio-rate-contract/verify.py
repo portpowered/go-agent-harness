@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bounded, fail-closed evidence checks for the C114 audio-rate slice."""
+"""Bounded, fail-closed evidence checks for the C134 C114 recovery slice."""
 
 from __future__ import annotations
 
@@ -18,12 +18,13 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[4]
 FACTORY_ROOT = Path(os.environ.get("FACTORY_ROOT", str(ROOT))).resolve()
-WORK = "audio-runtime-c114-retire-cli-audio-rate-contract"
-BRANCH = "codex/audio-runtime-c114-retire-cli-audio-rate-contract"
+WORK = "audio-runtime-c134-recover-c114-audio-rate-contract"
+BRANCH = "codex/audio-runtime-c134-recover-c114-audio-rate-contract"
 STARTUP = "8bdafc7f947a3a2c9856220abdc539437035bd21"
-ACCEPTED_MAIN = "3963bc3566da24f8214634c17a9d0f79a6724171"
+PRESERVED_HEAD = "59edd9e15b8cf631e7230959f31c4a5faf64e56f"
+ACCEPTED_MAIN = "bd6a1289218d1bef1a3af36e64e9d4496062416f"
 BASELINE = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
-RUNS = HERE / "runs"
+RUNS = HERE / "runs" / "c134-recovery"
 RATE_FILE = "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go"
 FORMAT_FILE = "agent-cli/internal/services/internal/agentruntime/session_audio_format.go"
 OWNED_PREFIX = str(HERE.relative_to(ROOT)) + "/"
@@ -123,6 +124,7 @@ def common_scope() -> dict[str, Any]:
     require(prd["branchName"] == BRANCH and git("branch", "--show-current") == BRANCH, "branch does not match the admitted PRD")
     head = git("rev-parse", "HEAD")
     origin_main = git("rev-parse", "origin/main")
+    require(ancestor(PRESERVED_HEAD, head), "preserved C114 ancestry is missing")
     require(ancestor(STARTUP, head), "startup integration ancestry is missing")
     require(ancestor(ACCEPTED_MAIN, head), "accepted main ancestry is missing")
     require(ancestor(origin_main, head), "fresh origin/main ancestry is missing")
@@ -195,7 +197,8 @@ def common_scope() -> dict[str, Any]:
     ):
         require(manifest.is_file(), f"coverage registration missing: {manifest.relative_to(ROOT)}")
     summary = json.loads((HERE / "verification-summary.json").read_text(encoding="utf-8"))
-    require(ancestor(summary["candidateRevision"], head), "verification summary is not bound to the candidate")
+    require(summary["work"] == "audio-runtime-c114-retire-cli-audio-rate-contract", "historical verification summary identity changed")
+    require(ancestor(summary["candidateRevision"], PRESERVED_HEAD), "historical verification summary is not bound to the preserved C114 head")
     return {
         "head": head,
         "originMain": origin_main,
@@ -207,7 +210,12 @@ def common_scope() -> dict[str, Any]:
 
 
 def is_owned(path: str) -> bool:
-    return path in {"agent-cli/internal/services/internal/agentruntime/session_audio_rate.go", FORMAT_FILE} or path.startswith(OWNED_PREFIX) or path.startswith("go-agent-runtime/services/audiorate/") or path.startswith("coverage-manifest/go-agent-runtime/services/audiorate/")
+    return path in {
+        "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+        FORMAT_FILE,
+        "agent-cli/internal/services/internal/agentruntime/session_audio_rate_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_format_test.go",
+    } or path.startswith(OWNED_PREFIX) or path.startswith("go-agent-runtime/services/audiorate/") or path.startswith("coverage-manifest/go-agent-runtime/services/audiorate/")
 
 
 def verify_mode(mode: str) -> dict[str, Any]:
