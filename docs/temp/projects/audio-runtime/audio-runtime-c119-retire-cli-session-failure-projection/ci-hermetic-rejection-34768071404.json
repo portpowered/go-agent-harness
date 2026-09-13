@@ -1,0 +1,100 @@
+{
+  "schema": "audio-runtime.c119.ci-rejection.v1",
+  "run": "34768071404",
+  "source_head": "b073776dac88ec0c05d29c738f24e7b7beb983d9",
+  "failed_jobs": [
+    {
+      "job": "103752527911",
+      "name": "CI (hermetic)",
+      "step": "Run hermetic test pipeline",
+      "command": "make test-hermetic",
+      "environment": "CGO_ENABLED=0; tags=nomicrophone",
+      "tests": [
+        {
+          "name": "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio",
+          "subtest": "test48_matched_healthy_control/provider_burst",
+          "failure": "remote playback did not reach final PCM marker before the scenario deadline: context deadline exceeded",
+          "evidence": {
+            "rendered_pcm": 467040,
+            "nonzero_pcm": 99835,
+            "expected_pcm": 120795,
+            "final_marker": false,
+            "playback": {
+              "queued": 0,
+              "dropped": 0,
+              "overflow": 0,
+              "discarded": 0,
+              "discard_events": 0,
+              "callbacks": 973,
+              "rendered": 467040
+            },
+            "capture": {
+              "queued": 0,
+              "captured": 467040,
+              "dropped": 0
+            },
+            "expected_tool_calls": 5,
+            "provider": {
+              "responses_sent": 6,
+              "response_creates": 5,
+              "tool_results": 5,
+              "protocol_error": ""
+            },
+            "child": "still running at timeout",
+            "callback_advances": 973
+          }
+        }
+      ]
+    }
+  ],
+  "cause": "No C119-owned cause is demonstrated. The failed scenario is in agent-cli/test/integration/session_tool_audio_remote_e2e_test.go and crosses the remote device/provider-burst integration path; none of the six admitted C119 production prefixes changed. The independently accepted C138/C127 terminal-drain probe covers a distinct fixture and does not authorize a C119 repair in excluded audio, device, transport, or integration paths.",
+  "validation": {
+    "exact_subtest": {
+      "command": "CGO_ENABLED=0 go test ./test/integration -tags=nomicrophone -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test48_matched_healthy_control/provider_burst$' -count=1 -timeout=120s",
+      "exit_code": 0,
+      "duration": "11.956s"
+    },
+    "exact_subtest_repeats": {
+      "command": "CGO_ENABLED=0 go test ./test/integration -tags=nomicrophone -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test48_matched_healthy_control/provider_burst$' -count=3 -timeout=180s",
+      "exit_code": 0,
+      "duration": "27.424s"
+    },
+    "post_merge_exact_subtest_repeats": {
+      "source_head": "b0e8cebbc5f08dfadfaaf5038b712f3567ecd5bc",
+      "command": "CGO_ENABLED=0 go test ./test/integration -tags=nomicrophone -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test48_matched_healthy_control/provider_burst$' -count=3 -timeout=180s",
+      "exit_code": 0,
+      "duration": "28.738s"
+    },
+    "c119_verifier": {
+      "pre_merge_artifact": "artifacts/verify-59071.json",
+      "artifact": "artifacts/verify-72024.json",
+      "exit_code": 0,
+      "causal_mutants_survived": false
+    },
+    "accumulated_regressions": {
+      "command": "COUNT=1 bash scripts/test-session-ci-regressions.sh all",
+      "exit_code": 0,
+      "modes": ["normal", "coverage", "race"],
+      "post_merge_exit_code": 0
+    }
+  },
+  "scope": {
+    "owned_paths_affected": [],
+    "excluded_failure_path": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go",
+    "production_repair_applied": false
+  },
+  "current_main": {
+    "revision": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
+    "merge_commit": "b0e8cebbc5f08dfadfaaf5038b712f3567ecd5bc",
+    "ancestry_preserved": true,
+    "wire_conflict_resolution": "retained both sessionfailure and sessiontrace registrations"
+  },
+  "coverage_registration": {
+    "exit_code": 2,
+    "missing_package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/causal",
+    "owner": "peer C127",
+    "c119_repair_applied": false
+  },
+  "status": "nonreproduced-out-of-scope; blocked from ACCEPTED by peer coverage registration prerequisite",
+  "next_action": "Retain the same task and PR while the project owner assigns/releases the peer C127 coverage-manifest entry. Then fetch/integrate the accepted current main, rerun coverage-registration and affected bounded gates, and submit the same task to script CI without polling. If the exact remote integration check rejects again, obtain an exact ownership/repair decision for that excluded path; do not broaden C119 ownership."
+}
