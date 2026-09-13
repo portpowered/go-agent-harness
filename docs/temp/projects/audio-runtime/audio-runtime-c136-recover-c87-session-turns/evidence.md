@@ -10,8 +10,12 @@ still equals immutable PR 476/head
 `28b5a9b18f67a4343ef9e12141ad5e5fc84ef18f`; C87 admission records
 `previous_review_findings: []`.
 
-The C87 implementation was transplanted as six new C136 commits on top of
-current main, without changing the historical C87 branch or its evidence:
+The C87 implementation was transplanted as six new C136 commits on top of the
+planning main, without changing the historical C87 branch or its evidence.
+After the disjoint checkpoint, refreshed `origin/main=
+915ed982d23f2e549e529ff43c4f370b4b51e394` (including the accepted C127 merge)
+was integrated without conflict as C136 merge commit
+`73a587594a6e8c682bbe2755b14cb15897d4d853`:
 the feature, contract/architecture alignment, quality repair, and three C87
 evidence checkpoints. Startup integration
 `8bdafc7f947a3a2c9856220abdc539437035bd21`, planning main
@@ -20,7 +24,7 @@ verify. The candidate delta is limited to the admitted session-turn source,
 tests, runtime service, coverage manifests, and C87 provenance tree; shared
 registries remain untouched.
 
-Focused implementation evidence at the pre-evidence checkpoint passed:
+Post-merge focused implementation evidence at source `73a587594` passed:
 
 - service session-turn normal tests: 42 tests in 3 packages, count 3;
 - service session-turn race tests: 39 tests in 3 packages, count 3;
@@ -41,16 +45,17 @@ Focused implementation evidence at the pre-evidence checkpoint passed:
 - accumulated race regressions: pass with an isolated Go build cache after an
   unrelated shared-cache import-file race in the first run.
 
-The expected shared architecture gate remains blocked by the unreleased
-migration leases: `make architecture-size-check` reports 13 findings,
-specifically the generated sessionturns Wire file plus twelve stale downward
-C87 baseline entries. No shared file was edited. No current-head script CI,
-independent review, guarded merge, vertical probe, or project acceptance is
-claimed.
+The expected shared architecture gate remains blocked by the still-active
+C110/C111/C112/C119 migration leases: `make architecture-size-check` reports
+13 findings, specifically the generated sessionturns Wire file plus twelve
+stale downward C87 baseline entries. C127 is complete and its accepted merge is
+present; no shared registry/baseline file was edited. No current-head script
+CI, independent review, guarded merge, vertical probe, or project acceptance
+is claimed.
 
-Exact next actions are to commit and push this candidate, then retain C136
-ownership while C110/C111/C112/C119 release the shared paths and C127 reaches
-accepted main. After release, integrate the accepted current main, apply only
-the demonstrated sessionturns registry/baseline entries permitted by the
-manifest, rerun bounded focused/accumulated gates, and submit one changed head
-to script CI without polling. Repair any exact C136 rejection on this same task.
+Exact next actions are to checkpoint/push this candidate, then retain C136
+ownership while C110/C111/C112/C119 release the shared paths. After release,
+fetch and integrate the accepted current main again, apply only the
+demonstrated sessionturns registry/baseline entries permitted by the manifest,
+rerun bounded focused/accumulated gates, and submit one changed head to script
+CI without polling. Repair any exact C136 rejection on this same task.
