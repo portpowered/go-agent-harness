@@ -23,12 +23,14 @@ not edited.
 The focused service suite covers exact 16/24/48 kHz sample counts, no-op
 backing identity, PCM16 odd-tail and unsupported-rate errors, scheduled order
 and metadata, replay/live/default resolution, setter effects, pre-side-effect
-validation, and cancellation. The separate consumer imports only the public
-audiorate/Wire contract and go-audio and is run with `GOWORK=off`.
+validation, and cancellation. The separate `external-consumer` imports only
+the public audiorate/Wire contract and go-audio and is run with `GOWORK=off`.
 
 Passed local evidence:
 
 - audiorate normal and race tests, focused CLI audio/rate/replay/scheduled tests, and the GOWORK-off consumer;
+- bounded `verify.py` positive/causal-negative, retirement/C101-read-only, and final-scope modes;
+- bounded `run.py` cases `c21-rate-consumption`, `c50-audio-tool-replay`, and `room-scheduled-audio`;
 - `make fmt`, `make vet`, pinned `make lint` (golangci-lint v2.9.0), pinned `make staticcheck` (2026.1), `make size-check`, `make coverage-registration`, and the architecture-gate unit tests;
 - `git diff --check`.
 

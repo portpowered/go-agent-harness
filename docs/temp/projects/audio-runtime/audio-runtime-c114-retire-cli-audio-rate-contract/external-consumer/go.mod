@@ -1,4 +1,4 @@
-module example.com/audio-runtime-c114-retire-cli-audio-rate-consumer
+module example.com/audio-runtime-c114-retire-cli-audio-rate-external-consumer
 
 go 1.26.7
 

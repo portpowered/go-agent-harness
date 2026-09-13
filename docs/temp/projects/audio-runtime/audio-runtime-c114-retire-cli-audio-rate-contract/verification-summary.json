@@ -36,8 +36,12 @@
   "tests": [
     {"command": "go test ./go-agent-runtime/services/audiorate/... -count=1 -timeout=180s", "result": "pass"},
     {"command": "go test -race ./go-agent-runtime/services/audiorate/... -count=1 -timeout=180s", "result": "pass"},
-    {"command": "GOWORK=off go test . -count=1 -timeout=180s", "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/consumer", "result": "pass"},
+    {"command": "GOWORK=off go test . -count=1 -timeout=180s", "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer", "result": "pass"},
     {"command": "focused normal and race CLI audio/rate/replay/scheduled regressions", "result": "pass"},
+    {"command": "verify.py --mode positive-and-causal-negative-controls", "result": "pass"},
+    {"command": "verify.py --mode retirement-callers-and-c101-readonly", "result": "pass"},
+    {"command": "verify.py --mode final-scope-and-provenance", "result": "pass"},
+    {"command": "run.py --case c21-rate-consumption --case c50-audio-tool-replay --case room-scheduled-audio", "result": "pass"},
     {"command": "make fmt && make vet && make lint && make staticcheck && make size-check && make coverage-registration", "result": "pass"},
     {"command": "make test-architecture-gate", "result": "pass"},
     {"command": "git diff --check", "result": "pass"}
