@@ -147,6 +147,34 @@ func TestLiveInteractivePolicyRoutesAcknowledgement(t *testing.T) {
 	}
 }
 
+func TestLiveInteractiveToolPolicyRequiresScheduler(t *testing.T) {
+	policy := testPolicy(runtimeTools.InteractiveToolPolicySettings{
+		FastReadTimeout: 5 * time.Second, LongRunningTimeout: 20 * time.Second, AcknowledgementThreshold: 2 * time.Second,
+	})
+	factoryCalled := false
+	service := live.New(live.Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+		factoryCalled = true
+		return policyInferencer{session: newPolicySession()}, nil
+	}})
+	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
+		SessionID: "interactive-policy-without-scheduler",
+		Capabilities: &session.LiveCapabilities{
+			Executor:              blockingTool{started: make(chan struct{})},
+			Definitions:           []messages.ToolDefinition{{Name: "exec"}},
+			InteractiveToolPolicy: policy,
+		},
+	})
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); !errors.Is(err, session.ErrLiveSchedulerUnavailable) {
+		t.Fatalf("Start = %v, want ErrLiveSchedulerUnavailable", err)
+	}
+	if factoryCalled {
+		t.Fatal("inferencer factory called before scheduler admission rejected the live request")
+	}
+}
+
 type blockingTool struct{ started chan struct{} }
 
 func (tool blockingTool) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {

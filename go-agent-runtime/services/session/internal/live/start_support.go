@@ -42,7 +42,7 @@ func (h *handle) validateTimingPolicy() error {
 	return nil
 }
 func (h *handle) requiresScheduler() bool {
-	return h.request.MaxDuration > 0 || h.request.RequireSessionUpdated || h.firstTurnPolicyEnabled() || h.rateLimitRetryEnabled() || h.request.ToolExecutionTimeout > 0 || h.providerLivenessEnabled()
+	return h.request.MaxDuration > 0 || h.request.RequireSessionUpdated || h.firstTurnPolicyEnabled() || h.rateLimitRetryEnabled() || h.request.ToolExecutionTimeout > 0 || h.providerLivenessEnabled() || (h.request.Capabilities != nil && h.request.Capabilities.InteractiveToolPolicy != nil)
 }
 func cloneLiveTerminalValue(value *messages.SessionCloseValue) *messages.SessionCloseValue {
 	if value == nil {

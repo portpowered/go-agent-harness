@@ -199,8 +199,7 @@ func TestLiveCancelPreservesFirstCauseAcrossTeardown(t *testing.T) {
 	}
 	cause := errors.New("provider liveness failure")
 	h.Cancel(cause)
-	// A later transport/media teardown must not replace the actionable cause
-	// with context.Canceled while the invocation is joining.
+	// A later transport/media teardown must not replace the actionable cause with context.Canceled while the invocation is joining.
 	h.Cancel(context.Canceled)
 	if waitErr := h.Wait(); !errors.Is(waitErr, cause) {
 		t.Fatalf("Wait = %v, want first cause %v", waitErr, cause)
@@ -366,6 +365,7 @@ func TestLiveTimingPolicyRequiresScheduler(t *testing.T) {
 		t.Fatalf("Start = %v, want ErrLiveSchedulerUnavailable", err)
 	}
 }
+
 func TestProviderLivenessEmptyResponsePublishesFaultBeforeTerminal(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(700, 0), time.Millisecond)
 	provider := newTestSession()
