@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
+      "file": "test/integration/s2s_e2e_vision_describe_test.go",
+      "symbol": "TestVisionDescribeFixtureIsWellFormed",
+      "value": 35,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
+      "file": "test/integration/s2s_e2e_vision_describe_test.go",
+      "symbol": "buildVisionDescribeFixture",
+      "value": 33,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
+      "file": "test/integration/s2s_e2e_vision_describe_test.go",
+      "symbol": "TestVisionDescribeFixtureIsWellFormed",
+      "value": 21,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration",
+      "file": "test/integration/s2s_e2e_vision_describe_test.go",
+      "symbol": "visionDescribeContentMarkers",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    }
+  ]
+}
