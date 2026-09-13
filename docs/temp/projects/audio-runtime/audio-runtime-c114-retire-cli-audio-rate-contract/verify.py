@@ -222,7 +222,11 @@ def verify_mode(mode: str) -> dict[str, Any]:
     elif mode == "retirement-callers-and-c101-readonly":
         checks.append(run_command("cli-audio-regressions", ["go", "test", "./agent-cli/internal/services/internal/agentruntime", "-run", "Test(StreamSessionAudioInputResamples16kHzAtProviderBoundary|RoomProviderInputPCMResamples16kHzMixerTo24kHzContract|ConvertSessionAudioPCMIdentityAndFailures|ConvertScheduledAudioInputsUsesDeclaredSourceRate|ConfigureSessionAudioContract|LoadReplaySessionConfigurationExtractsDuplexAudioRates|ReplayPlannersRejectCapturedAsymmetricAudioRatesBeforeDialerConstruction|LiveRecordRuntimeScheduledAudio)", "-count=1", "-timeout=240s"], timeout=300))
         require_success(checks[-1])
-        require(not any("c101" in path.lower() for path in scope["changedPaths"]), "C101 path appeared in the candidate diff")
+        # common_scope rejects every changed path outside the C114 lease. Do not
+        # search the evidence filenames for "c101": the report itself is
+        # intentionally named retirement-callers-and-c101-readonly.json.
+        source_changes = [path for path in scope["changedPaths"] if not path.startswith(OWNED_PREFIX)]
+        require(not any("c101" in path.lower() for path in source_changes), "C101 source path appeared in the candidate diff")
     elif mode == "final-scope-and-provenance":
         checks.append(run_command("external-consumer", ["go", "run", "."], HERE / "external-consumer", workspace=False))
         require_success(checks[-1])
