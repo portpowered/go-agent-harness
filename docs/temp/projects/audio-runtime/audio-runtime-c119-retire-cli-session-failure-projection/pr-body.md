@@ -28,6 +28,13 @@
 - `COUNT=1 bash scripts/test-session-ci-regressions.sh all` passed normal, coverage, and race modes. Replay artifact `run-1789284027-1152.json` is accepted from this source head and rebuilt yui `6d9ebab3bf94eded5f9e5d5bcb9db43256bc640aba199b6b6bce6891c121db06`; all four credential-free cases passed, all child groups were reaped, and no survivors remained.
 - Fresh `origin/main` is `ea53be13ce5e4ef14fd8c89c695c21744a1f7686` and is not an ancestor of this candidate. C79 PR #470 still holds the shared Wire/architecture lease, so integration and shared-file reconciliation remain deferred. No Script CI result, independent review, merge, or vertical acceptance is claimed.
 
+## Static budget repair checkpoint
+
+- The full current-head CI static log for run `34745142367`, job `103691571589`, at submitted head `d905345d094805d3b11457a48cda038494cdddad` had exactly two findings: `agentruntime` was `238 > 237`, and `services/sessionfailure/wire/wire_gen.go` was unregistered.
+- The C119-owned `session_failure_projection_test.go` had no callers outside itself and duplicated the service/unchanged-caller coverage. Commit `20fd1e5` deletes that 97-line test-only file; the live agentruntime package is now exactly `237` Go files. The production adapter remains exactly `86` lines, the legacy implementation remains deleted, and no baseline or registry path was changed.
+- Post-repair `rtk make architecture-size-check` reports exactly one remaining issue: generated-file-spoof for `services/sessionfailure/wire/wire_gen.go`. Service normal/race tests, the GOWORK=off consumer, unchanged caller regressions, both causal mutants, and the accumulated normal/coverage/race session regressions all pass; `verify.py --mode positive-and-two-mutations` produced accepted artifact `verify-72645.json`.
+- C79 PR #470 remains open, mergeable and 9/9 green with no review or guarded merge. The remaining Wire registration and any released-main baseline reconciliation stay deferred until C79 explicitly releases its shared ownership. This checkpoint is not yet pushed or submitted to Script CI.
+
 ## Handoff
 
 This head is based on accepted main 3963bc3566da24f8214634c17a9d0f79a6724171 and preserves startup ancestry. scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json remain untouched because C79 still holds their active lease; C119-05 must integrate current origin/main only after C79's reviewed guarded merge and explicit release. The executor has not polled or claimed Script CI green.
