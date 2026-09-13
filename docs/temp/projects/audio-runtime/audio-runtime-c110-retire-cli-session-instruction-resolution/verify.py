@@ -34,6 +34,9 @@ MUTATION_TIMEOUT_SECONDS = 120
 
 ALLOWED_EXACT = {
     str(LEGACY_REL),
+    "agent-cli/internal/services/internal/agentruntime/session.go",
+    "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
+    "agent-cli/internal/services/internal/agentruntime/session_tool_definitions_test.go",
     "scripts/wire-packages.txt",
     "docs/architecture/architecture-policy.json",
     "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_instructions.go.json",
