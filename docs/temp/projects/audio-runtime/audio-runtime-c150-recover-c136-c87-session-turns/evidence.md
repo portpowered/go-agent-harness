@@ -116,3 +116,30 @@ the leases, then fetch current main and apply only the one sessionturns Wire
 registration plus the twelve demonstrated downward baseline deletions. After
 the focused and accumulated gates pass, push the changed C150 candidate to
 the existing PR #513 and return `ACCEPTED` to Script CI without polling.
+
+## Bounded validation while shared leases remain held — 2026-09-13
+
+At candidate `07d3388fd7658fca6887ca66c514716f7610921`, the focused causal
+checks were rerun without source or shared-file changes. Sessionturns normal
+and race each passed `48` tests; deprecated CLI compatibility passed `6`
+normal and `2` race tests; the `GOWORK=off` external consumer passed; and all
+three inherited verifier modes passed. The bounded credential-free audio/tool
+and interruption/tool public cases each passed `3` tests with bounded output,
+reaped children, and no survivors. The accumulated session regression matrix
+passed normal, coverage, and race modes, including all `20` high-rate trials
+and its expected negative controls.
+
+The worktree remains clean. The shared leases are not released: PR `#497` is
+open at `a1dab09a` with its Windows portable lane failed, PR `#496` is open at
+`d014a358` with its coverage lane failed, and PR `#505` is open at
+`00f53923` with a new CI run still in progress. No guarded merge or release
+was observed, so C150 did not edit `scripts/wire-packages.txt` or
+`docs/architecture/architecture-policy.json`, and did not resubmit the
+unchanged 13-finding architecture rejection. The WebMCP TempDir cleanup
+failure remains the previously recorded out-of-lease, non-reproduced result.
+
+Next action is unchanged: after C110/C111/C119 guarded merges release the
+exact paths, fetch the then-current `origin/main`, integrate it while
+preserving C136, apply only the sessionturns Wire registration and twelve
+demonstrated downward baseline deletions, rerun bounded gates, commit/push
+the same PR `#513`, and return `ACCEPTED` to Script CI without polling.
