@@ -1,0 +1,87 @@
+{
+  "schema": "audio-runtime.c111.ci-rejection.v1",
+  "run": 34770121035,
+  "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34770121035",
+  "workflow": "CI",
+  "runNumber": 2322,
+  "head": "8a15d4f9fb27769bd84ade6217d8f18673bfb486",
+  "status": "completed",
+  "conclusion": "failure",
+  "startedAt": "2026-09-13T16:57:22Z",
+  "updatedAt": "2026-09-13T17:08:15Z",
+  "failedJob": {
+    "job": 103758059396,
+    "name": "CI (coverage)",
+    "step": "Run coverage profiles and coverage gate",
+    "command": "make coverage",
+    "logLines": 481,
+    "logSha256": "a9fecbc94ce73377936a66981f66a6da054f71d4539c2dd3a9f2bff98abb8316",
+    "failure": {
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession",
+      "expectedMinimum": "80.00%",
+      "actual": "61.80%",
+      "delta": "-18.20%",
+      "message": "coverage gate found coverage floor violations",
+      "makeResult": "make: *** [Makefile:303: coverage] Error 1"
+    },
+    "logEvidence": [
+      "agent-cli coverage completed successfully in 6m15.96s",
+      "all other coverage profiles completed",
+      "the only floor violation was the unchanged agentsession package",
+      "the complete 481-line job log was read in full"
+    ]
+  },
+  "passedChecks": [
+    "CI (hermetic)",
+    "CI (integration)",
+    "CI (race)",
+    "WebMCP Chrome",
+    "macOS audio release",
+    "Windows audio portable",
+    "unit",
+    "static"
+  ],
+  "scope": {
+    "prBase": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
+    "c111ChangedAgentsessionPackage": false,
+    "c111CoverageFloorChanged": false,
+    "c111Owned": false,
+    "action": "Preserve the exact non-waived peer failure; do not lower the floor or edit the peer package; keep this same C111 task for resubmission."
+  },
+  "localCharacterization": [
+    {
+      "command": "verify.py --mode retirement-and-owned-paths",
+      "result": "accepted",
+      "artifact": "artifacts/verify-1789319646-35114.json",
+      "artifactSha256": "9e0c67f66cbbff648d9f5a7ecb559d7348178c44ac12c57f00f9b7931e3baedc"
+    },
+    {
+      "command": "verify.py --mode positive-and-negative-controls",
+      "result": "accepted",
+      "artifact": "artifacts/verify-1789319665-35115.json",
+      "artifactSha256": "be0cf51b602cb16a1ad611914b84b04fe8773f2c48cbc70f9e98508612561be7"
+    },
+    {
+      "command": "GOWORK=off go test -race ./services/sessioncontinuation/... -count=3 -timeout=300s",
+      "result": "passed"
+    },
+    {
+      "command": "GOWORK=off go test ./test/integration -run '<four accumulated C111 regressions>' -count=1 -timeout=360s",
+      "result": "passed"
+    },
+    {
+      "command": "GOWORK=off go test -race ./test/integration -run '<four accumulated C111 regressions>' -count=3 -timeout=480s",
+      "result": "passed"
+    },
+    {
+      "command": "make wire-check && make architecture-size-check && make vet && make staticcheck && make lint",
+      "result": "passed"
+    },
+    {
+      "command": "make coverage-registration",
+      "result": "blocked by unchanged external C127 package go-agent-runtime/services/session/internal/live/causal; no C111 manifest or waiver change"
+    }
+  ],
+  "claimedGreen": false,
+  "nextAction": "Commit and push this owned evidence checkpoint, update PR #496, and return the changed same-task head to Script CI without polling. If Script CI reports a C111-owned signal, inspect its exact logs, repair this task, and resubmit; the agentsession floor and causal coverage registration remain external prerequisites."
+}

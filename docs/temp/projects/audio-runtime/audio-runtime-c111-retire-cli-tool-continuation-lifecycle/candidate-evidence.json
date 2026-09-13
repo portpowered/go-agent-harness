@@ -7,6 +7,7 @@
   "server": "http://127.0.0.1:7439",
   "branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
   "implementationRevision": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94",
+  "testedHead": "8a15d4f9fb27769bd84ade6217d8f18673bfb486",
   "admission": {
     "verifyWork": "admitted",
     "secondProject": false,
@@ -159,7 +160,7 @@
       "make staticcheck passed: pinned staticcheck 2026.1 across 15 modules",
       "git diff --check passed"
     ],
-    "scriptCI": "run 34768795618 rejected head 3e9c6e67 on the unchanged agentsession coverage floor; current-main merge 5d5bfe7 integrates b8650efd and the released Wire registry entry, and the changed same-task head is ready for resubmission with no CI-green claim"
+    "scriptCI": "run 34770121035 rejected candidate head 8a15d4f9 on the unchanged agentsession coverage floor; current-main merge 5d5bfe7 integrates b8650efd and the released Wire registry entry, and this owned evidence checkpoint is ready for same-task resubmission with no CI-green claim"
   },
   "accumulatedRegressions": {
     "result": "passed",
@@ -247,9 +248,15 @@
     "currentHead": "bf05d90c64b556f68834d7dfa3150ad8ba1c1931",
     "currentResult": "rejected: agent-cli/internal/services/agentsession 61.80% versus 80.00%; C111 diff under that package is empty",
     "floorChanged": false,
-    "latestObservedRun": "34768795618",
-    "latestObservedHead": "3e9c6e67cceacaa978c0494039713ebdd62efcc8",
-    "latestObservedResult": "rejected: CI (coverage) agentsession 61.80% versus unchanged 80.00% floor; no C111-owned path changed"
+    "latestObservedRun": "34770121035",
+    "latestObservedHead": "8a15d4f9fb27769bd84ade6217d8f18673bfb486",
+    "latestObservedResult": "rejected: CI (coverage) agentsession 61.80% versus unchanged 80.00% floor; no C111-owned path changed",
+    "latestObservedJob": 103758059396,
+    "latestObservedLog": {
+      "lines": 481,
+      "sha256": "a9fecbc94ce73377936a66981f66a6da054f71d4539c2dd3a9f2bff98abb8316",
+      "readInFull": true
+    }
   },
   "causalCharacterization": {
     "historical": false,
@@ -264,15 +271,17 @@
     "evidence": "bounded-causal-characterization-b5f6e422.md"
   },
   "latestCIRejection": {
-    "run": 34768795618,
-    "head": "3e9c6e67cceacaa978c0494039713ebdd62efcc8",
+    "run": 34770121035,
+    "head": "8a15d4f9fb27769bd84ade6217d8f18673bfb486",
     "conclusion": "failure",
-    "rawJson": "ci-rejection-34768795618.json",
+    "rawJson": "ci-rejection-34770121035.json",
     "failedChecks": [
-      {"name": "CI (coverage)", "job": 103754464594, "step": "Run coverage profiles and coverage gate"}
+      {"name": "CI (coverage)", "job": 103758059396, "step": "Run coverage profiles and coverage gate"}
     ],
     "coveragePackage": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession",
     "coverageFailure": "expected minimum 80.00%, actual 61.80%, delta -18.20%",
+    "logLines": 481,
+    "logSha256": "a9fecbc94ce73377936a66981f66a6da054f71d4539c2dd3a9f2bff98abb8316",
     "failureExcerpt": [
       "coverage gate found coverage floor violations:",
       "- github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession: expected minimum 80.00%, actual 61.80%, delta -18.20%",
@@ -280,12 +289,12 @@
       "make: *** [Makefile:303: coverage] Error 1"
     ],
     "ownership": "The C111 diff does not change agent-cli/internal/services/agentsession, its tests, or the coverage floor, so this completed coverage rejection is outside C111 and no source repair is demonstrated.",
-    "priorRejection": "ci-rejection-34766920601.json records the prior identical unchanged agentsession coverage rejection; ci-rejection-34764898583.json retains the earlier peer hermetic audio-output assertion, and all earlier findings remain in their exact records.",
+    "priorRejection": "ci-rejection-34768795618.json records the prior identical unchanged agentsession coverage rejection; ci-rejection-34764898583.json retains the earlier peer hermetic audio-output assertion, and all earlier findings remain in their exact records.",
     "claimedGreen": false
   },
   "currentHeadCI": {
-    "run": "34768795618",
-    "head": "3e9c6e67cceacaa978c0494039713ebdd62efcc8",
+    "run": "34770121035",
+    "head": "8a15d4f9fb27769bd84ade6217d8f18673bfb486",
     "passed": [
       "CI (hermetic)",
       "CI (integration)",
@@ -299,8 +308,8 @@
     "failed": [
       "coverage: agent-cli/internal/services/agentsession 61.80% versus 80.00% floor"
     ],
-    "postRejectionLocalRepair": "After the no-reset b8650efd current-main merge, C111 contract, Wire, four named regressions, external consumer, both owned verifiers, and an unfiltered continuation race run pass; the coverage failure remains outside C111 ownership",
-    "resubmissionHead": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94",
+    "postRejectionLocalRepair": "After the no-reset b8650efd current-main merge, C111 contract, Wire, four named regressions in normal and race lanes, external consumer, both owned verifiers, and quality gates pass; the coverage failure remains outside C111 ownership",
+    "resubmissionHead": "8a15d4f9fb27769bd84ade6217d8f18673bfb486",
     "statusAtInspection": "completed_failure",
     "observedCompletedRun": true,
     "claimedGreen": false
@@ -327,6 +336,7 @@
   },
   "latestLocalRerun": {
     "sourceRevision": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94",
+    "evidenceHead": "8a15d4f9fb27769bd84ade6217d8f18673bfb486",
     "causal": {
       "command": "GOWORK=off YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 120s -- go test ./test/integration -run '^TestAgentBinaryTest46HighRateToolAudioRegression/trial_10$' -count=1 -timeout 120s -v",
       "result": "passed",
@@ -339,6 +349,7 @@
       "command": "verify.py --mode positive-and-negative-controls",
       "result": "passed",
       "lanes": ["normal"],
+      "latestRaceLane": "direct four-regression race rerun passed with -count=3",
       "highRateTrials": "CI run 34763400175 failed TestAgentBinaryTest46HighRateToolAudioRegression/trial_10 before C127 main integration; local exact YUI_AUDIO_STRESS=1 trial_10 passed after current-main integration in 41.126s (subtest 1.96s)",
       "namedC111Regressions": "4/4"
     },
@@ -356,11 +367,11 @@
       "processGroupsReaped": true,
       "outputCapExceeded": false
     },
-    "scriptCI": "latest rejection run 34768795618 was inspected at head 3e9c6e67; current implementation head 5d5bfe7 integrates b8650efd plus the released registry entry, and the changed evidence checkpoint is ready for script CI submission with no CI-green claim"
+    "scriptCI": "latest rejection run 34770121035 was inspected at candidate head 8a15d4f9; the implementation revision 5d5bfe7 integrates b8650efd plus the released registry entry, and this changed evidence checkpoint is ready for script CI submission with no CI-green claim"
   },
   "handoff": {
-    "ci": "run 34768795618 was inspected at head 3e9c6e67: CI (coverage) failed unchanged agent-cli/internal/services/agentsession at 61.80% versus its 80.00% floor after the full 304.260s integration run, while hermetic, integration, race, static, unit, WebMCP, macOS, and Windows completed successfully; the exact log and ownership analysis are in ci-rejection-34768795618.json, and no C111 repair is demonstrated",
+    "ci": "run 34770121035 was inspected at candidate head 8a15d4f9: job 103758059396 CI (coverage) failed unchanged agent-cli/internal/services/agentsession at 61.80% versus its 80.00% floor after all coverage profiles completed; the complete 481-line log SHA-256 a9fecbc94ce73377936a66981f66a6da054f71d4539c2dd3a9f2bff98abb8316 and ownership analysis are in ci-rejection-34770121035.json, and no C111 repair is demonstrated",
     "review": "prior independent findings and the exact image-continuation rejection are repaired at e618a6a33/4921c3751f0; no self-review performed",
-    "nextAction": "Commit and push the current-main merge and exact rejection evidence, update PR #496, and return ACCEPTED to the script-owned CI gate without polling; on any C111-specific rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge."
+    "nextAction": "Commit and push this exact rejection evidence checkpoint, update PR #496, and return ACCEPTED to the script-owned CI gate without polling; on any C111-specific rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge. The unchanged agentsession floor and current-main causal coverage-registration prerequisite remain outside C111 ownership."
   }
 }
