@@ -225,10 +225,9 @@ def verify_board() -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise EvidenceFailure(f"canonical board was not JSON: {exc}") from exc
     require(isinstance(rows, list), "canonical board has no results list")
-    selected = [row for row in rows if row.get("name") == WORK]
+    selected = [row for row in rows if row.get("name") == WORK and row.get("workTypeName") == "task"]
     require(len(selected) == 1, f"canonical board does not have exactly one C146 task row: {len(selected)}")
     row = selected[0]
-    require(row.get("workTypeName") in {None, "task"}, f"C146 row has unexpected work type: {row.get('workTypeName')}")
     feedback = row.get("_rejection_feedback")
     require(not feedback, "canonical board contains actionable C146 rejection feedback")
     return {
