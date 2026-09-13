@@ -411,7 +411,7 @@ def public_replay_control(case: str, deadline: float, timeout: float) -> dict[st
         server_workspace = Path(tempfile.mkdtemp(prefix="c127-device-server-"))
         server_binary = server_workspace / "audio-device-server"
         build = run_bounded(
-            ["go", "build", "-tags=nomicrophone", "-trimpath", "-o", str(server_binary), str(DEVICE_SERVER_SOURCE)],
+            ["go", "build", "-tags=nomicrophone", "-trimpath", "-o", str(server_binary), f"./{DEVICE_SERVER_SOURCE}"],
             REPO_ROOT,
             timeout,
             safe_environment(CGO_ENABLED="0", GOWORK=str(REPO_ROOT / "go.work")),
