@@ -1,0 +1,125 @@
+{
+  "schema": "audio-runtime-c163-recover-c158-rtc-review-handoff/v1",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "planWork": "audio-runtime-c163-recover-c158-rtc-review-handoff",
+  "planBranch": "codex/audio-runtime-c163-recover-c158-rtc-review-handoff",
+  "planWorktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c163-recover-c158-rtc-review-handoff",
+  "admission": {
+    "status": "admitted",
+    "verifiedWith": "factory/scripts/project-control.py verify-work --type task --name audio-runtime-c163-recover-c158-rtc-review-handoff",
+    "factorySession": "~default",
+    "server": "http://127.0.0.1:7439"
+  },
+  "operationalCandidate": {
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c152-recover-c135-c131-rtc-ownership",
+    "localBranch": "codex/audio-runtime-c152-recover-c135-c131-rtc-ownership",
+    "remoteBranch": "codex/audio-runtime-c135-recover-c131-rtc-ownership",
+    "pullRequest": 512,
+    "preservedHead": "a16ecf21cd1ebc393fcfaf4d3e53e881530d6685",
+    "mergeCommit": "0a13e410b490fa1b44501bb1c11886b50e38dc22",
+    "mergeParents": [
+      "a16ecf21cd1ebc393fcfaf4d3e53e881530d6685",
+      "97d3dcfb1e97a2611aa26b203a7f893442db4768"
+    ],
+    "freshOriginMain": "97d3dcfb1e97a2611aa26b203a7f893442db4768",
+    "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "acceptedMain": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+    "preservedCommits": [
+      "f957b81e5",
+      "5e8c3ea59",
+      "279bf8c67",
+      "a16ecf21c"
+    ],
+    "ancestry": {
+      "startupIntegration": true,
+      "acceptedMain": true,
+      "freshOriginMain": true
+    }
+  },
+  "predecessorAndReviewHistory": {
+    "c158Task": "work-task-57",
+    "c158AcceptedAttempt": "d274d8ff-114e-4bd5-a54d-b7670da1f554",
+    "c158AcceptedAttemptOutcome": "ACCEPTED",
+    "c158TerminalFailure": "runner returned failed outcome",
+    "historicalCi": {
+      "run": 34783199803,
+      "head": "a16ecf21cd1ebc393fcfaf4d3e53e881530d6685",
+      "conclusion": "SUCCESS",
+      "lanes": [
+        "CI (static)",
+        "CI (unit)",
+        "CI (integration)",
+        "CI (coverage)",
+        "CI (race)",
+        "CI (hermetic)",
+        "CI (WebMCP Chrome)",
+        "CI (macOS audio release)",
+        "CI (Windows audio portable)"
+      ],
+      "isCurrentHeadEvidence": false
+    },
+    "c130": {
+      "decision": "FAILED",
+      "reportSha256": "a18cbe6fd21d06f83d913d71307ff629b2fcc4a3fa2830690df1fe33f2b4afcf",
+      "finding": "old gateway track adapters retained duplicate RTP/audio policy and mutable continuity/packetization/pacing state at 515 production lines",
+      "resolution": "preserved as immutable negative history; C152 candidate measures 72 + 61 = 133 gateway production lines with explicit Deprecated adapters"
+    },
+    "priorReviewFindings": "No independent review rows exist for PR 512/C158 at this handoff; the preserved C130 FAILED vertical findings remain represented above and are not relabeled."
+  },
+  "activeOwnership": {
+    "c162Work": "work-task-70",
+    "c162Files": [
+      "go-agent-runtime/services/sessiontrace/internal/service/service.go",
+      "go-agent-runtime/services/sessiontrace/internal/service/service_test.go"
+    ],
+    "c162ObservedState": "active worktree with only the two owned files modified",
+    "c163SessiontraceDelta": false
+  },
+  "boundedChangedHeadChecks": {
+    "ownershipDag": "passed",
+    "behavioralAndCausalNegatives": {
+      "status": "passed",
+      "normalTests": 84,
+      "raceTests": 415,
+      "goworkOffExternalConsumer": "passed"
+    },
+    "rtcFocusedNormal": {
+      "status": "passed",
+      "tests": 117
+    },
+    "rtcFocusedRace": {
+      "status": "passed",
+      "tests": 117
+    },
+    "deviceCallerWireFocused": {
+      "status": "passed",
+      "tests": 831,
+      "packages": 9
+    },
+    "finalScope": {
+      "status": "passed",
+      "gatewayProductionLines": 133,
+      "outsideScopePaths": []
+    },
+    "gofmt": "passed",
+    "diffCheck": "passed"
+  },
+  "remainingGates": [
+    "changed-head SCRIPT CI",
+    "fresh independent review",
+    "guarded merge",
+    "meta-owned immutable engineering scope=vertical probe",
+    "AUDIO",
+    "DEVICE",
+    "EMBED",
+    "SERVICE",
+    "TRACE",
+    "REPLAY",
+    "FAILURES",
+    "QUALITY",
+    "PARITY"
+  ],
+  "hardwareAndAcoustics": "out_of_scope",
+  "realtime": "not used"
+}
