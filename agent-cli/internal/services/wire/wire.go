@@ -21,7 +21,9 @@ import (
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimeProvidersWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	runtimeSelfPlayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay/wire"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -109,7 +111,13 @@ func (s legacyToolCapabilitiesService) Resolve(cfg *config.Config) (serviceTools
 // NewSelfPlayService keeps the self-play runtime implementation private while
 // exposing only its value-oriented application contract to the CLI graph.
 func NewSelfPlayService(factory agentruntime.SessionRuntimeFactory, clockSource clock.Source, modelCatalog runtimeProviders.ModelCatalog) serviceSelfPlay.Service {
-	return agentruntime.NewSelfPlayService(factory, clockSource, modelCatalog)
+	runtimeService := runtimeSelfPlayWire.NewService(runtimeSelfPlayWire.Dependencies{
+		Clock:          clockSource,
+		ModelAdmission: runtimeProvidersWire.NewModelAdmission(modelCatalog),
+		Sessions:       agentruntime.NewSelfPlaySessionFactory(factory, modelCatalog),
+		Runner:         agentruntime.NewSelfPlaySessionRunner(),
+	})
+	return agentruntime.NewSelfPlayService(runtimeService)
 }
 
 // DeviceSet is the device service's complete provider set. Application Wire
