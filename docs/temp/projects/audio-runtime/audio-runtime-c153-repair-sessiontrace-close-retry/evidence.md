@@ -62,3 +62,13 @@ to be recorded below.
 - After `rtk git fetch origin main`, `HEAD` is `2b86e658e1185aebbc693de252f14c502a6f43ca` and `origin/main` is `4a1c399ccbb3d780be95eb04316e84b8f11a6646`; `origin/main` is an ancestor of `HEAD`.
 - The required startup integration revision `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline revision `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` are ancestors of `HEAD`.
 - The pushed candidate must remain limited to the two owned service files and this evidence directory. No current-head SCRIPT CI, independent review, guarded merge, C143 recovery, vertical acceptance or project completion is claimed here.
+
+## Script-CI handoff
+
+- Final pushed source head before handoff: `ed5dc6ed0cdf178682408f2e166c5e10bfc098c8`.
+- Pull request opened against `main`: [PR #515](https://github.com/portpowered/go-agent-harness/pull/515).
+- The branch is clean and tracks the pushed exact head. `ACCEPTED` hands this
+  candidate to the script-owned current-head CI gate; CI has not been polled or
+  claimed green. Fresh independent review and guarded merge remain external
+  gates, and C143 must later integrate this guarded-merged repair on its own
+  changed head.
