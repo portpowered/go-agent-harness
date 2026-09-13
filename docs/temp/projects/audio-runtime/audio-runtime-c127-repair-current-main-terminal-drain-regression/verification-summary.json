@@ -1,0 +1,86 @@
+{
+  "schema": "audio-runtime.c127.verification-summary.v1",
+  "candidateImplementationRevision": "54277fe562c79c28a8a452c090293dfa41698b48",
+  "sourceRevision": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+  "checks": [
+    {
+      "name": "live package normal",
+      "command": "rtk proxy go test ./go-agent-runtime/services/session/internal/live -count=1 -timeout=180s",
+      "exit": 0,
+      "output": "ok github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live 0.315s"
+    },
+    {
+      "name": "live package race",
+      "command": "rtk proxy go test -race ./go-agent-runtime/services/session/internal/live -run 'BindPlaybackController|Terminal|Drain|Close|Cancel|Tool|CapturingInferencer' -count=3 -timeout=180s",
+      "exit": 0,
+      "output": "ok github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live 1.375s"
+    },
+    {
+      "name": "agent runtime focused regressions",
+      "command": "rtk proxy go test ./agent-cli/internal/services/internal/agentruntime -run 'RTC.*(Terminal|Drain|Provider|Close|Interrupt|Cancel|Tool|Accounting)' -count=1 -timeout=120s",
+      "exit": 0,
+      "output": "ok github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime 0.776s"
+    },
+    {
+      "name": "device runtime focused regressions",
+      "command": "rtk proxy go test ./go-device-gateway/pkg/runtime -run 'TestRTCDeviceSink|TestC21' -count=1 -timeout=120s",
+      "exit": 0,
+      "output": "ok github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime 1.177s"
+    },
+    {
+      "name": "go vet",
+      "command": "rtk proxy go vet ./go-agent-runtime/services/session/internal/live; go vet ./agent-cli/internal/services/internal/agentruntime; go vet ./go-device-gateway/pkg/runtime",
+      "exit": 0,
+      "output": "all three packages produced no diagnostics"
+    },
+    {
+      "name": "architecture",
+      "command": "rtk proxy make architecture-check",
+      "exit": 0,
+      "output": "architecture gate passed: 192 package(s), 1912 file(s), 28243 function(s) checked"
+    },
+    {
+      "name": "size",
+      "command": "rtk proxy make size-check",
+      "exit": 0,
+      "output": "architecture gate passed: 192 package(s), 1912 file(s), 28243 function(s) checked"
+    },
+    {
+      "name": "gofmt and diff",
+      "command": "rtk proxy gofmt -d four changed live files; rtk proxy git diff --check",
+      "exit": 0,
+      "output": "no gofmt diff and no whitespace errors"
+    },
+    {
+      "name": "strict test45",
+      "command": "rtk proxy env YUI_AUDIO_STRESS=1 go test ./agent-cli/test/integration -run '^TestAgentBinaryTest45HighRateToolAudioRegression$' -count=1 -timeout=600s",
+      "exit": 0,
+      "output": "ok github.com/portpowered/go-agent-harness/agent-cli/test/integration 20.070s"
+    },
+    {
+      "name": "strict test46",
+      "command": "rtk proxy env YUI_AUDIO_STRESS=1 go test ./agent-cli/test/integration -run '^TestAgentBinaryTest46HighRateToolAudioRegression$' -count=1 -timeout=600s",
+      "exit": 0,
+      "output": "ok github.com/portpowered/go-agent-harness/agent-cli/test/integration 19.344s"
+    }
+  ],
+  "publicReplay": {
+    "buildCommand": "rtk proxy go build -tags=nomicrophone -trimpath -o docs/temp/projects/audio-runtime/audio-runtime-c127-repair-current-main-terminal-drain-regression/artifacts/yui ./agent-cli/cmd/yui",
+    "binarySha256": "dabf6c52683d84409c5b7d31380254d6b17b7d8d72586c18bf622622901afdf0",
+    "binaryBytes": 51083330,
+    "replayCommand": "env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY <task>/artifacts/yui session --replay <task>/../audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json --audio-out audio.wav --record-dir tool-record --trace-audio --workdir <task>/runs/public/replay-final --allow-path <task>/runs/public/replay-final",
+    "mode": "offline credential-free replay; no live Realtime",
+    "exit": 0,
+    "output": [
+      "PROBE_TOOL_MARKER_9182",
+      "Assistant: strict replay continuation",
+      "[session closed: fixture_complete]",
+      "[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]"
+    ],
+    "toolOrder": "tool_call then completed tool_result then continuation response",
+    "outputPcmBytes": 4800,
+    "terminalQueue": 0,
+    "targetProcessCheckAfterRun": "empty"
+  },
+  "projectScope": "This is the C127 vertical only; no project-wide gate is claimed and SCRIPT CI was not polled."
+}
