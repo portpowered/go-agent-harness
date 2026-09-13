@@ -51,7 +51,7 @@ func (r *reducer) bindScheduledIDLocked(index int, rawID string) sessiondiagnost
 	if index < 0 || index >= len(r.scheduled) {
 		return sessiondiagnostics.Observation{}
 	}
-	if !r.scheduledResponseIDAvailableLocked(id) {
+	if id != "" && r.responseIDKnownLocked(id) {
 		return sessiondiagnostics.Observation{ResponseID: id, ScheduledIndex: index, HasScheduledIndex: true}
 	}
 	if r.scheduled[index].Disposition != sessiondiagnostics.DispositionPending {
@@ -79,7 +79,7 @@ func (r *reducer) setScheduledOwnerLocked(index int, rawID string) sessiondiagno
 	if index < 0 || index >= len(r.scheduled) {
 		return sessiondiagnostics.Observation{ResponseID: id}
 	}
-	if !r.scheduledResponseIDAvailableLocked(id) {
+	if id != "" && r.responseIDKnownLocked(id) {
 		return sessiondiagnostics.Observation{ResponseID: id, ScheduledIndex: index, HasScheduledIndex: true}
 	}
 	if r.scheduled[index].Disposition != sessiondiagnostics.DispositionPending {
@@ -102,14 +102,6 @@ func (r *reducer) setScheduledOwnerLocked(index int, rawID string) sessiondiagno
 	r.logicalScheduledID = id
 	r.logicalScheduledSet = true
 	return sessiondiagnostics.Observation{Accepted: true, ResponseID: id, ScheduledIndex: index, HasScheduledIndex: true}
-}
-
-// scheduledResponseIDAvailableLocked keeps response IDs from an earlier
-// lifecycle out of newly allocated scheduled slots. Reset intentionally
-// retains the reducer's known-ID history so late provider events fail closed;
-// every scheduled binding path must honor that same ownership boundary.
-func (r *reducer) scheduledResponseIDAvailableLocked(id string) bool {
-	return id == "" || !r.responseIDKnownLocked(id)
 }
 
 func (r *reducer) bindNextLocked(rawID string) sessiondiagnostics.Observation {
