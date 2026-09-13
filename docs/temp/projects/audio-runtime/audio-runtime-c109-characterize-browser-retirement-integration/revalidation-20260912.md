@@ -82,3 +82,22 @@ public evidence.
 The final evidence remains handoff-only: no CI-green, review, merge, vertical
 acceptance, hardware, acoustic, or project-acceptance claim is made. C61 and
 C83 remain unmerged and unaccepted pending their own task/review/CI gates.
+
+## Current-head CI rejection
+
+After this revalidation, PR #495 head `a2fc31af4f59c2aa8b7c3ee6d4e61b6231c597c2`
+was checked by run `34731461393`. The eight non-integration jobs passed. The
+integration job failed only at
+`TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
+(`agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:183`) after
+the remote final-PCM deadline: `rendered_pcm=462720`, `nonzero_pcm=138391`,
+`expected_pcm=174391`, `final_marker=false`, `callbacks=964`, and the child was
+still running at timeout. Playback and capture reported zero drops, overflows,
+discards, and discard events. The exact sanitized job evidence is checked in at
+`ci-rejection-34731461393.json`.
+
+This is the known C79/provider-audio terminal-drain failure family outside the
+C109 lease. The exact local control passed once in `15.867s`; no C109 production
+or integration repair is authorized, and the CI failure is retained rather than
+waived or relabeled. The next action is to push this evidence-only checkpoint
+and resubmit the same task to script CI, with C79 retaining the source repair.

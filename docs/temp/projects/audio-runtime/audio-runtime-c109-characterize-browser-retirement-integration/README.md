@@ -50,3 +50,22 @@ orders, and the two public reports.  `verify.py --mode all` is the accumulated
 gate for determinism, report/public negative controls, causal attribution, and
 handoff readiness; it does not claim that candidate CI is green or that the
 project is accepted.
+
+## Current script-CI rejection
+
+The changed C109 head `a2fc31af4f59c2aa8b7c3ee6d4e61b6231c597c2` was checked by
+PR #495 run `34731461393`. Coverage, hermetic, unit, static, race, WebMCP,
+macOS, and Windows passed. Integration failed only in
+`TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
+at `agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:183`:
+the remote playback deadline expired with `462720` rendered samples,
+`174391` expected samples, `final_marker=false`, zero queued/dropped/overflow/
+discarded samples, and the child still running. The exact sanitized record is
+`ci-rejection-34731461393.json`.
+
+This is the existing C79/provider-audio terminal-drain ownership boundary, not
+a C109 evidence defect. The exact local control passed once in `15.867s`, but
+that does not relabel or waive the CI failure. C109 did not change production,
+integration, device, transport, Wire-registry, or architecture-baseline paths;
+the changed evidence checkpoint is to be pushed and submitted to script CI,
+while C79 retains the necessary source repair.
