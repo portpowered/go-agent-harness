@@ -1,0 +1,62 @@
+{
+  "schema_version": "c108-ci-observation-v1",
+  "project": "audio-runtime",
+  "task": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
+  "pr": 493,
+  "head": "c75c87547ff52c416e0fadd92385958d4b24cc78",
+  "merge_ref": "ee6a41767e3d95208629958ea5328aaf120bf8cd",
+  "run_id": 34724763555,
+  "job_id": 103636855490,
+  "required_check": "CI (integration)",
+  "result": "FAILURE",
+  "failed_test": "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst",
+  "failure_location": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:183",
+  "failure": {
+    "kind": "remote_playback_final_pcm_marker_timeout",
+    "message": "remote playback did not reach final PCM marker before the scenario deadline: context deadline exceeded",
+    "rendered_pcm": 467040,
+    "nonzero_pcm": 150871,
+    "expected_pcm": 174391,
+    "final_marker": false,
+    "playback": {
+      "queued": 0,
+      "dropped": 0,
+      "overflow": 0,
+      "discarded": 0,
+      "discard_events": 0,
+      "callbacks": 973,
+      "rendered": 467040
+    },
+    "capture": {
+      "queued": 0,
+      "captured": 467040,
+      "dropped": 0
+    },
+    "child": "still running at timeout"
+  },
+  "other_required_checks": {
+    "static": "SUCCESS",
+    "unit": "SUCCESS",
+    "coverage": "SUCCESS",
+    "race": "SUCCESS",
+    "hermetic": "SUCCESS",
+    "WebMCP Chrome": "SUCCESS",
+    "macOS audio release": "SUCCESS",
+    "Windows audio portable": "SUCCESS",
+    "audio-device-server-integration": "SUCCESS",
+    "regressions": "SUCCESS"
+  },
+  "local_recheck": {
+    "command": "cd agent-cli && go test ./test/integration -count=3 -timeout 300s -v -run ^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio$/^test46$/^provider_burst$",
+    "runs": 3,
+    "result": "PASS",
+    "observed_test_durations_seconds": [
+      12.38,
+      11.69,
+      11.72
+    ]
+  },
+  "lease_assessment": "outside C108 owned evidence-only lease; no production, runtime, or integration-test mutation was made",
+  "ci_green_claim": false,
+  "next_action": "Preserve this same task and route the exact provider_burst terminal-drain observation to its owning runtime/integration work. After that prerequisite is resolved or explicitly classified, submit the changed exact C108 head to the script CI gate; do not claim green CI from this local recheck."
+}
