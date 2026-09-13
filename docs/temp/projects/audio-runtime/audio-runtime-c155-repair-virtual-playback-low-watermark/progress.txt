@@ -37,3 +37,31 @@ Static rejection repair checkpoint:
   evidence checkpoint, keep PR `#516` bound to the exact head, and return
   `ACCEPTED` to the script-owned current-head gate without polling; retain
   ownership through `CONTINUE` for any exact rejection or actionable repair.
+
+# C155 latest current-main integration and bounded recheck 2026-09-13
+
+- Fresh `git fetch origin main` resolved `origin/main` to
+  `2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`. The same C155 branch merged it
+  with non-ff commit `9e08472a0`; accepted main
+  `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current `origin/main` are
+  all ancestors. The worktree remained isolated and no host or peer worktree
+  was reset or changed.
+- The shared-root C155 append was removed from `progress.txt`; the candidate
+  diff now keeps C155 evidence only under this owned directory. The executable
+  change remains limited to `device_playback_adversarial_test.go`; production
+  virtual-device code and all unowned paths are unchanged.
+- Post-merge focused controls all exited 0: causal subtest normal `200`, race
+  `100`, `GOMAXPROCS=1` `100`, `GOMAXPROCS=8` `100`; adversarial scenarios
+  `04`-`20` normal `900`; full adversarial race `420`; typed/loopback `80`;
+  device-package normal `285` and race `759`; full gateway module `285`; and
+  gateway vet. Architecture-size passed at `202` packages, `1941` files and
+  `28785` functions. `make fmt`, `make wire-check`, pinned Staticcheck,
+  pinned golangci-lint and `git diff --check` passed; lint reported `0 issues`
+  in every module.
+- This is executor evidence only: no script-CI result, independent review,
+  guarded merge, vertical acceptance, physical/acoustic proof or project
+  completion is claimed. The next action is commit and push this changed
+  branch, update PR `#516` with exact head/ancestry and this evidence, and
+  return `ACCEPTED` to the script-owned current-head gate without polling;
+  retain C155 ownership through `CONTINUE` for any exact rejection or repair.
