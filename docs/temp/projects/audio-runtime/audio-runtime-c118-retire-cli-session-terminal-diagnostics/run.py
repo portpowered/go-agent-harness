@@ -548,6 +548,7 @@ def main() -> int:
     try:
         source_revision = git_value("rev-parse", "HEAD")
         origin_main = git_value("rev-parse", "origin/main")
+        require(is_ancestor(origin_main, source_revision), "candidate does not contain fetched origin/main")
         require(is_ancestor(STARTUP_REVISION, source_revision), "candidate lost startup integration ancestry")
         require(is_ancestor(BASELINE_REVISION, source_revision), "candidate lost admitted baseline ancestry")
         yui = args.yui.resolve()
