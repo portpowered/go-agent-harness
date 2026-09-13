@@ -2,7 +2,7 @@
   "bounded": {
     "aggregate_timeout_seconds": 900,
     "child_timeout_seconds": 480,
-    "elapsed_seconds": 32.191,
+    "elapsed_seconds": 30.399,
     "process_groups_clean": true
   },
   "case": "malformed-or-canceled",
@@ -17,18 +17,21 @@
       "command": "go run docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/verify.go --mode malformed-credential-overflow-timeout-cleanup",
       "credential_environment_scrubbed": true,
       "credential_output_markers_absent": true,
-      "elapsed_seconds": 1.662,
+      "elapsed_seconds": 1.351,
       "exit_code": 0,
+      "forbidden_markers_scanned_before_truncation": true,
       "label": "malformed credential overflow timeout cleanup",
       "output": "{\"candidate_revision\":\"bb18860cfae386fef93b1ea2717075e3570d4c35\",\"mode\":\"malformed-credential-overflow-timeout-cleanup\",\"status\":\"passed\"}\n",
       "output_bytes": 139,
       "output_capped": false,
       "output_sha256": "271a770d91f74209c7649046e5b05acdd9d38c656b6e8ad7b366979e06f42e6c",
       "process_group_gone": true,
+      "raw_output_sha256": "271a770d91f74209c7649046e5b05acdd9d38c656b6e8ad7b366979e06f42e6c",
       "removed_credential_environment_names": [
         "NPM_TOKEN",
         "groq_key"
       ],
+      "retained_output_sha256": "271a770d91f74209c7649046e5b05acdd9d38c656b6e8ad7b366979e06f42e6c",
       "status": "passed",
       "test_discovery": {
         "package_ok_lines": 0,
@@ -50,18 +53,21 @@
       "command": "go test ./internal/services/internal/agentruntime -run TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation -count=3 -timeout=180s",
       "credential_environment_scrubbed": true,
       "credential_output_markers_absent": true,
-      "elapsed_seconds": 9.452,
+      "elapsed_seconds": 8.523,
       "exit_code": 0,
+      "forbidden_markers_scanned_before_truncation": true,
       "label": "canceled browser scenario normal",
-      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.459s\n",
+      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.475s\n",
       "output_bytes": 102,
       "output_capped": false,
-      "output_sha256": "0dcde70bcf43d254dd620c5721230f09f1883d46a8f8bb056ff50cda5206477a",
+      "output_sha256": "6b553d6089e3d8e6399eec5eea2351e0130278efe80bfd1a3cee477fc674ffec",
       "process_group_gone": true,
+      "raw_output_sha256": "6b553d6089e3d8e6399eec5eea2351e0130278efe80bfd1a3cee477fc674ffec",
       "removed_credential_environment_names": [
         "NPM_TOKEN",
         "groq_key"
       ],
+      "retained_output_sha256": "6b553d6089e3d8e6399eec5eea2351e0130278efe80bfd1a3cee477fc674ffec",
       "status": "passed",
       "test_discovery": {
         "no_test_packages": 0,
@@ -84,18 +90,21 @@
       "command": "go test -race ./internal/services/internal/agentruntime -run TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation -count=3 -timeout=240s",
       "credential_environment_scrubbed": true,
       "credential_output_markers_absent": true,
-      "elapsed_seconds": 15.217,
+      "elapsed_seconds": 15.907,
       "exit_code": 0,
+      "forbidden_markers_scanned_before_truncation": true,
       "label": "canceled browser scenario race",
-      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.873s\n",
+      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.866s\n",
       "output_bytes": 102,
       "output_capped": false,
-      "output_sha256": "bcc3419a9d052651a0d981380c94b7f1924e6d9ce97fb0e904b68fcccd5ef1dc",
+      "output_sha256": "34fa0a7428de888401bff246c42f6e55826babe20ebcc018282b7aeb38e7f512",
       "process_group_gone": true,
+      "raw_output_sha256": "34fa0a7428de888401bff246c42f6e55826babe20ebcc018282b7aeb38e7f512",
       "removed_credential_environment_names": [
         "NPM_TOKEN",
         "groq_key"
       ],
+      "retained_output_sha256": "34fa0a7428de888401bff246c42f6e55826babe20ebcc018282b7aeb38e7f512",
       "status": "passed",
       "test_discovery": {
         "no_test_packages": 0,
@@ -125,7 +134,7 @@
       {
         "classification": "SOFTWARE_LOCAL_PROCESS_ONLY",
         "kind": "negative-control-output",
-        "sha256": "5785094729f94d7bee355d6e7c6ff5fd48ce5ca887d5155d7de65e69b4081804"
+        "sha256": "c6d82fa008fa543ed9f89aac53c69e136da7b6f34506595565907b3cedd40c40"
       }
     ],
     "cleanup_claim": true,

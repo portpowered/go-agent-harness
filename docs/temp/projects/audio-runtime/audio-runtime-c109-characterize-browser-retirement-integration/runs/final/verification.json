@@ -10,6 +10,11 @@
   ],
   "mode": "all",
   "negative": {
+    "auxiliary-cleanup-failure": {
+      "diagnostic": "public auxiliary synthetic-tree cleanup failed",
+      "fixture": "auxiliary-cleanup-failure",
+      "status": "rejected-as-required"
+    },
     "changed-sha": {
       "diagnostic": "changed C61 SHA",
       "fixture": "changed-sha",
@@ -35,6 +40,16 @@
       "fixture": "incomplete-sequence",
       "status": "rejected-as-required"
     },
+    "missing-caller-identity": {
+      "diagnostic": "containing caller symbol is missing: c83-hunk-47ed5e87fc-004-symbol-01",
+      "fixture": "missing-caller-identity",
+      "status": "rejected-as-required"
+    },
+    "missing-ci-attribution": {
+      "diagnostic": "C83 CI attribution projection differs from the retained artifact",
+      "fixture": "missing-ci-attribution",
+      "status": "rejected-as-required"
+    },
     "missing-conflict": {
       "diagnostic": "complete conflict path evidence is missing",
       "fixture": "missing-conflict",
@@ -58,6 +73,16 @@
     "reversed-order": {
       "diagnostic": "rehearsal order is reversed or missing",
       "fixture": "reversed-order",
+      "status": "rejected-as-required"
+    },
+    "stale-source-head": {
+      "diagnostic": "evidence source commit is unavailable",
+      "fixture": "stale-source-head",
+      "status": "rejected-as-required"
+    },
+    "truncated-output": {
+      "diagnostic": "public child evidence is incomplete",
+      "fixture": "truncated-output",
       "status": "rejected-as-required"
     },
     "truncated-ref": {

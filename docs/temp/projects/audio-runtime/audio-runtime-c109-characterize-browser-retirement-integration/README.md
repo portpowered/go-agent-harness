@@ -38,3 +38,10 @@ The C79-owned `scripts/wire-packages.txt` and
 6,400-sample integration loss remains assigned to C79/provider audio and is
 not duplicated, repaired, or relabeled here.  C61 and C83 remain unmerged and
 unaccepted until their own task/review/CI gates are resolved.
+
+The checked-in final bundle includes separate `ci-attribution.json` evidence,
+source-derived caller/API spans, exact committed-head provenance, both merge
+orders, and the two public reports.  `verify.py --mode all` is the accumulated
+gate for determinism, report/public negative controls, causal attribution, and
+handoff readiness; it does not claim that candidate CI is green or that the
+project is accepted.

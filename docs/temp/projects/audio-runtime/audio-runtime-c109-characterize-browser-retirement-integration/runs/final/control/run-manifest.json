@@ -5,10 +5,11 @@
     "verification": "verify.py --mode all"
   },
   "outputSha256": {
-    "ledger.json": "55fbe2c8081c1a72168b718432ace9b145014a8c01b70c2a4f9b595c84e7083f",
+    "ci-attribution.json": "9f56545e46910ccd87970823f0aa094b361f407880e67268ecc0de738fa05e69",
+    "ledger.json": "4f02e3ac5b156944188ee79c6d034c3b7b12d412462486f74166a670c8983834",
     "merge-orders.json": "774be9b078a622fb82ccd0652685034f5638894ebdeddc1bc2c8b5a269fe071a",
-    "provenance.json": "bfa414a411684341c54ec1e9bb82e3cd9aa7eb86cd90b9c9d80d7b90fc7abd40",
-    "report.json": "9d7a8aaee7fbb6d367f9e32a41b57448b144f27a495580d5444462b1b9bb0817",
+    "provenance.json": "b17f7e27026a1654b86c366a21e0e341b5994a347b29e9be91c38a7fbf9de202",
+    "report.json": "8afe89e4edec76f2f4f8d0e905a6ffd39c8d8ead7f00b4c6a129810c52afea64",
     "sequence.json": "5ff0b283d1d138e29f031eb3cca96d0743be27077950981bab2768c175cd4aad"
   },
   "schema": "audio-runtime-c109-run-manifest-v2",
