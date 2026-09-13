@@ -10,12 +10,16 @@ const (
 	SessionUnresolvedToolResultClassification = "unresolved_tool_result"
 	SessionImageContinuationClassification    = "image_tool_continuation"
 	SessionToolContinuationClassification     = "tool_continuation"
-	ErrSessionAudioResponseIncomplete         = sc.ErrAudioResponseIncomplete
+	// ErrSessionAudioResponseIncomplete is the CLI compatibility name for the
+	// reusable runtime's finite audio-response contract.
+	ErrSessionAudioResponseIncomplete = sc.ErrAudioResponseIncomplete
 )
 
-var ErrSessionUnresolvedToolResults = sc.ErrSessionUnresolvedToolResults
-var ErrSessionImageContinuationIncomplete = sc.ErrImageContinuationIncomplete
-var ErrSessionToolContinuationIncomplete = sc.ErrToolContinuationIncomplete
+var (
+	ErrSessionUnresolvedToolResults       = sc.ErrSessionUnresolvedToolResults
+	ErrSessionImageContinuationIncomplete = sc.ErrImageContinuationIncomplete
+	ErrSessionToolContinuationIncomplete  = sc.ErrToolContinuationIncomplete
+)
 
 // Deprecated: use sessioncontinuation.UnresolvedToolResultsError.
 type SessionUnresolvedToolResultsError = sc.UnresolvedToolResultsError
