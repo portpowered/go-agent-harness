@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/media_source_rtsp_test.go",
+      "symbol": "TestMediaSourceAPIAndProtocolEdgeContracts",
+      "value": 65,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/media_source_rtsp_test.go",
+      "symbol": "serveRTSPFixture",
+      "value": 47,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/media_source_rtsp_test.go",
+      "symbol": "TestMediaSourceAPIAndProtocolEdgeContracts",
+      "value": 76,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/media_source_rtsp_test.go",
+      "symbol": "TestRTSPMediaSourceStubNegotiatesAndStreams",
+      "value": 21,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/media_source_rtsp_test.go",
+      "symbol": "serveRTSPFixture",
+      "value": 22,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "file-lines",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/media_source_rtsp_test.go",
+      "value": 622,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/media_source_rtsp_test.go",
+      "symbol": "TestMediaSourceAPIAndProtocolEdgeContracts",
+      "value": 181,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc",
+      "file": "pkg/transport/rtc/media_source_rtsp_test.go",
+      "symbol": "TestMediaSourceAPIAndProtocolEdgeContracts",
+      "value": 158,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    }
+  ]
+}

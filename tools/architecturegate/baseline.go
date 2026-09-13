@@ -68,21 +68,18 @@ func loadBaseline(path, repoRoot string) (Baseline, error) {
 	if err != nil {
 		return Baseline{}, err
 	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return Baseline{}, fmt.Errorf("stat baseline %q: %w", path, err)
+	}
+	if info.IsDir() {
+		return loadBaselineDirectory(abs, path)
+	}
 	data, err := os.ReadFile(abs)
 	if err != nil {
 		return Baseline{}, fmt.Errorf("read baseline %q: %w", path, err)
 	}
-	var baseline Baseline
-	if err := json.Unmarshal(data, &baseline); err != nil {
-		return Baseline{}, fmt.Errorf("decode baseline %q: %w", path, err)
-	}
-	if baseline.Version != baselineVersion {
-		return Baseline{}, fmt.Errorf("baseline %q has version %d; expected %d", path, baseline.Version, baselineVersion)
-	}
-	if err := validateBaseline(baseline); err != nil {
-		return Baseline{}, fmt.Errorf("invalid baseline %q: %w", path, err)
-	}
-	return baseline, nil
+	return decodeBaseline(data, path)
 }
 
 func validateBaseline(baseline Baseline) error {
@@ -230,17 +227,16 @@ func compareBaselineHistory(ctx context.Context, gitBinary, repoRoot, baselinePa
 		return []Issue{{Rule: "baseline-history", File: filepath.ToSlash(relative), Message: fmt.Sprintf("cannot resolve merge base %q: %v", base, err)}}
 	}
 	mergeBaseName := strings.TrimSpace(string(mergeBase))
-	oldData, err := gitOutput(ctx, gitBinary, repoRoot, "show", mergeBaseName+":"+filepath.ToSlash(relative))
+	previous, found, err := loadHistoricalBaseline(ctx, gitBinary, repoRoot, mergeBaseName, filepath.ToSlash(relative))
 	if err != nil {
+		return []Issue{{Rule: "baseline-history", File: filepath.ToSlash(relative), Message: err.Error()}}
+	}
+	if !found {
 		policy := Policy{Version: policyVersion, Limits: defaultLimits()}
 		if len(policies) > 0 {
 			policy = policies[0]
 		}
 		return compareBootstrapBaseline(ctx, gitBinary, repoRoot, relative, mergeBaseName, current, policy)
-	}
-	previous, err := decodeHistoricalBaseline(oldData)
-	if err != nil {
-		return []Issue{{Rule: "baseline-history", File: filepath.ToSlash(relative), Message: err.Error()}}
 	}
 	return compareHistoricalEntries(relative, previous, current)
 }
