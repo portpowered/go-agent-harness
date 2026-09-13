@@ -124,6 +124,10 @@
     }
   },
   "source_bindings": {
+    "analyzer_tests": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/test_analyze.py",
+      "sha256": "e7d7b2829e74b253970fc3e84d5047e3bbf99209dcb4a32e4ff28520f94e7e88"
+    },
     "negative_fixture": {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json",
       "sha256": "0f51a143cf809d20df04bbf4350473a14961979f7ffc854eff1f7fea6b9b3840"
@@ -134,7 +138,7 @@
     },
     "verifier": {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py",
-      "sha256": "7e3873f7cc54a473794ce0378faad2e22dde2b226b909497cc4c8f558cecc07d"
+      "sha256": "3bfc5db9e3f47cad93cc3920299a48f608355488a5b67e27826a153dde1f5a03"
     }
   },
   "status": "passed"

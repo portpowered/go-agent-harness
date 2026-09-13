@@ -11,8 +11,14 @@ The preserved candidate revisions are C61
 `8e8177c031a7b3b9322d712af19970e13fa7a1bc` and C83
 `22cc6769aaf06d1e2c1275b064cc7ec29de3e371`.
 The final provenance also records fetched `origin/main`
-`3963bc3566da24f8214634c17a9d0f79a6724171` as the newer integrated review
+`b7d25ca6f0e9b94c62b193059160dfbf446ef1d6` as the newer integrated review
 main; the branch diff relative to that review main remains C109-owned only.
+The required and control synthetic rehearsals intentionally remain based on
+the admitted accepted main, as required by the PRD.  Because the newer review
+main deletes the architecture baseline that C61 still modifies, the final
+reports also retain a supplemental current-main compatibility rehearsal: it
+records the exact modify/delete conflict and abort/cleanup result without
+resolving or promoting it.
 
 Run the analyzer from the repository root, writing outside the checkout while
 iterating:
@@ -50,6 +56,13 @@ orders, and the two public reports.  `verify.py --mode all` is the accumulated
 gate for determinism, report/public negative controls, causal attribution, and
 handoff readiness; it does not claim that candidate CI is green or that the
 project is accepted.
+
+The analyzer resolves API references from complete package/module identity:
+anonymous function bodies do not become declarations, qualified imports are
+matched to their exact imported package, same-name symbols in another package
+are not treated as dependencies, and public module paths are not duplicated.
+The checked-in `test_analyze.py` regressions cover those cases.  The current
+source checkpoint is `652453bfea05b0d09e5257c7cfbd65c38e54f93f`.
 
 ## Current script-CI rejection
 

@@ -1,19 +1,19 @@
 {
-  "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
-  "base_tree": "4a1923bb54ae883e14a46ea7a85e0bc0b8786d8f",
+  "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "base_tree": "dded566273b27f7146c4e630a0f23fb9402198da",
   "cleanup": {
     "temporary_root_removed": true,
     "worktree_remove_command": "git worktree remove --force <temporary-worktree>",
     "worktree_remove_status": "passed",
     "worktree_removed": true
   },
-  "final_head": "4c4647e4e6cd5f54692a39472de5bc8f3ad42a05",
+  "final_head": "72431f5b7b53101073d27e1883338799cd58ddb3",
   "final_status": [],
-  "final_tree": "8372c75f4b2e8181148ac000d6dcd5db26414630",
+  "final_tree": "4d8e93ae0e74db403fdb02c70db9cf849c590156",
   "merges": [
     {
       "command": "git merge --no-ff --no-commit 8e8177c031a7b3b9322d712af19970e13fa7a1bc",
-      "commit": "910eebea40c3c113794e90ddc86eb3c091c7e130",
+      "commit": "c343bfdc67c94afcd106188076094eb931a91389",
       "commit_command": "git commit --no-verify -m C109 required merge c61",
       "conflict_kind": "none",
       "conflict_resolution": "not-needed",
@@ -28,12 +28,12 @@
       "output": "Automatic merge went well; stopped before committing as requested\n",
       "output_sha256": "96bb6a194a796153cbd0c640642866371219451832063763d544b942a8d97c4e",
       "parents": [
-        "910eebea40c3c113794e90ddc86eb3c091c7e130",
-        "3963bc3566da24f8214634c17a9d0f79a6724171",
+        "c343bfdc67c94afcd106188076094eb931a91389",
+        "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
       ],
       "post_status": [],
-      "pre_merge_head": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "pre_merge_head": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "ref": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
       "resolution": {
         "owner": "C109/none",
@@ -41,11 +41,11 @@
       },
       "status": "passed",
       "step": 1,
-      "tree": "ccd827d929fdc18074c21ca1eb31e431df651b94"
+      "tree": "6af4741839ceefd208ce8893f623ae42d33b5cef"
     },
     {
       "command": "git merge --no-ff --no-commit 22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
-      "commit": "4c4647e4e6cd5f54692a39472de5bc8f3ad42a05",
+      "commit": "72431f5b7b53101073d27e1883338799cd58ddb3",
       "commit_command": "git commit --no-verify -m C109 required merge c83",
       "conflict_kind": "none",
       "conflict_resolution": "not-needed",
@@ -60,12 +60,12 @@
       "output": "Auto-merging agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go\nAutomatic merge went well; stopped before committing as requested\n",
       "output_sha256": "348c940344b5b0b530e259652607e9c342e74910a1962ae1762db0277cd99361",
       "parents": [
-        "4c4647e4e6cd5f54692a39472de5bc8f3ad42a05",
-        "910eebea40c3c113794e90ddc86eb3c091c7e130",
+        "72431f5b7b53101073d27e1883338799cd58ddb3",
+        "c343bfdc67c94afcd106188076094eb931a91389",
         "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
       ],
       "post_status": [],
-      "pre_merge_head": "910eebea40c3c113794e90ddc86eb3c091c7e130",
+      "pre_merge_head": "c343bfdc67c94afcd106188076094eb931a91389",
       "ref": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
       "resolution": {
         "owner": "C109/none",
@@ -73,7 +73,7 @@
       },
       "status": "passed",
       "step": 2,
-      "tree": "8372c75f4b2e8181148ac000d6dcd5db26414630"
+      "tree": "4d8e93ae0e74db403fdb02c70db9cf849c590156"
     }
   ],
   "order": [
