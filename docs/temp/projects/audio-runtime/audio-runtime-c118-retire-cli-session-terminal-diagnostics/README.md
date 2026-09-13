@@ -1,69 +1,65 @@
 # C118 session-terminal retirement evidence
 
-`inventory.json` records the admitted project, immutable source baseline,
-dual-ancestry checks, caller census, peer lease exclusions, and the current
-task-board CI/review rejection and repair provenance. The current task is
-`work-task-23`; accepted main `09c70f51` is merged by `5c423b65`, and the
-current candidate is `5c423b65`. The independent review finding about
-scheduled-incomplete nil/context failures was repaired in `4b4b10c1`.
+`inventory.json` records the admitted project, immutable source baseline, dual
+ancestry, caller census, peer lease exclusions, and the current task-board
+CI/review provenance. The current task is `work-task-23`. Accepted peer repair
+main `915ed982d` is integrated by merge `d2cda1b28`; the tested source and
+source-pinned artifact are `675f8918`. The independent review finding about
+scheduled-incomplete nil/context failures was repaired in `4b4b10c1`, with the
+architecture-budget repair in `9cf7a04`.
+
+The current-main coverage registration repair is deliberately narrow: the
+released C127 causal package contains only tests, so
+`coverage-manifest/go-agent-runtime/services/session/internal/live/causal/package.json`
+registers it with the existing `test-only` exception. No C127 production code,
+device path, transport path, shared Wire registry, or architecture baseline was
+modified by C118.
 
 `external-consumer` is a separate Go module. With `GOWORK=off`, its test imports
 only the public `go-agent-runtime/services/sessionterminal` contract, its
-generated Wire constructor, and the public provider taxonomy. It verifies
-typed error identity, deterministic continuation metadata, accounting,
+generated Wire constructor, and the public provider taxonomy. It verifies typed
+error identity, deterministic continuation metadata, accounting,
 cancellation/output-state policy, and independent service construction.
 
-Implementation checkpoints are `360d2a9`, `26365f5`, `55a652f`, the
-documentation/evidence descendants `084de02`, `9a44039`, the coverage repair
-`2ba46424`, the review repair `4b4b10c1`, the fresh-main merge `668d7b48`,
-and the architecture-budget repair `9cf7a04`, followed by the fresh-main
-merge `5c423b65`. The committed retirement verifier measures 40,260 candidate
-CLI production lines versus 41,208 at baseline, a 948-line net reduction; the
-deleted policy source is pinned at 287 lines and its recorded SHA-256.
+The committed retirement verifier measures 39,391 candidate CLI production lines
+versus 41,208 at the pinned baseline, a 1,817-line net reduction; the deleted
+policy source is pinned at 287 lines and its recorded SHA-256.
 
 The bounded `run.py` runner builds no provider connection and executes the
-source-pinned shipped YUI with a credential-free environment. Report
-`runs/session-terminal-kx8ca5pa/report.json` at candidate `5c423b65`
-passes all four required cases:
-replay completion, SIGINT user cancellation with partial output, provider
-error, and the existing audio/tool replay. Each case records one terminal
-diagnostic, final accounting, fixture/binary hashes, and reaped process-group
-state; the tool replay retains the marker, strict continuation text, and the
-expected `audio/out-000.pcm` SHA-256
-`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`.
+source-pinned shipped YUI from tested source `675f8918` with a credential-free
+environment. Report `runs/session-terminal-zk2c6z1n/report.json` passes all four
+required cases with YUI SHA-256
+`c418314d97a635879b54afa3916129cc5ba887c6ec556c6ff972eab7f749846d`:
 
-The exact earlier coverage rejection is preserved in
-`ci-rejection-34737625163.json`; its declaration-only manifest repair is
-`2ba46424`. The latest exact-head rejection is preserved in
-`ci-rejection-34748383831.json`: eight required checks passed, while
-`CI (integration)` failed only in `Run production-binary audio-device replay
-integration` at the pre-merge head `a949546b`. Trial 05 rendered
-171191/177591 compared samples, losing 6400 with 16 underflow events and 7360
-zero-filled samples. The failure is in the peer/device audio drain path; the
-C118 diff does not own the integration, device, transport, or gateway paths.
-The independent review finding about the nil-error/no-continuation shortcut
-was repaired in `4b4b10c1`; the merged head also receives the one-line
-architecture-budget repair `9cf7a04`. Focused normal/race tests, the
-GOWORK=off consumer, both causal mutants, retirement verification, the shipped
-YUI workflows, and the accumulated normal/coverage/race session regression
-matrix pass at the current candidate.
+- replay completion: exit 0, `replay_complete/replay/complete`, two accounting
+  records, rendered PCM 3,360 bytes with the healthy 2,400-byte tail;
+- SIGINT user cancellation: exit 0, `user_cancelled/cancellation/cli/partial`,
+  1,440 provider audio bytes and partial output;
+- provider error: exit 1, `terminal_failure/terminal_failure/session/none`,
+  incomplete accounting;
+- existing audio/tool replay: exit 0, `provider_close/provider_close/provider/not_applicable`,
+  `PROBE_TOOL_MARKER_9182`, strict continuation, and the expected provider PCM
+  SHA-256 `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`.
 
-After fetching fresh accepted main, the isolated branch merged `09c70f51` as
-`5c423b65` and reran the focused normal/race tests, external consumer, causal
-mutants, retirement verifier, coverage registration, Wire, architecture-size,
-vet, pinned staticcheck, pinned lint, and
-`COUNT=3 scripts/test-session-ci-regressions.sh all`; all passed. The final
-source-pinned shipped YUI artifact and report are rebuilt at `5c423b65`.
+All cases reaped their process groups. The credential-free external consumer,
+both causal mutants, named normal/race tests, retirement verifier, accumulated
+normal/coverage/race session regression matrix at `COUNT=3`, coverage
+registration (189 packages), Wire, architecture-size (199 packages, 1,931
+files, 28,675 functions), vet, pinned staticcheck, pinned lint, formatting and
+diff checks pass at the tested source.
 
-The evidence is vertical only. Focused normal/race tests, the accumulated
-session regression matrix, pinned lint/staticcheck/vet, Wire generation and
-architecture checks, the external consumer, both causal mutants, and the
-shipped YUI workflows pass.
-The fresh-main merge preserved predecessor checkpoints and did not raise an
-architecture baseline or modify the shared registries directly. Script CI is
-not being resubmitted unchanged after the recorded integration rejection:
-primary/C64 ownership must transfer or land an accepted peer repair for the
-audio-device underflow first. Then this same task must integrate the repaired
-accepted main, rerun the focused and accumulated gates, push the changed
-candidate, and submit it to script CI without polling. Independent review,
-guarded merge, and the post-merge probe remain external handoff gates.
+The preserved exact-head rejection `ci-rejection-34748383831.json` recorded
+eight green checks and one `CI (integration)` failure in the peer production
+audio-device drain path: `test45/trial_05` lost 6,400 of 177,591 compared
+samples with 16 underflows and 7,360 zero-filled samples. C127 repaired that
+peer path in accepted main `915ed982d`; C118 integrated it and reran its
+bounded gates. No current-head script CI result, independent review, guarded
+merge, post-merge vertical probe, physical/acoustic proof or project acceptance
+is claimed.
+
+Next action: commit and push this refreshed same-task candidate, update PR #504
+with the exact merge, coverage-registration repair, test and artifact evidence,
+then return `ACCEPTED` to the script-owned changed-head CI gate without polling.
+Retain C118 ownership for any exact CI rejection or actionable review repair;
+independent review, guarded merge and the post-merge vertical probe remain
+external gates.

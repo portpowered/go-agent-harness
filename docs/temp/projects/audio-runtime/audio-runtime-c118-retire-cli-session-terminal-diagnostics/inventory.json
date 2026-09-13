@@ -13,8 +13,8 @@
     "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
     "branch": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
     "prdBranchName": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
-    "head": "5c423b654c5702d966516dedd590555f07e96636",
-    "originMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+    "head": "675f891820f9c3e2318f28fff6c57c832fab54a6",
+    "originMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
     "baseRevision": "3c5c69f96924bd6c7bbb8fdf12cfedaee7878291",
     "requiredIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
     "ancestryChecks": [
@@ -31,11 +31,11 @@
       "scope": "accepted current main; prior C118 implementation and evidence preserved"
     },
     "latestFreshMainIntegration": {
-      "from": "a949546b612010767dde0e036bc1975cde7b7fd7",
-      "originMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
-      "merge": "5c423b654c5702d966516dedd590555f07e96636",
+      "from": "4d5e0801c9df7c4f33a2498d0a20acf947b03992",
+      "originMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+      "merge": "d2cda1b28c59ff5cfe16f4121b4c50a84d2aad82",
       "strategy": "no-ff",
-      "scope": "accepted current main; predecessor C118 checkpoints and unrelated changes preserved"
+      "scope": "accepted C127-repaired current main; predecessor C118 checkpoints and unrelated changes preserved"
     }
   },
   "manifestHashes": {
@@ -97,11 +97,11 @@
     "localC118Progress": "no C118 entry in progress.txt or docs/factory inbox",
     "boardReviewFinding": "work-review-34 rejected the nil-error/no-continuation shortcut because Scheduled.Incomplete and continuation metadata could be suppressed without a terminal failure",
     "boardRepair": "4b4b10c1af1970aa8fc0f1772b05f6ba41621f2f adds lifecycle-obligation precedence and nil/context plus metadata-only regressions; 9cf7a04 repairs the merged architecture line budget",
-    "latestRejection": "CI (integration) failed only in the production-binary audio-device replay step: TestAgentBinaryTest45HighRateToolAudioRegression/trial_05 lost 6400 of 177591 compared samples with 16 underflow events and 7360 zero-filled samples; the C118 diff does not own the device/transport paths"
+    "latestRejection": "CI (integration) failed only in the production-binary audio-device replay step: TestAgentBinaryTest45HighRateToolAudioRegression/trial_05 lost 6400 of 177591 compared samples with 16 underflow events and 7360 zero-filled samples; C127 repaired that peer path and accepted main 915ed982 now contains the repair"
   },
   "ownership": {
     "sharedRegistryOwner": "C79 released through accepted main 09c70f51 (including predecessor 1a846724); shared registries were preserved and not modified directly by C118",
-    "latestCiFailureOwnership": "The latest hosted failure is the production-binary audio-device replay path, not a C118-owned sessionterminal or adapter path. C118 does not modify agent-cli/test/integration/session_tool_audio_remote_e2e_test.go, go-audio, go-device-gateway, go-llm-gateway, or transport; primary/C64-owner transfer or an accepted peer repair is required before resubmission.",
+    "latestCiFailureOwnership": "The latest hosted failure was the production-binary audio-device replay path, not a C118-owned sessionterminal or adapter path. C127 repaired it in accepted main 915ed982; C118 does not modify agent-cli/test/integration/session_tool_audio_remote_e2e_test.go, go-audio, go-device-gateway, go-llm-gateway, or transport. The only current-main integration repair here is the released C127 test-only coverage registration.",
     "sharedFilesNotModified": [
       "scripts/wire-packages.txt",
       "docs/architecture/architecture-size-baseline.json"
@@ -109,14 +109,15 @@
     "implementationScope": [
       "go-agent-runtime/services/sessionterminal/",
       "coverage-manifest/go-agent-runtime/services/sessionterminal/",
+      "coverage-manifest/go-agent-runtime/services/session/internal/live/causal/package.json (released C127 test-only registration repair)",
       "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go retirement and compatibility adapter",
       "this task evidence directory"
     ]
   },
   "implementationCheckpoint": {
-    "testedSourceRevision": "5c423b654c5702d966516dedd590555f07e96636",
-    "sourceArtifactRevision": "5c423b654c5702d966516dedd590555f07e96636",
-    "evidenceRunnerRevision": "5c423b654c5702d966516dedd590555f07e96636",
+    "testedSourceRevision": "675f891820f9c3e2318f28fff6c57c832fab54a6",
+    "sourceArtifactRevision": "675f891820f9c3e2318f28fff6c57c832fab54a6",
+    "evidenceRunnerRevision": "675f891820f9c3e2318f28fff6c57c832fab54a6",
     "commits": [
       "360d2a973d01e572daa9c1725b370474a88bb429",
       "26365f5383d2e9ddad27e7920240d9c837d8ebc0",
@@ -129,12 +130,14 @@
       "668d7b48f0f44e2f2aa545ac44ee714bb11c4ad4",
       "9cf7a04f17a8bd735327d50cec21990134e6327e",
       "a949546b612010767dde0e036bc1975cde7b7fd7",
-      "5c423b654c5702d966516dedd590555f07e96636"
+      "5c423b654c5702d966516dedd590555f07e96636",
+      "d2cda1b28c59ff5cfe16f4121b4c50a84d2aad82",
+      "675f891820f9c3e2318f28fff6c57c832fab54a6"
     ],
-    "retirementLineReduction": 948,
+    "retirementLineReduction": 1817,
     "focusedValidation": "candidate-evidence.json",
-    "shippedYuiEvidence": "passed: runs/session-terminal-kx8ca5pa/report.json at 5c423b65; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI SHA-256 2c731108827f2461d60fcfa2ed60291e8bf50adee3156799090e44de60b9e701; no surviving process groups",
-    "sharedGateStatus": "coverage registration (185 packages), Wire, architecture-size (195 packages, 1920 files, 28291 functions), vet, pinned staticcheck and pinned lint pass at final candidate; full local make coverage remains represented by the preserved unrelated macOS SIGINT timing evidence",
-    "latestCiStatus": "run 34748383831 rejected at pre-merge head a949546b: eight required checks passed and CI (integration) failed only in production-binary audio-device replay; no C118-owned repair or unchanged resubmission"
+    "shippedYuiEvidence": "passed: runs/session-terminal-zk2c6z1n/report.json at tested source 675f8918; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI SHA-256 c418314d97a635879b54afa3916129cc5ba887c6ec556c6ff972eab7f749846d; no surviving process groups",
+    "sharedGateStatus": "coverage registration (189 packages), Wire, architecture-size (199 packages, 1931 files, 28675 functions), vet, pinned staticcheck and pinned lint pass at tested source; the released C127 causal test-only package is registered; full local make coverage remains represented by the preserved unrelated macOS SIGINT timing evidence",
+    "latestCiStatus": "run 34748383831 rejected at pre-merge head a949546b: eight required checks passed and CI (integration) failed only in production-binary audio-device replay; C127 repaired that peer path in accepted main 915ed982, C118 integrated it and reran bounded gates"
   }
 }
