@@ -191,6 +191,38 @@ demonstrated downward baseline deletions while preserving peers, rerun bounded
 gates, commit/push the changed same PR #513 head, and return `ACCEPTED` to
 SCRIPT CI without polling.
 
+## Fresh main and lease hold — 2026-09-13T21:59:07Z
+
+The required task admission still returns `admitted` for the sole
+`audio-runtime/audio-runtime-v1` project. The isolated C150 branch is clean at
+`18595d58270261ee9af62abcd375797a499bc9c5`, and it still contains startup
+`8bdafc7f947a3a2c9856220abdc539437035bd21`, C136 checkpoint
+`7268f46a8c23cea480aecba621d49c01e4a30aac`, and accepted main
+`4a1c399ccbb3d780be95eb04316e84b8f11a6646`. A fresh fetch advanced
+`origin/main` to `97d3dcfb1e97a2611aa26b203a7f893442db4768` via the disjoint C153
+session-trace merge; that revision is intentionally not integrated before the
+exact shared leases release.
+
+The exact shared leases remain held: PR #497/C110 is open at
+`a1dab09a990a96f08fc21fc2977b8f7dad4e5a98` with an unstable Windows portable
+lane; PR #496/C111 is open at
+`d014a3586368c37e20618481ee162e1b83db113f` with an unstable coverage lane;
+and PR #505/C119 is open at
+`00f53923d61b32a27cf4d6ebc5bbf0b4c1ae6e3e` without independent review or a
+guarded merge. C150 therefore made no change to
+`scripts/wire-packages.txt` or `docs/architecture/architecture-policy.json`
+and did not resubmit the known 13-finding architecture rejection. PR #513
+remains open/draft at the inherited C136 head with no review findings. The
+WebMCP TempDir cleanup failure remains preserved as out-of-lease and
+non-reproduced; C150 made no WebMCP change.
+
+Exact next action: retain `work-task-35` until all three guarded merges release
+the shared paths, then fetch and integrate the then-current main, apply only
+the sessionturns Wire registration and twelve demonstrated downward baseline
+deletions while preserving peer entries, rerun the focused/accumulated gates,
+commit and push the changed PR #513 head, and submit it once to SCRIPT CI
+without polling.
+
 ## Exact lease and PR recheck — 2026-09-13T21:25:51Z
 
 Admission was reverified with `project-control.py verify-work --type task
