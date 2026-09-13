@@ -79,6 +79,9 @@ def terminate_group(process: subprocess.Popen[Any], *, force: bool = False) -> d
     except ProcessLookupError:
         result["wait_status"] = "group-already-gone"
         return result
+    except PermissionError:
+        result["wait_status"] = "term-permission-denied"
+        return result
     try:
         process.wait(timeout=1)
         result["wait_status"] = "terminated-after-term"
@@ -91,6 +94,9 @@ def terminate_group(process: subprocess.Popen[Any], *, force: bool = False) -> d
         result["kill_sent"] = True
     except ProcessLookupError:
         result["wait_status"] = "group-gone-before-kill"
+        return result
+    except PermissionError:
+        result["wait_status"] = "kill-permission-denied"
         return result
     try:
         process.wait(timeout=2)

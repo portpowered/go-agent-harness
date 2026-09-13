@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -214,6 +215,46 @@ class PublicRunnerCleanupTests(unittest.TestCase):
         self.assertTrue(result["timed_out"])
         self.assertTrue(result["cleanup"]["term_sent"] or result["cleanup"]["kill_sent"])
         self.assertTrue(result["process_group_gone"])
+
+
+class PublicRunnerExceptionCleanupTests(unittest.TestCase):
+    def test_caller_tree_is_reported_and_preserved_on_exception(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="c109-caller-exception-") as temporary:
+            temporary_root, worktree, expected_tree = RUNNER.create_required_tree()
+            output = Path(temporary) / "exception-report.json"
+            original_command_set = RUNNER.command_set
+            original_argv = sys.argv
+            try:
+                RUNNER.command_set = lambda *_args: (_ for _ in ()).throw(RUNNER.PublicCheckError("forced caller-tree exception"))
+                sys.argv = [
+                    str(PUBLIC_RUNNER_PATH),
+                    "--case",
+                    "malformed-or-canceled",
+                    "--tree",
+                    str(worktree),
+                    "--output",
+                    str(output),
+                    "--child-timeout",
+                    "1",
+                    "--aggregate-timeout",
+                    "1",
+                ]
+                self.assertEqual(RUNNER.main(), 2)
+                report = json.loads(output.read_text(encoding="utf-8"))
+                cleanup = report["cleanup"]
+                self.assertEqual(cleanup["mode"], "caller-owned-tree-preserved")
+                self.assertEqual(cleanup["status"], "passed")
+                self.assertTrue(cleanup["tree_preserved"])
+                self.assertTrue(cleanup["identity_unchanged"])
+            finally:
+                sys.argv = original_argv
+                RUNNER.command_set = original_command_set
+                cleanup = RUNNER.cleanup_tree(
+                    temporary_root,
+                    worktree,
+                    expected_binding={"head": RUNNER.revision(RUNNER.ROOT, "HEAD", cwd=worktree), "final_tree": expected_tree, "status": []},
+                )
+                self.assertEqual(cleanup["status"], "passed")
 
 
 class PublicReportValidationTests(unittest.TestCase):
