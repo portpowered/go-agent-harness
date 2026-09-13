@@ -3,9 +3,22 @@
   "work": "audio-runtime-c159-repair-provider-close-tool-dispatch-ordering",
   "branch": "codex/audio-runtime-c159-repair-provider-close-tool-dispatch-ordering",
   "planningMain": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
-  "reviewMain": "97d3dcfb1e97a2611aa26b203a7f893442db4768",
-  "sourceCheckpoint": "bec1957d861d9381afa37ff9cd7cc2a5b28b098c",
+  "reviewMain": "2c79ec6a931c3e86944d6a625d0a5060b4f85aa0",
+  "sourceCheckpoint": "2bc009cb9b3e1587a740e9ab692ef3fd420ad698",
   "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "currentMainIntegration": {
+    "previousReviewMain": "97d3dcfb1e97a2611aa26b203a7f893442db4768",
+    "previousSourceCheckpoint": "bec1957d861d9381afa37ff9cd7cc2a5b28b098c",
+    "fetchedOriginMain": "2c79ec6a931c3e86944d6a625d0a5060b4f85aa0",
+    "mergeCommit": "2bc009cb9b3e1587a740e9ab692ef3fd420ad698",
+    "mergeResult": "clean; no conflicts",
+    "candidateHeadBeforeIntegration": "07b6ab0f720fa56587083942f783eaffa00250d3",
+    "protectedPathsUnchanged": [
+      "agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
+      "agent-cli/internal/services/internal/agentruntime/session_room_orchestration.go",
+      "docs/temp/projects/audio-runtime/audio-runtime-c148-recover-c129-interactive-policy-adapter/reports/ownership-return.json"
+    ]
+  },
   "predecessorReport": {
     "sourceRevision": "4459d56ef3213c2fdb173180b3f4f159bb2b89c0",
     "sha256": "e867fc0551fe3c1f81938dcdcaf65024c5804884c89b36560f4fb2ff9464c389",
@@ -73,6 +86,24 @@
       "acceptedResultConversation": "passed 10/10 at GOMAXPROCS 1, 2 and 4"
     }
   },
+  "currentMainChecks": {
+    "providerCloseGOMAXPROCS1": "10/10 pass",
+    "providerCloseGOMAXPROCS2": "10/10 pass",
+    "providerCloseGOMAXPROCS4": "10/10 pass",
+    "providerCloseCoverpkg": "passed; 6.6% aggregate coverage; provider-close.cover.out refreshed",
+    "providerCloseRace": "10/10 pass",
+    "liveFocusedNormal": "passed; prescribed ProviderClose/Tool.*Dispatch/AcceptedResult/Continuation/Cancel/Shutdown selector at COUNT=50",
+    "liveFocusedRace": "passed; prescribed selector at COUNT=20",
+    "engineToolFocusedNormal": "passed; prescribed Tool.*Dispatch/Batch/Runner/Close/Cancel|ProviderClose selector at COUNT=50",
+    "engineToolFocusedRace": "passed; prescribed selector at COUNT=20",
+    "credentialFreeAccumulatedSelector": "passed; exit 0 in 250.600s at COUNT=3",
+    "architectureSizeGate": "passed; 202 packages, 1942 files, 28795 functions",
+    "wireCheck": "passed; all checked-in generated Wire files reproduced with no tracked changes",
+    "focusedVet": "passed",
+    "lint": "passed; pinned golangci-lint 2.9.0 reported 0 issues across all modules",
+    "staticcheck": "passed; pinned staticcheck 2026.1 reported 0 issues across all modules",
+    "diffCheck": "passed"
+  },
   "ciRepair": {
     "rejectedHead": "172f8705da36ef44309008e83a9525b537e1730f",
     "workflowRun": "34786405617",
@@ -84,6 +115,7 @@
   "replayRegression": {
     "credentialFreeFocusedNormal": "66/66 pass",
     "credentialFreeFocusedRace": "C159 conversation-close and missing-continuation controls passed",
+    "currentMainRefresh": "credential-free audio/tool selector passed; no credentials or Realtime used",
     "unrelatedRemoteAudioRace": {
       "status": "environmental-failure-retained",
       "failures": [

@@ -48,3 +48,31 @@ nonblocking behavior.
   files, and 28,778 functions checked.
 - Post-repair engine/participant focused tests passed 800/800 normal and 320/320
   race; the same PR is ready for script-gate resubmission after commit and push.
+
+## Current-main stale-head recovery
+
+- The canonical prior rejection named CI run `34787330204`: the exact candidate
+  passed its independent focused checks, but the run completed before PR #517
+  advanced `origin/main` from `97d3dcfb1e97a2611aa26b203a7f893442db4768` to
+  `2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`. The rejection is retained; it is
+  not treated as a product failure or waived.
+- Fetched current `origin/main=2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`
+  and merged it without conflict at source checkpoint
+  `2bc009cb9b3e1587a740e9ab692ef3fd420ad698`. Required baseline, startup,
+  planning-main and current-main ancestry checks pass. The candidate delta from
+  current main remains limited to C159 engine/tool-runner code and tests, the
+  owned architecture entry, and this evidence folder; protected C148/C129/PR
+  510 paths remain unchanged.
+- Refreshed causal evidence on the merged source: provider-close unresolved
+  passes 10/10 at GOMAXPROCS 1, 2 and 4; coverpkg passes at 6.6%; the exact race
+  oracle passes 10/10; focused live and engine/tool-runner normal/race selectors
+  pass at COUNT=50/20; and the credential-free accumulated selector exits 0 in
+  250.600s at COUNT=3. The earlier remote-device `test45/test46` race failures
+  remain retained as the recorded external playback `advance` regression.
+- Current structural checks pass: architecture-size reports 202 packages,
+  1,942 files and 28,795 functions; Wire regeneration is unchanged; focused vet
+  and `git diff --check` pass. The worktree is clean after the merged-source
+  verification.
+- Next action: commit this ledger update, push the same branch, update PR #518
+  to the changed head, and return `ACCEPTED` to SCRIPT-owned CI without polling.
+  No review, merge, vertical probe or project acceptance is claimed here.
