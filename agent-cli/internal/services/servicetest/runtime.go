@@ -11,6 +11,7 @@ import impl "github.com/portpowered/go-agent-harness/agent-cli/internal/services
 import runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 
 import runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+import runtimeContinuation "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioncontinuation"
 
 const BrowserConversationAssistantTurn = impl.BrowserConversationAssistantTurn
 
@@ -82,7 +83,7 @@ var ErrSessionAudioInTurnBargeRequiresSequence = impl.ErrSessionAudioInTurnBarge
 var ErrSessionAudioResponseIncomplete = impl.ErrSessionAudioResponseIncomplete
 var ErrSessionImageContinuationIncomplete = impl.ErrSessionImageContinuationIncomplete
 var ErrSessionScheduledAudioIncomplete = runtimeSession.ErrLiveScheduledAudioIncomplete
-var ErrSessionUnresolvedToolResults = sessioncontract.ErrSessionUnresolvedToolResults
+var ErrSessionUnresolvedToolResults = runtimeContinuation.ErrSessionUnresolvedToolResults
 var EvaluateBrowserConversation = impl.EvaluateBrowserConversation
 
 type InvalidOpenAIRealtimeVoiceError = sessioncontract.InvalidOpenAIRealtimeVoiceError
@@ -128,7 +129,7 @@ const SessionDiagnosticFieldUnresolvedToolResultCount = impl.SessionDiagnosticFi
 
 type SessionDiagnosticRecord = impl.SessionDiagnosticRecord
 type SessionDurationTimer = impl.SessionDurationTimer
-type SessionImageContinuationError = impl.SessionImageContinuationError
+type SessionImageContinuationError = runtimeContinuation.ImageContinuationError
 
 const SessionMaxDurationReason = impl.SessionMaxDurationReason
 
@@ -140,11 +141,11 @@ type SessionScheduledAudioIncompleteError = runtimeSession.LiveScheduledAudioInc
 
 const SessionSilentProviderTimeoutClassification = impl.SessionSilentProviderTimeoutClassification
 
-type SessionToolContinuationError = impl.SessionToolContinuationError
+type SessionToolContinuationError = runtimeContinuation.ToolContinuationError
 type SessionToolDiagnostic = impl.SessionToolDiagnostic
 
 const SessionTransportWebRTC = impl.SessionTransportWebRTC
 
-type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
+type SessionUnresolvedToolResultsError = runtimeContinuation.SessionUnresolvedToolResultsError
 
 var WriteBrowserConversationReport = impl.WriteBrowserConversationReport

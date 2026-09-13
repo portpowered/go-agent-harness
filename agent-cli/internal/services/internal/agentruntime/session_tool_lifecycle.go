@@ -1,9 +1,6 @@
 package agentruntime
 
 import (
-	"errors"
-	sessionpublic "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-	sessioncontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sc "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioncontinuation"
 	w "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioncontinuation/wire"
 )
@@ -16,32 +13,26 @@ const (
 	ErrSessionAudioResponseIncomplete         = sc.ErrAudioResponseIncomplete
 )
 
-var ErrSessionUnresolvedToolResults = sessionpublic.ErrSessionUnresolvedToolResults
-var ErrSessionImageContinuationIncomplete, ErrSessionToolContinuationIncomplete = sessioncontract.ErrLiveImageContinuationIncomplete, sessioncontract.ErrLiveToolContinuationIncomplete
+var ErrSessionUnresolvedToolResults = sc.ErrSessionUnresolvedToolResults
+var ErrSessionImageContinuationIncomplete = sc.ErrImageContinuationIncomplete
+var ErrSessionToolContinuationIncomplete = sc.ErrToolContinuationIncomplete
 
 // Deprecated: use sessioncontinuation.UnresolvedToolResultsError.
-type SessionUnresolvedToolResultsError = sessionpublic.SessionUnresolvedToolResultsError
+type SessionUnresolvedToolResultsError = sc.UnresolvedToolResultsError
 
-// Compatibility alias (deprecated; use sessioncontinuation.ImageContinuationError).
-type SessionImageContinuationError = sc.LegacyImageContinuationError
+// Deprecated: use sessioncontinuation.ImageContinuationError.
+type SessionImageContinuationError = sc.ImageContinuationError
 
-// Compatibility alias (deprecated; use sessioncontinuation.ToolContinuationError).
-type SessionToolContinuationError = sc.LegacyToolContinuationError
+// Deprecated: use sessioncontinuation.ToolContinuationError.
+type SessionToolContinuationError = sc.ToolContinuationError
 
 func joinSessionAudioOutputError(a error, p string, o error) error {
 	return w.New().JoinAudioOutputError(a, p, o)
 }
 
 func withUnresolvedToolResults(err error, observer *sessionProgressObserver) error {
-	if errors.Is(err, sessionpublic.ErrSessionUnresolvedToolResults) {
-		return err
-	}
 	ids, statuses := observer.unresolvedToolCallIDs(), observer.unresolvedToolResultSendStatuses()
-	next := w.New().Enrich(err, sc.Snapshot{Unresolved: sc.UnresolvedToolResultsSnapshot{CallIDs: ids, SendStatuses: statuses}})
-	if len(ids) == 0 {
-		return next
-	}
-	return errors.Join(next, sessionpublic.NewSessionUnresolvedToolResultsError(ids, statuses))
+	return w.New().Enrich(err, sc.Snapshot{Unresolved: sc.UnresolvedToolResultsSnapshot{CallIDs: ids, SendStatuses: statuses}})
 }
 
 func formatContinuationMetadata(v map[string]string) string { return w.New().FormatMetadata(v) }

@@ -22,7 +22,7 @@ CONSUMER = EVIDENCE_DIR / "external-consumer"
 ADMISSION = EVIDENCE_DIR / "admission.json"
 LEGACY = ROOT / "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go"
 BASELINE = "d4766c3dbbf2c198142047ead4449d58dd47d485"
-INTEGRATED_MAIN = "071b0abfd67501db61e3c1929971c6dd6e77eb62"
+INTEGRATED_MAIN = "bd6a1289218d1bef1a3af36e64e9d4496062416f"
 STARTUP = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 BASELINE_LINES = 147
 BASELINE_SHA256 = "48000dcd73b85ebbe93fd40a3996529878a99c799b67b0779d60f55dbb43fc1e"
@@ -159,6 +159,7 @@ def verify_source_and_scope() -> dict[str, Any]:
     forbidden = sorted(path for path in changed if path in FORBIDDEN_PATHS)
     allowed = {
         "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle.go",
+        "agent-cli/internal/services/servicetest/runtime.go",
         "agent-cli/internal/services/internal/agentruntime/session_tool_lifecycle_c111_test.go",
         "go-agent-runtime/services/sessioncontinuation/",
         "coverage-manifest/go-agent-runtime/services/sessioncontinuation/",

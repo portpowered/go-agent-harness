@@ -28,6 +28,45 @@ func TestNewAliasReturnsPublicContract(t *testing.T) {
 	}
 }
 
+func TestUnresolvedEnrichmentContainsOneTypedLifecycleError(t *testing.T) {
+	primary := errors.New("provider closed")
+	canonical := NewService().Enrich(primary, sessioncontinuation.Snapshot{
+		Unresolved: sessioncontinuation.UnresolvedToolResultsSnapshot{
+			CallIDs: []string{"call-unresolved"},
+		},
+	})
+	var typed *sessioncontinuation.UnresolvedToolResultsError
+	if !errors.As(canonical, &typed) || typed == nil {
+		t.Fatalf("enriched unresolved error was not directly discoverable: %v", canonical)
+	}
+	if !errors.Is(canonical, primary) || !errors.Is(canonical, sessioncontinuation.ErrSessionUnresolvedToolResults) {
+		t.Fatalf("canonical unresolved error lost public sentinel identity: %v", canonical)
+	}
+	if got := countUnresolvedErrors(canonical); got != 1 {
+		t.Fatalf("unresolved error tree contains %d typed lifecycle errors, want one: %v", got, canonical)
+	}
+}
+
+func countUnresolvedErrors(err error) int {
+	if err == nil {
+		return 0
+	}
+	if reflect.TypeOf(err) == reflect.TypeOf((*sessioncontinuation.UnresolvedToolResultsError)(nil)) {
+		return 1
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		count := 0
+		for _, child := range joined.Unwrap() {
+			count += countUnresolvedErrors(child)
+		}
+		return count
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		return countUnresolvedErrors(wrapped.Unwrap())
+	}
+	return 0
+}
+
 func newService(t *testing.T) sessioncontinuation.Service {
 	t.Helper()
 	service := NewService()
