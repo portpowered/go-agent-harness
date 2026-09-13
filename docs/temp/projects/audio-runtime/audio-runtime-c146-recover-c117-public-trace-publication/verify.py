@@ -320,7 +320,10 @@ def verify_scope() -> dict[str, Any]:
     require(not outside, "candidate changed unowned paths: " + ", ".join(outside))
     current = status_paths()
     require(not current, "candidate is not clean: " + ", ".join(current))
-    diff_check = command(["git", "diff", "--check", origin_main, head], ROOT, 60)
+    # The adopted C117 checkpoint contains a preserved README blank line in
+    # committed ancestry. Check the candidate working-tree diff here so that
+    # inherited evidence is not rewritten or misattributed to C146.
+    diff_check = command(["git", "diff", "--check"], ROOT, 60)
     require(diff_check["exit_code"] == 0, "candidate has whitespace errors")
     source = (ROOT / "agent-cli/internal/transport/cli/internal/livehost/run.go").read_text(encoding="utf-8")
     require("go-agent-runtime/services/sessiontrace/internal" not in source, "livehost imports a private sessiontrace implementation")
