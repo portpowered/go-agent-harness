@@ -2,7 +2,7 @@
 
 This evidence belongs to the admitted `audio-runtime` / `audio-runtime-v1`
 task `audio-runtime-c127-repair-current-main-terminal-drain-regression`.
-The implementation candidate is source checkpoint `abad266fb092b78ca141afc050b86018f1aba216`
+The implementation candidate is source checkpoint `bb88393e41ff93d3f1663b4085c8b03ac11baf6b`
 on branch
 `codex/audio-runtime-c127-repair-current-main-terminal-drain-regression`.
 The isolated worktree is the worktree containing this file. The immutable
@@ -36,9 +36,10 @@ drain policy, cancellation identity, interruption behavior, or assertion was
 weakened.
 
 The paired source regression is recorded in
-`terminal_drain_test.go:205-218`: a provider fake records an explicit six-boundary
-sequence with monotonic-process timing and 6,400-sample ranges. On unmodified
-current main the temporary causal test fails with
+`causal/terminal_drain_test.go:119-241`: a provider fake records an explicit
+six-boundary sequence with monotonic-process timing and 6,400-sample ranges at
+the public live-service boundary. On unmodified current main the temporary
+causal test fails with
 `provider media admitted during Receive: context deadline exceeded`; after the
 repair the candidate records
 `rtc_forwarding -> provider_receipt -> sink_admission -> device_render ->
@@ -71,6 +72,8 @@ relabeled as C98.
 The final post-edit checks were:
 
 * `go test ./go-agent-runtime/services/session/internal/live -count=1 -timeout=180s`
+* `go test ./go-agent-runtime/services/session/internal/live/causal -run '^TestTerminalDrainOrderedBoundaryTrace$' -count=1 -timeout=60s`
+* `go test -race ./go-agent-runtime/services/session/internal/live/causal -run '^TestTerminalDrainOrderedBoundaryTrace$' -count=3 -timeout=120s`
 * `go test -race ./go-agent-runtime/services/session/internal/live -run 'BindPlaybackController|Terminal|Drain|Close|Cancel|Tool|CapturingInferencer' -count=3 -timeout=180s`
 * focused RTC tests in `agent-cli/internal/services/internal/agentruntime` and
   `go-device-gateway/pkg/runtime`
@@ -92,12 +95,14 @@ C127 product result. The exact commands, exits, and output summaries are in
 `verification-summary.json`.
 
 The subsequent SCRIPT CI run `34759672383` also rejected the candidate: static
-reported the new causal test's 772-line file and its 26/28 cyclomatic/cognitive
-complexity, while coverage failed the out-of-lease
+reported the then-root causal test's 772-line file and its 26/28
+cyclomatic/cognitive complexity, while coverage failed the out-of-lease
 `TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab`.
-The static finding is repaired by the current isolated test file and helper
-split; the browser failure remains preserved as an external ownership finding,
-not a C127 runtime result.
+The static finding is repaired by moving the causal probe into
+`live/causal/terminal_drain_test.go` (241 lines) and splitting its helpers; the
+parent live package remains within its 15-file budget. The browser failure
+remains preserved as an external ownership finding, not a C127 runtime result;
+the exact browser test passes in a standalone local run.
 
 The source-pinned `nomicrophone` YUI build from the candidate has SHA256
 `8e8db1f19527d10cc7ea53653db95a790f6852199784efe10e011be5f238ab1d`

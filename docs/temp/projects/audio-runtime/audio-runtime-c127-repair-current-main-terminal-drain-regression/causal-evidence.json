@@ -6,7 +6,7 @@
   "branchName": "codex/audio-runtime-c127-repair-current-main-terminal-drain-regression",
   "workId": "work-task-3",
   "session": "~default",
-  "candidateImplementationRevision": "abad266fb092b78ca141afc050b86018f1aba216",
+  "candidateImplementationRevision": "bb88393e41ff93d3f1663b4085c8b03ac11baf6b",
   "source": {
     "currentMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
     "fetchedOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
@@ -123,22 +123,22 @@
     "input": "same provider block ordering, tool continuation, final response and provider-close boundary; current-main failure was run against unmodified origin/main",
     "orderedRun": {
       "path": "causal-run.json",
-      "sha256": "dde56a948928278dc62ba03d18f35f79bc34c2c220826b6f1b2884688198e3ac",
+      "sha256": "8b2def019d23251f18e6a1efedf46cc2fc194622e095f230922947f50e3449cd",
       "candidate": "rtc_forwarding -> provider_receipt -> sink_admission -> device_render -> response_terminal -> graceful_drain",
       "currentMainFailure": "provider media admitted during Receive: context deadline exceeded",
       "firstDivergence": "rtc_forwarding",
-      "aggregateElapsedMs": 17322,
+      "aggregateElapsedMs": 17813,
       "childCleanup": "all candidate, current-main, and accepted-C64 process groups reaped"
     },
     "preRepairEvidence": {
       "path": "pre-repair-failure.txt",
-      "command": "go test ./go-agent-runtime/services/session/internal/live -run ^TestCapturingInferencerClaimsProviderMediaBeforeTerminalDrainReceive$ -count=1 -timeout=30s",
+      "command": "go test ./go-agent-runtime/services/session/internal/live/causal -run ^TestTerminalDrainOrderedBoundaryTrace$ -count=1 -timeout=30s",
       "returncode": 1,
       "timedOut": false,
       "failure": "read provider media admitted during Receive: context deadline exceeded"
     },
     "postRepairEvidence": {
-      "command": "go test -race ./go-agent-runtime/services/session/internal/live -run 'BindPlaybackController|Terminal|Drain|Close|Cancel|Tool|CapturingInferencer' -count=3 -timeout=180s",
+      "command": "go test -race ./go-agent-runtime/services/session/internal/live/causal -run ^TestTerminalDrainOrderedBoundaryTrace$ -count=3 -timeout=120s",
       "returncode": 0,
       "timedOut": false,
       "result": "ok"

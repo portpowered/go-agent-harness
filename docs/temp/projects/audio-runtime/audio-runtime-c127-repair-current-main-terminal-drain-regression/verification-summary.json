@@ -1,6 +1,6 @@
 {
   "schema": "audio-runtime.c127.verification-summary.v2",
-  "candidateImplementationRevision": "abad266fb092b78ca141afc050b86018f1aba216",
+  "candidateImplementationRevision": "bb88393e41ff93d3f1663b4085c8b03ac11baf6b",
   "pinnedCurrentMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
   "fetchedOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
   "checks": [
@@ -8,13 +8,13 @@
       "name": "ordered causal comparison",
       "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c127-repair-current-main-terminal-drain-regression/run.py --mode characterize --current 09c70f51243caeaf1184c4806b99bbf7749e3044 --control 59af6325614d80173447fe2018a0471e27b4e7b1 --child-timeout 60 --aggregate-timeout 600",
       "exit": 0,
-      "output": "candidate repaired exit=0; pinned current-main unmodified exit=1 with provider media admitted during Receive: context deadline exceeded; accepted C64 exit=0 with exact provider/tool/render markers; aggregate_elapsed_ms=17322; all process groups reaped"
+      "output": "candidate repaired exit=0; pinned current-main unmodified exit=1 with provider media admitted during Receive: context deadline exceeded; accepted C64 exit=0 with exact provider/tool/render markers; aggregate_elapsed_ms=17813; all process groups reaped"
     },
     {
       "name": "ordered causal verifier",
       "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c127-repair-current-main-terminal-drain-regression/verify.py --mode first-divergence --require-current-unmodified --require-matched-control --base 09c70f51243caeaf1184c4806b99bbf7749e3044",
       "exit": 0,
-      "output": "first divergence=rtc_forwarding; candidate source=abad266fb092b78ca141afc050b86018f1aba216; origin/main=bd6a1289218d1bef1a3af36e64e9d4496062416f"
+      "output": "first divergence=rtc_forwarding; candidate source=bb88393e41ff93d3f1663b4085c8b03ac11baf6b; origin/main=bd6a1289218d1bef1a3af36e64e9d4496062416f"
     },
     {
       "name": "live package normal",
@@ -26,7 +26,19 @@
       "name": "live package race",
       "command": "rtk proxy go test -race ./go-agent-runtime/services/session/internal/live -run 'BindPlaybackController|Terminal|Drain|Close|Cancel|Tool|CapturingInferencer' -count=3 -timeout=300s",
       "exit": 0,
-      "output": "ok github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live 1.919s"
+      "output": "ok github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live 3 repetitions; 87 tests passed"
+    },
+    {
+      "name": "causal probe normal",
+      "command": "rtk proxy go test ./go-agent-runtime/services/session/internal/live/causal -run '^TestTerminalDrainOrderedBoundaryTrace$' -count=1 -timeout=60s",
+      "exit": 0,
+      "output": "ok github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/causal; standalone public-boundary causal probe passed"
+    },
+    {
+      "name": "causal probe race",
+      "command": "rtk proxy go test -race ./go-agent-runtime/services/session/internal/live/causal -run '^TestTerminalDrainOrderedBoundaryTrace$' -count=3 -timeout=120s",
+      "exit": 0,
+      "output": "ok github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/causal 3 passes"
     },
     {
       "name": "agent runtime focused regressions",
@@ -96,9 +108,9 @@
     },
     {
       "name": "architecture",
-      "command": "rtk proxy make architecture-check",
+      "command": "rtk proxy make architecture-size-check",
       "exit": 0,
-      "output": "architecture gate passed: 195 package(s), 1922 file(s), 28610 function(s) checked"
+      "output": "architecture gate passed: 196 package(s), 1923 file(s), 28623 function(s) checked"
     },
     {
       "name": "strict test45",
@@ -134,7 +146,7 @@
       "name": "static rejection repair",
       "command": "rtk proxy make architecture-size-check",
       "exit": 0,
-      "output": "architecture-size-check passed after isolating terminal_drain_test.go (218 lines) from service_test.go (600 lines); TestTerminalDrainOrderedBoundaryTrace complexity is within the 20-point limits"
+      "output": "architecture-size-check passed with causal/terminal_drain_test.go at 241 lines, parent live package at 15 files, and TestTerminalDrainOrderedBoundaryTrace complexity within the 20-point limits"
     }
   ],
   "publicReplay": {

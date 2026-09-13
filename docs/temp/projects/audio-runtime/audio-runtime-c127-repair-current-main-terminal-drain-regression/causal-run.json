@@ -1,12 +1,12 @@
 {
   "accepted_c64": "59af6325614d80173447fe2018a0471e27b4e7b1",
   "bounds": {
-    "aggregate_elapsed_ms": 16458,
+    "aggregate_elapsed_ms": 17813,
     "aggregate_seconds": 600.0,
     "per_process_seconds": 60.0
   },
   "branch": "codex/audio-runtime-c127-repair-current-main-terminal-drain-regression",
-  "candidate_revision": "abad266fb092b78ca141afc050b86018f1aba216",
+  "candidate_revision": "bb88393e41ff93d3f1663b4085c8b03ac11baf6b",
   "controls": {
     "accepted_c64_healthy": {
       "cleanup": {
@@ -23,10 +23,10 @@
         "^TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio$",
         "-timeout=60s"
       ],
-      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c127-c64-control-ctz4b38p/source/agent-cli",
-      "elapsed_ms": 7390,
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c127-c64-control-i_nefz80/source/agent-cli",
+      "elapsed_ms": 7008,
       "output_bounded": true,
-      "output_tail": "=== RUN   TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio\n    rtc_device_runtime_test.go:441: C64_SEQUENCE_EVIDENCE provider_events=17 tool_calls=2 continuation=two-tool final_response=terminal-drain-final-response order=tool-turn-before-final-audio\n    rtc_device_runtime_test.go:495: C64_RENDER_EVIDENCE provider_samples=9600 admitted_samples=6400 consumed_samples=6400 rendered_samples=6720 queued_samples=0 underflow_samples=320 callback_count=14 shutdown=complete\n--- PASS: TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio (0.03s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.467s\n",
+      "output_tail": "=== RUN   TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio\n    rtc_device_runtime_test.go:441: C64_SEQUENCE_EVIDENCE provider_events=17 tool_calls=2 continuation=two-tool final_response=terminal-drain-final-response order=tool-turn-before-final-audio\n    rtc_device_runtime_test.go:495: C64_RENDER_EVIDENCE provider_samples=9600 admitted_samples=6400 consumed_samples=6400 rendered_samples=6720 queued_samples=0 underflow_samples=320 callback_count=14 shutdown=complete\n--- PASS: TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio (0.03s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.473s\n",
       "render": {
         "admitted_samples": 6400,
         "callback_count": 14,
@@ -58,21 +58,21 @@
         "test",
         "-count=1",
         "-v",
-        "./go-agent-runtime/services/session/internal/live",
+        "./go-agent-runtime/services/session/internal/live/causal",
         "-run",
         "^TestTerminalDrainOrderedBoundaryTrace$",
         "-timeout=30s"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c127-repair-current-main-terminal-drain-regression",
-      "elapsed_ms": 810,
+      "elapsed_ms": 516,
       "output_bounded": true,
-      "output_tail": "=== RUN   TestTerminalDrainOrderedBoundaryTrace\n    terminal_drain_test.go:217: C127_ORDERED_BOUNDARY_TRACE events=[{\"sequence\":1,\"boundary\":\"rtc_forwarding\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":46125},{\"sequence\":2,\"boundary\":\"provider_receipt\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":46333},{\"sequence\":3,\"boundary\":\"sink_admission\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":98708},{\"sequence\":4,\"boundary\":\"device_render\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":101791},{\"sequence\":5,\"boundary\":\"response_terminal\",\"sample_start\":6400,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":150125},{\"sequence\":6,\"boundary\":\"graceful_drain\",\"sample_start\":6400,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":165666}]\n--- PASS: TestTerminalDrainOrderedBoundaryTrace (0.00s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live\t0.186s\n",
+      "output_tail": "=== RUN   TestTerminalDrainOrderedBoundaryTrace\n    terminal_drain_test.go:240: C127_ORDERED_BOUNDARY_TRACE events=[{\"sequence\":1,\"boundary\":\"rtc_forwarding\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":558917},{\"sequence\":2,\"boundary\":\"provider_receipt\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":561542},{\"sequence\":3,\"boundary\":\"sink_admission\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":612667},{\"sequence\":4,\"boundary\":\"device_render\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":621500},{\"sequence\":5,\"boundary\":\"response_terminal\",\"sample_start\":6400,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":694708},{\"sequence\":6,\"boundary\":\"graceful_drain\",\"sample_start\":6400,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":695458}]\n--- PASS: TestTerminalDrainOrderedBoundaryTrace (0.00s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/causal\t0.176s\n",
       "returncode": 0,
       "timed_out": false,
       "trace": [
         {
           "boundary": "rtc_forwarding",
-          "elapsed_nanos": 46125,
+          "elapsed_nanos": 558917,
           "sample_end": 6400,
           "sample_start": 0,
           "sequence": 1,
@@ -80,7 +80,7 @@
         },
         {
           "boundary": "provider_receipt",
-          "elapsed_nanos": 46333,
+          "elapsed_nanos": 561542,
           "sample_end": 6400,
           "sample_start": 0,
           "sequence": 2,
@@ -88,7 +88,7 @@
         },
         {
           "boundary": "sink_admission",
-          "elapsed_nanos": 98708,
+          "elapsed_nanos": 612667,
           "sample_end": 6400,
           "sample_start": 0,
           "sequence": 3,
@@ -96,7 +96,7 @@
         },
         {
           "boundary": "device_render",
-          "elapsed_nanos": 101791,
+          "elapsed_nanos": 621500,
           "sample_end": 6400,
           "sample_start": 0,
           "sequence": 4,
@@ -104,7 +104,7 @@
         },
         {
           "boundary": "response_terminal",
-          "elapsed_nanos": 150125,
+          "elapsed_nanos": 694708,
           "sample_end": 6400,
           "sample_start": 6400,
           "sequence": 5,
@@ -112,7 +112,7 @@
         },
         {
           "boundary": "graceful_drain",
-          "elapsed_nanos": 165666,
+          "elapsed_nanos": 695458,
           "sample_end": 6400,
           "sample_start": 6400,
           "sequence": 6,
@@ -130,22 +130,21 @@
         "test",
         "-count=1",
         "-v",
-        "./services/session/internal/live",
+        "./services/session/internal/live/causal",
         "-run",
         "^TestTerminalDrainOrderedBoundaryTrace$",
         "-timeout=30s"
       ],
-      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c127-current-main-67dbso20/source/go-agent-runtime",
-      "elapsed_ms": 1389,
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c127-current-main-_zdm1qug/source/go-agent-runtime",
+      "elapsed_ms": 1660,
       "failure_marker": "provider media admitted during Receive: context deadline exceeded",
       "output_bounded": true,
-      "output_tail": "=== RUN   TestTerminalDrainOrderedBoundaryTrace\n    terminal_drain_test.go:209: provider media admitted during Receive: context deadline exceeded\n--- FAIL: TestTerminalDrainOrderedBoundaryTrace (0.00s)\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live\t0.177s\nFAIL\n",
+      "output_tail": "=== RUN   TestTerminalDrainOrderedBoundaryTrace\n    terminal_drain_test.go:236: provider media admitted during Receive: context deadline exceeded\n--- FAIL: TestTerminalDrainOrderedBoundaryTrace (0.00s)\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/causal\t0.417s\nFAIL\n",
       "returncode": 1,
       "source_revision": "09c70f51243caeaf1184c4806b99bbf7749e3044",
-      "test_overlay_sha256": "65da2982119c3a19204c87ed317ae4a019632c233cbc08fd465ad46a470403e0",
+      "test_overlay_sha256": "64954ad3ffd256d9af0755b942306ea88cc0dfe3c1bd5f55c034308fc139af42",
       "test_overlay_sha256s": {
-        "go-agent-runtime/services/session/internal/live/service_test.go": "65da2982119c3a19204c87ed317ae4a019632c233cbc08fd465ad46a470403e0",
-        "go-agent-runtime/services/session/internal/live/terminal_drain_test.go": "9de9a08e00841c3bc2e5781ac4568c945758d293ed93c71c5e193dddf63f5e47"
+        "go-agent-runtime/services/session/internal/live/causal/terminal_drain_test.go": "64954ad3ffd256d9af0755b942306ea88cc0dfe3c1bd5f55c034308fc139af42"
       },
       "timed_out": false
     }
