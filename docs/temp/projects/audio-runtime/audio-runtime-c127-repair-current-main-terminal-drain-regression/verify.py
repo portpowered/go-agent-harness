@@ -18,14 +18,13 @@ PINNED_CURRENT_MAIN = "09c70f51243caeaf1184c4806b99bbf7749e3044"
 ACCEPTED_C64 = "59af6325614d80173447fe2018a0471e27b4e7b1"
 STARTUP_INTEGRATION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 BRANCH = "codex/audio-runtime-c127-repair-current-main-terminal-drain-regression"
-LIVE_TEST_FILE = REPO_ROOT / "go-agent-runtime/services/session/internal/live/service_test.go"
-CAUSAL_TEST_FILE = REPO_ROOT / "go-agent-runtime/services/session/internal/live/terminal_drain_test.go"
+CAUSAL_TEST_FILE = REPO_ROOT / "go-agent-runtime/services/session/internal/live/causal/terminal_drain_test.go"
 ALLOWED_EXACT = {
     "go-agent-runtime/services/session/internal/live/replay.go",
     "go-agent-runtime/services/session/internal/live/service.go",
     "go-agent-runtime/services/session/internal/live/service_test.go",
     "go-agent-runtime/services/session/internal/live/start_support.go",
-    "go-agent-runtime/services/session/internal/live/terminal_drain_test.go",
+    "go-agent-runtime/services/session/internal/live/causal/terminal_drain_test.go",
 }
 ALLOWED_PREFIX = "docs/temp/projects/audio-runtime/audio-runtime-c127-repair-current-main-terminal-drain-regression/"
 
@@ -139,13 +138,12 @@ def main() -> int:
     verify_trace(candidate.get("trace"))
     baseline = require_process(controls.get("current_main_unmodified"), "unmodified current-main negative control", 1)
     require(baseline.get("source_revision") == PINNED_CURRENT_MAIN, "negative control source changed")
-    require(baseline.get("test_overlay_sha256") == hashlib.sha256(LIVE_TEST_FILE.read_bytes()).hexdigest(), "negative-control overlay is not the reviewed live test")
+    require(baseline.get("test_overlay_sha256") == hashlib.sha256(CAUSAL_TEST_FILE.read_bytes()).hexdigest(), "negative-control overlay is not the reviewed causal test")
     require(
         baseline.get("test_overlay_sha256s") == {
-            "go-agent-runtime/services/session/internal/live/service_test.go": hashlib.sha256(LIVE_TEST_FILE.read_bytes()).hexdigest(),
-            "go-agent-runtime/services/session/internal/live/terminal_drain_test.go": hashlib.sha256(CAUSAL_TEST_FILE.read_bytes()).hexdigest(),
+            "go-agent-runtime/services/session/internal/live/causal/terminal_drain_test.go": hashlib.sha256(CAUSAL_TEST_FILE.read_bytes()).hexdigest(),
         },
-        "negative-control overlays are not the reviewed live tests",
+        "negative-control overlay is not the reviewed causal test",
     )
     require(baseline.get("failure_marker") in str(baseline.get("output_tail")), "negative control did not prove the first divergence")
     verify_c64(controls.get("accepted_c64_healthy"))
