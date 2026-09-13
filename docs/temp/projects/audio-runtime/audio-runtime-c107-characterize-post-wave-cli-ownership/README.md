@@ -24,3 +24,15 @@ rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c107-characteri
 is the named public-probe entry point from the admitted PRD. CI and independent
 review remain external; this characterization does not claim retirement or
 project completion, and software replay is not device or acoustic proof.
+
+Release evidence is generated on a clean tested parent and then committed as
+one evidence-only descendant. After that commit, run:
+
+```text
+rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py --mode final-binding
+```
+
+The final-binding check proves the direct parent/tested revision, live PR head,
+owned-path-only change, unchanged executable inputs, checksums, and clean
+diff. This avoids falsely embedding a self-referential commit hash in its own
+evidence while keeping the tested source and final submitted head explicit.

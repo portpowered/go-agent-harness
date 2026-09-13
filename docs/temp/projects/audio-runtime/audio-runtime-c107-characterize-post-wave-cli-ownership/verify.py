@@ -187,6 +187,25 @@ def git_show(revision: str, path: str) -> bytes:
     return result.stdout
 
 
+def evidence_binding(candidate: str | None = None) -> dict[str, Any]:
+    """Describe the immutable source of a run and its one-commit handoff.
+
+    A release report is written while ``candidate`` is checked out and then
+    committed as an evidence-only descendant.  Embedding the descendant's
+    commit id in its own tree would be self-referential, so the handoff records
+    the tested parent explicitly and ``--mode final-binding`` verifies the
+    exact descendant, live PR head, path confinement, and executable-input
+    equivalence after the commit exists.
+    """
+    tested = candidate or str(git("rev-parse", "HEAD"))
+    return {
+        "mode": "evidence-only-direct-descendant",
+        "tested_candidate_revision": tested,
+        "final_head_verification": "run verify.py --mode final-binding after committing this evidence; final HEAD must be one direct owned-evidence descendant",
+        "executable_input_equivalence": "final-binding compares the tested parent and final HEAD outside the owned C107 evidence directory",
+    }
+
+
 def process_group_gone(pid: int) -> bool:
     try:
         os.killpg(pid, 0)
@@ -838,6 +857,7 @@ def capture_state() -> dict[str, Any]:
         "candidate_branch": str(git("branch", "--show-current")),
         "candidate_pr": candidate_pr,
         "prd_identity": admitted_prd_identity(),
+        "evidence_binding": evidence_binding(),
     }
     write_json(HERE / "state-capture.json", capture)
     return capture
@@ -886,6 +906,7 @@ def provenance() -> dict[str, Any]:
         "prd_identity": admitted_prd_identity(),
         "branch": branch,
         "candidate_revision": candidate,
+        "evidence_binding": evidence_binding(candidate),
         "candidate_pr": candidate_pr,
         "accepted_source_revision": SOURCE_REVISION,
         "current_origin_main": origin,
@@ -1844,6 +1865,7 @@ def public_smoke() -> dict[str, Any]:
             "source_revision": SOURCE_REVISION,
             "source_archive_sha256": archive_hash,
             "candidate_revision_at_run": str(git("rev-parse", "HEAD")),
+            "evidence_binding": evidence_binding(),
             "binary_sha256": binary_hash,
             "binary_bytes": binary.stat().st_size,
             "build_inputs": {"files": inputs["files"], "entries_sha256": inputs["entries_sha256"], "roots": inputs["roots"]},
@@ -1879,7 +1901,7 @@ def focused_regressions() -> dict[str, Any]:
             raise EvidenceFailure(f"focused {label} regression did not execute all tests: {missing}")
         result["expected_tests"] = expected
         results.append(result)
-    report = {"schema_version": "c107-focused-regressions-v1", "source_revision": SOURCE_REVISION, "results": results, "ci_polling": "not performed"}
+    report = {"schema_version": "c107-focused-regressions-v1", "source_revision": SOURCE_REVISION, "evidence_binding": evidence_binding(), "results": results, "ci_polling": "not performed"}
     write_json(run_dir / "report.json", report)
     return report
 
@@ -1888,7 +1910,7 @@ def accumulated_regressions() -> dict[str, Any]:
     run_dir = HERE / "runs/accumulated-regressions"
     result = run_bounded("session-ci-regressions-count-1-all", ["bash", "scripts/test-session-ci-regressions.sh", "all"], ROOT, run_dir, timeout=540, env={"COUNT": "1"}, output_cap=MAX_OUTPUT_BYTES)
     require_success(result)
-    report = {"schema_version": "c107-accumulated-regressions-v1", "source_revision": SOURCE_REVISION, "candidate_revision_at_run": str(git("rev-parse", "HEAD")), "count": 1, "result": result, "command": "COUNT=1 scripts/test-session-ci-regressions.sh all", "ci_polling": "not performed", "credentials": "not used"}
+    report = {"schema_version": "c107-accumulated-regressions-v1", "source_revision": SOURCE_REVISION, "candidate_revision_at_run": str(git("rev-parse", "HEAD")), "evidence_binding": evidence_binding(), "count": 1, "result": result, "command": "COUNT=1 scripts/test-session-ci-regressions.sh all", "ci_polling": "not performed", "credentials": "not used"}
     write_json(run_dir / "report.json", report)
     return report
 
@@ -1923,6 +1945,71 @@ def checksums() -> dict[str, Any]:
         entries.append(f"{sha256_file(path)}  {path.relative_to(HERE).as_posix()}")
     checksum_path.write_text("\n".join(entries) + "\n", encoding="utf-8")
     return {"path": str(checksum_path.relative_to(ROOT)), "entries": len(entries), "sha256": sha256_file(checksum_path), "excluded": ["SHA256SUMS", "verification-summary.json", "__pycache__", "*.pyc"]}
+
+
+def final_binding() -> dict[str, Any]:
+    """Validate the exact commit produced by the evidence handoff.
+
+    This is intentionally read-only.  It is run after the release evidence is
+    committed and before push so the checked-in reports can state which
+    tested parent they descend from without pretending an impossible
+    self-referential commit hash.
+    """
+    require_time("final evidence binding")
+    final_head = str(git("rev-parse", "HEAD"))
+    parent = str(git("rev-parse", "HEAD^"))
+    summary_path = HERE / "verification-summary.json"
+    summary = read_json(summary_path)
+    binding = summary.get("evidence_binding")
+    if not isinstance(binding, dict) or binding.get("mode") != "evidence-only-direct-descendant":
+        raise EvidenceFailure("release summary omitted the evidence-only binding")
+    tested = binding.get("tested_candidate_revision")
+    if not isinstance(tested, str) or not SHA256_RE.fullmatch(tested):
+        raise EvidenceFailure("release summary has no pinned tested parent revision")
+    if parent != tested:
+        raise EvidenceFailure(f"final evidence commit parent {parent} is not tested revision {tested}")
+    changed = str(git("diff", "--name-only", parent, final_head)).splitlines()
+    allowed_prefix = str(HERE.relative_to(ROOT)) + "/"
+    outside = sorted(path for path in changed if not path.startswith(allowed_prefix))
+    if outside:
+        raise EvidenceFailure(f"evidence-only descendant changed paths outside C107 scope: {outside[:20]}")
+    source_roots = ("agent-cli", "go-agent-runtime", "go-agent-loop", "go-audio", "go-device-gateway", "go-llm-gateway", "tests", "go.work", "go.work.sum")
+    source_changes = str(git("diff", "--name-only", parent, final_head, "--", *source_roots)).splitlines()
+    if source_changes:
+        raise EvidenceFailure(f"evidence-only descendant changed executable inputs: {source_changes[:20]}")
+    diff_check = subprocess.run(["git", "diff", "--check", parent, final_head, "--", str(HERE.relative_to(ROOT))], cwd=ROOT, capture_output=True, text=True, timeout=60)
+    if diff_check.returncode != 0:
+        raise EvidenceFailure(f"final evidence diff-check failed: {diff_check.stdout}{diff_check.stderr}")
+    if not (HERE / "SHA256SUMS").is_file():
+        raise EvidenceFailure("final evidence is missing SHA256SUMS")
+    checksum_errors = []
+    for line in (HERE / "SHA256SUMS").read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        digest, _, relative = line.partition("  ")
+        path = HERE / relative
+        if not path.is_file() or sha256_file(path) != digest:
+            checksum_errors.append(relative)
+    if checksum_errors:
+        raise EvidenceFailure(f"final evidence checksum mismatch: {checksum_errors[:10]}")
+    candidate_pr = summary.get("reports", {}).get("provenance", {}).get("candidate_pr", {})
+    number = candidate_pr.get("number")
+    if not isinstance(number, int):
+        raise EvidenceFailure("release provenance omitted candidate PR number")
+    live = command_json(["gh", "pr", "view", str(number), "--repo", "portpowered/go-agent-harness", "--json", "number,headRefName,headRefOid,baseRefName,state"])
+    if live.get("headRefOid") != final_head or live.get("headRefName") != BRANCH or live.get("baseRefName") != "main" or live.get("state") != "OPEN":
+        raise EvidenceFailure(f"live PR head is not the final evidence commit: {live!r}")
+    return {
+        "status": "passed",
+        "mode": "final-binding",
+        "tested_candidate_revision": tested,
+        "final_head": final_head,
+        "direct_parent": parent,
+        "changed_paths": changed,
+        "executable_inputs_unchanged": True,
+        "live_pr_head": live,
+        "checksum_entries_verified": True,
+    }
 
 
 def run_mode(mode: str, first: pathlib.Path | None = None, second: pathlib.Path | None = None) -> dict[str, Any]:
@@ -1969,6 +2056,8 @@ def run_mode(mode: str, first: pathlib.Path | None = None, second: pathlib.Path 
         return accumulated_regressions()
     if mode == "scope":
         return scope_checks()
+    if mode == "final-binding":
+        return final_binding()
     if mode == "all":
         external = external_determinism(first, second) if first and second else None
         capture_state()
@@ -1986,7 +2075,7 @@ def run_mode(mode: str, first: pathlib.Path | None = None, second: pathlib.Path 
         reports["accumulated_regressions"] = accumulated_regressions()
         reports["scope"] = scope_checks()
         reports["checksums"] = checksums()
-        summary = {"schema_version": "c107-verification-summary-v1", "observed_at": now(), "candidate_revision": str(git("rev-parse", "HEAD")), "reports": reports, "all_project_criteria": "OPEN", "c107_result": "scoped characterization only; no retirement or project acceptance"}
+        summary = {"schema_version": "c107-verification-summary-v1", "observed_at": now(), "candidate_revision": str(git("rev-parse", "HEAD")), "evidence_binding": evidence_binding(), "reports": reports, "all_project_criteria": "OPEN", "c107_result": "scoped characterization only; no retirement or project acceptance"}
         write_json(HERE / "verification-summary.json", summary)
         return {"status": "passed", "mode": mode, "candidate_revision": summary["candidate_revision"], "reports": {key: "passed" for key in reports}}
     if mode == "release":
@@ -2004,7 +2093,7 @@ def run_mode(mode: str, first: pathlib.Path | None = None, second: pathlib.Path 
         reports["accumulated_regressions"] = accumulated_regressions()
         reports["scope"] = scope_checks()
         reports["checksums"] = checksums()
-        summary = {"schema_version": "c107-release-summary-v1", "observed_at": now(), "candidate_revision": str(git("rev-parse", "HEAD")), "reports": reports, "all_project_criteria": "OPEN", "ci": "submitted by script gate after this handoff; not polled by executor", "review": "independent review remains external"}
+        summary = {"schema_version": "c107-release-summary-v1", "observed_at": now(), "candidate_revision": str(git("rev-parse", "HEAD")), "evidence_binding": evidence_binding(), "reports": reports, "all_project_criteria": "OPEN", "ci": "submitted by script gate after this handoff; not polled by executor", "review": "independent review remains external"}
         write_json(HERE / "verification-summary.json", summary)
         return {"status": "passed", "mode": mode, "candidate_revision": summary["candidate_revision"], "reports": {key: "passed" for key in reports}}
     if mode == "validate-copy":
@@ -2015,7 +2104,7 @@ def run_mode(mode: str, first: pathlib.Path | None = None, second: pathlib.Path 
 def main() -> int:
     global AGGREGATE_STARTED, REQUESTED_CHILD_TIMEOUT, REQUESTED_TOTAL_TIMEOUT
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["state", "provenance", "inventory", "determinism", "subtraction", "candidates", "disjointness", "retirement-floors", "negative-controls", "public", "focused-regressions", "accumulated-regressions", "scope", "all", "release", "validate-copy"], required=True)
+    parser.add_argument("--mode", choices=["state", "provenance", "inventory", "determinism", "subtraction", "candidates", "disjointness", "retirement-floors", "negative-controls", "public", "focused-regressions", "accumulated-regressions", "scope", "final-binding", "all", "release", "validate-copy"], required=True)
     parser.add_argument("--child-timeout", type=int, default=CHILD_TIMEOUT)
     parser.add_argument("--total-timeout", type=int, default=TOTAL_TIMEOUT)
     parser.add_argument("--inventory", type=pathlib.Path)
