@@ -39,6 +39,7 @@ CASES = {
         "required_taps": {"speaker_enqueued"}, "required_runtime_kinds": {"provider_wire_receive", "provider_wire_send"}, "required_provider_wire_types": set(),
     },
 }
+SERVICE_BOUNDARY_TAPS = {"microphone_pre_gate", "microphone_uploaded", "speaker_enqueued", "speaker_rendered"}
 SECRET_ENV_NAMES = ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "GROK_API_KEY", "ANTHROPIC_API_KEY")
 OUTPUT_LIMIT = 256 * 1024
 TERM_GRACE = 2.0
@@ -264,6 +265,51 @@ def provider_wire_types(events: list[dict[str, Any]]) -> set[str]:
     return types
 
 
+def run_service_boundary_probe(name: str, case_dir: Path, source_timeline: Path, deadline: float) -> dict[str, Any]:
+    if time.monotonic() >= deadline:
+        raise EvidenceFailure(f"aggregate deadline exceeded before {name} service boundary probe")
+    output_root = case_dir / "service-boundary"
+    result = run_child(
+        f"{name}-service-boundary",
+        ["go", "run", "./traceprobe", "--case", name, "--output", str(output_root)],
+        HERE / "external-consumer",
+        case_dir / "service-boundary-process",
+        min(30.0, deadline - time.monotonic()),
+    )
+    require_clean(result)
+    bundle = output_root / "bundle"
+    timeline = bundle / "audio-trace/timeline.jsonl"
+    for path in (
+        bundle / "audio-trace/microphone-pre-gate.wav",
+        bundle / "audio-trace/microphone-uploaded.wav",
+        bundle / "audio-trace/speaker-enqueued.wav",
+        bundle / "audio-trace/speaker-rendered.wav",
+        timeline,
+    ):
+        if not path.is_file():
+            raise EvidenceFailure(f"{name} service boundary probe missing artifact: {path}")
+    events = read_timeline(timeline)
+    taps = {event.get("tap") for event in events if event.get("kind") == "audio"}
+    runtimes = [event for event in events if event.get("kind") == "runtime"]
+    runtime_kinds = {event.get("runtime_kind") for event in runtimes}
+    if not SERVICE_BOUNDARY_TAPS.issubset(taps) or not {"provider_wire_send", "provider_wire_receive", "terminal"}.issubset(runtime_kinds):
+        raise EvidenceFailure(
+            f"{name} service boundary probe is incomplete: taps={sorted(taps)}, runtime_kinds={sorted(runtime_kinds)}"
+        )
+    if "c112-traceprobe-secret" in timeline.read_text(encoding="utf-8"):
+        raise EvidenceFailure(f"{name} service boundary probe leaked a credential")
+    return {
+        "process": result,
+        "source_yui_timeline": str(source_timeline),
+        "bundle": str(bundle),
+        "timeline": str(timeline),
+        "timeline_events": len(events),
+        "runtime_events": len(runtimes),
+        "audio_taps": sorted(taps),
+        "runtime_kinds": sorted(runtime_kinds),
+    }
+
+
 def run_case(name: str, artifact: Path, run_dir: Path, timeout: float, deadline: float) -> dict[str, Any]:
     if time.monotonic() >= deadline:
         raise EvidenceFailure(f"aggregate deadline exceeded before {name}")
@@ -324,6 +370,7 @@ def run_case(name: str, artifact: Path, run_dir: Path, timeout: float, deadline:
             f"{name} trace did not retain its required audio edges and runtime evidence: "
             f"taps={sorted(taps)}, runtime_kinds={sorted(runtime_kinds)}, wire_types={sorted(wire_types)}"
         )
+    service_boundary = run_service_boundary_probe(name, case_dir, timeline, deadline)
     try:
         manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -339,6 +386,7 @@ def run_case(name: str, artifact: Path, run_dir: Path, timeout: float, deadline:
         "speaker_trace_bytes": speaker.stat().st_size, "speaker_trace_sha256": sha256_file(speaker), "audio_taps": sorted(taps),
         "runtime_kinds": sorted(runtime_kinds), "provider_wire_types": sorted(wire_types), "audio_input_bytes": len(audio_pcm),
         "audio_input_sha256": sha256_file(audio_input) if audio_input is not None else None,
+        "service_boundary": service_boundary,
     }
 
 

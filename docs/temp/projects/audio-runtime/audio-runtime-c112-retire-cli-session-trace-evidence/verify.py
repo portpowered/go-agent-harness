@@ -114,6 +114,8 @@ def verify_ownership() -> None:
     old_consumer = evidence / "consumer"
     if (old_consumer.is_dir() and any(old_consumer.iterdir())) or not (evidence / "external-consumer/go.mod").is_file():
         raise VerificationFailure("required external-consumer path is not the admitted evidence path")
+    if not (evidence / "external-consumer/traceprobe/main.go").is_file():
+        raise VerificationFailure("deterministic public sessiontrace boundary probe is missing")
     for path in (ROOT / "go-agent-runtime/services/sessiontrace").rglob("*.go"):
         text = path.read_text(encoding="utf-8")
         if any(token in text for token in ("agent-cli", "internal/agentruntime", "pflag", "cobra", "os/exec", "syscall")):
@@ -127,7 +129,8 @@ def verify_ownership() -> None:
     runner = (evidence / "run.py").read_text(encoding="utf-8")
     runner_required = (
         "AGENT_MODEL__", "credential_environment_names", "removed_credential_environment_names",
-        "microphone_pre_gate", "provider_wire_types", "derived_fixture_sha256", "rendered_sha256",
+        "microphone_pre_gate", "microphone_uploaded", "speaker_rendered", "SERVICE_BOUNDARY_TAPS",
+        "provider_wire_types", "derived_fixture_sha256", "rendered_sha256", "service-boundary", "traceprobe",
     )
     if any(needle not in runner for needle in runner_required):
         raise VerificationFailure("bounded replay runner is missing credential, audio-edge, or provenance assertions")
