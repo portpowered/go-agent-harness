@@ -6,12 +6,30 @@
     "startup_integration": true
   },
   "branch": {
-    "actual": "codex/audio-runtime-c52-hermetic-room-liveness-characterization",
-    "expected": "codex/audio-runtime-c52-hermetic-room-liveness-characterization",
+    "actual": "codex/audio-runtime-c60-c52-failed-case-attribution-repair",
+    "expected": "codex/audio-runtime-c60-c52-failed-case-attribution-repair",
     "matches": true
   },
-  "candidate_evidence_parent_revision": "3af52f8bb74850bbc3d7102ea4302b6b2b9a3401",
-  "candidate_source_revision": "3af52f8bb74850bbc3d7102ea4302b6b2b9a3401",
+  "c60_evidence": {
+    "attribution_controls": {
+      "path": "attribution-controls.json",
+      "sha256": "deafe6d46dcc854f45a8850a7fdaaa977ab26759eeecea5be87fcc01927fe676"
+    },
+    "fixture": {
+      "path": "failed-case-attribution-fixture.json",
+      "sha256": "ebfa301cfd6f6ef5e0b61e8e4418c31c26cf5defbfce64731383ac71a9f89835"
+    },
+    "replay": {
+      "path": "replay-report.json",
+      "sha256": "e0b78b6872faa6460bdd19aa21c45921a9ca2d9d2591e1aa170c424a16a37a36"
+    },
+    "replay_wrapper": {
+      "path": "verify_replay.py",
+      "sha256": "f59e11c0329828487b05aba828a10fa7597d9a0936d640e3067f376864fa08c1"
+    }
+  },
+  "candidate_evidence_parent_revision": "3940ef20c8a3f001e568ac40c98a937f673c8ed7",
+  "candidate_source_revision": "3940ef20c8a3f001e568ac40c98a937f673c8ed7",
   "ci_observation": {
     "attempt": 1,
     "captured_at": "2026-09-11T06:43:19.163889+00:00",
@@ -99,11 +117,11 @@
       "GONOSUMDB": "",
       "GOPRIVATE": "",
       "GOPROXY": "https://proxy.golang.org,direct",
-      "HOME": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-eho_rpe2/home",
+      "HOME": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-lp43wkv1/home",
       "LANG": "C",
       "LC_ALL": "C",
       "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
-      "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-eho_rpe2/gotmp",
+      "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-lp43wkv1/gotmp",
       "TZ": "UTC"
     },
     "removed_secret_keys": [
@@ -116,6 +134,7 @@
     "runner_injected": [
       "C52_REVISION",
       "C52_MATRIX_CELL",
+      "C52_RUN_ID",
       "C52_TRACE_PATH",
       "C52_OVERLAY_HASH",
       "GOCACHE",
@@ -124,7 +143,7 @@
       "GOWORK"
     ]
   },
-  "evidence_candidate_revision": "3af52f8bb74850bbc3d7102ea4302b6b2b9a3401",
+  "evidence_candidate_revision": "3940ef20c8a3f001e568ac40c98a937f673c8ed7",
   "factory": {
     "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
     "server": "http://127.0.0.1:7439",
@@ -140,7 +159,7 @@
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
       "exit_code": 0,
       "stderr": "",
-      "stdout": "{\"manifest\": {\"version\": \"harness-project.v1\", \"project\": \"audio-runtime\", \"contractRevision\": \"audio-runtime-v1\", \"baselineRevision\": \"3194edd97aed588f7cdf2f8c58a69ac21da4c9ad\", \"integrationBranch\": \"codex/embeddable-agent-runtime\", \"intendedMainline\": {\"remote\": \"origin\", \"branch\": \"main\", \"revision\": \"ddebb8f44346cde4c7e989a1880b8ffac6179df0\"}, \"authority\": {\"sourcePlan\": {\"path\": \"factory/projects/audio-runtime/source-plan.md\", \"sha256\": \"f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37\"}, \"request\": {\"path\": \"factory/projects/audio-runtime/request.md\", \"sha256\": \"4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0\"}, \"acceptance\": {\"path\": \"factory/projects/audio-runtime/acceptance.md\", \"sha256\": \"e08b64af98d5c6ded9deac36b7bc33d7af09c47de15e80821852f8e5553148d5\"}}, \"criteria\": [{\"id\": \"AUDIO\", \"rubric\": \"One independently testable audio subsystem owns packet parsing, formats, clocks, sample timing, DSP and buffer operations; the core loop uses buffers without direct device IO.\"}, {\"id\": \"DEVICE\", \"rubric\": \"The adjacent device gateway owns physical device abstractions and lifecycle; playback evidence distinguishes actual consumption from queue admission.\"}, {\"id\": \"EMBED\", \"rubric\": \"A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization.\"}, {\"id\": \"SERVICE\", \"rubric\": \"Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction; CLI transport delegates business behavior.\"}, {\"id\": \"TRACE\", \"rubric\": \"Correlated device capture/playback, provider send/receive, tool lifecycle, cancellation, queues/drops and terminal evidence use explicit timing domains and bounded recording resources.\"}, {\"id\": \"REPLAY\", \"rubric\": \"Credential-free replay preserves recorded audio packets, ordering, tool events, interruption and termination; hardware and external nondeterminism limits are explicit.\"}, {\"id\": \"FAILURES\", \"rubric\": \"Truncated/no playback, barge-in failure, long-conversation slowdown and tool-continuation collisions have reproducible characterization, fixes where demonstrated, and exact residual limitations without false completion claims.\"}, {\"id\": \"QUALITY\", \"rubric\": \"Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions.\"}, {\"id\": \"PARITY\", \"rubric\": \"Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits.\"}], \"realtimeBudget\": {\"sessionsPerMission\": 3, \"totalSecondsPerMission\": 120, \"credentialFile\": \"~/.you-agent-factory/secrets/OPENAPI_API_KEY\"}}, \"admission\": {\"schema\": \"factory.project-admission.v1\", \"version\": 1, \"status\": \"active\", \"project_id\": \"audio-runtime\", \"contract_revision\": \"audio-runtime-v1\", \"session\": {\"id\": \"75c628a5-219b-4ea7-ae3b-a78b489387d2\", \"endpoint\": {\"server\": \"http://127.0.0.1:7439\"}, \"resume\": {\"previous_session_id\": \"ef2add2f-c16c-462f-9175-886ba2464ca3\", \"recording_evidence\": {\"path\": \"/Users/abdifamily/work/harness/go-agent-harness/.git/factory-runs/0927f5667915472b8e0aa7c107152a43.json\", \"sha256\": \"6083ca9a6ff94330d3aa69638fb99592bfd9c9b47bb606397fce7842f19ff638\"}}, \"session_id\": \"75c628a5-219b-4ea7-ae3b-a78b489387d2\", \"sessionId\": \"75c628a5-219b-4ea7-ae3b-a78b489387d2\", \"server\": \"http://127.0.0.1:7439\"}, \"admitted\": true, \"project\": \"audio-runtime\", \"projectID\": \"audio-runtime\", \"contractRevision\": \"audio-runtime-v1\", \"server\": \"http://127.0.0.1:7439\", \"sessionId\": \"75c628a5-219b-4ea7-ae3b-a78b489387d2\"}, \"runtime\": {\"project\": \"audio-runtime\", \"contractRevision\": \"audio-runtime-v1\", \"root\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness\", \"server\": \"http://127.0.0.1:7439\", \"pid\": 78657, \"processStart\": \"Fri Sep 11 02:10:07 2026\", \"childPid\": 78669, \"recording\": \"/Users/abdifamily/work/harness/go-agent-harness/.git/factory-runs/4c002f76e2984b489a541342e118cd32.json\", \"definitionSha256\": \"69521ec404bc9f5e2aefebf7310a086575dd97bf55f1bd3e2cd1e60151c1f07c\", \"runtimeBuild\": {\"sourceMode\": \"git-archive\", \"buildTarget\": \"build-all\", \"sourceRevision\": \"a82f2e5a532a25b3e163014b28e72190ac28c354\", \"sha256\": \"54619421bd0be400adf5e44e33e4a3a6d9833381906677d4c6df56a0e9882b5e\", \"patches\": [{\"path\": \"factory/patches/0001-current-placement-precedes-history.patch\", \"sha256\": \"06fb23512c1778cd12f56c03cddfbfe03c5198bf14739db0937d82d40c0e1795\"}, {\"path\": \"factory/patches/0002-retain-consumed-work-as-history.patch\", \"sha256\": \"0e2978d2b927b37989c50e4fc1e77f7324d01601b4f03ef64c55275f163b8a92\"}, {\"path\": \"factory/patches/0003-retain-terminal-failure-notifications.patch\", \"sha256\": \"56e9d989aa64678801a3a1b497d60a0ec0fa147af6b865162106543a07ae2e75\"}, {\"path\": \"factory/patches/0004-script-decision-outcomes.patch\", \"sha256\": \"b9337d00f0c67e76cf58fbbc0ae8baf5d16818fa02cbd4f48c91da7b8a6afe26\"}]}, \"integrationRevision\": \"8bdafc7f947a3a2c9856220abdc539437035bd21\", \"status\": \"running\", \"sessionId\": \"75c628a5-219b-4ea7-ae3b-a78b489387d2\", \"predecessor\": {\"path\": \"/Users/abdifamily/work/harness/go-agent-harness/.git/factory-runs/0927f5667915472b8e0aa7c107152a43.json\", \"sha256\": \"6083ca9a6ff94330d3aa69638fb99592bfd9c9b47bb606397fce7842f19ff638\"}}}\n"
+      "stdout": "{\"manifest\": {\"version\": \"harness-project.v1\", \"project\": \"audio-runtime\", \"contractRevision\": \"audio-runtime-v1\", \"baselineRevision\": \"3194edd97aed588f7cdf2f8c58a69ac21da4c9ad\", \"integrationBranch\": \"codex/embeddable-agent-runtime\", \"intendedMainline\": {\"remote\": \"origin\", \"branch\": \"main\", \"revision\": \"ddebb8f44346cde4c7e989a1880b8ffac6179df0\"}, \"authority\": {\"sourcePlan\": {\"path\": \"factory/projects/audio-runtime/source-plan.md\", \"sha256\": \"f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37\"}, \"request\": {\"path\": \"factory/projects/audio-runtime/request.md\", \"sha256\": \"4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0\"}, \"acceptance\": {\"path\": \"factory/projects/audio-runtime/acceptance.md\", \"sha256\": \"edd1f5cbca1de8b49f96cdf8f039732d28a0082ef3718015e10535ff2e6a441a\"}}, \"criteria\": [{\"id\": \"AUDIO\", \"rubric\": \"One independently testable audio subsystem owns packet parsing, formats, clocks, sample timing, DSP and buffer operations; the core loop uses buffers without direct device IO.\"}, {\"id\": \"DEVICE\", \"rubric\": \"The adjacent device gateway owns physical device abstractions and lifecycle; playback evidence distinguishes actual consumption from queue admission.\"}, {\"id\": \"EMBED\", \"rubric\": \"A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization.\"}, {\"id\": \"SERVICE\", \"rubric\": \"Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction. The legacy agent-cli/internal/services/internal/agentruntime production package is fully deprecated: all production callers use service-owned contracts and transport integrations, and the package contains no business policy, reusable runtime behavior, composition ownership, or device/audio implementation. Any temporary compatibility symbols are explicit Deprecated: aliases or thin adapters with no independent decisions or mutable state. CLI packages own only presentation, argument/input adaptation, and transport integration into those services.\"}, {\"id\": \"TRACE\", \"rubric\": \"Correlated device capture/playback, provider send/receive, tool lifecycle, cancellation, queues/drops and terminal evidence use explicit timing domains and bounded recording resources.\"}, {\"id\": \"REPLAY\", \"rubric\": \"Credential-free replay preserves recorded audio packets, ordering, tool events, interruption and termination; hardware and external nondeterminism limits are explicit.\"}, {\"id\": \"FAILURES\", \"rubric\": \"Truncated/no playback, barge-in failure, long-conversation slowdown and tool-continuation collisions have reproducible characterization, fixes where demonstrated, and exact residual limitations without false completion claims.\"}, {\"id\": \"QUALITY\", \"rubric\": \"Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions.\"}, {\"id\": \"PARITY\", \"rubric\": \"Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits.\"}], \"realtimeBudget\": {\"sessionsPerMission\": 3, \"totalSecondsPerMission\": 120, \"credentialFile\": \"~/.you-agent-factory/secrets/OPENAPI_API_KEY\"}}, \"admission\": {\"schema\": \"factory.project-admission.v1\", \"version\": 1, \"status\": \"active\", \"project_id\": \"audio-runtime\", \"contract_revision\": \"audio-runtime-v1\", \"session\": {\"id\": \"a1dcfba4-c777-4aa9-b682-9b585f979e5b\", \"endpoint\": {\"server\": \"http://127.0.0.1:7439\"}, \"resume\": {\"previous_session_id\": \"75c628a5-219b-4ea7-ae3b-a78b489387d2\", \"recording_evidence\": {\"path\": \"/Users/abdifamily/work/harness/go-agent-harness/.git/factory-runs/2bf1956360f04f9690b1dee63024b07a.json\", \"sha256\": \"343542aad70ff9ba14bc82ba924d36b233e848e47f103e9b00791ddc2669795f\"}}, \"session_id\": \"a1dcfba4-c777-4aa9-b682-9b585f979e5b\", \"sessionId\": \"a1dcfba4-c777-4aa9-b682-9b585f979e5b\", \"server\": \"http://127.0.0.1:7439\"}, \"admitted\": true, \"project\": \"audio-runtime\", \"projectID\": \"audio-runtime\", \"contractRevision\": \"audio-runtime-v1\", \"server\": \"http://127.0.0.1:7439\", \"sessionId\": \"a1dcfba4-c777-4aa9-b682-9b585f979e5b\"}, \"runtime\": {\"project\": \"audio-runtime\", \"contractRevision\": \"audio-runtime-v1\", \"root\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness\", \"server\": \"http://127.0.0.1:7439\", \"pid\": 51962, \"processStart\": \"Fri Sep 11 06:54:34 2026\", \"childPid\": 51974, \"recording\": \"/Users/abdifamily/work/harness/go-agent-harness/.git/factory-runs/bf2ee32c6baa496a876deef01832ecb6.json\", \"definitionSha256\": \"bcbde51375e67f8ae0e738c667be03d71988cd01851323ff67f6b201b69018bc\", \"runtimeBuild\": {\"sourceMode\": \"git-archive\", \"buildTarget\": \"build-all\", \"sourceRevision\": \"a82f2e5a532a25b3e163014b28e72190ac28c354\", \"sha256\": \"54619421bd0be400adf5e44e33e4a3a6d9833381906677d4c6df56a0e9882b5e\", \"patches\": [{\"path\": \"factory/patches/0001-current-placement-precedes-history.patch\", \"sha256\": \"06fb23512c1778cd12f56c03cddfbfe03c5198bf14739db0937d82d40c0e1795\"}, {\"path\": \"factory/patches/0002-retain-consumed-work-as-history.patch\", \"sha256\": \"0e2978d2b927b37989c50e4fc1e77f7324d01601b4f03ef64c55275f163b8a92\"}, {\"path\": \"factory/patches/0003-retain-terminal-failure-notifications.patch\", \"sha256\": \"56e9d989aa64678801a3a1b497d60a0ec0fa147af6b865162106543a07ae2e75\"}, {\"path\": \"factory/patches/0004-script-decision-outcomes.patch\", \"sha256\": \"b9337d00f0c67e76cf58fbbc0ae8baf5d16818fa02cbd4f48c91da7b8a6afe26\"}]}, \"integrationRevision\": \"8bdafc7f947a3a2c9856220abdc539437035bd21\", \"status\": \"running\", \"freshBoardContext\": {\"path\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/factory/docs/sol-medium-restart-handoff.md\", \"sha256\": \"c347cdbac800a74d2b49f54a8fae01429086152559b0c34a12b003a3faac2c87\"}, \"freshBoardPredecessor\": {\"path\": \"/Users/abdifamily/work/harness/go-agent-harness/.git/factory-runs/2bf1956360f04f9690b1dee63024b07a.json\", \"sha256\": \"343542aad70ff9ba14bc82ba924d36b233e848e47f103e9b00791ddc2669795f\"}, \"sessionId\": \"a1dcfba4-c777-4aa9-b682-9b585f979e5b\", \"predecessor\": {\"path\": \"/Users/abdifamily/work/harness/go-agent-harness/.git/factory-runs/2bf1956360f04f9690b1dee63024b07a.json\", \"sha256\": \"343542aad70ff9ba14bc82ba924d36b233e848e47f103e9b00791ddc2669795f\"}}}\n"
     },
     "verify_work_command": {
       "command": [
@@ -150,22 +169,22 @@
         "--type",
         "task",
         "--name",
-        "audio-runtime-c52-hermetic-room-liveness-characterization"
+        "audio-runtime-c60-c52-failed-case-attribution-repair"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
       "exit_code": 0,
       "stderr": "",
-      "stdout": "{\"status\": \"admitted\", \"project\": \"audio-runtime\", \"name\": \"audio-runtime-c52-hermetic-room-liveness-characterization\"}\n"
+      "stdout": "{\"status\": \"admitted\", \"project\": \"audio-runtime\", \"name\": \"audio-runtime-c60-c52-failed-case-attribution-repair\"}\n"
     },
     "verify_work_result": {
-      "name": "audio-runtime-c52-hermetic-room-liveness-characterization",
+      "name": "audio-runtime-c60-c52-failed-case-attribution-repair",
       "project": "audio-runtime",
       "status": "admitted"
     }
   },
   "local_regressions": {
     "path": "regressions/summary.json",
-    "sha256": "1cfd603bc71c3e5a7ed86879028b8a59a52bde07cdb50a11375552ddcad5f58b",
+    "sha256": "c7964fd98be2f755918e70aa232524f9a8ea3bdac88baa66fbb4d00c8e8f6bbe",
     "summary": {
       "checks": {
         "normal": {
@@ -178,7 +197,7 @@
             "./services/rooms/internal/lifecycle",
             "./services/session/internal/live"
           ],
-          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go-agent-runtime",
+          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go-agent-runtime",
           "passes": true,
           "process": {
             "cleanup": {
@@ -199,9 +218,9 @@
               "./services/rooms/internal/lifecycle",
               "./services/session/internal/live"
             ],
-            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go-agent-runtime",
-            "duration_seconds": 15.55164545821026,
-            "ended_at": "2026-09-11T11:51:18.810523+00:00",
+            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go-agent-runtime",
+            "duration_seconds": 15.671327999792993,
+            "ended_at": "2026-09-11T22:38:04.272761+00:00",
             "exit_code": 0,
             "first_failure": {
               "line": 1,
@@ -210,14 +229,14 @@
             },
             "output_overflow": false,
             "reader_survivor": false,
-            "started_at": "2026-09-11T11:51:03.258623+00:00",
+            "started_at": "2026-09-11T22:37:48.601208+00:00",
             "stderr_bytes": 309,
-            "stderr_sha256": "e73e3399d64fa65c5e3a68dcba276ddb5856d2885bbae28828001c00227e4694",
+            "stderr_sha256": "b72b0be0ce5f6be94d18712f76c4ebbc2061f398cdf8f8d6668515346518b6f1",
             "stdout_bytes": 203,
-            "stdout_sha256": "c44a56282f5885d28277e5ffb54f0dbd30acbb4473f31ae03ac75bbf4e6895fc",
+            "stdout_sha256": "379c05547593ea8fb909956f277889510ca5b968879291db4de150193be0373b",
             "timed_out": false
           },
-          "source_revision": "3af52f8bb74850bbc3d7102ea4302b6b2b9a3401"
+          "source_revision": "3940ef20c8a3f001e568ac40c98a937f673c8ed7"
         },
         "race": {
           "command": [
@@ -229,7 +248,7 @@
             "-timeout=180s",
             "./services/rooms/internal/lifecycle"
           ],
-          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go-agent-runtime",
+          "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go-agent-runtime",
           "passes": true,
           "process": {
             "cleanup": {
@@ -250,21 +269,21 @@
               "-timeout=180s",
               "./services/rooms/internal/lifecycle"
             ],
-            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go-agent-runtime",
-            "duration_seconds": 7.859593333210796,
-            "ended_at": "2026-09-11T11:51:26.686600+00:00",
+            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go-agent-runtime",
+            "duration_seconds": 7.816209333948791,
+            "ended_at": "2026-09-11T22:38:12.104147+00:00",
             "exit_code": 0,
             "first_failure": null,
             "output_overflow": false,
             "reader_survivor": false,
-            "started_at": "2026-09-11T11:51:18.826956+00:00",
+            "started_at": "2026-09-11T22:38:04.287903+00:00",
             "stderr_bytes": 0,
             "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "stdout_bytes": 103,
-            "stdout_sha256": "ed41daf99d8a286f1ddb30300adea2743acbf91138bfe4ce8c238622547e9829",
+            "stdout_sha256": "b1201a1a2362c7003451445ed3fc87cb96ef43b1c4908baadf7c0ae3b1a6b0ca",
             "timed_out": false
           },
-          "source_revision": "3af52f8bb74850bbc3d7102ea4302b6b2b9a3401"
+          "source_revision": "3940ef20c8a3f001e568ac40c98a937f673c8ed7"
         }
       },
       "passes": true,
@@ -272,11 +291,11 @@
       "storage": {
         "binary_output_bytes": 0,
         "cleanup_verified": true,
-        "fixture_report_bytes": 9964,
-        "free_space_after_cleanup_bytes": 116051714048,
-        "free_space_before_cleanup_bytes": 115413737472,
-        "free_space_before_run_bytes": 116052811776,
-        "reproducible_scratch_bytes_before_cleanup": 582628372,
+        "fixture_report_bytes": 9913,
+        "free_space_after_cleanup_bytes": 72275464192,
+        "free_space_before_cleanup_bytes": 71645138944,
+        "free_space_before_run_bytes": 72279846912,
+        "reproducible_scratch_bytes_before_cleanup": 576503987,
         "reproducible_scratch_bytes_retained_after_cleanup": 0,
         "source_staging_bytes": 0
       }
@@ -285,13 +304,13 @@
   "matrix_run": {
     "aggregate_deadline_met": true,
     "cell_count": 22,
-    "matrix_results_sha256": "2a0bc3603e506473043c158f14794bfca1eade8f302431eac53e20ed69602340",
+    "matrix_results_sha256": "f16012980a277c462304baf2b5840615a610b03dce8b1028bdf5901b3d9c36e8",
     "negative_controls": {
       "all_rejected": true,
       "controls": {
         "archive_reuse_mismatch": {
           "copied_from_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
-          "error": "RuntimeError: pre-existing source archive contents do not match fixed revision 823bd350fe5d11782c38bda87d7b7bfd7d89d7cd: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T143300Z-review52-repair-v2/negative-controls/archive-reuse-mismatch/stale-pr438.tar has content a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d7",
+          "error": "RuntimeError: pre-existing source archive contents do not match fixed revision 823bd350fe5d11782c38bda87d7b7bfd7d89d7cd: /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T212525Z/negative-controls/archive-reuse-mismatch/stale-pr438.tar has content a9ef6c923e3cf3f0baf02b2db796b49aa9e4429cba2d743cb91be0ad3cb",
           "rejected": true,
           "scratch_removed": true,
           "source_revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd"
@@ -318,14 +337,14 @@
               "-c",
               "import os,time; child=os.fork(); (os.close(1), os.close(2), time.sleep(30)) if child==0 else os._exit(0)"
             ],
-            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T143300Z-review52-repair-v2/scratch/planning-main/go-agent-runtime",
-            "duration_seconds": 0.04902004078030586,
-            "ended_at": "2026-09-11T11:09:35.190308+00:00",
+            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T212525Z/scratch/planning-main/go-agent-runtime",
+            "duration_seconds": 0.0844149999320507,
+            "ended_at": "2026-09-11T21:26:46.900915+00:00",
             "exit_code": 0,
             "first_failure": null,
             "output_overflow": false,
             "reader_survivor": false,
-            "started_at": "2026-09-11T11:09:35.141299+00:00",
+            "started_at": "2026-09-11T21:26:46.816508+00:00",
             "stderr_bytes": 0,
             "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "stdout_bytes": 0,
@@ -350,14 +369,14 @@
               "-c",
               "import os,time; child=os.fork(); time.sleep(30) if child==0 else time.sleep(30)"
             ],
-            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T143300Z-review52-repair-v2/scratch/planning-main/go-agent-runtime",
-            "duration_seconds": 1.5490678329952061,
-            "ended_at": "2026-09-11T11:09:35.140902+00:00",
+            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T212525Z/scratch/planning-main/go-agent-runtime",
+            "duration_seconds": 1.5662900828756392,
+            "ended_at": "2026-09-11T21:26:46.815665+00:00",
             "exit_code": -15,
             "first_failure": null,
             "output_overflow": false,
             "reader_survivor": false,
-            "started_at": "2026-09-11T11:09:33.591764+00:00",
+            "started_at": "2026-09-11T21:26:45.249394+00:00",
             "stderr_bytes": 0,
             "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "stdout_bytes": 0,
@@ -387,22 +406,23 @@
               "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$",
               "./services/session/internal/live"
             ],
-            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T143300Z-review52-repair-v2/scratch/planning-main/go-agent-runtime",
-            "duration_seconds": 0.5297673330642283,
-            "ended_at": "2026-09-11T11:09:33.591174+00:00",
+            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T212525Z/scratch/planning-main/go-agent-runtime",
+            "duration_seconds": 0.5272956248372793,
+            "ended_at": "2026-09-11T21:26:45.248835+00:00",
             "exit_code": 0,
             "first_failure": null,
             "output_overflow": false,
             "reader_survivor": false,
-            "started_at": "2026-09-11T11:09:33.061390+00:00",
+            "started_at": "2026-09-11T21:26:44.721548+00:00",
             "stderr_bytes": 0,
             "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            "stdout_bytes": 996,
-            "stdout_sha256": "df10d51549c083512d27fc591e0796586374288c7fd37d039ee5e5726648e5b8",
+            "stdout_bytes": 995,
+            "stdout_sha256": "9764cdeed5b380f596a9cece1ae45082441a7ff6ad8ada22133700fb240177df",
             "timed_out": false
           },
           "rejected": true,
           "selection": {
+            "action_package_mismatches": [],
             "behavior_passed": false,
             "cached_marker": false,
             "first_assertion": "",
@@ -412,6 +432,7 @@
             "no_tests_marker": false,
             "package": "./services/session/internal/live",
             "package_events": [],
+            "raw_action_binding": null,
             "relevant_test_names": [],
             "requested_count": 1,
             "required_test_fail_counts": {
@@ -425,6 +446,9 @@
             },
             "required_test_skip_counts": {
               "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+            },
+            "required_test_terminal_actions": {
+              "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": []
             },
             "required_test_terminal_counts": {
               "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
@@ -454,22 +478,23 @@
               "^C52NoSuchTest$",
               "./services/rooms/internal/lifecycle"
             ],
-            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/20260911T143300Z-review52-repair-v2/scratch/planning-main/go-agent-runtime",
-            "duration_seconds": 0.41797679103910923,
-            "ended_at": "2026-09-11T11:09:33.060650+00:00",
+            "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T212525Z/scratch/planning-main/go-agent-runtime",
+            "duration_seconds": 0.4395865839906037,
+            "ended_at": "2026-09-11T21:26:44.720787+00:00",
             "exit_code": 0,
             "first_failure": null,
             "output_overflow": false,
             "reader_survivor": false,
-            "started_at": "2026-09-11T11:09:32.642664+00:00",
+            "started_at": "2026-09-11T21:26:44.281212+00:00",
             "stderr_bytes": 0,
             "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "stdout_bytes": 1014,
-            "stdout_sha256": "238b685b08112dbf193c24dcf488e04a6071793ee3f49a53c4041e93d2ea7159",
+            "stdout_sha256": "b095ea2b08861b3b0cb48e64c050669af9515cd209c68223e38877538dd66251",
             "timed_out": false
           },
           "rejected": true,
           "selection": {
+            "action_package_mismatches": [],
             "behavior_passed": false,
             "cached_marker": false,
             "first_assertion": "",
@@ -482,33 +507,34 @@
               {
                 "Action": "start",
                 "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-                "Time": "2026-09-11T11:09:32.870012Z"
+                "Time": "2026-09-11T21:26:44.522428Z"
               },
               {
                 "Action": "output",
                 "Output": "testing: warning: no tests to run\n",
                 "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-                "Time": "2026-09-11T11:09:33.043351Z"
+                "Time": "2026-09-11T21:26:44.696756Z"
               },
               {
                 "Action": "output",
                 "Output": "PASS\n",
                 "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-                "Time": "2026-09-11T11:09:33.043435Z"
+                "Time": "2026-09-11T21:26:44.696819Z"
               },
               {
                 "Action": "output",
-                "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.173s [no tests to run]\n",
+                "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.174s [no tests to run]\n",
                 "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-                "Time": "2026-09-11T11:09:33.043547Z"
+                "Time": "2026-09-11T21:26:44.696963Z"
               },
               {
                 "Action": "pass",
-                "Elapsed": 0.174,
+                "Elapsed": 0.175,
                 "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
-                "Time": "2026-09-11T11:09:33.043571Z"
+                "Time": "2026-09-11T21:26:44.697003Z"
               }
             ],
+            "raw_action_binding": null,
             "relevant_test_names": [],
             "requested_count": 1,
             "required_test_fail_counts": {
@@ -523,6 +549,9 @@
             "required_test_skip_counts": {
               "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
             },
+            "required_test_terminal_actions": {
+              "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": []
+            },
             "required_test_terminal_counts": {
               "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
             },
@@ -533,8 +562,8 @@
       },
       "schema": "audio-runtime-c52-negative-controls-v2"
     },
-    "path": "runs/20260911T143300Z-review52-repair-v2/run.json",
-    "run_id": "20260911T143300Z-review52-repair-v2"
+    "path": "runs/c60-final-20260911T212525Z/run.json",
+    "run_id": "c60-final-20260911T212525Z"
   },
   "no_source_mutation": true,
   "planning_main_revision": "7f73c8b3b4ebc99b55b8bb5e802beff024385407",
@@ -575,20 +604,24 @@
     "status": "REPORTED_UNDER_PAYLOAD"
   },
   "project": "audio-runtime",
-  "refreshed_origin_main_revision": "4a3f83430be6fde42ef3b25d39e25a9492980e30",
+  "refreshed_origin_main_revision": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
   "runner_inputs": {
+    "attribution_controls_sha256": "deafe6d46dcc854f45a8850a7fdaaa977ab26759eeecea5be87fcc01927fe676",
     "capture_ci_sha256": "9e358e7a7345c3e1894814eab61358c1d2b85e2135c7d066f3d0711a39286bb1",
     "expected_checkpoints_sha256": "4107e8692145f50f73fa6d4b49085d082741e382859cec098156420e176a01df",
+    "fixture_sha256": "ebfa301cfd6f6ef5e0b61e8e4418c31c26cf5defbfce64731383ac71a9f89835",
     "integrity_controls_sha256": "231af1ce99f0eee09799c9c678248b77d5a5fa6cea306197e07ea450d541021e",
     "matrix_sha256": "16003084e9c6415dcbdb9cd90bfcc5d255c55b3d38824776a803533041bdc45c",
-    "overlay_sha256": "209c074ce991f204ecf35e035a206720482cebcd4c83e58af516d857693c4d9a",
-    "provenance_script_sha256": "12fae77ab8f71611db64267cd32707a4c13a768d0e6b6632674eddb46da32983",
+    "overlay_sha256": "434704414ff5a3c1dd65fac12a5dbf6657fe1fa07f9f6a70b63fda4dcfb7c6b1",
+    "provenance_script_sha256": "71d555c20e5c5e66480b1dee2ee8427638e55ca13fb03f4f08c8d2616c15f462",
     "regressions_script_sha256": "8b2ea7ae29fa18a56e5882365713fa4214bd38fe83dbff0a00e7140cbf0b3870",
-    "run_sha256": "2a0bc3603e506473043c158f14794bfca1eade8f302431eac53e20ed69602340",
-    "runner_sha256": "aefde30f67513db82bf0c1c0b98684aa63546a250a41669c448e2b3797ae505f",
-    "verify_sha256": "9823903823372792f5ab981d56b519de257b79203acdfe34d2a6e3c10ab1f510"
+    "replay_sha256": "e0b78b6872faa6460bdd19aa21c45921a9ca2d9d2591e1aa170c424a16a37a36",
+    "replay_wrapper_sha256": "f59e11c0329828487b05aba828a10fa7597d9a0936d640e3067f376864fa08c1",
+    "run_sha256": "f16012980a277c462304baf2b5840615a610b03dce8b1028bdf5901b3d9c36e8",
+    "runner_sha256": "e17ee6a464e25e096b37a155e048a03d234a91eb4a0162c40e22c7707136511b",
+    "verify_sha256": "62b4b82935aa314bc0cd09bc50537859d4df51b53ebe1a355d802588d3f0fce6"
   },
-  "schema": "audio-runtime-c52-provenance-v1",
+  "schema": "audio-runtime-c60-provenance-v1",
   "source_archives": {
     "planning_main": {
       "bytes": 51513216,
@@ -621,11 +654,6 @@
   },
   "source_mutation_audit": {
     "dirty_paths": [
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/README.md",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/evidence-index.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/integrity-controls.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/pr-body.md",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/provenance.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/normal.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/normal/process.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/normal/stderr.log",
@@ -634,17 +662,19 @@
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/race/process.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/race/stdout.log",
       "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/regressions/summary.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/storage.json",
-      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/verify.py"
+      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/replay-report.json"
     ],
     "outside_owned_paths": [],
-    "owned_prefix": "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/",
+    "owned_prefixes": [
+      "docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/",
+      "docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/"
+    ],
     "production_source_unchanged": true
   },
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "storage": {
     "path": "storage.json",
-    "sha256": "cef9b1050f9399fa378ecf5056156f286e02a49ce7d904185d3b80f1afa344f7",
+    "sha256": "003f1e1ad9ef378da88b9d99aeee6e4131eed68e57f0458db42bc9ee13593a7d",
     "summary": {
       "archive_reuse": {
         "planning-main": {
@@ -667,7 +697,7 @@
         }
       },
       "binary_output_bytes": 0,
-      "cache_bytes_before_cleanup": 653252867,
+      "cache_bytes_before_cleanup": 653132489,
       "cleanup": {
         "current_run": {
           "cache_present_after_cleanup": false,
@@ -685,14 +715,14 @@
           "CI log/metadata"
         ]
       },
-      "current_run_fixture_report_bytes": 8030300,
-      "fixture_report_bytes": 25301761,
-      "free_space_after_cleanup_bytes": 120842915840,
-      "free_space_before_cleanup_bytes": 119821434880,
-      "free_space_before_run_bytes": 120698228736,
+      "current_run_fixture_report_bytes": 8788156,
+      "fixture_report_bytes": 26157599,
+      "free_space_after_cleanup_bytes": 74844053504,
+      "free_space_before_cleanup_bytes": 73822879744,
+      "free_space_before_run_bytes": 74753818624,
       "free_space_limitation": "free space was measured immediately before and after cleanup; background filesystem activity is not controlled",
-      "observed_at": "2026-09-11T11:53:02.054894+00:00",
-      "reproducible_scratch_bytes_before_cleanup": 266983979,
+      "observed_at": "2026-09-11T22:39:48.445059+00:00",
+      "reproducible_scratch_bytes_before_cleanup": 266984251,
       "reproducible_scratch_bytes_retained_after_cleanup": 0,
       "reuse_identity": {
         "planning-main": {
@@ -774,10 +804,10 @@
           },
           "cache_present": false,
           "cleanup_verified": true,
-          "free_space_after_cleanup_bytes": 120842915840,
-          "free_space_before_cleanup_bytes": 119821434880,
-          "retained_bytes": 8229387,
-          "run_id": "20260911T143300Z-review52-repair-v2",
+          "free_space_after_cleanup_bytes": 74844053504,
+          "free_space_before_cleanup_bytes": 73822879744,
+          "retained_bytes": 9085225,
+          "run_id": "c60-final-20260911T212525Z",
           "scratch_content_present": false,
           "storage": {
             "archive_reuse": {
@@ -801,17 +831,17 @@
               }
             },
             "binary_output_bytes": 0,
-            "cache_bytes_before_cleanup": 653252867,
+            "cache_bytes_before_cleanup": 653132489,
             "cleanup": {
               "cache_present_after_cleanup": false,
               "known_generated_cache_and_scratch_removed": true,
               "scratch_present_after_cleanup": false
             },
-            "fixture_report_bytes": 8030300,
-            "free_space_after_cleanup_bytes": 120842915840,
-            "free_space_before_cleanup_bytes": 119821434880,
-            "free_space_before_run_bytes": 120698228736,
-            "reproducible_scratch_bytes_before_cleanup": 266983979,
+            "fixture_report_bytes": 8788156,
+            "free_space_after_cleanup_bytes": 74844053504,
+            "free_space_before_cleanup_bytes": 73822879744,
+            "free_space_before_run_bytes": 74753818624,
+            "reproducible_scratch_bytes_before_cleanup": 266984251,
             "reproducible_scratch_bytes_retained_after_cleanup": 0,
             "source_staging_bytes": 103053735
           }
@@ -851,22 +881,22 @@
       "source_staging_bytes": 103053735
     }
   },
-  "task": "audio-runtime-c52-hermetic-room-liveness-characterization",
+  "task": "audio-runtime-c60-c52-failed-case-attribution-repair",
   "toolchain": {
     "cpu_count": 10,
     "go_env": {
       "CGO_ENABLED": "0",
       "GOARCH": "arm64",
-      "GOCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-eho_rpe2/gocache",
+      "GOCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-lp43wkv1/gocache",
       "GOENV": "",
-      "GOMODCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-eho_rpe2/gomodcache",
+      "GOMODCACHE": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-lp43wkv1/gomodcache",
       "GOOS": "darwin",
       "GOPROXY": "https://proxy.golang.org,direct",
       "GOSUMDB": "sum.golang.org",
-      "GOTMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-eho_rpe2/gotmp",
+      "GOTMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-lp43wkv1/gotmp",
       "GOTOOLCHAIN": "auto",
       "GOVERSION": "go1.26.7",
-      "GOWORK": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go.work"
+      "GOWORK": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go.work"
     },
     "go_env_command": {
       "command": [
@@ -885,17 +915,17 @@
         "GOPROXY",
         "GOSUMDB"
       ],
-      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair",
       "exit_code": 0,
       "stderr": "",
-      "stdout": "go1.26.7\ndarwin\narm64\n0\nauto\n/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization/go.work\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-eho_rpe2/gomodcache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-eho_rpe2/gocache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-eho_rpe2/gotmp\n\nhttps://proxy.golang.org,direct\nsum.golang.org\n"
+      "stdout": "go1.26.7\ndarwin\narm64\n0\nauto\n/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/go.work\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-lp43wkv1/gomodcache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-lp43wkv1/gocache\n/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c52-provenance-lp43wkv1/gotmp\n\nhttps://proxy.golang.org,direct\nsum.golang.org\n"
     },
     "go_version_command": {
       "command": [
         "go",
         "version"
       ],
-      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization",
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair",
       "exit_code": 0,
       "stderr": "go: downloading go1.26.7 (darwin/arm64)\n",
       "stdout": "go version go1.26.7 darwin/arm64\n"
@@ -970,7 +1000,7 @@
   ],
   "worktree": {
     "isolated": true,
-    "prd_branch_name": "codex/audio-runtime-c52-hermetic-room-liveness-characterization",
-    "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c52-hermetic-room-liveness-characterization"
+    "prd_branch_name": "codex/audio-runtime-c60-c52-failed-case-attribution-repair",
+    "root": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair"
   }
 }
