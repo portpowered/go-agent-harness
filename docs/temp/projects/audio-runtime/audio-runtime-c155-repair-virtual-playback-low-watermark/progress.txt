@@ -1,0 +1,9 @@
+2026-09-13
+
+- Admission verified from FACTORY_ROOT for the sole audio-runtime task; branch matches prd.json.
+- Fresh origin/main and accepted planning base are 4a1c399ccbb3d780be95eb04316e84b8f11a6646; startup integration revision is an ancestor.
+- No C155 review findings exist in the canonical factory server list.
+- Baseline exact subtest controls passed locally, but the predecessor Windows log showed the same test’s start/read ordering failure.
+- Temporary forced start-late control recorded a nil waiter result at queued=2400 above low=1920; the temporary file was removed.
+- Repaired subtest uses a standard context Done handshake to establish waiter throttling before reads. No production file changed.
+- Focused, race, scheduler, package, gateway, vet and diff checks passed; commit/push/PR evidence is appended after handoff.
