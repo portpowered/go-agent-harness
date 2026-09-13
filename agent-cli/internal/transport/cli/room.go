@@ -55,16 +55,6 @@ func NewRoomRunCommand(globalFlags *flags.GlobalFlags, service runtimeRooms.Serv
 	return NewRoomRunCommandWithToolService(globalFlags, service, nil)
 }
 
-// NewRoomRunCommandWithToolService injects the already-composed runtime tool
-// service used when a room participant requests browser capabilities.
-func NewRoomRunCommandWithToolService(globalFlags *flags.GlobalFlags, service runtimeRooms.Service, runtimeToolService runtimeTools.Service) *RoomRunCommand {
-	command := &RoomRunCommand{globalFlags: globalFlags, service: service, runtimeToolService: runtimeToolService, signalContext: defaultRoomSignalContext}
-	if service != nil {
-		command.run = service.Run
-	}
-	return command
-}
-
 // SetRunner replaces the room service used by this command. It is intended
 // for hermetic command tests and does not change the production default.
 func (c *RoomRunCommand) SetRunner(runner RoomRunFunc) {

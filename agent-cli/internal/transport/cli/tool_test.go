@@ -19,8 +19,14 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audiocodecwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
+
+func newTestSessionRuntimeToolService() runtimeTools.Service {
+	return runtimeToolsWire.NewServiceWithAudioCodec(audiocodecwire.NewService())
+}
 
 type cliTestTool struct {
 	id       string

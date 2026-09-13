@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -15,6 +16,16 @@ import (
 )
 
 const runtimeRoomBrowserEventCapacity = 16
+
+// NewRoomRunCommandWithToolService injects the already-composed runtime tool
+// service used when a room participant requests browser capabilities.
+func NewRoomRunCommandWithToolService(globalFlags *flags.GlobalFlags, service runtimeRooms.Service, runtimeToolService runtimeTools.Service) *RoomRunCommand {
+	command := &RoomRunCommand{globalFlags: globalFlags, service: service, runtimeToolService: runtimeToolService, signalContext: defaultRoomSignalContext}
+	if service != nil {
+		command.run = service.Run
+	}
+	return command
+}
 
 // roomRunPlans keeps command admission results together until the service
 // receives one immutable launch or replay decision. It lives with the room
