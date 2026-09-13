@@ -26,6 +26,7 @@ import (
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -40,7 +41,8 @@ type LiveCredentialReference func(string) string
 // devices.Service while the command itself stores only the common contract.
 type FileDeviceService struct {
 	runtimeDevices.Service
-	Scheduler clock.Scheduler
+	Scheduler    clock.Scheduler
+	TraceService runtimeSessionTrace.Service
 }
 
 // NewSessionCommand creates the session command with both public service
@@ -177,9 +179,13 @@ func (c *SessionCommand) runRuntimeLiveSessionWithAnnouncements(ctx context.Cont
 		WriteAnnouncements: writeRuntimeLiveAnnouncements,
 		AnnouncementOutput: announcementOut,
 		DeviceService:      c.deviceService,
-		FileDeviceService:  livehost.FileDeviceService{Service: c.fileDeviceService.Service, Scheduler: c.fileDeviceService.Scheduler},
-		RecordingService:   c.recordingService,
-		CredentialValues:   runtimeLiveCredentialValues,
+		FileDeviceService: livehost.FileDeviceService{
+			Service:   c.fileDeviceService.Service,
+			Scheduler: c.fileDeviceService.Scheduler,
+		},
+		RecordingService: c.recordingService,
+		CredentialValues: runtimeLiveCredentialValues,
+		TraceService:     c.fileDeviceService.TraceService,
 	}))
 }
 

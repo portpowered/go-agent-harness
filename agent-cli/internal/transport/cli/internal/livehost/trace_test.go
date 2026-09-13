@@ -10,12 +10,15 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	runtimeSessionTraceWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
@@ -269,33 +272,149 @@ func TestTraceFailClosedKeepsTraceDisabledBehavior(t *testing.T) {
 	}
 }
 
+func TestPublicSessionTracePublishesRedactedRuntimeAndAudioAfterRecording(t *testing.T) {
+	root := t.TempDir()
+	bundle := filepath.Join(root, "bundle")
+	secret := "trace-secret-value"
+	probe := &traceHostProbe{run: func(options runtimeSession.LiveRunOptions) error {
+		if options.Recorder == nil {
+			t.Fatal("live options recorder is nil")
+		}
+		message := messages.StreamMessage{
+			Type:  messages.StreamTypeResponseCreate,
+			Value: &messages.ResponseCreateValue{Type: "response_create", Instructions: secret},
+		}
+		if err := options.Recorder.RecordMessage(context.Background(), runtimeSession.LiveRecord{Direction: runtimeSession.LiveRecordAgent, Timestamp: time.Unix(1, 0), Message: message}); err != nil {
+			return err
+		}
+		if err := options.Recorder.RecordAudio(context.Background(), runtimeSession.LiveAudioRecord{
+			Direction: runtimeSession.LiveRecordClient, Admission: runtimeSession.LiveAudioQueueAdmitted,
+			Frame: audio.PCMFrame{Format: audio.PCM16DeviceFormat(16_000), Samples: []int16{1, -2, 3}},
+		}); err != nil {
+			return err
+		}
+		if err := options.Recorder.RecordAudio(context.Background(), runtimeSession.LiveAudioRecord{
+			Direction: runtimeSession.LiveRecordClient, Admission: runtimeSession.LiveAudioMediaBridged,
+			Frame: audio.PCMFrame{Format: audio.PCM16DeviceFormat(16_000), Samples: []int16{4, -5, 6}},
+		}); err != nil {
+			return err
+		}
+		if err := options.Recorder.RecordAudio(context.Background(), runtimeSession.LiveAudioRecord{
+			Direction: runtimeSession.LiveRecordAgent, Admission: runtimeSession.LiveAudioMediaBridged,
+			Frame: audio.PCMFrame{Format: audio.PCM16DeviceFormat(16_000), Samples: []int16{7, -8, 9}},
+		}); err != nil {
+			return err
+		}
+		if err := options.Recorder.RecordEvent(context.Background(), runtimeSession.LiveEvent{Kind: string(runtimeSession.LiveEventTerminal)}); err != nil {
+			return err
+		}
+		return options.Recorder.Finalize(context.Background(), nil)
+	}}
+	recording := &traceRecordingProbe{}
+	err := Run(context.Background(), nil, serviceSession.Request{TraceAudio: true, RecordDirectory: bundle}, Dependencies{
+		LiveService:  probe,
+		TraceService: runtimeSessionTraceWire.NewService(),
+		BuildRequest: func(context.Context, serviceSession.Request, *runtimeReplay.CaptureInspection) (runtimeSession.LiveRequest, error) {
+			return runtimeSession.LiveRequest{SessionID: "trace-public", InputAudioSampleRate: 16_000, OutputAudioSampleRate: 16_000}, nil
+		},
+		RecordingService: recording,
+		CredentialValues: func(serviceSession.Request) ([]string, error) { return []string{secret}, nil },
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	timelinePath := filepath.Join(bundle, "audio-trace", "timeline.jsonl")
+	timeline, err := os.ReadFile(timelinePath)
+	if err != nil {
+		t.Fatalf("read published timeline: %v", err)
+	}
+	if strings.Contains(string(timeline), secret) {
+		t.Fatalf("timeline leaked credential %q: %s", secret, timeline)
+	}
+	for _, kind := range []string{"provider_wire_receive", "response_create", "audio_input", "audio_output", "terminal"} {
+		if !strings.Contains(string(timeline), `"runtime_kind":"`+kind+`"`) {
+			t.Fatalf("timeline missing runtime kind %q: %s", kind, timeline)
+		}
+	}
+	for _, name := range []string{"microphone-pre-gate.wav", "microphone-uploaded.wav", "speaker-enqueued.wav"} {
+		if _, err := os.Stat(filepath.Join(bundle, "audio-trace", name)); err != nil {
+			t.Fatalf("trace audio %s: %v", name, err)
+		}
+	}
+}
+
+func TestPublicSessionTraceDoesNotOverwriteExistingDestination(t *testing.T) {
+	root := t.TempDir()
+	bundle := filepath.Join(root, "bundle")
+	recording := &traceRecordingProbe{existingTrace: true}
+	probe := &traceHostProbe{run: func(options runtimeSession.LiveRunOptions) error {
+		return options.Recorder.Finalize(context.Background(), nil)
+	}}
+	err := Run(context.Background(), nil, serviceSession.Request{TraceAudio: true, RecordDirectory: bundle}, Dependencies{
+		LiveService:  probe,
+		TraceService: runtimeSessionTraceWire.NewService(),
+		BuildRequest: func(context.Context, serviceSession.Request, *runtimeReplay.CaptureInspection) (runtimeSession.LiveRequest, error) {
+			return runtimeSession.LiveRequest{SessionID: "trace-duplicate", OutputAudioSampleRate: 16_000}, nil
+		},
+		RecordingService: recording,
+		CredentialValues: func(serviceSession.Request) ([]string, error) { return nil, nil },
+	})
+	if !errors.Is(err, runtimeSessionTrace.ErrDestinationExists) {
+		t.Fatalf("Run error = %v, want destination conflict", err)
+	}
+	sentinel, readErr := os.ReadFile(filepath.Join(bundle, "audio-trace", "timeline.jsonl"))
+	if readErr != nil {
+		t.Fatalf("read existing destination: %v", readErr)
+	}
+	if string(sentinel) != "existing-trace" {
+		t.Fatalf("existing destination changed to %q", sentinel)
+	}
+}
+
 type traceHostProbe struct {
 	built  atomic.Int32
 	runs   atomic.Int32
 	runErr error
+	run    func(runtimeSession.LiveRunOptions) error
 }
 
 func (p *traceHostProbe) OpenLive(context.Context, runtimeSession.LiveRequest) (runtimeSession.LiveHandle, error) {
 	return nil, errors.New("trace host probe does not open handles")
 }
 
-func (p *traceHostProbe) RunLive(context.Context, runtimeSession.LiveRunOptions) error {
+func (p *traceHostProbe) RunLive(_ context.Context, options runtimeSession.LiveRunOptions) error {
 	p.runs.Add(1)
+	if p.run != nil {
+		return p.run(options)
+	}
 	return p.runErr
 }
 
 type traceRecordingProbe struct {
-	opened      atomic.Int32
-	credentials atomic.Int32
+	opened        atomic.Int32
+	credentials   atomic.Int32
+	existingTrace bool
 }
 
 func (p *traceRecordingProbe) TrackSession(messages.SessionInferencer, runtimeRecording.Writer, string) (runtimeRecording.SessionCapture, error) {
 	return nil, nil
 }
 
-func (p *traceRecordingProbe) OpenLiveEvidence(runtimeRecording.LiveEvidenceOptions) (runtimeSession.LiveRecorder, error) {
+func (p *traceRecordingProbe) OpenLiveEvidence(options runtimeRecording.LiveEvidenceOptions) (runtimeSession.LiveRecorder, error) {
 	p.opened.Add(1)
-	return &traceRecorderProbe{}, nil
+	if err := os.MkdirAll(options.Destination, 0o755); err != nil {
+		return nil, err
+	}
+	if p.existingTrace {
+		path := filepath.Join(options.Destination, "audio-trace")
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(filepath.Join(path, "timeline.jsonl"), []byte("existing-trace"), 0o600); err != nil {
+			return nil, err
+		}
+	}
+	return &traceRecorderProbe{destination: options.Destination}, nil
 }
 
 func (p *traceRecordingProbe) OpenLiveSemanticEvidence(string) (runtimeSession.LiveRecorder, error) {
@@ -303,7 +422,7 @@ func (p *traceRecordingProbe) OpenLiveSemanticEvidence(string) (runtimeSession.L
 	return &traceRecorderProbe{}, nil
 }
 
-type traceRecorderProbe struct{}
+type traceRecorderProbe struct{ destination string }
 
 func (*traceRecorderProbe) RecordMessage(context.Context, runtimeSession.LiveRecord) error {
 	return nil
@@ -317,7 +436,12 @@ func (*traceRecorderProbe) RecordEvent(context.Context, runtimeSession.LiveEvent
 	return nil
 }
 
-func (*traceRecorderProbe) Finalize(context.Context, error) error { return nil }
+func (r *traceRecorderProbe) Finalize(context.Context, error) error {
+	if r == nil || r.destination == "" {
+		return nil
+	}
+	return os.MkdirAll(r.destination, 0o755)
+}
 
 var _ runtimeSession.LiveService = (*traceHostProbe)(nil)
 var _ runtimeSession.LiveRunner = (*traceHostProbe)(nil)
