@@ -6,4 +6,6 @@
 - Baseline exact subtest controls passed locally, but the predecessor Windows log showed the same test’s start/read ordering failure.
 - Temporary forced start-late control recorded a nil waiter result at queued=2400 above low=1920; the temporary file was removed.
 - Repaired subtest uses a standard context Done handshake to establish waiter throttling before reads. No production file changed.
-- Focused, race, scheduler, package, gateway, vet and diff checks passed; commit/push/PR evidence is appended after handoff.
+- Focused, race, scheduler, package, gateway, vet and diff checks passed.
+- Implementation checkpoint 87c38b48d7cec36ecb476ac44f0f27fcf97b05f0 was committed and pushed; PR #516 was opened from that exact head.
+- The evidence-only follow-up commit records this handoff without changing production behavior. The final pushed head is the exact SHA returned in the task response; script CI must run that head, including Windows portable, and owns all polling.

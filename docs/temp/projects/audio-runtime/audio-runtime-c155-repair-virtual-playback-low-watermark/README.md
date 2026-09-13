@@ -60,4 +60,4 @@ All commands below exited 0 on the candidate worktree:
 - `go vet ./go-device-gateway/...`
 - `git diff --check`
 
-The exact pushed revision, PR, and script-CI handoff are recorded in `progress.txt` after commit.
+The implementation checkpoint, PR, and script-CI handoff boundary are recorded in `progress.txt`; the final pushed handoff head is supplied in the task response.
