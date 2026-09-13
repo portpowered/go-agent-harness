@@ -48,6 +48,15 @@ OWNED_PREFIXES = (
     "coverage-manifest/go-audio/pkg/rtctransport/",
     "docs/temp/projects/audio-runtime/audio-runtime-c131-repair-c116-gateway-rtc-ownership/",
     "docs/temp/projects/audio-runtime/audio-runtime-c135-recover-c131-rtc-ownership/",
+    # C152's caller repair requires the public service to be supplied at the
+    # application composition boundary rather than constructed by the probe.
+    "agent-cli/internal/services/internal/devices/service_test.go",
+    "agent-cli/internal/services/wire/wire.go",
+    "agent-cli/internal/transport/cli/device_probe_test.go",
+    "agent-cli/internal/wire/wire.go",
+    "agent-cli/internal/wire/wire_gen.go",
+    "go-agent-runtime/services/devices/internal/probe/",
+    "go-agent-runtime/services/devices/wire/",
 )
 
 class VerificationFailure(RuntimeError):
@@ -246,7 +255,7 @@ def final_scope() -> dict:
         path for path in changed
         if not any(path == prefix or path.startswith(prefix) for prefix in OWNED_PREFIXES)
     ]
-    require(not outside, "candidate changed paths outside C135 scope: " + ", ".join(outside))
+    require(not outside, "candidate changed paths outside the C135/C152 recovery scope: " + ", ".join(outside))
     counts = {relative(path): len(path.read_text(encoding="utf-8").splitlines()) for path in GATEWAY_FILES}
     require(sum(counts.values()) <= 503, f"gateway line budget failed: {counts}")
     diff_check = command(["git", "diff", "--check"])
