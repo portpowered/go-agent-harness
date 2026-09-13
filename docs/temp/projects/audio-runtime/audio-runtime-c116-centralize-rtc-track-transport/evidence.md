@@ -2,9 +2,45 @@
 
 This evidence belongs to the admitted `audio-runtime` project and task
 `audio-runtime-c116-centralize-rtc-track-transport`. It describes the source
-tree tested at implementation checkpoint
-`26b1d45a08079b97b1dfcb0d0b609fe747063203`; the evidence refresh is a
-docs-only descendant with the same source behavior.
+tree tested at the current candidate head
+`82eed81dcb022b6ace632423a44f52f83d4b016f`. The current candidate includes
+the adapter lint/coverage repair `3b40b8b8dd20a7f1816165c65e95aaa7967e3e2d`,
+the split coverage-test checkpoint
+`7d0a4e80a8a5c97bc9ab13c715f437aa9fb44aba`, and the clean current-main merge
+at the candidate head.
+
+## Current candidate checkpoint
+
+- `origin/main` was fetched to
+  `09c70f51243caeaf1184c4806b99bbf7749e3044` in this isolated worktree and
+  merged with `--no-ff` as `82eed81dcb022b6ace632423a44f52f83d4b016f`.
+- The current branch is
+  `codex/audio-runtime-c116-centralize-rtc-track-transport`; the worktree was
+  clean before this evidence refresh. The running host checkout was never
+  merged or reset.
+- The pinned golangci-lint failure was repaired by making both compatibility
+  adapter `reflect.Kind` switches exhaustive. The prior RTC package coverage
+  failure was repaired with behavior-focused compatibility-adapter tests;
+  `go-llm-gateway/pkg/transport/rtc` now reports 88.5% against its 87.60%
+  manifest floor.
+- Current structural gates pass: `make lint` (0 issues), `make vet`,
+  `make staticcheck`, `make wire-check` (11 graphs, no drift),
+  `make architecture-size-check` (195 packages, 1,920 files, 28,285
+  functions), `make coverage-registration` (185 packages across 6 modules),
+  and `make coverage` (exit 0).
+- Current focused and accumulated gates pass: `make test-rtc-race`,
+  `make test-regressions` (agent-cli replay fixtures and all gateway replay
+  fixtures), and all five `verify.py` modes. The bounded runner passes
+  `rtc-track-roundtrip` (15), `external-media` (93),
+  `device-probe-software` (6), `c21-consumption-replay` (3), and
+  `credential-free-audio-tool` (3).
+- The public external consumer passes with `GOWORK=off` and race detection
+  (`ok audio-runtime-c116-rtc-transport-consumer 1.180s`). Runtime RTC race
+  coverage passes in 3 packages (45 tests), and the gateway RTC package passes
+  its 3x race run (261 tests).
+- The earlier Script-CI rejection at the pre-repair head identified exactly
+  the two repaired gates: static exhaustive-switch diagnostics and the RTC
+  coverage floor. No green Script-CI result is claimed for this new head.
 
 ## Admission and ancestry
 
@@ -20,10 +56,12 @@ docs-only descendant with the same source behavior.
   `ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d`.
 - Startup revision: `8bdafc7f947a3a2c9856220abdc539437035bd21`.
 - Accepted main revision: `3963bc3566da24f8214634c17a9d0f79a6724171`.
-- Fresh `git fetch origin main` updated the isolated worktree's
-  `origin/main` to `1a8467246c6607a06ffc7289075da2595724ce8b`.
-- Merge checkpoint `207217ead5e53d658b5d10d7848ba0543e54e7aa` integrates that
-  fresh main into this worktree. Startup, accepted main, and fresh
+- The earlier fresh-main checkpoint
+  `1a8467246c6607a06ffc7289075da2595724ce8b` remains an ancestor; the final
+  `git fetch origin main` updated the isolated worktree's `origin/main` to
+  `09c70f51243caeaf1184c4806b99bbf7749e3044`.
+- Merge checkpoint `82eed81dcb022b6ace632423a44f52f83d4b016f` integrates that
+  current main into this worktree. Startup, accepted main, and current
   `origin/main` are ancestors of the candidate. The running host checkout was
   never merged or reset.
 
@@ -78,7 +116,7 @@ source.
 
 ## Focused and accumulated gate evidence
 
-At the implementation checkpoint, the following passed:
+At the earlier implementation checkpoint, the following passed:
 
 - runtime RTC package: 15 normal tests and 15 race tests;
 - gateway RTC package: 62 normal tests and 62 race tests;
