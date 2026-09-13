@@ -37,6 +37,14 @@ RELEASED_SHARED_PATHS = (
     "scripts/wire-packages.txt",
     "docs/architecture/architecture-policy.json",
     "docs/architecture/architecture-size-baseline.json",
+    # origin/main now shards the former monolithic baseline; these are the
+    # exact C79-owned fragments changed by the same demonstrated downward
+    # repair.
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_liveness.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go.json",
 )
 # This pre-existing identity regression is kept as an exact, test-only
 # compatibility repair: disposed reducer slots cannot be rebound, so the
