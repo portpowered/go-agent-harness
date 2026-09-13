@@ -1,0 +1,29 @@
+{
+  "task": "audio-runtime-c124-recover-c84-room-participant-lifecycle",
+  "review_finding": "participant_tracker.go eagerly evaluated replaceFailure(o) even when specific(o, l.o) was false, allowing duplicate or late terminal failures to overwrite first-cause error identity and metadata.",
+  "repair_commit": "ecb5600e4",
+  "repair": "replaceFailure(o) is now called only inside the lazy specific-failure branch; the false branch returns without mutating the first observation.",
+  "regression_commit": "7b6c22bae",
+  "regression": "TestParticipantTrackerPreservesFirstSpecificFailure asserts duplicate rejection, unchanged terminal metadata, errors.Is behavior, and exact sentinel identity through Terminal().",
+  "integration_merge": "eabafeefa",
+  "origin_main": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+  "gates": {
+    "focused_normal": "passed: lifecycle/wire focused matrix, count=3; 48 tests per run",
+    "focused_race": "passed: lifecycle focused race matrix, count=3; 48 tests per run",
+    "regression_normal": "passed: first-cause regression, count=3",
+    "regression_race": "passed: first-cause regression, race count=3",
+    "rooms": "passed: go-agent-runtime/services/rooms/... count=1; 45 tests",
+    "external_consumer": "passed: GOWORK=off, -mod=readonly",
+    "accumulated_review_regressions": "passed: scripts/test-session-ci-regressions.sh all with COUNT=3 across normal, coverage, and race transport/integration/device/openai packages",
+    "mutation_guards": "passed: mutation-post-bound-tool and mutation-double-close; each negative failed, positive and restored runs passed",
+    "wire": "passed: make wire-check",
+    "coverage_registration": "passed: make coverage-registration",
+    "coverage_changed": "passed: make coverage-changed COVERAGE_BASE=09c70f51243caeaf1184c4806b99bbf7749e3044",
+    "architecture": "passed: 195 packages, 1922 files, 28598 functions; participant_tracker_test.go=600 lines",
+    "vet": "passed: make vet",
+    "lint": "passed: pinned golangci-lint 2.9.0, 0 issues",
+    "staticcheck": "passed: pinned staticcheck 2026.1",
+    "yui_replays": "passed: source-built yui multi-participant-room-replay, malformed-or-late-terminal, and non-room-audio-tool"
+  },
+  "next_gate": "Push this branch and submit the updated PR to script CI; do not infer CI green from local evidence."
+}
