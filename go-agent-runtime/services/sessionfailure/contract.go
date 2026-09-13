@@ -90,8 +90,9 @@ func (f DiagnosticSinkFunc) Record(record DiagnosticRecord) {
 // Dependencies are explicit application callbacks. Publish must return false
 // when the surrounding lifecycle rejects an observation.
 type Dependencies struct {
-	Publish func(Observation) bool
-	Sink    DiagnosticSink
+	Publish  func(Observation) bool
+	Rollback func()
+	Sink     DiagnosticSink
 }
 
 // Service normalizes provider/session terminal values and owns the first
@@ -100,8 +101,11 @@ type Service interface {
 	NormalizeErrorValue(*messages.ErrorValue) (Facts, error)
 	FactsFromSessionRunError(error) *Facts
 	NormalizeClose(*messages.SessionCloseValue, Progress) Facts
+	AcceptError(*messages.ErrorValue) bool
+	AcceptClose(*messages.SessionCloseValue, Progress) bool
 	Accept(Facts, error) bool
 	Snapshot() *Observation
+	SnapshotFacts() Facts
 	Clear()
 	Projection(Projection, string, Progress) Facts
 	EmitUnsupportedTool(ToolCall)

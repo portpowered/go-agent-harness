@@ -40,6 +40,11 @@ func (s *Service) NormalizeErrorValue(v *messages.ErrorValue) (sessionfailure.Fa
 	return facts, err
 }
 
+func (s *Service) AcceptError(v *messages.ErrorValue) bool {
+	facts, err := s.NormalizeErrorValue(v)
+	return s.Accept(facts, err)
+}
+
 func ignoredCancellation(v *messages.ErrorValue) bool {
 	return v.TerminalReason == messages.TerminalReasonCancellation ||
 		(v.Classification == sessionfailure.ErrorClassCancellation && v.TerminalReason == "") ||
@@ -131,6 +136,10 @@ func (s *Service) NormalizeClose(v *messages.SessionCloseValue, progress session
 	return facts
 }
 
+func (s *Service) AcceptClose(v *messages.SessionCloseValue, progress sessionfailure.Progress) bool {
+	return s.Accept(s.NormalizeClose(v, progress), nil)
+}
+
 func (s *Service) Accept(facts sessionfailure.Facts, err error) bool {
 	if s == nil || facts.FailingEvent == "" {
 		return false
@@ -146,6 +155,9 @@ func (s *Service) Accept(facts sessionfailure.Facts, err error) bool {
 	s.mu.Unlock()
 	if s.dependencies.Publish != nil && !s.dependencies.Publish(clone(*accepted)) {
 		s.rollback(accepted)
+		if s.dependencies.Rollback != nil {
+			s.dependencies.Rollback()
+		}
 		return false
 	}
 	return true
@@ -185,6 +197,14 @@ func (s *Service) Snapshot() *sessionfailure.Observation {
 	copy := clone(*s.accepted)
 	s.mu.Unlock()
 	return &copy
+}
+
+func (s *Service) SnapshotFacts() sessionfailure.Facts {
+	observation := s.Snapshot()
+	if observation == nil {
+		return sessionfailure.Facts{}
+	}
+	return observation.Facts
 }
 
 func (s *Service) Clear() {
