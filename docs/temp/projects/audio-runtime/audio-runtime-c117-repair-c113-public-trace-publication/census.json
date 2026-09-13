@@ -15,7 +15,7 @@
       "500",
       "--all"
     ],
-    "payload_sha256": "4e377dd984ce2082b16af7b7e35a0a9588f951c584f23fb936448b656cdfbcd3",
+    "payload_sha256": "1e1678ea240615afd21bf24e17df1970e6e2454c3f0256d61606b28504b38b49",
     "rows": [
       {
         "baseRevision": null,
@@ -762,7 +762,7 @@
     },
     "work": "audio-runtime-c79-retire-cli-response-lifecycle"
   },
-  "current_head": "7f116013142762dee39acae21fd2cf104d2e0473",
+  "current_head": "6777955c6e06bfde4627a9e27c21a18f99ab3778",
   "host_source_and_test_paths": {
     "c108_artifacts_at_planning_main": [
       {
