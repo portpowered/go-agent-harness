@@ -1,0 +1,41 @@
+{
+  "acoustic_proof": "OUT_OF_SCOPE_AND_NEVER_PASS",
+  "admission": "admitted",
+  "branch": "codex/audio-runtime-c115-centralize-filesystem-audio-codec",
+  "candidate_revision": "bbeb72042b0247fae370b3d7e7cc6c8c25ea6578",
+  "cases": [
+    "c21-consumption-replay",
+    "c50-public-replay",
+    "fake-output-overflow",
+    "malformed-truncated",
+    "shipped-audio-tool"
+  ],
+  "changed_paths_forbidden": [],
+  "command_count": 16,
+  "credential_free": true,
+  "evidence_source_revision": "bbeb72042b0247fae370b3d7e7cc6c8c25ea6578",
+  "independent_review": "not performed by executor",
+  "mode": "public-and-accumulated-regressions",
+  "origin_main": "1a8467246c6607a06ffc7289075da2595724ce8b",
+  "passes": true,
+  "physical_device_consumption": "UNKNOWN_AND_OUT_OF_SCOPE",
+  "project": "audio-runtime",
+  "project_acceptance": "not claimed",
+  "schema_version": "c115-verification-v1",
+  "script_ci": "ready for exact current HEAD; CI was not polled or duplicated",
+  "source_checks": [
+    "tool command has explicit runtime-service constructor",
+    "tool transport has no uncomposed runtime fallback",
+    "session capability service is injected",
+    "session transport has no uncomposed runtime construction",
+    "room browser adapter forwards runtime service",
+    "room command retains runtime service seam",
+    "filesystem adapter keeps one injected codec caller",
+    "Wire source selects explicit constructors",
+    "generated Wire passes composed service",
+    "cleanup errors are returned",
+    "bounded decoder terminates on overflow",
+    "production NewService audit is clean"
+  ],
+  "task": "audio-runtime-c115-centralize-filesystem-audio-codec"
+}

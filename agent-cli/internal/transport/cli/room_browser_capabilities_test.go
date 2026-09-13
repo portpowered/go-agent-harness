@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewRoomParticipantBrowserCapabilitiesFactoryCreatesIndependentOwners(t *testing.T) {
-	factory := NewRoomParticipantBrowserCapabilitiesFactory(t.TempDir())
+	factory := NewRoomParticipantBrowserCapabilitiesFactory(t.TempDir(), newTestSessionRuntimeToolService())
 	participant := func(id string) runtimeRooms.Participant {
 		browser := defaultRuntimeBrowserToolsConfig()
 		browser.Connection.CDPURL = "http://127.0.0.1:9222"

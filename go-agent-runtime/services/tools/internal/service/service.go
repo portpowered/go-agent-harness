@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
 	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/browser"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/composition"
@@ -19,13 +20,22 @@ import (
 // Service resolves the copied tool implementations against normalized public
 // request values. The implementation package is deliberately kept private so
 // callers cannot depend on registry or tool concrete types.
-type Service struct{}
+type Service struct {
+	audioCodec audiocodec.Service
+}
 
 type invoker struct{ executor messages.ToolExecutor }
 
 var _ public.Service = (*Service)(nil)
 
 func New() *Service { return &Service{} }
+
+// NewWithAudioCodec constructs the tools service with the host-neutral audio
+// codec supplied by the composition boundary. The codec is kept private and
+// is injected only into request-scoped filesystem read tools.
+func NewWithAudioCodec(codec audiocodec.Service) *Service {
+	return &Service{audioCodec: codec}
+}
 
 // BrowserContract returns the pure browser protocol/result policy. The
 // connection and platform adapters remain outside this implementation.
@@ -81,14 +91,14 @@ func (s *Service) Resolve(ctx context.Context, request public.Request) (public.C
 	}
 	if request.Executor != nil || request.Browser != nil {
 		if request.Executor == nil && request.UseDefaultTool {
-			defaultSurface := defaultCapability(request, policy)
+			defaultSurface := defaultCapability(request, policy, s.audioCodec)
 			request.Executor = defaultSurface.Executor
 			request.Definitions = defaultSurface.Definitions
 			request.FilesystemPolicyApplied = true
 		}
 		return resolvedExternalCapability(request, policy)
 	}
-	return defaultCapability(request, policy), nil
+	return defaultCapability(request, policy, s.audioCodec), nil
 }
 
 func validateRequest(request public.Request) error {
@@ -158,23 +168,25 @@ func resolvedExternalCapability(request public.Request, policy *filesystem.Files
 	return capability, nil
 }
 
-func defaultCapability(request public.Request, policy *filesystem.FilesystemPolicy) public.Capability {
+func defaultCapability(request public.Request, policy *filesystem.FilesystemPolicy, audioCodec audiocodec.Service) public.Capability {
 	var toolRegistry *registry.ToolRegistry
 	if request.DisplayCapabilitySet {
-		toolRegistry = registry.NewToolRegistryWithDisplayCapabilityAndPolicyAndSkillRoots(
+		toolRegistry = registry.NewToolRegistryWithDisplayCapabilityAndPolicyAndSkillRootsAndAudioCodec(
 			registry.RegistryOptions{Selections: request.Selections, Exec: request.Exec},
 			request.DisplayCapability,
 			request.DisplaySurface,
 			policy,
 			skillRootDirectories(request.SkillRoots),
 			request.DiagnosticWriter,
+			audioCodec,
 		)
 	} else {
-		toolRegistry = registry.NewToolRegistryWithPolicyAndSkillRoots(
+		toolRegistry = registry.NewToolRegistryWithPolicyAndSkillRootsAndAudioCodec(
 			registry.RegistryOptions{Selections: request.Selections, Exec: request.Exec},
 			policy,
 			skillRootDirectories(request.SkillRoots),
 			request.DiagnosticWriter,
+			audioCodec,
 		)
 	}
 	if registry.SelectionEnabled(request.Selections, "dispatch_agent") && request.Inferencer != nil {

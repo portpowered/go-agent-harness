@@ -16,7 +16,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
-	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	"github.com/spf13/cobra"
 )
 
@@ -60,7 +59,15 @@ func newToolCommandError(kind error, message string, cause error) error {
 
 // NewToolCommand creates the ToolCommand with global flags (used to load config and resolve enabled tools).
 func NewToolCommand(globalFlags *flags.GlobalFlags) *ToolCommand {
-	return &ToolCommand{globalFlags: globalFlags, runtimeService: runtimeToolsWire.NewService()}
+	return NewToolCommandWithRuntimeService(globalFlags, nil)
+}
+
+// NewToolCommandWithRuntimeService creates the command with the composed
+// runtime tool service supplied by the application composition root. Keeping
+// the service explicit prevents the transport from constructing an incomplete
+// registry that cannot resolve the audio codec.
+func NewToolCommandWithRuntimeService(globalFlags *flags.GlobalFlags, runtimeService runtimeTools.Service) *ToolCommand {
+	return &ToolCommand{globalFlags: globalFlags, runtimeService: runtimeService}
 }
 
 // getCapability loads config and resolves a request-scoped runtime tool
@@ -90,10 +97,10 @@ func (c *ToolCommand) getCapability() (runtimeTools.Capability, error) {
 	if err != nil {
 		return runtimeTools.Capability{}, newToolCommandError(errToolConfig, fmt.Sprintf("load config: %v", err), err)
 	}
-	service := c.runtimeService
-	if service == nil {
-		service = runtimeToolsWire.NewService()
+	if c.runtimeService == nil {
+		return runtimeTools.Capability{}, newToolCommandError(errToolConfig, "runtime tool service is not configured", nil)
 	}
+	service := c.runtimeService
 	selections := make([]runtimeTools.ToolSelection, 0, len(cfg.Tools.List))
 	for _, entry := range cfg.Tools.List {
 		selections = append(selections, runtimeTools.ToolSelection{ID: entry.ID, Enabled: entry.Enabled})

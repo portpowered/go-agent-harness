@@ -107,7 +107,7 @@ func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
 	)
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(cfg)
+	}, newTestSessionRuntimeToolService())(cfg)
 	if err != nil {
 		t.Fatalf("construct session capabilities: %v", err)
 	}
@@ -341,7 +341,7 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 	)
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(cfg)
+	}, newTestSessionRuntimeToolService())(cfg)
 	if err != nil {
 		t.Fatalf("construct session capabilities: %v", err)
 	}

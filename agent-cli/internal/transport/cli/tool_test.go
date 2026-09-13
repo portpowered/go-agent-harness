@@ -19,8 +19,14 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audiocodecwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
+
+func newTestSessionRuntimeToolService() runtimeTools.Service {
+	return runtimeToolsWire.NewServiceWithAudioCodec(audiocodecwire.NewService())
+}
 
 type cliTestTool struct {
 	id       string
@@ -96,7 +102,7 @@ func newToolTestCommand(t *testing.T, capability runtimeTools.Capability) *ToolC
 	t.Helper()
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	command := NewToolCommand(globalFlags)
+	command := NewToolCommandWithRuntimeService(globalFlags, newTestSessionRuntimeToolService())
 	command.capabilityLoader = func() (runtimeTools.Capability, error) { return capability, nil }
 	return command
 }
@@ -268,7 +274,7 @@ func TestToolCommandParsingAndWriters(t *testing.T) {
 func TestToolCommandLoadsTemporaryConfig(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	command := NewToolCommand(globalFlags)
+	command := NewToolCommandWithRuntimeService(globalFlags, newTestSessionRuntimeToolService())
 	capability, err := command.getCapability()
 	if err != nil {
 		t.Fatalf("getCapability: %v", err)
@@ -302,7 +308,7 @@ func TestToolCommandFilesystemScopeUsesLaunchCwdOrExplicitWorkdir(t *testing.T) 
 			globalFlags := flags.NewGlobalFlags()
 			globalFlags.ConfigDirPath = configDir
 			globalFlags.WorkDirPath = tt.workdir
-			command := NewToolCommand(globalFlags)
+			command := NewToolCommandWithRuntimeService(globalFlags, newTestSessionRuntimeToolService())
 
 			var out bytes.Buffer
 			err := runToolTestCommand(t, command, []string{"write_file", "path=" + fileName, "content=cwd-marker"}, &out)
@@ -335,7 +341,7 @@ func TestToolCommandFilesystemScopeAllowsMultipleRootsAndRejectsOutside(t *testi
 	globalFlags.ConfigDirPath = t.TempDir()
 	globalFlags.WorkDirPath = launchDir
 	globalFlags.AllowPathList = []string{allowedOne, allowedTwo, allowedOne}
-	command := NewToolCommand(globalFlags)
+	command := NewToolCommandWithRuntimeService(globalFlags, newTestSessionRuntimeToolService())
 
 	for _, root := range []string{allowedOne, allowedTwo} {
 		name := filepath.Join(root, "written.txt")
@@ -399,7 +405,7 @@ func TestToolCommandFilesystemRefusalIsStderrAndNonZero(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
 	globalFlags.WorkDirPath = workdir
-	command := NewToolCommand(globalFlags)
+	command := NewToolCommandWithRuntimeService(globalFlags, newTestSessionRuntimeToolService())
 
 	cmd := command.Generate()
 	cmd.SetArgs([]string{"write_file", "path=" + deniedTarget, "content=MUST-NOT-WRITE"})

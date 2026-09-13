@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
 	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/filesystem"
@@ -20,6 +21,7 @@ import (
 type ToolRegistry struct {
 	tools            map[string]core.Tool
 	diagnosticWriter io.Writer
+	audioCodec       audiocodec.Service
 	mu               sync.RWMutex
 }
 
@@ -28,6 +30,13 @@ func registryDiagnosticWriter(registry *ToolRegistry) io.Writer {
 		return io.Discard
 	}
 	return registry.diagnosticWriter
+}
+
+func registryAudioCodec(registry *ToolRegistry) audiocodec.Service {
+	if registry == nil {
+		return nil
+	}
+	return registry.audioCodec
 }
 
 type RegistryErrorKind string
@@ -103,7 +112,7 @@ func isNilTool(tool core.Tool) bool {
 // shared read-only values; the registry map itself is always copied so a
 // session cannot overwrite another session's image preparer.
 func (r *ToolRegistry) cloneWithSessionImagePreparer(preparer filesystem.ImagePartPreparer) *ToolRegistry {
-	clone := &ToolRegistry{tools: make(map[string]core.Tool), diagnosticWriter: registryDiagnosticWriter(r)}
+	clone := &ToolRegistry{tools: make(map[string]core.Tool), diagnosticWriter: registryDiagnosticWriter(r), audioCodec: registryAudioCodec(r)}
 	if r == nil {
 		return clone
 	}
@@ -125,7 +134,7 @@ func (r *ToolRegistry) cloneWithSessionImagePreparer(preparer filesystem.ImagePa
 // customer-facing filesystem tool rebuilt against the same policy. The
 // original registry remains untouched for callers that own a separate scope.
 func (r *ToolRegistry) cloneWithFilesystemPolicy(policy *filesystem.FilesystemPolicy) *ToolRegistry {
-	clone := &ToolRegistry{tools: make(map[string]core.Tool), diagnosticWriter: registryDiagnosticWriter(r)}
+	clone := &ToolRegistry{tools: make(map[string]core.Tool), diagnosticWriter: registryDiagnosticWriter(r), audioCodec: registryAudioCodec(r)}
 	if r == nil {
 		return clone
 	}
@@ -135,7 +144,7 @@ func (r *ToolRegistry) cloneWithFilesystemPolicy(policy *filesystem.FilesystemPo
 	for name, tool := range r.tools {
 		switch name {
 		case "read_file":
-			tool = filesystem.NewReadFileToolWithPolicy(policy)
+			tool = filesystem.NewReadFileToolWithPolicyAndAudioCodec(policy, registryAudioCodec(r))
 		case filesystem.ReadImageToolID:
 			if readImage, ok := tool.(*filesystem.ReadImageTool); ok {
 				tool = filesystem.NewReadImageToolWithPolicy(policy, readImage.SessionImagePreparer())
@@ -169,7 +178,7 @@ func (r *ToolRegistry) WithFilesystemPolicy(policy *filesystem.FilesystemPolicy)
 // cloneWithDispatchRegistry gives nested dispatch calls the same filesystem
 // policy without recursively rebuilding the dispatch tool itself.
 func (r *ToolRegistry) cloneWithDispatchRegistry() *ToolRegistry {
-	clone := &ToolRegistry{tools: make(map[string]core.Tool), diagnosticWriter: registryDiagnosticWriter(r)}
+	clone := &ToolRegistry{tools: make(map[string]core.Tool), diagnosticWriter: registryDiagnosticWriter(r), audioCodec: registryAudioCodec(r)}
 	if r == nil {
 		return clone
 	}

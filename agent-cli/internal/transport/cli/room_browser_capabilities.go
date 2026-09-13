@@ -7,13 +7,25 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 const runtimeRoomBrowserEventCapacity = 16
+
+// NewRoomRunCommandWithToolService injects the already-composed runtime tool
+// service used when a room participant requests browser capabilities.
+func NewRoomRunCommandWithToolService(globalFlags *flags.GlobalFlags, service runtimeRooms.Service, runtimeToolService runtimeTools.Service) *RoomRunCommand {
+	command := &RoomRunCommand{globalFlags: globalFlags, service: service, runtimeToolService: runtimeToolService, signalContext: defaultRoomSignalContext}
+	if service != nil {
+		command.run = service.Run
+	}
+	return command
+}
 
 // roomRunPlans keeps command admission results together until the service
 // receives one immutable launch or replay decision. It lives with the room
@@ -87,7 +99,7 @@ func validateRoomOutput(service runtimeRooms.Service, plans roomRunPlans, output
 // adapter. The session browser composition remains the single source for
 // broker tools, initialization, and cleanup; this adapter only changes the
 // selection store to a fresh in-memory store for each room participant.
-func NewRoomParticipantBrowserCapabilitiesFactory(configDir string) runtimeRooms.BrowserCapabilitiesFactory {
+func NewRoomParticipantBrowserCapabilitiesFactory(configDir string, runtimeService runtimeTools.Service) runtimeRooms.BrowserCapabilitiesFactory {
 	browserFactory := NewSessionToolCapabilitiesFactory(
 		roomBrowserOnlyStaticExecutor{},
 		func(browser config.BrowserConfig) (webmcp.Broker, error) {
@@ -97,6 +109,7 @@ func NewRoomParticipantBrowserCapabilitiesFactory(configDir string) runtimeRooms
 			)
 			return newSessionBrowserBrokerWithDoctorFactory(browser, doctorFactory)
 		},
+		runtimeService,
 	)
 
 	return func(participant runtimeRooms.Participant) (runtimeRooms.BrowserCapabilities, error) {

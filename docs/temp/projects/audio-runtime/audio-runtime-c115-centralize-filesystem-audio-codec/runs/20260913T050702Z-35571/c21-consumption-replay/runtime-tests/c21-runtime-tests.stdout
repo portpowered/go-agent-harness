@@ -1,0 +1,16 @@
+=== RUN   TestC21ConsumptionBoundary
+--- PASS: TestC21ConsumptionBoundary (0.01s)
+=== RUN   TestC21ConsumptionInterruptionAndRate
+--- PASS: TestC21ConsumptionInterruptionAndRate (0.00s)
+=== RUN   TestC21ConsumptionInterruptionAtIncompleteSpanBoundary
+--- PASS: TestC21ConsumptionInterruptionAtIncompleteSpanBoundary (0.00s)
+=== RUN   TestC21ObservationBoundsStalledConsumer
+--- PASS: TestC21ObservationBoundsStalledConsumer (0.00s)
+=== RUN   TestC21DelayedRenderObservationDoesNotDoubleCountDiscardedPCM
+--- PASS: TestC21DelayedRenderObservationDoesNotDoubleCountDiscardedPCM (0.00s)
+=== RUN   TestC21ObservationIdentityAndLifecycleControls
+--- PASS: TestC21ObservationIdentityAndLifecycleControls (0.00s)
+=== RUN   TestC21ObservationUnsupportedBackendControl
+--- PASS: TestC21ObservationUnsupportedBackendControl (0.00s)
+PASS
+ok  	github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime	0.205s

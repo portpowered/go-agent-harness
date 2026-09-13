@@ -587,7 +587,7 @@ func TestSessionToolCapabilitiesFactoryKeepsDisabledBrowserCompositionInert(t *t
 	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
 		calls++
 		return nil, errors.New("broker must not be constructed")
-	})
+	}, newTestSessionRuntimeToolService())
 	cfg := browserCapabilityConfig(t, false)
 
 	capabilities, err := factory(cfg)
@@ -613,7 +613,7 @@ func TestSessionToolCapabilitiesFactoryKeepsDisabledBrowserCompositionInert(t *t
 func TestSessionToolCapabilitiesFactoryUsesDefaultFilesystemPolicyWithoutMetadata(t *testing.T) {
 	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, &sessionDisplaySurfaceFake{
 		capability: cliTools.UnavailableDisplayCapability("headless test"),
-	})
+	}, newTestSessionRuntimeToolService())
 
 	capabilities, err := factory(&config.Config{Browser: config.DefaultBrowserConfig(), FilesystemWorkDir: t.TempDir()})
 	if err != nil {
@@ -653,7 +653,7 @@ func TestSessionToolCapabilitiesFactoryComposesFilteredStaticToolsWithRealBroker
 	factory := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		gotBrowser = browser
 		return broker, nil
-	})
+	}, newTestSessionRuntimeToolService())
 	cfg := browserCapabilityConfig(t, true)
 
 	capabilities, err := factory(cfg)
@@ -698,7 +698,7 @@ func TestSessionToolCapabilitiesFactoryComposesFilteredStaticToolsWithRealBroker
 
 func TestSessionToolCapabilitiesFactoryAdvertisesCastControlsOnlyWhenEnabled(t *testing.T) {
 	broker := &capabilityBroker{castDevices: []webmcp.CastDevice{{Name: "Den TV", ID: "sink-den"}}}
-	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) { return broker, nil })
+	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) { return broker, nil }, newTestSessionRuntimeToolService())
 
 	disabled, err := factory(browserCapabilityConfig(t, true))
 	if err != nil {
@@ -760,7 +760,7 @@ func TestSessionToolCapabilitiesRefreshKeepsBrowserControlsForOrdinaryPage(t *te
 		},
 		catalogErr: catalogPending,
 	}
-	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) { return broker, nil })
+	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) { return broker, nil }, newTestSessionRuntimeToolService())
 	capabilities, err := factory(browserCapabilityConfig(t, true))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
@@ -779,7 +779,7 @@ func TestSessionToolCapabilitiesFactoryClosesBrokerWhenCompositionFails(t *testi
 	broker := &capabilityBroker{closeErr: closeErr}
 	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
 		return broker, errors.New("broker construction failed")
-	})
+	}, newTestSessionRuntimeToolService())
 
 	_, err := factory(browserCapabilityConfig(t, true))
 	if err == nil || !strings.Contains(err.Error(), "broker construction failed") || !strings.Contains(err.Error(), "broker close failed") {
@@ -794,7 +794,7 @@ func TestSessionToolCapabilitiesFactoryTransfersIdempotentCloseHook(t *testing.T
 	broker := &capabilityBroker{}
 	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
 		return broker, nil
-	})
+	}, newTestSessionRuntimeToolService())
 
 	capabilities, err := factory(browserCapabilityConfig(t, true))
 	if err != nil {
@@ -1049,7 +1049,7 @@ func TestSessionToolCapabilitiesRefreshAdvertisesFirstClassPageTools(t *testing.
 	}
 	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
 		return broker, nil
-	})
+	}, newTestSessionRuntimeToolService())
 	capabilities, err := factory(browserCapabilityConfig(t, true))
 	if err != nil {
 		t.Fatalf("factory: %v", err)

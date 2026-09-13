@@ -12,7 +12,7 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 // SessionBrowserBrokerFactory is retained as the transport injection seam;
@@ -25,8 +25,8 @@ type SessionDisplayCapability = cliTools.DisplayCapability
 // owned by services/internal/tools.
 const sessionDisplayCapabilityProbeTimeout = 3 * time.Second
 
-func NewSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory) SessionToolCapabilitiesFactory {
-	return NewSessionToolCapabilitiesFactoryWithDisplaySurface(staticExecutor, brokerFactory, nil)
+func NewSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, runtimeService runtimeTools.Service) SessionToolCapabilitiesFactory {
+	return NewSessionToolCapabilitiesFactoryWithDisplaySurface(staticExecutor, brokerFactory, nil, runtimeService)
 }
 
 // NewSessionToolCapabilitiesFactoryFromService adapts the injected service
@@ -45,22 +45,22 @@ func NewSessionToolCapabilitiesFactoryFromService(resolver serviceTools.Service)
 	}
 }
 
-func NewSessionToolCapabilitiesFactoryWithDisplaySurface(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displaySurface cliTools.DisplaySurface) SessionToolCapabilitiesFactory {
+func NewSessionToolCapabilitiesFactoryWithDisplaySurface(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displaySurface cliTools.DisplaySurface, runtimeService runtimeTools.Service) SessionToolCapabilitiesFactory {
 	if displaySurface == nil {
 		displaySurface = cliTools.NewHostDisplaySurface()
 	}
-	return newSessionToolCapabilitiesFactory(staticExecutor, brokerFactory, displaySurface, displaySurface)
+	return newSessionToolCapabilitiesFactory(staticExecutor, brokerFactory, displaySurface, displaySurface, runtimeService)
 }
 
-func NewSessionToolCapabilitiesFactoryWithDisplayProbe(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displayProbe cliTools.DisplayCapabilityProbe) SessionToolCapabilitiesFactory {
+func NewSessionToolCapabilitiesFactoryWithDisplayProbe(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displayProbe cliTools.DisplayCapabilityProbe, runtimeService runtimeTools.Service) SessionToolCapabilitiesFactory {
 	surface := cliTools.NewHostDisplaySurface()
 	if displayProbe == nil {
 		displayProbe = surface
 	}
-	return newSessionToolCapabilitiesFactory(staticExecutor, brokerFactory, surface, displayProbe)
+	return newSessionToolCapabilitiesFactory(staticExecutor, brokerFactory, surface, displayProbe, runtimeService)
 }
 
-func newSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe) SessionToolCapabilitiesFactory {
+func newSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe, runtimeService runtimeTools.Service) SessionToolCapabilitiesFactory {
 	browserFactory := func(browser config.BrowserConfig, configDir string) (serviceTools.BrowserCapability, error) {
 		var broker webmcp.Broker
 		var err error
@@ -71,7 +71,7 @@ func newSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, bro
 		}
 		return serviceBrowserCapability(broker), err
 	}
-	resolver := servicewire.NewToolCapabilitiesService(staticExecutor, browserFactory, displaySurface, displayProbe, runtimeToolsWire.NewService())
+	resolver := servicewire.NewToolCapabilitiesService(staticExecutor, browserFactory, displaySurface, displayProbe, runtimeService)
 	return NewSessionToolCapabilitiesFactoryFromService(resolver)
 }
 

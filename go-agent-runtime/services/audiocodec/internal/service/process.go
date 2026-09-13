@@ -1,0 +1,186 @@
+package service
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"sync"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
+)
+
+type processRunner struct {
+	executable string
+	lookPath   func(string) (string, error)
+	command    func(context.Context, string, ...string) command
+}
+
+type command interface {
+	setStdin(io.Reader)
+	setStdout(io.Writer)
+	setStderr(io.Writer)
+	start() error
+	wait() error
+	terminate() error
+}
+
+type execCommand struct {
+	cmd *exec.Cmd
+}
+
+func (c *execCommand) setStdin(reader io.Reader)  { c.cmd.Stdin = reader }
+func (c *execCommand) setStdout(writer io.Writer) { c.cmd.Stdout = writer }
+func (c *execCommand) setStderr(writer io.Writer) { c.cmd.Stderr = writer }
+func (c *execCommand) start() error               { return c.cmd.Start() }
+func (c *execCommand) wait() error                { return c.cmd.Wait() }
+func (c *execCommand) terminate() error {
+	if c == nil || c.cmd == nil || c.cmd.Process == nil {
+		return nil
+	}
+	return c.cmd.Process.Kill()
+}
+
+func newProcessRunner(executable string) *processRunner {
+	return &processRunner{
+		executable: executable,
+		lookPath:   exec.LookPath,
+		command: func(ctx context.Context, path string, args ...string) command {
+			return &execCommand{cmd: exec.CommandContext(ctx, path, args...)}
+		},
+	}
+}
+
+func (r *processRunner) run(ctx context.Context, inputPath string, limits audiocodec.Limits) (result runResult, returnErr error) {
+	if err := ctx.Err(); err != nil {
+		return runResult{}, newError(audiocodec.ErrorCanceled, err, "decoder context ended before start")
+	}
+	path, err := r.lookPath(r.executable)
+	if err != nil {
+		return runResult{}, newError(audiocodec.ErrorExecutableLookup, err, r.executable)
+	}
+	input, err := os.Open(inputPath)
+	if err != nil {
+		return runResult{}, newError(audiocodec.ErrorInputFile, err, "open temporary input")
+	}
+	defer func() {
+		if err := input.Close(); err != nil && returnErr == nil {
+			returnErr = newError(audiocodec.ErrorInputFile, err, "close decoder input")
+		}
+	}()
+
+	commandContext, cancel := context.WithCancel(ctx)
+	defer cancel()
+	cmd := r.command(commandContext, path, "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", inputPath, "-f", "s16le", "-ac", "1", "-ar", "16000", "-")
+	var terminateOnce sync.Once
+	var terminateErr error
+	var terminateErrMu sync.Mutex
+	terminate := func() {
+		terminateOnce.Do(func() {
+			cancel()
+			if err := cmd.terminate(); err != nil {
+				terminateErrMu.Lock()
+				terminateErr = err
+				terminateErrMu.Unlock()
+			}
+		})
+	}
+	stdout := newBoundedBuffer(limits.MaxOutputBytes)
+	stderr := newBoundedBuffer(limits.MaxStderrBytes)
+	stdout.onOverflow = terminate
+	stderr.onOverflow = terminate
+	cmd.setStdin(input)
+	cmd.setStdout(stdout)
+	cmd.setStderr(stderr)
+	if err := cmd.start(); err != nil {
+		if contextErr := ctx.Err(); contextErr != nil {
+			return runResult{}, newError(audiocodec.ErrorCanceled, contextErr, "decoder context ended during start")
+		}
+		return runResult{}, newError(audiocodec.ErrorProcessStart, err, "start "+r.executable)
+	}
+	waitErr := cmd.wait()
+	terminateErrMu.Lock()
+	decoderTerminateErr := terminateErr
+	terminateErrMu.Unlock()
+	if err := decoderLimitError(stdout, stderr, decoderTerminateErr); err != nil {
+		return runResult{}, err
+	}
+	if waitErr != nil {
+		return runResult{}, decoderWaitError(ctx, waitErr, stderr, r.executable)
+	}
+	return runResult{stdout: stdout.Bytes()}, nil
+}
+
+func decoderLimitError(stdout, stderr *boundedBuffer, terminateErr error) error {
+	var limitErr error
+	if stdout.exceeded {
+		limitErr = newError(audiocodec.ErrorOutputTooLarge, stdout.limitError(), "capture decoder stdout")
+	}
+	if limitErr == nil && stderr.exceeded {
+		limitErr = newError(audiocodec.ErrorStderrTooLarge, stderr.limitError(), "capture decoder stderr")
+	}
+	if limitErr == nil {
+		return nil
+	}
+	if terminateErr == nil {
+		return limitErr
+	}
+	return errors.Join(limitErr, newError(audiocodec.ErrorProcessWait, terminateErr, "terminate decoder after output limit"))
+}
+
+func decoderWaitError(ctx context.Context, waitErr error, stderr *boundedBuffer, executable string) error {
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return newError(audiocodec.ErrorCanceled, ctx.Err(), "decoder context ended")
+	}
+	var exitErr *exec.ExitError
+	if errors.As(waitErr, &exitErr) {
+		detail := "decoder exited unsuccessfully"
+		if stderr.Len() != 0 {
+			detail += ": " + stderr.String()
+		}
+		return newError(audiocodec.ErrorDecode, waitErr, detail)
+	}
+	return newError(audiocodec.ErrorProcessWait, waitErr, "wait for "+executable)
+}
+
+type boundedBuffer struct {
+	bytes.Buffer
+	max          int
+	exceeded     bool
+	onOverflow   func()
+	overflowOnce sync.Once
+}
+
+func newBoundedBuffer(max int) *boundedBuffer {
+	return &boundedBuffer{max: max}
+}
+
+func (b *boundedBuffer) Write(data []byte) (int, error) {
+	remaining := b.max - b.Len()
+	if remaining <= 0 {
+		b.markExceeded()
+		return 0, io.ErrShortBuffer
+	}
+	if len(data) > remaining {
+		_, _ = b.Buffer.Write(data[:remaining])
+		b.markExceeded()
+		return remaining, io.ErrShortBuffer
+	}
+	return b.Buffer.Write(data)
+}
+
+func (b *boundedBuffer) markExceeded() {
+	b.exceeded = true
+	b.overflowOnce.Do(func() {
+		if b.onOverflow != nil {
+			b.onOverflow()
+		}
+	})
+}
+
+func (b *boundedBuffer) limitError() error {
+	return fmt.Errorf("captured %d bytes, limit %d", b.Len(), b.max)
+}

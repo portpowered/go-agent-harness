@@ -78,7 +78,7 @@ func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "exec"})
 	}
 
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil, newTestSessionRuntimeToolService())(cfg)
 	if err != nil {
 		t.Fatalf("capability factory: %v", err)
 	}

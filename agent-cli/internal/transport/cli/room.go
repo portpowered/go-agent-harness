@@ -19,6 +19,7 @@ import (
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -42,19 +43,16 @@ type RoomSignalContextFunc func(context.Context) (context.Context, func())
 
 // RoomRunCommand implements `yui room run`.
 type RoomRunCommand struct {
-	globalFlags   *flags.GlobalFlags
-	service       runtimeRooms.Service
-	signalContext RoomSignalContextFunc
-	run           RoomRunFunc
+	globalFlags        *flags.GlobalFlags
+	service            runtimeRooms.Service
+	runtimeToolService runtimeTools.Service
+	signalContext      RoomSignalContextFunc
+	run                RoomRunFunc
 }
 
 // NewRoomRunCommand injects room orchestration without device construction.
 func NewRoomRunCommand(globalFlags *flags.GlobalFlags, service runtimeRooms.Service) *RoomRunCommand {
-	command := &RoomRunCommand{globalFlags: globalFlags, service: service, signalContext: defaultRoomSignalContext}
-	if service != nil {
-		command.run = service.Run
-	}
-	return command
+	return NewRoomRunCommandWithToolService(globalFlags, service, nil)
 }
 
 // SetRunner replaces the room service used by this command. It is intended
@@ -295,7 +293,7 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 		options.ConfigDir = ""
 	} else {
 		options.LaunchPlan = &plans.launchPlan
-		options.BrowserCapabilitiesFactory = NewRoomParticipantBrowserCapabilitiesFactory(roomConfigDir(roomRunGlobalFlags(c)))
+		options.BrowserCapabilitiesFactory = NewRoomParticipantBrowserCapabilitiesFactory(roomConfigDir(roomRunGlobalFlags(c)), c.runtimeToolService)
 	}
 
 	var result runtimeRooms.RoomResult

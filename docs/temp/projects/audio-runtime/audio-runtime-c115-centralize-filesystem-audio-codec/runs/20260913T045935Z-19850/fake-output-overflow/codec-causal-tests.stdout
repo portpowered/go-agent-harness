@@ -1,0 +1,10 @@
+=== RUN   TestConvertReportsTemporaryCleanupFailure
+--- PASS: TestConvertReportsTemporaryCleanupFailure (0.00s)
+=== RUN   TestProcessRunnerEnforcesOutputAndStderrBounds
+=== RUN   TestProcessRunnerEnforcesOutputAndStderrBounds/stdout_bound
+=== RUN   TestProcessRunnerEnforcesOutputAndStderrBounds/stderr_bound
+--- PASS: TestProcessRunnerEnforcesOutputAndStderrBounds (0.00s)
+    --- PASS: TestProcessRunnerEnforcesOutputAndStderrBounds/stdout_bound (0.00s)
+    --- PASS: TestProcessRunnerEnforcesOutputAndStderrBounds/stderr_bound (0.00s)
+PASS
+ok  	github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec/internal/service	1.380s

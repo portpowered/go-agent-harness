@@ -1,0 +1,3 @@
+read audio: ffmpeg convert to PCM 16kHz: audiocodec: decoder rejected input: decoder exited unsuccessfully: [in#0 @ 0x1377088d0] Error opening input: Invalid data found when processing input
+Error opening input file /var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audiocodec-input-709066506.
+Error opening input files: Invalid data found when processing input
