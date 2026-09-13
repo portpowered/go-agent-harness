@@ -18,6 +18,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+import wave
 
 
 TASK_ROOT = Path(__file__).resolve().parent
@@ -203,6 +204,19 @@ def pcm16_samples(path: Path) -> list[int]:
     if not payload:
         return []
     return list(struct.unpack("<" + ("h" * (len(payload) // 2)), payload))
+
+
+def wav_pcm16_samples(path: Path) -> tuple[int, list[int], bytes]:
+    with wave.open(str(path), "rb") as stream:
+        if stream.getnchannels() != 1 or stream.getsampwidth() != 2 or stream.getcomptype() != "NONE":
+            raise RunnerError(f"device-bound WAV is not mono PCM16: {path}")
+        sample_rate = stream.getframerate()
+        payload = stream.readframes(stream.getnframes())
+    if len(payload) % 2 != 0:
+        raise RunnerError(f"device-bound WAV has odd PCM16 byte length: {path}")
+    if not payload:
+        raise RunnerError(f"device-bound WAV is empty: {path}")
+    return sample_rate, list(struct.unpack("<" + ("h" * (len(payload) // 2)), payload)), payload
 
 
 def contains_pcm16(haystack: list[int], needle: list[int]) -> bool:
@@ -477,6 +491,9 @@ def public_replay_control(case: str, deadline: float, timeout: float) -> dict[st
     pcm_bytes = pcm.stat().st_size
     if pcm_bytes != 4800:
         raise RunnerError(f"public {case} rendered {pcm_bytes} PCM bytes, want 4800")
+    device_wav_rate, device_wav_samples, device_wav_pcm = wav_pcm16_samples(output)
+    if device_wav_rate != 16000:
+        raise RunnerError(f"public {case} device-bound WAV rate={device_wav_rate}, want 16000")
     software_device: dict[str, object] | None = None
     if server_endpoint is not None:
         if server_snapshot is None or server_start is None or server_build is None or server_cleanup is None:
@@ -490,9 +507,8 @@ def public_replay_control(case: str, deadline: float, timeout: float) -> dict[st
                 raise RunnerError(f"public {case} software device {field}={playback.get(field)!r}, want zero")
         if playback.get("RenderedSamples") != len(rendered_samples) or not any(sample != 0 for sample in rendered_samples):
             raise RunnerError(f"public {case} software device did not render nonzero PCM: {playback}")
-        expected_samples = pcm16_samples(pcm)
-        if not contains_pcm16([int(sample) for sample in rendered_samples], expected_samples):
-            raise RunnerError(f"public {case} software device PCM does not contain the exact output PCM")
+        if not contains_pcm16([int(sample) for sample in rendered_samples], device_wav_samples):
+            raise RunnerError(f"public {case} software device PCM does not contain the exact device-bound WAV PCM")
         if server_cleanup["cleanup"]["parent_reaped"] is not True or server_cleanup["cleanup"]["group_alive_after"]:
             raise RunnerError(f"public {case} software device cleanup is incomplete: {server_cleanup}")
         software_device = {
@@ -502,6 +518,16 @@ def public_replay_control(case: str, deadline: float, timeout: float) -> dict[st
             "snapshot": server_snapshot,
             "cleanup": server_cleanup,
             "exact_output_pcm_contained": True,
+            "device_output_wav": {
+                "sample_rate": device_wav_rate,
+                "channels": 1,
+                "sample_width_bytes": 2,
+                "frames": len(device_wav_samples),
+                "pcm_bytes": len(device_wav_pcm),
+                "pcm_sha256": hashlib.sha256(device_wav_pcm).hexdigest(),
+                "wav_bytes": output.stat().st_size,
+                "wav_sha256": sha256_file(output),
+            },
         }
     return {
         "case": case,
