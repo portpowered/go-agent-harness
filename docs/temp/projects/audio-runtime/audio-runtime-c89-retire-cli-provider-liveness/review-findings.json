@@ -1,0 +1,14 @@
+{
+  "work": "audio-runtime-c89-retire-cli-provider-liveness",
+  "previousReviewFindings": [],
+  "previousCiRejections": [],
+  "authorityCheck": {
+    "boardQuery": "exact filtered canonical work list for session ~default, name audio-runtime-c89-retire-cli-provider-liveness, --all --counts",
+    "taskRow": "work-task-151",
+    "reviewRows": 0,
+    "ciRejectionRows": 0,
+    "rejectionFeedbackRows": 0
+  },
+  "progressSearch": "progress.txt contains no C89, c89, providerliveness, or provider liveness entry.",
+  "status": "No prior C89 review findings were available; this candidate must still receive fresh independent review after script CI."
+}

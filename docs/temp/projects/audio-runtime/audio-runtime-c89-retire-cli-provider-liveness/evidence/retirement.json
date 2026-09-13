@@ -1,0 +1,11 @@
+{
+  "baseline_lines": 569,
+  "baseline_sha256": "d9de111ed44d79045cdc492a7309314cad81c7e478ee8a2fea7a1c9755d2eb17",
+  "candidate_lines": 190,
+  "candidate_sha256": "f5b3d494d6fff1ce7fe494860d3b6aad138f52963193d5908ebc37fc8fd24adc",
+  "deprecated_alias_count": 5,
+  "legacy_forbidden_symbols": [],
+  "passed": true,
+  "retired_lines": 379,
+  "service_forbidden_imports_or_initializers": []
+}

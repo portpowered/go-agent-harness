@@ -1,0 +1,22 @@
+{
+  "gofmt": "pass",
+  "vet": "pass for providerliveness and agentruntime",
+  "lint": "pass: pinned golangci-lint 2.9.0 across 15 workspace modules",
+  "staticcheck": {
+    "status": "blocked by unowned predecessor fields",
+    "command": "make staticcheck",
+    "exitCode": 1,
+    "exactFindings": [
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go:300 field livenessErr is unused",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go:303 field livenessTimer is unused",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go:305 field livenessControlCh is unused",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go:306 field livenessWatcherStop is unused",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go:307 field livenessWatcherStarted is unused",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go:308 field livenessGeneration is unused",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go:309 field livenessArmed is unused",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go:310 field livenessStopped is unused",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go:311 field localToolDepth is unused"
+    ],
+    "requiredAction": "The exact unowned peer file must be assigned for cleanup or the shared ownership plan must release it; C89 does not mutate it."
+  }
+}

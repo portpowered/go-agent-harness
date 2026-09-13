@@ -1,0 +1,21 @@
+{
+  "wireCheck": {
+    "command": "make wire-check",
+    "exitCode": 1,
+    "exactResult": "Wire registry mismatch: unregistered=['go-agent-runtime/services/providerliveness/wire/wire_gen.go'], outside modules=[]",
+    "owner": "C79",
+    "requiredAction": "After C79 reviewed guarded merge releases scripts/wire-packages.txt, request explicit demonstrated downward-only ownership before adding the providerliveness/wire entry."
+  },
+  "architectureSizeCheck": {
+    "command": "make architecture-size-check",
+    "exitCode": 1,
+    "remainingIssues": 6,
+    "candidateIssues": [],
+    "sharedOrInheritedIssues": [
+      "five baseline-stale session_liveness.go entries require deletion from docs/architecture/architecture-size-baseline.json",
+      "generated-file-spoof for go-agent-runtime/services/providerliveness/wire/wire_gen.go requires scripts/wire-packages.txt registration"
+    ],
+    "owner": "C79",
+    "status": "blocked shared registries remain non-passing as policy requires"
+  }
+}

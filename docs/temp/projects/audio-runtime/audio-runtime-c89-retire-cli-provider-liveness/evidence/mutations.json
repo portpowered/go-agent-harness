@@ -1,0 +1,58 @@
+{
+  "clean": {
+    "command": [
+      "go",
+      "test",
+      "./services/providerliveness/internal/service",
+      "-run",
+      "TestService(EmptyResponseExclusions|ArmingResetAndStaleGeneration)$",
+      "-count=1",
+      "-timeout=30s"
+    ],
+    "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/providerliveness-clean-giw84wjp",
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/providerliveness/internal/service\t0.380s\n"
+  },
+  "mutations": [
+    {
+      "clean_source_passed_before_mutation": true,
+      "command": [
+        "go",
+        "test",
+        "./services/providerliveness/internal/service",
+        "-run",
+        "^TestServiceEmptyResponseExclusions/loop-cancel$",
+        "-count=1",
+        "-timeout=30s"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/providerliveness-cancelled-empty-response-fwso9hcw",
+      "exit_code": 1,
+      "intended_assertion_observed": true,
+      "label": "cancelled-empty-response",
+      "mutated_source_failed": true,
+      "stderr": "",
+      "stdout": "--- FAIL: TestServiceEmptyResponseExclusions (0.00s)\n    --- FAIL: TestServiceEmptyResponseExclusions/loop-cancel (0.00s)\n        service_test.go:146: excluded response published a liveness wake\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/providerliveness/internal/service\t0.167s\nFAIL\n"
+    },
+    {
+      "clean_source_passed_before_mutation": true,
+      "command": [
+        "go",
+        "test",
+        "./services/providerliveness/internal/service",
+        "-run",
+        "^TestServiceArmingResetAndStaleGeneration$",
+        "-count=1",
+        "-timeout=30s"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/providerliveness-obsolete-generation-tr2n2ink",
+      "exit_code": 1,
+      "intended_assertion_observed": true,
+      "label": "obsolete-generation",
+      "mutated_source_failed": true,
+      "stderr": "",
+      "stdout": "--- FAIL: TestServiceArmingResetAndStaleGeneration (0.00s)\n    service_test.go:176: obsolete timer generation published a failure\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/providerliveness/internal/service\t0.190s\nFAIL\n"
+    }
+  ],
+  "passed": true
+}

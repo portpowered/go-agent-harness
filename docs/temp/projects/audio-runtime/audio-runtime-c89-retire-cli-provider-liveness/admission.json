@@ -1,0 +1,26 @@
+{
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "work": "audio-runtime-c89-retire-cli-provider-liveness",
+  "taskId": "work-task-151",
+  "session": "~default",
+  "branch": "codex/audio-runtime-c89-retire-cli-provider-liveness",
+  "prdBranch": "codex/audio-runtime-c89-retire-cli-provider-liveness",
+  "headAtAdmission": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "originMainAtAdmission": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "baselineLegacyLines": 569,
+  "manifestSha256": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
+  "sourcePlanSha256": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
+  "prdSha256": "24cf9645a3711941a352494f8554a188393425af26cb6de9a1b0e7382020cd81",
+  "verifyWork": {
+    "command": "python3 factory/scripts/project-control.py verify-work --type task --name audio-runtime-c89-retire-cli-provider-liveness --root $FACTORY_ROOT",
+    "result": "{\"status\":\"admitted\",\"project\":\"audio-runtime\",\"name\":\"audio-runtime-c89-retire-cli-provider-liveness\"}"
+  },
+  "ancestry": {
+    "startup": true,
+    "planningOriginMain": true,
+    "currentOriginMain": true
+  },
+  "sharedPathLease": "C79 retains scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json; this task does not modify either file."
+}

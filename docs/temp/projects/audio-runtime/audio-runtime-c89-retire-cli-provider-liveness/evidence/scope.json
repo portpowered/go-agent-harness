@@ -1,0 +1,11 @@
+{
+  "changed_paths": [
+    "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+    "coverage-manifest/go-agent-runtime/services/providerliveness/",
+    "go-agent-runtime/services/providerliveness/"
+  ],
+  "passed": true,
+  "shared_registry_changes": [],
+  "unowned_changed_paths": [],
+  "unowned_runtime_byte_drift": []
+}
