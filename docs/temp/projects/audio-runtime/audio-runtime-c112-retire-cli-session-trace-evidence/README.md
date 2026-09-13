@@ -7,16 +7,17 @@ current-main-integrated source/probe checkpoint is
 `708013bd419175482fd5aad5d1e83432e8d71b33`; the final atomic-publication and
 evidence-runner repair checkpoint is
 `dee72ae047db826a049c41fe5be2410d09135c6e`. The metadata-only evidence refresh
-follows that source checkpoint on branch
+follows that source checkpoint through final candidate merge
+`cea43e874a6d2d2eded0ab0f5b19e48dcfd3b983` on branch
 `codex/audio-runtime-c112-retire-cli-session-trace-evidence`.
 
 ## Admission, ancestry, and census
 
 - `project-control.py verify-work --type task --name audio-runtime-c112-retire-cli-session-trace-evidence` returns the admitted `audio-runtime` task.
 - Accepted planning baseline: `d4766c3dbbf2c198142047ead4449d58dd47d485`.
-- Current fetched `origin/main`: `071b0abfd67501db61e3c1929971c6dd6e77eb62`; it is an ancestor of the final candidate.
+- Current fetched `origin/main`: `bd6a1289218d1bef1a3af36e64e9d4496062416f`; it is an ancestor of the final candidate.
 - Required startup ancestor: `8bdafc7f947a3a2c9856220abdc539437035bd21`.
-- The current mainline was integrated by merge commit `708013bd419175482fd5aad5d1e83432e8d71b33`, preserving the predecessor and C79 merge ancestry. The merge retains the peer C116 RTC transport source and shared generated-Wire registrations. Checkpoint `dee72ae` adds the service-owned atomic no-replace publication repair and bounded evidence-runner hardening; the shipped artifact was rebuilt from that checkpoint.
+- The C116 current-main integration was merge commit `708013bd419175482fd5aad5d1e83432e8d71b33`; the newly fetched mainline `bd6a1289218d1bef1a3af36e64e9d4496062416f` was then integrated by final candidate merge `cea43e874a6d2d2eded0ab0f5b19e48dcfd3b983`, preserving the predecessor and C79 ancestry. Checkpoint `dee72ae` adds the service-owned atomic no-replace publication repair and bounded evidence-runner hardening; the shipped artifact was rebuilt from the final merged candidate.
 - The immutable pre-extraction `trace.go` is 119 lines with SHA-256 `db9fab41dd02578db5e7b024af869eb762b21ec14c48c64442d4ad9ca3149710`.
 - The final CLI seam is 43 lines with SHA-256 `939fa231d9b182536297cf18f923a6f358fec46a7dcbf5ea64bb7db548ed5d75`; 76 lines of CLI lifecycle/orchestration are retired.
 
@@ -63,13 +64,13 @@ empty unpublished retention, dropped prior-observer wiring, and shared payload
 copying. The runner strips credential environment variables, caps output,
 reaps the child process group, and checks source-pinned fixture and PCM hashes.
 
-Final runner result from a yui artifact rebuilt at source checkpoint
-`dee72ae047db826a049c41fe5be2410d09135c6e` using `make -C agent-cli build`
+Final runner result from a yui artifact rebuilt at final candidate merge
+`cea43e874a6d2d2eded0ab0f5b19e48dcfd3b983` using `make -C agent-cli build`
 passed with `AGENT_MODEL__OPENAI__API_KEY` and
 `AGENT_MODEL__GROK__API_KEY` injected into the parent and removed before launch.
 The artifact is `artifacts/yui` SHA-256
-`54ffb3d466649b246efbcf48025b2676b674ecf1bd677836a55b53b53a0f1830`, and run
-directory `runs/vertical-20260913T122101Z-17103`:
+`1cfadaea74eb80388e2b2a170fb0eddd9de8a611994ac4deb2c6161a602d1bbd`, and run
+directory `runs/vertical-20260913T122357Z-24128`:
 
 - Tool replay: exit 0, no timeout/survivors, 29 timeline events/21 runtime events, provider PCM 4,800 bytes (`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`), rendered PCM 3,200 bytes (`7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`), speaker trace 4,844 bytes (`305d40c0fa1b687133be6a7841654dcbe89310b7b7f9800cb624c25bcffd880c`), deterministic microphone input 1,440 bytes (`db9ac5111b2173f5f0e7909539a7dea70134b5736d4f2582c99e25705aab6148`), derived fixture (`62835dcb8270ab1dba865d078e79b13a3c6c3c89454c65f5eb7f5bb42586a714`), microphone pre-gate and speaker-enqueued taps, provider wire append/commit types, and `PROBE_TOOL_MARKER_9182` plus `strict replay continuation`.
 - Interruption replay: exit 0, no timeout/survivors, 20 timeline events/15 runtime events, provider PCM 3,840 bytes (`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`), rendered PCM 3,360 bytes (`302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff`), speaker trace 3,884 bytes (`001ff24159be9c44e5ba33e39c15cea64818fb488b14b860b623fe95c7a4f2ca`), and replay-complete terminal evidence.
@@ -87,9 +88,10 @@ This is credential-free software/file replay evidence. Native Windows hardware,
 physical devices, and physical/acoustic claims are OUT OF SCOPE and are never
 represented as PASS.
 
-## Fresh local gate checkpoint — 2026-09-13T12:21:07Z
+## Fresh local gate checkpoint — 2026-09-13T12:29:35Z
 
-On the exact repair source `dee72ae047db826a049c41fe5be2410d09135c6e`, the owned
+On the exact final candidate merge `cea43e874a6d2d2eded0ab0f5b19e48dcfd3b983`, with
+the required fetched `origin/main` `bd6a1289218d1bef1a3af36e64e9d4496062416f`, the owned
 `verify.py --mode all` passed admission, startup/accepted/current-main
 ancestry, owned-path scope, sessiontrace normal/race tests, CLI adapter
 normal/race tests, the `GOWORK=off` external consumer build/test, and all three
@@ -102,8 +104,10 @@ The accumulated command
 coverage, and race modes: CLI interruption, shipped replay/continuation and
 duplex controls, simulated-device controls, composed OpenAI tool lifecycle, and
 the strict 20-trial high-rate control. `make wire-check` and
-`make architecture-size-check` pass at 198 packages, 1,929 files, and 28,366
-functions. The final owned-path scope check and `git diff --check` also pass.
+`make architecture-size-check` pass at 198 packages, 1,931 files, and 28,679
+functions. Full vet, pinned staticcheck, coverage registration, and the scoped
+owned-module golangci-lint check also pass. The final owned-path scope check and
+`git diff --check` pass.
 
 ## Handoff
 
@@ -114,8 +118,11 @@ provenance. The latest independent review also required atomic no-replace
 publication, microphone/upload/playback evidence, complete configured-credential
 scrubbing, and an artifact rebuilt from the reviewed checkpoint; those repairs
 are complete at `dee72ae`. Focused causal tests, accumulated replay regressions,
-formatting, vet, Wire, architecture-size, coverage registration, pinned lint,
-pinned staticcheck, and `git diff --check` pass.
+formatting, vet, Wire, architecture-size, coverage registration, scoped pinned
+lint for the owned runtime module, pinned staticcheck, and `git diff --check`
+pass. The repository-wide lint target still reports five unrelated baseline
+C124 `agent-cli` findings outside the admitted C112 paths; those predecessor
+changes are preserved and are not relabeled as C112 failures.
 
 The prior Script CI outcomes are retained without relabeling: PR #498 head
 `fe10ea3` had green run `34752205668` before this current-main integration, while
