@@ -46,7 +46,7 @@ func newProcessRunner(executable string) *processRunner {
 	}
 }
 
-func (r *processRunner) run(ctx context.Context, inputPath string, limits audiocodec.Limits) (runResult, error) {
+func (r *processRunner) run(ctx context.Context, inputPath string, limits audiocodec.Limits) (result runResult, returnErr error) {
 	if err := ctx.Err(); err != nil {
 		return runResult{}, newError(audiocodec.ErrorCanceled, err, "decoder context ended before start")
 	}
@@ -58,7 +58,11 @@ func (r *processRunner) run(ctx context.Context, inputPath string, limits audioc
 	if err != nil {
 		return runResult{}, newError(audiocodec.ErrorInputFile, err, "open temporary input")
 	}
-	defer input.Close()
+	defer func() {
+		if err := input.Close(); err != nil && returnErr == nil {
+			returnErr = newError(audiocodec.ErrorInputFile, err, "close decoder input")
+		}
+	}()
 
 	cmd := r.command(ctx, path, "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", inputPath, "-f", "s16le", "-ac", "1", "-ar", "16000", "-")
 	stdout := newBoundedBuffer(limits.MaxOutputBytes)

@@ -295,10 +295,14 @@ func (c *testCommand) setStderr(writer io.Writer) { c.stderr = writer }
 func (c *testCommand) start() error               { return c.startErr }
 func (c *testCommand) wait() error {
 	if len(c.stdoutData) != 0 {
-		_, _ = c.stdout.Write(c.stdoutData)
+		if _, err := c.stdout.Write(c.stdoutData); err != nil {
+			return err
+		}
 	}
 	if len(c.stderrData) != 0 {
-		_, _ = c.stderr.Write(c.stderrData)
+		if _, err := c.stderr.Write(c.stderrData); err != nil {
+			return err
+		}
 	}
 	return c.waitErr
 }

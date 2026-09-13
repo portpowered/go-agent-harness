@@ -112,7 +112,13 @@ func (s *Service) decode(ctx context.Context, input []byte, limits audiocodec.Li
 	defer removeTempFile(tmpPath)
 
 	if _, err := tmp.Write(input); err != nil {
-		_ = tmp.Close()
+		if closeErr := tmp.Close(); closeErr != nil {
+			return runResult{}, newError(
+				audiocodec.ErrorInputFile,
+				fmt.Errorf("%w (close temporary input: %w)", err, closeErr),
+				"write temporary input",
+			)
+		}
 		return runResult{}, newError(audiocodec.ErrorInputFile, err, "write temporary input")
 	}
 	if err := tmp.Close(); err != nil {

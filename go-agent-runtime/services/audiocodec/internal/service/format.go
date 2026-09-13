@@ -9,6 +9,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
 )
 
+const (
+	aacSyncMask  byte = 0xf6
+	aacSyncValue byte = 0xf0
+)
+
 func detectFormat(input []byte, hint string) (audiocodec.InputFormat, error) {
 	if format, ok := formatFromHint(hint); ok {
 		return format, nil
@@ -124,5 +129,5 @@ func isAACSync(input []byte) bool {
 	if len(input) < 2 || input[0] != 0xff {
 		return false
 	}
-	return input[1]&0xf6 == 0xf0
+	return input[1]&aacSyncMask == aacSyncValue
 }
