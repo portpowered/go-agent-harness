@@ -165,3 +165,41 @@ released accepted main while preserving the C136 sessionturns implementation,
 apply only the demonstrated sessionturns registry/baseline entries, rerun the
 bounded gates, commit/push the same PR, and submit its changed head to SCRIPT
 CI without polling.
+
+## Exact-head focused and accumulated recheck — 2026-09-13T17:33:43Z
+
+Admission remains `admitted` for the sole `audio-runtime/audio-runtime-v1`
+project, the isolated branch still matches `prd.json.branchName`, PR #513 is
+open at `c2be50efdf1d571de504eda0ef6cee78f5ae1699`, and PR #476 remains
+unchanged at `28b5a9b18f67a4343ef9e12141ad5e5fc84ef18f`. The fresh fetch keeps
+`origin/main=b8650efd95f6a2e2e675a3dfd0969a9d311a877b`; C112 and C127 are
+merged, while C110, C111, and C119 remain open and retain the shared-path
+dependency. No source, predecessor, host checkout, or shared registry/policy
+file was changed.
+
+The exact current-head focused recheck passed sessionturns normal/race (`42` /
+`39` tests), deprecated CLI compatibility normal/race (`6` / `2`), the
+separate `GOWORK=off` consumer, and all three verifiers: mutations,
+retirement-and-adapter, and owned-and-excluded-paths. The bounded public runner
+passed both requested cases (`3` / `3` tests each) with scrubbed credentials,
+bounded output, reaped children, and no surviving process groups. The first
+attempt included an obsolete `--output-limit-bytes` option rejected by the
+current runner parser; the supported rerun omitted only that unsupported option
+and passed without source changes.
+
+`COUNT=1 bash scripts/test-session-ci-regressions.sh all` passed normal,
+coverage, and race modes, including all 20 high-rate trials and retained
+negative controls. Expected replay/PCM/transcript mismatch diagnostics remained
+asserted. These are executor checks only: the current candidate is not script-
+CI green, independently reviewed, guarded-merged, vertically accepted, or
+project-complete.
+
+The required canonical factory work-list request returned
+`CLI_COMMAND_FAILED` / `INTERNAL_SERVER_ERROR`; no factory state mutation was
+attempted. GitHub and the preserved admission/evidence records independently
+show no C136 review findings and the same C110/C111/C119 shared-path lease
+dependency. Exact next action is to retain C136, then after those three guarded
+merges release the paths, fetch and integrate the then-accepted `origin/main`,
+add only the demonstrated sessionturns registry/baseline entries, rerun the
+bounded gates, and submit the changed same-task head to SCRIPT CI without
+polling.
