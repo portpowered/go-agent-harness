@@ -85,6 +85,58 @@ func TestFinalizeLifecycleHintsOrderMetadataAndErrorIdentity(t *testing.T) {
 	}
 }
 
+func TestFinalizeScheduledAudioIncompleteWithNilOrContextError(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{name: "nil", err: nil},
+		{name: "context canceled", err: context.Canceled},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result := New().Finalize(sessionterminal.Request{
+				RunError: test.err,
+				Output:   sessionterminal.OutputSnapshot{SawSessionOpen: true, TurnsCompleted: 1},
+				Lifecycle: sessionterminal.LifecycleSnapshot{
+					Scheduled: sessionterminal.ScheduledSnapshot{
+						Completed:  0,
+						Dispatched: 1,
+						Inputs:     2,
+						Incomplete: true,
+					},
+				},
+			})
+			failure := findRecord(t, result, sessionterminal.EventFailure)
+			if got := failure.Fields[sessionterminal.FieldClassification]; got != "scheduled_audio_incomplete" {
+				t.Fatalf("classification = %q", got)
+			}
+			if got := failure.Fields[sessionterminal.FieldScheduledInputCount]; got != "2" {
+				t.Fatalf("scheduled input count = %q", got)
+			}
+			if !hasEvent(result, sessionterminal.EventMetrics) {
+				t.Fatal("scheduled failure did not retain metrics")
+			}
+		})
+	}
+}
+
+func TestFinalizeContinuationMetadataIsLifecycleFailureWithoutIDs(t *testing.T) {
+	result := New().Finalize(sessionterminal.Request{
+		Lifecycle: sessionterminal.LifecycleSnapshot{
+			PendingContinuations: sessionterminal.ContinuationSnapshot{
+				Statuses: map[string]string{"call-a": "incomplete"},
+			},
+		},
+	})
+	failure := findRecord(t, result, sessionterminal.EventFailure)
+	if got := failure.Fields[sessionterminal.FieldClassification]; got != "tool_continuation" {
+		t.Fatalf("classification = %q", got)
+	}
+	if got := failure.Fields[sessionterminal.FieldPendingContinuationStatuses]; got != "call-a=incomplete" {
+		t.Fatalf("statuses = %q", got)
+	}
+}
+
 func TestFinalizeCancellationAndRoomBoundPrecedence(t *testing.T) {
 	cancelled := New().Finalize(sessionterminal.Request{
 		UserCancelled:  true,

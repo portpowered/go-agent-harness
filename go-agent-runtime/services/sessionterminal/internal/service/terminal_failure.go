@@ -26,7 +26,7 @@ func terminalFailure(request sessionterminal.Request) *sessionterminal.FailureFa
 	if failure := factsFromSessionRunError(request.RunError); failure != nil {
 		return failure
 	}
-	if request.RunError == nil && noContinuationIDs(request) {
+	if request.RunError == nil && noContinuationIDs(request) && !hasLifecycleObligation(request) {
 		return nil
 	}
 	if failure := obligationFailure(request); failure != nil {
@@ -37,13 +37,15 @@ func terminalFailure(request sessionterminal.Request) *sessionterminal.FailureFa
 
 func hasLifecycleObligation(request sessionterminal.Request) bool {
 	lifecycle := request.Lifecycle
-	continuations := lifecycle.PendingContinuations
 	return len(lifecycle.UnresolvedToolResultCallIDs) > 0 ||
 		len(lifecycle.PendingContinuationCallIDs) > 0 ||
 		len(lifecycle.PendingToolContinuationIDs) > 0 ||
 		len(lifecycle.PendingImageContinuationIDs) > 0 ||
-		len(continuations.Statuses) > 0 || len(continuations.Codes) > 0 ||
-		len(continuations.Details) > 0 || lifecycle.Scheduled.Incomplete
+		continuationMetadataPresent(lifecycle.PendingContinuations) || lifecycle.Scheduled.Incomplete
+}
+
+func continuationMetadataPresent(snapshot sessionterminal.ContinuationSnapshot) bool {
+	return len(snapshot.Statuses) > 0 || len(snapshot.Codes) > 0 || len(snapshot.Details) > 0
 }
 
 func contextOnlyError(err error) bool {
@@ -104,6 +106,12 @@ func obligationFailure(request sessionterminal.Request) *sessionterminal.Failure
 		if len(obligation.ids) > 0 {
 			return lifecycleFailure(obligation.classification, request)
 		}
+	}
+	if lifecycle.Scheduled.Incomplete {
+		return lifecycleFailure("scheduled_audio_incomplete", request)
+	}
+	if continuationMetadataPresent(lifecycle.PendingContinuations) {
+		return lifecycleFailure("tool_continuation", request)
 	}
 	return nil
 }
