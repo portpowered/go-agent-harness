@@ -13,14 +13,14 @@
     "ancestry": "accepted main, required startup, and fetched origin/main are ancestors of the final candidate; current origin/main was integrated by merge 708013bd"
   },
   "testedSource": {
-    "revision": "708013bd419175482fd5aad5d1e83432e8d71b33",
-    "candidateRevision": "708013bd419175482fd5aad5d1e83432e8d71b33",
+    "revision": "dee72ae047db826a049c41fe5be2410d09135c6e",
+    "candidateRevision": "dee72ae047db826a049c41fe5be2410d09135c6e",
     "traceLines": 43,
     "traceSha256": "939fa231d9b182536297cf18f923a6f358fec46a7dcbf5ea64bb7db548ed5d75",
-    "traceSha256Command": "rtk git show 708013bd419175482fd5aad5d1e83432e8d71b33:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
+    "traceSha256Command": "rtk git show dee72ae047db826a049c41fe5be2410d09135c6e:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
     "candidateTraceLines": 43,
     "candidateTraceSha256": "939fa231d9b182536297cf18f923a6f358fec46a7dcbf5ea64bb7db548ed5d75",
-    "candidateTraceSha256Command": "rtk git show 708013bd419175482fd5aad5d1e83432e8d71b33:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
+    "candidateTraceSha256Command": "rtk git show dee72ae047db826a049c41fe5be2410d09135c6e:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
     "candidateRelation": {
       "type": "current-main-integrated-candidate",
       "diffCommand": "rtk git diff --name-only 77de2f9cd7e3ea5496537f96cde7203249250e6f..708013bd419175482fd5aad5d1e83432e8d71b33",
@@ -79,7 +79,7 @@
       "make fmt: PASS",
       "make vet: PASS",
       "make wire-check: PASS",
-      "make architecture-size-check: PASS (198 packages, 1925 files, 28360 functions)",
+      "make architecture-size-check: PASS (198 packages, 1929 files, 28366 functions)",
       "make coverage-registration: PASS (185 workspace packages across 6 modules)",
       "make lint: PASS with golangci-lint 2.9.0",
       "make staticcheck: PASS with staticcheck 2026.1",
@@ -93,29 +93,36 @@
     "result": "PASS; two independent traces, all four PCM edges, deterministic clock, same-length PCM mutation identity, missing-clock rejection, duplicate destination retention"
   },
   "shippedYuiProbe": {
-    "sourceRevision": "708013bd419175482fd5aad5d1e83432e8d71b33",
+    "sourceRevision": "dee72ae047db826a049c41fe5be2410d09135c6e",
     "artifact": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/artifacts/yui",
-    "artifactSha256": "2510dcb06c4f52e7d460eee6d88834722ddb236fb46b0672f0962ea542a3bb48",
+    "artifactSha256": "54ffb3d466649b246efbcf48025b2676b674ecf1bd677836a55b53b53a0f1830",
     "buildCommand": "rtk make -C agent-cli build BUILD_OUTPUT=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence/docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/artifacts/yui",
-    "buildResult": "PASS; rebuilt from current-main-integrated candidateRevision 708013bd419175482fd5aad5d1e83432e8d71b33",
-    "command": "python3 docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/run.py --case trace-audio-tool-replay --case interruption-replay --child-timeout 60 --aggregate-timeout 180",
-    "runDir": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/runs/vertical-20260913T110900Z-95386",
-    "environment": "credential-free; stdout/stderr capped at 256 KiB; child timeout 60s; aggregate timeout 180s; no surviving process-group PIDs",
+    "buildResult": "PASS; rebuilt from final atomic-publication and evidence-runner checkpoint dee72ae047db826a049c41fe5be2410d09135c6e",
+    "command": "AGENT_MODEL__OPENAI__API_KEY=sentinel AGENT_MODEL__GROK__API_KEY=sentinel2 python3 docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/run.py --case trace-audio-tool-replay --case interruption-replay --child-timeout 60 --aggregate-timeout 180",
+    "runDir": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/runs/vertical-20260913T122101Z-17103",
+    "environment": "parent injected AGENT_MODEL__OPENAI__API_KEY and AGENT_MODEL__GROK__API_KEY; runner removed both before launch; stdout/stderr capped at 256 KiB; child timeout 60s; aggregate timeout 180s; no surviving process-group PIDs",
+    "removedCredentialEnvironmentNames": ["AGENT_MODEL__GROK__API_KEY", "AGENT_MODEL__OPENAI__API_KEY"],
     "fixtureHashes": {
-      "audioTool": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "audioToolSource": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "audioToolDerived": "62835dcb8270ab1dba865d078e79b13a3c6c3c89454c65f5eb7f5bb42586a714",
       "interruption": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206"
     },
     "cases": {
       "trace-audio-tool-replay": {
         "exitCode": 0,
-        "timelineEvents": 27,
-        "runtimeEvents": 20,
+        "timelineEvents": 29,
+        "runtimeEvents": 21,
         "providerPcmBytes": 4800,
         "providerPcmSha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
         "renderedPcmBytes": 3200,
-        "renderedPcmSha256": "7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805",
+        "renderedPcmSha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805",
         "speakerTraceBytes": 4844,
         "speakerTraceSha256": "305d40c0fa1b687133be6a7841654dcbe89310b7b7f9800cb624c25bcffd880c",
+        "audioInputBytes": 1440,
+        "audioInputSha256": "db9ac5111b2173f5f0e7909539a7dea70134b5736d4f2582c99e25705aab6148",
+        "audioTaps": ["microphone_pre_gate", "speaker_enqueued"],
+        "runtimeKinds": ["provider_wire_receive", "provider_wire_send", "tool_call", "tool_result"],
+        "providerWireTypes": ["input_audio_buffer.append", "input_audio_buffer.commit"],
         "markers": ["PROBE_TOOL_MARKER_9182", "strict replay continuation"],
         "terminal": "fixture_complete/provider_close"
       },
@@ -129,6 +136,8 @@
         "renderedPcmSha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff",
         "speakerTraceBytes": 3884,
         "speakerTraceSha256": "001ff24159be9c44e5ba33e39c15cea64818fb488b14b860b623fe95c7a4f2ca",
+        "audioTaps": ["speaker_enqueued"],
+        "runtimeKinds": ["provider_wire_receive", "provider_wire_send"],
         "terminal": "replay_complete/replay"
       }
     },
@@ -168,13 +177,17 @@
     "reviewWorkId": "work-review-45",
     "historicalDecision": "FAILED",
     "historicalRejection": "PR #498 at 7725b8d9 had all nine required checks green, and independent focused/race/consumer tests plus both replay fixtures passed. Actionable defects remained: Finish(ctx, \"\", false) returned nil while retain suppressed the staged-path diagnostic for an empty bundle; trace.go kept observer ordering, copying, and preference decisions in the CLI; required verify.py, run.py, and external-consumer paths were absent; evidence was stale/mixed and the replay used untouched livehost tracing.",
-    "repairStatus": "all listed actionable defects repaired and reverified at 77de2f9; C112 production paths remain unchanged through the current-main-integrated 708013bd candidate"
+    "repairStatus": "all listed actionable defects repaired and reverified at 77de2f9; the atomic publication, fresh replay, credential scrub, lint, and provenance repairs are reverified at dee72ae",
+    "latestReviewWorkId": "work-review-13",
+    "latestReviewDecision": "FAILED",
+    "latestReviewFindings": "The independent review found a check-then-rename overwrite race, speaker-only fresh replay evidence, incomplete AGENT_MODEL__*__API_KEY scrubbing, and an artifact/evidence provenance mismatch.",
+    "latestReviewRepair": "dee72ae adds platform-native no-replace publication with an adversarial destination race test, deterministic microphone/upload/playback/runtime assertions, complete configured credential-name scrubbing, a lint-clean adversarial test, and a rebuilt artifact/run bound to the repair checkpoint."
   },
   "scriptCi": {
-    "currentRevision": "708013bd419175482fd5aad5d1e83432e8d71b33",
+    "currentRevision": "dee72ae047db826a049c41fe5be2410d09135c6e",
     "status": "READY_FOR_CHANGED_HEAD_SUBMISSION",
     "currentOriginMain": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
-    "executorAction": "Commit and push this evidence refresh, then return ACCEPTED to the script-owned CI gate without polling. The next CI run must evaluate the changed head; no current CI result is claimed here.",
+    "executorAction": "Push the final metadata-only evidence refresh atop source checkpoint dee72ae, then return ACCEPTED to the script-owned CI gate without polling. The next CI run must evaluate the changed head; no current CI result is claimed here.",
     "historicalGreenHead": {
       "revision": "fe10ea3bee8371f06e81c4f253c4a8599bb9cdc5",
       "run": 34752205668,
@@ -193,18 +206,20 @@
     }
   },
   "freshLocalValidation": {
-    "revision": "708013bd419175482fd5aad5d1e83432e8d71b33",
-    "timestamp": "2026-09-13T11:10:13Z",
+    "revision": "dee72ae047db826a049c41fe5be2410d09135c6e",
+    "timestamp": "2026-09-13T12:21:07Z",
     "commands": [
       "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/verify.py --mode all",
       "rtk proxy env COUNT=1 bash scripts/test-session-ci-regressions.sh all",
       "rtk make wire-check",
       "rtk make architecture-size-check",
+      "AGENT_MODEL__OPENAI__API_KEY=sentinel AGENT_MODEL__GROK__API_KEY=sentinel2 python3 docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/run.py --case trace-audio-tool-replay --case interruption-replay --child-timeout 60 --aggregate-timeout 180",
       "rtk proxy git diff --check"
     ],
     "results": {
-      "ownedVerifier": "PASS: admission, required ancestry, owned-path scope, sessiontrace normal/race, CLI adapter normal/race, GOWORK=off external consumer test/build, and three intended causal mutation failures",
+      "ownedVerifier": "PASS: admission, required ancestry, owned-path scope, sessiontrace normal/race, CLI adapter normal/race, GOWORK=off external consumer test/build, platform compile probes, and three intended causal mutation failures",
       "accumulatedRegressions": "PASS: normal, coverage, and race; CLI interruption, shipped replay/continuation/duplex, simulated-device, composed OpenAI tool lifecycle, and strict 20-trial high-rate controls",
+      "artifactReplay": "PASS: source-pinned yui artifact; tool 29 timeline/21 runtime with microphone_pre_gate, speaker_enqueued, append/commit wire types; interruption 20 timeline/15 runtime; both credential-free and no survivors",
       "diff": "PASS: owned path scope and whitespace"
     }
   },

@@ -4,7 +4,9 @@ This is the admitted `audio-runtime` evidence for
 `audio-runtime-c112-retire-cli-session-trace-evidence`. The repaired C112
 implementation checkpoint is `77de2f9cd7e3ea5496537f96cde7203249250e6`; the
 current-main-integrated source/probe checkpoint is
-`708013bd419175482fd5aad5d1e83432e8d71b33`. The metadata-only evidence refresh
+`708013bd419175482fd5aad5d1e83432e8d71b33`; the final atomic-publication and
+evidence-runner repair checkpoint is
+`dee72ae047db826a049c41fe5be2410d09135c6e`. The metadata-only evidence refresh
 follows that source checkpoint on branch
 `codex/audio-runtime-c112-retire-cli-session-trace-evidence`.
 
@@ -14,7 +16,7 @@ follows that source checkpoint on branch
 - Accepted planning baseline: `d4766c3dbbf2c198142047ead4449d58dd47d485`.
 - Current fetched `origin/main`: `071b0abfd67501db61e3c1929971c6dd6e77eb62`; it is an ancestor of the final candidate.
 - Required startup ancestor: `8bdafc7f947a3a2c9856220abdc539437035bd21`.
-- The current mainline was integrated by merge commit `708013bd419175482fd5aad5d1e83432e8d71b33`, preserving the predecessor and C79 merge ancestry. The C112 production/service paths are unchanged after `77de2f9`; the merge retains the peer C116 RTC transport source and shared generated-Wire registrations, and the shipped artifact was rebuilt from the integrated source.
+- The current mainline was integrated by merge commit `708013bd419175482fd5aad5d1e83432e8d71b33`, preserving the predecessor and C79 merge ancestry. The merge retains the peer C116 RTC transport source and shared generated-Wire registrations. Checkpoint `dee72ae` adds the service-owned atomic no-replace publication repair and bounded evidence-runner hardening; the shipped artifact was rebuilt from that checkpoint.
 - The immutable pre-extraction `trace.go` is 119 lines with SHA-256 `db9fab41dd02578db5e7b024af869eb762b21ec14c48c64442d4ad9ca3149710`.
 - The final CLI seam is 43 lines with SHA-256 `939fa231d9b182536297cf18f923a6f358fec46a7dcbf5ea64bb7db548ed5d75`; 76 lines of CLI lifecycle/orchestration are retired.
 
@@ -30,7 +32,11 @@ the device gateway and trace storage remains in `go-audio/pkg/recording`.
 
 `Finish(ctx, "", false)` now returns the staged-path diagnostic even after a
 successful close, and `errors.Join` preserves a distinct close-error identity.
-The focused regression and its mutation control cover both behaviors.
+Published traces claim the destination and use a platform-native no-replace
+rename, so a destination created after the claim cannot be overwritten; the
+adversarial concurrent-destination test verifies the sentinel and staged trace
+remain intact. The focused regressions and mutation controls cover these
+behaviors.
 
 The external consumer is exactly at `external-consumer/`; it imports only the
 public sessiontrace contract and generated Wire constructor. It passes:
@@ -57,14 +63,18 @@ empty unpublished retention, dropped prior-observer wiring, and shared payload
 copying. The runner strips credential environment variables, caps output,
 reaps the child process group, and checks source-pinned fixture and PCM hashes.
 
-Final runner result from a yui artifact rebuilt at source/probe checkpoint
-`708013bd` using `make -C agent-cli build` passed. The artifact is
-`artifacts/yui` SHA-256 `2510dcb06c4f52e7d460eee6d88834722ddb236fb46b0672f0962ea542a3bb48`,
-and run directory `runs/vertical-20260913T110900Z-95386`:
+Final runner result from a yui artifact rebuilt at source checkpoint
+`dee72ae047db826a049c41fe5be2410d09135c6e` using `make -C agent-cli build`
+passed with `AGENT_MODEL__OPENAI__API_KEY` and
+`AGENT_MODEL__GROK__API_KEY` injected into the parent and removed before launch.
+The artifact is `artifacts/yui` SHA-256
+`54ffb3d466649b246efbcf48025b2676b674ecf1bd677836a55b53b53a0f1830`, and run
+directory `runs/vertical-20260913T122101Z-17103`:
 
-- Tool replay: exit 0, no timeout/survivors, 27 timeline events/20 runtime events, provider PCM 4,800 bytes (`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`), rendered PCM 3,200 bytes (`7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`), speaker trace 4,844 bytes (`305d40c0fa1b687133be6a7841654dcbe89310b7b7f9800cb624c25bcffd880c`), and `PROBE_TOOL_MARKER_9182` plus `strict replay continuation`.
+- Tool replay: exit 0, no timeout/survivors, 29 timeline events/21 runtime events, provider PCM 4,800 bytes (`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`), rendered PCM 3,200 bytes (`7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`), speaker trace 4,844 bytes (`305d40c0fa1b687133be6a7841654dcbe89310b7b7f9800cb624c25bcffd880c`), deterministic microphone input 1,440 bytes (`db9ac5111b2173f5f0e7909539a7dea70134b5736d4f2582c99e25705aab6148`), derived fixture (`62835dcb8270ab1dba865d078e79b13a3c6c3c89454c65f5eb7f5bb42586a714`), microphone pre-gate and speaker-enqueued taps, provider wire append/commit types, and `PROBE_TOOL_MARKER_9182` plus `strict replay continuation`.
 - Interruption replay: exit 0, no timeout/survivors, 20 timeline events/15 runtime events, provider PCM 3,840 bytes (`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`), rendered PCM 3,360 bytes (`302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff`), speaker trace 3,884 bytes (`001ff24159be9c44e5ba33e39c15cea64818fb488b14b860b623fe95c7a4f2ca`), and replay-complete terminal evidence.
-- Fixtures: tool `38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169`; interruption `154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206`.
+- Both children exited with code 0, no surviving process-group PIDs, and a credential-free environment; the runner removed `AGENT_MODEL__GROK__API_KEY` and `AGENT_MODEL__OPENAI__API_KEY`.
+- Fixtures: source tool `38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169`, derived audio tool `62835dcb8270ab1dba865d078e79b13a3c6c3c89454c65f5eb7f5bb42586a714`, and interruption `154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206`.
 
 The concurrent run `runs/vertical-20260913T100247Z-94048` is preserved as a
 negative diagnostic, not relabeled: interruption replay exited 0 without
@@ -77,21 +87,22 @@ This is credential-free software/file replay evidence. Native Windows hardware,
 physical devices, and physical/acoustic claims are OUT OF SCOPE and are never
 represented as PASS.
 
-## Fresh local gate checkpoint — 2026-09-13T11:10:13Z
+## Fresh local gate checkpoint — 2026-09-13T12:21:07Z
 
-On the exact current-main-integrated source `708013bd419175482fd5aad5d1e83432e8d71b33`,
-the owned `verify.py --mode all` passed admission, startup/accepted/current-main
+On the exact repair source `dee72ae047db826a049c41fe5be2410d09135c6e`, the owned
+`verify.py --mode all` passed admission, startup/accepted/current-main
 ancestry, owned-path scope, sessiontrace normal/race tests, CLI adapter
 normal/race tests, the `GOWORK=off` external consumer build/test, and all three
-causal mutation controls. The mutation controls failed for their intended
-assertions and were accepted by the fail-closed verifier.
+causal mutation controls. The verifier's mutation controls failed for their
+intended assertions and were accepted by the fail-closed verifier; the
+concurrent-destination regression and Darwin/Windows compile probes also pass.
 
 The accumulated command
 `COUNT=1 bash scripts/test-session-ci-regressions.sh all` passed in normal,
 coverage, and race modes: CLI interruption, shipped replay/continuation and
 duplex controls, simulated-device controls, composed OpenAI tool lifecycle, and
 the strict 20-trial high-rate control. `make wire-check` and
-`make architecture-size-check` pass at 198 packages, 1,925 files, and 28,360
+`make architecture-size-check` pass at 198 packages, 1,929 files, and 28,366
 functions. The final owned-path scope check and `git diff --check` also pass.
 
 ## Handoff
@@ -99,9 +110,12 @@ functions. The final owned-path scope check and `git diff --check` also pass.
 The prior review rejection is preserved in `candidate-evidence.json`. It required
 the empty-bundle lifecycle repair, service-owned observer boundary, mandated
 verifier/runner/external-consumer paths, fresh final-head evidence, and exact
-provenance. Those repairs are complete. Focused causal tests, accumulated
-replay regressions, formatting, vet, Wire, architecture-size, coverage
-registration, pinned lint, pinned staticcheck, and `git diff --check` pass.
+provenance. The latest independent review also required atomic no-replace
+publication, microphone/upload/playback evidence, complete configured-credential
+scrubbing, and an artifact rebuilt from the reviewed checkpoint; those repairs
+are complete at `dee72ae`. Focused causal tests, accumulated replay regressions,
+formatting, vet, Wire, architecture-size, coverage registration, pinned lint,
+pinned staticcheck, and `git diff --check` pass.
 
 The prior Script CI outcomes are retained without relabeling: PR #498 head
 `fe10ea3` had green run `34752205668` before this current-main integration, while
