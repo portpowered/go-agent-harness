@@ -118,7 +118,7 @@
   },
   "handoff": {
     "accepted_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
-    "candidate_head": "be6dfad9010db1ed52dc8e12319bc8f50f27e915",
+    "candidate_head": "d809b4e5ce07ea4d16accbd0ff70db7343a53690",
     "ci_polling": "not performed by executor",
     "review": "not performed by executor",
     "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
@@ -159,6 +159,7 @@
       "docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/census.md",
       "docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/external-consumer/go.mod",
       "docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/external-consumer/main_test.go",
+      "docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/latest-runtime-probe.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/run.py",
       "docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/final.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/positive-and-four-mutations.json",
