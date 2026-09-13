@@ -14,14 +14,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type testInferencer struct{ session *testSession }
+type testInferencer struct{ session messages.Session }
 
 func (i *testInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	return i.session, nil
 }
-
 func requireLiveHandle(t *testing.T, opened session.LiveHandle) *handle {
-	t.Helper()
 	h, ok := opened.(*handle)
 	if !ok {
 		t.Fatalf("handle type = %T, want *handle", opened)
@@ -37,7 +35,6 @@ type testSession struct {
 	mu                  sync.Mutex
 	sent                []messages.StreamMessage
 }
-
 type failingLiveRecorder struct {
 	messageErr, contextErr, finalizeErr error
 	finalized, recorded                 chan struct{}
@@ -65,16 +62,13 @@ func (r *failingLiveRecorder) Finalize(context.Context, error) error {
 }
 
 type testLiveCapabilityHandle struct {
-	initialized, closed chan struct{}
-	events              chan session.LiveCapabilityEvent
+	initialized, closed       chan struct{}
+	events                    chan session.LiveCapabilityEvent
+	initializeOnce, closeOnce sync.Once
 }
 
 func (h *testLiveCapabilityHandle) Initialize(context.Context) error {
-	select {
-	case <-h.initialized:
-	default:
-		close(h.initialized)
-	}
+	h.initializeOnce.Do(func() { close(h.initialized) })
 	return nil
 }
 func (h *testLiveCapabilityHandle) RefreshDefinitions(context.Context) ([]messages.ToolDefinition, error) {
@@ -84,11 +78,7 @@ func (h *testLiveCapabilityHandle) BrowserWatch(context.Context) <-chan session.
 	return h.events
 }
 func (h *testLiveCapabilityHandle) Close() error {
-	select {
-	case <-h.closed:
-	default:
-		close(h.closed)
-	}
+	h.closeOnce.Do(func() { close(h.closed) })
 	return nil
 }
 func newTestSession() *testSession {
@@ -199,8 +189,6 @@ func TestLiveCancelPreservesFirstCauseAcrossTeardown(t *testing.T) {
 	}
 	cause := errors.New("provider liveness failure")
 	h.Cancel(cause)
-	// A later transport/media teardown must not replace the actionable cause
-	// with context.Canceled while the invocation is joining.
 	h.Cancel(context.Canceled)
 	if waitErr := h.Wait(); !errors.Is(waitErr, cause) {
 		t.Fatalf("Wait = %v, want first cause %v", waitErr, cause)
@@ -581,6 +569,11 @@ func assertContinuationPending(t *testing.T, h *handle, msg messages.StreamMessa
 	}
 }
 func TestBindPlaybackControllerUsesVirtualCursorForReplayFileOutput(t *testing.T) {
+	provider := &mediaClaimOrderSession{testSession: newTestSession()}
+	connected, err := (terminalDrainInferencer{inner: &testInferencer{session: provider}}).ConnectSession(context.Background())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, connected.Close()) })
+	require.NotEmpty(t, provider.sent)
 	media := sharedaudio.NewSessionMediaAtRate(nil, 24000)
 	t.Cleanup(func() { require.NoError(t, media.Close()) })
 	i := &liveInvocation{options: session.LiveRunOptions{Request: session.LiveRequest{ReplayPlan: &session.LiveReplayPlan{}}}, endpoints: media.Endpoints()}
@@ -597,4 +590,11 @@ func TestBindPlaybackControllerUsesVirtualCursorForReplayFileOutput(t *testing.T
 	if !ok || interrupted.PlaybackResponse != response || interrupted.AudioEndMS != 0 {
 		t.Fatalf("replay interruption = %+v/%t, want response at zero cursor", interrupted, ok)
 	}
+}
+
+type mediaClaimOrderSession struct{ *testSession }
+
+func (s *mediaClaimOrderSession) RTCMedia() sharedaudio.MediaEndpoints {
+	s.sent = append(s.sent, messages.StreamMessage{})
+	return sharedaudio.MediaEndpoints{}
 }
