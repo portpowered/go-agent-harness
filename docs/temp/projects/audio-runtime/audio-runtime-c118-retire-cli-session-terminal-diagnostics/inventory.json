@@ -13,15 +13,23 @@
     "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
     "branch": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
     "prdBranchName": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
-    "head": "3963bc3566da24f8214634c17a9d0f79a6724171",
-    "originMain": "3963bc3566da24f8214634c17a9d0f79a6724171",
-    "baseRevision": "3963bc3566da24f8214634c17a9d0f79a6724171",
+    "head": "ec3de1bc4f723dc619213aff904cc22818e8c96e",
+    "originMain": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+    "baseRevision": "3c5c69f96924bd6c7bbb8fdf12cfedaee7878291",
     "requiredIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
     "ancestryChecks": [
-      "required integration revision is an ancestor of origin/main",
-      "worktree head is an ancestor of origin/main"
+      "required startup integration revision is an ancestor of integration head",
+      "planning baseline revision is an ancestor of integration head",
+      "fresh origin/main revision is an ancestor of integration head"
     ],
-    "initialStatus": "clean"
+    "initialStatus": "clean",
+    "freshMainIntegration": {
+      "from": "3c5c69f96924bd6c7bbb8fdf12cfedaee7878291",
+      "originMain": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+      "merge": "ec3de1bc4f723dc619213aff904cc22818e8c96e",
+      "strategy": "no-ff",
+      "scope": "accepted C107 evidence only; prior C118 implementation and evidence preserved"
+    }
   },
   "manifestHashes": {
     "manifest.json": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
@@ -71,14 +79,14 @@
     ]
   },
   "priorFindings": {
-    "taskBoard": "task work-task-277 is admitted in init after CI run 34737625163 returned the same task for repair",
+    "taskBoard": "task work-task-23 is admitted in init after fresh-board recovery; predecessor work-task-277 returned the same task after CI run 34737625163",
     "matchingReviewRows": 0,
     "matchingCiRejectionRows": 0,
     "taskCiRejection": "ci-rejection-34737625163.json",
     "localC118Progress": "no C118 entry in progress.txt or docs/factory inbox"
   },
   "ownership": {
-    "sharedRegistryOwner": "C79 (in-review; work-review-239; PR470 head a5d26045)",
+    "sharedRegistryOwner": "C79 (in-review; work-review-239; PR470 remains the recorded exclusive shared-file owner)",
     "sharedFilesNotModified": [
       "scripts/wire-packages.txt",
       "docs/architecture/architecture-size-baseline.json"
@@ -91,7 +99,8 @@
     ]
   },
   "implementationCheckpoint": {
-    "testedSourceRevision": "2ba46424eca1641157a84cfefb4a40fcff7af6ca",
+    "testedSourceRevision": "ec3de1bc4f723dc619213aff904cc22818e8c96e",
+    "sourceArtifactRevision": "2ba46424eca1641157a84cfefb4a40fcff7af6ca",
     "evidenceRunnerRevision": "9a440390e10e1f995268aab49b4adf90fb489e60",
     "commits": [
       "360d2a973d01e572daa9c1725b370474a88bb429",
@@ -105,6 +114,6 @@
     "retirementLineReduction": 227,
     "focusedValidation": "candidate-evidence.json",
     "shippedYuiEvidence": "passed: runs/session-terminal-y4m5bp0m/report.json at 2ba46424; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI; no surviving process groups",
-    "sharedGateStatus": "coverage registration passes after the exact CI rejection repair; full local make coverage also encountered the unrelated macOS SIGINT timing failure before reaching the coverage gate"
+    "sharedGateStatus": "coverage registration, Wire, architecture-size, vet, pinned staticcheck and pinned lint pass after fresh-main integration; full local make coverage remains represented by the preserved unrelated macOS SIGINT timing evidence"
   }
 }

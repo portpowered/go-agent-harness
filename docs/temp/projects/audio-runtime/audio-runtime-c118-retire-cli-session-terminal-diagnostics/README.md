@@ -2,8 +2,9 @@
 
 `inventory.json` records the admitted project, immutable source baseline,
 dual-ancestry checks, caller census, peer lease exclusions, and the current
-task-board CI rejection/repair provenance. No independent C118 review finding
-exists.
+task-board CI rejection/repair provenance. The current task is `work-task-23`,
+and its clean fresh-main integration is `ec3de1bc` over `origin/main`
+`ea53be13`. No independent C118 review finding exists.
 
 `external-consumer` is a separate Go module. With `GOWORK=off`, its test imports
 only the public `go-agent-runtime/services/sessionterminal` contract, its
@@ -37,6 +38,14 @@ mutants, retirement verification, and the accumulated normal/coverage/race
 session regression matrix pass after the repair. The shipped artifact is
 unchanged and remains SHA-256
 `06a497e0467f009f32dac20984500b11661272addad719d5941228fe096f20ca`.
+
+After fetching fresh accepted main, the isolated branch merged `ea53be13` as
+`ec3de1bc` with no conflicts and reran the focused normal/race tests, external
+consumer, causal mutants, retirement verifier, coverage registration, Wire,
+architecture-size, vet, pinned staticcheck, pinned lint, and
+`COUNT=3 scripts/test-session-ci-regressions.sh all`; all passed. The inherited
+C107 evidence is the only fresh-main delta, so the source-pinned shipped YUI
+artifact remains valid without relabeling.
 
 The evidence is vertical only. Focused normal/race tests, the accumulated
 session regression matrix, pinned lint/staticcheck/vet, Wire generation and
