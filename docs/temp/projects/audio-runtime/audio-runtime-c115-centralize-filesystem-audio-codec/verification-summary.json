@@ -2,7 +2,7 @@
   "acoustic_proof": "OUT_OF_SCOPE_AND_NEVER_PASS",
   "admission": "admitted",
   "branch": "codex/audio-runtime-c115-centralize-filesystem-audio-codec",
-  "candidate_revision": "9674d3b3407a16990ce3d0e1305a0a5db27b671d",
+  "candidate_revision": "0a03c883778823a992fc55bd8283e14af163b256",
   "cases": [
     "c21-consumption-replay",
     "c50-public-replay",
