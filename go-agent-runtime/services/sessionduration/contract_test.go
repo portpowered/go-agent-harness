@@ -25,7 +25,10 @@ func (stateProbe) Admit(bool, messages.StreamMessage) (messages.StreamMessage, b
 	return messages.StreamMessage{}, false
 }
 func (stateProbe) PublishProviderTerminal(Publication) error { return nil }
-func (stateProbe) Written() bool                             { return false }
+func (stateProbe) PublishMaxDuration(Publication, messages.TerminalOutputState) error {
+	return nil
+}
+func (stateProbe) Written() bool { return false }
 
 type serviceProbe struct{}
 

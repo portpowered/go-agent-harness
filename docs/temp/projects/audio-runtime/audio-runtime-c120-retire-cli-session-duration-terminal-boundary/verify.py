@@ -24,9 +24,10 @@ TARGET = "agent-cli/internal/services/internal/agentruntime/session_duration_ter
 LOOP = "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go"
 ADAPTER = "agent-cli/internal/services/internal/agentruntime/session_duration_terminal_adapter.go"
 TARGET_SHA256 = "82917c1a30ceed01da41109e368c2c6851b2ed6c5e5b689959f9d8faa5f88b88"
-LOOP_SHA256 = "2bf32471d10af9117600c5006d453fb12beb6a134e0461f0e6b895005270591f"
+BASE_LOOP_SHA256 = "2bf32471d10af9117600c5006d453fb12beb6a134e0461f0e6b895005270591f"
+REPAIRED_LOOP_SHA256 = "cd65dff97f8d58def4bac1dc0cf81b869a392ac366e6a19dee54359ff6e637ba"
 
-ALLOWED_EXACT = {TARGET, ADAPTER, "agent-cli/internal/services/internal/agentruntime/session_duration_terminal_service_test.go", "docs/architecture/architecture-policy.json"}
+ALLOWED_EXACT = {TARGET, LOOP, ADAPTER, "agent-cli/internal/services/internal/agentruntime/session_duration_terminal_service_test.go", "docs/architecture/architecture-policy.json"}
 ALLOWED_PREFIXES = (
     "go-agent-runtime/services/sessionduration/",
     "coverage-manifest/go-agent-runtime/services/sessionduration/",
@@ -38,7 +39,6 @@ FORBIDDEN_PEER_PREFIXES = (
     "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
     "agent-cli/internal/services/internal/agentruntime/session_diagnostics_failure.go",
     "agent-cli/internal/services/internal/agentruntime/session_failure_projection_adapter.go",
-    "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go",
 )
 
 
@@ -95,9 +95,16 @@ def verify_provenance() -> None:
     original = git_show(TARGET)
     if len(original.splitlines()) != 131 or sha256(original) != TARGET_SHA256:
         raise VerificationFailure("immutable 131-line terminal source identity changed")
+    base_loop = git_show(LOOP)
+    if sha256(base_loop) != BASE_LOOP_SHA256:
+        raise VerificationFailure("immutable pre-mutation duration loop identity changed")
+    verify_repaired_loop()
+
+
+def verify_repaired_loop() -> None:
     loop = (ROOT / LOOP).read_bytes()
-    if sha256(loop) != LOOP_SHA256:
-        raise VerificationFailure("duration loop changed from the pre-mutation census")
+    if sha256(loop) != REPAIRED_LOOP_SHA256:
+        raise VerificationFailure("duration loop differs from the authorized terminal-state repair")
 
 
 def diff_base() -> str:
@@ -118,6 +125,7 @@ def verify_ownership() -> None:
             raise VerificationFailure(f"C120 changed an excluded peer path: {path}")
         if path != TARGET and path not in ALLOWED_EXACT and not any(path.startswith(prefix) for prefix in ALLOWED_PREFIXES):
             raise VerificationFailure(f"path outside admitted C120 ownership: {path}")
+    verify_repaired_loop()
     if (ROOT / TARGET).exists():
         raise VerificationFailure("legacy session_duration_terminal.go still exists")
     adapter = ROOT / ADAPTER

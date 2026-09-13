@@ -33,7 +33,7 @@ At the accepted task base:
   - `sessionTransportError`: loop lines 156 and 164.
   - `writeMaxDurationTerminal`: loop line 170.
   - `sessionDurationTerminalState` and its methods: loop message processing and buffered/straggler drain helpers.
-- The loop is an explicit byte-for-byte exclusion. All current duration callers remain outside the mutation set.
+- The loop was an explicit byte-for-byte exclusion at census time. All current duration callers remained outside the mutation set. A later same-task review recovery explicitly authorized only the terminal-state access repair in this file; the repair is pinned by the updated verifier and does not change caller behavior or terminal policy.
 - A repository-wide exact-name search found no exported, reflection, plugin, or generated reference to the target symbols. Static search cannot rule out arbitrary runtime behavior outside Go symbol references; the symbols are unexported and no dynamic reference was found in the admitted source.
 
 ## Ownership exclusions
@@ -52,10 +52,11 @@ part of C120's mutation set:
 - C118: `session_diagnostics_terminal.go`, its test, `go-agent-runtime/services/sessionterminal/`, coverage, evidence, compatibility caller paths, and deferred shared registries.
 - C119: `session_diagnostics_failure.go`, `session_failure_projection_adapter.go`, its test, `go-agent-runtime/services/sessionfailure/`, coverage, and evidence.
 
-C120 owns only the target terminal file replacement, the new
+C120 owns the target terminal file replacement, the explicitly authorized
+terminal-state access repair in the duration loop, the new
 `go-agent-runtime/services/sessionduration/` service and dedicated Wire,
-matching coverage manifests, and this task's evidence directory. The duration
-loop and all listed peer paths remain unchanged.
+matching coverage manifests, and this task's evidence directory. All listed
+peer paths remain unchanged.
 
 ## Public probe inputs
 
@@ -82,7 +83,8 @@ auto-discovery and architecture debt to owner fragments. The architecture gate
 still requires generated-file provenance, so the only demonstrated shared
 reconciliation is the one `go-agent-runtime/services/sessionduration/wire`
 entry added to `docs/architecture/architecture-policy.json`. No old Wire
-registry, architecture baseline, loop, or peer retirement path was edited.
+registry, architecture baseline, or peer retirement path was edited. The later
+review repair is limited to duration-loop accessors and is recorded below.
 
 ## Prior review and project boundary
 
@@ -90,3 +92,20 @@ Canonical Factory work listing for the C120 name contained only the idea, plan,
 and `work-task-283` task (`init`); no `work-review` record or prior C120 finding
 was present. The admitted manifest is the only project manifest used. No second
 project, acceptance waiver, or completion claim is authorized.
+
+## Same-task review repair
+
+After PR 506 head `17491c1fa` reached independent review, `work-review-30`
+rejected the candidate because the compatibility adapter retained a mutable
+`terminalWritten` boolean while `session_duration_loop.go` also read and wrote
+that state. The primary resumed the same task and authorized the minimal loop
+access needed to remove the duplicate owner. Accepted main `1a8467246c` was
+fetched and merged as checkpoint `d41b34c34`; the merge conflict in the owned
+architecture policy retained both generated-Wire registrations.
+
+The repair removes the adapter boolean, exposes max-duration publication through
+the runtime-owned state, and changes only duration-loop reads/call-through to
+the service-owned `Written` state. The repaired loop SHA-256 is
+`cd65dff97f8d58def4bac1dc0cf81b869a392ac366e6a19dee54359ff6e637ba`; the
+pre-mutation loop SHA-256 remains pinned as
+`2bf32471d10af9117600c5006d453fb12beb6a134e0461f0e6b895005270591f`.

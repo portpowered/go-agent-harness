@@ -152,6 +152,35 @@ func TestServicePublishesMaxDurationMetadata(t *testing.T) {
 	}
 }
 
+func TestStatePublishesMaxDurationOnceAndMarksWritten(t *testing.T) {
+	state := New().NewState(sessionduration.TerminalSource{})
+	writes := 0
+	var accepted messages.StreamMessage
+	publication := sessionduration.Publication{
+		Artifacts: artifactFunc(func(msg messages.StreamMessage) error {
+			accepted = msg
+			return nil
+		}),
+		Write: sessionduration.MessageWriter(func(messages.StreamMessage) error {
+			writes++
+			return nil
+		}),
+	}
+	if err := state.PublishMaxDuration(publication, messages.TerminalOutputComplete); err != nil {
+		t.Fatalf("publish max duration: %v", err)
+	}
+	if err := state.PublishMaxDuration(publication, messages.TerminalOutputComplete); err != nil {
+		t.Fatalf("duplicate max duration: %v", err)
+	}
+	if writes != 1 || !state.Written() {
+		t.Fatalf("max duration writes=%d written=%v, want one write and written state", writes, state.Written())
+	}
+	value, ok := accepted.Value.(*messages.SessionCloseValue)
+	if !ok || value == nil || value.TerminalReason != messages.TerminalReason("max_duration") || value.OutputState != messages.TerminalOutputComplete {
+		t.Fatalf("max duration metadata = %+v", accepted.Value)
+	}
+}
+
 func TestServiceJoinsLifecycleAndTransportErrors(t *testing.T) {
 	runtimeErr := errors.New("runtime identity")
 	closeErr := errors.New("close identity")

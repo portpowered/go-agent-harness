@@ -21,6 +21,10 @@ func (s *Service) NewState(source sessionduration.TerminalSource) sessionduratio
 }
 
 func (s *Service) PublishMaxDuration(publication sessionduration.Publication, output messages.TerminalOutputState) error {
+	return publishMaxDuration(publication, output)
+}
+
+func publishMaxDuration(publication sessionduration.Publication, output messages.TerminalOutputState) error {
 	return publish(publication, messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValueWithTerminal(
@@ -196,6 +200,22 @@ func (s *terminalState) PublishProviderTerminal(publication sessionduration.Publ
 		return nil
 	}
 	if err := publish(publication, msg); err != nil {
+		return err
+	}
+	s.terminalWritten = true
+	return nil
+}
+
+func (s *terminalState) PublishMaxDuration(publication sessionduration.Publication, output messages.TerminalOutputState) error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.terminalWritten {
+		return nil
+	}
+	if err := publishMaxDuration(publication, output); err != nil {
 		return err
 	}
 	s.terminalWritten = true

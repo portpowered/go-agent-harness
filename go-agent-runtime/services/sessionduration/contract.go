@@ -35,6 +35,7 @@ type State interface {
 	OutputState() messages.TerminalOutputState
 	Admit(bool, messages.StreamMessage) (messages.StreamMessage, bool)
 	PublishProviderTerminal(Publication) error
+	PublishMaxDuration(Publication, messages.TerminalOutputState) error
 	Written() bool
 }
 
