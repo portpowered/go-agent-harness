@@ -152,9 +152,12 @@ def validate_source_binding(provenance: dict[str, Any]) -> None:
     binding = provenance.get("sourceBinding", {})
     root = current_root()
     head = subprocess.check_output(["git", "rev-parse", "HEAD^{commit}"], cwd=root, text=True).strip()
-    source_tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=root, text=True).strip()
-    require(binding.get("committedHead") == head, "evidence was not generated from the committed current HEAD")
-    require(binding.get("committedTree") == source_tree, "evidence source tree is not the committed current tree")
+    bound_head = binding.get("committedHead")
+    require(isinstance(bound_head, str) and re.fullmatch(r"[0-9a-f]{40}", bound_head), "evidence source commit identity is missing")
+    require(git_ok(root, ["cat-file", "-e", f"{bound_head}^{{commit}}"]), "evidence source commit is unavailable")
+    require(git_ok(root, ["merge-base", "--is-ancestor", bound_head, head]), "evidence source commit is not an ancestor of the checked-in evidence")
+    bound_tree = subprocess.check_output(["git", "rev-parse", f"{bound_head}^{{tree}}"], cwd=root, text=True).strip()
+    require(binding.get("committedTree") == bound_tree, "evidence source tree is not bound to its committed source commit")
     require(binding.get("cleanScripts") is True and binding.get("statusBefore") == [], "C109 scripts were dirty during evidence generation")
     scripts = binding.get("scripts", [])
     require(isinstance(scripts, list) and scripts, "committed C109 source bindings are missing")
@@ -163,8 +166,9 @@ def validate_source_binding(provenance: dict[str, Any]) -> None:
         require(path.startswith(OWNED_PREFIX) and (root / path).is_file(), f"source binding path is invalid: {path}")
         current_sha = __import__("hashlib").sha256((root / path).read_bytes()).hexdigest()
         require(item.get("working_tree_sha256") == current_sha, f"source binding changed after generation: {path}")
-        blob = subprocess.check_output(["git", "rev-parse", f"HEAD:{path}"], cwd=root, text=True).strip()
-        require(item.get("head_blob") == blob and item.get("matches_committed_head") is True, f"source binding is stale: {path}")
+        bound_blob = subprocess.check_output(["git", "rev-parse", f"{bound_head}:{path}"], cwd=root, text=True).strip()
+        current_blob = subprocess.check_output(["git", "rev-parse", f"HEAD:{path}"], cwd=root, text=True).strip()
+        require(item.get("head_blob") == bound_blob == current_blob and item.get("matches_committed_head") is True, f"source binding is stale: {path}")
 
 
 def validate_ledger(ledger: dict[str, Any]) -> None:
