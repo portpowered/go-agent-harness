@@ -13,8 +13,8 @@
     "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
     "branch": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
     "prdBranchName": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
-    "head": "9cf7a04f17a8bd735327d50cec21990134e6327e",
-    "originMain": "1a8467246c6607a06ffc7289075da2595724ce8b",
+    "head": "5c423b654c5702d966516dedd590555f07e96636",
+    "originMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
     "baseRevision": "3c5c69f96924bd6c7bbb8fdf12cfedaee7878291",
     "requiredIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
     "ancestryChecks": [
@@ -29,6 +29,13 @@
       "merge": "668d7b48f0f44e2f2aa545ac44ee714bb11c4ad4",
       "strategy": "no-ff",
       "scope": "accepted current main; prior C118 implementation and evidence preserved"
+    },
+    "latestFreshMainIntegration": {
+      "from": "a949546b612010767dde0e036bc1975cde7b7fd7",
+      "originMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+      "merge": "5c423b654c5702d966516dedd590555f07e96636",
+      "strategy": "no-ff",
+      "scope": "accepted current main; predecessor C118 checkpoints and unrelated changes preserved"
     }
   },
   "manifestHashes": {
@@ -79,16 +86,22 @@
     ]
   },
   "priorFindings": {
-    "taskBoard": "task work-task-23 is admitted in init after fresh-board recovery; predecessor work-task-277 returned the same task after CI run 34737625163",
+    "taskBoard": "task work-task-23 is admitted in init after fresh-board recovery; predecessor work-task-277 returned the same task after CI run 34737625163; latest board rejection is CI run 34748383831 at pre-merge head a949546b",
     "matchingReviewRows": 1,
     "matchingCiRejectionRows": 0,
-    "taskCiRejection": "ci-rejection-34737625163.json",
+    "taskCiRejection": [
+      "ci-rejection-34737625163.json",
+      "ci-rejection-34748383831.json"
+    ],
+    "latestCiRejection": "ci-rejection-34748383831.json",
     "localC118Progress": "no C118 entry in progress.txt or docs/factory inbox",
     "boardReviewFinding": "work-review-34 rejected the nil-error/no-continuation shortcut because Scheduled.Incomplete and continuation metadata could be suppressed without a terminal failure",
-    "boardRepair": "4b4b10c1af1970aa8fc0f1772b05f6ba41621f2f adds lifecycle-obligation precedence and nil/context plus metadata-only regressions; 9cf7a04 repairs the merged architecture line budget"
+    "boardRepair": "4b4b10c1af1970aa8fc0f1772b05f6ba41621f2f adds lifecycle-obligation precedence and nil/context plus metadata-only regressions; 9cf7a04 repairs the merged architecture line budget",
+    "latestRejection": "CI (integration) failed only in the production-binary audio-device replay step: TestAgentBinaryTest45HighRateToolAudioRegression/trial_05 lost 6400 of 177591 compared samples with 16 underflow events and 7360 zero-filled samples; the C118 diff does not own the device/transport paths"
   },
   "ownership": {
-    "sharedRegistryOwner": "C79 released through accepted main 1a846724; shared registries were preserved and not modified directly by C118",
+    "sharedRegistryOwner": "C79 released through accepted main 09c70f51 (including predecessor 1a846724); shared registries were preserved and not modified directly by C118",
+    "latestCiFailureOwnership": "The latest hosted failure is the production-binary audio-device replay path, not a C118-owned sessionterminal or adapter path. C118 does not modify agent-cli/test/integration/session_tool_audio_remote_e2e_test.go, go-audio, go-device-gateway, go-llm-gateway, or transport; primary/C64-owner transfer or an accepted peer repair is required before resubmission.",
     "sharedFilesNotModified": [
       "scripts/wire-packages.txt",
       "docs/architecture/architecture-size-baseline.json"
@@ -101,9 +114,9 @@
     ]
   },
   "implementationCheckpoint": {
-    "testedSourceRevision": "9cf7a04f17a8bd735327d50cec21990134e6327e",
-    "sourceArtifactRevision": "9cf7a04f17a8bd735327d50cec21990134e6327e",
-    "evidenceRunnerRevision": "9cf7a04f17a8bd735327d50cec21990134e6327e",
+    "testedSourceRevision": "5c423b654c5702d966516dedd590555f07e96636",
+    "sourceArtifactRevision": "5c423b654c5702d966516dedd590555f07e96636",
+    "evidenceRunnerRevision": "5c423b654c5702d966516dedd590555f07e96636",
     "commits": [
       "360d2a973d01e572daa9c1725b370474a88bb429",
       "26365f5383d2e9ddad27e7920240d9c837d8ebc0",
@@ -114,11 +127,14 @@
       "2ba46424eca1641157a84cfefb4a40fcff7af6ca",
       "4b4b10c1af1970aa8fc0f1772b05f6ba41621f2f",
       "668d7b48f0f44e2f2aa545ac44ee714bb11c4ad4",
-      "9cf7a04f17a8bd735327d50cec21990134e6327e"
+      "9cf7a04f17a8bd735327d50cec21990134e6327e",
+      "a949546b612010767dde0e036bc1975cde7b7fd7",
+      "5c423b654c5702d966516dedd590555f07e96636"
     ],
-    "retirementLineReduction": 855,
+    "retirementLineReduction": 948,
     "focusedValidation": "candidate-evidence.json",
-    "shippedYuiEvidence": "passed: runs/session-terminal-emttqwq9/report.json at 9cf7a04; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI SHA-256 2c731108827f2461d60fcfa2ed60291e8bf50adee3156799090e44de60b9e701; no surviving process groups",
-    "sharedGateStatus": "coverage registration (182 packages), Wire, architecture-size (192 packages, 1914 files, 28232 functions), vet, pinned staticcheck and pinned lint pass at final candidate; full local make coverage remains represented by the preserved unrelated macOS SIGINT timing evidence"
+    "shippedYuiEvidence": "passed: runs/session-terminal-kx8ca5pa/report.json at 5c423b65; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI SHA-256 2c731108827f2461d60fcfa2ed60291e8bf50adee3156799090e44de60b9e701; no surviving process groups",
+    "sharedGateStatus": "coverage registration (185 packages), Wire, architecture-size (195 packages, 1920 files, 28291 functions), vet, pinned staticcheck and pinned lint pass at final candidate; full local make coverage remains represented by the preserved unrelated macOS SIGINT timing evidence",
+    "latestCiStatus": "run 34748383831 rejected at pre-merge head a949546b: eight required checks passed and CI (integration) failed only in production-binary audio-device replay; no C118-owned repair or unchanged resubmission"
   }
 }
