@@ -310,3 +310,39 @@ without rewriting C136/C87, apply only the sessionturns generated-Wire
 registration and twelve demonstrated downward baseline deletions, rerun the
 bounded gates, push the changed same PR #513 head, and return `ACCEPTED` to
 SCRIPT CI without polling.
+
+## Canonical lease recheck — 2026-09-13T22:29:19Z
+
+The required `verify-work --type task --name
+audio-runtime-c150-recover-c136-c87-session-turns` still returns `admitted` for
+the sole `audio-runtime/audio-runtime-v1` project. The canonical `~default`
+work list keeps `work-task-35` as `init/PROCESSING` with no review row and no
+other C150 owner. The C150 branch remains `codex/audio-runtime-c150-recover-c136-c87-session-turns`;
+the C136 checkout remains at `7268f46a8c23cea480aecba621d49c01e4a30aac` with
+only its original 48-line evidence append dirty.
+
+The exact shared-path release is still unavailable. C110 PR #497 is OPEN at
+`a1dab09a990a96f08fc21fc2977b8f7dad4e5a98` with eight successful checks and a
+Windows portable failure; C111 PR #496 is OPEN at
+`d014a3586368c37e20618481ee162e1b83db113f` with eight successful checks and a
+coverage failure; and C119 PR #505 is OPEN at
+`c8734b36e36eac3c7ce4c636bd179ae13f19a283` with nine successful checks but no
+independent review or guarded merge. Their recovery task rows are terminal,
+but no guarded merge has released `scripts/wire-packages.txt` or
+`docs/architecture/architecture-policy.json`. C150 therefore made no shared
+file mutation and did not resubmit the unchanged 13-finding candidate.
+
+The fetched `origin/main` is `97d3dcfb1e97a2611aa26b203a7f893442db4768`,
+which is newer than the accepted `4a1c399ccbb3d780be95eb04316e84b8f11a6646`.
+It is intentionally not integrated before the exact shared leases release.
+PR #513 remains OPEN/DRAFT on the inherited C136 head with no independent
+review findings. The WebMCP TempDir cleanup failure remains the recorded
+out-of-lease, non-reproduced result; no C150 WebMCP or C127 change was made.
+
+Exact next action: retain C150 ownership until C110/C111/C119 have guarded
+merges or the primary records an explicit exact-path transfer; then fetch the
+accepted current main, integrate without rewriting C136/C87, apply only the
+sessionturns Wire registration and twelve downward baseline deletions while
+preserving peer entries, rerun the bounded focused/accumulated gates,
+commit/push the changed PR #513 head, and return `ACCEPTED` to SCRIPT CI
+without polling.
