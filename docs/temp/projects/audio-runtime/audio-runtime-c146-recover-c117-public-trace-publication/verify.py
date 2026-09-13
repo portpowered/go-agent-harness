@@ -42,9 +42,17 @@ C113_FIXTURE_SHA256 = "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384e
 EXPECTED_TOOL_PCM_SHA256 = "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
 
 SOURCE_CODE_PATHS = {
+    # The livehost package is capped at 15 maintained files and 400 production
+    # lines per file. These existing same-package files are structural parts of
+    # the C117 host seam, not additional behavior owners; keeping them explicit
+    # preserves the fail-closed path check without hiding the architecture split.
+    "agent-cli/internal/transport/cli/internal/livehost/events.go",
+    "agent-cli/internal/transport/cli/internal/livehost/request_policy.go",
     "agent-cli/internal/transport/cli/internal/livehost/run.go",
     "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go",
+    "agent-cli/internal/transport/cli/internal/livehost/run_helpers.go",
     "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
+    "agent-cli/internal/transport/cli/internal/livehost/trace.go",
     "agent-cli/internal/transport/cli/session_observability.go",
     "agent-cli/internal/transport/cli/session_observability_test.go",
     "agent-cli/internal/wire/wire.go",

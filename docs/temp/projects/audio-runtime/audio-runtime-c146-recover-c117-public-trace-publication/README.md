@@ -14,6 +14,13 @@ consumption snapshot when that public device exposes no callback setter. The
 snapshot is transport evidence of the simulated callback only, never queue,
 file, replay, or acoustic evidence.
 
+The livehost package is capped at 15 maintained files and 400 production lines
+per file by the repository architecture policy. The public host seam is
+therefore split across the existing same-package `events.go`,
+`request_policy.go`, `run_helpers.go`, `run.go`, and `trace.go` files. The C146
+and C108 successor verifiers list those structural paths explicitly; no other
+production path is admitted by the scope check.
+
 Build the candidate artifacts and run the bounded evidence matrix with:
 
 ```text

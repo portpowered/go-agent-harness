@@ -39,9 +39,16 @@ C117_BRANCH = "codex/audio-runtime-c117-repair-c113-public-trace-publication"
 C117_OWNED_REL = "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication"
 C146_OWNED_REL = "docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication"
 C117_SUCCESSOR_PATHS = {
+    # C117's public host seam is structurally split across these existing
+    # livehost files to remain within the enforced 15-file/400-line package
+    # budget. They are explicit same-package successor paths, not peer owners.
+    "agent-cli/internal/transport/cli/internal/livehost/events.go",
+    "agent-cli/internal/transport/cli/internal/livehost/request_policy.go",
     "agent-cli/internal/transport/cli/internal/livehost/run.go",
     "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go",
+    "agent-cli/internal/transport/cli/internal/livehost/run_helpers.go",
     "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
+    "agent-cli/internal/transport/cli/internal/livehost/trace.go",
     "agent-cli/internal/transport/cli/session_observability.go",
     "agent-cli/internal/transport/cli/session_observability_test.go",
     "agent-cli/internal/wire/wire.go",
