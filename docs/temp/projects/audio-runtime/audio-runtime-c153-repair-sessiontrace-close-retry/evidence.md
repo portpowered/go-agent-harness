@@ -55,3 +55,10 @@ to be recorded below.
 - Existing publish/redaction workflow, `rtk go test ./go-agent-runtime/services/sessiontrace/internal/service -run '^TestPreparedCapturesEdgesRedactsAndPublishes$' -count=5 -timeout=180s`, exited `0` (`5 passed`).
 - Targeted vet, `rtk go vet ./go-agent-runtime/services/sessiontrace/...`, exited `0` (`No issues found`).
 - `rtk git diff --check`, exited `0`.
+
+## Checkpoint and ancestry
+
+- Bounded repair checkpoint: `2b86e658e1185aebbc693de252f14c502a6f43ca` (`fix(sessiontrace): wait for in-flight close retry`).
+- After `rtk git fetch origin main`, `HEAD` is `2b86e658e1185aebbc693de252f14c502a6f43ca` and `origin/main` is `4a1c399ccbb3d780be95eb04316e84b8f11a6646`; `origin/main` is an ancestor of `HEAD`.
+- The required startup integration revision `8bdafc7f947a3a2c9856220abdc539437035bd21` and baseline revision `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad` are ancestors of `HEAD`.
+- The pushed candidate must remain limited to the two owned service files and this evidence directory. No current-head SCRIPT CI, independent review, guarded merge, C143 recovery, vertical acceptance or project completion is claimed here.
