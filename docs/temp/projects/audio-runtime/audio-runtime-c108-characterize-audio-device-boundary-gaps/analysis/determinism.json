@@ -1,0 +1,24 @@
+{
+  "declared_timestamp_normalization": "none; analyzer emits no timestamps",
+  "files": {
+    "analysis.md": {
+      "first_sha256": "e194e79a7d1766be61f4848ed677aa66d1390abc0c595491d4ae9debbed19d2d",
+      "second_sha256": "e194e79a7d1766be61f4848ed677aa66d1390abc0c595491d4ae9debbed19d2d"
+    },
+    "call-paths.json": {
+      "first_sha256": "b3dcec23dda67498d0a9cbb4dc83c7fbe902caa004a1614771a216f72a559ad6",
+      "second_sha256": "b3dcec23dda67498d0a9cbb4dc83c7fbe902caa004a1614771a216f72a559ad6"
+    },
+    "classifications.json": {
+      "first_sha256": "5ee941d493138118362410430bb8b3d1cdad971848d15c48a443d39803e76c76",
+      "second_sha256": "5ee941d493138118362410430bb8b3d1cdad971848d15c48a443d39803e76c76"
+    },
+    "inventory.json": {
+      "first_sha256": "e18e6df09cc61545ca50258b57efefc3317ffac13c55368f5be96f5b9fede59b",
+      "second_sha256": "e18e6df09cc61545ca50258b57efefc3317ffac13c55368f5be96f5b9fede59b"
+    }
+  },
+  "passes": true,
+  "schema_version": "c108-determinism-v1",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+}
