@@ -1,0 +1,41 @@
+{
+  "schema": "audio-runtime.c119.ci-static-rejection.v1",
+  "source_revision": "8ffcafbf75428ffeb8ea540d1d99dc373b6cf4ab",
+  "ci": {
+    "run_id": "34748733564",
+    "job_id": "103701496385",
+    "check": "CI (static)",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34748733564/job/103701496385",
+    "job_status": "completed",
+    "conclusion": "failure",
+    "failed_step": "Run golangci-lint",
+    "log_status": "GitHub reported logs unavailable while the overall workflow was still in progress"
+  },
+  "failure": {
+    "linter": "exhaustive",
+    "path": "agent-cli/internal/services/internal/agentruntime/session_duration_terminal.go",
+    "line": 26,
+    "detail": "switch over messages.StreamMessageType omitted the listed stream message cases"
+  },
+  "ownership": {
+    "c119_owned": false,
+    "c120_owned": true,
+    "c120_current_main_merge": "09c70f51243caeaf1184c4806b99bbf7749e3044"
+  },
+  "local_reproduction": {
+    "command": "make lint",
+    "pinned_golangci_lint": "2.9.0",
+    "result": "reproduced before current-main integration"
+  },
+  "repair": {
+    "action": "merge current origin/main into the same C119 branch without changing C120 source",
+    "merge_commit": "1dbcea900eb10b5392f008ca328075d0ee5e250d",
+    "resolved_by_current_main": true,
+    "c119_production_repair": false
+  },
+  "disposition": {
+    "assertions_or_deadlines_weakened": false,
+    "peer_failure_retained": true,
+    "next_action": "submit the changed post-merge evidence head to script CI without polling"
+  }
+}
