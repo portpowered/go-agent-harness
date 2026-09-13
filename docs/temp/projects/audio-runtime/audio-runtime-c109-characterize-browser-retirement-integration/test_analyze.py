@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -16,6 +17,12 @@ SPEC = importlib.util.spec_from_file_location("c109_analyze", ANALYZER_PATH)
 assert SPEC is not None and SPEC.loader is not None
 ANALYZER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ANALYZER)
+
+sys.path.insert(0, str(PUBLIC_RUNNER_PATH.parent))
+RUNNER_SPEC = importlib.util.spec_from_file_location("c109_public_runner", PUBLIC_RUNNER_PATH)
+assert RUNNER_SPEC is not None and RUNNER_SPEC.loader is not None
+RUNNER = importlib.util.module_from_spec(RUNNER_SPEC)
+RUNNER_SPEC.loader.exec_module(RUNNER)
 
 
 def git(root: Path, *args: str) -> str:
@@ -168,6 +175,24 @@ class PublicRunnerArgumentTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 2)
             self.assertIn("provided synthetic tree does not exist", completed.stdout)
             self.assertNotIn("the following arguments are required: --output", completed.stdout)
+
+
+class PublicRunnerCleanupTests(unittest.TestCase):
+    def test_cleanup_reaps_surviving_group_after_leader_closes_stdout(self) -> None:
+        silent_descendant = "import os,time; os.close(1); os.close(2); time.sleep(30)"
+        leader = "import subprocess,sys; subprocess.Popen([sys.executable, '-c', " + repr(silent_descendant) + "])"
+
+        result = RUNNER.bounded(
+            [sys.executable, "-c", leader],
+            Path.cwd(),
+            1,
+            label="exiting leader with silent descendant regression",
+        )
+
+        self.assertEqual(result["status"], "timeout")
+        self.assertTrue(result["timed_out"])
+        self.assertTrue(result["cleanup"]["term_sent"] or result["cleanup"]["kill_sent"])
+        self.assertTrue(result["process_group_gone"])
 
 
 if __name__ == "__main__":

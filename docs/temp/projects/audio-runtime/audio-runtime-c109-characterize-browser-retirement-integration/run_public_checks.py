@@ -110,6 +110,17 @@ def process_group_gone(pid: int) -> bool:
     return False
 
 
+def wait_for_group_gone(pid: int, timeout: float) -> bool:
+    deadline = time.monotonic() + max(0.0, timeout)
+    while True:
+        if process_group_gone(pid):
+            return True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(0.01, remaining))
+
+
 def test_discovery(command: str, output: str) -> dict[str, Any]:
     required = "go test" in command or "test-session-ci-regressions.sh" in command
     if not required:
@@ -223,11 +234,16 @@ def bounded(argv: list[str], cwd: Path, timeout: int, *, env_extra: dict[str, st
     finally:
         selector.close()
         stream.close()
-    if process.poll() is None:
+    # The leader may have exited while a descendant keeps the process group
+    # alive.  Pipe EOF is not proof that the group was reaped: a descendant
+    # can close its inherited stdout and continue running silently.  Always
+    # clean up a surviving group, regardless of the leader's exit status.
+    if not process_group_gone(process.pid):
         cleanup.update(terminate_group(process, force=True))
+        cleanup["group_gone_after_cleanup"] = wait_for_group_gone(process.pid, 2)
         timed_out = True
     elapsed = round(time.monotonic() - started, 3)
-    process_group_clean = process_group_gone(process.pid)
+    process_group_clean = wait_for_group_gone(process.pid, 0.25)
     retained_output = bytes(retained).decode(errors="replace")
     discovery = test_discovery(" ".join(argv), retained_output)
     status = "passed" if process.returncode == 0 and not timed_out and process_group_clean and not output_capped and discovery["valid"] else ("timeout" if timed_out else "failed")
