@@ -12,8 +12,8 @@
     },
     "inventory.json": {
       "byte_identical_after_run_timestamp_normalization": true,
-      "first_sha256": "011025c7c9c7ae1cbf5171768d54e7e946428be75aef6d4fc8e8dce231b10322",
-      "second_sha256": "011025c7c9c7ae1cbf5171768d54e7e946428be75aef6d4fc8e8dce231b10322"
+      "first_sha256": "ccfa719e0e9cf05e561814fb1c1e22bc3fa7ec9a921f618bd55c2f6dcbb70429",
+      "second_sha256": "ccfa719e0e9cf05e561814fb1c1e22bc3fa7ec9a921f618bd55c2f6dcbb70429"
     },
     "inventory.md": {
       "byte_identical_after_run_timestamp_normalization": true,
@@ -33,13 +33,13 @@
         "--source",
         "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "--output-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-1-t1fsp6u_",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-1-hai6mu9d",
         "--subtraction",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "deadline_seconds": 240,
-      "elapsed_seconds": 9.32835,
+      "elapsed_seconds": 9.710139,
       "environment": {
         "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
         "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -52,7 +52,7 @@
       "label": "analyzer",
       "output_limited": false,
       "process_group_gone": true,
-      "process_group_id": 9146,
+      "process_group_id": 27211,
       "schema_version": "c107-command-run-v1",
       "stderr_bytes": 0,
       "stderr_path": "runs/inventory/analyzer.stderr",
@@ -71,13 +71,13 @@
         "--source",
         "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "--output-dir",
-        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-2-99t48n6g",
+        "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-2-i5lqsy20",
         "--subtraction",
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "deadline_seconds": 240,
-      "elapsed_seconds": 9.353833,
+      "elapsed_seconds": 9.505454,
       "environment": {
         "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
         "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -90,7 +90,7 @@
       "label": "analyzer",
       "output_limited": false,
       "process_group_gone": true,
-      "process_group_id": 9206,
+      "process_group_id": 27287,
       "schema_version": "c107-command-run-v1",
       "stderr_bytes": 0,
       "stderr_path": "runs/inventory/analyzer.stderr",

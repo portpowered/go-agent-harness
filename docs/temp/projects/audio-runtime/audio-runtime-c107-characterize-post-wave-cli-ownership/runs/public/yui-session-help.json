@@ -1,13 +1,13 @@
 {
   "aggregate_deadline_seconds": 600,
   "argv": [
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-lpid41w8/yui",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-gnqs81en/yui",
     "session",
     "--help"
   ],
-  "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-lpid41w8/archive",
+  "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-gnqs81en/archive",
   "deadline_seconds": 60,
-  "elapsed_seconds": 0.034442,
+  "elapsed_seconds": 0.034621,
   "environment": {
     "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
     "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
@@ -20,7 +20,7 @@
   "label": "yui-session-help",
   "output_limited": false,
   "process_group_gone": true,
-  "process_group_id": 19606,
+  "process_group_id": 37400,
   "schema_version": "c107-command-run-v1",
   "stderr_bytes": 0,
   "stderr_path": "runs/public/yui-session-help.stderr",

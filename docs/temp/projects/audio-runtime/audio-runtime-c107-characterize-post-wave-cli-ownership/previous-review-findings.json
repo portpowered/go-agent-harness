@@ -225,7 +225,7 @@
       "name": "audio-runtime-c109-characterize-browser-retirement-integration",
       "rejection_feedback": "CI checks failed for PR #495 at head 0185f03afbd2bf81e6d2cdb32d3a1586576aad7d: required checks failed on current head 0185f03afbd2bf81e6d2cdb32d3a1586576aad7d: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34732547786/job/103657892852). Return this task to the executor with the listed failures.",
       "state": {
-        "name": "ci-pending",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "work_id": "work-task-224",
@@ -328,6 +328,28 @@
         "type": "PROCESSING"
       },
       "work_id": "work-task-277",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c119-retire-cli-session-failure-projection\", \"branch\": \"codex/audio-runtime-c119-retire-cli-session-failure-projection\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c119-retire-cli-session-failure-projection",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-281",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"branch\": \"codex/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "work_id": "work-task-283",
       "work_type": "task"
     },
     {
@@ -848,12 +870,23 @@
       "work_type": "review"
     },
     {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "Independent GOWORK=off probes show malformed tool events are accepted: orphan EventToolResultAccepted mutates continuation state, and EventToolCall with foreign ResponseID is Accepted=true (continuation.go:10-44). Fix ownership/conflicting-ID validation while preserving valid early results within an active lifecycle; make the CLI adapter retain unresolved state on rejection and add regressions. Evidence is stale: ledgers and replay artifacts cite 7dc1429, not reviewed HEAD a9099ec. Rebuild yui, rerun all verify.py modes and three run.py cases, refresh exact provenance, commit/push, and submit changed-head CI. Preserve prior cumulative regressions; do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-278",
+      "work_type": "review"
+    },
+    {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
       "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-      "rejection_feedback": "PR #470 head e78f9644 has all 9 required checks green, but an independent public reducer probe accepted Candidate/Admitted=true for duplicate response end after untagged content; events.go:55-58 clears messageEndSeen without ownership validation. Fix response ownership/generation and add this regression while retaining prior ID, purpose, reset, continuation, disposition, retry, audio-drain, cleanup, and shipped-tool assertions. Evidence is also stale: all ledgers/replay artifacts record e3212e4, not e78f9644. Executor must fix, rebuild yui, run all three run.py cases and verify.py response-matrix, retirement-and-scope, and both mutation modes with --expect-failure, refresh every ledger/artifact digest to final_head=candidate=e78f9644 and origin_main=3963bc3, commit/push, submit changed-head CI, and request fresh review.",
+      "rejection_feedback": "Independent GOWORK=off probes show malformed tool events are accepted: orphan EventToolResultAccepted mutates continuation state, and EventToolCall with foreign ResponseID is Accepted=true (continuation.go:10-44). Fix ownership/conflicting-ID validation while preserving valid early results within an active lifecycle; make the CLI adapter retain unresolved state on rejection and add regressions. Evidence is stale: ledgers and replay artifacts cite 7dc1429, not reviewed HEAD a9099ec. Rebuild yui, rerun all verify.py modes and three run.py cases, refresh exact provenance, commit/push, and submit changed-head CI. Preserve prior cumulative regressions; do not merge.",
       "state": {
-        "name": "in-review",
-        "type": "PROCESSING"
+        "name": "failed",
+        "type": "FAILED"
       },
       "work_id": "work-task-114",
       "work_type": "task"
@@ -1057,6 +1090,6 @@
       "work_type": "task"
     }
   ],
-  "observed_at": "2026-09-13T02:50:45Z",
+  "observed_at": "2026-09-13T03:00:18Z",
   "schema_version": "c107-previous-review-findings-v1"
 }

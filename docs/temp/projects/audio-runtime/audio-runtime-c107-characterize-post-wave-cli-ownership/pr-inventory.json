@@ -130,7 +130,7 @@
       "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
     ]
   ],
-  "observed_at": "2026-09-13T02:50:45Z",
+  "observed_at": "2026-09-13T03:00:18Z",
   "prs": [
     {
       "accepted_main_changed_production_paths": [],
@@ -2232,8 +2232,8 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c79-retire-cli-response-lifecycle",
       "task_state": {
-        "name": "in-review",
-        "type": "PROCESSING"
+        "name": "failed",
+        "type": "FAILED"
       },
       "task_work_id": "work-task-114",
       "title": "refactor: retire CLI response lifecycle",
@@ -4094,7 +4094,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verification-summary.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py"
       ],
-      "head": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+      "head": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
       "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "is_retirement_checkpoint": true,
       "number": 494,
@@ -4213,7 +4213,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c109-characterize-browser-retirement-integration",
       "task_state": {
-        "name": "ci-pending",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-224",
@@ -4337,7 +4337,7 @@
         "go-agent-runtime/services/sessioninstructions/wire/wire.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go"
       ],
-      "head": "a9479a1fbdb14682b16153c97b7a74453362b2f3",
+      "head": "f2c376dac788b01f295966d46ee9db2bb4deffa2",
       "head_branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
       "is_retirement_checkpoint": true,
       "number": 497,
@@ -4636,6 +4636,7 @@
         "coverage-manifest/go-agent-runtime/services/audiocodec/wire/package.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-04934ed.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-5b23b484.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-bc585f7.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-f5b6b2a.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/external-consumer/go.mod",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/external-consumer/go.sum",
@@ -4660,7 +4661,7 @@
         "go-agent-runtime/services/tools/wire/wire.go",
         "go-agent-runtime/services/tools/wire/wire_gen.go"
       ],
-      "head": "bc585f787e001f92f2da797f8d0f64f58b1520bc",
+      "head": "7c4fbd536fea025b4f0cc5c34ae51af2b565555f",
       "head_branch": "codex/audio-runtime-c115-centralize-filesystem-audio-codec",
       "is_retirement_checkpoint": true,
       "number": 501,
@@ -4875,7 +4876,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/pre-c112-test.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/verify.py"
       ],
-      "head": "7f116013142762dee39acae21fd2cf104d2e0473",
+      "head": "aedfb8fcfad94bb8725ee029f2f43b55fe75615e",
       "head_branch": "codex/audio-runtime-c117-repair-c113-public-trace-publication",
       "is_retirement_checkpoint": true,
       "number": 503,

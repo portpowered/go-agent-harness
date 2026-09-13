@@ -1,24 +1,24 @@
 {
-  "active_task_count": 8,
+  "active_task_count": 9,
   "board_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/canonical-board.json",
-  "board_sha256": "a001782581027ea73c5eb18d1882aa6c45b4562679602f0f8cf2a9397f32cdb2",
+  "board_sha256": "b8dcc7e8a3f800404a9bdd7b81ee8780a8cec975c1bb4b4d90b702fc3becf4d8",
   "candidate_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-  "candidate_head": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+  "candidate_head": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
   "candidate_pr": {
     "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
     "base_branch": "main",
-    "head": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+    "head": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
     "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "number": 494,
     "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
     "task_work_id": "work-task-218"
   },
   "contract_revision": "audio-runtime-v1",
-  "observed_at": "2026-09-13T02:50:45Z",
+  "observed_at": "2026-09-13T03:00:18Z",
   "open_pr_count": 56,
   "open_retirement_pr_count": 56,
   "pr_inventory_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/pr-inventory.json",
-  "pr_inventory_sha256": "b195bf42aacec08ea8a97c2aff6d9a518b8bb1356786af23aeda9982da108996",
+  "pr_inventory_sha256": "00f4e17702c285750d00f4879f977ea009aa9fde360254dc485a8dd8a009d6fd",
   "prd_identity": {
     "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "project": "audio-runtime"
@@ -28,5 +28,5 @@
   "server": "http://127.0.0.1:7439",
   "session": "~default",
   "subtraction_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json",
-  "subtraction_sha256": "37672c034515f2b6b177309e5f2ab305078804257adb275f93d0badb87c491c2"
+  "subtraction_sha256": "293543aba123dd08555cb7d0c284ad080792d168efcefe344203b9e3254efb11"
 }

@@ -11,8 +11,8 @@
         "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership"
       },
       "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "checkpoint_sha": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
-      "head": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+      "checkpoint_sha": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
+      "head": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
       "lease_paths": [],
       "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
       "observation_command": "canonical board row + gh pr view --json files",
@@ -42,7 +42,7 @@
       "observation_command": "canonical board row + gh pr view --json files",
       "pr_number": 495,
       "state": {
-        "name": "ci-pending",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "work_id": "work-task-224",
@@ -61,8 +61,8 @@
         "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution"
       },
       "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "checkpoint_sha": "a9479a1fbdb14682b16153c97b7a74453362b2f3",
-      "head": "a9479a1fbdb14682b16153c97b7a74453362b2f3",
+      "checkpoint_sha": "f2c376dac788b01f295966d46ee9db2bb4deffa2",
+      "head": "f2c376dac788b01f295966d46ee9db2bb4deffa2",
       "lease_paths": [
         "agent-cli/internal/services/internal/agentruntime/session_instructions.go"
       ],
@@ -87,8 +87,8 @@
         "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c115-centralize-filesystem-audio-codec"
       },
       "branch": "codex/audio-runtime-c115-centralize-filesystem-audio-codec",
-      "checkpoint_sha": "bc585f787e001f92f2da797f8d0f64f58b1520bc",
-      "head": "bc585f787e001f92f2da797f8d0f64f58b1520bc",
+      "checkpoint_sha": "7c4fbd536fea025b4f0cc5c34ae51af2b565555f",
+      "head": "7c4fbd536fea025b4f0cc5c34ae51af2b565555f",
       "lease_paths": [],
       "name": "audio-runtime-c115-centralize-filesystem-audio-codec",
       "observation_command": "canonical board row + gh pr view --json files",
@@ -135,8 +135,8 @@
         "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication"
       },
       "branch": "codex/audio-runtime-c117-repair-c113-public-trace-publication",
-      "checkpoint_sha": "7f116013142762dee39acae21fd2cf104d2e0473",
-      "head": "7f116013142762dee39acae21fd2cf104d2e0473",
+      "checkpoint_sha": "aedfb8fcfad94bb8725ee029f2f43b55fe75615e",
+      "head": "aedfb8fcfad94bb8725ee029f2f43b55fe75615e",
       "lease_paths": [],
       "name": "audio-runtime-c117-repair-c113-public-trace-publication",
       "observation_command": "canonical board row + gh pr view --json files",
@@ -173,48 +173,52 @@
       "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c118-retire-cli-session-terminal-diagnostics"
     },
     {
-      "accepted_main_changed_paths": [
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
-        "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
-        "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
-        "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
-      ],
+      "accepted_main_changed_paths": [],
       "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "board_checkpoint": {
-        "baseRevision": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
-        "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+        "baseRevision": "3963bc3566da24f8214634c17a9d0f79a6724171",
+        "branch": "codex/audio-runtime-c119-retire-cli-session-failure-projection",
         "head": "NONE",
         "pr_number": "NONE",
-        "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle"
+        "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c119-retire-cli-session-failure-projection"
       },
-      "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-      "checkpoint_sha": "a9099ec555644517fc10f0d4ecbddd3f3cf7c56b",
-      "head": "a9099ec555644517fc10f0d4ecbddd3f3cf7c56b",
-      "lease_paths": [
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
-        "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
-        "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
-        "agent-cli/internal/services/internal/agentruntime/session_response_admission.go",
-        "docs/architecture/architecture-size-baseline.json",
-        "scripts/wire-packages.txt"
-      ],
-      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-      "observation_command": "canonical board row + gh pr view --json files",
-      "pr_number": 470,
+      "branch": "codex/audio-runtime-c119-retire-cli-session-failure-projection",
+      "checkpoint_sha": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "head": "NONE",
+      "lease_paths": [],
+      "name": "audio-runtime-c119-retire-cli-session-failure-projection",
+      "observation_command": "canonical board row content/tags; no unmerged PR",
+      "pr_number": "NONE",
       "state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
-      "work_id": "work-task-114",
-      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle"
+      "work_id": "work-task-281",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c119-retire-cli-session-failure-projection"
+    },
+    {
+      "accepted_main_changed_paths": [],
+      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "board_checkpoint": {
+        "baseRevision": "3963bc3566da24f8214634c17a9d0f79a6724171",
+        "branch": "codex/audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+        "head": "NONE",
+        "pr_number": "NONE",
+        "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary"
+      },
+      "branch": "codex/audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+      "checkpoint_sha": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "head": "NONE",
+      "lease_paths": [],
+      "name": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+      "observation_command": "canonical board row content/tags; no unmerged PR",
+      "pr_number": "NONE",
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "work_id": "work-task-283",
+      "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary"
     }
   ],
   "all_open_pr_numbers": [
@@ -334,10 +338,10 @@
     503
   ],
   "candidate_rule": "a candidate path must be an accepted-main production path with zero path_owners and must not be a shared path dependency",
-  "canonical_board_sha256": "a001782581027ea73c5eb18d1882aa6c45b4562679602f0f8cf2a9397f32cdb2",
-  "captured_at": "2026-09-13T02:50:45Z",
+  "canonical_board_sha256": "b8dcc7e8a3f800404a9bdd7b81ee8780a8cec975c1bb4b4d90b702fc3becf4d8",
+  "captured_at": "2026-09-13T03:00:18Z",
   "contract_revision": "audio-runtime-v1",
-  "open_pr_inventory_sha256": "b195bf42aacec08ea8a97c2aff6d9a518b8bb1356786af23aeda9982da108996",
+  "open_pr_inventory_sha256": "00f4e17702c285750d00f4879f977ea009aa9fde360254dc485a8dd8a009d6fd",
   "path_owners": {
     "agent-cli/internal/services/internal/agentruntime/capability_alias.go": [],
     "agent-cli/internal/services/internal/agentruntime/metrics_collector.go": [
@@ -1704,7 +1708,7 @@
         "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
         "pr_number": 470,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-114"
       }
     ],
@@ -1751,7 +1755,7 @@
         "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
         "pr_number": 470,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-114"
       }
     ],
@@ -1799,7 +1803,7 @@
         "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
         "pr_number": 470,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-114"
       }
     ],
@@ -1846,7 +1850,7 @@
         "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
         "pr_number": 470,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-114"
       }
     ],
@@ -1894,7 +1898,7 @@
         "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
         "pr_number": 470,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-114"
       }
     ],
@@ -2244,7 +2248,7 @@
         ],
         "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
         "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-        "head": "a9479a1fbdb14682b16153c97b7a74453362b2f3",
+        "head": "f2c376dac788b01f295966d46ee9db2bb4deffa2",
         "observation_commands": [
           [
             "gh",
@@ -2363,7 +2367,7 @@
         "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
         "pr_number": 470,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-114"
       }
     ],
@@ -2452,7 +2456,7 @@
         "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
         "pr_number": 470,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-114"
       },
       {
@@ -2911,7 +2915,7 @@
         "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
         "pr_number": 470,
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-        "state": "active-task",
+        "state": "preserved-unmerged-pr",
         "work_id": "work-task-114"
       }
     ],
@@ -5257,7 +5261,7 @@
       "owner": "audio-runtime-c79-retire-cli-response-lifecycle",
       "pr_number": 470,
       "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "state": "active-task",
+      "state": "preserved-unmerged-pr",
       "work_id": "work-task-114"
     },
     {
@@ -6114,7 +6118,7 @@
       "accepted_main_changed_paths": [],
       "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "head": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+      "head": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
       "observation_commands": [
         [
           "gh",
@@ -6226,7 +6230,7 @@
       ],
       "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "head": "a9479a1fbdb14682b16153c97b7a74453362b2f3",
+      "head": "f2c376dac788b01f295966d46ee9db2bb4deffa2",
       "observation_commands": [
         [
           "gh",
@@ -6377,7 +6381,7 @@
       "accepted_main_changed_paths": [],
       "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "branch": "codex/audio-runtime-c115-centralize-filesystem-audio-codec",
-      "head": "bc585f787e001f92f2da797f8d0f64f58b1520bc",
+      "head": "7c4fbd536fea025b4f0cc5c34ae51af2b565555f",
       "observation_commands": [
         [
           "gh",
@@ -6449,7 +6453,7 @@
       "accepted_main_changed_paths": [],
       "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "branch": "codex/audio-runtime-c117-repair-c113-public-trace-publication",
-      "head": "7f116013142762dee39acae21fd2cf104d2e0473",
+      "head": "aedfb8fcfad94bb8725ee029f2f43b55fe75615e",
       "observation_commands": [
         [
           "gh",
@@ -6510,7 +6514,7 @@
       "path": "docs/architecture/architecture-size-baseline.json",
       "pr_number": 470,
       "reason": "C79 exclusive architecture baseline lease; later dependency, never C107 ownership",
-      "work_id": "work-task-114"
+      "work_id": "NONE"
     },
     {
       "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
@@ -6519,7 +6523,7 @@
       "path": "scripts/wire-packages.txt",
       "pr_number": 470,
       "reason": "C79 exclusive shared Wire registry lease; later dependency, never C107 ownership",
-      "work_id": "work-task-114"
+      "work_id": "NONE"
     }
   ],
   "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"

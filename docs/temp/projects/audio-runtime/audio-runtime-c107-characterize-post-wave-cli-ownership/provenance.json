@@ -9,25 +9,25 @@
   "ancestry": {
     "accepted_source": {
       "ancestor": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "descendant": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+      "descendant": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
       "exit_code": 0,
       "passed": true
     },
     "baseline": {
       "ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
-      "descendant": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+      "descendant": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
       "exit_code": 0,
       "passed": true
     },
     "current_origin_main": {
       "ancestor": "3963bc3566da24f8214634c17a9d0f79a6724171",
-      "descendant": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+      "descendant": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
       "exit_code": 0,
       "passed": true
     },
     "startup_integration": {
       "ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-      "descendant": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+      "descendant": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
       "exit_code": 0,
       "passed": true
     }
@@ -44,13 +44,13 @@
   "candidate_pr": {
     "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
     "base_branch": "main",
-    "head": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+    "head": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
     "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "number": 494,
     "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
     "task_work_id": "work-task-218"
   },
-  "candidate_revision": "8c183508a9c2a36e06315f896d39b5aed2b033bd",
+  "candidate_revision": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
   "contract_revision": "audio-runtime-v1",
   "credentials": "not used; command environment for public replay removes credential variables",
   "current_origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
@@ -64,10 +64,10 @@
       "main"
     ],
     "exit_code": 0,
-    "stderr_sha256": "5734d4f16efc02917bc8fcad6a99bca535438180ce08197ee6e22031f788af7b",
+    "stderr_sha256": "54b759e2f9e31c5995466467866508754527b8f2fd6fc1d047eb9db48c604c61",
     "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
-  "observed_at": "2026-09-13T02:50:46Z",
+  "observed_at": "2026-09-13T03:00:19Z",
   "prd_identity": {
     "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "project": "audio-runtime"

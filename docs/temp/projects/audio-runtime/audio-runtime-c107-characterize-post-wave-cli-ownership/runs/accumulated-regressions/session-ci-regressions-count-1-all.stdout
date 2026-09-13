@@ -3,23 +3,23 @@
 === RUN   TestSessionCommandAudioInterruptOrdering/unfiltered
 === RUN   TestSessionCommandAudioInterruptOrdering/named
 === RUN   TestSessionCommandAudioInterruptOrdering/negative
---- PASS: TestSessionCommandAudioInterruptOrdering (0.78s)
-    --- PASS: TestSessionCommandAudioInterruptOrdering/unfiltered (0.37s)
-    --- PASS: TestSessionCommandAudioInterruptOrdering/named (0.35s)
+--- PASS: TestSessionCommandAudioInterruptOrdering (0.79s)
+    --- PASS: TestSessionCommandAudioInterruptOrdering/unfiltered (0.38s)
+    --- PASS: TestSessionCommandAudioInterruptOrdering/named (0.37s)
     --- PASS: TestSessionCommandAudioInterruptOrdering/negative (0.05s)
 PASS
-ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli	1.205s
+ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli	1.243s
 ==> session CI regressions: mode=normal package=./test/integration count=1
 === RUN   TestShippedSessionProcessFamilyBCorrection
---- PASS: TestShippedSessionProcessFamilyBCorrection (0.61s)
+--- PASS: TestShippedSessionProcessFamilyBCorrection (0.78s)
 === RUN   TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries
---- PASS: TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries (0.17s)
+--- PASS: TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries (0.29s)
 === RUN   TestShippedSessionProcessDuplexConversation
---- PASS: TestShippedSessionProcessDuplexConversation (0.08s)
+--- PASS: TestShippedSessionProcessDuplexConversation (0.11s)
 === RUN   TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated
---- PASS: TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated (0.80s)
+--- PASS: TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated (0.85s)
 === RUN   TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle
---- PASS: TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle (2.22s)
+--- PASS: TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle (2.26s)
 === RUN   TestSessionConfigToolFilterThroughRealCLI
 === RUN   TestSessionConfigToolFilterThroughRealCLI/empty_tools_list_enables_opted-in_experimental_sleep
 === RUN   TestSessionConfigToolFilterThroughRealCLI/default_hides_experimental_sleep_but_keeps_terminal_tools
@@ -29,9 +29,209 @@ ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli	1.
     --- PASS: TestSessionConfigToolFilterThroughRealCLI/default_hides_experimental_sleep_but_keeps_terminal_tools (0.00s)
     --- PASS: TestSessionConfigToolFilterThroughRealCLI/disabled_sleep_keeps_omitted_read_file (0.00s)
 === RUN   TestReadImageSpokenFailedContinuationIsActionable
---- PASS: TestReadImageSpokenFailedContinuationIsActionable (4.94s)
+--- PASS: TestReadImageSpokenFailedContinuationIsActionable (4.95s)
 === RUN   TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI
---- PASS: TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI (0.18s)
+--- PASS: TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI (0.15s)
+=== RUN   TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess
+--- PASS: TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess (0.01s)
+=== RUN   TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch
+Error: capture media pump: capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
+session error: replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
+replay mismatch
+replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
+replay mismatch
+scheduled audio session ended before all turns completed: completed=0 dispatched=0 scheduled=2
+capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
+--- PASS: TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch (0.74s)
+=== RUN   TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl
+    session_duplex_overlap_test.go:81: v8 later-turn PCM negative control rejected as expected: multi-turn recording view B/agent A-turn-2 turn 2 PCM identity mismatch: expected hash=2df53de977496a6aeef54bd738c151cb50b14bbafc33b7234c3ddf11d2c769f9 RMS=3826.2; observed hash=4eb683d0c83d75189f8ab4adfd7224ed018c1224aa7bace472896837c6e0fe8f RMS=4083.3
+--- PASS: TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl (0.34s)
+=== RUN   TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl
+    session_duplex_overlap_test.go:103: v8 later-turn transcript negative control rejected as expected: multi-turn harness B turn 2 (B-turn-2) transcript marker mismatch: expected="B transcript turn 2" observed="A transcript turn 2"
+--- PASS: TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl (0.27s)
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_01
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_01
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_02
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_02
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_03
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_03
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_04
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_04
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_05
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_05
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_06
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_06
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_07
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_07
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_08
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_08
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_09
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_09
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_10
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_10
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_11
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_11
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_12
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_12
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_13
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_13
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_14
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_14
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_15
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_15
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_16
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_16
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_17
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_17
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_18
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_18
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_19
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_19
+=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_20
+=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_20
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_01
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_11
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_16
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_20
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_19
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_18
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_17
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_13
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_15
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_14
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_06
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_10
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_09
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_08
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_07
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_04
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_05
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_03
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_12
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_02
+--- PASS: TestAgentBinaryTest46HighRateToolAudioRegression (0.00s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_01 (1.45s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_11 (1.45s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_16 (2.18s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_20 (2.18s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_19 (2.89s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_18 (2.89s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_17 (3.62s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_13 (3.62s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_14 (4.34s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_15 (4.35s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_10 (3.62s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_06 (3.64s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_09 (3.59s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_08 (3.60s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_04 (3.61s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_07 (3.63s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_05 (3.58s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_03 (3.59s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_12 (3.66s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_02 (3.68s)
+=== RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM
+=== RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/default_cue
+=== RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/provider_only_fixture
+--- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM (6.70s)
+    --- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/default_cue (3.36s)
+    --- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/provider_only_fixture (3.34s)
+=== RUN   TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle
+--- PASS: TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle (1.49s)
+=== RUN   TestSessionToolResultConversationMissingContinuationIsBounded
+--- PASS: TestSessionToolResultConversationMissingContinuationIsBounded (0.37s)
+=== RUN   TestSessionToolResultConversationCorruptAudioDeltaIsRejected
+--- PASS: TestSessionToolResultConversationCorruptAudioDeltaIsRejected (0.05s)
+PASS
+ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration	30.917s
+==> session CI regressions: mode=normal package=go-device-gateway/pkg/devices count=1
+=== RUN   TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock
+--- PASS: TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock (0.00s)
+=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum
+=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/64
+=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/128
+=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/240
+=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/256
+=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/480
+=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/512
+=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/960
+=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/128_512_256_480
+--- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum (0.00s)
+    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/64 (0.00s)
+    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/128 (0.00s)
+    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/240 (0.00s)
+    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/256 (0.00s)
+    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/480 (0.00s)
+    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/512 (0.00s)
+    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/960 (0.00s)
+    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/128_512_256_480 (0.00s)
+=== RUN   TestSimulatedDuplex48kMacCadenceAndExactUnderrun
+--- PASS: TestSimulatedDuplex48kMacCadenceAndExactUnderrun (0.00s)
+=== RUN   TestSimulatedDuplexClockJitterFaultsAndEpochsAreDeterministic
+--- PASS: TestSimulatedDuplexClockJitterFaultsAndEpochsAreDeterministic (0.00s)
+=== RUN   TestSimulatedDuplexAcousticDelayGainNearEndAndFIR
+--- PASS: TestSimulatedDuplexAcousticDelayGainNearEndAndFIR (0.01s)
+=== RUN   TestSimulatedDuplexCaptureOverflowPolicies
+=== RUN   TestSimulatedDuplexCaptureOverflowPolicies/drop_oldest
+=== RUN   TestSimulatedDuplexCaptureOverflowPolicies/drop_newest
+--- PASS: TestSimulatedDuplexCaptureOverflowPolicies (0.00s)
+    --- PASS: TestSimulatedDuplexCaptureOverflowPolicies/drop_oldest (0.00s)
+    --- PASS: TestSimulatedDuplexCaptureOverflowPolicies/drop_newest (0.00s)
+=== RUN   TestSimulatedDuplexDeviceLossWakesBlockedRead
+--- PASS: TestSimulatedDuplexDeviceLossWakesBlockedRead (0.00s)
+=== RUN   TestSimulatedDuplexRegistryAndStreamContracts
+--- PASS: TestSimulatedDuplexRegistryAndStreamContracts (0.00s)
+=== RUN   TestSimulatedDuplexPlaybackWaitsTrackQueueChanges
+--- PASS: TestSimulatedDuplexPlaybackWaitsTrackQueueChanges (0.00s)
+=== RUN   TestSimulatedDuplexScenarioValidationAndTimelineFaults
+--- PASS: TestSimulatedDuplexScenarioValidationAndTimelineFaults (0.00s)
+PASS
+ok  	github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices	0.236s
+==> session CI regressions: mode=normal package=go-llm-gateway/pkg/providers/openai count=1
+=== RUN   TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire
+--- PASS: TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire (0.00s)
+=== RUN   TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation
+--- PASS: TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation (0.15s)
+=== RUN   TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire
+--- PASS: TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire (0.00s)
+PASS
+ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai	0.360s
+==> session CI regressions: mode=coverage package=./internal/transport/cli count=1
+=== RUN   TestSessionCommandAudioInterruptOrdering
+=== RUN   TestSessionCommandAudioInterruptOrdering/unfiltered
+=== RUN   TestSessionCommandAudioInterruptOrdering/named
+=== RUN   TestSessionCommandAudioInterruptOrdering/negative
+--- PASS: TestSessionCommandAudioInterruptOrdering (0.78s)
+    --- PASS: TestSessionCommandAudioInterruptOrdering/unfiltered (0.38s)
+    --- PASS: TestSessionCommandAudioInterruptOrdering/named (0.35s)
+    --- PASS: TestSessionCommandAudioInterruptOrdering/negative (0.05s)
+PASS
+coverage: 3.3% of statements
+ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli	1.239s	coverage: 3.3% of statements
+==> session CI regressions: mode=coverage package=./test/integration count=1
+=== RUN   TestShippedSessionProcessFamilyBCorrection
+--- PASS: TestShippedSessionProcessFamilyBCorrection (0.63s)
+=== RUN   TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries
+--- PASS: TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries (0.15s)
+=== RUN   TestShippedSessionProcessDuplexConversation
+--- PASS: TestShippedSessionProcessDuplexConversation (0.08s)
+=== RUN   TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated
+--- PASS: TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated (0.79s)
+=== RUN   TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle
+--- PASS: TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle (2.21s)
+=== RUN   TestSessionConfigToolFilterThroughRealCLI
+=== RUN   TestSessionConfigToolFilterThroughRealCLI/empty_tools_list_enables_opted-in_experimental_sleep
+=== RUN   TestSessionConfigToolFilterThroughRealCLI/default_hides_experimental_sleep_but_keeps_terminal_tools
+=== RUN   TestSessionConfigToolFilterThroughRealCLI/disabled_sleep_keeps_omitted_read_file
+--- PASS: TestSessionConfigToolFilterThroughRealCLI (0.01s)
+    --- PASS: TestSessionConfigToolFilterThroughRealCLI/empty_tools_list_enables_opted-in_experimental_sleep (0.00s)
+    --- PASS: TestSessionConfigToolFilterThroughRealCLI/default_hides_experimental_sleep_but_keeps_terminal_tools (0.00s)
+    --- PASS: TestSessionConfigToolFilterThroughRealCLI/disabled_sleep_keeps_omitted_read_file (0.00s)
+=== RUN   TestReadImageSpokenFailedContinuationIsActionable
+--- PASS: TestReadImageSpokenFailedContinuationIsActionable (4.93s)
+=== RUN   TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI
+--- PASS: TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI (0.15s)
 === RUN   TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess
 --- PASS: TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess (0.01s)
 === RUN   TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch
@@ -93,259 +293,59 @@ capture completion control "audio_commit" for turn 1: live provider rejected con
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_01
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_11
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_16
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_06
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_20
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_08
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_19
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_18
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_17
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_14
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_15
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_13
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_12
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_06
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_10
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_09
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_08
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_07
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_18
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_04
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_05
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_03
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_02
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_17
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_14
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_15
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_12
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_13
 --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression (0.00s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_11 (1.41s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_01 (1.43s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_06 (2.24s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_16 (2.31s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_20 (3.00s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_08 (3.00s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_10 (3.68s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_19 (3.68s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_09 (4.40s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_07 (4.40s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_04 (3.64s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_18 (3.67s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_05 (3.53s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_03 (3.47s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_02 (3.49s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_17 (3.48s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_14 (4.27s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_15 (4.41s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_12 (4.48s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_13 (4.71s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_01 (1.45s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_11 (1.46s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_16 (2.16s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_20 (2.18s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_18 (2.91s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_19 (2.91s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_17 (3.62s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_14 (3.62s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_15 (4.35s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_13 (4.35s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_12 (3.61s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_06 (3.60s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_09 (3.58s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_10 (3.60s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_08 (3.58s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_07 (3.58s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_04 (3.62s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_05 (3.62s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_02 (3.65s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_03 (3.67s)
 === RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM
 === RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/default_cue
 === RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/provider_only_fixture
---- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM (6.89s)
-    --- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/default_cue (3.50s)
+--- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM (6.70s)
+    --- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/default_cue (3.31s)
     --- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/provider_only_fixture (3.39s)
 === RUN   TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle
---- PASS: TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle (1.48s)
+--- PASS: TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle (1.59s)
 === RUN   TestSessionToolResultConversationMissingContinuationIsBounded
 --- PASS: TestSessionToolResultConversationMissingContinuationIsBounded (0.37s)
 === RUN   TestSessionToolResultConversationCorruptAudioDeltaIsRejected
 --- PASS: TestSessionToolResultConversationCorruptAudioDeltaIsRejected (0.05s)
 PASS
-ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration	31.302s
-==> session CI regressions: mode=normal package=go-device-gateway/pkg/devices count=1
-=== RUN   TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock
---- PASS: TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock (0.00s)
-=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum
-=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/64
-=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/128
-=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/240
-=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/256
-=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/480
-=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/512
-=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/960
-=== RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/128_512_256_480
---- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum (0.00s)
-    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/64 (0.00s)
-    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/128 (0.00s)
-    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/240 (0.00s)
-    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/256 (0.00s)
-    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/480 (0.00s)
-    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/512 (0.00s)
-    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/960 (0.00s)
-    --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/128_512_256_480 (0.00s)
-=== RUN   TestSimulatedDuplex48kMacCadenceAndExactUnderrun
---- PASS: TestSimulatedDuplex48kMacCadenceAndExactUnderrun (0.00s)
-=== RUN   TestSimulatedDuplexClockJitterFaultsAndEpochsAreDeterministic
---- PASS: TestSimulatedDuplexClockJitterFaultsAndEpochsAreDeterministic (0.00s)
-=== RUN   TestSimulatedDuplexAcousticDelayGainNearEndAndFIR
---- PASS: TestSimulatedDuplexAcousticDelayGainNearEndAndFIR (0.01s)
-=== RUN   TestSimulatedDuplexCaptureOverflowPolicies
-=== RUN   TestSimulatedDuplexCaptureOverflowPolicies/drop_oldest
-=== RUN   TestSimulatedDuplexCaptureOverflowPolicies/drop_newest
---- PASS: TestSimulatedDuplexCaptureOverflowPolicies (0.00s)
-    --- PASS: TestSimulatedDuplexCaptureOverflowPolicies/drop_oldest (0.00s)
-    --- PASS: TestSimulatedDuplexCaptureOverflowPolicies/drop_newest (0.00s)
-=== RUN   TestSimulatedDuplexDeviceLossWakesBlockedRead
---- PASS: TestSimulatedDuplexDeviceLossWakesBlockedRead (0.00s)
-=== RUN   TestSimulatedDuplexRegistryAndStreamContracts
---- PASS: TestSimulatedDuplexRegistryAndStreamContracts (0.00s)
-=== RUN   TestSimulatedDuplexPlaybackWaitsTrackQueueChanges
---- PASS: TestSimulatedDuplexPlaybackWaitsTrackQueueChanges (0.00s)
-=== RUN   TestSimulatedDuplexScenarioValidationAndTimelineFaults
---- PASS: TestSimulatedDuplexScenarioValidationAndTimelineFaults (0.00s)
-PASS
-ok  	github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices	0.216s
-==> session CI regressions: mode=normal package=go-llm-gateway/pkg/providers/openai count=1
-=== RUN   TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire
---- PASS: TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire (0.00s)
-=== RUN   TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation
---- PASS: TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation (0.15s)
-=== RUN   TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire
---- PASS: TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire (0.00s)
-PASS
-ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai	0.402s
-==> session CI regressions: mode=coverage package=./internal/transport/cli count=1
-=== RUN   TestSessionCommandAudioInterruptOrdering
-=== RUN   TestSessionCommandAudioInterruptOrdering/unfiltered
-=== RUN   TestSessionCommandAudioInterruptOrdering/named
-=== RUN   TestSessionCommandAudioInterruptOrdering/negative
---- PASS: TestSessionCommandAudioInterruptOrdering (0.87s)
-    --- PASS: TestSessionCommandAudioInterruptOrdering/unfiltered (0.40s)
-    --- PASS: TestSessionCommandAudioInterruptOrdering/named (0.39s)
-    --- PASS: TestSessionCommandAudioInterruptOrdering/negative (0.08s)
-PASS
-coverage: 3.3% of statements
-ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli	1.500s	coverage: 3.3% of statements
-==> session CI regressions: mode=coverage package=./test/integration count=1
-=== RUN   TestShippedSessionProcessFamilyBCorrection
---- PASS: TestShippedSessionProcessFamilyBCorrection (0.64s)
-=== RUN   TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries
---- PASS: TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries (0.21s)
-=== RUN   TestShippedSessionProcessDuplexConversation
---- PASS: TestShippedSessionProcessDuplexConversation (0.13s)
-=== RUN   TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated
---- PASS: TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated (0.83s)
-=== RUN   TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle
---- PASS: TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle (2.25s)
-=== RUN   TestSessionConfigToolFilterThroughRealCLI
-=== RUN   TestSessionConfigToolFilterThroughRealCLI/empty_tools_list_enables_opted-in_experimental_sleep
-=== RUN   TestSessionConfigToolFilterThroughRealCLI/default_hides_experimental_sleep_but_keeps_terminal_tools
-=== RUN   TestSessionConfigToolFilterThroughRealCLI/disabled_sleep_keeps_omitted_read_file
---- PASS: TestSessionConfigToolFilterThroughRealCLI (0.02s)
-    --- PASS: TestSessionConfigToolFilterThroughRealCLI/empty_tools_list_enables_opted-in_experimental_sleep (0.01s)
-    --- PASS: TestSessionConfigToolFilterThroughRealCLI/default_hides_experimental_sleep_but_keeps_terminal_tools (0.01s)
-    --- PASS: TestSessionConfigToolFilterThroughRealCLI/disabled_sleep_keeps_omitted_read_file (0.00s)
-=== RUN   TestReadImageSpokenFailedContinuationIsActionable
---- PASS: TestReadImageSpokenFailedContinuationIsActionable (4.97s)
-=== RUN   TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI
---- PASS: TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI (0.17s)
-=== RUN   TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess
---- PASS: TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess (0.01s)
-=== RUN   TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch
-Error: capture media pump: capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
-session error: replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
-replay mismatch
-replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
-replay mismatch
-scheduled audio session ended before all turns completed: completed=0 dispatched=0 scheduled=2
-capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
---- PASS: TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch (0.74s)
-=== RUN   TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl
-    session_duplex_overlap_test.go:81: v8 later-turn PCM negative control rejected as expected: multi-turn recording view B/agent A-turn-2 turn 2 PCM identity mismatch: expected hash=2df53de977496a6aeef54bd738c151cb50b14bbafc33b7234c3ddf11d2c769f9 RMS=3826.2; observed hash=4eb683d0c83d75189f8ab4adfd7224ed018c1224aa7bace472896837c6e0fe8f RMS=4083.3
---- PASS: TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl (0.31s)
-=== RUN   TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl
-    session_duplex_overlap_test.go:103: v8 later-turn transcript negative control rejected as expected: multi-turn harness B turn 2 (B-turn-2) transcript marker mismatch: expected="B transcript turn 2" observed="A transcript turn 2"
---- PASS: TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl (0.31s)
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_01
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_01
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_02
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_02
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_03
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_03
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_04
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_04
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_05
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_05
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_06
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_06
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_07
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_07
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_08
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_08
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_09
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_09
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_10
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_10
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_11
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_11
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_12
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_12
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_13
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_13
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_14
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_14
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_15
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_15
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_16
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_16
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_17
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_17
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_18
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_18
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_19
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_19
-=== RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_20
-=== PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_20
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_01
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_11
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_16
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_20
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_19
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_18
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_17
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_14
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_15
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_06
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_10
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_09
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_08
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_07
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_13
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_04
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_05
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_03
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_12
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_02
---- PASS: TestAgentBinaryTest46HighRateToolAudioRegression (0.00s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_01 (1.46s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_11 (1.47s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_16 (2.17s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_20 (2.25s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_19 (3.03s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_18 (3.07s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_17 (3.72s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_14 (3.78s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_15 (4.44s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_06 (4.51s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_10 (3.69s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_09 (3.75s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_08 (3.71s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_07 (3.74s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_13 (3.56s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_04 (3.63s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_05 (3.64s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_03 (3.77s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_12 (3.69s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_02 (3.75s)
-=== RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM
-=== RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/default_cue
-=== RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/provider_only_fixture
---- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM (6.67s)
-    --- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/default_cue (3.38s)
-    --- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/provider_only_fixture (3.29s)
-=== RUN   TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle
---- PASS: TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle (1.50s)
-=== RUN   TestSessionToolResultConversationMissingContinuationIsBounded
---- PASS: TestSessionToolResultConversationMissingContinuationIsBounded (0.37s)
-=== RUN   TestSessionToolResultConversationCorruptAudioDeltaIsRejected
---- PASS: TestSessionToolResultConversationCorruptAudioDeltaIsRejected (0.06s)
-PASS
 coverage: 71.4% of statements
-ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration	31.114s	coverage: 71.4% of statements
+ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration	30.159s	coverage: 71.4% of statements
 ==> session CI regressions: mode=coverage package=go-device-gateway/pkg/devices count=1
 === RUN   TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock
 --- PASS: TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock (0.00s)
@@ -389,7 +389,7 @@ ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration	31.114s	
 --- PASS: TestSimulatedDuplexScenarioValidationAndTimelineFaults (0.00s)
 PASS
 coverage: 17.5% of statements
-ok  	github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices	0.973s	coverage: 17.5% of statements
+ok  	github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices	0.240s	coverage: 17.5% of statements
 ==> session CI regressions: mode=coverage package=go-llm-gateway/pkg/providers/openai count=1
 === RUN   TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire
 --- PASS: TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire (0.00s)
@@ -399,55 +399,55 @@ ok  	github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices	0.973
 --- PASS: TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire (0.00s)
 PASS
 coverage: 32.8% of statements
-ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai	0.362s	coverage: 32.8% of statements
+ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai	0.361s	coverage: 32.8% of statements
 ==> session CI regressions: mode=race package=./internal/transport/cli count=1
 === RUN   TestSessionCommandAudioInterruptOrdering
 === RUN   TestSessionCommandAudioInterruptOrdering/unfiltered
 === RUN   TestSessionCommandAudioInterruptOrdering/named
 === RUN   TestSessionCommandAudioInterruptOrdering/negative
---- PASS: TestSessionCommandAudioInterruptOrdering (0.87s)
-    --- PASS: TestSessionCommandAudioInterruptOrdering/unfiltered (0.40s)
+--- PASS: TestSessionCommandAudioInterruptOrdering (0.92s)
+    --- PASS: TestSessionCommandAudioInterruptOrdering/unfiltered (0.42s)
     --- PASS: TestSessionCommandAudioInterruptOrdering/named (0.40s)
-    --- PASS: TestSessionCommandAudioInterruptOrdering/negative (0.07s)
+    --- PASS: TestSessionCommandAudioInterruptOrdering/negative (0.11s)
 PASS
-ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli	2.524s
+ok  	github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli	2.974s
 ==> session CI regressions: mode=race package=./test/integration count=1
 === RUN   TestShippedSessionProcessFamilyBCorrection
---- PASS: TestShippedSessionProcessFamilyBCorrection (0.71s)
+--- PASS: TestShippedSessionProcessFamilyBCorrection (0.65s)
 === RUN   TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries
---- PASS: TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries (1.36s)
+--- PASS: TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries (0.95s)
 === RUN   TestShippedSessionProcessDuplexConversation
---- PASS: TestShippedSessionProcessDuplexConversation (0.10s)
+--- PASS: TestShippedSessionProcessDuplexConversation (0.09s)
 === RUN   TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated
---- PASS: TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated (0.97s)
+--- PASS: TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated (0.82s)
 === RUN   TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle
---- PASS: TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle (2.37s)
+--- PASS: TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle (2.27s)
 === RUN   TestSessionConfigToolFilterThroughRealCLI
 === RUN   TestSessionConfigToolFilterThroughRealCLI/empty_tools_list_enables_opted-in_experimental_sleep
 === RUN   TestSessionConfigToolFilterThroughRealCLI/default_hides_experimental_sleep_but_keeps_terminal_tools
 === RUN   TestSessionConfigToolFilterThroughRealCLI/disabled_sleep_keeps_omitted_read_file
---- PASS: TestSessionConfigToolFilterThroughRealCLI (0.03s)
+--- PASS: TestSessionConfigToolFilterThroughRealCLI (0.02s)
     --- PASS: TestSessionConfigToolFilterThroughRealCLI/empty_tools_list_enables_opted-in_experimental_sleep (0.01s)
     --- PASS: TestSessionConfigToolFilterThroughRealCLI/default_hides_experimental_sleep_but_keeps_terminal_tools (0.01s)
     --- PASS: TestSessionConfigToolFilterThroughRealCLI/disabled_sleep_keeps_omitted_read_file (0.01s)
 === RUN   TestReadImageSpokenFailedContinuationIsActionable
---- PASS: TestReadImageSpokenFailedContinuationIsActionable (5.66s)
+--- PASS: TestReadImageSpokenFailedContinuationIsActionable (5.57s)
 === RUN   TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI
---- PASS: TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI (0.18s)
+--- PASS: TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI (0.17s)
 === RUN   TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess
---- PASS: TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess (0.03s)
+--- PASS: TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess (0.02s)
 === RUN   TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch
 Error: capture media pump: capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
 session error: replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
 replay mismatch
 replay mismatch: expected event type "input_audio_buffer.append" at sequence 4, actual event type "input_audio_buffer.append" at sequence 4: JSON pointer /audio: expected "uIQGq1cqzGA=", actual "AABzAOUAVwHIATcCpQIQA3gD...(truncated)
 replay mismatch
-scheduled audio session ended before all turns completed: completed=0 dispatched=0 scheduled=2
+scheduled audio session ended before all turns completed: completed=0 dispatched=0 scheduled=2 (status=transport; detail=provider_closed)
 capture completion control "audio_commit" for turn 1: live provider rejected control "audio_commit"
 --- PASS: TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch (0.79s)
 === RUN   TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl
     session_duplex_overlap_test.go:81: v8 later-turn PCM negative control rejected as expected: multi-turn recording view B/agent A-turn-2 turn 2 PCM identity mismatch: expected hash=2df53de977496a6aeef54bd738c151cb50b14bbafc33b7234c3ddf11d2c769f9 RMS=3826.2; observed hash=4eb683d0c83d75189f8ab4adfd7224ed018c1224aa7bace472896837c6e0fe8f RMS=4083.3
---- PASS: TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl (0.35s)
+--- PASS: TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnAudioControl (0.36s)
 === RUN   TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl
     session_duplex_overlap_test.go:103: v8 later-turn transcript negative control rejected as expected: multi-turn harness B turn 2 (B-turn-2) transcript marker mismatch: expected="B transcript turn 2" observed="A transcript turn 2"
 --- PASS: TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl (0.35s)
@@ -493,60 +493,60 @@ capture completion control "audio_commit" for turn 1: live provider rejected con
 === RUN   TestAgentBinaryTest46HighRateToolAudioRegression/trial_20
 === PAUSE TestAgentBinaryTest46HighRateToolAudioRegression/trial_20
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_01
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_10
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_16
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_05
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_09
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_11
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_08
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_06
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_13
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_15
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_04
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_07
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_16
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_20
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_19
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_02
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_03
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_17
-=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_14
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_18
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_19
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_17
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_08
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_10
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_09
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_07
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_06
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_15
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_14
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_03
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_05
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_04
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_02
+=== CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_13
 === CONT  TestAgentBinaryTest46HighRateToolAudioRegression/trial_12
 --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression (0.00s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_01 (5.04s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_10 (5.06s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_16 (9.14s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_05 (9.48s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_09 (13.15s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_11 (13.44s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_08 (17.48s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_06 (18.16s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_13 (21.46s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_15 (22.39s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_04 (20.41s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_07 (21.93s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_20 (21.22s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_19 (22.27s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_02 (22.23s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_03 (23.71s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_17 (22.64s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_14 (23.31s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_18 (22.62s)
-    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_12 (23.41s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_01 (5.34s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_11 (5.48s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_20 (10.15s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_16 (10.31s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_19 (14.44s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_18 (14.78s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_17 (18.68s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_08 (19.08s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_10 (24.74s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_09 (25.43s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_07 (24.31s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_06 (25.31s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_15 (26.54s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_14 (28.07s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_03 (27.28s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_05 (28.93s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_04 (28.20s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_02 (30.08s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_13 (28.10s)
+    --- PASS: TestAgentBinaryTest46HighRateToolAudioRegression/trial_12 (29.65s)
 === RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM
 === RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/default_cue
 === RUN   TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/provider_only_fixture
---- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM (12.66s)
-    --- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/default_cue (6.29s)
-    --- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/provider_only_fixture (6.37s)
+--- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM (13.29s)
+    --- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/default_cue (6.21s)
+    --- PASS: TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM/provider_only_fixture (7.08s)
 === RUN   TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle
---- PASS: TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle (1.54s)
+--- PASS: TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle (1.55s)
 === RUN   TestSessionToolResultConversationMissingContinuationIsBounded
---- PASS: TestSessionToolResultConversationMissingContinuationIsBounded (0.39s)
+--- PASS: TestSessionToolResultConversationMissingContinuationIsBounded (0.41s)
 === RUN   TestSessionToolResultConversationCorruptAudioDeltaIsRejected
---- PASS: TestSessionToolResultConversationCorruptAudioDeltaIsRejected (0.09s)
+--- PASS: TestSessionToolResultConversationCorruptAudioDeltaIsRejected (0.11s)
 PASS
-ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration	87.320s
+ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration	94.917s
 ==> session CI regressions: mode=race package=go-device-gateway/pkg/devices count=1
 === RUN   TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock
 --- PASS: TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock (0.00s)
@@ -559,7 +559,7 @@ ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration	87.320s
 === RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/512
 === RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/960
 === RUN   TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/128_512_256_480
---- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum (0.00s)
+--- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum (0.01s)
     --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/64 (0.00s)
     --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/128 (0.00s)
     --- PASS: TestSimulatedDuplexCleanBaselineAndVariableCallbackQuantum/240 (0.00s)
@@ -571,7 +571,7 @@ ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration	87.320s
 === RUN   TestSimulatedDuplex48kMacCadenceAndExactUnderrun
 --- PASS: TestSimulatedDuplex48kMacCadenceAndExactUnderrun (0.00s)
 === RUN   TestSimulatedDuplexClockJitterFaultsAndEpochsAreDeterministic
---- PASS: TestSimulatedDuplexClockJitterFaultsAndEpochsAreDeterministic (0.00s)
+--- PASS: TestSimulatedDuplexClockJitterFaultsAndEpochsAreDeterministic (0.02s)
 === RUN   TestSimulatedDuplexAcousticDelayGainNearEndAndFIR
 --- PASS: TestSimulatedDuplexAcousticDelayGainNearEndAndFIR (0.01s)
 === RUN   TestSimulatedDuplexCaptureOverflowPolicies
@@ -589,13 +589,13 @@ ok  	github.com/portpowered/go-agent-harness/agent-cli/test/integration	87.320s
 === RUN   TestSimulatedDuplexScenarioValidationAndTimelineFaults
 --- PASS: TestSimulatedDuplexScenarioValidationAndTimelineFaults (0.00s)
 PASS
-ok  	github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices	1.274s
+ok  	github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices	1.343s
 ==> session CI regressions: mode=race package=go-llm-gateway/pkg/providers/openai count=1
 === RUN   TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire
---- PASS: TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire (0.00s)
+--- PASS: TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire (0.01s)
 === RUN   TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation
---- PASS: TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation (0.15s)
+--- PASS: TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation (0.16s)
 === RUN   TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire
 --- PASS: TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire (0.00s)
 PASS
-ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai	1.408s
+ok  	github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai	1.440s

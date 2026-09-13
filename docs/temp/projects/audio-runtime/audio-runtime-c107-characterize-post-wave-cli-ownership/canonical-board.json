@@ -12,40 +12,8 @@
     "500",
     "--all"
   ],
-  "observed_at": "2026-09-13T02:50:15Z",
+  "observed_at": "2026-09-13T02:59:48Z",
   "results": [
-    {
-      "chainingTraceDepth": 34,
-      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
-      "previousChainingTraceIds": [
-        "trace-admit-audio-runtime-audio-runtime-v1"
-      ],
-      "relations": [
-        {
-          "sourceWorkName": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
-          "targetWorkId": "work-thoughts-275",
-          "targetWorkName": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
-          "type": "PARENT_CHILD"
-        }
-      ],
-      "requestId": "audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z",
-      "state": {
-        "name": "init",
-        "type": "INITIAL"
-      },
-      "tags": {
-        "_parent_request_id": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
-        "_parent_work_id": "work-thoughts-275",
-        "_source_dispatch_id": "05f14603-af65-457f-bb46-1b5d6f675ffc",
-        "_source_transition_id": "ideafy",
-        "_work_name": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
-        "_work_type": "idea"
-      },
-      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "batch-audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z-audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
-      "workTypeName": "idea"
-    },
     {
       "chainingTraceDepth": 1,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
@@ -62,6 +30,31 @@
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "batch-admit-audio-runtime-audio-runtime-v1-audio-runtime",
       "workTypeName": "project"
+    },
+    {
+      "chainingTraceDepth": 36,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"branch\": \"codex/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z",
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"branch\": \"codex/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-283",
+      "workTypeName": "task"
     },
     {
       "chainingTraceDepth": 22,
@@ -509,6 +502,70 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "batch-audio-runtime-c118-session-terminal-diagnostics-retirement-20260913T0221Z-audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+      "workTypeName": "idea"
+    },
+    {
+      "chainingTraceDepth": 34,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c119-retire-cli-session-failure-projection",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c119-retire-cli-session-failure-projection",
+          "targetWorkId": "work-thoughts-275",
+          "targetWorkName": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z",
+      "state": {
+        "name": "to-complete",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_parent_request_id": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+        "_parent_work_id": "work-thoughts-275",
+        "_source_dispatch_id": "05f14603-af65-457f-bb46-1b5d6f675ffc",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c119-retire-cli-session-failure-projection",
+        "_work_type": "idea"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z-audio-runtime-c119-retire-cli-session-failure-projection",
+      "workTypeName": "idea"
+    },
+    {
+      "chainingTraceDepth": 34,
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "relations": [
+        {
+          "sourceWorkName": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+          "targetWorkId": "work-thoughts-275",
+          "targetWorkName": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+          "type": "PARENT_CHILD"
+        }
+      ],
+      "requestId": "audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z",
+      "state": {
+        "name": "to-complete",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_parent_request_id": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
+        "_parent_work_id": "work-thoughts-275",
+        "_source_dispatch_id": "05f14603-af65-457f-bb46-1b5d6f675ffc",
+        "_source_transition_id": "ideafy",
+        "_work_name": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+        "_work_type": "idea"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "batch-audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z-audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
       "workTypeName": "idea"
     },
     {
@@ -1856,79 +1913,20 @@
       "workTypeName": "idea"
     },
     {
-      "chainingTraceDepth": 34,
+      "chainingTraceDepth": 21,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "name": "audio-runtime-c119-retire-cli-session-failure-projection",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
       "previousChainingTraceIds": [
         "trace-admit-audio-runtime-audio-runtime-v1"
       ],
-      "relations": [
-        {
-          "sourceWorkName": "audio-runtime-c119-retire-cli-session-failure-projection",
-          "targetWorkId": "work-thoughts-275",
-          "targetWorkName": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
-          "type": "PARENT_CHILD"
-        }
-      ],
-      "requestId": "audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z",
+      "requestId": "audio-runtime-c109-browser-retirement-integration-rehearsal-20260912T1924Z",
       "state": {
         "name": "init",
         "type": "PROCESSING"
-      },
-      "tags": {
-        "_parent_request_id": "audio-runtime-c110-c112-residual-retirement-20260912T2010Z",
-        "_parent_work_id": "work-thoughts-275",
-        "_source_dispatch_id": "05f14603-af65-457f-bb46-1b5d6f675ffc",
-        "_source_transition_id": "ideafy",
-        "_work_name": "audio-runtime-c119-retire-cli-session-failure-projection",
-        "_work_type": "idea"
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
-      "workId": "batch-audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z-audio-runtime-c119-retire-cli-session-failure-projection",
-      "workTypeName": "idea"
-    },
-    {
-      "chainingTraceDepth": 6,
-      "currentChainingTraceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
-      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-      "previousChainingTraceIds": [
-        "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309"
-      ],
-      "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
-      "workId": "work-review-278",
+      "workId": "work-review-284",
       "workTypeName": "review"
-    },
-    {
-      "chainingTraceDepth": 5,
-      "content": [
-        {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
-          "type": "text"
-        }
-      ],
-      "currentChainingTraceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
-      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-      "previousChainingTraceIds": [
-        "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309"
-      ],
-      "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
-      "state": {
-        "name": "in-review",
-        "type": "PROCESSING"
-      },
-      "tags": {
-        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
-        "_rejection_feedback": "PR #470 head e78f9644 has all 9 required checks green, but an independent public reducer probe accepted Candidate/Admitted=true for duplicate response end after untagged content; events.go:55-58 clears messageEndSeen without ownership validation. Fix response ownership/generation and add this regression while retaining prior ID, purpose, reset, continuation, disposition, retry, audio-drain, cleanup, and shipped-tool assertions. Evidence is also stale: all ledgers/replay artifacts record e3212e4, not e78f9644. Executor must fix, rebuild yui, run all three run.py cases and verify.py response-matrix, retirement-and-scope, and both mutation modes with --expect-failure, refresh every ledger/artifact digest to final_head=candidate=e78f9644 and origin_main=3963bc3, commit/push, submit changed-head CI, and request fresh review.",
-        "continue_feedback": "HEAD 1bcccd46 is clean, pushed on PR #470, admitted, and contains required ancestry through origin/main 84c91ee1. Focused normal/race, external consumer, mutation oracles, lint, staticcheck, and diff checks pass. Remaining exact failures are the unregistered sessiondiagnostics Wire path and 12 stale C79 baseline entries. C57 PR449 and C61 PR452 remain open, so their shared leases are unreleased. After release, make only those registry/baseline edits, rerun gates, commit/push PR #470, and submit the same task to script CI without polling."
-      },
-      "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
-      "workId": "work-task-114",
-      "workTypeName": "task"
     },
     {
       "chainingTraceDepth": 9,
@@ -1971,7 +1969,7 @@
       ],
       "requestId": "audio-runtime-c109-browser-retirement-integration-rehearsal-20260912T1924Z",
       "state": {
-        "name": "ci-pending",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "tags": {
@@ -2003,7 +2001,7 @@
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"branch\": \"codex/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
         "_rejection_feedback": "CI checks failed for PR #497 at head 87d0bb9516c24ac59fca920f69636deb8efaea25: required checks failed on current head 87d0bb9516c24ac59fca920f69636deb8efaea25: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34726522404/job/103641480861). Return this task to the executor with the listed failures.",
-        "continue_feedback": "Revision a9479a1 is pushed to open PR #497; worktree clean and admission/branch checks pass. Focused C110 tests, verifiers, and accumulated regressions pass. Wire and architecture gates reproduce six C79-leased failures. After C79 guarded release, fetch main, apply only demonstrated shared repairs, rerun bounded gates, push the same PR, and return ACCEPTED for script CI."
+        "continue_feedback": "Revision f2c376dac788b01f295966d46ee9db2bb4deffa2 is pushed to PR #497. Admission, branch/ancestry, and clean-worktree checks pass; focused tests, verifier modes, GOWORK=off consumer, bounded YUI probe, and COUNT=3 accumulated regressions pass. Wire/architecture gates remain blocked by six C79-leased mismatches. C79 work-task-114 is still in review. After its guarded release, reconcile shared registry/baseline files, rerun gates, refresh evidence, push, and return ACCEPTED for script CI."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-232",
@@ -2029,7 +2027,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c115-centralize-filesystem-audio-codec\", \"branch\": \"codex/audio-runtime-c115-centralize-filesystem-audio-codec\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
-        "continue_feedback": "Checkpoint bc585f78 pushed to PR #501; implementation f5b6b2a0 removes the filesystem peer-Wire seam and injects public audiocodec.Service through composition. Focused/race tests 379/379, CLI tests 1869/1869, standalone consumer, regressions, fmt, vet, Staticcheck, lint, and coverage registration pass. Architecture reports only C79-owned audiocodec Wire registration. Next: after C79 guarded merge and lease release, fetch origin/main, apply only released registry/baseline edits, rerun gates, push the same PR, and submit to script CI without polling."
+        "continue_feedback": "C115 remains admitted at clean pushed HEAD 7c4fbd5 (PR #501). Focused normal/race, GOWORK=off consumer, and accumulated regressions pass; ancestry and 261→228-line retirement are verified. The only remaining failures are Wire/architecture registration of go-agent-runtime/services/audiocodec/wire/wire_gen.go. C79 still owns the shared registry/baseline and is in changed-head CI. After its reviewed guarded merge and explicit lease release, integrate current origin/main, apply only demonstrated C115 registry/baseline edits, rerun scoped gates, push PR #501, and submit changed-head script CI without polling."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-262",
@@ -2081,7 +2079,7 @@
       },
       "tags": {
         "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication\", \"branch\": \"codex/audio-runtime-c117-repair-c113-public-trace-publication\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
-        "continue_feedback": "C117 checkpoint pushed as PR #503 at 7f116013. C113 reproduction passes exact hashes and confirms exit 0 with no timeline; C108 provenance, ownership, negative controls and checksums pass. Host tests compile but intentionally fail closed pending C112. Next: after C112 PR #498 (rejected head 8b298333) receives green SCRIPT CI, independent approval and guarded merge, fetch/integrate accepted main, compose public sessiontrace, rerun focused checks, and update PR #503."
+        "continue_feedback": "Pushed PR #503 at aedfb8fcfad94bb8725ee029f2f43b55fe75615e. Admission, branch/worktree, C108 provenance/ownership/negative-controls, full SHA256 manifest, C117 scope/checksum gates, and normal/coverage/race regression matrix pass. Trace-required tests remain intentionally red pre-C112. C112 is still blocked by failed static Wire/baseline checks and hermetic dynamic-tool/agentruntime tests. Next: after C112 green Script CI, independent review, and guarded merge, integrate accepted main, implement public sessiontrace, rerun focused gates, and resubmit the same PR."
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-268",
@@ -2111,6 +2109,47 @@
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-277",
       "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 36,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c119-retire-cli-session-failure-projection\", \"branch\": \"codex/audio-runtime-c119-retire-cli-session-failure-projection\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c119-retire-cli-session-failure-projection",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c119-retire-cli-session-failure-projection\", \"branch\": \"codex/audio-runtime-c119-retire-cli-session-failure-projection\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-task-281",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 6,
+      "currentChainingTraceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309"
+      ],
+      "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "workId": "work-thoughts-285",
+      "workTypeName": "thoughts"
     },
     {
       "chainingTraceDepth": 22,
@@ -2848,6 +2887,25 @@
       "workTypeName": "review"
     },
     {
+      "chainingTraceDepth": 6,
+      "currentChainingTraceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309"
+      ],
+      "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_rejection_feedback": "Independent GOWORK=off probes show malformed tool events are accepted: orphan EventToolResultAccepted mutates continuation state, and EventToolCall with foreign ResponseID is Accepted=true (continuation.go:10-44). Fix ownership/conflicting-ID validation while preserving valid early results within an active lifecycle; make the CLI adapter retain unresolved state on rejection and add regressions. Evidence is stale: ledgers and replay artifacts cite 7dc1429, not reviewed HEAD a9099ec. Rebuild yui, rerun all verify.py modes and three run.py cases, refresh exact provenance, commit/push, and submit changed-head CI. Preserve prior cumulative regressions; do not merge."
+      },
+      "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "workId": "work-review-278",
+      "workTypeName": "review"
+    },
+    {
       "chainingTraceDepth": 9,
       "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "name": "audio-runtime-c62-validation-contract-anchor-repair",
@@ -3033,6 +3091,37 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-task-109",
+      "workTypeName": "task"
+    },
+    {
+      "chainingTraceDepth": 5,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "failureDetail": {
+        "message": "runner returned failed outcome",
+        "reason": "unknown"
+      },
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "previousChainingTraceIds": [
+        "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309"
+      ],
+      "requestId": "audio-runtime-c79-c80-retirement-capacity-20260912T0430Z",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+        "_rejection_feedback": "Independent GOWORK=off probes show malformed tool events are accepted: orphan EventToolResultAccepted mutates continuation state, and EventToolCall with foreign ResponseID is Accepted=true (continuation.go:10-44). Fix ownership/conflicting-ID validation while preserving valid early results within an active lifecycle; make the CLI adapter retain unresolved state on rejection and add regressions. Evidence is stale: ledgers and replay artifacts cite 7dc1429, not reviewed HEAD a9099ec. Rebuild yui, rerun all verify.py modes and three run.py cases, refresh exact provenance, commit/push, and submit changed-head CI. Preserve prior cumulative regressions; do not merge.",
+        "continue_feedback": "HEAD 1bcccd46 is clean, pushed on PR #470, admitted, and contains required ancestry through origin/main 84c91ee1. Focused normal/race, external consumer, mutation oracles, lint, staticcheck, and diff checks pass. Remaining exact failures are the unregistered sessiondiagnostics Wire path and 12 stale C79 baseline entries. C57 PR449 and C61 PR452 remain open, so their shared leases are unreleased. After release, make only those registry/baseline edits, rerun gates, commit/push PR #470, and submit the same task to script CI without polling."
+      },
+      "traceId": "trace-request-time-3fa4ed624778997fa5b03a4ccbf43309",
+      "workId": "work-task-114",
       "workTypeName": "task"
     },
     {
@@ -5698,6 +5787,56 @@
       },
       "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
       "workId": "work-plan-276",
+      "workTypeName": "plan"
+    },
+    {
+      "chainingTraceDepth": 35,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c119-retire-cli-session-failure-projection\", \"branch\": \"codex/audio-runtime-c119-retire-cli-session-failure-projection\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c119-retire-cli-session-failure-projection",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c119-retire-cli-session-failure-projection\", \"branch\": \"codex/audio-runtime-c119-retire-cli-session-failure-projection\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-plan-280",
+      "workTypeName": "plan"
+    },
+    {
+      "chainingTraceDepth": 35,
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"branch\": \"codex/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "currentChainingTraceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "name": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+      "previousChainingTraceIds": [
+        "trace-admit-audio-runtime-audio-runtime-v1"
+      ],
+      "requestId": "audio-runtime-c119-session-failure-projection-retirement-20260913T0237Z",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "tags": {
+        "_last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"branch\": \"codex/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}"
+      },
+      "traceId": "trace-admit-audio-runtime-audio-runtime-v1",
+      "workId": "work-plan-282",
       "workTypeName": "plan"
     },
     {
