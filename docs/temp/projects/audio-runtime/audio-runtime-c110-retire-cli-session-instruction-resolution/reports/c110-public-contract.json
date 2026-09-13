@@ -60,7 +60,7 @@
     },
     "ancestry": {
       "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "head": "4c040de9cfb69ee3688bca177d8cea2667967434",
+      "head": "d079766822c701d5d58152fe4d45eda6e50105ea",
       "origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "required_ancestors": {
         "accepted_main": {
@@ -183,7 +183,7 @@
     },
     "source_hashes": {
       "agent-cli/internal/services/internal/agentruntime/session_instructions.go": "d407d80e8750359a5fb8d0e352b4ac371c0481e92f81ca9b78b34f5e197931ac",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py": "aefb7439a2cfc3330daead1771abe34f9d510b6272578885f9263cbc61daa32f",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py": "4b6d9fb9abccf3fb00fc9d6250742c0f423040b493b4c0f6aa8ff780daaa0fb4",
       "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py": "49ffc6c4ffe37d1a53dccfe5d58435d9985b82b8a52baf1a90a2c0c122f24fe5",
       "go-agent-runtime/services/session/wire/providers.go": "12bc273963372c52e13aa40edb8e7452f958b31adba21b021392a856d4739a6f",
       "go-agent-runtime/services/session/wire/wire_gen.go": "68c9ef7000bf2542e9676c2cd5674ffb946108221d095f39f058856dee7e812b",
