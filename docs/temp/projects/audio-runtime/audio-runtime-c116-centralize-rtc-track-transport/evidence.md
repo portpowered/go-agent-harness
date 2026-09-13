@@ -4,8 +4,11 @@ This evidence belongs to the admitted `audio-runtime` project and task
 `audio-runtime-c116-centralize-rtc-track-transport`. It describes the source
 tree tested at implementation checkpoint
 `82eed81dcb022b6ace632423a44f52f83d4b016f` and the exact reviewed/pushed
-candidate head `418855f756c13f96aadafa6a7932ed6a80ecc9ad`. The reviewed head is
-a documentation-only descendant of the implementation checkpoint. The
+candidate head `418855f756c13f96aadafa6a7932ed6a80ecc9ad`. The current
+same-task rejection-characterization handoff is documentation-only commit
+`d0391421d7f7d1b6e75c13a26a14a0ec3f9c6ba4`, a descendant of that reviewed
+head. The reviewed head and the handoff descendant are documentation-only
+descendants of the implementation checkpoint. The
 candidate includes the adapter lint/coverage repair
 `3b40b8b8dd20a7f1816165c65e95aaa7967e3e2d`, the split coverage-test
 checkpoint `7d0a4e80a8a5c97bc9ab13c715f437aa9fb44aba`, and the clean
@@ -207,9 +210,10 @@ C116; physical Windows hardware and acoustic proof are also out of scope.
   `10` runs at `-cpu=1,2,4`, so no C116 causal regression was reproduced.
 - The out-of-scope timing failure is preserved as CI evidence. No
   go-agent-loop source, timeout, assertion, oracle, device path or C116
-  acceptance criterion was changed to mask it. The next handoff is a changed
-  C116 evidence descendant with the same task ownership; SCRIPT CI must
-  evaluate that exact head without agent polling.
+  acceptance criterion was changed to mask it. The next handoff is changed
+  C116 evidence descendant `d0391421d7f7d1b6e75c13a26a14a0ec3f9c6ba4` with
+  the same task ownership; SCRIPT CI must evaluate that exact head without
+  agent polling.
 - After the rejection, C116-owned controls were rerun on the unchanged
   implementation: `make test-rtc-race` and `make test-regressions` passed;
   verifier inbound/outbound causal negatives and final scope/provenance all
@@ -223,9 +227,9 @@ they do not certify the changed handoff descendant. The exact reviewed head
 with all nine required checks green, including the current `origin/main`
 ancestry recorded above. The prior provider-burst residual remains excluded.
 
-The next executor action is to commit and push this evidence-only descendant,
-update PR #500 with its exact head and this reviewed-head/run binding, and
-submit the same task to script CI. The executor must not poll CI. Independent
-review, guarded merge, and the immutable engineering vertical probe remain
-open; any exact-head rejection that touches C116 returns to this task for
-repair and resubmission.
+The next executor action is to push handoff head
+`d0391421d7f7d1b6e75c13a26a14a0ec3f9c6ba4`, update PR #500 with its exact head
+and this reviewed-head/run binding, and submit the same task to script CI. The
+executor must not poll CI. Independent review, guarded merge, and the
+immutable engineering vertical probe remain open; any exact-head rejection
+that touches C116 returns to this task for repair and resubmission.
