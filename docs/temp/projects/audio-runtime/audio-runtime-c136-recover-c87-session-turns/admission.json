@@ -1,0 +1,31 @@
+{
+  "schema": "audio-runtime.c136.admission/v1",
+  "project": "audio-runtime",
+  "contract_revision": "audio-runtime-v1",
+  "task": "audio-runtime-c136-recover-c87-session-turns",
+  "branch": "codex/audio-runtime-c136-recover-c87-session-turns",
+  "status": "admitted",
+  "candidate_base": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+  "planning_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+  "startup_integration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "preserved_c87_head": "28b5a9b18f67a4343ef9e12141ad5e5fc84ef18f",
+  "previous_review_findings": [],
+  "active_dependency_owners": [
+    "audio-runtime-c110-retire-cli-session-instruction-resolution",
+    "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+    "audio-runtime-c112-retire-cli-session-trace-evidence",
+    "audio-runtime-c119-retire-cli-session-failure-projection",
+    "audio-runtime-c127-repair-current-main-terminal-drain-regression"
+  ],
+  "shared_changes_deferred": [
+    "scripts/wire-packages.txt",
+    "docs/architecture/architecture-policy.json",
+    "docs/architecture/architecture-size-baseline.json"
+  ],
+  "ancestry_verified": [
+    "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "origin/main"
+  ]
+}
+
