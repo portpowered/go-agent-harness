@@ -44,6 +44,9 @@ ALLOWED_EXACT = {
     "go-agent-runtime/services/session/wire/providers.go",
     "go-agent-runtime/services/session/wire/wire_gen.go",
     "agent-cli/internal/services/internal/agentruntime/session_instructions_test.go",
+    "agent-cli/internal/transport/cli/internal/livehost/request.go",
+    "agent-cli/internal/transport/cli/internal/livehost/request_test.go",
+    "agent-cli/internal/transport/cli/session_observability.go",
 }
 ALLOWED_PREFIXES = (
     "go-agent-runtime/services/sessioninstructions/",
@@ -60,6 +63,11 @@ CALLER_PATHS = (
     "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
     "agent-cli/internal/services/internal/agentruntime/session_image.go",
     "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+)
+INSTRUCTION_CONSTRUCTION_CALLERS = (
+    "agent-cli/internal/transport/cli/internal/livehost/request.go",
+    "agent-cli/internal/transport/cli/internal/livehost/request_test.go",
+    "agent-cli/internal/transport/cli/session_observability.go",
 )
 class VerificationError(Exception):
     pass
@@ -361,32 +369,36 @@ def verify_retirement() -> dict[str, Any]:
     compatibility = REPO_ROOT / "go-agent-runtime/services/session/wire/providers.go"
     compatibility_text = compatibility.read_text(encoding="utf-8")
     require(
-        "func NewInstructionService()" in compatibility_text,
-        "session Wire compatibility constructor is missing",
-    )
-    require(
-        "sessioninstructionswire.NewInstructionService()" in compatibility_text,
-        "session Wire compatibility constructor does not delegate to the dedicated instruction Wire",
-    )
-    require(
         "session/internal/instructions" not in compatibility_text,
-        "session Wire compatibility constructor still imports the duplicate instruction implementation",
+        "session Wire still imports the duplicate instruction implementation",
     )
     require(
         "sessioninstructions.Factory{}.Build()" not in compatibility_text,
-        "session Wire compatibility constructor retains the removed public factory bypass",
+        "session Wire retains the removed public factory bypass",
     )
+    construction_callers: list[dict[str, Any]] = []
+    for relative in INSTRUCTION_CONSTRUCTION_CALLERS:
+        caller = REPO_ROOT / relative
+        require(caller.is_file(), f"instruction construction caller source missing: {relative}")
+        caller_text = caller.read_text(encoding="utf-8")
+        require(
+            "sessioninstructionswire.NewInstructionService()" in caller_text,
+            f"instruction construction caller does not use dedicated Wire: {relative}",
+        )
+        construction_callers.append({"path": relative, "sha256": sha256_file(caller)})
 
     evidence_paths = [
         str(LEGACY_REL),
         "go-agent-runtime/services/sessioninstructions/contract.go",
         "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
+        "go-agent-runtime/services/sessioninstructions/internal/service/policy.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go",
         "go-agent-runtime/services/session/instructions.go",
         "go-agent-runtime/services/session/wire/providers.go",
         "go-agent-runtime/services/session/wire/wire_gen.go",
         "agent-cli/internal/services/internal/agentruntime/session_instructions_test.go",
+        *INSTRUCTION_CONSTRUCTION_CALLERS,
         str(ROOT.relative_to(REPO_ROOT) / "verify.py"),
         str(ROOT.relative_to(REPO_ROOT) / "run.py"),
     ]
@@ -410,10 +422,11 @@ def verify_retirement() -> dict[str, Any]:
             "allowed_prefixes": list(ALLOWED_PREFIXES),
             "unexpected": unexpected,
             "caller_evidence": callers,
+            "instruction_construction_callers": construction_callers,
             "compatibility_api": {
                 "path": str(compatibility.relative_to(REPO_ROOT)),
-                "constructor": "NewInstructionService",
-                "reason": "compatibility constructor delegates to the dedicated instruction Wire",
+                "constructor": "removed",
+                "reason": "session composition no longer imports a peer service Wire; host composition uses the dedicated instruction Wire",
                 "delegates_to": "sessioninstructionswire.NewInstructionService",
             },
         },

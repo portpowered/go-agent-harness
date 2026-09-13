@@ -13,13 +13,12 @@ The canonical implementation is stateless and receives all host I/O through an
 injected loader. Resolution rejects malformed or oversized text, preserves
 causes with phase-specific `ResolutionError` values, checks cancellation around
 loader calls, and clones capability snapshots before policy composition. The
-implementation type is unexported in the `sessioninstructions` service
-package; the private `internal/service` provider and dedicated instruction Wire
-own the normal construction path. The public stateless Factory is only the
-source-compatible bridge used by `session/wire`, so that compatibility path
-does not import a peer Wire or retain a second policy owner. The external
-consumer constructs two independent public services and verifies that
-their loader state does not cross-contaminate.
+public `sessioninstructions` package is contract-only; its unexported
+implementation lives under `internal/service`, and the dedicated instruction
+Wire owns construction. The session service Wire does not import a peer Wire;
+the existing CLI construction callers use the dedicated instruction Wire
+directly. The external consumer constructs two independent public services and
+verifies that their loader state does not cross-contaminate.
 
 The committed verification command is:
 
