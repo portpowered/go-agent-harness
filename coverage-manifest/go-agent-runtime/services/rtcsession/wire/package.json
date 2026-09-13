@@ -1,0 +1,4 @@
+{
+  "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtcsession/wire",
+  "minimum": 95.00
+}

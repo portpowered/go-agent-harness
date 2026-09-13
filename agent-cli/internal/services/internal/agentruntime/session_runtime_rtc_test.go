@@ -16,6 +16,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtcsession"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
@@ -48,7 +49,6 @@ func TestSessionRTCRuntimeObservabilityCoversSuccessFailureAndClose(t *testing.T
 	if err := runtime.Close(); err != nil {
 		t.Fatal(err)
 	}
-
 	failing := components
 	failing.ResolveSignaling = func(context.Context, string) (rtc.Signaling, error) { return nil, errors.New("offline") }
 	runtime, err = NewSessionRTCRuntimeFactoryWithObservability(failing, sampler, logger)(SessionRuntimeSelection{Transport: SessionTransportWebRTC})
@@ -58,7 +58,6 @@ func TestSessionRTCRuntimeObservabilityCoversSuccessFailureAndClose(t *testing.T
 	if _, err := runtime.Start(context.Background()); err == nil {
 		t.Fatal("failing runtime start returned nil error")
 	}
-
 	var events []string
 	for _, sample := range samples {
 		if sample.Name == "session.rtc.lifecycle" {
@@ -72,13 +71,11 @@ func TestSessionRTCRuntimeObservabilityCoversSuccessFailureAndClose(t *testing.T
 		t.Fatalf("lifecycle logs = %+v", logs)
 	}
 }
-
 func TestSessionRTCRuntime_ComposesSelectedDependenciesAndClosesInReverseOrder(t *testing.T) {
 	const (
 		signalingEndpoint = "loopback://signaling/sentinel"
 		mediaSource       = "fixture://media/sentinel"
 	)
-
 	var (
 		events          []string
 		gotSignalingURL string
@@ -86,7 +83,6 @@ func TestSessionRTCRuntime_ComposesSelectedDependenciesAndClosesInReverseOrder(t
 		gotAttached     sharedaudio.InboundMedia
 	)
 	appendEvent := func(event string) { events = append(events, event) }
-
 	signaling := &testRTCSignaling{close: func() error {
 		appendEvent("close signaling")
 		return nil
@@ -107,7 +103,6 @@ func TestSessionRTCRuntime_ComposesSelectedDependenciesAndClosesInReverseOrder(t
 			return nil
 		},
 	}
-
 	factory := NewSessionRTCRuntimeFactory(SessionRTCComponents{
 		ResolveSignaling: func(_ context.Context, endpoint string) (rtc.Signaling, error) {
 			gotSignalingURL = endpoint
@@ -127,7 +122,6 @@ func TestSessionRTCRuntime_ComposesSelectedDependenciesAndClosesInReverseOrder(t
 			return media, nil
 		},
 	})
-
 	selection := SessionRuntimeSelection{
 		Transport:         SessionTransportWebRTC,
 		SignalingEndpoint: signalingEndpoint,
@@ -140,7 +134,6 @@ func TestSessionRTCRuntime_ComposesSelectedDependenciesAndClosesInReverseOrder(t
 	if len(events) != 0 {
 		t.Fatalf("runtime construction performed setup: %v", events)
 	}
-
 	data, err := runtime.Start(context.Background())
 	if err != nil {
 		t.Fatalf("start RTC runtime: %v", err)
@@ -157,7 +150,6 @@ func TestSessionRTCRuntime_ComposesSelectedDependenciesAndClosesInReverseOrder(t
 	if want := []string{"resolve signaling", "create data plane", "open media source", "attach media"}; !reflect.DeepEqual(events, want) {
 		t.Fatalf("startup order = %v, want %v", events, want)
 	}
-
 	if err := runtime.Close(); err != nil {
 		t.Fatalf("close RTC runtime: %v", err)
 	}
@@ -172,7 +164,6 @@ func TestSessionRTCRuntime_ComposesSelectedDependenciesAndClosesInReverseOrder(t
 		t.Fatalf("lifecycle events = %v, want %v", events, want)
 	}
 }
-
 func TestSessionRTCRuntime_CleansPartialStartupAndPreservesCause(t *testing.T) {
 	setupErr := errors.New("fixture media source unavailable")
 	var events []string
@@ -185,7 +176,6 @@ func TestSessionRTCRuntime_CleansPartialStartupAndPreservesCause(t *testing.T) {
 		appendEvent("close signaling")
 		return nil
 	}}
-
 	runtimeFactory := NewSessionRTCRuntimeFactory(SessionRTCComponents{
 		ResolveSignaling: func(context.Context, string) (rtc.Signaling, error) {
 			appendEvent("resolve signaling")
@@ -208,7 +198,6 @@ func TestSessionRTCRuntime_CleansPartialStartupAndPreservesCause(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct RTC runtime: %v", err)
 	}
-
 	if _, err := runtime.Start(context.Background()); err == nil {
 		t.Fatal("start RTC runtime unexpectedly succeeded")
 	} else {
@@ -230,7 +219,6 @@ func TestSessionRTCRuntime_CleansPartialStartupAndPreservesCause(t *testing.T) {
 		t.Fatalf("partial lifecycle events = %v, want %v", events, want)
 	}
 }
-
 func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) {
 	const (
 		signaling = " loopback://plan/sentinel "
@@ -265,7 +253,7 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 	if plan.transport != SessionTransportWebRTC || plan.signalingEndpoint != signaling || plan.mediaSource != media {
 		t.Fatalf("plan selection fields = (%q, %q, %q), want exact WebRTC values", plan.transport, plan.signalingEndpoint, plan.mediaSource)
 	}
-	if _, ok := plan.inferencer.(*sessionRTCRuntimeInferencer); !ok {
+	if _, ok := plan.inferencer.(rtcsession.Inferencer); !ok {
 		t.Fatalf("plan inferencer = %T, want RTC lifecycle wrapper", plan.inferencer)
 	}
 	if runtime.closeCount != 0 {
@@ -275,7 +263,6 @@ func TestPlanSessionRuntime_WebRTCDispatchesThroughRuntimeFactory(t *testing.T) 
 		t.Fatalf("cleanup test runtime: %v", err)
 	}
 }
-
 func TestSessionRTCRuntimeInferencerStartsBeforeProviderAndUsesRTCDataPlane(t *testing.T) {
 	var order []string
 	dataPlane := &testRTCDataPlane{
@@ -293,13 +280,14 @@ func TestSessionRTCRuntimeInferencerStartsBeforeProviderAndUsesRTCDataPlane(t *t
 		order = append(order, "connect provider")
 		return newScriptedSession(), nil
 	}}
-	wrapped := &sessionRTCRuntimeInferencer{inner: inner, runtime: runtime}
+	decorator := sessionRTCRuntimeDecoratorFor(runtime)
+	wrapped := decorator.wrapInferencer(inner)
 
 	session, err := wrapped.ConnectSession(context.Background())
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	dialer := &sessionRTCLazyDialer{runtime: runtime}
+	dialer := decorator.lazyDialer()
 	if _, err := dialer.Dial("provider-endpoint", nil); err != nil {
 		t.Fatalf("RTC data dial: %v", err)
 	}
@@ -310,7 +298,6 @@ func TestSessionRTCRuntimeInferencerStartsBeforeProviderAndUsesRTCDataPlane(t *t
 		t.Fatalf("provider/runtime order = %v, want %v", order, want)
 	}
 }
-
 func TestSessionRTCRuntimeSessionForwardsProviderCapabilities(t *testing.T) {
 	wantSendErr := errors.New("provider send rejected")
 	media := RTCMediaEndpoints{
@@ -324,7 +311,20 @@ func TestSessionRTCRuntimeSessionForwardsProviderCapabilities(t *testing.T) {
 		inputDrops:      3,
 		outputDrops:     5,
 	}
-	wrapper := &sessionRTCRuntimeSession{Session: provider}
+	runtime := &testSessionRTCRuntime{}
+	inner := &testSessionInferencer{connect: func() (messages.Session, error) {
+		return provider, nil
+	}}
+	wrapperInferencer := sessionRTCRuntimeDecoratorFor(runtime).wrapInferencer(inner)
+	wrapper, err := wrapperInferencer.ConnectSession(context.Background())
+	if err != nil {
+		t.Fatalf("connect wrapped capability session: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := wrapper.Close(); err != nil {
+			t.Errorf("close wrapped capability session: %v", err)
+		}
+	})
 
 	gotMedia, ok := rtcMediaFromSession(wrapper)
 	if !ok {
