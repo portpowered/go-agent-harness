@@ -8,6 +8,7 @@
   "branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
   "implementationRevision": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94",
   "testedHead": "8a15d4f9fb27769bd84ade6217d8f18673bfb486",
+  "evidenceCheckpoint": "702d452410711a368287bf8a85e4138fe3bbd8ab",
   "admission": {
     "verifyWork": "admitted",
     "secondProject": false,
@@ -309,7 +310,7 @@
       "coverage: agent-cli/internal/services/agentsession 61.80% versus 80.00% floor"
     ],
     "postRejectionLocalRepair": "After the no-reset b8650efd current-main merge, C111 contract, Wire, four named regressions in normal and race lanes, external consumer, both owned verifiers, and quality gates pass; the coverage failure remains outside C111 ownership",
-    "resubmissionHead": "8a15d4f9fb27769bd84ade6217d8f18673bfb486",
+    "resubmissionHead": "702d452410711a368287bf8a85e4138fe3bbd8ab",
     "statusAtInspection": "completed_failure",
     "observedCompletedRun": true,
     "claimedGreen": false
@@ -367,11 +368,11 @@
       "processGroupsReaped": true,
       "outputCapExceeded": false
     },
-    "scriptCI": "latest rejection run 34770121035 was inspected at candidate head 8a15d4f9; the implementation revision 5d5bfe7 integrates b8650efd plus the released registry entry, and this changed evidence checkpoint is ready for script CI submission with no CI-green claim"
+    "scriptCI": "latest rejection run 34770121035 was inspected at candidate head 8a15d4f9; evidence checkpoint 702d4524 is pushed, the implementation revision 5d5bfe7 integrates b8650efd plus the released registry entry, and the changed same-task head is ready for script CI submission with no CI-green claim"
   },
   "handoff": {
     "ci": "run 34770121035 was inspected at candidate head 8a15d4f9: job 103758059396 CI (coverage) failed unchanged agent-cli/internal/services/agentsession at 61.80% versus its 80.00% floor after all coverage profiles completed; the complete 481-line log SHA-256 a9fecbc94ce73377936a66981f66a6da054f71d4539c2dd3a9f2bff98abb8316 and ownership analysis are in ci-rejection-34770121035.json, and no C111 repair is demonstrated",
     "review": "prior independent findings and the exact image-continuation rejection are repaired at e618a6a33/4921c3751f0; no self-review performed",
-    "nextAction": "Commit and push this exact rejection evidence checkpoint, update PR #496, and return ACCEPTED to the script-owned CI gate without polling; on any C111-specific rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge. The unchanged agentsession floor and current-main causal coverage-registration prerequisite remain outside C111 ownership."
+    "nextAction": "Evidence checkpoint 702d4524 is committed and pushed; update PR #496 and return ACCEPTED to the script-owned CI gate without polling. On any C111-specific rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge. The unchanged agentsession floor and current-main causal coverage-registration prerequisite remain outside C111 ownership."
   }
 }
