@@ -46,7 +46,6 @@
     490,
     491,
     492,
-    493,
     494,
     495,
     496,
@@ -100,7 +99,6 @@
     490,
     491,
     492,
-    493,
     494,
     495,
     496,
@@ -122,7 +120,7 @@
       "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
     ]
   ],
-  "observed_at": "2026-09-12T23:54:53Z",
+  "observed_at": "2026-09-13T00:49:40Z",
   "prs": [
     {
       "accepted_main_changed_production_paths": [],
@@ -2127,7 +2125,7 @@
         "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
         "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
       ],
-      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "base_branch": "main",
       "draft": false,
       "files": [
@@ -2175,7 +2173,7 @@
         "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
         "scripts/wire-packages.txt"
       ],
-      "head": "b2e3648d608919033649f54230db86efd2b7a121",
+      "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
       "head_branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
       "is_retirement_checkpoint": true,
       "number": 470,
@@ -2224,7 +2222,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c79-retire-cli-response-lifecycle",
       "task_state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-114",
@@ -4020,108 +4018,7 @@
     },
     {
       "accepted_main_changed_production_paths": [],
-      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "base_branch": "main",
-      "draft": false,
-      "files": [
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/README.md",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/SHA256SUMS",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/analysis.md",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/call-paths.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/classifications.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/determinism.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/inventory-validation.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/inventory.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analyze.py",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates-validation.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/canonical-board.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/ci-rejection-34724763555.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/ownership.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/proof-levels.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/release.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/run_public_checks.py",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/agentruntime-causal.stderr",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/agentruntime-causal.stdout",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/go-audio-boundary.stderr",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/go-audio-boundary.stdout",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/go-device-gateway-boundary.stderr",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/go-device-gateway-boundary.stdout",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/report.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/rtc-transport-causal.stderr",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/rtc-transport-causal.stdout",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/negative-controls/report.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/evidence/runs/exec-invocations-v4.log",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/malformed.session.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/yui-malformed-truncated.stderr",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/yui-malformed-truncated.stdout",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/audio.wav",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/evidence/runs/exec-invocations-v4.log",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/agent.transcript.jsonl",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/audio-trace/speaker-enqueued.wav",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/audio-trace/timeline.jsonl",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/audio/out-000.pcm",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/client.transcript.jsonl",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/manifest.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/provider.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/session-log.jsonl",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/yui-replay.stderr",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/yui-replay.stdout",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/report.json",
-        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py"
-      ],
-      "head": "3124ffdbc0a6c6db82632cbba60c10fd6b106b39",
-      "head_branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
-      "is_retirement_checkpoint": true,
-      "number": 493,
-      "observation_commands": [
-        [
-          "gh",
-          "pr",
-          "list",
-          "--repo",
-          "portpowered/go-agent-harness",
-          "--state",
-          "open",
-          "--limit",
-          "500",
-          "--json",
-          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
-        ],
-        [
-          "gh",
-          "pr",
-          "view",
-          "493",
-          "--repo",
-          "portpowered/go-agent-harness",
-          "--json",
-          "files"
-        ]
-      ],
-      "retirement_classification": {
-        "accepted_main_target_paths": [],
-        "title_branch_keywords": [
-          "audio",
-          "runtime"
-        ]
-      },
-      "state": "OPEN",
-      "task_name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
-      "task_state": {
-        "name": "ci-pending",
-        "type": "PROCESSING"
-      },
-      "task_work_id": "work-task-222",
-      "title": "docs(factory): characterize audio/device boundary gaps (C108)",
-      "url": "https://github.com/portpowered/go-agent-harness/pull/493"
-    },
-    {
-      "accepted_main_changed_production_paths": [],
-      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "base_branch": "main",
       "draft": false,
       "files": [
@@ -4187,7 +4084,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verification-summary.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py"
       ],
-      "head": "f2df9cc7bc98773d8e6bcef2b712d150806a0086",
+      "head": "bb494b4775038a21df3e9d76de682c0d1fb30939",
       "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "is_retirement_checkpoint": true,
       "number": 494,
@@ -4235,7 +4132,7 @@
     },
     {
       "accepted_main_changed_production_paths": [],
-      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "base_branch": "main",
       "draft": false,
       "files": [
@@ -4244,6 +4141,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/revalidation-20260912.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/ci-attribution.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/ledger.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/merge-orders.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/provenance.json",
@@ -4252,6 +4150,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/control/sequence.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/browser-audio-tool.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/malformed-or-canceled.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/ci-attribution.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/ledger.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/merge-orders.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/required/provenance.json",
@@ -4261,7 +4160,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/verification.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py"
       ],
-      "head": "e3cde9327bf7f8d562bdbe7ba77aecbee77f6a76",
+      "head": "399b60809e986c6e468716b44c75bd8e636d0a66",
       "head_branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
       "is_retirement_checkpoint": true,
       "number": 495,
@@ -4301,7 +4200,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c109-characterize-browser-retirement-integration",
       "task_state": {
-        "name": "init",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-224",
@@ -4379,8 +4278,8 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
       "task_state": {
-        "name": "failed",
-        "type": "FAILED"
+        "name": "init",
+        "type": "PROCESSING"
       },
       "task_work_id": "work-task-236",
       "title": "refactor(audio-runtime): retire CLI tool continuation lifecycle",
@@ -4465,7 +4364,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
       "task_state": {
-        "name": "ci-pending",
+        "name": "init",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-232",
@@ -4547,8 +4446,8 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c112-retire-cli-session-trace-evidence",
       "task_state": {
-        "name": "init",
-        "type": "PROCESSING"
+        "name": "failed",
+        "type": "FAILED"
       },
       "task_work_id": "work-task-238",
       "title": "feat(runtime): retire CLI session trace orchestration",

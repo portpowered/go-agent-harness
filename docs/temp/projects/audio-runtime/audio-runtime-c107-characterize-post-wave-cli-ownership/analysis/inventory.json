@@ -53635,7 +53635,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -54470,7 +54470,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           },
           {
@@ -56351,9 +56351,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -56501,9 +56501,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -56644,9 +56644,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -56723,9 +56723,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -56901,9 +56901,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -58484,9 +58484,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -58698,9 +58698,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -60025,9 +60025,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -64427,7 +64427,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -64844,7 +64844,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -70794,7 +70794,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -70874,7 +70874,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -70954,7 +70954,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -71044,7 +71044,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -71170,7 +71170,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -71368,7 +71368,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -71449,7 +71449,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -71541,7 +71541,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -71633,7 +71633,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -71723,7 +71723,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -86569,7 +86569,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           },
           {
@@ -86692,7 +86692,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           },
           {
@@ -86836,7 +86836,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           },
           {
@@ -86958,7 +86958,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           },
           {
@@ -87081,7 +87081,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           },
           {
@@ -87213,7 +87213,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           },
           {
@@ -87336,7 +87336,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           },
           {
@@ -87459,7 +87459,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           },
           {
@@ -87582,7 +87582,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           },
           {
@@ -87705,7 +87705,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           },
           {
@@ -129158,9 +129158,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -129284,9 +129284,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -129410,9 +129410,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -129536,9 +129536,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -129662,9 +129662,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -129788,9 +129788,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -129914,9 +129914,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -130040,9 +130040,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -130166,9 +130166,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -130292,9 +130292,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -130418,9 +130418,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -130544,9 +130544,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -130670,9 +130670,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -130796,9 +130796,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -130922,9 +130922,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -131048,9 +131048,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -131174,9 +131174,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -131300,9 +131300,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -131426,9 +131426,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -131552,9 +131552,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -131678,9 +131678,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -131804,9 +131804,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -131930,9 +131930,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -132056,9 +132056,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -132182,9 +132182,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -132308,9 +132308,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -132434,9 +132434,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -132560,9 +132560,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -132686,9 +132686,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -132812,9 +132812,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -132938,9 +132938,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -133064,9 +133064,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -133190,9 +133190,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -133316,9 +133316,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -133442,9 +133442,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -133568,9 +133568,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -133694,9 +133694,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -133820,9 +133820,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -133946,9 +133946,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -134072,9 +134072,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -134198,9 +134198,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -134324,9 +134324,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -134450,9 +134450,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -134576,9 +134576,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -134702,9 +134702,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -134828,9 +134828,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -134954,9 +134954,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -135080,9 +135080,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -135206,9 +135206,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -135332,9 +135332,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -135458,9 +135458,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -135584,9 +135584,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -135710,9 +135710,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -135836,9 +135836,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -135996,9 +135996,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -136123,9 +136123,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -136249,9 +136249,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -136375,9 +136375,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -136502,9 +136502,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -136629,9 +136629,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -136756,9 +136756,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -136883,9 +136883,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -137081,9 +137081,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -137219,9 +137219,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -137391,9 +137391,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -137529,9 +137529,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -137768,9 +137768,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -137863,9 +137863,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -137958,9 +137958,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -138053,9 +138053,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -138148,9 +138148,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -138232,9 +138232,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -138316,9 +138316,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -138411,9 +138411,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -138518,9 +138518,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -138602,9 +138602,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -138697,9 +138697,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -138792,9 +138792,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -138899,9 +138899,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -138994,9 +138994,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -139089,9 +139089,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -140104,9 +140104,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -140197,9 +140197,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -140292,9 +140292,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -140375,9 +140375,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -140458,9 +140458,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -140541,9 +140541,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -140624,9 +140624,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -140707,9 +140707,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -140838,9 +140838,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -140933,9 +140933,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -141040,9 +141040,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -141135,9 +141135,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -141228,9 +141228,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -141312,9 +141312,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -141407,9 +141407,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -141514,9 +141514,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -141609,9 +141609,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -141704,9 +141704,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -141811,9 +141811,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -141942,9 +141942,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -142085,9 +142085,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -142204,9 +142204,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -142299,9 +142299,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -142406,9 +142406,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -142501,9 +142501,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -142608,9 +142608,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -142751,9 +142751,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -142858,9 +142858,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -142953,9 +142953,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -143048,9 +143048,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -143155,9 +143155,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -143262,9 +143262,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -143379,9 +143379,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -143510,9 +143510,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -143605,9 +143605,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -143724,9 +143724,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -143819,9 +143819,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -143914,9 +143914,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -144021,9 +144021,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -144128,9 +144128,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -144271,9 +144271,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -144390,9 +144390,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -144485,9 +144485,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -144592,9 +144592,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -144687,9 +144687,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -144792,9 +144792,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -144887,9 +144887,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -144980,9 +144980,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -145396,9 +145396,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -145482,9 +145482,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -145675,9 +145675,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -145818,9 +145818,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -145975,9 +145975,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -146106,9 +146106,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -146203,9 +146203,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -146298,9 +146298,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -146384,9 +146384,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -146481,9 +146481,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -146567,9 +146567,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -146664,9 +146664,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -146750,9 +146750,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -146836,9 +146836,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -146922,9 +146922,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -147077,9 +147077,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -147163,9 +147163,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -147260,9 +147260,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -147357,9 +147357,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -147478,9 +147478,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -147564,9 +147564,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -147661,9 +147661,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -147770,9 +147770,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -147867,9 +147867,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -147964,9 +147964,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -148061,9 +148061,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -148158,9 +148158,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -148279,9 +148279,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -148376,9 +148376,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -175624,9 +175624,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -175707,9 +175707,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -175790,9 +175790,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -175897,9 +175897,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -175981,9 +175981,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -176076,9 +176076,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -176171,9 +176171,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -176276,9 +176276,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -176360,9 +176360,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -176468,9 +176468,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -176705,9 +176705,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -176812,9 +176812,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -176919,9 +176919,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -177003,9 +177003,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -177086,9 +177086,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -177170,9 +177170,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -177265,9 +177265,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -177409,9 +177409,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -177505,9 +177505,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -177613,9 +177613,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -177697,9 +177697,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -177781,9 +177781,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -177865,9 +177865,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -177949,9 +177949,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -178054,9 +178054,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -178161,9 +178161,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -178245,9 +178245,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -178329,9 +178329,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -178424,9 +178424,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -178519,9 +178519,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -178960,9 +178960,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -179081,9 +179081,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -179202,9 +179202,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -179323,9 +179323,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -179444,9 +179444,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -179565,9 +179565,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -179687,9 +179687,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -179856,9 +179856,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -179977,9 +179977,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -180098,9 +180098,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -180219,9 +180219,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -180341,9 +180341,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -180463,9 +180463,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -180594,9 +180594,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -180761,9 +180761,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -180894,9 +180894,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -181025,9 +181025,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -181158,9 +181158,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -181303,9 +181303,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -181436,9 +181436,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -181581,9 +181581,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -181714,9 +181714,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -181857,9 +181857,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -182000,9 +182000,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -182122,9 +182122,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -182303,9 +182303,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -182448,9 +182448,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -182617,9 +182617,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -182786,9 +182786,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -182919,9 +182919,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -183064,9 +183064,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -183197,9 +183197,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -183330,9 +183330,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -183499,9 +183499,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -183621,9 +183621,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -183743,9 +183743,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -183865,9 +183865,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -183998,9 +183998,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -184131,9 +184131,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -184262,9 +184262,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -207763,9 +207763,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -207942,9 +207942,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -208037,9 +208037,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -208144,9 +208144,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -208273,9 +208273,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -208357,9 +208357,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -208441,9 +208441,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -208525,9 +208525,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -208609,9 +208609,9 @@
               "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
               "agent-cli/internal/services/internal/agentruntime/session_response_admission.go"
             ],
-            "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+            "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
             "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-            "head": "b2e3648d608919033649f54230db86efd2b7a121",
+            "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
             "observation_commands": [
               [
                 "gh",
@@ -294773,7 +294773,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -294851,7 +294851,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -294929,7 +294929,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295007,7 +295007,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295085,7 +295085,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295163,7 +295163,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295241,7 +295241,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295319,7 +295319,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295419,7 +295419,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295497,7 +295497,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295585,7 +295585,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295685,7 +295685,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295763,7 +295763,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295841,7 +295841,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -295953,7 +295953,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -296041,7 +296041,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -296129,7 +296129,7 @@
             "owner": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
             "pr_number": 496,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "preserved-unmerged-pr",
+            "state": "active-task",
             "work_id": "work-task-236"
           }
         ],
@@ -302686,7 +302686,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -302776,7 +302776,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -302866,7 +302866,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],
@@ -302954,7 +302954,7 @@
             "owner": "audio-runtime-c112-retire-cli-session-trace-evidence",
             "pr_number": 498,
             "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-            "state": "active-task",
+            "state": "preserved-unmerged-pr",
             "work_id": "work-task-238"
           }
         ],

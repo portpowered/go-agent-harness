@@ -1,5 +1,5 @@
 {
-  "candidate_revision_at_run": "f2df9cc7bc98773d8e6bcef2b712d150806a0086",
+  "candidate_revision_at_run": "bb494b4775038a21df3e9d76de682c0d1fb30939",
   "ci_polling": "not performed",
   "command": "COUNT=1 scripts/test-session-ci-regressions.sh all",
   "count": 1,
@@ -12,25 +12,25 @@
       "all"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
-    "deadline_seconds": 366,
-    "elapsed_seconds": 163.374536,
+    "deadline_seconds": 297,
+    "elapsed_seconds": 161.126325,
     "environment": {
       "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
       "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
       "GOWORK": "",
       "HOME": "/Users/abdifamily",
-      "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0asiunh:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+      "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0LRUS3y:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
       "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
     },
     "exit_code": 0,
     "label": "session-ci-regressions-count-1-all",
     "output_limited": false,
     "process_group_gone": true,
-    "process_group_id": 49301,
+    "process_group_id": 30912,
     "schema_version": "c107-command-run-v1",
     "stderr_bytes": 0,
     "stderr_path": "runs/accumulated-regressions/session-ci-regressions-count-1-all.stderr",
-    "stdout_bytes": 45902,
+    "stdout_bytes": 45859,
     "stdout_path": "runs/accumulated-regressions/session-ci-regressions-count-1-all.stdout",
     "termination": null,
     "timed_out": false

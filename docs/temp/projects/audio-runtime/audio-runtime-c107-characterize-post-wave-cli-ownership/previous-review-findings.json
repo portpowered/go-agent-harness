@@ -100,9 +100,20 @@
       "work_type": "review"
     },
     {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR #494 head dfc705578e65dcc8a4c92a16574888a6d435487 has 9 green CI checks, and independent analyzer/YUI replay passed. Reject: current origin/main is 3963bc3566da24f8214634c17a9d0f79a6724171 and is not an ancestor; provenance/release artifacts still pin d4766c3 and f2df9cc7. verify.py also fails open: a fabricated symbol service dependency and a mutated active-task head both pass validate-copy. Fix source-derived dependency validation and full active-task identity validation with causal negatives, integrate current origin/main, regenerate/rebind all evidence and SHA256SUMS to the final pushed head, push, and resubmit exact HEAD to SCRIPT CI without polling. Preserve existing deletion-row controls; do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-255",
+      "work_type": "review"
+    },
+    {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"branch\": \"codex/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
       "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "rejection_feedback": "PR #494 head 98352dfe20456b1db8bcb9e559fc44ddd8371e6d has all nine required checks green in run 34725036123. Independent analyzer, verifier, candidate/subtraction, scope, and credential-free replay checks passed. However checked-in provenance, PR inventory, state, public replay, regression, and release summaries still pin be743f506f1db606fb88ad23c5432359a677c74a, so evidence is stale for the current head. Same C107 executor must regenerate all release evidence and SHA256SUMS at 98352dfe, refresh exact board/PR/head/ancestry/artifact references, commit and push only the owned C107 directory, submit the changed head to SCRIPT CI without polling, then request fresh review. Preserve prior completeness/deletion negative controls; do not merge.",
+      "rejection_feedback": "PR #494 head dfc705578e65dcc8a4c92a16574888a6d435487 has 9 green CI checks, and independent analyzer/YUI replay passed. Reject: current origin/main is 3963bc3566da24f8214634c17a9d0f79a6724171 and is not an ancestor; provenance/release artifacts still pin d4766c3 and f2df9cc7. verify.py also fails open: a fabricated symbol service dependency and a mutated active-task head both pass validate-copy. Fix source-derived dependency validation and full active-task identity validation with causal negatives, integrate current origin/main, regenerate/rebind all evidence and SHA256SUMS to the final pushed head, push, and resubmit exact HEAD to SCRIPT CI without polling. Preserve existing deletion-row controls; do not merge.",
       "state": {
         "name": "init",
         "type": "PROCESSING"
@@ -137,8 +148,8 @@
       "name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
       "rejection_feedback": "CI checks failed for PR #493 at head c75c87547ff52c416e0fadd92385958d4b24cc78: required checks failed on current head c75c87547ff52c416e0fadd92385958d4b24cc78: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34724763555/job/103636855490). Return this task to the executor with the listed failures.",
       "state": {
-        "name": "ci-pending",
-        "type": "PROCESSING"
+        "name": "complete",
+        "type": "TERMINAL"
       },
       "work_id": "work-task-222",
       "work_type": "task"
@@ -181,7 +192,7 @@
       "name": "audio-runtime-c109-characterize-browser-retirement-integration",
       "rejection_feedback": "PR #495 head e3cde9327bf7f8d562bdbe7ba77aecbee77f6a76 has green required CI, and independent verify/public probes passed, but evidence defects remain: (1) C109-03 explicitly requires ci-attribution.json; it is absent. analyze.py:867-917 emits only hard-coded nested attribution with no exact-head/job evidence or failed-lane signatures. Historical run 34713381619 is head 22cc6769aaf06d1e2c1275b064cc7ec29de3e371 and has static/integration failures; retain all seven passing lanes plus exact failure ownership. (2) Ledger caller_edges are raw textual references without containing caller symbols/declarations; api_relationship uses a hard-coded five-symbol list and added-line search, so c83_requires_c61_api=false is not source-complete. Make the ledger AST/source-derived and require caller identity/spans in verify.py. (3) Checked-in final provenance was generated at e0af439b with dirty scripts and differs from a clean e3cde932 analyzer run; bind final evidence to the committed head and regenerate required/control artifacts. (4) run_public_checks.py scans forbidden markers only after output truncation and ignores auxiliary cleanup failure for --tree. Fix these fail-closed paths. Amend only the C109 directory on the same task/PR, regenerate ledger/attribution/sequence/public reports and negatives, rerun verify and public probes, push the new head, and resubmit exact HEAD to SCRIPT CI; do not modify C61, C83, or C79-owned files.",
       "state": {
-        "name": "init",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "work_id": "work-task-224",
@@ -201,9 +212,9 @@
     {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"branch\": \"codex/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
       "name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "rejection_feedback": "Reviewed PR #497 at head 877866206b1372d4ef5a5836344ab0a6fccc06d7; all nine required checks are green, and independent service/CLI tests, race tests, external consumer, Wire, and architecture checks pass. Actionable blockers remain: the diff violates C110 ownership and the active C79 lease by changing unowned runtime/transport files, session_playback_diagnostics.go, scripts/wire-packages.txt, and docs/architecture/architecture-size-baseline.json; restore those changes and integrate shared-file edits only after C79’s guarded merge. The 277-line CLI file shrinks to 73 only because 204 lines were moved into session_audio_dispatch.go; agentruntime production lines increase 41208→41217, so the required 190-line net retirement is not demonstrated. verify.py lacks the required retirement-and-owned-paths mode and its guard-mutations mode performs no mutations; required caller/lease/exclusion evidence, run.py, yui artifact, provenance hashes, text-seed/invalid-pre-provider/clean-shutdown/audio-tool-replay evidence are missing, while the ignored report is stale at 68 lines. Also fix cancellation handling after legacy Stat/ReadFile/SkillsSummary calls, retain final playback diagnostics when the session context is canceled during teardown, and preserve the removed exported session/wire.NewInstructionService compatibility API. Exact next action: executor restore the allowed path set, implement the real bounded fail-closed behavior and compatibility/lifecycle fixes, produce the required source-pinned evidence and causal mutants, then submit the repaired head to the script CI gate; no merge performed.",
+      "rejection_feedback": "CI checks failed for PR #497 at head 87d0bb9516c24ac59fca920f69636deb8efaea25: required checks failed on current head 87d0bb9516c24ac59fca920f69636deb8efaea25: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34726522404/job/103641480861). Return this task to the executor with the listed failures.",
       "state": {
-        "name": "ci-pending",
+        "name": "init",
         "type": "PROCESSING"
       },
       "work_id": "work-task-232",
@@ -214,8 +225,8 @@
       "name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
       "rejection_feedback": "",
       "state": {
-        "name": "failed",
-        "type": "FAILED"
+        "name": "init",
+        "type": "PROCESSING"
       },
       "work_id": "work-task-236",
       "work_type": "task"
@@ -225,10 +236,32 @@
       "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
       "rejection_feedback": "CI checks failed for PR #498 at head 8b2983338ea449fd739994e8fbbc958581bd2e7b: required checks failed on current head 8b2983338ea449fd739994e8fbbc958581bd2e7b: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345381). Return this task to the executor with the listed failures.",
       "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-238",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c114-retire-cli-audio-rate-contract\", \"branch\": \"codex/audio-runtime-c114-retire-cli-audio-rate-contract\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c114-retire-cli-audio-rate-contract",
+      "rejection_feedback": "",
+      "state": {
         "name": "init",
         "type": "PROCESSING"
       },
-      "work_id": "work-task-238",
+      "work_id": "work-task-260",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c115-centralize-filesystem-audio-codec\", \"branch\": \"codex/audio-runtime-c115-centralize-filesystem-audio-codec\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c115-centralize-filesystem-audio-codec",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-262",
       "work_type": "task"
     },
     {
@@ -716,11 +749,22 @@
       "work_type": "review"
     },
     {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head b2e3648d608919033649f54230db86efd2b7a121 has green required checks, but C79 evidence is stale: ledgers/artifact record a8e45355fe495f58c3ba1078a80050492ae6f864, and static evidence records 996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7. Independent runtime probes passed, but a reset→ensure→bind-old-response probe reproduced stale ID reclamation in scheduled.go:49-124 (Accepted:true), violating reset ownership. Repair with generation/known-ID protection and regression coverage, rebuild artifacts at the new exact head, rerun response/retirement/mutation and all bounded replay cases, refresh provenance, commit/push, and submit the changed head to script CI without polling. Historical failures remain recorded; no waiver or merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-253",
+      "work_type": "review"
+    },
+    {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
       "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-      "rejection_feedback": "Independent service, race, external-consumer, adapter, integration, replay, and shipped-CLI checks passed. PR #470 head a8e45355fe495f58c3ba1078a80050492ae6f864 has all required checks green in run 34725100606. However every C79 evidence ledger and artifact records candidate 05a6ea5a39927d224fe81200a2698e68c0a25005, not the current head; runner/evidence logic changed afterward. Rebuild the exact-head artifact, rerun response/retirement/mutation and all three bounded replay cases, refresh provenance to a8e45355, commit/push, and submit the new head to SCRIPT CI without polling. Historical CI failures remain recorded and are not waived.",
+      "rejection_feedback": "PR #470 head b2e3648d608919033649f54230db86efd2b7a121 has green required checks, but C79 evidence is stale: ledgers/artifact record a8e45355fe495f58c3ba1078a80050492ae6f864, and static evidence records 996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7. Independent runtime probes passed, but a reset→ensure→bind-old-response probe reproduced stale ID reclamation in scheduled.go:49-124 (Accepted:true), violating reset ownership. Repair with generation/known-ID protection and regression coverage, rebuild artifacts at the new exact head, rerun response/retirement/mutation and all bounded replay cases, refresh provenance, commit/push, and submit the changed head to script CI without polling. Historical failures remain recorded; no waiver or merge.",
       "state": {
-        "name": "init",
+        "name": "ci-pending",
         "type": "PROCESSING"
       },
       "work_id": "work-task-114",
@@ -925,6 +969,6 @@
       "work_type": "task"
     }
   ],
-  "observed_at": "2026-09-12T23:54:53Z",
+  "observed_at": "2026-09-13T00:49:40Z",
   "schema_version": "c107-previous-review-findings-v1"
 }
