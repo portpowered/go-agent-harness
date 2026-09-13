@@ -220,3 +220,37 @@ merges, fetch the then-current main, integrate it without rewriting C136/C87,
 apply only the sessionturns generated-Wire registration and twelve downward
 baseline deletions, rerun the bounded focused and accumulated gates, then push
 the changed same PR line and return `ACCEPTED` to SCRIPT CI without polling.
+
+## Fresh owned recheck while shared leases remain held — 2026-09-13
+
+At pre-checkpoint head `4c191e05217bccbee6f0497b797cb7b13ca3405f`, the owned
+causal recheck passed: sessionturns normal and race suites, deprecated CLI
+compatibility normal and race suites, the separate `GOWORK=off` consumer, all
+three inherited C136 verifiers, both credential-free public cases, and
+`COUNT=1 bash scripts/test-session-ci-regressions.sh all` in normal, coverage
+and race modes. The accumulated matrix passed all 20 high-rate trials and
+retained the expected replay/audio/transcript negative controls. The Wire
+regeneration/check completed successfully and `git diff --check` remained
+clean.
+
+`make architecture-size-check` failed closed with exactly the known thirteen
+deferred findings: twelve stale downward entries for the retired C87
+`session_turns.go`/test symbols and the unregistered generated
+`go-agent-runtime/services/sessionturns/wire/wire_gen.go`. No source, peer,
+shared registry, policy or baseline path was changed.
+
+The live PR snapshot still shows C110 PR #497 open with its Windows portable
+lane failed, C111 PR #496 open with its coverage lane failed, and C119 PR #505
+open with all nine checks green but no guarded merge. Therefore the exact
+shared leases remain held. PR #513 remains open/draft at inherited C136 head
+`7268f46a8c23cea480aecba621d49c01e4a30aac` with no independent review. The
+external WebMCP TempDir failure remains preserved as out-of-lease,
+non-reproduced evidence. No CI, review, merge, probe or acceptance claim is
+made.
+
+Exact next action: retain `work-task-35` until C110/C111/C119 guarded merges
+release their exact paths; then fetch the accepted current main, integrate it
+without rewriting C136/C87, apply only the sessionturns generated-Wire
+registration and twelve demonstrated downward baseline deletions, rerun the
+bounded gates, push the changed same PR #513 head, and return `ACCEPTED` to
+SCRIPT CI without polling.
