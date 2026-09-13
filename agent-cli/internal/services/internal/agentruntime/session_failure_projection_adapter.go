@@ -20,9 +20,9 @@ func pf(f *f) sf.Facts {
 	if f == nil {
 		return sf.Facts{}
 	}
-	return sf.Facts{f.classification, f.terminalReason, f.provenance, f.outputState, f.errorType, f.code, f.failingEvent}
+	return sf.Facts{Classification: f.classification, TerminalReason: f.terminalReason, Provenance: f.provenance, OutputState: f.outputState, ErrorType: f.errorType, Code: f.code, FailingEvent: f.failingEvent}
 }
-func progress(o *observer) sf.Progress { return sf.Progress{o.sawSessionOpen, o.turnsCompleted} }
+func progress(o *observer) sf.Progress { return sfw.Progress(o.sawSessionOpen, o.turnsCompleted) }
 func (o *observer) failureSnapshot() *f {
 	if o == nil {
 		return nil
@@ -63,7 +63,7 @@ func (o *observer) emitToolCallRecord(v *m.ToolCallEndValue) {
 	}
 	fi(o).Failure.EmitUnsupportedTool(sf.ToolCall{Name: v.Name, ID: v.ToolCallID, TurnIndex: o.turnsCompleted + 1})
 }
-func deriveOutputState(open bool, turns int) string { return sfw.OutputState(sf.Progress{open, turns}) }
+func deriveOutputState(open bool, turns int) string { return sfw.OutputStateForProgress(open, turns) }
 func fi(o *observer) *sfw.Invocation {
 	if o == nil {
 		return sfw.NewInvocation(nil, sf.Dependencies{}, nil, nil)

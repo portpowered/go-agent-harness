@@ -72,6 +72,14 @@ func OutputState(progress sf.Progress) string {
 	return NewService(sf.Dependencies{}).OutputState(progress)
 }
 
+func Progress(sessionOpened bool, turnsCompleted int) sf.Progress {
+	return sf.Progress{SessionOpened: sessionOpened, TurnsCompleted: turnsCompleted}
+}
+
+func OutputStateForProgress(sessionOpened bool, turnsCompleted int) string {
+	return OutputState(Progress(sessionOpened, turnsCompleted))
+}
+
 func RunFacts(err error) sf.Facts {
 	facts := NewService(sf.Dependencies{}).FactsFromSessionRunError(err)
 	if facts == nil {
