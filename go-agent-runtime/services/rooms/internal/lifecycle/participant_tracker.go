@@ -175,7 +175,9 @@ func (l *pl) disconnectTerminal() bool { l.disconnected(); l.term(pDisconnected,
 func (l *pl) observeFailure(o E) bool {
 	return pickCall(o.TerminalReason == string(rProviderClose) && o.FailingEvent == string(sClose) && call(l.q) == nil, func() bool { return l.disconnectTerminal() }, func() bool {
 		return pickCall(!l.has(fbc), func() bool {
-			return pickCall(l.has(ff), func() bool { return pick(specific(o, l.o), l.replaceFailure(o), false) }, func() bool { return l.newFailure(o) })
+			return pickCall(l.has(ff), func() bool {
+				return pickCall(specific(o, l.o), func() bool { return l.replaceFailure(o) }, func() bool { return false })
+			}, func() bool { return l.newFailure(o) })
 		}, func() bool { return false })
 	})
 }

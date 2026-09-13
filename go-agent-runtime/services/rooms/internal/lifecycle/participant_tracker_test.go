@@ -391,6 +391,44 @@ func testParticipantFailureAndDisconnect(t *testing.T) {
 	}
 }
 
+func TestParticipantTrackerPreservesFirstSpecificFailure(t *testing.T) {
+	lifecycle := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{})
+	lifecycle.MarkConnected(errors.New("fallback provider failure"))
+	firstCause := errors.New("first specific provider failure")
+	if !lifecycle.ObserveTerminal(rooms.SessionTerminalObservation{
+		Classification:     "transport",
+		TerminalReason:     string(messages.TerminalReasonTerminalFailure),
+		TerminalProvenance: string(messages.TerminalProvenanceProvider),
+		OutputState:        string(messages.TerminalOutputPartial),
+		Err:                firstCause,
+		Failure:            true,
+	}) {
+		t.Fatal("first specific failure was not observed")
+	}
+	before := lifecycle.TerminalObservationSnapshot()
+	lateCause := errors.New("late duplicate provider failure")
+	if lifecycle.ObserveTerminal(rooms.SessionTerminalObservation{
+		Classification:     "transport",
+		TerminalReason:     string(messages.TerminalReasonProviderClose),
+		TerminalProvenance: string(messages.TerminalProvenanceCLI),
+		OutputState:        string(messages.TerminalOutputNone),
+		Err:                lateCause,
+		Failure:            true,
+	}) {
+		t.Fatal("duplicate specific failure was accepted")
+	}
+	after := lifecycle.TerminalObservationSnapshot()
+	if after.TerminationTrigger != before.TerminationTrigger || after.TerminationDisposition != before.TerminationDisposition || after.Classification != before.Classification || after.TerminalReason != before.TerminalReason || after.TerminalProvenance != before.TerminalProvenance || after.OutputState != before.OutputState || after.Failure != before.Failure {
+		t.Fatalf("duplicate failure changed terminal observation: before=%+v after=%+v", before, after)
+	}
+	if after.Err != firstCause || !errors.Is(after.Err, firstCause) || errors.Is(after.Err, lateCause) {
+		t.Fatalf("duplicate failure changed first cause identity: got=%v, first=%v, late=%v", after.Err, firstCause, lateCause)
+	}
+	if _, terminalErr, observed := lifecycle.Terminal(); !observed || terminalErr != firstCause || !errors.Is(terminalErr, firstCause) {
+		t.Fatalf("terminal error identity = %v, observed=%v, want %v", terminalErr, observed, firstCause)
+	}
+}
+
 func testParticipantLiveness(t *testing.T) {
 	liveness := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{})
 	liveness.MarkLivenessFailure(errors.New("silent"), rooms.ParticipantLivenessMetadata{Classification: "silent_provider", TerminalReason: messages.TerminalReasonTerminalFailure, TerminalProvenance: messages.TerminalProvenanceSession, OutputState: messages.TerminalOutputNone})
