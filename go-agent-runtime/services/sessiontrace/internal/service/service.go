@@ -84,11 +84,11 @@ func (p *prepared) Finish(ctx context.Context, bundle string, published bool) er
 	if closeErr != nil {
 		return p.retain(bundle, closeErr)
 	}
-	if bundle == "" {
-		return nil
-	}
 	if !published {
 		return p.retain(bundle, nil)
+	}
+	if bundle == "" {
+		return nil
 	}
 	destination := filepath.Join(bundle, "audio-trace")
 	claimPath := destination + ".claim"
@@ -135,9 +135,6 @@ func (p *prepared) close(ctx context.Context) error {
 }
 
 func (p *prepared) retain(bundle string, err error) error {
-	if bundle == "" {
-		return err
-	}
 	return errors.Join(err, fmt.Errorf("audio evidence retained at %s", p.path))
 }
 
@@ -228,6 +225,9 @@ func (c observerChain) ObserveProviderBoundaries() bool {
 
 func (c observerChain) RetainCommitPayload() bool {
 	for _, observer := range c {
+		if _, isTrace := observer.(*traceObserver); isTrace {
+			continue
+		}
 		preference, ok := observer.(sessiontrace.CommitPayloadObserver)
 		if !ok || preference.RetainCommitPayload() {
 			return true

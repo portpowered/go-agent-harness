@@ -371,18 +371,3 @@ func setTraceBinding(o *SessionRunOptions, b sessiontrace.DeviceBinding) {
 	o.RTCDeviceBinding.RenderedSamplesObserver = devicert.RTCDeviceRenderedSamplesObserver(b.RenderedSamplesObserver)
 	o.RTCDeviceBinding.RenderedSamplesUnavailable = b.RenderedSamplesUnavailable
 }
-
-func runtimeObserverCallback(observer SessionRuntimeObserver) func(SessionRuntimeObservation) {
-	if observer == nil {
-		return func(SessionRuntimeObservation) {}
-	}
-	return observer.ObserveSessionRuntime
-}
-
-func traceRetainCommitPayload(observer SessionRuntimeObserver) bool {
-	if observer == nil {
-		return false
-	}
-	preference, ok := observer.(interface{ RetainCommitPayload() bool })
-	return !ok || preference.RetainCommitPayload()
-}

@@ -80,6 +80,31 @@ func TestFinishCloseTimeoutRetainsStagedPath(t *testing.T) {
 	}
 }
 
+func TestFinishUnpublishedEmptyBundleRetainsCloseCauseAndStagedPath(t *testing.T) {
+	successfulClosePath := t.TempDir()
+	successfulClose := &prepared{
+		path: successfulClosePath, timeout: time.Second, closed: make(chan struct{}),
+		closeTrace: func() error { return nil },
+	}
+	if err := successfulClose.Finish(context.Background(), "", false); err == nil || !strings.Contains(err.Error(), successfulClosePath) {
+		t.Fatalf("empty unpublished finish lost staged path after successful close: %v", err)
+	}
+
+	closeCause := errors.New("trace close sentinel")
+	stagedPath := t.TempDir()
+	prepared := &prepared{
+		path: stagedPath, timeout: time.Second, closed: make(chan struct{}),
+		closeTrace: func() error { return closeCause },
+	}
+	err := prepared.Finish(context.Background(), "", false)
+	if !errors.Is(err, closeCause) {
+		t.Fatalf("empty unpublished finish lost close cause: %v", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), stagedPath) {
+		t.Fatalf("empty unpublished finish lost staged path: %v", err)
+	}
+}
+
 func TestPreparedCapturesEdgesRedactsAndPublishes(t *testing.T) {
 	root := t.TempDir()
 	prepared, callbackOrder, observed := newCausalTrace(t, root)
