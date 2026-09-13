@@ -55,6 +55,7 @@ AGGREGATE_STARTED = 0.0
 REQUESTED_CHILD_TIMEOUT = CHILD_TIMEOUT
 REQUESTED_TOTAL_TIMEOUT = TOTAL_TIMEOUT
 CANONICAL_INVENTORY_SHAPE: dict[str, Any] | None = None
+SOURCE_SERVICE_DEPENDENCIES: dict[str, list[str] | str] = {}
 
 REQUIRED_ACTIVE_NAMES = {
     "audio-runtime-c79-retire-cli-response-lifecycle",
@@ -368,6 +369,39 @@ def source_counts() -> dict[str, Any]:
     return {"production_files": len(paths), "physical_lines": lines, "bytes": bytes_count, "paths": paths}
 
 
+def source_service_dependencies(path: str) -> list[str] | str:
+    """Derive runtime-service imports from the pinned source, not evidence rows."""
+    cached = SOURCE_SERVICE_DEPENDENCIES.get(path)
+    if cached is not None:
+        return cached
+    source = git_show(SOURCE_REVISION, path).decode("utf-8", errors="replace").splitlines()
+    imports: set[str] = set()
+    index = 0
+    while index < len(source):
+        match = re.match(r"^[ \t]*import[ \t]+(.*)$", source[index])
+        if not match:
+            index += 1
+            continue
+        declaration = match.group(1)
+        if declaration.lstrip().startswith("("):
+            block = [declaration[declaration.index("(") + 1 :]]
+            index += 1
+            while index < len(source):
+                if re.match(r"^[ \t]*\)", source[index]):
+                    break
+                block.append(source[index])
+                index += 1
+            declaration = "\n".join(block)
+        for literal in re.finditer(r'"([^"\\]*(?:\\.[^"\\]*)*)"|`([^`]*)`', declaration):
+            imported = literal.group(1) if literal.group(1) is not None else literal.group(2)
+            if "/go-agent-runtime/services/" in imported:
+                imports.add(imported)
+        index += 1
+    result: list[str] | str = sorted(imports) if imports else "NONE"
+    SOURCE_SERVICE_DEPENDENCIES[path] = result
+    return result
+
+
 def factory_status() -> Any:
     command = [sys.executable, str(FACTORY_ROOT / "factory/scripts/project-control.py"), "status"]
     return command_json(command)
@@ -575,8 +609,84 @@ def board_checkpoint(row: dict[str, Any]) -> dict[str, str]:
                 "worktree": str(payload.get("worktree", "NONE")),
                 "branch": str(payload.get("branch")),
                 "baseRevision": str(payload.get("baseRevision", "NONE")),
+                "head": str(payload.get("head", payload.get("checkpoint_sha", "NONE"))),
+                "pr_number": str(payload.get("pr_number", "NONE")),
             }
-    return {"worktree": "NONE", "branch": "NONE", "baseRevision": "NONE"}
+    return {"worktree": "NONE", "branch": "NONE", "baseRevision": "NONE", "head": "NONE", "pr_number": "NONE"}
+
+
+def active_task_identity_records(
+    board_results: list[dict[str, Any]], prs: dict[str, Any], source_paths: set[str]
+) -> list[dict[str, Any]]:
+    """Reconstruct every active task row from the board and observed PR pins."""
+    tasks = active_task_rows(board_results)
+    task_by_name = {row.get("name"): row for row in tasks}
+    if len(task_by_name) != len(tasks):
+        raise EvidenceFailure("canonical board has duplicate active task identities")
+    pr_by_name: dict[str, dict[str, Any]] = {}
+    for pr in prs.get("prs", []):
+        name = pr.get("task_name")
+        if name not in task_by_name:
+            continue
+        if name in pr_by_name:
+            raise EvidenceFailure(f"active task has multiple open PR identities: {name}")
+        if pr.get("task_work_id") != task_by_name[name].get("workId"):
+            raise EvidenceFailure(f"active task PR work identity mismatch: {name}")
+        pr_by_name[name] = pr
+
+    records: list[dict[str, Any]] = []
+    for row in tasks:
+        name = row.get("name")
+        checkpoint = board_checkpoint(row)
+        pr = pr_by_name.get(name)
+        if pr:
+            # The board baseRevision is the task's isolation checkpoint. GitHub's
+            # PR base may advance independently when main moves, so retain the
+            # complete board checkpoint but do not require those two bases to be
+            # byte-for-byte equal.
+            for key, observed, expected in (
+                ("branch", checkpoint.get("branch"), pr.get("head_branch")),
+                ("head", checkpoint.get("head"), pr.get("head")),
+                ("pr_number", checkpoint.get("pr_number"), str(pr.get("number"))),
+            ):
+                if observed not in {None, "", "NONE"} and observed != expected:
+                    raise EvidenceFailure(f"active task board/PR {key} mismatch: {name}")
+            branch = pr.get("head_branch")
+            pr_number: int | str = pr.get("number")
+            head = pr.get("head")
+            base = pr.get("base")
+            checkpoint_sha = head
+            observation_command = "canonical board row + gh pr view --json files"
+            changed = sorted(pr.get("accepted_main_changed_production_paths", []))
+        else:
+            branch = checkpoint.get("branch") if checkpoint.get("branch") not in {None, "", "NONE"} else f"codex/{name}"
+            pr_number = "NONE"
+            head = checkpoint.get("head", "NONE")
+            base = checkpoint.get("baseRevision", "NONE")
+            checkpoint_sha = head if head not in {None, "", "NONE"} else base
+            observation_command = "canonical board row content/tags; no unmerged PR"
+            changed = []
+        leases = list(changed)
+        if name == "audio-runtime-c79-retire-cli-response-lifecycle":
+            leases.extend(sorted(SHARED_PATHS))
+        records.append(
+            {
+                "name": name,
+                "work_id": row.get("workId"),
+                "state": row.get("state"),
+                "branch": branch,
+                "pr_number": pr_number,
+                "head": head,
+                "base": base,
+                "checkpoint_sha": checkpoint_sha,
+                "observation_command": observation_command,
+                "worktree": checkpoint.get("worktree", "NONE"),
+                "board_checkpoint": checkpoint,
+                "accepted_main_changed_paths": changed,
+                "lease_paths": sorted(set(leases)),
+            }
+        )
+    return sorted(records, key=lambda row: str(row.get("name", "")))
 
 
 def build_subtraction(board: dict[str, Any], prs: dict[str, Any], source_paths: set[str]) -> dict[str, Any]:
@@ -635,31 +745,7 @@ def build_subtraction(board: dict[str, Any], prs: dict[str, Any], source_paths: 
                 "reason": reason,
             }
         )
-    active = []
-    for row in tasks:
-        name = row.get("name")
-        pr = pr_by_name.get(name)
-        checkpoint = board_checkpoint(row)
-        changed = sorted(pr.get("accepted_main_changed_production_paths", [])) if pr else []
-        leases = list(changed)
-        if name == "audio-runtime-c79-retire-cli-response-lifecycle":
-            leases.extend(sorted(SHARED_PATHS))
-        active.append(
-            {
-                "name": name,
-                "work_id": row.get("workId"),
-                "state": row.get("state"),
-                "branch": pr.get("head_branch") if pr else checkpoint["branch"] if checkpoint["branch"] != "NONE" else f"codex/{name}",
-                "pr_number": pr.get("number") if pr else "NONE",
-                "head": pr.get("head") if pr else "NONE",
-                "base": pr.get("base") if pr else "NONE",
-                "checkpoint_sha": pr.get("head") if pr else checkpoint["baseRevision"],
-                "observation_command": "canonical board row + gh pr view --json files" if pr else "canonical board row content/tags; no unmerged PR",
-                "worktree": checkpoint["worktree"],
-                "accepted_main_changed_paths": changed,
-                "lease_paths": sorted(set(leases)),
-            }
-        )
+    active = active_task_identity_records(board_results, prs, source_paths)
     return {
         "schema_version": "c107-subtraction-v1",
         "project": PROJECT,
@@ -915,6 +1001,11 @@ def validate_inventory(path: pathlib.Path, *, require_subtraction: bool = True) 
         for key in ("caller_edges", "caller_edge_status", "dynamic_interface_reflection_generated_uncertainty"):
             if symbol.get(key) != expected_symbol.get(key):
                 raise EvidenceFailure(f"inventory symbol evidence mismatch: {symbol.get('id')}")
+        derived_dependency = source_service_dependencies(symbol["file"])
+        if expected_symbol.get("existing_destination_service_dependency") != derived_dependency:
+            raise EvidenceFailure(f"canonical source census service dependency mismatch: {symbol.get('id')}")
+        if symbol.get("existing_destination_service_dependency") != derived_dependency:
+            raise EvidenceFailure(f"inventory service dependency is not source-derived: {symbol.get('id')}")
         if symbol.get("class") not in ALLOWED_CLASSES:
             raise EvidenceFailure(f"symbol classification missing or invalid: {symbol.get('id')}")
         if symbol.get("class") == "deprecated_adapter":
@@ -1360,12 +1451,46 @@ def validate_subtraction_document(
         extra = sorted(set(recorded_numbers) - set(expected_numbers))
         raise EvidenceFailure(f"subtraction omitted open retirement PR identities: missing={missing} extra={extra}")
 
-    expected_active_names = {
-        row.get("name")
-        for row in active_task_rows(board.get("results", []))
-        if row.get("name")
+    expected_active_records = active_task_identity_records(board.get("results", []), prs, source_paths)
+    actual_active_records = subtraction.get("active_tasks")
+    if not isinstance(actual_active_records, list):
+        raise EvidenceFailure("subtraction omitted active-task identity records")
+    expected_active_by_name = {row["name"]: row for row in expected_active_records}
+    actual_active_by_name: dict[str, dict[str, Any]] = {}
+    for row in actual_active_records:
+        if not isinstance(row, dict) or not isinstance(row.get("name"), str):
+            raise EvidenceFailure("subtraction active-task identity row is invalid")
+        if row["name"] in actual_active_by_name:
+            raise EvidenceFailure(f"subtraction duplicated active-task identity: {row['name']}")
+        actual_active_by_name[row["name"]] = row
+    if set(actual_active_by_name) != set(expected_active_by_name):
+        missing = sorted(set(expected_active_by_name) - set(actual_active_by_name))
+        extra = sorted(set(actual_active_by_name) - set(expected_active_by_name))
+        raise EvidenceFailure(f"subtraction active-task identity set mismatch: missing={missing} extra={extra}")
+    identity_keys = {
+        "name",
+        "work_id",
+        "state",
+        "branch",
+        "pr_number",
+        "head",
+        "base",
+        "checkpoint_sha",
+        "observation_command",
+        "worktree",
+        "board_checkpoint",
+        "accepted_main_changed_paths",
+        "lease_paths",
     }
-    active_names = {row.get("name") for row in subtraction.get("active_tasks", [])}
+    for name, expected in expected_active_by_name.items():
+        actual = actual_active_by_name[name]
+        mismatches = sorted(key for key in identity_keys if actual.get(key) != expected.get(key))
+        extra = sorted(set(actual) - identity_keys)
+        if mismatches or extra:
+            fields = mismatches + [f"extra:{key}" for key in extra]
+            raise EvidenceFailure(f"subtraction active-task identity mismatch: {name} fields={fields}")
+    expected_active_names = set(expected_active_by_name)
+    active_names = set(actual_active_by_name)
     preserved_names = {row.get("owner") for row in subtraction.get("preserved_unmerged_checkpoints", [])}
     represented_names = active_names | preserved_names
     if active_names != expected_active_names:
@@ -1474,6 +1599,22 @@ def negative_controls() -> dict[str, Any]:
         write_json(mutated_inventory, inventory)
         class_result = subprocess.run([sys.executable, str(__file__), "--mode", "validate-copy", "--inventory", str(mutated_inventory), "--subtraction", str(original_subtraction), "--pr-inventory", str(original_pr)], cwd=ROOT, env=safe_environment(), capture_output=True, text=True, timeout=min(60, max(1, int(max(1, remaining_time())))))
 
+        mutated_dependency_inventory = temp_path / "inventory-dependency-mutated.json"
+        dependency_inventory = read_json(original_inventory)
+        dependency_symbol = next(
+            (symbol for symbol in dependency_inventory["symbols"] if symbol.get("existing_destination_service_dependency") != "NONE"),
+            None,
+        )
+        if dependency_symbol is None:
+            raise EvidenceFailure("negative control has no service dependency row to mutate")
+        dependency = dependency_symbol["existing_destination_service_dependency"]
+        if isinstance(dependency, list):
+            dependency_symbol["existing_destination_service_dependency"] = sorted(set(dependency + ["github.com/fabricated/c107-service"]))
+        else:
+            dependency_symbol["existing_destination_service_dependency"] = ["github.com/fabricated/c107-service"]
+        write_json(mutated_dependency_inventory, dependency_inventory)
+        dependency_result = subprocess.run([sys.executable, str(__file__), "--mode", "validate-copy", "--inventory", str(mutated_dependency_inventory), "--subtraction", str(original_subtraction), "--pr-inventory", str(original_pr)], cwd=ROOT, env=safe_environment(), capture_output=True, text=True, timeout=min(60, max(1, int(max(1, remaining_time())))))
+
         mutated_row_inventory = temp_path / "inventory-row-deleted.json"
         row_deleted_inventory = read_json(original_inventory)
         deleted_symbol = row_deleted_inventory["symbols"].pop(0)
@@ -1503,26 +1644,49 @@ def negative_controls() -> dict[str, Any]:
         write_json(mutated_checkpoint_subtraction, checkpoint_subtraction)
         checkpoint_result = subprocess.run([sys.executable, str(__file__), "--mode", "validate-copy", "--inventory", str(original_inventory), "--subtraction", str(mutated_checkpoint_subtraction), "--pr-inventory", str(original_pr)], cwd=ROOT, env=safe_environment(), capture_output=True, text=True, timeout=min(60, max(1, int(max(1, remaining_time())))))
 
+        mutated_active_subtraction = temp_path / "subtraction-active-task-mutated.json"
+        active_subtraction = read_json(original_subtraction)
+        active_target = next(
+            (row for row in active_subtraction.get("active_tasks", []) if isinstance(row, dict) and isinstance(row.get("head"), str) and len(row["head"]) == 40),
+            None,
+        )
+        if active_target is None:
+            raise EvidenceFailure("negative control has no active task head to mutate")
+        expected_active_head = active_target["head"]
+        active_target["head"] = "0" * 40 if expected_active_head != "0" * 40 else "1" * 40
+        write_json(mutated_active_subtraction, active_subtraction)
+        active_result = subprocess.run([sys.executable, str(__file__), "--mode", "validate-copy", "--inventory", str(original_inventory), "--subtraction", str(mutated_active_subtraction), "--pr-inventory", str(original_pr)], cwd=ROOT, env=safe_environment(), capture_output=True, text=True, timeout=min(60, max(1, int(max(1, remaining_time())))))
+
         for label, result, expected_text in (
             ("pinned-pr-head", head_result, "subtraction PR head/path mismatch"),
             ("symbol-classification", class_result, "symbol classification missing or invalid"),
+            ("service-dependency", dependency_result, "inventory service dependency is not source-derived"),
             ("symbol-row-deletion", row_result, "inventory symbol coverage mismatch"),
             ("preserved-pr-deletion", checkpoint_result, "subtraction omitted open retirement PR identities"),
+            ("active-task-head", active_result, "subtraction active-task identity mismatch"),
         ):
             combined = redact_text(result.stdout + result.stderr)
             if result.returncode == 0 or expected_text not in combined:
                 raise EvidenceFailure(f"{label} mutation did not fail closed with stable diagnostic")
         report = {
-            "schema_version": "c107-negative-controls-v2",
+            "schema_version": "c107-negative-controls-v3",
             "source_revision": SOURCE_REVISION,
             "pr_head_mutation": {"exit_code": head_result.returncode, "diagnostic": redact_text(head_result.stderr.strip() or head_result.stdout.strip()), "mutated_from": expected_head, "mutated_to": first_owner["head"]},
             "symbol_classification_deletion": {"exit_code": class_result.returncode, "diagnostic": redact_text(class_result.stderr.strip() or class_result.stdout.strip()), "deleted_symbol_id": deleted_id},
+            "service_dependency_mutation": {"exit_code": dependency_result.returncode, "diagnostic": redact_text(dependency_result.stderr.strip() or dependency_result.stdout.strip()), "mutated_symbol_id": dependency_symbol["id"], "fabricated_dependency": "github.com/fabricated/c107-service"},
             "symbol_row_deletion": {"exit_code": row_result.returncode, "diagnostic": redact_text(row_result.stderr.strip() or row_result.stdout.strip()), "deleted_symbol_id": deleted_symbol["id"], "self_reported_totals_adjusted": True},
             "preserved_pr_deletion": {
                 "exit_code": checkpoint_result.returncode,
                 "diagnostic": redact_text(checkpoint_result.stderr.strip() or checkpoint_result.stdout.strip()),
                 "deleted_pr_number": deleted_pr_number,
                 "self_reported_retirement_list_adjusted": True,
+            },
+            "active_task_head_mutation": {
+                "exit_code": active_result.returncode,
+                "diagnostic": redact_text(active_result.stderr.strip() or active_result.stdout.strip()),
+                "task_name": active_target["name"],
+                "mutated_from": expected_active_head,
+                "mutated_to": active_target["head"],
             },
             "pristine_validation": validate_subtraction(),
         }
