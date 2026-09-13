@@ -11,7 +11,7 @@ The preserved candidate revisions are C61
 `8e8177c031a7b3b9322d712af19970e13fa7a1bc` and C83
 `22cc6769aaf06d1e2c1275b064cc7ec29de3e371`.
 The final provenance also records fetched `origin/main`
-`ea53be13ce5e4ef14fd8c89c695c21744a1f7686` as the newer integrated review
+`1a8467246c6607a06ffc7289075da2595724ce8b` as the newer integrated review
 main; the branch diff relative to that review main remains C109-owned only.
 The required and control synthetic rehearsals intentionally remain based on
 the admitted accepted main, as required by the PRD.  Because the newer review
@@ -61,8 +61,44 @@ The analyzer resolves API references from complete package/module identity:
 anonymous function bodies do not become declarations, qualified imports are
 matched to their exact imported package, same-name symbols in another package
 are not treated as dependencies, and public module paths are not duplicated.
-The checked-in `test_analyze.py` regressions cover those cases.  The final
-evidence source checkpoint is `629132f33a584dbf026c3a33296cd5d97958f031`.
+The checked-in `test_analyze.py` regressions cover those cases plus the admitted
+public-command argument contract.  The final evidence source checkpoint is
+`b9f6f0742131a78618df8bfcfe93eb8b78461364`.
+
+## Review repair and current-main integration
+
+Independent review `work-review-37` found two actionable evidence defects:
+the admitted public commands omitted the runner's required `--output`, and
+the evidence did not contain the newer review-time `origin/main`.  Commit
+`0c93c4ce0ba30599d7ae92fdf7b81cc0b5f2bcae` integrates review main without
+rewriting the C109 history; `b9f6f0742131a78618df8bfcfe93eb8b78461364` makes
+`--output` optional for the declared commands and adds a regression test.  An
+explicit output path still retains the JSON report used by the final bundle.
+
+Fresh required/control analyzer outputs both record accepted main
+`d4766c3dbbf2c198142047ead4449d58dd47d485`, review main
+`1a8467246c6607a06ffc7289075da2595724ce8b`, source HEAD `b9f6f074`, unchanged
+C61/C83 refs/worktrees, and complete cleanup.  The required output hashes are
+`provenance 2e4bcecbe0a5c7e274f816464aae73d9dcfd53e43f6d11379cfc2d4d0347b686`,
+`ledger 44dcb4c42c53f52ff7544eba9939436822960d2153aeee79e1e88ac9efa79209`,
+`merge-orders 5d10f96910d69786a578097c14a7d88b561a2fc679712c89c682fadf75affd44`,
+`report b769eb304057d4f97d59e1a8f6abf59187ada15dbdd4cc9207460808c569d01d`,
+and `run-manifest 4690e2cef53541b4e588fcf7a2800d95a76ce0c055f1f0e5a3544fe47044c3c8`.
+The control merge/report/manifest hashes are
+`774be9b078a622fb82ccd0652685034f5638894ebdeddc1bc2c8b5a269fe071a`,
+`cbfab1f02266996c56eb8559cda54f15c477b60fc0134f4da811450530393614`, and
+`c0aab79c9b60e0d45e3f40d2396b9492a38ea96eb2f3dd805e39c16629d1a562`.
+
+The repaired public runner passes the explicit positive case `18/18` in
+`275.452s` and malformed/canceled case `3/3` in `30.409s`; their retained
+report hashes are `0d367f5921101c52e98cf1308f6ec96f2d384429db4b02c388e77838542e6412`
+and `d70da2bafbe2f2f5f87a46b31a2581b24a74060f25ab0e9e3d50b66ca9546e40`.
+`verify.py --mode all` passes all eight checks and 19 negative fixtures; its
+retained verification hash is
+`c99e255602ed6c81d8dc31b33767337ef4a918b818dff2ce10f7a4b83a5aaccb`.
+The prior hosted provider-audio terminal-drain rejection remains preserved
+under C79 ownership and is not repaired or relabeled here.  C61/C83 and all
+nine broad project gates remain open.
 
 ## Aggregate-budget runner repair
 

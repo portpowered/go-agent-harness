@@ -18414,7 +18414,7 @@
         "go-agent-runtime/services/browserscenario/service.go",
         "go-agent-runtime/services/browserscenario/wire/wire.go"
       ],
-      "reviewMain": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+      "reviewMain": "1a8467246c6607a06ffc7289075da2595724ce8b",
       "source_driven": true
     },
     "failClosedRules": [
@@ -324232,7 +324232,7 @@
       "acceptedMain": "dded566273b27f7146c4e630a0f23fb9402198da",
       "c61": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2",
       "c83": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048",
-      "reviewMain": "81f41ed86a99802c589481beb79a66e95952b897"
+      "reviewMain": "485cce92e8eaf914f236b059a5afe2641d223c3c"
     },
     "candidates": {
       "c61": {
@@ -324272,16 +324272,16 @@
       "exit_code": 0,
       "output_retained": false,
       "reason": "fetch transport output is mutable; commit/ref identity is retained instead",
-      "resolved_origin_main": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+      "resolved_origin_main": "1a8467246c6607a06ffc7289075da2595724ce8b",
       "status": "passed"
     },
-    "fetchedOriginMain": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+    "fetchedOriginMain": "1a8467246c6607a06ffc7289075da2595724ce8b",
     "hostCheckout": {
       "afterStatus": [],
       "beforeStatus": [],
       "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
       "changedStatusLines": [],
-      "head": "629132f33a584dbf026c3a33296cd5d97958f031",
+      "head": "b9f6f0742131a78618df8bfcfe93eb8b78461364",
       "scopeClean": true
     },
     "newerMainFetchedAndIntegrated": true,
@@ -324367,7 +324367,7 @@
         },
         {
           "name": "refs/remotes/origin/main",
-          "object": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686"
+          "object": "1a8467246c6607a06ffc7289075da2595724ce8b"
         }
       ],
       "before": [
@@ -324397,7 +324397,7 @@
         },
         {
           "name": "refs/remotes/origin/main",
-          "object": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686"
+          "object": "1a8467246c6607a06ffc7289075da2595724ce8b"
         }
       ],
       "candidateRefsUnchanged": true,
@@ -324405,12 +324405,12 @@
     },
     "refsUnchanged": true,
     "requestedAcceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-    "reviewMain": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+    "reviewMain": "1a8467246c6607a06ffc7289075da2595724ce8b",
     "schema": "audio-runtime-c109-provenance-v2",
     "sourceBinding": {
       "cleanScripts": true,
-      "committedHead": "629132f33a584dbf026c3a33296cd5d97958f031",
-      "committedTree": "c7bad62a8035da2a9b32db444412035f720f5e61",
+      "committedHead": "b9f6f0742131a78618df8bfcfe93eb8b78461364",
+      "committedTree": "52012ca8e4e09ceca2d6b667f63076f8d95c4e8c",
       "scripts": [
         {
           "head_blob": "e47e5fa8d24b3b11e9466cb70d7fb76d3b86d1a0",
@@ -324427,18 +324427,18 @@
           "working_tree_sha256": "3bfc5db9e3f47cad93cc3920299a48f608355488a5b67e27826a153dde1f5a03"
         },
         {
-          "head_blob": "f75c3d749f8e15a84da016e60cc1144b52a0bc67",
+          "head_blob": "691dd79a5558aaf79dcc24f330f0bbb74ae7d29f",
           "matches_committed_head": true,
           "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
-          "working_blob": "f75c3d749f8e15a84da016e60cc1144b52a0bc67",
-          "working_tree_sha256": "04161bdc2d5f838b9af54b58c6b95f37fb5e1c515cffbb0693908b194fcc694a"
+          "working_blob": "691dd79a5558aaf79dcc24f330f0bbb74ae7d29f",
+          "working_tree_sha256": "772837b115432c2eb54251a8cbdfd6e05b97bcc1503d7cefb61828597fb15780"
         },
         {
-          "head_blob": "c17e813487e7f34aae6bc45aa23d02912228b3ee",
+          "head_blob": "50be94d4afb489d941eb91c2c675bd3a496e58d5",
           "matches_committed_head": true,
           "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/test_analyze.py",
-          "working_blob": "c17e813487e7f34aae6bc45aa23d02912228b3ee",
-          "working_tree_sha256": "e7d7b2829e74b253970fc3e84d5047e3bbf99209dcb4a32e4ff28520f94e7e88"
+          "working_blob": "50be94d4afb489d941eb91c2c675bd3a496e58d5",
+          "working_tree_sha256": "b9e53dc7b41dcac11182d23bed2444b4cb23fc01f834535a702daaefd2e6eb54"
         }
       ],
       "statusAfter": [],
@@ -324453,7 +324453,7 @@
         {
           "branch": "refs/heads/codex/audio-runtime-c109-characterize-browser-retirement-integration",
           "detached": false,
-          "head": "629132f33a584dbf026c3a33296cd5d97958f031",
+          "head": "b9f6f0742131a78618df8bfcfe93eb8b78461364",
           "locked": false,
           "path": ".claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration",
           "prunable": "",
@@ -324568,10 +324568,10 @@
     "worktree_path_recorded": "temporary path intentionally omitted from normalized evidence"
   },
   "reviewMainCompatibility": {
-    "base": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+    "base": "1a8467246c6607a06ffc7289075da2595724ce8b",
     "control": {
-      "base": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
-      "base_tree": "81f41ed86a99802c589481beb79a66e95952b897",
+      "base": "1a8467246c6607a06ffc7289075da2595724ce8b",
+      "base_tree": "485cce92e8eaf914f236b059a5afe2641d223c3c",
       "cleanup": {
         "temporary_root_removed": true,
         "worktree_remove_command": "git worktree remove --force <temporary-worktree>",
@@ -324584,135 +324584,80 @@
       "merges": [
         {
           "command": "git merge --no-ff --no-commit 22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
-          "commit": "f778fef44d8d99bd69e9e499b44aef18df2a7bae",
-          "commit_command": "git commit --no-verify -m C109 review-main-control merge c83",
-          "conflict_kind": "none",
-          "conflict_resolution": "not-needed",
-          "conflicted_paths": [],
-          "conflicts": [],
-          "evidence_ids": [
-            "review-main-control-merge-01"
-          ],
-          "exit_code": 0,
-          "expected_commit": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
-          "label": "c83",
-          "output": "Auto-merging docs/architecture/architecture-policy.json\nAutomatic merge went well; stopped before committing as requested\n",
-          "output_sha256": "35c94f1b3e9a37644a52a7a985688c2c67dbf252afe6caa39bba34d3bd75740b",
-          "parents": [
-            "f778fef44d8d99bd69e9e499b44aef18df2a7bae",
-            "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
-            "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
-          ],
-          "post_status": [],
-          "pre_merge_head": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
-          "ref": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
-          "resolution": {
-            "owner": "C109/none",
-            "status": "not-needed"
-          },
-          "status": "passed",
-          "step": 1,
-          "tree": "3339cc58db432e28f2184f146a6f021751810ab3"
-        },
-        {
-          "command": "git merge --no-ff --no-commit 8e8177c031a7b3b9322d712af19970e13fa7a1bc",
-          "conflict_diff": "* Unmerged path docs/architecture/architecture-size-baseline.json",
+          "conflict_diff": "diff --cc docs/architecture/architecture-policy.json\nindex f6906365c,2a9b68dd0..000000000\n--- a/docs/architecture/architecture-policy.json\n+++ b/docs/architecture/architecture-policy.json\n@@@ -246,7 -246,7 +246,12 @@@\n      },\n      {\n        \"module\": \"go-agent-runtime\",\n++<<<<<<< HEAD\n +      \"pattern\": \"services/sessiondiagnostics/wire/wire_gen.go\",\n++||||||| 84c91ee1b\n++=======\n+       \"pattern\": \"services/browserrunner/wire/wire_gen.go\",\n++>>>>>>> 22cc6769aaf06d1e2c1275b064cc7ec29de3e371\n        \"generator\": \"wire\",\n        \"header\": \"// Code generated by Wire. DO NOT EDIT.\"\n      }",
           "conflict_kind": "content-conflict",
           "conflict_resolution": "aborted; C109 does not resolve candidate conflicts",
           "conflicted_paths": [
-            "docs/architecture/architecture-size-baseline.json"
+            "docs/architecture/architecture-policy.json"
           ],
           "conflicts": [
             {
-              "hunk_count": 0,
+              "hunk_count": 1,
               "index_stages": [
                 {
-                  "blob": "3220815a37b468ada808235063441e55bc841d0b",
+                  "blob": "8dec36466fbd141c3599d46dd6663c599d21891c",
                   "mode": "100644",
-                  "path": "docs/architecture/architecture-size-baseline.json",
+                  "path": "docs/architecture/architecture-policy.json",
                   "stage": "1"
                 },
                 {
-                  "blob": "face3e133133e4e74cc0e72b6f2ce3cde645dc2e",
+                  "blob": "f6906365c962d143155857afdecd3c0788f309e1",
                   "mode": "100644",
-                  "path": "docs/architecture/architecture-size-baseline.json",
+                  "path": "docs/architecture/architecture-policy.json",
+                  "stage": "2"
+                },
+                {
+                  "blob": "2a9b68dd0fbdca0422a8340b1e12e220684ab534",
+                  "mode": "100644",
+                  "path": "docs/architecture/architecture-policy.json",
                   "stage": "3"
                 }
               ],
-              "kind": "modify-delete",
-              "patch": "* Unmerged path docs/architecture/architecture-size-baseline.json",
-              "patch_sha256": "d657d849161a293fe69e78ee250d186cbc2b8d42913df27b581bf63faf0d10e0",
-              "path": "docs/architecture/architecture-size-baseline.json"
+              "kind": "content-conflict",
+              "patch": "diff --cc docs/architecture/architecture-policy.json\nindex f6906365c,2a9b68dd0..000000000\n--- a/docs/architecture/architecture-policy.json\n+++ b/docs/architecture/architecture-policy.json\n@@@ -246,7 -246,7 +246,12 @@@\n      },\n      {\n        \"module\": \"go-agent-runtime\",\n++<<<<<<< HEAD\n +      \"pattern\": \"services/sessiondiagnostics/wire/wire_gen.go\",\n++||||||| 84c91ee1b\n++=======\n+       \"pattern\": \"services/browserrunner/wire/wire_gen.go\",\n++>>>>>>> 22cc6769aaf06d1e2c1275b064cc7ec29de3e371\n        \"generator\": \"wire\",\n        \"header\": \"// Code generated by Wire. DO NOT EDIT.\"\n      }",
+              "patch_sha256": "3dab5d2f0dcf042ca7672384d3931a13a4abe5629f1c9c2b51392221d6bd88dc",
+              "path": "docs/architecture/architecture-policy.json"
             }
           ],
           "evidence_ids": [
-            "review-main-control-merge-02"
+            "review-main-control-merge-01"
           ],
           "exit_code": 1,
-          "expected_commit": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
-          "label": "c61",
-          "output": "Auto-merging agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go\nCONFLICT (modify/delete): docs/architecture/architecture-size-baseline.json deleted in HEAD and modified in 8e8177c031a7b3b9322d712af19970e13fa7a1bc.  Version 8e8177c031a7b3b9322d712af19970e13fa7a1bc of docs/architecture/architecture-size-baseline.json left in tree.\nAutomatic merge failed; fix conflicts and then commit the result.\n",
-          "output_sha256": "fb0e8319c0f45f88cb3f451fccde091665789f5e08374294bc20c7e68969ebac",
+          "expected_commit": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+          "label": "c83",
+          "output": "Auto-merging docs/architecture/architecture-policy.json\nCONFLICT (content): Merge conflict in docs/architecture/architecture-policy.json\nAutomatic merge failed; fix conflicts and then commit the result.\n",
+          "output_sha256": "213fc8a90143c3a563b8e4077684e6f00e30ec2ba795eb43e4d845f9c40c65e5",
           "post_status": [
-            "D  agent-cli/internal/services/internal/agentruntime/session_browser_scenario.go",
-            "A  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_compat.go",
-            "D  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_correction.go",
-            "A  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_derivation_compat.go",
-            "D  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_evaluation.go",
-            "D  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_recovery.go",
-            "D  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report.go",
-            "A  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report_compat.go",
-            "M  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_report_test.go",
+            "M  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_interrupt.go",
+            "M  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_run.go",
             "M  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go",
-            "M  agent-cli/internal/services/servicetest/runtime.go",
-            "A  coverage-manifest/go-agent-runtime/services/browserscenario/internal/service/package.json",
-            "A  coverage-manifest/go-agent-runtime/services/browserscenario/package.json",
-            "A  coverage-manifest/go-agent-runtime/services/browserscenario/wire/package.json",
-            "DU docs/architecture/architecture-size-baseline.json",
-            "A  docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/consumer/consumer_test.go",
-            "A  docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/consumer/go.mod",
-            "A  docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/run.py",
-            "A  docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/verify.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/compat_test.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/correction.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/derivation_evaluation_test.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/evaluation.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/observation.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/opaque.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/recovery.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/report_test.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/scenario_test.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/service.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/validator.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/validator_process.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/validator_process_other.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/validator_process_test.go",
-            "A  go-agent-runtime/services/browserscenario/internal/service/validator_process_unix.go",
-            "A  go-agent-runtime/services/browserscenario/opaque.go",
-            "A  go-agent-runtime/services/browserscenario/report_contract.go",
-            "A  go-agent-runtime/services/browserscenario/report_render.go",
-            "A  go-agent-runtime/services/browserscenario/report_sanitize.go",
-            "A  go-agent-runtime/services/browserscenario/report_validity.go",
-            "A  go-agent-runtime/services/browserscenario/result_clone.go",
-            "A  go-agent-runtime/services/browserscenario/result_contract.go",
-            "A  go-agent-runtime/services/browserscenario/result_validation.go",
-            "A  go-agent-runtime/services/browserscenario/run.go",
-            "A  go-agent-runtime/services/browserscenario/run_finalize.go",
-            "A  go-agent-runtime/services/browserscenario/run_observations.go",
-            "A  go-agent-runtime/services/browserscenario/scenario_contract.go",
-            "A  go-agent-runtime/services/browserscenario/scenario_json.go",
-            "A  go-agent-runtime/services/browserscenario/scenario_validation.go",
-            "A  go-agent-runtime/services/browserscenario/service.go",
-            "A  go-agent-runtime/services/browserscenario/wire/wire.go"
+            "M  agent-cli/internal/services/internal/agentruntime/session_browser_scenario_tracker.go",
+            "A  coverage-manifest/go-agent-runtime/services/browserrunner/internal/service/package.json",
+            "A  coverage-manifest/go-agent-runtime/services/browserrunner/package.json",
+            "A  coverage-manifest/go-agent-runtime/services/browserrunner/wire/package.json",
+            "UU docs/architecture/architecture-policy.json",
+            "A  docs/temp/projects/audio-runtime/audio-runtime-c83-retire-cli-browser-scenario-runner/checkpoint-tracker-interruption.md",
+            "A  docs/temp/projects/audio-runtime/audio-runtime-c83-retire-cli-browser-scenario-runner/external-consumer/go.mod",
+            "A  docs/temp/projects/audio-runtime/audio-runtime-c83-retire-cli-browser-scenario-runner/external-consumer/main_test.go",
+            "A  go-agent-runtime/services/browserrunner/internal/service/interruption.go",
+            "A  go-agent-runtime/services/browserrunner/internal/service/partition.go",
+            "A  go-agent-runtime/services/browserrunner/internal/service/service.go",
+            "A  go-agent-runtime/services/browserrunner/internal/service/service_test.go",
+            "A  go-agent-runtime/services/browserrunner/internal/service/tracker.go",
+            "A  go-agent-runtime/services/browserrunner/internal/service/tracker_observe.go",
+            "A  go-agent-runtime/services/browserrunner/service.go",
+            "A  go-agent-runtime/services/browserrunner/wire/providers.go",
+            "A  go-agent-runtime/services/browserrunner/wire/wire_gen.go",
+            "A  go-agent-runtime/services/browserrunner/wire/wire_test.go"
           ],
-          "pre_merge_head": "f778fef44d8d99bd69e9e499b44aef18df2a7bae",
-          "ref": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+          "pre_merge_head": "1a8467246c6607a06ffc7289075da2595724ce8b",
+          "ref": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
           "resolution": {
             "owner": "C61/work-task-34 or C83/work-task-125",
             "status": "aborted"
           },
           "status": "failed",
-          "step": 2
+          "step": 1
         }
       ],
       "order": [
@@ -324725,8 +324670,8 @@
     },
     "purpose": "Supplemental current-main compatibility evidence; it is not the admitted C109 synthetic delivery tree.",
     "required": {
-      "base": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
-      "base_tree": "81f41ed86a99802c589481beb79a66e95952b897",
+      "base": "1a8467246c6607a06ffc7289075da2595724ce8b",
+      "base_tree": "485cce92e8eaf914f236b059a5afe2641d223c3c",
       "cleanup": {
         "temporary_root_removed": true,
         "worktree_remove_command": "git worktree remove --force <temporary-worktree>",
@@ -324828,7 +324773,7 @@
             "A  go-agent-runtime/services/browserscenario/service.go",
             "A  go-agent-runtime/services/browserscenario/wire/wire.go"
           ],
-          "pre_merge_head": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+          "pre_merge_head": "1a8467246c6607a06ffc7289075da2595724ce8b",
           "ref": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
           "resolution": {
             "owner": "C61/work-task-34 or C83/work-task-125",
