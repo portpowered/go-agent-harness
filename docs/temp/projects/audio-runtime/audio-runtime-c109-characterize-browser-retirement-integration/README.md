@@ -32,9 +32,11 @@ evidence, and prohibited candidate-acceptance claims.  `run_public_checks.py`
 is the bounded software-only test runner; it records command, timeout,
 credential-scrub, process-group, test-discovery, shipped-report, and
 effect-cleanup evidence without claiming hardware or acoustic coverage. The
-default child/aggregate bounds are 480/900 seconds so accumulated normal,
-coverage, and race regressions are fully exercised; a caller-provided `--tree`
-must be the exact clean main -> C61 -> C83 synthetic tree.
+default child/aggregate bounds are 90/300 seconds; accumulated race coverage
+is split into bounded transport, integration, devices, and OpenAI children
+without relaxing the checked-in test patterns. A caller-provided `--tree`
+must be the exact clean main -> C61 -> C83 synthetic tree and is rejected if a
+child mutates it.
 
 The C79-owned `scripts/wire-packages.txt` and
 `docs/architecture/architecture-size-baseline.json` remain untouched.  The

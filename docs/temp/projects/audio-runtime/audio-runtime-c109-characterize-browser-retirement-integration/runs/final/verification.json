@@ -1,4 +1,20 @@
 {
+  "caller_tree_mutation_control": {
+    "child_status": "passed",
+    "cleanup": {
+      "attempted": true,
+      "identity_unchanged": null,
+      "mode": "task-owned-temporary-tree",
+      "remove_command": "git worktree remove --force <temporary-worktree>",
+      "remove_exit_code": 0,
+      "status": "passed",
+      "temporary_root_removed": true,
+      "tree_preserved": false,
+      "worktree_removed": true
+    },
+    "status": "rejected-as-required",
+    "tree_unchanged": false
+  },
   "checks": [
     "provenance-and-scope",
     "merge-orders",
@@ -6,6 +22,7 @@
     "handoff-sequence",
     "determinism",
     "negative-fixtures",
+    "caller-tree-mutation-control",
     "public-checks"
   ],
   "mode": "all",
@@ -13,6 +30,11 @@
     "auxiliary-cleanup-failure": {
       "diagnostic": "public auxiliary synthetic-tree cleanup failed",
       "fixture": "auxiliary-cleanup-failure",
+      "status": "rejected-as-required"
+    },
+    "caller-tree-mutation": {
+      "diagnostic": "public synthetic tree changed during checks",
+      "fixture": "caller-tree-mutation",
       "status": "rejected-as-required"
     },
     "changed-sha": {
@@ -99,6 +121,20 @@
       "diagnostic": "zero-test discovery accepted: browserrunner+browserscenario normal",
       "fixture": "zero-test-discovery",
       "status": "rejected-as-required"
+    }
+  },
+  "source_bindings": {
+    "negative_fixture": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json",
+      "sha256": "0f51a143cf809d20df04bbf4350473a14961979f7ffc854eff1f7fea6b9b3840"
+    },
+    "public_runner": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
+      "sha256": "f2bdc990fc710f8baddb9766837f101a0c08f32d0386cc29117a826a08a83cef"
+    },
+    "verifier": {
+      "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py",
+      "sha256": "7e3873f7cc54a473794ce0378faad2e22dde2b226b909497cc4c8f558cecc07d"
     }
   },
   "status": "passed"
