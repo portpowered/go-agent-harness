@@ -324277,11 +324277,23 @@
     },
     "fetchedOriginMain": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
     "hostCheckout": {
-      "afterStatus": [],
-      "beforeStatus": [],
+      "afterStatus": [
+        "M  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/README.md",
+        "A  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/ci-rejection-34754953782.json",
+        "A  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/revalidation-20260913-ci-repair.md",
+        "M  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/browser-audio-tool.json",
+        "M  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/malformed-or-canceled.json"
+      ],
+      "beforeStatus": [
+        "M  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/README.md",
+        "A  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/ci-rejection-34754953782.json",
+        "A  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/revalidation-20260913-ci-repair.md",
+        "M  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/browser-audio-tool.json",
+        "M  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/malformed-or-canceled.json"
+      ],
       "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
       "changedStatusLines": [],
-      "head": "a8409ebc566a0f5ec6c2c287e6665cf14c162307",
+      "head": "ab0ada54292b9682879a98fc3b470e3b8c30df6a",
       "scopeClean": true
     },
     "newerMainFetchedAndIntegrated": true,
@@ -324409,8 +324421,8 @@
     "schema": "audio-runtime-c109-provenance-v2",
     "sourceBinding": {
       "cleanScripts": true,
-      "committedHead": "a8409ebc566a0f5ec6c2c287e6665cf14c162307",
-      "committedTree": "587a5b8b834a12608fba0363a38cbcd26835814a",
+      "committedHead": "ab0ada54292b9682879a98fc3b470e3b8c30df6a",
+      "committedTree": "d5385d7177f40bce8d59182bcfc14a336ce50c0c",
       "scripts": [
         {
           "head_blob": "46605eb4beb1d026b2e4b1b81a57b2fa83e08a69",
@@ -324441,7 +324453,13 @@
           "working_tree_sha256": "d07a668ae174dcc2e1e0791f4b570b0c41f22bd9f47989fb2b2f2ee469d40395"
         }
       ],
-      "statusAfter": [],
+      "statusAfter": [
+        "M  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/README.md",
+        "A  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/ci-rejection-34754953782.json",
+        "A  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/revalidation-20260913-ci-repair.md",
+        "M  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/browser-audio-tool.json",
+        "M  docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/public/malformed-or-canceled.json"
+      ],
       "statusBefore": []
     },
     "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
@@ -324453,7 +324471,7 @@
         {
           "branch": "refs/heads/codex/audio-runtime-c109-characterize-browser-retirement-integration",
           "detached": false,
-          "head": "a8409ebc566a0f5ec6c2c287e6665cf14c162307",
+          "head": "ab0ada54292b9682879a98fc3b470e3b8c30df6a",
           "locked": false,
           "path": ".claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration",
           "prunable": "",

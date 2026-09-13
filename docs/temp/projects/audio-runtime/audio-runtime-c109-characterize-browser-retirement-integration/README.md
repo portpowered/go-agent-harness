@@ -246,3 +246,24 @@ This remains software-only evidence. It does not claim C61/C83 repair, merge,
 review, acceptance, vertical validation, hardware/acoustic proof or project
 completion; the C79 provider-audio failure and all nine broad project gates
 remain open.
+
+## Current hermetic rejection — 2026-09-13
+
+PR #495 run `34754953782` tested candidate head
+`ab0ada54292b9682879a98fc3b470e3b8c30df6a` in merge checkout
+`5222672fe985c95f9f32128905fe687959887d0b`. Eight required lanes passed;
+hermetic failed only the unchanged
+`TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence` at
+`s2s_room_realtime_replay_overlap_test.go:624` (`context deadline exceeded`)
+and `TestRunSessionWithAudioOut_FinalizesPlayableWAV` at
+`session_audio_out_test.go:79` (`WAV samples = 480 samples, want exact ordered
+response`). The exact run/log hashes and full signatures are retained in
+`ci-rejection-34754953782.json`.
+
+Neither failure is in the C109 diff against `origin/main`; they are routed to
+the existing room/liveness and audio-output owners. C109 did not edit, waive,
+relabel or claim either failure repaired, and does not retry the unchanged
+candidate. Fresh owned evidence remains green: analyzer 4/4, verifier 8 checks
+plus 19 negatives, positive public 18/18 in 253.568s, and malformed/canceled
+3/3 in 29.471s. No CI-green, review, merge, C61/C83 acceptance, vertical,
+hardware/acoustic or project-completion claim is made.
