@@ -6,18 +6,21 @@
   "branchName": "codex/audio-runtime-c127-repair-current-main-terminal-drain-regression",
   "workId": "work-task-3",
   "session": "~default",
-  "candidateImplementationRevision": "54277fe562c79c28a8a452c090293dfa41698b48",
+  "candidateImplementationRevision": "53bf5739f47412d33e2a8cd7165287f55839a752",
   "source": {
     "currentMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+    "fetchedOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
     "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
     "acceptedC64Merge": "59af6325614d80173447fe2018a0471e27b4e7b1",
     "preservedC118Head": "4d5e0801c9df7c4f33a2498d0a20acf947b03992",
-    "originMainEqualsCurrentMain": true,
+    "originMainEqualsCurrentMain": false,
+    "candidateContainsFetchedOriginMain": true,
     "ancestryChecks": {
       "startupIntegration": true,
       "currentMain": true,
       "acceptedC64Merge": true,
-      "preservedC118Head": true
+      "preservedC118Head": true,
+      "fetchedOriginMain": true
     }
   },
   "admission": {
@@ -118,6 +121,15 @@
     "perProcessBoundSeconds": 60,
     "aggregateBoundSeconds": 600,
     "input": "same provider block ordering, tool continuation, final response and provider-close boundary; current-main failure was run against unmodified origin/main",
+    "orderedRun": {
+      "path": "causal-run.json",
+      "sha256": "dde56a948928278dc62ba03d18f35f79bc34c2c220826b6f1b2884688198e3ac",
+      "candidate": "rtc_forwarding -> provider_receipt -> sink_admission -> device_render -> response_terminal -> graceful_drain",
+      "currentMainFailure": "provider media admitted during Receive: context deadline exceeded",
+      "firstDivergence": "rtc_forwarding",
+      "aggregateElapsedMs": 17322,
+      "childCleanup": "all candidate, current-main, and accepted-C64 process groups reaped"
+    },
     "preRepairEvidence": {
       "path": "pre-repair-failure.txt",
       "command": "go test ./go-agent-runtime/services/session/internal/live -run ^TestCapturingInferencerClaimsProviderMediaBeforeTerminalDrainReceive$ -count=1 -timeout=30s",
@@ -182,6 +194,8 @@
   "cleanup": {
     "earlierAbortedCharacterizationSurvivors": 3,
     "exactPidsTerminated": [35130, 43255, 43257],
-    "finalTargetProcessCheck": "empty"
+    "finalTargetProcessCheck": "empty",
+    "postStrictIntegrationTargetProcessCheck": "empty",
+    "postPublicReplayProcessGroups": "reaped"
   }
 }

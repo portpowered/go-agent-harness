@@ -2,12 +2,14 @@
 
 This evidence belongs to the admitted `audio-runtime` / `audio-runtime-v1`
 task `audio-runtime-c127-repair-current-main-terminal-drain-regression`.
-The implementation candidate is commit `54277fe562c79c28a8a452c090293dfa41698b48`
+The implementation candidate is source checkpoint `53bf5739f47412d33e2a8cd7165287f55839a752`
 on branch
 `codex/audio-runtime-c127-repair-current-main-terminal-drain-regression`.
-The isolated worktree is the worktree containing this file. The source base was
-freshly fetched `origin/main` at
-`09c70f51243caeaf1184c4806b99bbf7749e3044`; startup integration
+The isolated worktree is the worktree containing this file. The immutable
+current-main negative control is pinned at
+`09c70f51243caeaf1184c4806b99bbf7749e3044`; a fresh fetch resolved
+`origin/main` to `bd6a1289218d1bef1a3af36e64e9d4496062416f`, which is merged
+into the candidate at `edd209d66`. Startup integration
 `8bdafc7f947a3a2c9856220abdc539437035bd21` and accepted C64 merge
 `59af6325614d80173447fe2018a0471e27b4e7b1` are ancestors of the candidate.
 C118 remains preserved at clean PR 504 head
@@ -34,11 +36,16 @@ drain policy, cancellation identity, interruption behavior, or assertion was
 weakened.
 
 The paired source regression is recorded in
-`service_test.go:571-600`: a provider fake records whether media was claimed
-when the terminal-drain connection is established. On unmodified current main
-the temporary causal test failed with `read provider media admitted during
-Receive: context deadline exceeded`; after the repair the claim-order check,
-focused package tests, and strict production-binary regressions pass.
+`service_test.go:603-771`: a provider fake records an explicit six-boundary
+sequence with monotonic-process timing and 6,400-sample ranges. On unmodified
+current main the temporary causal test fails with
+`provider media admitted during Receive: context deadline exceeded`; after the
+repair the candidate records
+`rtc_forwarding -> provider_receipt -> sink_admission -> device_render ->
+response_terminal -> graceful_drain`. The complete bounded comparison is in
+`causal-run.json`: candidate and accepted C64 pass, unmodified pinned current
+main fails at the RTC preclaim boundary, every child is reaped, and the
+aggregate run is within 600 seconds.
 
 ## Immutable controls and prior findings
 
@@ -67,25 +74,37 @@ The final post-edit checks were:
 * `go test -race ./go-agent-runtime/services/session/internal/live -run 'BindPlaybackController|Terminal|Drain|Close|Cancel|Tool|CapturingInferencer' -count=3 -timeout=180s`
 * focused RTC tests in `agent-cli/internal/services/internal/agentruntime` and
   `go-device-gateway/pkg/runtime`
-* `go vet` for all three relevant packages
-* `make architecture-check` and `make size-check`
+* `make vet`, `make lint` (pinned golangci-lint 2.9.0), `make staticcheck`
+  (pinned staticcheck 2026.1), `make wire-check`, `make architecture-check`,
+  and `make coverage-registration`
 * separate, unchanged, strict `TestAgentBinaryTest45HighRateToolAudioRegression`
   and `TestAgentBinaryTest46HighRateToolAudioRegression` runs
+* accumulated normal, coverage, and race session regression harnesses, all
+  exiting zero
 
-All exited zero. The exact commands, exits, and output summaries are in
+The focused and accumulated checks exited zero. Coverage registration exited
+zero; the full changed-package coverage attempt reached the unrelated
+`TestShippedSessionSIGINTDuringToolExecutionFinalizesCleanly` deadline failure
+under broad instrumentation. That exact test passes on both fetched
+`origin/main` and the candidate outside the broad coverage run, and its source
+is outside the C127 lease, so the failure remains executor-owned rather than a
+C127 product result. The exact commands, exits, and output summaries are in
 `verification-summary.json`.
 
-The source-pinned `nomicrophone` YUI build has SHA256
-`dabf6c52683d84409c5b7d31380254d6b17b7d8d72586c18bf622622901afdf0`.
-The offline public replay from that binary exited zero and emitted
-`PROBE_TOOL_MARKER_9182`, an ordered tool call/result, continuation text,
-provider-close terminal metadata, and 4800 bytes of output PCM. Artifact
-hashes are recorded in `provenance.json` and the replay manifest. This is
-software-device/offline replay evidence only; no credentials, live Realtime
-session, physical device, or acoustic claim was used.
+The source-pinned `nomicrophone` YUI build from the candidate has SHA256
+`8e8db1f19527d10cc7ea53653db95a790f6852199784efe10e011be5f238ab1d`
+(`51,101,938` bytes). The bounded public runner and the offline replay from
+that binary exited zero and emitted `PROBE_TOOL_MARKER_9182`, an ordered tool
+call/result, continuation text, provider-close terminal metadata, and 4,800
+bytes of output PCM with terminal queue zero. Artifact hashes are recorded in
+`provenance.json`, `verification-summary.json`, and `public-run.json`. The
+strict test45/test46 checks provide the separate software-device/tool process
+boundary proof. This remains software-device/offline replay evidence only; no
+credentials, live Realtime session, physical device, or acoustic claim was
+used.
 
-The cleanup audit found three exact `audio-device-server` processes left by an
-earlier aborted characterization attempt; they were terminated by exact PID
-and the final target-process check was empty. This is recorded as harness
-cleanup evidence, not as a product pass. Script CI has not been polled and
-this candidate does not claim green CI or project-wide completion.
+The bounded runner recorded process-group cleanup for every causal and public
+child. A final target-process check for `audio-device-server` was empty after
+the strict integration cleanup. This is recorded as harness cleanup evidence,
+not as a product pass. Script CI has not been polled and this candidate does
+not claim green CI or project-wide completion.

@@ -1,0 +1,61 @@
+{
+  "schema": "audio-runtime.c127.ownership-census.v1",
+  "task": "audio-runtime-c127-repair-current-main-terminal-drain-regression",
+  "admission": {
+    "project": "audio-runtime",
+    "contractRevision": "audio-runtime-v1",
+    "branch": "codex/audio-runtime-c127-repair-current-main-terminal-drain-regression",
+    "workId": "work-task-3",
+    "session": "~default"
+  },
+  "baseline": {
+    "pinnedCurrentMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+    "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "acceptedC64": "59af6325614d80173447fe2018a0471e27b4e7b1",
+    "preservedC118": "4d5e0801c9df7c4f33a2498d0a20acf947b03992",
+    "fetchedOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "currentMainMerge": "edd209d66"
+  },
+  "preExistingCandidateCheckpoint": {
+    "head": "5e28018e0",
+    "transferredLiveFiles": {
+      "go-agent-runtime/services/session/internal/live/replay.go": "da4803d80af025d2fa201a45b196863bd8957b0c1b7fc1058318bb8f24e03b18",
+      "go-agent-runtime/services/session/internal/live/service.go": "9132ba85910ccd565ac5c380b6afacdb77e3796b192a1d538a8cb21009750f25",
+      "go-agent-runtime/services/session/internal/live/service_test.go": "65da2982119c3a19204c87ed317ae4a019632c233cbc08fd465ad46a470403e0",
+      "go-agent-runtime/services/session/internal/live/start_support.go": "00636eeee7a98205ab2b72d524ffdee721128789ac0496229d0c3e00c47e0b2f"
+    }
+  },
+  "ownedManifestPathsAtCensus": {
+    "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go": "0abe47c8aeaff7f1d856be1a4a25cf8682ee276913ff73b2788e9ff1cd903c5a",
+    "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go": "38b232053d9d4f46de2060ee5482e9fe4701c852b278ee654863a365689d04f5",
+    "go-agent-runtime/services/session/internal/live/lifecycle.go": "dec3ea49fb1ade21fdbb18317d66a0a22f6f21ae42f9c9f9da36f6751c0e8bfb",
+    "go-agent-runtime/services/session/internal/live/lifecycle_test.go": null,
+    "go-device-gateway/pkg/runtime/rtc_device_sink.go": "6ac74e0f662c96a16461302f6974db7cfd87c6b5e37c9fa9b746730554d45b6f",
+    "go-device-gateway/pkg/runtime/rtc_device_audio_ports.go": "46d2ffb714d2e44fc3b27a14acfdc834a820ab0bc84d96743fd2c141397ddc81",
+    "go-device-gateway/pkg/runtime/rtc_device_sink_test.go": null,
+    "go-device-gateway/pkg/runtime/rtc_device_audio_ports_test.go": "522f5c9c923b9992c85d0f11bade6576c065f10cfabdadfa04c32062be77fcd0",
+    "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go": "c6731ff1ffe385eb8c8eacd1077ca9ba40139426d69098ddc0c8b53bd61e4c6b"
+  },
+  "excludedActivePeerHeads": {
+    "C109": "2e008f603a543c0ab0ace40a3766f8fe9da19e39",
+    "C110": "e266d872218f08108bcdb8e81e2da603dd39a9a6",
+    "C111": "d4ab203ed16cc6cb4889a4955ff481b71c76f0d6",
+    "C112": "ab8b17c47b0343f07893b4719b5c0e9cc38248f3",
+    "C116": "c9a49590d172938f9e1caca4c8a5759abf653edc",
+    "C118": "4d5e0801c9df7c4f33a2498d0a20acf947b03992",
+    "C119": "2241acd84ead8e7675a57fa6c010941c1c8b84a6",
+    "C124": "4ff19eb06666b733a859cc790127bb0d74daf13f",
+    "C126": "53fa0c65567cc6925c54eef6dcf0059fcf596842"
+  },
+  "postMutation": {
+    "sourceCheckpoint": "53bf5739f47412d33e2a8cd7165287f55839a752",
+    "currentSourceHashes": {
+      "go-agent-runtime/services/session/internal/live/replay.go": "da4803d80af025d2fa201a45b196863bd8957b0c1b7fc1058318bb8f24e03b18",
+      "go-agent-runtime/services/session/internal/live/service.go": "9132ba85910ccd565ac5c380b6afacdb77e3796b192a1d538a8cb21009750f25",
+      "go-agent-runtime/services/session/internal/live/service_test.go": "c6faa17ccb7cc7079cb555646d035d086de303bcf4676ca33c690de12ef41329",
+      "go-agent-runtime/services/session/internal/live/start_support.go": "00636eeee7a98205ab2b72d524ffdee721128789ac0496229d0c3e00c47e0b2f"
+    },
+    "diffAgainstPinnedCurrentMainSha256": "83c5ffbe201d9d55aa85e2a170055923c4efe5f5ccb768edc1efa353af2f9c46",
+    "unownedSourceChanges": []
+  }
+}
