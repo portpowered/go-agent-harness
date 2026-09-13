@@ -174,7 +174,7 @@ func (r *blockingRunner) run(ctx context.Context, _ string, _ audiocodec.Limits)
 	return runResult{}, ctx.Err()
 }
 
-func TestProcessRunnerClassifiesLookupStartWaitDecodeAndBounds(t *testing.T) {
+func TestProcessRunnerClassifiesLookupCancellationAndInput(t *testing.T) {
 	input := writeRunnerInput(t)
 	t.Run("lookup", func(t *testing.T) {
 		runner := newProcessRunner("missing")
@@ -199,6 +199,10 @@ func TestProcessRunnerClassifiesLookupStartWaitDecodeAndBounds(t *testing.T) {
 			t.Fatalf("input error = %v", err)
 		}
 	})
+}
+
+func TestProcessRunnerClassifiesStartWaitAndDecode(t *testing.T) {
+	input := writeRunnerInput(t)
 	t.Run("start", func(t *testing.T) {
 		runner := testProcessRunner(&testCommand{startErr: errors.New("start")})
 		if _, err := runner.run(context.Background(), input, defaultLimits()); !errors.Is(err, audiocodec.ErrProcessStart) {
@@ -225,6 +229,10 @@ func TestProcessRunnerClassifiesLookupStartWaitDecodeAndBounds(t *testing.T) {
 			t.Fatalf("decode diagnostic error = %v", err)
 		}
 	})
+}
+
+func TestProcessRunnerEnforcesOutputAndStderrBounds(t *testing.T) {
+	input := writeRunnerInput(t)
 	t.Run("stdout bound", func(t *testing.T) {
 		limits := defaultLimits()
 		limits.MaxOutputBytes = 2
