@@ -12,9 +12,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/instructions"
 	session2 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/service"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -28,6 +28,13 @@ func NewService(deps Dependencies) session.Service {
 	return service
 }
 
+// NewInstructionService assembles the stateless session instruction policy
+// service while exposing only its public contract to hosts and embedders.
+func NewInstructionService() session.InstructionService {
+	service := instructions.New()
+	return service
+}
+
 // NewFileStoreFactory assembles the built-in durable store factory. The
 // factory is deliberately separate from NewService: embedders may inject a
 // remote or in-memory SessionStore, while CLI hosts opt into the canonical
@@ -35,13 +42,6 @@ func NewService(deps Dependencies) session.Service {
 func NewFileStoreFactory() session.FileStoreFactory {
 	factory := newFileStoreFactory()
 	return factory
-}
-
-// NewInstructionService preserves the session package's exported constructor
-// while delegating policy ownership to the dedicated sessioninstructions graph.
-func NewInstructionService() session.InstructionService {
-	v := newInstructionService()
-	return v
 }
 
 // providers.go:
@@ -60,10 +60,6 @@ type Dependencies struct {
 	ProviderService providers.Service
 	ToolService     tools.Service
 	Logger          logging.Logger
-}
-
-func newInstructionService() session.InstructionService {
-	return sessioninstructions.Factory{}.Build()
 }
 
 func newFileStoreFactory() *session2.Factory { return session2.NewFactory() }

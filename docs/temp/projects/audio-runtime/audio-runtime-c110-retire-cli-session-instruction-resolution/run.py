@@ -37,7 +37,6 @@ SOURCE_FILES = (
     "go-agent-runtime/services/session/instructions.go",
     "go-agent-runtime/services/sessioninstructions/contract.go",
     "go-agent-runtime/services/sessioninstructions/contract_test.go",
-    "go-agent-runtime/services/sessioninstructions/service.go",
     "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
     "go-agent-runtime/services/sessioninstructions/internal/service/service_test.go",
     "go-agent-runtime/services/sessioninstructions/wire/wire.go",

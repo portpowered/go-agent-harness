@@ -26,7 +26,7 @@ REPORTS = ROOT / "reports"
 LEGACY_REL = Path("agent-cli/internal/services/internal/agentruntime/session_instructions.go")
 LEGACY = REPO_ROOT / LEGACY_REL
 NEW_PACKAGE = REPO_ROOT / "go-agent-runtime/services/sessioninstructions"
-SERVICE = NEW_PACKAGE / "service.go"
+SERVICE = NEW_PACKAGE / "internal/service/service.go"
 BASELINE = ROOT / "baseline.json"
 RUNNER = ROOT / "run.py"
 MAX_OUTPUT_BYTES = 1 << 20
@@ -208,7 +208,7 @@ def copy_mutation_workspace(destination: Path) -> tuple[Path, Path]:
 def mutate_and_kill() -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="c110-guard-mutants-") as temporary:
         mutation_root, consumer_copy = copy_mutation_workspace(Path(temporary) / "repo")
-        mutant_none = mutation_root / "go-agent-runtime/services/sessioninstructions/service.go"
+        mutant_none = mutation_root / "go-agent-runtime/services/sessioninstructions/internal/service/service.go"
         source = mutant_none.read_text(encoding="utf-8")
         needle = 'if value == "none" {'
         require(source.count(needle) == 1, "none guard mutant anchor is not unique")
@@ -216,7 +216,7 @@ def mutate_and_kill() -> dict[str, Any]:
         consumer_result = run(["go", "run", ".", "--mode", "positive"], consumer_copy, timeout=MUTATION_TIMEOUT_SECONDS)
         require(consumer_result["exit_code"] != 0 and not consumer_result["timed_out"], f"none mutant survived: {consumer_result}")
 
-        mutant_cancel = mutation_root / "go-agent-runtime/services/sessioninstructions/service.go"
+        mutant_cancel = mutation_root / "go-agent-runtime/services/sessioninstructions/internal/service/service.go"
         source = mutant_cancel.read_text(encoding="utf-8")
         guard = (
             "\tsummary, summaryErr := skillsSummary(ctx, loader)\n"
@@ -329,7 +329,13 @@ def verify_retirement() -> dict[str, Any]:
     require(not unexpected, f"changed paths outside C110 ownership: {unexpected}")
     shared_changes = [path for path in paths if path in SHARED_LEASE_PATHS]
     require(not shared_changes, f"C79-owned shared paths changed before guarded release: {shared_changes}")
-    require(not (REPO_ROOT / "go-agent-runtime/services/session/internal/instructions/service.go").exists(), "old duplicate instruction service still exists")
+    compatibility_service_rel = Path("go-agent-runtime/services/session/internal/instructions/service.go")
+    compatibility_service = REPO_ROOT / compatibility_service_rel
+    require(
+        compatibility_service.is_file()
+        and compatibility_service.read_bytes() == git_file("origin/main", compatibility_service_rel),
+        "historical session instruction service compatibility source changed",
+    )
 
     callers: list[dict[str, Any]] = []
     for relative in CALLER_PATHS:
@@ -342,15 +348,16 @@ def verify_retirement() -> dict[str, Any]:
     compatibility = REPO_ROOT / "go-agent-runtime/services/session/wire/providers.go"
     compatibility_text = compatibility.read_text(encoding="utf-8")
     require("func NewInstructionService()" in compatibility_text, "session Wire compatibility constructor is missing")
-    require("sessioninstructions.Factory{}.Build()" in compatibility_text, "session Wire compatibility constructor does not use the public stateless bridge")
+    require("instructionservice.New" in compatibility_text, "session Wire compatibility constructor does not preserve its private implementation boundary")
 
     evidence_paths = [
         str(LEGACY_REL),
         "go-agent-runtime/services/sessioninstructions/contract.go",
-        "go-agent-runtime/services/sessioninstructions/service.go",
         "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go",
+        "go-agent-runtime/services/session/instructions.go",
+        "go-agent-runtime/services/session/internal/instructions/service.go",
         "go-agent-runtime/services/session/wire/providers.go",
         "go-agent-runtime/services/session/wire/wire_gen.go",
         str(ROOT.relative_to(REPO_ROOT) / "verify.py"),
@@ -379,7 +386,7 @@ def verify_retirement() -> dict[str, Any]:
             "compatibility_api": {
                 "path": str(compatibility.relative_to(REPO_ROOT)),
                 "constructor": "NewInstructionService",
-                "delegates_to": "sessioninstructions.Factory{}.Build",
+                "delegates_to": "session/internal/instructions.New",
             },
         },
         "c79_lease": {

@@ -14,9 +14,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	agent "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
+	instructionservice "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/instructions"
 	persistence "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/service"
-	sessioninstructions "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -43,6 +43,13 @@ func NewService(deps Dependencies) session.Service {
 	return nil
 }
 
+// NewInstructionService assembles the stateless session instruction policy
+// service while exposing only its public contract to hosts and embedders.
+func NewInstructionService() session.InstructionService {
+	wire.Build(instructionservice.New, wire.Bind(new(session.InstructionService), new(*instructionservice.Service)))
+	return nil
+}
+
 // NewFileStoreFactory assembles the built-in durable store factory. The
 // factory is deliberately separate from NewService: embedders may inject a
 // remote or in-memory SessionStore, while CLI hosts opt into the canonical
@@ -50,17 +57,6 @@ func NewService(deps Dependencies) session.Service {
 func NewFileStoreFactory() session.FileStoreFactory {
 	wire.Build(newFileStoreFactory, wire.Bind(new(session.FileStoreFactory), new(*persistence.Factory)))
 	return nil
-}
-
-// NewInstructionService preserves the session package's exported constructor
-// while delegating policy ownership to the dedicated sessioninstructions graph.
-func NewInstructionService() session.InstructionService {
-	wire.Build(newInstructionService)
-	return nil
-}
-
-func newInstructionService() session.InstructionService {
-	return sessioninstructions.Factory{}.Build()
 }
 
 func newFileStoreFactory() *persistence.Factory { return persistence.NewFactory() }
