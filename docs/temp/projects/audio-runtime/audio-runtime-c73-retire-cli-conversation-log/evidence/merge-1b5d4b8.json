@@ -1,0 +1,83 @@
+{
+  "task": "audio-runtime-c73-retire-cli-conversation-log",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "session": "~default",
+  "testedSourceRevision": "1b5d4b8dc3a9a4372ccaf508c12b7be4cc997d9f",
+  "c73Checkpoint": "06a9f90331e79b1bc105293532eec1527df64d24",
+  "originMain": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+  "parents": [
+    "06a9f90331e79b1bc105293532eec1527df64d24",
+    "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f"
+  ],
+  "admission": {
+    "verifyWork": "admitted",
+    "branch": "codex/audio-runtime-c73-retire-cli-conversation-log",
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c73-retire-cli-conversation-log",
+    "secondProject": false,
+    "acceptanceWaiver": false
+  },
+  "ancestry": {
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "planningOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "acceptedMainAncestor": true,
+    "fetchedOriginMainIntegrated": true,
+    "currentOriginMainAncestor": true
+  },
+  "retirement": {
+    "acceptedMainProductionLines": 531,
+    "candidateProductionLines": 112,
+    "retiredProductionLines": 419,
+    "minimumRetiredProductionLines": 266,
+    "candidateSHA256": "81a041066c854944adf0312a465ffe32b3ab583d52cacef00eb597db6f95468b"
+  },
+  "focusedEvidence": {
+    "serviceNormal": "12 passed in 3 packages",
+    "serviceRace": "30 passed in 3 packages",
+    "externalConsumer": "GOWORK=off passed",
+    "mutationArrivalOrder": "expected oracle failure passed",
+    "mutationNoBound": "expected oracle failure passed",
+    "cliConversationNormal": "10 passed",
+    "cliConversationRace": "30 passed",
+    "recordedRegression": "passed",
+    "nonRecordedRegression": "passed",
+    "negativeControls": "passed",
+    "coverageRegistration": "179 workspace packages across 6 modules passed",
+    "vet": "passed",
+    "pinnedStaticcheck": "passed",
+    "pinnedGolangciLint": "all modules 0 issues",
+    "diffCheck": "passed"
+  },
+  "preservedResiduals": {
+    "broadCLIRace": "395 passed, 1 failed in C61-owned TestBrowserConversationCommandValidatorReadsBoundedStructuredVerdict; no peer source changed",
+    "changedCoverage": "failed in unrelated go-agent-loop functional tool linking because a shared Go build-cache object was missing; no C73 assertion or source failure was reported",
+    "architecture": [
+      "six stale C73 session_conversation_log.go baseline entries",
+      "generated-file-spoof for go-agent-runtime/services/conversationlog/wire/wire_gen.go"
+    ],
+    "wire": "go-agent-runtime/services/conversationlog/wire/wire_gen.go is not registered in scripts/wire-packages.txt"
+  },
+  "sharedLeaseBlockers": [
+    {
+      "owner": "C57",
+      "pullRequest": 449,
+      "state": "OPEN",
+      "path": "scripts/wire-packages.txt",
+      "requiredChange": "add only go-agent-runtime/services/conversationlog/wire after the exact lease releases"
+    },
+    {
+      "owner": "C61",
+      "pullRequest": 452,
+      "state": "OPEN",
+      "path": "docs/architecture/architecture-size-baseline.json",
+      "requiredChange": "delete only the six demonstrated stale C73 entries after the exact lease releases"
+    }
+  ],
+  "preserved": [
+    "No shared Wire registry or architecture baseline edit",
+    "No C47 coverage repair or tolerance change",
+    "No host checkout reset or predecessor checkpoint rewrite",
+    "No CI polling or green-CI claim"
+  ],
+  "nextAction": "Retain C73 ownership while C57 and C61 retain their open exact leases; after release, apply only the demonstrated Wire registration and six downward baseline deletions, rerun focused gates, push the changed head and submit the same task to script CI without polling."
+}

@@ -1,0 +1,67 @@
+{
+  "task": "audio-runtime-c73-retire-cli-conversation-log",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "session": "~default",
+  "head": "b790a14ca3d66da7dc647c167c00817a47346bd8",
+  "branch": "codex/audio-runtime-c73-retire-cli-conversation-log",
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c73-retire-cli-conversation-log",
+  "admission": {
+    "verifyWork": "admitted",
+    "secondProject": false,
+    "acceptanceWaiver": false
+  },
+  "ancestry": {
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "planningOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "fetchedOriginMain": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+    "fetchedOriginMainAncestor": true,
+    "workingTreeBeforeCheckpoint": "clean"
+  },
+  "retirement": {
+    "acceptedMainProductionLines": 531,
+    "candidateProductionLines": 112,
+    "retiredProductionLines": 419,
+    "minimumRetiredProductionLines": 266,
+    "ownedProductionPath": "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go"
+  },
+  "focusedChecks": {
+    "serviceNormal": "12 passed in 3 packages",
+    "serviceRace": "30 passed in 3 packages",
+    "frozenJSONLAndTiming": "passed",
+    "arrivalOrderMutation": "control passed; mutation failed its intended late-item attribution oracle",
+    "noBoundMutation": "control passed; mutation failed its intended 64 KiB suffix oracle",
+    "externalConsumer": "GOWORK=off passed",
+    "recordedAudioToolRegression": "passed",
+    "nonRecordedAudioToolRegression": "passed",
+    "negativeControls": "passed"
+  },
+  "sharedLeases": {
+    "wire": {
+      "owner": "C57",
+      "pullRequest": 449,
+      "path": "scripts/wire-packages.txt",
+      "status": "held",
+      "requiredChange": "add only go-agent-runtime/services/conversationlog/wire"
+    },
+    "architecture": {
+      "owner": "C61",
+      "pullRequest": 452,
+      "path": "docs/architecture/architecture-size-baseline.json",
+      "status": "held",
+      "requiredChange": "delete only the six demonstrated stale C73 entries"
+    }
+  },
+  "review": {
+    "pullRequest": 464,
+    "independentReviewStarted": false,
+    "priorFeedback": "executor checkpoints only; no independent review findings"
+  },
+  "preserved": [
+    "No shared Wire registry edit",
+    "No architecture baseline edit",
+    "No peer-owned source or predecessor checkpoint edit",
+    "No CI-green, review, merge, vertical or project acceptance claim"
+  ],
+  "nextAction": "After the C57 and C61 exact shared-file leases release, fetch and integrate the latest origin/main, add only the demonstrated conversationlog Wire registration and six downward/deletion baseline changes, rerun focused/shared gates, commit and push the same PR, then submit the changed head to SCRIPT CI without polling."
+}

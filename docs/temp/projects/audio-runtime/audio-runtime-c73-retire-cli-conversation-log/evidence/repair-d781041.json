@@ -1,0 +1,94 @@
+{
+  "task": "audio-runtime-c73-retire-cli-conversation-log",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "session": "~default",
+  "head": "d781041fefed17614b5dcba4d1a905d98622ef8d",
+  "parentCheckpoints": [
+    "ef62a39ee8a64b8e73b6c532d9a422afa175ffba",
+    "788292348304bcf30b9ea2652b0d34c646bfc426"
+  ],
+  "admission": {
+    "verifyWork": "admitted",
+    "branch": "codex/audio-runtime-c73-retire-cli-conversation-log",
+    "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c73-retire-cli-conversation-log",
+    "secondProject": false,
+    "acceptanceWaiver": false
+  },
+  "ancestry": {
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "planningOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "fetchedOriginMain": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+    "fetchedOriginMainIntegrated": false,
+    "reason": "implementation-handoff requires C57 Wire and C61 architecture leases to release before current-main integration"
+  },
+  "ciRejection": {
+    "run": "34673174431",
+    "head": "ef62a39ee8a64b8e73b6c532d9a422afa175ffba",
+    "static": {
+      "wire": "unregistered go-agent-runtime/services/conversationlog/wire/wire_gen.go",
+      "architecture": [
+        "six stale C73 session_conversation_log.go baseline entries",
+        "generated-file-spoof services/conversationlog/wire/wire_gen.go"
+      ],
+      "lintAndStaticcheck": "three unused CLI compatibility aliases"
+    },
+    "coverage": {
+      "failure": "C47-owned TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test45/provider_burst",
+      "observed": "171191/177591 compared samples; exactly 6400 lost; zero drop/discard/overflow events",
+      "ownership": "not C73-owned; preserved without masking"
+    }
+  },
+  "repairs": [
+    "Removed only the three lint-dead TurnInput, TurnResponse and ToolEvent CLI aliases; retained the three aliases used by recording/image callers and the thin reducer adapter.",
+    "Corrected cli-retirement verification to assert the three retained alias declarations rather than counting removed dead aliases.",
+    "Corrected verifier all mode to mark both deliberate mutation checks as expected failures."
+  ],
+  "retirement": {
+    "acceptedMainProductionLines": 531,
+    "candidateProductionLines": 112,
+    "retiredProductionLines": 419,
+    "minimumRetiredProductionLines": 266,
+    "policyTokens": [],
+    "cliRetirementVerifier": "passed"
+  },
+  "focusedEvidence": {
+    "serviceNormal": "12 passed in 3 packages",
+    "serviceRaceCount3": "36 passed in 3 packages",
+    "externalConsumerNormal": "passed",
+    "externalConsumerRace": "passed",
+    "cliNormalSelector": "396 passed",
+    "cliExactConversationRecordingRaceCount3": "63 passed",
+    "cliBroadRaceSelector": "395 passed, one known browser-validator timing failure; no peer source changed",
+    "frozenAndMutationVerifierAll": "passed; both mutations failed their intended independent oracles",
+    "publicNonRecordedAudioTool": "passed",
+    "publicRecordedSessionLog": "passed",
+    "publicNegativeControls": "passed",
+    "coverageRegistration": "179 workspace packages across 6 modules passed",
+    "vet": "passed",
+    "pinnedStaticcheck": "all modules passed",
+    "pinnedGolangciLint": "all modules 0 issues",
+    "diffCheck": "passed"
+  },
+  "sharedLeaseBlockers": [
+    {
+      "owner": "C57",
+      "pullRequest": 449,
+      "path": "scripts/wire-packages.txt",
+      "evidence": "make wire-check reports the generated C73 Wire path unregistered"
+    },
+    {
+      "owner": "C61",
+      "pullRequest": 452,
+      "path": "docs/architecture/architecture-size-baseline.json",
+      "evidence": "make architecture-size-check reports six stale C73 entries and generated-file-spoof"
+    }
+  ],
+  "preserved": [
+    "No shared Wire registry or architecture baseline edit",
+    "No C47 coverage repair or acceptance waiver",
+    "No host checkout reset or predecessor checkpoint rewrite",
+    "No CI polling or green-CI claim"
+  ],
+  "nextAction": "When C57 and C61 release the exact shared leases, integrate fetched origin/main 84c91ee1, apply only the demonstrated downward registry/baseline changes, rerun focused gates, push and submit this same task to script CI without polling."
+}

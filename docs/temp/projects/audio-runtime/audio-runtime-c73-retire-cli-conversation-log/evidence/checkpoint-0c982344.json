@@ -1,0 +1,85 @@
+{
+  "task": "audio-runtime-c73-retire-cli-conversation-log",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "session": "~default",
+  "head": "0c982344e89c17e7ced6469a6b759578e6c90cd7",
+  "branch": "codex/audio-runtime-c73-retire-cli-conversation-log",
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c73-retire-cli-conversation-log",
+  "admission": {
+    "verifyWork": "admitted",
+    "secondProject": false,
+    "acceptanceWaiver": false
+  },
+  "ancestry": {
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "planningOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "fetchedOriginMain": "84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f",
+    "fetchedOriginMainAncestor": true,
+    "workingTreeBeforeCheckpoint": "clean"
+  },
+  "retirement": {
+    "acceptedMainProductionLines": 531,
+    "candidateProductionLines": 112,
+    "retiredProductionLines": 419,
+    "minimumRetiredProductionLines": 266,
+    "ownedProductionPath": "agent-cli/internal/services/internal/agentruntime/session_conversation_log.go"
+  },
+  "focusedChecks": [
+    "go test ./go-agent-runtime/services/conversationlog/... -count=1: 12 passed in 3 packages",
+    "go test -race ./go-agent-runtime/services/conversationlog/... -run 'Transcript|Tool|Snapshot|Timing|Cancel|Bound|JSON' -count=3: 30 passed in 3 packages",
+    "GOWORK=off external consumer normal and race: passed",
+    "frozen JSONL/timing verifier: passed",
+    "arrival-order mutation: control passed and intended oracle failed",
+    "no-bound mutation: control passed and intended oracle failed",
+    "CLI Conversation|Recording|Audio|Tool|Continuation normal: 396 passed",
+    "recorded, non-recorded and runner-negative accumulated regressions: passed",
+    "make coverage-registration: 179 workspace packages across 6 modules passed",
+    "git diff --check: passed"
+  ],
+  "sharedGateFindings": {
+    "wire": {
+      "owner": "C57",
+      "path": "scripts/wire-packages.txt",
+      "status": "blocked",
+      "finding": "unregistered go-agent-runtime/services/conversationlog/wire/wire_gen.go"
+    },
+    "architecture": {
+      "owner": "C61",
+      "path": "docs/architecture/architecture-size-baseline.json",
+      "status": "blocked",
+      "findings": [
+        "six stale session_conversation_log.go baseline entries",
+        "generated-file-spoof services/conversationlog/wire/wire_gen.go"
+      ]
+    }
+  },
+  "hostedCI": {
+    "run": "34676164543",
+    "head": "0c982344e89c17e7ced6469a6b759578e6c90cd7",
+    "static": {
+      "job": "103506300387",
+      "result": "failed only on the two shared C73 gate blockers above"
+    },
+    "coverage": {
+      "job": "103506300433",
+      "result": "peer-owned failure",
+      "finding": "replay mismatch diagnostic followed by fatal error: found bad pointer in Go heap in the existing vision/replay integration path"
+    },
+    "integration": {
+      "job": "103506300412",
+      "result": "peer-owned C47 failure",
+      "finding": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_02 rendered 171191/177591 compared samples, losing exactly 6400; drops/overflow/discards were zero"
+    },
+    "independentReview": "not started",
+    "merge": "not performed"
+  },
+  "ownership": {
+    "sharedFilesUntouched": [
+      "scripts/wire-packages.txt",
+      "docs/architecture/architecture-size-baseline.json"
+    ],
+    "peerOwnedFailuresPreserved": true
+  },
+  "nextAction": "Retain C73 ownership. When C57 releases scripts/wire-packages.txt and C61 releases docs/architecture/architecture-size-baseline.json, fetch and integrate the latest origin/main, add only the conversationlog Wire registration and the six demonstrated downward/deletion baseline changes, rerun the focused/shared gates, commit and push the same PR, then return ACCEPTED to Script CI without polling."
+}

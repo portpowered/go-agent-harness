@@ -1,0 +1,79 @@
+{
+  "task": "audio-runtime-c73-retire-cli-conversation-log",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "branch": "codex/audio-runtime-c73-retire-cli-conversation-log",
+  "head": "bb6e30b2",
+  "predecessorCheckpoints": ["9300d1ae", "dd451954"],
+  "admission": "admitted",
+  "ancestry": {
+    "startupIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "planningOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "fetchedExecutionOriginMain": "d5d6f84363d8569d5dc1a59985f8d45cf50e1d06",
+    "ancestorChecks": "passed",
+    "hostCheckoutReset": false
+  },
+  "retirement": {
+    "acceptedMainProductionLines": 531,
+    "candidateCLIBridgeLines": 121,
+    "retiredCLILines": 410,
+    "minimumRetiredLines": 266,
+    "bridgePolicyTokens": []
+  },
+  "repair": {
+    "privateImplementationFiles": [
+      "go-agent-runtime/services/conversationlog/internal/service/clone.go",
+      "go-agent-runtime/services/conversationlog/internal/service/observe.go",
+      "go-agent-runtime/services/conversationlog/internal/service/service.go",
+      "go-agent-runtime/services/conversationlog/internal/service/snapshot.go"
+    ],
+    "productionLineCounts": {
+      "clone.go": 54,
+      "observe.go": 180,
+      "service.go": 177,
+      "snapshot.go": 152
+    },
+    "rootCompositionTestMoved": true,
+    "wireCoverageTestAdded": "go-agent-runtime/services/conversationlog/wire/wire_test.go",
+    "mutationHarnessUpdated": true
+  },
+  "focusedEvidence": {
+    "serviceNormal": "go test ./go-agent-runtime/services/conversationlog/... -count=5 passed",
+    "serviceRace": "go test -race ./go-agent-runtime/services/conversationlog/... -count=3 passed",
+    "externalConsumer": "GOWORK=off external-consumer go test ./... -count=3 passed",
+    "cliNormal": "agentruntime Conversation|Recording|Audio|Tool|Continuation selector passed",
+    "frozenControls": "frozen JSONL/timing and external consumer passed",
+    "mutations": "arrival-order and no-bound controls failed their intended oracle after positive control passed",
+    "coverage": "conversationlog 100.0%, internal/service 90.1%, wire 100.0%",
+    "coverageRegistration": "179 workspace packages across 6 modules passed",
+    "wireGeneration": "direct GOWORK=off go generate for conversationlog/wire passed with no drift",
+    "lint": "local conversationlog golangci-lint passed",
+    "vet": "conversationlog go vet passed",
+    "staticcheck": "conversationlog staticcheck passed",
+    "diffCheck": "passed"
+  },
+  "knownPeerOwnedFailure": "CLI race selector reproduced existing browser-validator timeout and audio-device/replay mismatch; no peer-owned source changed.",
+  "sharedLeaseBlockers": [
+    {
+      "owner": "C57",
+      "pullRequest": 449,
+      "path": "scripts/wire-packages.txt",
+      "gate": "wire-check reports unregistered go-agent-runtime/services/conversationlog/wire/wire_gen.go"
+    },
+    {
+      "owner": "C61",
+      "pullRequest": 452,
+      "path": "docs/architecture/architecture-size-baseline.json",
+      "gate": "architecture-size-check reports six stale C73 session_conversation_log entries"
+    }
+  ],
+  "ciReview": {
+    "priorPR": 464,
+    "priorRejectedHead": "9300d1ae",
+    "priorStaticFinding": "generated-Wire registration, architecture stale entries, and initial size/composition findings",
+    "currentHeadSubmitted": false,
+    "ciGreen": false,
+    "independentReview": "not started"
+  },
+  "nextAction": "Push bb6e30b2 and update PR 464, then retain C73 ownership until C57/C61 release their exact shared-file leases; integrate accepted current main and make only downward/deletion registry repairs before changed-head CI handoff."
+}
