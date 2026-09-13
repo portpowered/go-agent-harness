@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
@@ -173,25 +174,56 @@ func TestRunRoom_BoundGraceExpiryCancelsActiveResponseCleanly(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			const activeID = "active"
 			const peerID = "peer"
+			activeEvents := []messages.StreamMessage{roomTestSessionOpen(activeID)}
+			if testCase.name == "duration" {
+				// Queue the active response with the provider handshake. The room
+				// duration starts during connection admission, so injecting it only
+				// after readiness would allow the bound to legitimately win first.
+				activeEvents = append(activeEvents, roomTestMessageStart())
+			}
 			inferencers := map[string]*roomTestInferencer{
-				activeID: {events: []messages.StreamMessage{roomTestSessionOpen(activeID)}},
+				activeID: {events: activeEvents},
 				peerID:   {events: []messages.StreamMessage{roomTestSessionOpen(peerID)}},
 			}
 			opts, _ := newRoomTestRunOptions([]string{activeID, peerID}, inferencers)
 			opts.OutputDir = filepath.Join(t.TempDir(), "room-run")
 			opts.BoundShutdownGrace = 40 * time.Millisecond
+			// This oracle isolates room-bound response ownership from the mixer’s
+			// periodic silence ingress. The room still constructs and tears down the
+			// production mixer; no provider audio is needed to prove the bound
+			// cancellation ordering.
+			opts.MixerConfig.CadenceFactory = func(time.Duration) room.PCM16Cadence {
+				return roomBoundTestNoTickCadence{}
+			}
 			testCase.bound(&opts)
 
 			ready := make(chan string, 2)
 			bound := make(chan RoomTerminationReason, 1)
 			stream := make(chan roomBoundStreamObservation, 16)
+			activeResponseObserved := make(chan struct{}, 1)
 			diagnostics := make(chan struct {
 				participantID string
 				record        SessionDiagnosticRecord
 			}, 128)
 			opts.OnParticipantReady = func(result RoomParticipantReady) { ready <- result.ParticipantID }
-			opts.onRoomBoundShutdown = func(reason RoomTerminationReason) { bound <- reason }
+			opts.onRoomBoundShutdown = func(reason RoomTerminationReason) {
+				if got := roomBoundTestResponseCancelCount(inferencers[activeID]); got != 0 {
+					t.Errorf("active response cancellations before grace expiry = %d, want zero", got)
+				}
+				select {
+				case <-activeResponseObserved:
+				default:
+					t.Errorf("room bound began before active response observation")
+				}
+				bound <- reason
+			}
 			opts.onParticipantStream = func(participantID string, message messages.StreamMessage) {
+				if participantID == activeID && message.Type == messages.StreamTypeMessageStart {
+					select {
+					case activeResponseObserved <- struct{}{}:
+					default:
+					}
+				}
 				stream <- roomBoundStreamObservation{participantID: participantID, message: message}
 			}
 			opts.OnDiagnostic = func(participantID string, record SessionDiagnosticRecord) {
@@ -214,11 +246,11 @@ func TestRunRoom_BoundGraceExpiryCancelsActiveResponseCleanly(t *testing.T) {
 			if testCase.name == "turn" {
 				writeRoomBoundTestEvents(t, activeSession, roomTestResponse("active first"))
 				awaitRoomBoundTestMessage(t, stream, activeID, messages.StreamTypeMessageEnd)
+				writeRoomBoundTestEvents(t, activeSession, []messages.StreamMessage{
+					{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
+				})
 			}
 			// Ensure the response is observable before waiting for either bound.
-			writeRoomBoundTestEvents(t, activeSession, []messages.StreamMessage{
-				{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
-			})
 			awaitRoomBoundTestMessage(t, stream, activeID, messages.StreamTypeMessageStart)
 			if testCase.name == "turn" {
 				writeRoomBoundTestEvents(t, peerSession, roomTestResponse("peer first"))
@@ -303,6 +335,11 @@ func TestRunRoom_BoundGraceExpiryCancelsActiveResponseCleanly(t *testing.T) {
 		})
 	}
 }
+
+type roomBoundTestNoTickCadence struct{}
+
+func (roomBoundTestNoTickCadence) C() <-chan time.Time { return nil }
+func (roomBoundTestNoTickCadence) Stop()               {}
 
 func TestRunRoom_BoundGraceProviderFailureRemainsAuthoritative(t *testing.T) {
 	const (
@@ -439,6 +476,17 @@ func waitRoomBoundTestSession(t *testing.T, inferencer *roomTestInferencer) *roo
 			time.Sleep(time.Millisecond)
 		}
 	}
+}
+
+func roomBoundTestResponseCancelCount(inferencer *roomTestInferencer) int {
+	if inferencer == nil {
+		return 0
+	}
+	sessions := inferencer.sessionsSnapshot()
+	if len(sessions) != 1 {
+		return 0
+	}
+	return sessions[0].sentTypeCountSnapshot(messages.StreamTypeResponseCancel)
 }
 
 func writeRoomBoundTestEvents(t *testing.T, session *roomTestSession, events []messages.StreamMessage) {

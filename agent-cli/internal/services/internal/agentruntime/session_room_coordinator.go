@@ -18,10 +18,14 @@ type roomCoordinator struct {
 	boundCancellation chan struct{}
 	cancel            context.CancelFunc
 
-	mu                    sync.Mutex
-	reason                RoomTerminationReason
-	err                   error
-	active                map[string]*roomParticipantRuntime
+	mu     sync.Mutex
+	reason RoomTerminationReason
+	err    error
+	active map[string]*roomParticipantRuntime
+	// boundRuntimes preserves the participants captured at the bound until the
+	// grace window expires. A participant may retire from active while its
+	// already-started response still needs the force-phase cancellation.
+	boundRuntimes         []*roomParticipantRuntime
 	results               map[string]RoomParticipantResult
 	maxTurns              int
 	progress              chan struct{}
@@ -147,6 +151,7 @@ func (c *roomCoordinator) beginBoundShutdown(reason RoomTerminationReason, err e
 			runtime.lifecycle.markCoordinatorStopping(true, reason)
 		}
 	}
+	c.boundRuntimes = append(c.boundRuntimes[:0], runtimes...)
 	c.mu.Unlock()
 
 	c.closeAdmission()
@@ -190,11 +195,18 @@ func (c *roomCoordinator) forceBoundShutdown() {
 		}
 		c.boundForced = true
 		var firstFailure error
-		runtimes := make([]*roomParticipantRuntime, 0, len(c.active))
-		for _, runtime := range c.active {
+		runtimes := append([]*roomParticipantRuntime(nil), c.boundRuntimes...)
+		if len(runtimes) == 0 {
+			for _, runtime := range c.active {
+				if runtime != nil {
+					runtimes = append(runtimes, runtime)
+				}
+			}
+		}
+		for _, runtime := range runtimes {
 			if runtime != nil {
-				runtimes = append(runtimes, runtime)
 				if runtime.lifecycle != nil {
+					runtime.lifecycle.markCoordinatorStopping(true, c.reason)
 					runtime.lifecycle.markBoundCancellation()
 					observation := runtime.lifecycle.terminalObservationSnapshot()
 					if firstFailure == nil && observation.failure {
