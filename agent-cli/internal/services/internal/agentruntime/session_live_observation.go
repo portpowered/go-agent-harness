@@ -215,6 +215,8 @@ func (s *observedSession) Send(ctx context.Context, msg messages.StreamMessage) 
 // session lifecycle boundary. Tool calls are resolved only after this method
 // reports success from the wrapped provider session.
 func (s *observedSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	unlockProviderBoundary := s.progress.lockProviderBoundary()
+	defer unlockProviderBoundary()
 	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
 	if !outcome.OK() {
 		if msg.Type == messages.StreamTypeToolCallEnd && s.progress != nil {
@@ -282,6 +284,8 @@ func (s *observedSession) SessionAdmissionAllowsCompleteMessage(msg messages.Mes
 // RequestResponse forwards the optional explicit response request while
 // preserving the capability boundary of replay and injected sessions.
 func (s *observedSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
+	unlockProviderBoundary := s.progress.lockProviderBoundary()
+	defer unlockProviderBoundary()
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllows(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}) {
 		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}
 	}
@@ -303,6 +307,8 @@ func (s *observedSession) SupportsResponseRequests() bool {
 // observation wrapper embeds the stream-only public Session interface, so it
 // must preserve the rich tool-result path used by multimodal sessions.
 func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
+	unlockProviderBoundary := s.progress.lockProviderBoundary()
+	defer unlockProviderBoundary()
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
 		return false
 	}
@@ -318,6 +324,8 @@ func (s *observedSession) SendMessage(ctx context.Context, msg messages.Message)
 // SendMessageWithoutResponse preserves deferred rich-message delivery for
 // callers that batch tool results before requesting one provider response.
 func (s *observedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	unlockProviderBoundary := s.progress.lockProviderBoundary()
+	defer unlockProviderBoundary()
 	if s.SessionAdmissionClosed() && !s.SessionAdmissionAllowsCompleteMessage(msg) {
 		return false
 	}

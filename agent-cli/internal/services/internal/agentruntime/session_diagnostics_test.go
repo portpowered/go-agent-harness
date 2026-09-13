@@ -33,13 +33,11 @@ func (s *diagnosticRecordSink) RecordSessionDiagnostic(record SessionDiagnosticR
 	defer s.mu.Unlock()
 	s.records = append(s.records, record)
 }
-
 func (s *diagnosticRecordSink) all() []SessionDiagnosticRecord {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]SessionDiagnosticRecord(nil), s.records...)
 }
-
 func (s *diagnosticRecordSink) events(event string) []SessionDiagnosticRecord {
 	var matched []SessionDiagnosticRecord
 	for _, record := range s.all() {
@@ -62,15 +60,12 @@ type sessionDiagnosticArtifacts struct {
 func (a sessionDiagnosticArtifacts) failureRecords() []SessionDiagnosticRecord {
 	return a.records.events(SessionDiagnosticEventFailure)
 }
-
 func (a sessionDiagnosticArtifacts) turnRecords() []SessionDiagnosticRecord {
 	return a.records.events(SessionDiagnosticEventTurn)
 }
-
 func (a sessionDiagnosticArtifacts) toolCallRecords() []SessionDiagnosticRecord {
 	return a.records.events(SessionDiagnosticEventToolCall)
 }
-
 func (a sessionDiagnosticArtifacts) series(direction metrics.Direction, modality metrics.Modality) metrics.SeriesSnapshot {
 	return a.snapshot.SeriesFor(direction, modality)
 }
@@ -121,6 +116,20 @@ func TestSessionProgressObserver_IgnoresNonTerminalProviderDiagnostic(t *testing
 
 	if observer.failure != nil {
 		t.Fatalf("nonterminal provider diagnostic became a session failure: %#v", observer.failure)
+	}
+}
+
+func TestSessionProgressObserver_RetainsRejectedAcceptedResultObligation(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	if err := observer.lifecycle.Close(); err != nil {
+		t.Fatalf("close lifecycle: %v", err)
+	}
+
+	// A provider-send acknowledgement that arrives after the lifecycle has
+	// closed must not clear the adapter's unresolved obligation.
+	observer.noteToolResultAccepted("call-after-close")
+	if got := observer.unresolvedToolCallIDs(); len(got) != 1 || got[0] != "call-after-close" {
+		t.Fatalf("rejected accepted-result obligation = %v, want [call-after-close]", got)
 	}
 }
 
@@ -333,7 +342,6 @@ func TestSessionDiagnostics_ConnectPhaseFailureEmitsOneCanonicalRecord(t *testin
 		}
 	}
 }
-
 func TestSessionDiagnostics_MidStreamFailureEmitsOneCanonicalRecord(t *testing.T) {
 	sessionInf := &scriptedSessionInferencer{
 		events: []messages.StreamMessage{
@@ -374,7 +382,6 @@ func TestSessionDiagnostics_MidStreamFailureEmitsOneCanonicalRecord(t *testing.T
 		}
 	}
 }
-
 func TestSessionDiagnostics_DrainPhaseFailureEmitsOneCanonicalRecord(t *testing.T) {
 	sessionInf := &scriptedSessionInferencer{
 		events: []messages.StreamMessage{
@@ -425,7 +432,6 @@ func TestSessionDiagnostics_AuthFailureFixtureIsDiagnosable(t *testing.T) {
 			input.EventCount, input.TotalBytes, output.EventCount, output.TotalBytes)
 	}
 }
-
 func TestSessionDiagnostics_MidSessionDisconnectFixtureIsDiagnosable(t *testing.T) {
 	artifacts := runReplayFixture(t, "session_failure_disconnect.session.json")
 	if err := matchFailureSignature(artifacts, signatureDisconnect); err != nil {
@@ -437,14 +443,12 @@ func TestSessionDiagnostics_MidSessionDisconnectFixtureIsDiagnosable(t *testing.
 			text.EventCount, text.TotalBytes, len("partial answer before the transport died"))
 	}
 }
-
 func TestSessionDiagnostics_MalformedFrameFixtureIsDiagnosable(t *testing.T) {
 	artifacts := runReplayFixture(t, "session_failure_malformed_frame.session.json")
 	if err := matchFailureSignature(artifacts, signatureMalformedFrame); err != nil {
 		t.Fatal(err)
 	}
 }
-
 func TestSessionDiagnostics_ToolCallFailureFixtureIsDiagnosable(t *testing.T) {
 	artifacts := runReplayFixture(t, "session_failure_tool_call.session.json")
 	if err := matchToolCallFailureSignature(artifacts); err != nil {
@@ -481,7 +485,6 @@ func TestSessionDiagnostics_HealthyMultiTurnFixtureYieldsReceivedAudioSeries(t *
 		t.Fatalf("turn 2 record = %v, want turn_index=2 output_text_bytes=17", second)
 	}
 }
-
 func TestSessionDiagnostics_SilentAudioInputAttributesZeroBytesToItsTurn(t *testing.T) {
 	sessionInf := &scriptedSessionInferencer{
 		events: []messages.StreamMessage{
@@ -563,7 +566,6 @@ func TestSessionDiagnostics_ZeroTurnDeadSessionFailsEveryDiagnosis(t *testing.T)
 		}
 	}
 }
-
 func TestSessionDiagnostics_FailureModeSignaturesArePairwiseDistinct(t *testing.T) {
 	artifactSets := map[string]sessionDiagnosticArtifacts{}
 	for _, mode := range closedSetModes {
@@ -616,7 +618,6 @@ func TestSessionDiagnostics_FailureModeSignaturesArePairwiseDistinct(t *testing.
 		}
 	}
 }
-
 func TestSessionDiagnostics_HealthyRunMatchesNoFailureSignature(t *testing.T) {
 	healthy := runReplayFixture(t, "session_healthy_multiturn_audio.session.json")
 	for _, mode := range closedSetModes {
@@ -634,7 +635,6 @@ func TestSessionDiagnostics_CleanCloseProducesNoFailureRecord(t *testing.T) {
 		t.Fatalf("clean run emitted %d failure records, want 0", len(failures))
 	}
 }
-
 func TestSessionDiagnostics_OnlyNoExecutorToolCallsAreUnexecutable(t *testing.T) {
 	newToolCall := func() messages.StreamMessage {
 		return messages.StreamMessage{

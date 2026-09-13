@@ -131,10 +131,8 @@ func TestSessionProgressObserver_ChainedToolContinuationCreditsPredecessor(t *te
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ResponseID: firstContinuationID, ToolCallId: secondCallID, Value: messages.NewToolCallEndValue(secondCallID, "second_tool", `{}`)})
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: firstContinuationID, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
 
-	observer.toolStateMu.Lock()
-	firstState := observer.toolContinuations[firstCallID]
-	firstComplete := firstState != nil && firstState.continuationComplete
-	observer.toolStateMu.Unlock()
+	firstState, firstOK := observer.continuationState(firstCallID)
+	firstComplete := firstOK && firstState.ContinuationComplete
 	if !firstComplete {
 		t.Fatal("chained tool response stranded the predecessor continuation")
 	}
@@ -145,10 +143,8 @@ func TestSessionProgressObserver_ChainedToolContinuationCreditsPredecessor(t *te
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: secondContinuationID, Value: messages.NewTextDeltaValue("all done")})
 	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: secondContinuationID, Value: &messages.MessageEndValue{Type: "message_end", Status: "completed"}})
 
-	observer.toolStateMu.Lock()
-	secondState := observer.toolContinuations[secondCallID]
-	secondComplete := secondState != nil && secondState.continuationComplete
-	observer.toolStateMu.Unlock()
+	secondState, secondOK := observer.continuationState(secondCallID)
+	secondComplete := secondOK && secondState.ContinuationComplete
 	if !secondComplete {
 		t.Fatal("final chained continuation did not complete")
 	}
@@ -180,7 +176,7 @@ func TestSessionProgressObserver_UnknownScheduledResponseIDCannotFallbackToCurre
 
 func TestSessionProgressObserver_LateDispositionCannotClearNewerScheduledOwner(t *testing.T) {
 	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
-	observer.scheduledResponses = []scheduledAudioResponseLifecycle{{}}
+	observer.scheduledResponses = []scheduledAudioResponseLifecycle{{}, {}}
 	if !observer.bindScheduledResponseID(0, "response-old") || !observer.setActiveScheduledResponseWithID(0, "response-old") {
 		t.Fatal("failed to establish initial scheduled owner")
 	}
@@ -189,7 +185,7 @@ func TestSessionProgressObserver_LateDispositionCannotClearNewerScheduledOwner(t
 		t.Fatalf("cancelled lifecycle count = %d, want 1", observer.completedScheduled)
 	}
 
-	if !observer.bindScheduledResponseID(0, "response-new") || !observer.setActiveScheduledResponseWithID(0, "response-new") {
+	if !observer.bindScheduledResponseID(1, "response-new") || !observer.setActiveScheduledResponseWithID(1, "response-new") {
 		t.Fatal("failed to establish replacement scheduled owner")
 	}
 	observer.noteScheduledResponseDisposition("response-old", scheduledAudioResponseCompleted)
@@ -204,7 +200,30 @@ func TestSessionProgressObserver_LateDispositionCannotClearNewerScheduledOwner(t
 	if observer.activeScheduledResponseSet || observer.logicalScheduledResponseSet {
 		t.Fatal("current disposition did not clear its own owner")
 	}
-	if observer.completedScheduled != 1 {
-		t.Fatalf("duplicate resolved disposition changed completed count to %d, want 1", observer.completedScheduled)
+	if observer.completedScheduled != 2 {
+		t.Fatalf("duplicate resolved disposition changed completed count to %d, want 2", observer.completedScheduled)
+	}
+}
+
+func TestSessionProgressObserver_SessionOpenResetsReducerBeforeUntaggedResponse(t *testing.T) {
+	observer := newSessionProgressObserver(nil, nil, "openai", "gpt-realtime")
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: "response-old", Value: messages.NewMessageStartValue()})
+	if !observer.activeResponse || observer.activeResponseID != "response-old" {
+		t.Fatalf("initial response owner = active=%t id=%q, want response-old", observer.activeResponse, observer.activeResponseID)
+	}
+
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("session-new", "openai")})
+	if snapshot := observer.lifecycle.Snapshot(); snapshot.ActiveResponse || len(snapshot.CompletedResponseIDs) != 0 || len(snapshot.RetiredResponseIDs) != 0 {
+		t.Fatalf("SESSION.OPEN left prior reducer state: %+v", snapshot)
+	}
+
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()})
+	if !observer.activeResponse || observer.activeResponseID != "" {
+		t.Fatalf("untagged response owner = active=%t id=%q, want a fresh untagged response", observer.activeResponse, observer.activeResponseID)
+	}
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("fresh response")})
+	observer.observe(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	if observer.turnsCompleted != 1 {
+		t.Fatalf("fresh untagged response completed turns = %d, want 1", observer.turnsCompleted)
 	}
 }

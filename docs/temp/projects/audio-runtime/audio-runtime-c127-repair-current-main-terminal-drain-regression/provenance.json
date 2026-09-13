@@ -1,0 +1,169 @@
+{
+  "schema": "audio-runtime.c127.provenance.v1",
+  "project": "audio-runtime",
+  "task": "audio-runtime-c127-repair-current-main-terminal-drain-regression",
+  "contractRevision": "audio-runtime-v1",
+  "branch": "codex/audio-runtime-c127-repair-current-main-terminal-drain-regression",
+  "workId": "work-task-3",
+  "source": {
+    "originMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "pinnedCurrentMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+    "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "acceptedC64Merge": "59af6325614d80173447fe2018a0471e27b4e7b1",
+    "candidateImplementationRevision": "bb88393e41ff93d3f1663b4085c8b03ac11baf6b",
+    "evidenceRunnerRevision": "5997399bb527744f35423665f575f64cc51c8fb5",
+    "candidateTree": "a621961a12e6d1e339c0e5898d2594e301d17db9",
+    "candidateDiffSha256": "2b209f2bf52ab6f94050b934971aa43f68742aefe8379cc2b9ba3e8a94684a08",
+    "candidateContainsFetchedOriginMain": true,
+    "changedSourcePaths": [
+      "go-agent-runtime/services/session/internal/live/replay.go",
+      "go-agent-runtime/services/session/internal/live/service.go",
+      "go-agent-runtime/services/session/internal/live/service_test.go",
+      "go-agent-runtime/services/session/internal/live/causal/terminal_drain_test.go",
+      "go-agent-runtime/services/session/internal/live/start_support.go"
+    ],
+    "sourceFileSha256": {
+      "go-agent-runtime/services/session/internal/live/replay.go": "da4803d80af025d2fa201a45b196863bd8957b0c1b7fc1058318bb8f24e03b18",
+      "go-agent-runtime/services/session/internal/live/service.go": "9132ba85910ccd565ac5c380b6afacdb77e3796b192a1d538a8cb21009750f25",
+      "go-agent-runtime/services/session/internal/live/service_test.go": "65da2982119c3a19204c87ed317ae4a019632c233cbc08fd465ad46a470403e0",
+      "go-agent-runtime/services/session/internal/live/causal/terminal_drain_test.go": "64954ad3ffd256d9af0755b942306ea88cc0dfe3c1bd5f55c034308fc139af42",
+      "go-agent-runtime/services/session/internal/live/start_support.go": "00636eeee7a98205ab2b72d524ffdee721128789ac0496229d0c3e00c47e0b2f"
+    }
+  },
+  "admission": {
+    "command": "python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work --type task --name audio-runtime-c127-repair-current-main-terminal-drain-regression",
+    "status": "admitted",
+    "project": "audio-runtime",
+    "name": "audio-runtime-c127-repair-current-main-terminal-drain-regression",
+    "boardWorkType": "task",
+    "boardWorkId": "work-task-3",
+    "session": "~default"
+  },
+  "toolchain": {
+    "goVersion": "go version go1.26.7 darwin/arm64",
+    "GOOS": "darwin",
+    "GOARCH": "arm64",
+    "CGO_ENABLED_build": "1",
+    "GOTOOLCHAIN": "go1.26.7",
+    "GOWORK": "<isolated-worktree>/go.work"
+  },
+  "buildInputs": {
+    "algorithm": "path-nul-content-nul-sha256-v1",
+    "pathPrefixes": [
+      "agent-cli",
+      "go-agent-loop",
+      "go-agent-runtime",
+      "go-audio",
+      "go-device-gateway",
+      "go-llm-gateway",
+      "go.work",
+      "go.work.sum"
+    ],
+    "fileCount": 2218,
+    "sha256": "8fd616a3a431ef1ee386e47b7d67b90cbb0ea6d53fa7ca26c3ba6a7b2174afff"
+  },
+  "shippedYui": {
+    "path": "artifacts/yui",
+    "sha256": "8e8db1f19527d10cc7ea53653db95a790f6852199784efe10e011be5f238ab1d",
+    "bytes": 51101938,
+    "buildCommand": "go build -tags=nomicrophone -trimpath -o artifacts/yui ./agent-cli/cmd/yui",
+    "flags": {
+      "tags": ["nomicrophone"],
+      "trimpath": true,
+      "credentials": false,
+      "realtime": false
+    }
+  },
+  "fixtures": {
+    "identity": "c16-audio-tool.session.json",
+    "path": "../audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
+    "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+  },
+  "replayArtifacts": {
+    "audioWav": {
+      "path": "runs/public/replay-current-head-3/rendered.wav",
+      "bytes": 3244,
+      "sha256": "961bd1b82b54dcc2ada46e1f913b6e78bab172f1e3f5190be93747e7fe1e18dc"
+    },
+    "outputPcm": {
+      "path": "runs/public/replay-current-head-3/bundle/audio/out-000.pcm",
+      "bytes": 4800,
+      "sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502"
+    },
+    "sessionLog": {
+      "path": "runs/public/replay-current-head-3/bundle/session-log.jsonl",
+      "bytes": 662,
+      "sha256": "039d49adc0239cb447de0bf28e3fe009a4601e1618ebd5449553e2d903cb4cf3"
+    },
+    "manifest": {
+      "path": "runs/public/replay-current-head-3/bundle/manifest.json",
+      "sha256": "1ca02e194e6352d7fcbb6c69baf40bc94364c3cd6a2f09ec6b23407346892f4c"
+    },
+    "provider": {
+      "path": "runs/public/replay-current-head-3/bundle/provider.json",
+      "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
+    },
+    "execTrace": {
+      "path": "runs/public/replay-current-head-3/workdir/evidence/runs/exec-invocations-v4.log",
+      "bytes": 23,
+      "contains": "PROBE_TOOL_MARKER_9182",
+      "sha256": "f91134b50758e6d4418ab08f6a3afa9f2acceb91117c3f67d0db515b762eb43e"
+    }
+  },
+  "publicRunner": {
+    "path": "public-run.json",
+    "sha256": "88d7f33f2ecdb6e2dc2e7fd86b2edc6eb1af8b8e08fcdd29df0b1313a3915736",
+    "candidateRevision": "5997399bb527744f35423665f575f64cc51c8fb5",
+    "cases": ["software-device-tool-drain", "credential-free-audio-tool-replay"],
+    "aggregateElapsedMs": 1715,
+    "routeEvidence": {
+      "software-device-tool-drain": {
+        "deviceServerSource": "agent-cli/cmd/audio-device-server",
+        "deviceServerSha256": "4a6a17732f4bd8ec765cac866226c6c6463b9b4ecd1780bb73c1129fb16d1742",
+        "deviceServerBytes": 8658210,
+        "audioDeviceServerFlag": true,
+        "audioOutputDeviceFlag": true,
+        "deviceOutputWav": {
+          "sampleRate": 16000,
+          "frames": 1600,
+          "pcmBytes": 3200,
+          "pcmSha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805",
+          "wavBytes": 3244,
+          "wavSha256": "961bd1b82b54dcc2ada46e1f913b6e78bab172f1e3f5190be93747e7fe1e18dc"
+        },
+        "renderedSamples": 5280,
+        "queuedSamples": 0,
+        "droppedSamples": 0,
+        "overflowEvents": 0,
+        "discardedSamples": 0,
+        "discardEvents": 0,
+        "exactDeviceOutputPcmContained": true,
+        "serverProcessReaped": true,
+        "serverProcessGroupAliveAfter": false
+      },
+      "credential-free-audio-tool-replay": {
+        "audioDeviceServerFlag": false,
+        "audioOutputDeviceFlag": false
+      }
+    }
+  },
+  "historicalCiEvidence": {
+    "34748383831": {
+      "metadataSha256": "29ee0b4516fa5deaf41204612c6b34f18e87831ced7d373e1699f3e9b81ff6ae",
+      "failedLogSha256": "bc2712fb84f05149d21b3dc8edefe48df413e75c781a746b65218722f40a6090"
+    },
+    "34749714271": {
+      "metadataSha256": "709afd163de21aac77646b00af1498823c4b290ef3905e2e77096a4382495ae",
+      "failedLogSha256": "8d2d6609098cc1826ffc7f721ee7e36d4e206e0c49c5dfa3e4375adc0b6ca2d7"
+    }
+  },
+  "limitations": {
+    "changedPackageCoveragePassed": false,
+    "changedPackageCoverageFailure": "unrelated TestShippedSessionSIGINTDuringToolExecutionFinalizesCleanly deadline under broad coverage instrumentation; exact test passes on origin/main and candidate outside that run",
+    "scriptCiPolled": false,
+    "independentReviewPerformed": false,
+    "liveRealtimeUsed": false,
+    "physicalDeviceOrAcousticProof": false,
+    "projectWideCompletion": false
+  }
+}

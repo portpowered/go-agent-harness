@@ -1,45 +1,33 @@
 package rtc
 
-import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
-	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
 	"github.com/pion/rtp"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
-const (
-	// OutboundRTPClockRate is the RTP clock used by negotiated WebRTC Opus.
-	OutboundRTPClockRate = wavio.Rate48kHz
+// OutboundRTPClockRate is retained for legacy Pion codec negotiation. New
+// runtime compositions use services/rtctransport for packetization policy.
+const OutboundRTPClockRate = wavio.Rate48kHz
 
+const (
 	defaultOpusPayloadType uint8  = 111
 	defaultOutboundSSRC    uint32 = 1
+
+	ErrOutboundClosed        Error = "rtc outbound track is closed"
+	ErrOutboundEmptyFrame    Error = "rtc outbound PCM frame is empty"
+	ErrOutboundNilEncoder    Error = "rtc outbound Opus encoder is nil"
+	ErrOutboundNilWriter     Error = "rtc outbound RTP writer is nil"
+	ErrOutboundEmptyPayload  Error = "rtc outbound encoder produced an empty payload"
+	ErrOutboundFrameTooLarge Error = "rtc outbound PCM frame is too large"
 )
 
-var (
-	// ErrOutboundClosed identifies a write attempted after, or interrupted by,
-	// closing the outbound track.
-	ErrOutboundClosed = errors.New("rtc outbound track is closed")
-	// ErrOutboundEmptyFrame identifies a frame without PCM samples.
-	ErrOutboundEmptyFrame = errors.New("rtc outbound PCM frame is empty")
-	// ErrOutboundNilEncoder identifies a configuration without an Opus encoder.
-	ErrOutboundNilEncoder = errors.New("rtc outbound Opus encoder is nil")
-	// ErrOutboundNilWriter identifies a configuration without an RTP writer.
-	ErrOutboundNilWriter = errors.New("rtc outbound RTP writer is nil")
-	// ErrOutboundEmptyPayload identifies an encoder that produced no Opus data.
-	ErrOutboundEmptyPayload = errors.New("rtc outbound encoder produced an empty payload")
-	// ErrOutboundFrameTooLarge identifies a frame whose media clock cannot be
-	// represented by the RTP timestamp or the pacing sample counter.
-	ErrOutboundFrameTooLarge = errors.New("rtc outbound PCM frame is too large")
-)
-
-// OutboundOperationError preserves the error returned by a resampler, codec,
-// pacer, RTP writer, or encoder closer while adding the failed operation.
 type OutboundOperationError struct {
 	Operation string
 	Err       error
@@ -51,106 +39,78 @@ func (e *OutboundOperationError) Error() string {
 
 func (e *OutboundOperationError) Unwrap() error { return e.Err }
 
-// OpusEncoder encodes one 48 kHz, mono PCM16 frame into one Opus payload.
-// Implementations must consume samples before returning and must honor ctx
-// while doing work. The returned payload is owned by the caller.
 type OpusEncoder interface {
-	Encode(ctx context.Context, samples []int16) ([]byte, error)
+	Encode(context.Context, []int16) ([]byte, error)
 }
 
-// OpusEncoderFunc adapts a function to OpusEncoder.
 type OpusEncoderFunc func(context.Context, []int16) ([]byte, error)
 
 func (f OpusEncoderFunc) Encode(ctx context.Context, samples []int16) ([]byte, error) {
 	return f(ctx, samples)
 }
 
-// RTPWriter writes an already packetized RTP Opus packet. The writer owns the
-// packet only for the duration of the call and must honor ctx while blocked.
 type RTPWriter interface {
-	WriteRTP(ctx context.Context, packet *rtp.Packet) error
+	WriteRTP(context.Context, *rtp.Packet) error
 }
 
-// RTPWriterFunc adapts a function to RTPWriter.
 type RTPWriterFunc func(context.Context, *rtp.Packet) error
 
 func (f RTPWriterFunc) WriteRTP(ctx context.Context, packet *rtp.Packet) error {
 	return f(ctx, packet)
 }
 
-// Pacer schedules packets at a media-clock offset measured in 48 kHz samples.
-// The first packet is requested at offset zero; later packets are requested at
-// the number of samples already emitted. Using samples rather than caller
-// wall-clock arrival makes the RTP timeline deterministic under jitter.
 type Pacer interface {
-	Wait(ctx context.Context, mediaSampleOffset uint64) error
+	Wait(context.Context, uint64) error
 }
 
-// PacerFunc adapts a function to Pacer.
 type PacerFunc func(context.Context, uint64) error
 
-func (f PacerFunc) Wait(ctx context.Context, mediaSampleOffset uint64) error {
-	return f(ctx, mediaSampleOffset)
+func (f PacerFunc) Wait(ctx context.Context, offset uint64) error {
+	return f(ctx, offset)
 }
 
-// OutboundTrackConfig configures an OutboundTrack. Encoder and Writer are
-// intentionally injected: Pion supplies RTP transport, while a codec module
-// supplies PCM16-to-Opus encoding.
 type OutboundTrackConfig struct {
-	SourceRate int
-	Encoder    OpusEncoder
-	Writer     RTPWriter
-	Pacer      Pacer
-
+	SourceRate            int
+	Encoder               OpusEncoder
+	Writer                RTPWriter
+	Pacer                 Pacer
 	PayloadType           uint8
 	SSRC                  uint32
 	InitialSequenceNumber uint16
 	InitialTimestamp      uint32
 }
 
-// OutboundTrack sends PCM16 frames as timestamped, paced RTP Opus packets.
-var _ sharedaudio.OutboundMedia = (*OutboundTrack)(nil)
-
+// OutboundTrack is the narrow legacy adapter kept so existing Pion callers do
+// not need to migrate as part of this service-boundary slice.
 type OutboundTrack struct {
 	encoder    OpusEncoder
 	writer     RTPWriter
 	pacer      Pacer
 	sourceRate int
-
-	payloadType uint8
-	ssrc        uint32
-	sequence    uint16
-	timestamp   uint32
-
-	mediaSamples uint64
-
-	writeGate chan struct{}
-
-	lifecycleMu sync.Mutex
-	lifeCtx     context.Context
-	lifeCancel  context.CancelCauseFunc
-	closed      bool
-	active      int
-	activeDone  chan struct{}
-
-	closeOnce sync.Once
-	closeErr  error
+	payload    uint8
+	ssrc       uint32
+	sequence   uint16
+	timestamp  uint32
+	samples    uint64
+	mu         sync.Mutex
+	writeMu    sync.Mutex
+	closed     bool
+	closeOnce  sync.Once
+	closeErr   error
 }
 
-// NewOutboundTrack validates configuration without starting goroutines or
-// acquiring any network resources. Source samples are converted to the Opus
-// 48 kHz clock with wavio.Resample for every frame.
+var _ sharedaudio.OutboundMedia = (*OutboundTrack)(nil)
+
 func NewOutboundTrack(config OutboundTrackConfig) (*OutboundTrack, error) {
-	if config.Encoder == nil {
+	if nilOutboundValue(config.Encoder) {
 		return nil, ErrOutboundNilEncoder
 	}
-	if config.Writer == nil {
+	if nilOutboundValue(config.Writer) {
 		return nil, ErrOutboundNilWriter
 	}
 	if _, err := wavio.Resample(nil, config.SourceRate, OutboundRTPClockRate); err != nil {
 		return nil, &OutboundOperationError{Operation: "configure source rate", Err: err}
 	}
-
 	if config.PayloadType == 0 {
 		config.PayloadType = defaultOpusPayloadType
 	}
@@ -158,261 +118,130 @@ func NewOutboundTrack(config OutboundTrackConfig) (*OutboundTrack, error) {
 		config.SSRC = defaultOutboundSSRC
 	}
 	if config.Pacer == nil {
-		config.Pacer = newWallClockPacer()
+		config.Pacer = newLegacyWallClockPacer()
 	}
-
-	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
-	track := &OutboundTrack{
-		encoder:    config.Encoder,
-		writer:     config.Writer,
-		pacer:      config.Pacer,
-		sourceRate: config.SourceRate,
-
-		payloadType: config.PayloadType,
-		ssrc:        config.SSRC,
-		sequence:    config.InitialSequenceNumber,
-		timestamp:   config.InitialTimestamp,
-
-		lifeCtx:    lifeCtx,
-		lifeCancel: lifeCancel,
-		writeGate:  make(chan struct{}, 1),
-	}
-	track.writeGate <- struct{}{}
-	return track, nil
+	return &OutboundTrack{encoder: config.Encoder, writer: config.Writer, pacer: config.Pacer, sourceRate: config.SourceRate, payload: config.PayloadType, ssrc: config.SSRC, sequence: config.InitialSequenceNumber, timestamp: config.InitialTimestamp}, nil
 }
 
-// WriteFrame resamples, encodes, paces, and writes one caller-owned PCM16
-// frame. No state is committed until the complete RTP write succeeds.
+func nilOutboundValue(value any) bool {
+	if value == nil {
+		return true
+	}
+	ref := reflect.ValueOf(value)
+	switch ref.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return ref.IsNil()
+	case reflect.Invalid, reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Array, reflect.String, reflect.Struct:
+		return false
+	default:
+		return false
+	}
+}
+
 func (t *OutboundTrack) WriteFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
-	operationCtx, finish, err := t.beginWrite(ctx)
-	if err != nil {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
 		return err
-	}
-	defer finish()
-
-	select {
-	case <-operationCtx.Done():
-		return wrapOutbound("write", contextCause(operationCtx))
-	case <-t.writeGate:
-	}
-	defer func() { t.writeGate <- struct{}{} }()
-
-	if err := contextCauseIfDone(operationCtx); err != nil {
-		return wrapOutbound("write", err)
 	}
 	if len(frame.Samples) == 0 {
 		return ErrOutboundEmptyFrame
 	}
-
+	t.writeMu.Lock()
+	defer t.writeMu.Unlock()
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return ErrOutboundClosed
+	}
+	sequence, timestamp, mediaSamples := t.sequence, t.timestamp, t.samples
+	t.mu.Unlock()
 	resampled, err := wavio.Resample(frame.Samples, t.sourceRate, OutboundRTPClockRate)
 	if err != nil {
-		return wrapOutbound("resample", err)
+		return &OutboundOperationError{Operation: "resample", Err: err}
 	}
-	if len(resampled) == 0 || uint64(len(resampled)) > uint64(^uint32(0)) || uint64(len(resampled)) > ^uint64(0)-t.mediaSamples {
+	if len(resampled) == 0 || uint64(len(resampled)) > uint64(^uint32(0)) || uint64(len(resampled)) > ^uint64(0)-mediaSamples {
 		return ErrOutboundFrameTooLarge
 	}
-	if err := contextCauseIfDone(operationCtx); err != nil {
-		return wrapOutbound("resample", err)
-	}
-
-	encoded, err := t.encoder.Encode(operationCtx, resampled)
+	encoded, err := t.encoder.Encode(ctx, append([]int16(nil), resampled...))
 	if err != nil {
-		return wrapOutbound("encode", err)
+		return &OutboundOperationError{Operation: "encode", Err: err}
 	}
 	if len(encoded) == 0 {
-		return wrapOutbound("encode", ErrOutboundEmptyPayload)
+		return &OutboundOperationError{Operation: "encode", Err: ErrOutboundEmptyPayload}
 	}
-
-	packet := &rtp.Packet{
-		Header: rtp.Header{
-			Version:        2,
-			Marker:         t.mediaSamples == 0,
-			PayloadType:    t.payloadType,
-			SequenceNumber: t.sequence,
-			Timestamp:      t.timestamp,
-			SSRC:           t.ssrc,
-		},
-		Payload: append([]byte(nil), encoded...),
+	packet := &rtp.Packet{Header: rtp.Header{Version: 2, Marker: mediaSamples == 0, PayloadType: t.payload, SequenceNumber: sequence, Timestamp: timestamp, SSRC: t.ssrc}, Payload: append([]byte(nil), encoded...)}
+	if err := t.pacer.Wait(ctx, mediaSamples); err != nil {
+		return &OutboundOperationError{Operation: "pace", Err: err}
 	}
-
-	if err := t.pacer.Wait(operationCtx, t.mediaSamples); err != nil {
-		return wrapOutbound("pace", err)
+	if err := t.writer.WriteRTP(ctx, packet); err != nil {
+		return &OutboundOperationError{Operation: "write RTP", Err: err}
 	}
-	if err := contextCauseIfDone(operationCtx); err != nil {
-		return wrapOutbound("pace", err)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return ErrOutboundClosed
 	}
-	if err := t.writer.WriteRTP(operationCtx, packet); err != nil {
-		return wrapOutbound("write RTP", err)
-	}
-
 	t.sequence++
 	t.timestamp += uint32(len(resampled))
-	t.mediaSamples += uint64(len(resampled))
+	t.samples += uint64(len(resampled))
 	return nil
 }
 
-// Close is idempotent. It cancels active writes, waits for them to release
-// owned state, and closes an encoder that also implements io.Closer-like
-// Close() error. The RTP writer remains caller-owned.
 func (t *OutboundTrack) Close() error {
 	t.closeOnce.Do(func() {
-		t.lifecycleMu.Lock()
+		t.mu.Lock()
 		t.closed = true
-		t.lifeCancel(ErrOutboundClosed)
-		done := t.activeDone
-		t.lifecycleMu.Unlock()
-
-		if done != nil {
-			<-done
-		}
+		t.mu.Unlock()
 		if closer, ok := t.encoder.(interface{ Close() error }); ok {
 			if err := closer.Close(); err != nil {
-				t.closeErr = wrapOutbound("close encoder", err)
+				t.closeErr = &OutboundOperationError{Operation: "close encoder", Err: err}
 			}
 		}
 	})
 	return t.closeErr
 }
 
-func (t *OutboundTrack) beginWrite(ctx context.Context) (context.Context, func(), error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	t.lifecycleMu.Lock()
-	if t.closed {
-		t.lifecycleMu.Unlock()
-		return nil, nil, ErrOutboundClosed
-	}
-	if t.active == 0 {
-		t.activeDone = make(chan struct{})
-	}
-	t.active++
-	lifeCtx := t.lifeCtx
-	t.lifecycleMu.Unlock()
-
-	operationCtx, cancel := context.WithCancelCause(ctx)
-	stopLifeHook := context.AfterFunc(lifeCtx, func() {
-		cancel(context.Cause(lifeCtx))
-	})
-	finish := func() {
-		stopLifeHook()
-		cancel(nil)
-		t.endWrite()
-	}
-	return operationCtx, finish, nil
+type legacyWallClockPacer struct {
+	mu      sync.Mutex
+	started bool
+	start   time.Time
 }
 
-func (t *OutboundTrack) endWrite() {
-	t.lifecycleMu.Lock()
-	defer t.lifecycleMu.Unlock()
-	t.active--
-	if t.active == 0 {
-		close(t.activeDone)
-	}
-}
+func newLegacyWallClockPacer() Pacer { return &legacyWallClockPacer{} }
 
-func wrapOutbound(operation string, err error) error {
-	if err == nil {
-		return nil
-	}
-	return &OutboundOperationError{Operation: operation, Err: err}
-}
-
-func contextCauseIfDone(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return contextCause(ctx)
-	default:
-		return nil
-	}
-}
-
-func contextCause(ctx context.Context) error {
-	if cause := context.Cause(ctx); cause != nil {
-		return cause
-	}
+func (p *legacyWallClockPacer) Wait(ctx context.Context, offset uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return context.Canceled
-}
-
-type wallClockPacer struct {
-	started bool
-	start   time.Time
-	now     func() time.Time
-	wait    func(context.Context, time.Duration) error
-}
-
-func newWallClockPacer() Pacer {
-	return &wallClockPacer{
-		now:  time.Now,
-		wait: waitWallClock,
-	}
-}
-
-func (p *wallClockPacer) Wait(ctx context.Context, mediaSampleOffset uint64) error {
-	if err := contextCauseIfDone(ctx); err != nil {
-		return err
-	}
-
-	now := p.now()
-	offsetDuration := sampleOffsetDuration(mediaSampleOffset)
-	start := p.start
+	p.mu.Lock()
+	now := time.Now()
 	if !p.started {
-		start = now
+		p.start, p.started = now, true
 	}
-	deadline := start.Add(offsetDuration)
-	if p.started && !deadline.After(now) {
-		// A late caller must not make a backlog burst. Re-anchor the media
-		// timeline at the current emission while retaining the requested
-		// interval for the next packet.
-		start = now.Add(-offsetDuration)
-		deadline = now
-	}
-
-	if err := p.wait(ctx, deadline.Sub(now)); err != nil {
-		return err
-	}
-	p.started = true
-	p.start = start
-	return nil
-}
-
-func waitWallClock(ctx context.Context, duration time.Duration) error {
-	if err := contextCauseIfDone(ctx); err != nil {
-		return err
-	}
-	if duration <= 0 {
+	deadline := p.start.Add(legacySampleOffsetDuration(offset))
+	p.mu.Unlock()
+	delay := time.Until(deadline)
+	if delay <= 0 {
 		return nil
 	}
-	timer := time.NewTimer(duration)
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
 	select {
 	case <-timer.C:
 		return nil
 	case <-ctx.Done():
-		if !timer.Stop() {
-			select {
-			case <-timer.C:
-			default:
-			}
-		}
-		return contextCause(ctx)
+		return ctx.Err()
 	}
 }
 
-func sampleOffsetDuration(samples uint64) time.Duration {
-	const maxDuration = uint64(1<<63 - 1)
+func legacySampleOffsetDuration(samples uint64) time.Duration {
 	seconds := samples / OutboundRTPClockRate
 	remainder := samples % OutboundRTPClockRate
-	if seconds > maxDuration/uint64(time.Second) {
-		return time.Duration(maxDuration)
-	}
-	wholeNanos := seconds * uint64(time.Second)
-	fractionNanos := remainder * uint64(time.Second) / OutboundRTPClockRate
-	if wholeNanos > maxDuration-fractionNanos {
-		return time.Duration(maxDuration)
-	}
-	return time.Duration(wholeNanos + fractionNanos)
+	return time.Duration(seconds)*time.Second + time.Duration(remainder)*time.Second/OutboundRTPClockRate
 }
