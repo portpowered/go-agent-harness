@@ -1,0 +1,4 @@
+{
+  "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport",
+  "minimum": 45.00
+}
