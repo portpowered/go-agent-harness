@@ -105,6 +105,9 @@ func (r *reducer) adoptUnscheduledContinuationIDLocked(id string, purpose sessio
 			if _, scheduled := r.scheduledIndexForLocked(state.ResponseID); scheduled {
 				continue
 			}
+			if _, pendingSlot := r.nextUnboundScheduledIndexLocked(); pendingSlot {
+				continue
+			}
 			state.ContinuationResponseID = id
 			r.continuations[callID] = state
 		}

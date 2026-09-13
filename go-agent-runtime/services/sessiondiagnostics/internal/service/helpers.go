@@ -243,6 +243,15 @@ func cloneScheduled(values []sessiondiagnostics.ScheduledState) []sessiondiagnos
 	return result
 }
 
+func (r *reducer) nextUnboundScheduledIndexLocked() (int, bool) {
+	for index, state := range r.scheduled {
+		if !state.Bound && state.Disposition == sessiondiagnostics.DispositionPending {
+			return index, true
+		}
+	}
+	return 0, false
+}
+
 func cloneContinuations(values map[string]sessiondiagnostics.ContinuationState) []sessiondiagnostics.ContinuationState {
 	if len(values) == 0 {
 		return nil

@@ -164,7 +164,10 @@ func (r *reducer) bindPendingContinuationsLocked(index int, id string) {
 			continue
 		}
 		owner, ok := r.scheduledIndexForLocked(state.ResponseID)
-		if !ok || owner != index {
+		if ok && owner != index {
+			continue
+		}
+		if state.ContinuationScheduledSet {
 			continue
 		}
 		state.ContinuationScheduledIndex = index
@@ -220,6 +223,9 @@ func (r *reducer) pendingContinuationIndexLocked() (int, bool) {
 			continue
 		}
 		owner, ok := r.scheduledIndexForLocked(state.ResponseID)
+		if !ok {
+			owner, ok = r.nextUnboundScheduledIndexLocked()
+		}
 		if !ok || (index >= 0 && owner >= index) {
 			continue
 		}

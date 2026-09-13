@@ -509,6 +509,7 @@ func TestToolContinuationRetainsTerminalMetadataWhenOriginalResponseWasUnbound(t
 	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventContinuationRequested})
 	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, Role: sessiondiagnostics.RoleTool, CallID: "call-unbound"})
 	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseOpen, ResponseID: "response-continuation"})
+	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventBindScheduledBoundary, ResponseID: "response-continuation"})
 	apply(sessiondiagnostics.Event{Kind: sessiondiagnostics.EventResponseEnd, ResponseID: "response-continuation", Terminal: &sessiondiagnostics.Terminal{
 		Status: "failed", ErrorCode: "server_error", StatusDetails: "reason=error, code=server_error",
 	}})
