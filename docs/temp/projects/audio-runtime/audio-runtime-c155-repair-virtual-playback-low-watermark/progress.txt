@@ -1,5 +1,12 @@
 2026-09-13
 
+Static rejection repair checkpoint:
+
+- The full static rejection for CI run `34783651640`, job `103795073680`, is retained as `ci-rejection-34783651640.json`: only the owned adversarial test drifted to `52/106/222/278` against its immutable `49/101/206/260` baseline; format, Wire, vet, lint and Staticcheck passed.
+- Repair commit `66aeb3b2bd787041149469bf2b56e5523d6dbb4f` retains the aggregate test's exact baseline metrics and moves only the deterministic waiter-start handshake into a helper. No production, baseline or unowned path changed.
+- Post-repair architecture-size passes (`202` packages, `1940` files, `28759` functions). The causal subtest passes normal `200`, race `100`, `GOMAXPROCS=1` `100`, and `GOMAXPROCS=8` `100`; adversarial normal/race `900/420`, typed/loopback `80`, device package normal/race `2530/759`, full gateway module `285`, vet, fmt, Wire, pinned lint, pinned Staticcheck and diff checks pass.
+- Fresh `origin/main` remains `4a1c399ccbb3d780be95eb04316e84b8f11a6646`; accepted main and startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` remain ancestors. The next action is commit this evidence update, push the same PR #516 changed head, and return `ACCEPTED` to the script-owned CI gate without polling; keep ownership for any exact rejection.
+
 - Admission verified from FACTORY_ROOT for the sole audio-runtime task; branch matches prd.json.
 - Fresh origin/main and accepted planning base are 4a1c399ccbb3d780be95eb04316e84b8f11a6646; startup integration revision is an ancestor.
 - No C155 review findings exist in the canonical factory server list.

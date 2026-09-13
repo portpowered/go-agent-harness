@@ -43,6 +43,13 @@ waiter-return queued=1920
 
 The first read remains above low and the waiter remains blocked; the final read reaches low and permits return.
 
+## CI rejection repair
+
+- Script CI run `34783651640` rejected head `51ddc49edeefc9f3fc318d96246e6d2f5065b92b` only in `CI (static)`, job `103795073680`. The complete job log reported four exact baseline drifts for `TestVirtualPlaybackCapacityAdversarial`: cyclomatic `52 > 49`, cognitive `106 > 101`, statements `222 > 206`, and physical lines `278 > 260`. Gofmt, generated Wire, vet, golangci-lint and Staticcheck all passed in that job. The raw job metadata is retained in `ci-rejection-34783651640.json`; no C155 review row or review finding exists.
+- Repair commit `66aeb3b2bd787041149469bf2b56e5523d6dbb4f` keeps the legacy aggregate test at the exact admitted baseline metrics and factors only the deterministic waiter-start handshake into `startCapacityWaitAtBlocked`. The subtest name, start handshake, above-low blocked reads, low-watermark wake, timeout, and diagnostic start log remain unchanged in behavior. The architecture baseline and all unowned paths are untouched.
+- After the repair, `make architecture-size-check` passes at `202` packages, `1940` files and `28759` functions. The causal subtest passes `200` normal, `100` race, `100` `GOMAXPROCS=1`, and `100` `GOMAXPROCS=8` repetitions. Adversarial normal/race passes are `900/420`; typed/loopback regressions pass `80`; device package normal/race passes `2530/759`; the full gateway module passes `285`; gateway vet, fmt, Wire, pinned lint, pinned Staticcheck and diff checks pass.
+- Fresh `git fetch origin main` leaves `origin/main=4a1c399ccbb3d780be95eb04316e84b8f11a6646`; accepted main, startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21`, and the clean owned-path scope remain ancestors/intact. The final source checkpoint is `66aeb3b2bd787041149469bf2b56e5523d6dbb4f`.
+
 ## Verification
 
 All commands below exited 0 on the candidate worktree:
