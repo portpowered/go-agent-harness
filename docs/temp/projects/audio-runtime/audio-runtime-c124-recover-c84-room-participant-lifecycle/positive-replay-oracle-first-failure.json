@@ -1,0 +1,37 @@
+{
+  "case": "multi-participant-room-replay",
+  "source_revision": "d486abf7d3973c415e1a332687e0bdcbbd0406cf",
+  "binary": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/artifacts/yui",
+    "sha256": "6f06adcf3c882c6cabd39ed782ec6b5f7cd12fe03cd240d17db305a52c3b3e36",
+    "size": 53140306
+  },
+  "command": [
+    "artifacts/yui",
+    "room",
+    "run",
+    "--replay",
+    "runs/multi-participant-room-replay/bundle",
+    "--out",
+    "runs/multi-participant-room-replay/output",
+    "--workdir",
+    "runs/multi-participant-room-replay/work",
+    "--allow-path",
+    "runs/multi-participant-room-replay/work"
+  ],
+  "process": {
+    "exit_code": 0,
+    "timed_out": false,
+    "process_group_gone": true
+  },
+  "assertion": "room replay audio artifact missing or empty: participants/alpha/received.pcm",
+  "artifacts": {
+    "agent-alpha.wav": 2924,
+    "agent-beta.wav": 2924,
+    "room-mix.wav": 2240,
+    "participants/alpha/received.pcm": 0,
+    "participants/beta/received.pcm": 0
+  },
+  "causal_observation": "The C16 strict replay contains provider output_audio.delta records and no input_audio_buffer.append records. The run produced non-empty participant WAVs, room-mix.wav, audio_source events, and bidirectional speaker_pcm_segment routes; no peer PCM was accepted by the strict replay outbound path.",
+  "classification": "overstrict evidence oracle; fixture boundary, not a participant lifecycle failure"
+}

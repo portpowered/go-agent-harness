@@ -1,0 +1,49 @@
+{
+  "adapter_policy": "explicit Deprecated decision-free adapters only",
+  "baseline_lines": 1391,
+  "changed_paths": [
+    "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go",
+    "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/README.md",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/architecture-delta.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/delta-classification.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/excluded-path-byte-check.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/go.mod",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/go.sum",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/external-consumer/participant_lifecycle_test.go",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-double-close.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/mutation-post-bound-tool.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/positive-replay-oracle-first-failure.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/provenance.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/retirement-and-owned-paths.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/run.py",
+    "docs/temp/projects/audio-runtime/audio-runtime-c124-recover-c84-room-participant-lifecycle/verify.py",
+    "go-agent-runtime/services/rooms/internal/lifecycle/browser_validation_test.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/graph_media.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/media.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/participant.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/participant_session.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/participant_tracker.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/participant_tracker_test.go",
+    "go-agent-runtime/services/rooms/internal/lifecycle/result.go",
+    "go-agent-runtime/services/rooms/participant_lifecycle.go",
+    "go-agent-runtime/services/rooms/wire/participant_lifecycle.go"
+  ],
+  "ledger_paths": [],
+  "legacy_line_counts": {
+    "agent-cli/internal/services/internal/agentruntime/session_room_lifecycle.go": 427,
+    "agent-cli/internal/services/internal/agentruntime/session_room_tracked_session.go": 95
+  },
+  "legacy_total": 522,
+  "retained_symbols": {
+    "roomCleanupWaiter": "legacy bounded cleanup timer adapter",
+    "roomConnectTrackingInferencer": "legacy admission-barrier fa\u00e7ade",
+    "roomLifecycleWorkError": "legacy result/error formatting adapter",
+    "roomParticipantLifecycle": "Deprecated runtime lifecycle fa\u00e7ade",
+    "roomParticipantPlan": "legacy caller data shape",
+    "roomParticipantRuntime": "legacy worker handles and completion channels",
+    "roomTrackedSession": "Deprecated runtime tracked-session fa\u00e7ade"
+  },
+  "retired_lines": 869
+}
