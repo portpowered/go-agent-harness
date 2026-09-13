@@ -4,11 +4,12 @@ This evidence belongs to the admitted `audio-runtime` project and task
 `audio-runtime-c116-centralize-rtc-track-transport`. It describes the source
 tree tested at implementation checkpoint
 `82eed81dcb022b6ace632423a44f52f83d4b016f` and the exact reviewed/pushed
-candidate head `418855f756c13f96aadafa6a7932ed6a80ecc9ad`. The current
-same-task rejection-characterization handoff is documentation-only commit
-`d0391421d7f7d1b6e75c13a26a14a0ec3f9c6ba4`, a descendant of that reviewed
-head. The reviewed head and the handoff descendant are documentation-only
-descendants of the implementation checkpoint. The
+candidate head `418855f756c13f96aadafa6a7932ed6a80ecc9ad`. The
+same-task rejection-characterization checkpoint is documentation-only commit
+`d0391421d7f7d1b6e75c13a26a14a0ec3f9c6ba4`, and the current handoff is its
+documentation-only descendant on this branch. The reviewed head and these
+handoff descendants are documentation-only descendants of the
+implementation checkpoint. The
 candidate includes the adapter lint/coverage repair
 `3b40b8b8dd20a7f1816165c65e95aaa7967e3e2d`, the split coverage-test
 checkpoint `7d0a4e80a8a5c97bc9ab13c715f437aa9fb44aba`, and the clean
@@ -227,9 +228,10 @@ they do not certify the changed handoff descendant. The exact reviewed head
 with all nine required checks green, including the current `origin/main`
 ancestry recorded above. The prior provider-burst residual remains excluded.
 
-The next executor action is to push handoff head
-`d0391421d7f7d1b6e75c13a26a14a0ec3f9c6ba4`, update PR #500 with its exact head
-and this reviewed-head/run binding, and submit the same task to script CI. The
-executor must not poll CI. Independent review, guarded merge, and the
-immutable engineering vertical probe remain open; any exact-head rejection
-that touches C116 returns to this task for repair and resubmission.
+The next executor action is to push the current branch HEAD, the
+documentation-only descendant of `d0391421d7f7d1b6e75c13a26a14a0ec3f9c6ba4`,
+update PR #500 with its exact head and this reviewed-head/run binding, and
+submit the same task to script CI. The executor must not poll CI. Independent
+review, guarded merge, and the immutable engineering vertical probe remain
+open; any exact-head rejection that touches C116 returns to this task for
+repair and resubmission.
