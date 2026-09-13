@@ -1,0 +1,4 @@
+{"Action":"pass","Test":"TestSessionReplayRateDomainContractYUI24kTo16k","Output":"C106 cross-rate PASS provider=24000Hz/2400 samples/4800 bytes sha256=92b09984282be8a9cf7900c6659b5ee3c42fbe496eb38cd22f2457a34d1d6fd7 public=16000Hz/1600 samples/3200 bytes sha256=f8e8572a333e96b573b345430748df9bba3e9b39251f23fcd690607c1b343cc8"}
+{"Action":"pass","Test":"TestSessionReplayRateDomainContractRejectsWrongRateOddBytesAndMutation","Output":"strict rate/shape/mutation/integrity negative controls passed"}
+{"Action":"pass","Test":"TestSessionReplayRateDomainContractC68SameRateAndObserverOmission","Output":"C106 same-rate PASS provider/public=128 bytes sha256=fedd7e0ffdfa5db0a0b6b051f924834f7be1507b8f9c9bfaec49039590b61d9e; RECORDING_OBSERVER_OMISSION_UNRESOLVED accepted_audio=0 audio_bytes=0"}
+{"Action":"pass","Test":"TestSessionReplayRateDomainContract","Output":"3 passed in 1 packages"}
