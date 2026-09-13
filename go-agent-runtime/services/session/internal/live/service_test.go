@@ -9,8 +9,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
-	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/stretchr/testify/require"
@@ -191,7 +189,6 @@ func TestLiveCancelPreservesFirstCauseAcrossTeardown(t *testing.T) {
 	}
 	cause := errors.New("provider liveness failure")
 	h.Cancel(cause)
-	// A later transport/media teardown must not replace the actionable cause with context.Canceled while the invocation is joining.
 	h.Cancel(context.Canceled)
 	if waitErr := h.Wait(); !errors.Is(waitErr, cause) {
 		t.Fatalf("Wait = %v, want first cause %v", waitErr, cause)
@@ -357,31 +354,6 @@ func TestLiveTimingPolicyRequiresScheduler(t *testing.T) {
 		t.Fatalf("Start = %v, want ErrLiveSchedulerUnavailable", err)
 	}
 }
-
-func TestLiveInteractiveToolPolicyRequiresSchedulerBeforeProvider(t *testing.T) {
-	policy, err := runtimeToolsWire.NewInteractiveToolPolicy().Resolve(runtimeTools.InteractiveToolPolicyRequest{})
-	if err != nil {
-		t.Fatalf("resolve interactive tool policy: %v", err)
-	}
-	providerCalls := 0
-	service := New(Dependencies{InferencerFactory: func(_ context.Context, _ session.LiveRequest) (messages.SessionInferencer, error) {
-		providerCalls++
-		return &testInferencer{session: newTestSession()}, nil
-	}})
-	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
-		Capabilities: &session.LiveCapabilities{InteractiveToolPolicy: policy},
-	})
-	if err != nil {
-		t.Fatalf("OpenLive: %v", err)
-	}
-	if err := handle.Start(context.Background()); !errors.Is(err, session.ErrLiveSchedulerUnavailable) {
-		t.Fatalf("Start = %v, want ErrLiveSchedulerUnavailable", err)
-	}
-	if providerCalls != 0 {
-		t.Fatalf("provider calls = %d, want no provider setup before scheduler admission", providerCalls)
-	}
-}
-
 func TestProviderLivenessEmptyResponsePublishesFaultBeforeTerminal(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(700, 0), time.Millisecond)
 	provider := newTestSession()

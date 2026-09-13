@@ -10,10 +10,35 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
+
+type schedulerAdmissionPolicy struct {
+	runtimeTools.InteractiveToolPolicy
+}
+
+func (policy schedulerAdmissionPolicy) Clone() runtimeTools.InteractiveToolPolicy { return policy }
+
+func TestLiveInteractiveToolPolicyRequiresSchedulerBeforeProvider(t *testing.T) {
+	providerCalls := 0
+	service := New(Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+		providerCalls++
+		return &testInferencer{session: newTestSession()}, nil
+	}})
+	handle, err := service.OpenLive(context.Background(), session.LiveRequest{Capabilities: &session.LiveCapabilities{InteractiveToolPolicy: schedulerAdmissionPolicy{}}})
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); !errors.Is(err, session.ErrLiveSchedulerUnavailable) {
+		t.Fatalf("Start = %v, want ErrLiveSchedulerUnavailable", err)
+	}
+	if providerCalls != 0 {
+		t.Fatalf("provider calls = %d, want no provider setup before scheduler admission", providerCalls)
+	}
+}
 
 func TestLiveFirstTurnTimeoutUsesInjectedScheduler(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(400, 0), time.Millisecond)
