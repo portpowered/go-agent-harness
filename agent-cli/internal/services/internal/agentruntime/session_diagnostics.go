@@ -323,10 +323,9 @@ type sessionProgressObserver struct {
 	// observation boundary as a typed provider failure. It is intentionally
 	// separate from the diagnostic sink so a failure still produces exactly
 	// one canonical session_failure record.
-	failureObserver func(sessionTerminalObservation)
-	emitOnce        sync.Once
-	metricsOnce     sync.Once
-	finishMu        sync.Mutex
+	failureObserver       func(sessionTerminalObservation)
+	emitOnce, metricsOnce sync.Once
+	finishMu              sync.Mutex
 }
 
 func (o *sessionProgressObserver) markRoomBoundCancellation() {
