@@ -6,7 +6,7 @@
   "session": "~default",
   "server": "http://127.0.0.1:7439",
   "branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
-  "implementationRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d",
+  "implementationRevision": "4921c3751f0027941f6f3991cf9c88f784b18265",
   "admission": {
     "verifyWork": "admitted",
     "secondProject": false,
@@ -23,7 +23,7 @@
     "immutableSourceSha256": "48000dcd73b85ebbe93fd40a3996529878a99c799b67b0779d60f55dbb43fc1e",
     "legacyAdapterLines": 48,
     "netPhysicalProductionLinesRetired": 99,
-    "changedFiles": 23,
+    "changedFiles": 24,
     "changedPathsRemainOwned": true
   },
   "checks": [
@@ -77,11 +77,11 @@
     },
     {
       "command": "make build",
-      "result": "passed: agent-cli, audio-device server, all workspace modules, and analyzergate"
+      "result": "passed at predecessor checkpoint; final source-pinned yui build passed in run.py"
     },
     {
       "command": "COUNT=1 bash scripts/test-session-ci-regressions.sh all",
-      "result": "passed: normal, coverage, and race lanes; high-rate provider-burst 20/20"
+      "result": "passed at predecessor checkpoint; final head's four accumulated regressions passed in verify.py"
     },
     {
       "command": "git diff --check",
@@ -90,33 +90,33 @@
     {
       "command": "verify.py --mode retirement-and-owned-paths",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789305549-14143.json",
-      "sha256": "80335d2e52d8a0185b819f14fff2aba0d8fcfaa1c9ee4d57b18b96f54322047f",
-      "sourceRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d"
+      "artifact": "artifacts/verify-1789308243-90685.json",
+      "sha256": "38a92a375c15f700fe5be5bf90c4a4142bf6e0b6ca37d20f62cf2bbea0e28029",
+      "sourceRevision": "4921c3751f0027941f6f3991cf9c88f784b18265"
     },
     {
       "command": "verify.py --mode positive-and-negative-controls",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789305574-14161.json",
-      "sha256": "4a268e09b879cde19c0dfd1e6c8af3fe2eaec7ef0e5ae3b97a727a2b7ce7caed",
-      "sourceRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d"
+      "artifact": "artifacts/verify-1789308278-90785.json",
+      "sha256": "e4031d458b52f356a3d5d9e7c9d9aea4f6034ed7280315f17fbc3d8d88cb3311",
+      "sourceRevision": "4921c3751f0027941f6f3991cf9c88f784b18265"
     }
   ],
   "postMergeValidation": {
-    "sourceRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d",
+    "sourceRevision": "4921c3751f0027941f6f3991cf9c88f784b18265",
     "freshOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
     "verification": {
       "result": "accepted",
-      "artifact": "artifacts/verify-1789305574-14161.json",
-      "sha256": "4a268e09b879cde19c0dfd1e6c8af3fe2eaec7ef0e5ae3b97a727a2b7ce7caed",
+      "artifact": "artifacts/verify-1789308278-90785.json",
+      "sha256": "e4031d458b52f356a3d5d9e7c9d9aea4f6034ed7280315f17fbc3d8d88cb3311",
       "checks": "runtime contract, race, GOWORK=off external consumer, and four accumulated regressions; all exited 0, timed_out=false, reaped=true",
       "retirement": "147-line immutable baseline/hash verified; 48-line legacy adapter; 99 net production lines retired; owned-path verifier accepted",
       "coverageRegistration": "188 workspace packages across 6 modules"
     },
     "publicReplay": {
       "result": "accepted",
-      "artifact": "artifacts/run-1789305724-20535.json",
-      "sha256": "22c6303f653dc9d278f6d92a2217f4c8a11b0e5e2a28bcaff43a26ef7cdccedb",
+      "artifact": "artifacts/run-1789307734-75807.json",
+      "sha256": "9a7b2b591537cb9a7f4db8b2737372311982487fb10571798b63690b5ddcdaae",
       "binaryBytes": 51122754,
       "binarySha256": "3a29a36dda5da23a4ff1f856dadbcbc4f77b165a453a114995454c25efde44a4",
       "credentialFree": true,
@@ -126,6 +126,7 @@
       "outputCapExceeded": false
     },
     "highRateCharacterization": {
+      "historical": true,
       "command": "GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v",
       "result": "passed",
       "durationSeconds": 22.211,
@@ -143,13 +144,13 @@
       "make staticcheck passed: pinned staticcheck 2026.1 across 15 modules",
       "git diff --check passed"
     ],
-    "scriptCI": "not submitted for this repair checkpoint; no CI green claim"
+    "scriptCI": "not submitted for this repair checkpoint; ACCEPTED will submit the changed head and makes no CI-green claim"
   },
   "accumulatedRegressions": {
     "result": "passed",
-    "command": "COUNT=1 bash scripts/test-session-ci-regressions.sh all",
-    "lanes": ["normal", "coverage", "race"],
-    "highRateTrials": "20/20 passed",
+    "command": "verify.py --mode positive-and-negative-controls",
+    "lanes": ["normal"],
+    "highRateTrials": "predecessor checkpoint retained 20/20; not rerun as part of this sentinel repair",
     "tests": [
       "TestSessionToolResultConversationMissingContinuationIsBounded",
       "TestSessionToolResultConversationCorruptAudioDeltaIsRejected",
@@ -159,9 +160,9 @@
   },
   "replay": {
     "result": "accepted",
-    "artifact": "artifacts/run-1789305724-20535.json",
-    "sha256": "22c6303f653dc9d278f6d92a2217f4c8a11b0e5e2a28bcaff43a26ef7cdccedb",
-    "sourceRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d",
+    "artifact": "artifacts/run-1789307734-75807.json",
+    "sha256": "9a7b2b591537cb9a7f4db8b2737372311982487fb10571798b63690b5ddcdaae",
+    "sourceRevision": "4921c3751f0027941f6f3991cf9c88f784b18265",
     "binary": {
       "bytes": 51122754,
       "sha256": "3a29a36dda5da23a4ff1f856dadbcbc4f77b165a453a114995454c25efde44a4"
@@ -233,6 +234,7 @@
     "floorChanged": false
   },
   "causalCharacterization": {
+    "historical": true,
     "command": "GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v",
     "result": "passed",
     "durationSeconds": 22.655,
@@ -243,45 +245,87 @@
     "dependency": "preserve the prior playback-drain observation as separate C64 terminal-drain evidence if it recurs",
     "evidence": "bounded-causal-characterization-b5f6e422.md"
   },
+  "latestCIRejection": {
+    "run": 34759945739,
+    "head": "3a88aef2b6c9fba1d04e72075ee971a6e94bbceb",
+    "conclusion": "failure",
+    "rawJson": "ci-rejection-34759945739.json",
+    "failedChecks": [
+      {"name": "CI (integration)", "job": 103730904376, "step": "Run deterministic integration tests"},
+      {"name": "CI (coverage)", "job": 103730904321, "step": "Run coverage profiles and coverage gate"},
+      {"name": "CI (hermetic)", "job": 103730904393, "step": "Run hermetic test pipeline"}
+    ],
+    "commonFailureTest": "TestReadImageSpokenFailedContinuationIsActionable",
+    "failureExcerpt": [
+      "failed empty continuation error = image tool continuation was not completed for 1 call(s): call_read_image_1 (status=failed; code=token_limit_exceeded; detail=reason=max_output_tokens, type=token_limit, code=token_limit_exceeded, message=continuation exceeded token limit)",
+      "audio session ended before the final assistant response, want image continuation sentinel"
+    ],
+    "repairCommits": ["e618a6a33", "4921c3751f0"],
+    "repairResult": "The public canonical error retains immutable sentinel constants and errors.Is compatibility, while the CLI test facade keeps the legacy runtime sentinel/type view; no duplicate unresolved lifecycle error is joined.",
+    "claimedGreen": false
+  },
   "currentHeadCI": {
-    "run": "34729269748 (pre-integration historical run)",
-    "head": "b5f6e422883397f5a3b07a3c80a583f0d8003fd8",
+    "run": "34759945739 (prior rejected head; not the submitted repair)",
+    "head": "3a88aef2b6c9fba1d04e72075ee971a6e94bbceb",
     "passed": [
       "unit",
       "race",
-      "integration",
-      "coverage",
-      "hermetic",
       "WebMCP Chrome",
       "macOS audio release",
       "Windows audio portable"
     ],
-    "static": "historical generated Wire registration and generated-file-spoof failures; resolved by the exact C111 architecture-policy entry and retained at 1e85e5e3",
-    "postIntegrationLocal": "focused, race, consumer, accumulated regressions, Wire, architecture, coverage, build, vet, lint, and staticcheck passed",
+    "failed": [
+      "integration: TestReadImageSpokenFailedContinuationIsActionable",
+      "coverage: TestReadImageSpokenFailedContinuationIsActionable",
+      "hermetic: TestReadImageSpokenFailedContinuationIsActionable"
+    ],
+    "static": "passed",
+    "postRejectionLocalRepair": "normal, nomicrophone, and coverpkg reruns of the exact failing test passed at final source head 4921c375; final verifier and shipped replay also passed",
     "observedCompletedRun": true,
     "claimedGreen": false
   },
+  "reviewFindings": {
+    "independentReviewRequired": true,
+    "priorAttempts": [
+      {
+        "review": "work-review-22",
+        "head": "6a41574b",
+        "finding": "The adapter enriched a canonical error and joined a distinct legacy unresolved-results error; move compatibility identity to the public boundary so one unresolved snapshot yields one typed lifecycle error, and add an error-tree assertion."
+      },
+      {
+        "review": "work-review-29",
+        "head": "d4ab203",
+        "finding": "The same duplicate/decision-bearing compatibility defect remained; explicit Deprecated markers and current integrated-main verifier/evidence/PR provenance were also required."
+      }
+    ],
+    "resolvedBy": [
+      "e618a6a33: removed the duplicate legacy join and moved the canonical compatibility projection to the public contract boundary",
+      "4921c3751f0: restored immutable public sentinel constants after the architecture gate identified mutable package state, while preserving legacy test-seam identity"
+    ],
+    "status": "all known review findings have a repair commit and final-head causal validation; no self-review performed"
+  },
   "latestLocalRerun": {
-    "sourceRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d",
+    "sourceRevision": "4921c3751f0027941f6f3991cf9c88f784b18265",
     "causal": {
-      "command": "GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v",
+      "command": "GOWORK=off go test ./test/integration -run '^TestReadImageSpokenFailedContinuationIsActionable$' -count=1 -timeout=90s -v",
       "result": "passed",
-      "durationSeconds": 22.655,
-      "subtestDurationSeconds": 12.40,
-      "strictFinalPCMMarker": true
+      "testDurationSeconds": 4.93,
+      "processDurationSeconds": 17.949,
+      "nomicrophone": "passed; test duration 4.92s; process duration 15.349s",
+      "coverpkg": "passed; test duration 4.92s; process duration 15.316s"
     },
     "accumulatedRegressions": {
-      "command": "COUNT=1 bash scripts/test-session-ci-regressions.sh all",
+      "command": "verify.py --mode positive-and-negative-controls",
       "result": "passed",
-      "lanes": ["normal", "coverage", "race"],
-      "highRateTrials": "20/20",
+      "lanes": ["normal"],
+      "highRateTrials": "predecessor checkpoint retained 20/20; not rerun for this repair",
       "namedC111Regressions": "4/4"
     },
-    "sourceRepair": "1e85e5e3: moved compatibility identity to the public continuation contract, removed the duplicate unresolved lifecycle join, and added an error-tree assertion",
+    "sourceRepair": "e618a6a3 plus 4921c375: repaired the exact CI image-continuation identity failure and kept the host-neutral public package free of mutable sentinel state",
     "publicReplay": {
       "result": "accepted",
-      "artifact": "artifacts/run-1789305724-20535.json",
-      "sha256": "22c6303f653dc9d278f6d92a2217f4c8a11b0e5e2a28bcaff43a26ef7cdccedb",
+      "artifact": "artifacts/run-1789307734-75807.json",
+      "sha256": "9a7b2b591537cb9a7f4db8b2737372311982487fb10571798b63690b5ddcdaae",
       "binaryBytes": 51122754,
       "binarySha256": "3a29a36dda5da23a4ff1f856dadbcbc4f77b165a453a114995454c25efde44a4",
       "credentialFree": true,
@@ -292,8 +336,8 @@
     "scriptCI": "not submitted by this local rerun; no CI green claim"
   },
   "handoff": {
-    "ci": "completed run 34729269748 remains historical and is not claimed green for this repair; exact-head candidate is ready for fresh script CI submission",
-    "review": "prior independent findings repaired: duplicate unresolved lifecycle error, missing Deprecated markers, and stale integrated-main verifier/evidence; no self-review performed",
+    "ci": "run 34759945739 was inspected in full and its integration/coverage/hermetic image-continuation failure was repaired; final source-pinned evidence is ready for fresh script CI submission",
+    "review": "prior independent findings and the exact CI rejection are repaired at 4921c375; no self-review performed",
     "nextAction": "Commit and push the exact-head evidence checkpoint, update PR #496, and return ACCEPTED to the script-owned CI gate without polling; on any exact rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge."
   }
 }
