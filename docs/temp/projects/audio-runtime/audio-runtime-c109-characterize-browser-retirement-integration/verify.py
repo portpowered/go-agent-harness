@@ -191,9 +191,12 @@ def validate_source_binding(provenance: dict[str, Any]) -> None:
 
 def validate_ledger(ledger: dict[str, Any]) -> None:
     require(ledger.get("schema") == "audio-runtime-c109-ledger-v2", "ledger schema missing")
-    require(ledger.get("base", {}).get("source_driven") is True, "ledger is not source-driven")
-    require(ledger.get("base", {}).get("candidateIntersection") == [SHARED_RUNNER], "unexpected candidate path intersection")
-    union_paths = ledger.get("base", {}).get("candidateUnionPaths", [])
+    base = ledger.get("base", {})
+    require(base.get("source_driven") is True, "ledger is not source-driven")
+    require(base.get("acceptedMain") == ACCEPTED_MAIN, "ledger synthetic base is not the admitted accepted main")
+    require(isinstance(base.get("reviewMain"), str) and re.fullmatch(r"[0-9a-f]{40}", base["reviewMain"]), "ledger review main identity is missing")
+    require(base.get("candidateIntersection") == [SHARED_RUNNER], "unexpected candidate path intersection")
+    union_paths = base.get("candidateUnionPaths", [])
     require(union_paths == sorted(union_paths) and union_paths, "candidate union paths are incomplete")
     require(ledger.get("base", {}).get("candidateUnionCount") == len(union_paths), "candidate union count mismatch")
     require(ledger.get("unownedCandidatePaths") == [], "candidate path was attributed to C109")
@@ -331,7 +334,7 @@ def validate_rehearsal(report: dict[str, Any]) -> None:
     expected_order = ["c61", "c83"] if role == "required" else ["c83", "c61"]
     require(rehearsal.get("schema") == "audio-runtime-c109-merge-rehearsal-v2", "merge rehearsal schema missing")
     require(rehearsal.get("order") == expected_order, "rehearsal order is reversed or missing")
-    require(rehearsal.get("base") == report.get("provenance", {}).get("reviewMain"), "rehearsal base is not review-time main")
+    require(rehearsal.get("base") == report.get("provenance", {}).get("requestedAcceptedMain"), "rehearsal base is not the admitted accepted main")
     merges = rehearsal.get("merges")
     require(isinstance(merges, list) and len(merges) == 2, "both merge steps are required")
     previous = rehearsal["base"]
@@ -360,10 +363,70 @@ def validate_rehearsal(report: dict[str, Any]) -> None:
     require(cleanup.get("worktree_removed") is True and cleanup.get("temporary_root_removed") is True, "temporary rehearsal directory was not removed")
 
 
-def validate_sequence(sequence: dict[str, Any], review_main: str) -> None:
+def validate_review_compatibility_run(run: dict[str, Any], base: str, expected_order: list[str]) -> None:
+    require(run.get("schema") == "audio-runtime-c109-merge-rehearsal-v2", "review-main rehearsal schema missing")
+    require(run.get("base") == base and run.get("order") == expected_order, "review-main rehearsal identity/order is incomplete")
+    merges = run.get("merges")
+    require(isinstance(merges, list) and 1 <= len(merges) <= len(expected_order), "review-main rehearsal merge evidence is incomplete")
+    previous = base
+    saw_failure = False
+    for index, merge in enumerate(merges):
+        label = expected_order[index]
+        expected_commit = C61 if label == "c61" else C83
+        require(merge.get("step") == index + 1 and merge.get("label") == label, "review-main merge label/order mismatch")
+        require(merge.get("expected_commit") == expected_commit and merge.get("pre_merge_head") == previous, "review-main merge ancestry is incomplete")
+        require(isinstance(merge.get("output_sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", merge["output_sha256"]), "review-main merge output identity is missing")
+        if merge.get("exit_code") == 0:
+            require(not saw_failure, "review-main rehearsal continued after a failed merge")
+            require(merge.get("status") == "passed" and merge.get("conflicted_paths") == [] and merge.get("conflicts") == [], "review-main successful merge contains hidden conflict state")
+            require(merge.get("conflict_kind") == "none" and merge.get("conflict_resolution") == "not-needed", "review-main successful merge resolution is unsupported")
+            parents = merge.get("parents", [])
+            require(len(parents) == 3 and parents[1] == previous and parents[2] == expected_commit, "review-main merge parents are incomplete")
+            require(isinstance(merge.get("tree"), str) and re.fullmatch(r"[0-9a-f]{40}", merge["tree"]) and merge.get("post_status") == [], "review-main merge tree is incomplete")
+            previous = merge.get("commit")
+            require(isinstance(previous, str) and re.fullmatch(r"[0-9a-f]{40}", previous), "review-main merge commit is missing")
+        else:
+            saw_failure = True
+            require(merge.get("status") == "failed" and merge.get("conflicted_paths"), "review-main failure did not retain conflicted paths")
+            conflicts = merge.get("conflicts")
+            require(isinstance(conflicts, list) and conflicts, "review-main failure omitted conflict evidence")
+            for conflict in conflicts:
+                require(conflict.get("path") in merge["conflicted_paths"], "review-main conflict path is not bound to the merge")
+                require(conflict.get("kind") in {"content-conflict", "modify-delete", "delete-modify"}, "review-main conflict kind is unsupported")
+                require(isinstance(conflict.get("index_stages"), list) and len(conflict["index_stages"]) >= 2, "review-main conflict index stages are missing")
+                require(isinstance(conflict.get("patch_sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", conflict["patch_sha256"]), "review-main conflict patch identity is missing")
+            require(merge.get("conflict_resolution", "").startswith("aborted;") and merge.get("resolution", {}).get("status") == "aborted", "review-main conflict was resolved by C109")
+            require(merge.get("post_status"), "review-main conflict status was not retained")
+    if saw_failure:
+        require(run.get("final_head") is None and run.get("final_tree") is None and run.get("final_status") == [], "failed review-main rehearsal was promoted")
+    else:
+        require(run.get("final_head") == previous and isinstance(run.get("final_tree"), str) and run.get("final_status") == [], "review-main successful rehearsal final identity is missing")
+    cleanup = run.get("cleanup", {})
+    require(cleanup.get("worktree_remove_status") == "passed" and cleanup.get("worktree_removed") is True and cleanup.get("temporary_root_removed") is True, "review-main rehearsal cleanup is incomplete")
+
+
+def validate_review_main_compatibility(report: dict[str, Any]) -> None:
+    provenance = report.get("provenance", {})
+    compatibility = report.get("reviewMainCompatibility")
+    require(isinstance(compatibility, dict), "review-main compatibility evidence is missing")
+    require(compatibility.get("schema") == "audio-runtime-c109-review-main-compatibility-v1", "review-main compatibility schema is missing")
+    require(compatibility.get("base") == provenance.get("reviewMain"), "review-main compatibility base is stale")
+    if provenance.get("newerMainFetchedAndIntegrated") is True:
+        require(compatibility.get("status") in {"conflict-recorded", "passed"}, "review-main compatibility status is unsupported")
+        validate_review_compatibility_run(compatibility.get("required", {}), compatibility["base"], ["c61", "c83"])
+        validate_review_compatibility_run(compatibility.get("control", {}), compatibility["base"], ["c83", "c61"])
+        required_failed = any(item.get("exit_code") != 0 for item in compatibility["required"]["merges"])
+        control_failed = any(item.get("exit_code") != 0 for item in compatibility["control"]["merges"])
+        expected_status = "conflict-recorded" if required_failed or control_failed else "passed"
+        require(compatibility.get("status") == expected_status, "review-main compatibility status does not match evidence")
+    else:
+        require(compatibility.get("status") == "same-as-accepted-main" and compatibility.get("required") is None and compatibility.get("control") is None, "same-main compatibility evidence is inconsistent")
+
+
+def validate_sequence(sequence: dict[str, Any], accepted_main: str) -> None:
     require(sequence.get("schema") == "audio-runtime-c109-bounded-sequence-v2", "bounded sequence schema missing")
     require(sequence.get("status") == "bounded-and-procedural", "bounded sequence status missing")
-    require(sequence.get("inputs", {}).get("accepted_main") == review_main, "sequence main input is stale")
+    require(sequence.get("inputs", {}).get("accepted_main") == accepted_main, "sequence main input is stale")
     require(sequence.get("inputs", {}).get("c61", {}).get("commit") == C61 and sequence.get("inputs", {}).get("c83", {}).get("commit") == C83, "sequence candidate inputs are stale")
     steps = sequence.get("steps", [])
     require(len(steps) == 4, "bounded sequence must include shared, C61, C83 and handoff steps")
@@ -416,6 +479,7 @@ def validate_report(report: dict[str, Any], *, expected_role: str | None = None)
     require(all(OWNED_PREFIX not in line for line in host.get("changedStatusLines", [])), "analyzer changed an unexpected host path")
     require(provenance.get("refsUnchanged") is True, "candidate refs or worktree refs changed")
     validate_rehearsal(report)
+    validate_review_main_compatibility(report)
     validate_ledger(report.get("ledger", {}))
     historical = report.get("historicalC61Finding", {})
     require(historical.get("historical_run") == "34658619207" and historical.get("historical_job") == "103456263118", "C61 historical run/job missing")
@@ -447,7 +511,7 @@ def validate_report(report: dict[str, Any], *, expected_role: str | None = None)
     loss = ci.get("integration_loss", {})
     require(loss.get("lost_samples") == 6400 and loss.get("total_samples") == 174391, "provider-audio loss evidence drifted")
     require(loss.get("rendered_samples") == 167991 and loss.get("owner") == "C79/provider-audio" and loss.get("status") == "EXTERNAL_OWNER_DO_NOT_DUPLICATE_REPAIR_OR_RELABEL", "provider-audio loss was relabeled")
-    validate_sequence(report.get("sequence", {}), provenance["reviewMain"])
+    validate_sequence(report.get("sequence", {}), provenance["requestedAcceptedMain"])
     claims = report.get("deliveryClaims", {})
     require(claims.get("C61") == {"merged": False, "fixed": False, "probed": False, "accepted": False}, "C61 acceptance claim is forbidden")
     require(claims.get("C83") == {"merged": False, "fixed": False, "probed": False, "accepted": False}, "C83 acceptance claim is forbidden")
@@ -531,7 +595,7 @@ def verify_pair(required_path: Path, control_path: Path) -> tuple[dict[str, Any]
     control, _ = report_bundle(control_path)
     validate_report(required, expected_role="required")
     validate_report(control, expected_role="control")
-    for key in ("project", "task", "contractRevision", "provenance", "ledger", "historicalC61Finding", "ciAttribution", "c83CIAttribution", "sequence", "deliveryClaims", "broadGates", "claims"):
+    for key in ("project", "task", "contractRevision", "provenance", "ledger", "reviewMainCompatibility", "historicalC61Finding", "ciAttribution", "c83CIAttribution", "sequence", "deliveryClaims", "broadGates", "claims"):
         required_value = required.get(key)
         control_value = control.get(key)
         if key == "provenance":

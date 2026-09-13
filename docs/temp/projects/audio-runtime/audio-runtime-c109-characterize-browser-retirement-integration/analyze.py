@@ -1272,13 +1272,25 @@ def conflict_hunks(root: Path, worktree: Path, paths: list[str]) -> list[dict[st
     result: list[dict[str, Any]] = []
     for path in paths:
         diff = git_output(root, ["diff", "--cc", "--", path], cwd=worktree, check=False)
+        index_stages: list[dict[str, str]] = []
+        unmerged = git_output(root, ["ls-files", "-u", "--", path], cwd=worktree, check=False)
+        for line in unmerged.splitlines():
+            mode, blob, stage, staged_path = line.split(maxsplit=3)
+            index_stages.append({"mode": mode, "blob": blob, "stage": stage, "path": staged_path})
+        if len(index_stages) >= 2 and not any(item["stage"] == "2" for item in index_stages):
+            kind = "modify-delete"
+        elif len(index_stages) >= 2 and not any(item["stage"] == "3" for item in index_stages):
+            kind = "delete-modify"
+        else:
+            kind = "content-conflict"
         result.append(
             {
                 "path": path,
-                "kind": "content-conflict",
+                "kind": kind,
                 "patch_sha256": hashlib.sha256(diff.encode()).hexdigest(),
                 "patch": diff,
                 "hunk_count": len(re.findall(r"^@@", diff, flags=re.MULTILINE)),
+                "index_stages": index_stages,
             }
         )
     return result
@@ -1783,14 +1795,48 @@ def main() -> int:
     require(git(root, ["merge-base", "--is-ancestor", review_main, source_head], check=False)["exit_code"] == 0, "review-time origin/main is not integrated into the committed C109 HEAD")
     require(revision(root, args.c61) == C61 and revision(root, args.c83) == C83, "candidate refs changed from the admitted exact SHAs")
 
-    c61_paths = diff_paths(root, review_main, args.c61)
-    c83_paths = diff_paths(root, review_main, args.c83)
+    # The admitted C109 contract defines the synthetic candidate tree from the
+    # exact accepted main.  The freshly fetched review main is still integrated
+    # into this evidence branch and is characterized separately below; using it
+    # as the synthetic base would silently turn the current-main baseline deletion into a
+    # different C109 run.
+    rehearsal_base = requested_main
+    c61_paths = diff_paths(root, rehearsal_base, args.c61)
+    c83_paths = diff_paths(root, rehearsal_base, args.c83)
     union_paths = sorted(set(c61_paths) | set(c83_paths))
     shared_paths = sorted(set(c61_paths) & set(c83_paths))
     require(shared_paths == [SHARED_RUNNER], f"unexpected candidate path intersection: {shared_paths}")
     required = args.order == "c61-c83"
     order = [("c61", args.c61), ("c83", args.c83)] if required else [("c83", args.c83), ("c61", args.c61)]
-    rehearsal = commit_rehearsal(root, review_main, order, "required" if required else "control")
+    rehearsal = commit_rehearsal(root, rehearsal_base, order, "required" if required else "control")
+    if newer_main:
+        review_main_compatibility = {
+            "schema": "audio-runtime-c109-review-main-compatibility-v1",
+            "status": "conflict-recorded",
+            "base": review_main,
+            "required": commit_rehearsal(
+                root,
+                review_main,
+                [("c61", args.c61), ("c83", args.c83)],
+                "review-main-required",
+            ),
+            "control": commit_rehearsal(
+                root,
+                review_main,
+                [("c83", args.c83), ("c61", args.c61)],
+                "review-main-control",
+            ),
+            "purpose": "Supplemental current-main compatibility evidence; it is not the admitted C109 synthetic delivery tree.",
+        }
+    else:
+        review_main_compatibility = {
+            "schema": "audio-runtime-c109-review-main-compatibility-v1",
+            "status": "same-as-accepted-main",
+            "base": review_main,
+            "required": None,
+            "control": None,
+            "purpose": "The fetched review main is the admitted accepted main, so the required rehearsal is the compatibility evidence.",
+        }
 
     after_refs = ref_snapshot(root)
     after_host_status = status_lines(root)
@@ -1804,12 +1850,13 @@ def main() -> int:
     require(host_scope_clean, f"unexpected host checkout mutation: {changed_status}")
     require(revision(root, "HEAD") == source_head and tree(root, "HEAD") == source_tree, "analyzer changed the committed C109 HEAD")
 
-    files = [file_record(root, review_main, args.c61, args.c83, path, c61_paths, c83_paths, shared_paths) for path in union_paths]
+    files = [file_record(root, rehearsal_base, args.c61, args.c83, path, c61_paths, c83_paths, shared_paths) for path in union_paths]
     api = api_relationship(root, args.c61, args.c83, c61_paths, c83_paths)
     ci = ci_attribution()
     ledger = {
         "schema": "audio-runtime-c109-ledger-v2",
         "base": {
+            "acceptedMain": rehearsal_base,
             "reviewMain": review_main,
             "candidateIntersection": shared_paths,
             "candidateUnionPaths": union_paths,
@@ -1848,6 +1895,7 @@ def main() -> int:
         "candidateTrees": {
             "c61": tree(root, args.c61),
             "c83": tree(root, args.c83),
+            "acceptedMain": tree(root, rehearsal_base),
             "reviewMain": tree(root, review_main),
         },
         "fetch": {
@@ -1883,7 +1931,7 @@ def main() -> int:
         },
         "refsUnchanged": refs_unchanged,
     }
-    sequence = bounded_sequence(review_main, args.c61, args.c83)
+    sequence = bounded_sequence(rehearsal_base, args.c61, args.c83)
     report = {
         "schema": "audio-runtime-c109-v2",
         "project": PROJECT,
@@ -1898,6 +1946,7 @@ def main() -> int:
         "provenance": provenance,
         "ledger": ledger,
         "rehearsal": rehearsal,
+        "reviewMainCompatibility": review_main_compatibility,
         "historicalC61Finding": historical_c61_finding(root, review_main, args.c61),
         "ciAttribution": ci,
         "c83CIAttribution": ci,
@@ -1934,7 +1983,13 @@ def main() -> int:
                 "control": "analyze.py --order c83-c61 --expect-control",
                 "verification": "verify.py --mode all",
             },
-            "source": {"main": review_main, "c61": args.c61, "c83": args.c83},
+            "source": {
+                "main": rehearsal_base,
+                "acceptedMain": rehearsal_base,
+                "reviewMain": review_main,
+                "c61": args.c61,
+                "c83": args.c83,
+            },
             "outputSha256": {name: sha256_file(output_dir / name) for name in ("ci-attribution.json", "ledger.json", "merge-orders.json", "provenance.json", "report.json", "sequence.json")},
         },
     )
