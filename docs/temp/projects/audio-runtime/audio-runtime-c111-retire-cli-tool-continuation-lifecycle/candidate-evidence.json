@@ -6,7 +6,7 @@
   "session": "~default",
   "server": "http://127.0.0.1:7439",
   "branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
-  "implementationRevision": "ea515cb356047e7b014247f44cfc1cddc90ff6a5",
+  "implementationRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d",
   "admission": {
     "verifyWork": "admitted",
     "secondProject": false,
@@ -14,16 +14,16 @@
     "startupIsAncestor": true,
     "acceptedMainIsAncestor": true,
     "integratedMainIsAncestor": true,
-    "integratedMainRevision": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+    "integratedMainRevision": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
     "prdBranchMatches": true,
     "baselineRevision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
   },
   "retirement": {
     "immutableSourceLines": 147,
     "immutableSourceSha256": "48000dcd73b85ebbe93fd40a3996529878a99c799b67b0779d60f55dbb43fc1e",
-    "legacyAdapterLines": 57,
-    "netPhysicalProductionLinesRetired": 90,
-    "changedFiles": 22,
+    "legacyAdapterLines": 48,
+    "netPhysicalProductionLinesRetired": 99,
+    "changedFiles": 23,
     "changedPathsRemainOwned": true
   },
   "checks": [
@@ -61,19 +61,19 @@
     },
     {
       "command": "make coverage-registration",
-      "result": "passed: 182 workspace packages across 6 modules"
+      "result": "passed: 188 workspace packages across 6 modules"
     },
     {
       "command": "make coverage",
-      "result": "passed: coverage gate checked 182 registered packages across 7 profiles; no floor changes"
+      "result": "passed at the predecessor checkpoint: coverage gate checked 182 registered packages across 7 profiles; no floor changes"
     },
     {
       "command": "make architecture-size-check",
-      "result": "passed: 192 package(s), 1912 file(s), 28230 function(s) checked"
+      "result": "passed: 198 package(s), 1928 file(s), 28650 function(s) checked"
     },
     {
       "command": "make wire-check",
-      "result": "passed: 10 Wire packages auto-discovered and regenerated without drift"
+      "result": "passed: 12 Wire packages auto-discovered and regenerated without drift"
     },
     {
       "command": "make build",
@@ -90,34 +90,35 @@
     {
       "command": "verify.py --mode retirement-and-owned-paths",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789289678-76402.json",
-      "sourceRevision": "ea515cb356047e7b014247f44cfc1cddc90ff6a5"
+      "artifact": "artifacts/verify-1789305549-14143.json",
+      "sha256": "80335d2e52d8a0185b819f14fff2aba0d8fcfaa1c9ee4d57b18b96f54322047f",
+      "sourceRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d"
     },
     {
       "command": "verify.py --mode positive-and-negative-controls",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789288344-38539.json",
-      "sha256": "2c7dd41c406fa55e6a06e3afad43d54446919ea561596030e701b988400f7c04",
-      "sourceRevision": "ea515cb356047e7b014247f44cfc1cddc90ff6a5"
+      "artifact": "artifacts/verify-1789305574-14161.json",
+      "sha256": "4a268e09b879cde19c0dfd1e6c8af3fe2eaec7ef0e5ae3b97a727a2b7ce7caed",
+      "sourceRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d"
     }
   ],
   "postMergeValidation": {
-    "sourceRevision": "eea5834ebe11d4bdb1a88d6bb369dcb2f7d75c25",
-    "freshOriginMain": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+    "sourceRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d",
+    "freshOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
     "verification": {
       "result": "accepted",
-      "artifact": "artifacts/verify-1789299769-61869.json",
-      "sha256": "83b1119ad811a5f63a4dfc47d4dee7346f4771d89f314a05edad2c30014fcefe",
+      "artifact": "artifacts/verify-1789305574-14161.json",
+      "sha256": "4a268e09b879cde19c0dfd1e6c8af3fe2eaec7ef0e5ae3b97a727a2b7ce7caed",
       "checks": "runtime contract, race, GOWORK=off external consumer, and four accumulated regressions; all exited 0, timed_out=false, reaped=true",
-      "retirement": "147-line immutable baseline/hash verified; 57-line legacy adapter; owned-path verifier accepted",
+      "retirement": "147-line immutable baseline/hash verified; 48-line legacy adapter; 99 net production lines retired; owned-path verifier accepted",
       "coverageRegistration": "188 workspace packages across 6 modules"
     },
     "publicReplay": {
       "result": "accepted",
-      "artifact": "artifacts/run-1789299913-65449.json",
-      "sha256": "b53d6afac2bd22d234c50b5a4852d2fc81fe429004feb27dea432e1c210e9fc9",
-      "binaryBytes": 51139410,
-      "binarySha256": "45db870aeeb79091cd291c3692071a207c01eb84a0b72bf05de07814b8024f7a",
+      "artifact": "artifacts/run-1789305724-20535.json",
+      "sha256": "22c6303f653dc9d278f6d92a2217f4c8a11b0e5e2a28bcaff43a26ef7cdccedb",
+      "binaryBytes": 51122754,
+      "binarySha256": "3a29a36dda5da23a4ff1f856dadbcbc4f77b165a453a114995454c25efde44a4",
       "credentialFree": true,
       "realtimeSessions": 0,
       "cases": ["missing-tool-continuation", "corrupt-audio-delta", "non-tool-audio-regression"],
@@ -135,14 +136,14 @@
     "quality": [
       "make fmt passed",
       "make wire-check passed: 12 Wire packages regenerated without drift",
-      "make architecture-size-check passed: 198 packages, 1926 files, 28335 functions",
+      "make architecture-size-check passed: 198 packages, 1928 files, 28650 functions",
       "make coverage-registration passed: 188 workspace packages across 6 modules",
       "make vet passed",
       "make lint passed: pinned golangci-lint 2.9.0, 0 issues across 15 modules",
       "make staticcheck passed: pinned staticcheck 2026.1 across 15 modules",
       "git diff --check passed"
     ],
-    "scriptCI": "not submitted yet; no CI green claim"
+    "scriptCI": "not submitted for this repair checkpoint; no CI green claim"
   },
   "accumulatedRegressions": {
     "result": "passed",
@@ -158,12 +159,12 @@
   },
   "replay": {
     "result": "accepted",
-    "artifact": "artifacts/run-1789289041-64019.json",
-    "sha256": "d3669b82ebd29c6fc26baa87d2b40922f21f6d9308ce5770e26724f274d98a04",
-    "sourceRevision": "ea515cb356047e7b014247f44cfc1cddc90ff6a5",
+    "artifact": "artifacts/run-1789305724-20535.json",
+    "sha256": "22c6303f653dc9d278f6d92a2217f4c8a11b0e5e2a28bcaff43a26ef7cdccedb",
+    "sourceRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d",
     "binary": {
-      "bytes": 51100738,
-      "sha256": "ae4134643ce24b2bf23c9ae96e0167ab532aca8fb281eca9df84d7d48015ec1f"
+      "bytes": 51122754,
+      "sha256": "3a29a36dda5da23a4ff1f856dadbcbc4f77b165a453a114995454c25efde44a4"
     },
     "credentialFree": true,
     "realtimeSessions": 0,
@@ -226,17 +227,17 @@
     "priorRun": "34723920469",
     "priorHead": "9712ed8b2a7879d08dd620eb0a64a895b7309e24",
     "priorFailure": "go-agent-runtime/services/session expected 80.00%, actual 76.80%, delta -3.20%",
-    "currentRun": "local make coverage after integration",
+    "currentRun": "local make coverage after integration (pre-repair checkpoint)",
     "currentHead": "ea515cb356047e7b014247f44cfc1cddc90ff6a5",
-    "currentResult": "coverage gate passed: 182 registered packages across 7 profiles; no floor changes",
+    "currentResult": "historical predecessor pass: coverage gate checked 182 registered packages across 7 profiles; no floor changes",
     "floorChanged": false
   },
   "causalCharacterization": {
     "command": "GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v",
     "result": "passed",
-    "durationSeconds": 24.991,
-    "subtestDurationSeconds": 12.39,
-    "sourceRevision": "ea515cb356047e7b014247f44cfc1cddc90ff6a5",
+    "durationSeconds": 22.655,
+    "subtestDurationSeconds": 12.40,
+    "sourceRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d",
     "priorFailureReproduced": false,
     "repair": "none; no C111-owned cause demonstrated",
     "dependency": "preserve the prior playback-drain observation as separate C64 terminal-drain evidence if it recurs",
@@ -255,18 +256,18 @@
       "macOS audio release",
       "Windows audio portable"
     ],
-    "static": "historical generated Wire registration and generated-file-spoof failures; resolved locally on ea515cb by the exact C111 architecture-policy entry",
+    "static": "historical generated Wire registration and generated-file-spoof failures; resolved by the exact C111 architecture-policy entry and retained at 1e85e5e3",
     "postIntegrationLocal": "focused, race, consumer, accumulated regressions, Wire, architecture, coverage, build, vet, lint, and staticcheck passed",
     "observedCompletedRun": true,
     "claimedGreen": false
   },
   "latestLocalRerun": {
-    "sourceRevision": "44747db8fca0a1f5e11ce9722b709976316b943a",
+    "sourceRevision": "1e85e5e340a084f5d0ff3a2e85449d6ff796001d",
     "causal": {
       "command": "GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v",
       "result": "passed",
-      "durationSeconds": 24.059,
-      "subtestDurationSeconds": 12.55,
+      "durationSeconds": 22.655,
+      "subtestDurationSeconds": 12.40,
       "strictFinalPCMMarker": true
     },
     "accumulatedRegressions": {
@@ -276,12 +277,23 @@
       "highRateTrials": "20/20",
       "namedC111Regressions": "4/4"
     },
-    "sourceRepair": "none; no C111-owned cause demonstrated",
+    "sourceRepair": "1e85e5e3: moved compatibility identity to the public continuation contract, removed the duplicate unresolved lifecycle join, and added an error-tree assertion",
+    "publicReplay": {
+      "result": "accepted",
+      "artifact": "artifacts/run-1789305724-20535.json",
+      "sha256": "22c6303f653dc9d278f6d92a2217f4c8a11b0e5e2a28bcaff43a26ef7cdccedb",
+      "binaryBytes": 51122754,
+      "binarySha256": "3a29a36dda5da23a4ff1f856dadbcbc4f77b165a453a114995454c25efde44a4",
+      "credentialFree": true,
+      "realtimeSessions": 0,
+      "processGroupsReaped": true,
+      "outputCapExceeded": false
+    },
     "scriptCI": "not submitted by this local rerun; no CI green claim"
   },
   "handoff": {
-    "ci": "completed run 34729269748 inspected for exact failure; current integrated candidate is ready for a fresh script CI submission; no CI green claim",
-    "review": "not self-reviewed; no C111 review findings were present at admission",
-    "nextAction": "Commit and push the final current-main provenance/evidence checkpoint, update PR #496, and return ACCEPTED to the script-owned CI gate without polling; on any exact rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge."
+    "ci": "completed run 34729269748 remains historical and is not claimed green for this repair; exact-head candidate is ready for fresh script CI submission",
+    "review": "prior independent findings repaired: duplicate unresolved lifecycle error, missing Deprecated markers, and stale integrated-main verifier/evidence; no self-review performed",
+    "nextAction": "Commit and push the exact-head evidence checkpoint, update PR #496, and return ACCEPTED to the script-owned CI gate without polling; on any exact rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge."
   }
 }
