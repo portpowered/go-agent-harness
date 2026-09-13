@@ -12,8 +12,10 @@ The preserved candidate revisions are C61
 `22cc6769aaf06d1e2c1275b064cc7ec29de3e371`.
 The final provenance records the freshly fetched `origin/main` as the newer
 integrated review main; the current revalidation uses
-`bd6a1289218d1bef1a3af36e64e9d4496062416f` and the branch diff relative to that
-review main remains C109-owned only.
+`915ed982d23f2e549e529ff43c4f370b4b51e394` and the branch diff relative to that
+review main remains C109-owned only. This is the accepted C127 repair mainline
+after its independent vertical repro; C109 does not duplicate its provider-
+audio repair.
 The required and control synthetic rehearsals intentionally remain based on
 the admitted accepted main, as required by the PRD.  Because the newer review
 main deletes the architecture baseline that C61 still modifies, the final
@@ -50,6 +52,28 @@ The C79-owned `scripts/wire-packages.txt` and
 6,400-sample integration loss remains assigned to C79/provider audio and is
 not duplicated, repaired, or relabeled here.  C61 and C83 remain unmerged and
 unaccepted until their own task/review/CI gates are resolved.
+
+## C127 accepted-main dependency recovery
+
+The C109 branch integrated fetched `origin/main=915ed982d23f2e549e529ff43c4f370b4b51e394`
+as merge commit `ca618fe68ef181b2c75ccf7efaada0cf2b328760` after the C127
+reviewed/guarded delivery and C138 independent vertical repro released the
+provider-audio dependency. The exact prior PR #495 rejection is retained in
+`ci-rejection-34762923229.json`: run `34762923229`, job `103738782236`, tested
+head `64613f656f642b26bc09f670a3f677239ac74364`, had eight passing lanes and
+failed only `test48_matched_healthy_control/provider_burst` with
+`114395/120795` rendered samples, exactly 6,400 lost, zero dropped/overflow/
+discarded samples, and 19 underflow events. The raw run metadata and complete
+failed-job log were read and retained by SHA-256 in that record.
+
+Fresh C109-owned evidence was then regenerated from the exact accepted-main
+synthetic tree: the required and reverse analyzer rehearsals passed, the
+credential-free browser/audio/tool matrix passed `18/18` under `90/300`
+seconds, the malformed/canceled matrix passed `3/3` under `60/180` seconds,
+and `verify.py --mode all` passed all eight checks plus 20 negative fixtures.
+This remains software-only executor evidence; current-head script CI, fresh
+review, guarded merge and the C109 vertical probe remain external, and C61,
+C83, all nine broad gates, and hardware/acoustic proof are not claimed.
 
 The checked-in final bundle includes separate `ci-attribution.json` evidence,
 source-derived caller/API spans, exact committed-head provenance, both merge

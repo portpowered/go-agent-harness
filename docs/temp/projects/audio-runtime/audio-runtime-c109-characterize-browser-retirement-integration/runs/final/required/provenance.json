@@ -4,7 +4,7 @@
     "acceptedMain": "dded566273b27f7146c4e630a0f23fb9402198da",
     "c61": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2",
     "c83": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048",
-    "reviewMain": "cca0e74b02fbab93c7ac851d6b4ea02fe3492788"
+    "reviewMain": "7640e6dada43591e68443d1bbc21bd3e155bfbeb"
   },
   "candidates": {
     "c61": {
@@ -44,16 +44,16 @@
     "exit_code": 0,
     "output_retained": false,
     "reason": "fetch transport output is mutable; commit/ref identity is retained instead",
-    "resolved_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "resolved_origin_main": "915ed982d23f2e549e529ff43c4f370b4b51e394",
     "status": "passed"
   },
-  "fetchedOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+  "fetchedOriginMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
   "hostCheckout": {
     "afterStatus": [],
     "beforeStatus": [],
     "branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
     "changedStatusLines": [],
-    "head": "712c4e1cbb9da20705c7f0a00e65dd30b46507a5",
+    "head": "ca618fe68ef181b2c75ccf7efaada0cf2b328760",
     "scopeClean": true
   },
   "newerMainFetchedAndIntegrated": true,
@@ -139,7 +139,7 @@
       },
       {
         "name": "refs/remotes/origin/main",
-        "object": "bd6a1289218d1bef1a3af36e64e9d4496062416f"
+        "object": "915ed982d23f2e549e529ff43c4f370b4b51e394"
       }
     ],
     "before": [
@@ -169,7 +169,7 @@
       },
       {
         "name": "refs/remotes/origin/main",
-        "object": "bd6a1289218d1bef1a3af36e64e9d4496062416f"
+        "object": "915ed982d23f2e549e529ff43c4f370b4b51e394"
       }
     ],
     "candidateRefsUnchanged": true,
@@ -177,12 +177,12 @@
   },
   "refsUnchanged": true,
   "requestedAcceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-  "reviewMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+  "reviewMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
   "schema": "audio-runtime-c109-provenance-v2",
   "sourceBinding": {
     "cleanScripts": true,
-    "committedHead": "712c4e1cbb9da20705c7f0a00e65dd30b46507a5",
-    "committedTree": "5a6497f3c8dd7fe4fe8ac70b76da8ae5e8fb5d46",
+    "committedHead": "ca618fe68ef181b2c75ccf7efaada0cf2b328760",
+    "committedTree": "a17660c375aebee7b72b2864d51485a18d1d2487",
     "scripts": [
       {
         "head_blob": "46605eb4beb1d026b2e4b1b81a57b2fa83e08a69",
@@ -225,7 +225,7 @@
       {
         "branch": "refs/heads/codex/audio-runtime-c109-characterize-browser-retirement-integration",
         "detached": false,
-        "head": "712c4e1cbb9da20705c7f0a00e65dd30b46507a5",
+        "head": "ca618fe68ef181b2c75ccf7efaada0cf2b328760",
         "locked": false,
         "path": ".claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration",
         "prunable": "",
