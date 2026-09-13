@@ -286,7 +286,10 @@ func TestFinishDoesNotOverwriteConcurrentDestination(t *testing.T) {
 	}
 	bundle := t.TempDir()
 	destination := filepath.Join(bundle, "audio-trace")
-	preparedImpl := preparedValue.(*prepared)
+	preparedImpl, ok := preparedValue.(*prepared)
+	if !ok {
+		t.Fatal("prepared value has unexpected implementation")
+	}
 	preparedImpl.rename = func(oldPath, newPath string) error {
 		if err := os.Mkdir(newPath, 0o700); err != nil {
 			return err
