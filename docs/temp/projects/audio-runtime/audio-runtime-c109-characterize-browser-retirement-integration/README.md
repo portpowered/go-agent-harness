@@ -69,3 +69,23 @@ that does not relabel or waive the CI failure. C109 did not change production,
 integration, device, transport, Wire-registry, or architecture-baseline paths;
 the changed evidence checkpoint is to be pushed and submitted to script CI,
 while C79 retains the necessary source repair.
+
+## Latest script-CI rejection
+
+The exact current-head rejection for PR #495 is run `34732547786`, job
+`103657892852`, at head `0185f03afbd2bf81e6d2cdb32d3a1586576aad7d`. Eight
+other required lanes passed. Integration failed only in
+`TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst`
+at `agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:183`:
+the remote playback deadline expired with `464160` rendered samples,
+`150871` nonzero samples, `174391` expected samples, `final_marker=false`,
+`967` callbacks, an underflow trace, zero queued/dropped/overflow/discarded
+samples, and the child still running at timeout. The complete sanitized
+record is `ci-rejection-34732547786.json`; the retrieved job log SHA-256 is
+`3ec0d3acb03405b376f2ef7a6e4fe32fbfdd968939811d9e2ae3fdb73dbc13a1`.
+
+The exact same local control passed in `15.617s`; this is preserved as a
+non-waiver only. The failure remains the C79/provider-audio terminal-drain
+family, with no C109 repair authorization. The current C109 candidate stays
+evidence-only and must be resubmitted to script CI after this evidence
+checkpoint; C61, C83 and all nine project gates remain unmerged/open.
