@@ -66,17 +66,162 @@ func TestPreparedTracePoliciesAndNilDeviceCallbacks(t *testing.T) {
 
 func TestFinishCloseTimeoutRetainsStagedPath(t *testing.T) {
 	release := make(chan struct{})
+	completion := make(chan struct{})
+	started := make(chan struct{})
+	closeCalls := 0
 	prepared := &prepared{path: t.TempDir(), timeout: time.Millisecond, closed: make(chan struct{}), closeTrace: func() error {
+		closeCalls++
+		close(started)
 		<-release
+		<-completion
 		return nil
 	}}
 	bundle := t.TempDir()
 	if err := prepared.Finish(context.Background(), bundle, true); !errors.Is(err, sessiontrace.ErrCloseTimeout) {
 		t.Fatalf("timeout error = %v", err)
 	}
+	if _, err := os.Stat(prepared.StagedPath()); err != nil {
+		t.Fatalf("timed-out trace was not retained: %v", err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("closeTrace did not start")
+	}
 	close(release)
-	if err := prepared.Finish(context.Background(), "", true); err != nil {
+	retryResult := make(chan error, 1)
+	retryContext, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	go func() {
+		retryResult <- prepared.Finish(retryContext, "", true)
+	}()
+	select {
+	case err := <-retryResult:
+		close(completion)
+		t.Fatalf("retry returned before the in-flight close completed: %v", err)
+	case <-time.After(10 * time.Millisecond):
+	}
+	close(completion)
+	if err := <-retryResult; err != nil {
 		t.Fatalf("finish after timeout = %v", err)
+	}
+	if closeCalls != 1 {
+		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
+	}
+}
+
+func TestFinishRetryRetainsCloseCauseAndStagedPath(t *testing.T) {
+	closeCause := errors.New("trace close sentinel")
+	release := make(chan struct{})
+	completion := make(chan struct{})
+	started := make(chan struct{})
+	closeCalls := 0
+	prepared := &prepared{path: t.TempDir(), timeout: time.Millisecond, closed: make(chan struct{}), closeTrace: func() error {
+		closeCalls++
+		close(started)
+		<-release
+		<-completion
+		return closeCause
+	}}
+	defer func() {
+		select {
+		case <-completion:
+		default:
+			close(completion)
+		}
+	}()
+
+	if err := prepared.Finish(context.Background(), "", false); !errors.Is(err, sessiontrace.ErrCloseTimeout) {
+		t.Fatalf("timeout error = %v", err)
+	}
+	stagedPath := prepared.StagedPath()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("closeTrace did not start")
+	}
+	close(release)
+
+	retryResult := make(chan error, 1)
+	go func() {
+		retryResult <- prepared.Finish(context.Background(), "", false)
+	}()
+	select {
+	case err := <-retryResult:
+		close(completion)
+		t.Fatalf("retry returned before the in-flight close completed: %v", err)
+	case <-time.After(10 * time.Millisecond):
+	}
+	close(completion)
+	err := <-retryResult
+	if !errors.Is(err, closeCause) {
+		t.Fatalf("retry lost close cause: %v", err)
+	}
+	if !strings.Contains(err.Error(), stagedPath) {
+		t.Fatalf("retry lost staged path: %v", err)
+	}
+	if closeCalls != 1 {
+		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
+	}
+}
+
+func TestFinishRetryHonorsCancellationWhileCloseInFlight(t *testing.T) {
+	release := make(chan struct{})
+	released := make(chan struct{})
+	completion := make(chan struct{})
+	started := make(chan struct{})
+	closeCalls := 0
+	prepared := &prepared{path: t.TempDir(), timeout: time.Millisecond, closed: make(chan struct{}), closeTrace: func() error {
+		closeCalls++
+		close(started)
+		<-release
+		close(released)
+		<-completion
+		return nil
+	}}
+	defer func() {
+		select {
+		case <-completion:
+		default:
+			close(completion)
+		}
+	}()
+
+	if err := prepared.Finish(context.Background(), "", true); !errors.Is(err, sessiontrace.ErrCloseTimeout) {
+		t.Fatalf("timeout error = %v", err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("closeTrace did not start")
+	}
+	close(release)
+	select {
+	case <-released:
+	case <-time.After(time.Second):
+		t.Fatal("closeTrace did not observe release")
+	}
+
+	retryContext, cancel := context.WithCancel(context.Background())
+	retryResult := make(chan error, 1)
+	go func() {
+		retryResult <- prepared.Finish(retryContext, "", true)
+	}()
+	cancel()
+	select {
+	case err := <-retryResult:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled retry error = %v", err)
+		}
+		if !strings.Contains(err.Error(), prepared.StagedPath()) {
+			t.Fatalf("canceled retry lost staged path: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("canceled retry did not return")
+	}
+	close(completion)
+	if closeCalls != 1 {
+		t.Fatalf("closeTrace calls = %d, want one", closeCalls)
 	}
 }
 
