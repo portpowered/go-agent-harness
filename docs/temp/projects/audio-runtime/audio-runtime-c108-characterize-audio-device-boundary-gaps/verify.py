@@ -43,6 +43,8 @@ C117_SUCCESSOR_PATHS = {
     "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
     "agent-cli/internal/transport/cli/session_observability.go",
     "agent-cli/internal/transport/cli/session_observability_test.go",
+    "agent-cli/internal/wire/wire.go",
+    "agent-cli/internal/wire/wire_gen.go",
     C117_OWNED_REL,
 }
 PRODUCTION_ROOTS = ("agent-cli", "go-agent-loop", "go-agent-runtime", "go-llm-gateway")
@@ -478,6 +480,13 @@ def provenance_mode() -> dict[str, Any]:
     admission = verify_admission()
     rows = board_rows(persist=not c117_successor())
     matches = task_rows(rows)
+    if not matches and c117_successor():
+        # C108 is complete on the fresh board and its successor is the only
+        # active writer. Preserve the captured C108 task row as historical
+        # ownership evidence instead of inventing a new board row or treating
+        # the successor recovery as a second C108 admission.
+        preserved_board = read_json(BOARD)
+        matches = task_rows(preserved_board.get("results", []))
     if not matches:
         raise EvidenceFailure("canonical board has no C108 task row")
     modules = subprocess_result(["go", "list", "-m", "all"], ROOT, 120)
