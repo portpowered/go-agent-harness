@@ -76,3 +76,44 @@ to the script-owned CI gate without polling.
   source or executable build input changes after `7b75776b`. The candidate
   remains executor evidence only; script CI, independent review, guarded
   merge, immutable vertical validation and project acceptance are open.
+
+## Current-main reconciliation and exact candidate gates
+
+- The canonical board returned the C162 task as `work-task-70` with the exact
+  stale-base rejection: PR `#519` head `456e19458` had green checks, but fetched
+  `origin/main=2c79ec6a931c3e86944d6a625d0a5060b4f85aa0` was not an ancestor.
+  The independent `work-review-53` finding remains preserved as historical
+  negative evidence; no new C162 source finding or active writer collision was
+  reported.
+- `rtk git fetch origin main` fetched the current main, and this worktree
+  merged it without touching the running host checkout as merge commit
+  `1f79f6fb9a486e7376056be1fb8a0491208c4779`. The accepted PR 515 merge
+  `97d3dcfb1e97a2611aa26b203a7f893442db4768`, required startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current `origin/main` are
+  all ancestors. `git diff --name-only origin/main...HEAD` contains only the
+  two C162 service files and this C162 evidence directory; the six C156 files
+  are inherited mainline content, not C162 mutations.
+- On merged source `1f79f6fb9a486e7376056be1fb8a0491208c4779`, the causal
+  regression passed normally at `400` assertions, under `nomicrophone` coverpkg
+  at `16.8%`, and under race at `200` tests. Full sessiontrace normal, race and
+  nomicrophone coverpkg suites each passed `19` tests in three packages;
+  retained-path/redaction/no-overwrite controls passed `15` tests; and vet
+  passed. The regenerated coverage profiles are bound by SHA-256
+  `a1c1bc1d05421bda4b083b1593b424f77a710271ca51ed0ce6cb3f814e167759`
+  (`canceled-close.cover.out`) and
+  `8c38a014bf9edd606f8046c46a21042490fb436396d2a87f7409bac823ca0131`
+  (`sessiontrace.cover.out`).
+- The merged architecture gate passes at `202` packages, `1,941` files and
+  `28,795` functions. `make fmt`, regenerated-Wire consistency, pinned
+  golangci-lint `v2.9.0` (`0` issues across `15` modules), pinned staticcheck
+  `2026.1`, diff-check, and the credential-free
+  `TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle`
+  regression pass. The accumulated `COUNT=3` session regression script exits
+  `0` in normal, coverage and race modes across transport, integration,
+  simulated devices and composed OpenAI provider controls; expected mismatch,
+  PCM and transcript negative diagnostics remain asserted.
+- No current-head SCRIPT CI result, independent review, guarded merge,
+  immutable vertical probe or project acceptance is claimed. The pre-merge
+  worktree is clean and the next action is to commit this evidence update,
+  push the same branch, update PR `#519` with the merged exact head, and return
+  `ACCEPTED` to the script-owned CI gate without polling it.
