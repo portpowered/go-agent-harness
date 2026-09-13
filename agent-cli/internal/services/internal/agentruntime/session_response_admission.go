@@ -69,10 +69,8 @@ func (o *sessionProgressObserver) hasTerminalToolContinuationFailure() bool {
 	if o == nil {
 		return false
 	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	for _, state := range o.toolContinuations {
-		if continuationTerminalFailureLocked(state) {
+	for _, state := range o.lifecycleContinuationStates() {
+		if state.ResultAccepted && state.ContinuationRequested && state.ToolResponseComplete && state.ContinuationTerminalSeen && !state.ContinuationComplete && state.ContinuationFailure {
 			return true
 		}
 	}
@@ -94,7 +92,10 @@ func (o *sessionProgressObserver) providerToolCallObserved() bool {
 	if o == nil {
 		return false
 	}
-	o.toolStateMu.Lock()
-	defer o.toolStateMu.Unlock()
-	return o.providerToolCallSeen
+	for _, state := range o.lifecycleContinuationStates() {
+		if state.ProviderCallObserved {
+			return true
+		}
+	}
+	return false
 }

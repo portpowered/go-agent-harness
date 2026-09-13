@@ -3,6 +3,7 @@ agent-cli/internal/wire
 go-agent-runtime/services/devices/wire
 go-agent-runtime/services/providers/wire
 go-agent-runtime/services/session/wire
+go-agent-runtime/services/sessiondiagnostics/wire
 go-agent-runtime/services/rooms/wire
 go-agent-runtime/services/tools/wire
 go-agent-runtime/services/replay/wire

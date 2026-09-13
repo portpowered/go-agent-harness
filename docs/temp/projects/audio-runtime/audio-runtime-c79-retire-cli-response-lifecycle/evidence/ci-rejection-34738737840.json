@@ -1,0 +1,49 @@
+{
+  "schema": "audio-runtime-c79-ci-rejection/v1",
+  "run": "34738737840",
+  "head": "323a60cf8dab76e8bd36ec0534e6330a55caeb95",
+  "reported_pr_base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+  "current_origin_main": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+  "status": "failure",
+  "checks": [
+    {
+      "job": "103674685519",
+      "check": "CI (race)",
+      "step": "make test-sessions-race",
+      "failure": "TestCancellingOneMidRunSessionLeavesOthersUndisturbed: survivor sess-01 tool tally diverges from reference: got [], want [{call-sess-01-1 session_marker_lookup {session:sess-01 query:marker}}]",
+      "local_reproduction": {
+        "command": "go test -race ./go-agent-loop/test/functional/sessions -run '^TestCancellingOneMidRunSessionLeavesOthersUndisturbed$' -count=5 -timeout=180s",
+        "result": "pass: 5/5",
+        "causal_comparison": "go-agent-loop has no diff in origin/main...candidate"
+      },
+      "classification": "not_reproduced_locally_out_of_scope_or_suite_flake",
+      "ownership": "no C79 source repair is authorized or demonstrated by this failure"
+    },
+    {
+      "job": "103674685450",
+      "check": "CI (integration)",
+      "step": "make test-regressions",
+      "failure": "TestSessionCommand_ReplayCorruptedProducedCaptureReportsNestedDivergence: corrupted replay error = context deadline exceeded, want replay mismatch",
+      "local_reproduction": {
+        "command": "go test ./agent-cli/test/integration -run '^TestSessionCommand_ReplayCorruptedProducedCaptureReportsNestedDivergence$' -count=5 -timeout=180s",
+        "result": "pass: 5/5"
+      },
+      "classification": "not_reproduced_locally; no causal C79 repair demonstrated"
+    },
+    {
+      "job": "103674685537",
+      "check": "CI (hermetic)",
+      "step": "make test-hermetic",
+      "failure": "TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl: multi-turn harness A B-turn-1 turn 1 input commit timestamp is not deterministic for tick 8",
+      "local_reproduction": {
+        "command": "CGO_ENABLED=0 go test ./agent-cli/test/integration -tags=nomicrophone -run '^TestSessionCLI_DuplexPCMMultiTurnRejectsLaterTurnTranscriptControl$' -count=5 -timeout=240s",
+        "result": "pass: 5/5"
+      },
+      "classification": "not_reproduced_locally; scheduling nondeterminism with no causal C79 repair demonstrated"
+    }
+  ],
+  "other_checks": "CI static, unit, coverage, WebMCP, macOS, and Windows passed in the rejected run",
+  "ownership": "executor diagnosed exact hosted failures and retained the same task; no source repair was applied for non-reproduced failures",
+  "next_action": "submit the current-main-integrated C79 candidate to the script CI gate; if a failure repeats, inspect that exact current-head check and repair only demonstrated C79 causes",
+  "acceptance": "executor evidence only; no script-CI success, review, merge, vertical-probe, or project-acceptance claim"
+}
