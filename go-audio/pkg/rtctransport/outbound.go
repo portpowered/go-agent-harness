@@ -1,4 +1,4 @@
-package service
+package rtctransport
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/pion/rtp"
-	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
@@ -19,12 +18,12 @@ const (
 	maxOutboundQueueDepth            = 64
 )
 
-var _ rtctransport.OutboundTrack = (*OutboundTrack)(nil)
+var _ sharedaudio.OutboundMedia = (*OutboundTrack)(nil)
 
 type OutboundTrack struct {
-	encoder       rtctransport.OpusEncoder
-	writer        rtctransport.RTPWriter
-	pacer         rtctransport.Pacer
+	encoder       OpusEncoder
+	writer        RTPWriter
+	pacer         Pacer
 	sourceRate    int
 	sourceSamples int
 
@@ -48,12 +47,12 @@ type OutboundTrack struct {
 	closeErr  error
 }
 
-func (s *Service) NewOutboundTrack(config rtctransport.OutboundTrackConfig) (rtctransport.OutboundTrack, error) {
+func NewOutboundTrack(config OutboundTrackConfig) (*OutboundTrack, error) {
 	if nilValue(config.Encoder) {
-		return nil, rtctransport.ErrOutboundNilEncoder
+		return nil, ErrOutboundNilEncoder
 	}
 	if nilValue(config.Writer) {
-		return nil, rtctransport.ErrOutboundNilWriter
+		return nil, ErrOutboundNilWriter
 	}
 	sourceSamples, err := normalizeOutboundFrame(config)
 	if err != nil {
@@ -75,7 +74,7 @@ func (s *Service) NewOutboundTrack(config rtctransport.OutboundTrackConfig) (rtc
 	if config.Pacer == nil {
 		config.Pacer = newWallClockPacer()
 	} else if nilValue(config.Pacer) {
-		return nil, rtctransport.ErrOutboundNilPacer
+		return nil, ErrOutboundNilPacer
 	}
 	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
 	track := &OutboundTrack{
@@ -90,13 +89,20 @@ func (s *Service) NewOutboundTrack(config rtctransport.OutboundTrackConfig) (rtc
 	return track, nil
 }
 
-func normalizeOutboundFrame(config rtctransport.OutboundTrackConfig) (int, error) {
-	if _, err := wavio.Resample(nil, config.SourceRate, rtctransport.OutboundRTPClockRate); err != nil {
-		return 0, outboundConfigError("source rate", config.SourceRate, err.Error())
+func normalizeOutboundFrame(config OutboundTrackConfig) (int, error) {
+	if _, err := wavio.Resample(nil, config.SourceRate, OutboundRTPClockRate); err != nil {
+		return 0, &OutboundOperationError{
+			Operation: "configuration",
+			Kind:      ErrInvalidOutboundTrackConfig,
+			Err:       fmt.Errorf("source rate: got %v: %w", config.SourceRate, err),
+		}
 	}
 	duration := config.FrameDuration
 	if duration == 0 {
-		duration = rtctransport.DefaultInboundFrameDuration
+		// The legacy gateway adapter intentionally permits variable-sized
+		// source frames. The runtime wrapper supplies its historical 20 ms
+		// default before calling this shared constructor.
+		return 0, nil
 	}
 	if !validInboundDuration(duration) {
 		return 0, outboundConfigError("frame duration", duration, "want a legal Opus duration from 2.5 ms through 60 ms")
@@ -144,10 +150,10 @@ func (t *OutboundTrack) WriteFrame(ctx context.Context, frame sharedaudio.PCMFra
 
 func validateOutboundFrame(frame sharedaudio.PCMFrame, want int) error {
 	if len(frame.Samples) == 0 {
-		return rtctransport.ErrOutboundEmptyFrame
+		return ErrOutboundEmptyFrame
 	}
-	if len(frame.Samples) != want {
-		return wrapOutboundWithKind("frame", rtctransport.ErrOutboundFrameSize,
+	if want > 0 && len(frame.Samples) != want {
+		return wrapOutboundWithKind("frame", ErrOutboundFrameSize,
 			fmt.Errorf("got %d samples, want %d", len(frame.Samples), want))
 	}
 	return nil
@@ -163,12 +169,12 @@ func (t *OutboundTrack) acquireWriteGate(ctx context.Context) error {
 }
 
 func (t *OutboundTrack) resampleFrame(ctx context.Context, frame sharedaudio.PCMFrame) ([]int16, error) {
-	resampled, err := wavio.Resample(frame.Samples, t.sourceRate, rtctransport.OutboundRTPClockRate)
+	resampled, err := wavio.Resample(frame.Samples, t.sourceRate, OutboundRTPClockRate)
 	if err != nil {
 		return nil, wrapOutbound("resample", err)
 	}
 	if len(resampled) == 0 || uint64(len(resampled)) > uint64(^uint32(0)) || uint64(len(resampled)) > ^uint64(0)-t.mediaSamples {
-		return nil, rtctransport.ErrOutboundFrameTooLarge
+		return nil, ErrOutboundFrameTooLarge
 	}
 	if err := contextCauseIfDone(ctx); err != nil {
 		return nil, wrapOutbound("resample", err)
@@ -182,7 +188,7 @@ func (t *OutboundTrack) encodePacket(ctx context.Context, samples []int16) (*rtp
 		return nil, wrapOutbound("encode", err)
 	}
 	if len(encoded) == 0 {
-		return nil, wrapOutbound("encode", rtctransport.ErrOutboundEmptyPayload)
+		return nil, wrapOutbound("encode", ErrOutboundEmptyPayload)
 	}
 	return &rtp.Packet{
 		Header: rtp.Header{
@@ -203,14 +209,26 @@ func (t *OutboundTrack) sendPacket(ctx context.Context, packet *rtp.Packet) erro
 	if err := t.writer.WriteRTP(ctx, packet); err != nil {
 		return wrapOutbound("write RTP", err)
 	}
+	if err := contextCauseIfDone(ctx); err != nil {
+		return wrapOutbound("write RTP", err)
+	}
+	if t.isClosed() {
+		return ErrOutboundClosed
+	}
 	return nil
+}
+
+func (t *OutboundTrack) isClosed() bool {
+	t.lifecycleMu.Lock()
+	defer t.lifecycleMu.Unlock()
+	return t.closed
 }
 
 func (t *OutboundTrack) Close() error {
 	t.closeOnce.Do(func() {
 		t.lifecycleMu.Lock()
 		t.closed = true
-		t.lifeCancel(rtctransport.ErrOutboundClosed)
+		t.lifeCancel(ErrOutboundClosed)
 		done := t.activeDone
 		t.lifecycleMu.Unlock()
 		if done != nil {
@@ -232,7 +250,7 @@ func (t *OutboundTrack) beginWrite(ctx context.Context) (context.Context, func()
 	t.lifecycleMu.Lock()
 	if t.closed {
 		t.lifecycleMu.Unlock()
-		return nil, nil, rtctransport.ErrOutboundClosed
+		return nil, nil, ErrOutboundClosed
 	}
 	if t.active == 0 {
 		t.activeDone = make(chan struct{})
@@ -248,7 +266,7 @@ func (t *OutboundTrack) beginWrite(ctx context.Context) (context.Context, func()
 	case t.queueSlots <- struct{}{}:
 	default:
 		t.endWrite()
-		return nil, nil, rtctransport.ErrOutboundQueueOverflow
+		return nil, nil, ErrOutboundQueueOverflow
 	}
 	operationCtx, cancel := context.WithCancelCause(ctx)
 	stopLifeHook := context.AfterFunc(lifeCtx, func() { cancel(context.Cause(lifeCtx)) })
@@ -274,18 +292,18 @@ func wrapOutbound(operation string, err error) error {
 	if err == nil {
 		return nil
 	}
-	return &rtctransport.OutboundOperationError{Operation: operation, Err: err}
+	return &OutboundOperationError{Operation: operation, Err: err}
 }
 
 func wrapOutboundWithKind(operation string, kind, err error) error {
 	if err == nil {
 		return nil
 	}
-	return &rtctransport.OutboundOperationError{Operation: operation, Kind: kind, Err: err}
+	return &OutboundOperationError{Operation: operation, Kind: kind, Err: err}
 }
 
 func outboundConfigError(field string, observed any, reason string) error {
-	return wrapOutboundWithKind("configuration", rtctransport.ErrInvalidOutboundTrackConfig,
+	return wrapOutboundWithKind("configuration", ErrInvalidOutboundTrackConfig,
 		fmt.Errorf("%s: got %v (%s)", field, observed, reason))
 }
 
@@ -315,7 +333,7 @@ type wallClockPacer struct {
 	wait    func(context.Context, time.Duration) error
 }
 
-func newWallClockPacer() rtctransport.Pacer {
+func newWallClockPacer() Pacer {
 	return &wallClockPacer{now: time.Now, wait: waitWallClock}
 }
 
@@ -366,13 +384,13 @@ func waitWallClock(ctx context.Context, duration time.Duration) error {
 
 func sampleOffsetDuration(samples uint64) time.Duration {
 	const maxDuration = uint64(1<<63 - 1)
-	seconds := samples / rtctransport.OutboundRTPClockRate
-	remainder := samples % rtctransport.OutboundRTPClockRate
+	seconds := samples / OutboundRTPClockRate
+	remainder := samples % OutboundRTPClockRate
 	if seconds > maxDuration/uint64(time.Second) {
 		return time.Duration(maxDuration)
 	}
 	wholeNanos := seconds * uint64(time.Second)
-	fractionNanos := remainder * uint64(time.Second) / rtctransport.OutboundRTPClockRate
+	fractionNanos := remainder * uint64(time.Second) / OutboundRTPClockRate
 	if wholeNanos > maxDuration-fractionNanos {
 		return time.Duration(maxDuration)
 	}

@@ -327,19 +327,13 @@ func testOutboundLegacyPacer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOutboundTrack() error = %v", err)
 	}
-	if _, ok := track.pacer.(*legacyWallClockPacer); !ok {
-		t.Fatalf("default pacer type = %T, want legacyWallClockPacer", track.pacer)
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := track.pacer.Wait(ctx, 0); !errors.Is(err, context.Canceled) {
-		t.Fatalf("canceled default pacer = %v, want context.Canceled", err)
+	if err := track.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: []int16{1}}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled default pacing = %v, want context.Canceled", err)
 	}
-	if err := track.pacer.Wait(context.Background(), 0); err != nil {
-		t.Fatalf("first default pacing = %v", err)
-	}
-	if got, want := legacySampleOffsetDuration(OutboundRTPClockRate+1), time.Second+time.Second/OutboundRTPClockRate; got != want {
-		t.Fatalf("sample offset duration = %v, want %v", got, want)
+	if err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: []int16{1}}); err != nil {
+		t.Fatalf("first default paced write = %v", err)
 	}
 	if err := track.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
@@ -434,9 +428,22 @@ func testOutboundWriteFailures(t *testing.T) {
 
 func testOutboundClose(t *testing.T) {
 	var track *OutboundTrack
+	closeDone := make(chan error, 1)
+	closeObserved := make(chan struct{})
 	writer := &compatibilityOutboundWriter{onWrite: func() {
-		if closeErr := track.Close(); closeErr != nil {
-			panic(closeErr)
+		go func() { closeDone <- track.Close() }()
+		deadline := time.NewTimer(time.Second)
+		defer deadline.Stop()
+		for {
+			if err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{}); errors.Is(err, ErrOutboundClosed) {
+				close(closeObserved)
+				return
+			}
+			select {
+			case <-deadline.C:
+				panic("Close did not publish closed state while writer was active")
+			default:
+			}
 		}
 	}}
 	var err error
@@ -446,6 +453,10 @@ func testOutboundClose(t *testing.T) {
 	}
 	if err := track.WriteFrame(context.Background(), sharedaudio.PCMFrame{Samples: []int16{1}}); !errors.Is(err, ErrOutboundClosed) {
 		t.Fatalf("write after concurrent close = %v, want %v", err, ErrOutboundClosed)
+	}
+	<-closeObserved
+	if closeErr := <-closeDone; closeErr != nil {
+		t.Fatalf("concurrent Close() error = %v", closeErr)
 	}
 	closeErr := errors.New("encoder close failed")
 	track, err = NewOutboundTrack(OutboundTrackConfig{SourceRate: wavio.Rate48kHz, Encoder: &compatibilityOutboundEncoder{encoded: []byte{1}, closeErr: closeErr}, Writer: &compatibilityOutboundWriter{}, Pacer: &compatibilityOutboundPacer{}})

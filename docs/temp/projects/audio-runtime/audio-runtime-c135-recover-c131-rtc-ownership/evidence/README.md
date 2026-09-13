@@ -1,0 +1,3 @@
+# C135 evidence
+
+This directory records recovery provenance and bounded verification outputs for audio-runtime-c135-recover-c131-rtc-ownership.\n\nThe preserved C130 report remains FAILED; its canonical SHA-256 is recorded in admission-and-baseline.json and checked by verify.py. The C116 external consumer remains in its archived directory and is executed by the C131 verify-external-consumer.sh shim. Hardware endpoints and physical acoustics remain out of scope.\n\nrun.py writes evidence/run-report.json only after it has run the requested bounded shipped cases. It records the built artifact hash, source revision, bounded output, and process-group cleanup. verify.py fails closed if any required case or cleanup observation is absent.\n

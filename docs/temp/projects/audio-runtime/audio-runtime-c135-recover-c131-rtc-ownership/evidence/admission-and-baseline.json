@@ -1,0 +1,43 @@
+{
+  "schema": "audio-runtime-c135-admission/v1",
+  "work": "audio-runtime-c135-recover-c131-rtc-ownership",
+  "decision": "admitted",
+  "project": "audio-runtime",
+  "contract_revision": "audio-runtime-v1",
+  "branch": "codex/audio-runtime-c135-recover-c131-rtc-ownership",
+  "preserved_c131_checkpoint": {
+    "branch": "codex/audio-runtime-c131-repair-c116-gateway-rtc-ownership",
+    "revision": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+    "worktree": "clean before recovery",
+    "canonical_status": "C131 plan complete; setup collided with pre-existing C119 work-task-19; no C131 task, PR, commit, or worker"
+  },
+  "required_ancestry": {
+    "startup_integration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "preserved_c131": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+    "planning_origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f"
+  },
+  "c130": {
+    "decision": "FAILED",
+    "report_sha256": "a18cbe6fd21d06f83d913d71307ff629b2fcc4a3fa2830690df1fe33f2b4afcf",
+    "accepted_source_revision": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+    "baseline_gateway_lines": {
+      "track_in.go": 268,
+      "track_out.go": 247,
+      "total": 515
+    },
+    "failure": "duplicate gateway RTP/audio policy and mutable continuity/packetization/pacing state"
+  },
+  "c135_before_after": {
+    "gateway_production_lines": {
+      "track_in.go": 72,
+      "track_out.go": 61,
+      "total": 133
+    },
+    "owner": "go-audio/pkg/rtctransport",
+    "runtime_boundary": "go-agent-runtime/services/rtctransport",
+    "gateway_surface": "explicit Deprecated aliases/delegates only"
+  },
+  "peer_ownership": "C109-C112, C119, C127, C129 and C134 checked disjoint; C111/C119 SCRIPT CI and terminal C126 are not writers",
+  "scope_note": "go-audio/go.mod and go.sum are supporting module metadata required for GOWORK=off Pion RTP resolution by the owned core package"
+}
+

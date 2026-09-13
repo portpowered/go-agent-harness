@@ -1,4 +1,4 @@
-package service
+package rtctransport
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/pion/rtp"
-	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
@@ -25,29 +24,29 @@ type inboundTrackConfig struct {
 	resample                                         func([]int16, int, int) ([]int16, error)
 }
 
-func normalizeInboundConfig(c rtctransport.InboundTrackConfig) (inboundTrackConfig, error) {
+func normalizeInboundConfig(c InboundTrackConfig) (inboundTrackConfig, error) {
 	rate := c.SampleRate
 	if rate == 0 {
-		rate = rtctransport.CodecSampleRate
+		rate = CodecSampleRate
 	}
 	if rate != wavio.Rate16kHz && rate != wavio.Rate24kHz && rate != wavio.Rate48kHz {
 		return inboundTrackConfig{}, inboundConfigError("sample rate", rate, "want 16000, 24000, or 48000 Hz")
 	}
 	duration := c.FrameDuration
 	if duration == 0 {
-		duration = rtctransport.DefaultInboundFrameDuration
+		duration = DefaultInboundFrameDuration
 	}
 	if !validInboundDuration(duration) {
 		return inboundTrackConfig{}, inboundConfigError("frame duration", duration, "want a legal Opus duration from 2.5 ms through 60 ms")
 	}
 	depth := c.JitterDepth
 	if depth == 0 {
-		depth = rtctransport.DefaultInboundJitterDepth
+		depth = DefaultInboundJitterDepth
 	}
 	if depth <= 0 || depth > maxInboundJitterDepth || depth%duration != 0 {
 		return inboundTrackConfig{}, inboundConfigError("jitter depth", depth, "must be positive, bounded, and frame-aligned")
 	}
-	codecSamples := int(int64(rtctransport.CodecSampleRate) * int64(duration) / int64(time.Second))
+	codecSamples := int(int64(CodecSampleRate) * int64(duration) / int64(time.Second))
 	outputSamples := int(int64(rate) * int64(duration) / int64(time.Second))
 	timer := c.NewTimer
 	if timer == nil {
@@ -77,9 +76,9 @@ type packetSource struct {
 
 func adaptPacketSource(value any) (packetSource, error) {
 	if nilValue(value) {
-		return packetSource{}, rtctransport.ErrNilInboundRTPTrack
+		return packetSource{}, ErrNilInboundRTPTrack
 	}
-	source, ok := value.(rtctransport.RTPPacketSource)
+	source, ok := value.(RTPPacketSource)
 	if !ok {
 		return packetSource{}, inboundConfigError("RTP source", fmt.Sprintf("%T", value), "want ReadRTP")
 	}
@@ -113,7 +112,7 @@ func nilValue(value any) bool {
 
 type InboundTrack struct {
 	source      packetSource
-	decoder     rtctransport.OpusDecoder
+	decoder     OpusDecoder
 	config      inboundTrackConfig
 	frames      chan frameResult
 	done        chan struct{}
@@ -138,9 +137,9 @@ type packetEvent struct {
 	err    error
 }
 
-var _ rtctransport.InboundTrack = (*InboundTrack)(nil)
+var _ sharedaudio.InboundMedia = (*InboundTrack)(nil)
 
-func (s *Service) NewInboundTrack(source, opus any, config rtctransport.InboundTrackConfig) (rtctransport.InboundTrack, error) {
+func NewInboundTrack(source, opus any, config InboundTrackConfig) (*InboundTrack, error) {
 	cfg, err := normalizeInboundConfig(config)
 	if err != nil {
 		return nil, err
@@ -150,11 +149,11 @@ func (s *Service) NewInboundTrack(source, opus any, config rtctransport.InboundT
 		return nil, err
 	}
 	if nilValue(opus) {
-		return nil, rtctransport.ErrNilOpusDecoder
+		return nil, ErrNilOpusDecoder
 	}
-	decoder, ok := opus.(rtctransport.OpusDecoder)
+	decoder, ok := opus.(OpusDecoder)
 	if !ok {
-		return nil, rtctransport.ErrUnsupportedOpusDecoder
+		return nil, ErrUnsupportedOpusDecoder
 	}
 	track := &InboundTrack{
 		source: packetSource, decoder: decoder, config: cfg,
@@ -197,7 +196,7 @@ func (t *InboundTrack) handlePacketEvent(state *inboundPlayout, event packetEven
 		return t.finishSourceEvent(state, event.err)
 	}
 	if event.packet == nil {
-		t.finish(inboundTrackError(rtctransport.ErrInvalidInboundRTPPacket, "packet", errors.New("source returned nil without an error")))
+		t.finish(inboundTrackError(ErrInvalidInboundRTPPacket, "packet", errors.New("source returned nil without an error")))
 		return true
 	}
 	if err := state.push(event.packet); err != nil {
@@ -214,7 +213,7 @@ func (t *InboundTrack) finishSourceEvent(state *inboundPlayout, eventErr error) 
 	if err := state.flush(); err != nil {
 		t.finish(err)
 	} else {
-		t.finish(inboundTrackError(rtctransport.ErrInboundTrackSource, "read RTP", eventErr))
+		t.finish(inboundTrackError(ErrInboundTrackSource, "read RTP", eventErr))
 	}
 	return true
 }
@@ -248,9 +247,9 @@ func (t *InboundTrack) emit(samples []int16) error {
 	case t.frames <- frameResult{frame: sharedaudio.PCMFrame{Samples: samples}}:
 		return nil
 	case <-t.done:
-		return rtctransport.ErrInboundTrackClosed
+		return ErrInboundTrackClosed
 	default:
-		return inboundTrackError(rtctransport.ErrInboundTrackQueueOverflow, "queue", errors.New("inbound frame delivery queue is full"))
+		return inboundTrackError(ErrInboundTrackQueueOverflow, "queue", errors.New("inbound frame delivery queue is full"))
 	}
 }
 
@@ -273,7 +272,7 @@ func (t *InboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, err
 		ctx = context.Background()
 	}
 	if t.closed.Load() {
-		return sharedaudio.PCMFrame{}, rtctransport.ErrInboundTrackClosed
+		return sharedaudio.PCMFrame{}, ErrInboundTrackClosed
 	}
 	select {
 	case <-ctx.Done():
@@ -282,12 +281,12 @@ func (t *InboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, err
 	}
 	select {
 	case <-t.closedDone:
-		return sharedaudio.PCMFrame{}, rtctransport.ErrInboundTrackClosed
+		return sharedaudio.PCMFrame{}, ErrInboundTrackClosed
 	case <-ctx.Done():
 		return sharedaudio.PCMFrame{}, ctx.Err()
 	case result, ok := <-t.frames:
 		if t.closed.Load() {
-			return sharedaudio.PCMFrame{}, rtctransport.ErrInboundTrackClosed
+			return sharedaudio.PCMFrame{}, ErrInboundTrackClosed
 		}
 		if !ok {
 			return sharedaudio.PCMFrame{}, t.terminal()
@@ -296,7 +295,7 @@ func (t *InboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, err
 			return sharedaudio.PCMFrame{}, result.err
 		}
 		if len(result.frame.Samples) != t.config.outputSamples {
-			return sharedaudio.PCMFrame{}, inboundTrackError(rtctransport.ErrInboundTrackFrame, "frame", fmt.Errorf("got %d samples, want %d", len(result.frame.Samples), t.config.outputSamples))
+			return sharedaudio.PCMFrame{}, inboundTrackError(ErrInboundTrackFrame, "frame", fmt.Errorf("got %d samples, want %d", len(result.frame.Samples), t.config.outputSamples))
 		}
 		return result.frame, nil
 	}
@@ -307,7 +306,7 @@ func (t *InboundTrack) Close() error {
 		t.closed.Store(true)
 		close(t.closedDone)
 		if err := t.stop(); err != nil {
-			t.closeErr = inboundTrackError(rtctransport.ErrInboundTrackSource, "close source", err)
+			t.closeErr = inboundTrackError(ErrInboundTrackSource, "close source", err)
 		}
 	})
 	return t.closeErr
@@ -336,7 +335,7 @@ func (t *InboundTrack) recordSourceCloseError(err error) {
 	t.terminalMu.Lock()
 	defer t.terminalMu.Unlock()
 	if t.terminalErr == nil {
-		t.terminalErr = inboundTrackError(rtctransport.ErrInboundTrackSource, "close source", err)
+		t.terminalErr = inboundTrackError(ErrInboundTrackSource, "close source", err)
 	}
 }
 
