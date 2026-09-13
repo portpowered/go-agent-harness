@@ -11,7 +11,7 @@ policy was changed.
 
 - `project-control.py verify-work --type task --name audio-runtime-c156-repair-agentsession-coverage-regression --root "$FACTORY_ROOT"`: exit 0, `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c156-repair-agentsession-coverage-regression"}`.
 - Factory session: `~default`; startup `integrationRevision`: `8bdafc7f947a3a2c9856220abdc539437035bd21`.
-- `origin/main` fetched for this worktree: `4a1c399ccbb3d780be95eb04316e84b8f11a6646`.
+- Planning `origin/main`: `4a1c399ccbb3d780be95eb04316e84b8f11a6646`; review-time fetched current `origin/main`: `97d3dcfb1e97a2611aa26b203a7f893442db4768`.
 - Baseline ancestor: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`.
 - C145 comparison head: `d014a3586368c37e20618481ee162e1b83db113f`.
 - Source plan SHA-256: `f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37`.
@@ -95,7 +95,7 @@ voices.go: Error 100.0%; Unwrap 100.0%; SupportedOpenAIRealtimeVoices 100.0%; Va
 total: (statements) 100.0%
 ```
 
-The final full `make coverage` gate exited 0. Its full profile
+The pre-main-update full `make coverage` gate exited 0. Its full profile
 `coverage/agent-cli.out` SHA-256 is
 `fc780f0f90263ed708d667b2acebd9b0a6cd8bf8a9eab8085348d4c50946c83e`; the
 deduplicated agentsession slice is 76/76 statements, 100.00%, with the
@@ -105,7 +105,7 @@ manifest still exactly:
 {"package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession", "minimum": 80.00}
 ```
 
-Final focused and accumulated results (all exit 0):
+Pre-main-update focused and accumulated results (all exit 0):
 
 - `rtk proxy sh -c 'cd agent-cli && CGO_ENABLED=0 go test ./internal/services/agentsession -tags=nomicrophone -run C156 -count=50 -timeout=180s'` — output SHA-256 `0295a4010a0b99cece5ee92fa70d62590e19a62e5468d3461a9db9666ed281b8`.
 - `rtk proxy sh -c 'cd agent-cli && CGO_ENABLED=0 go test -race ./internal/services/agentsession -tags=nomicrophone -run C156 -count=20 -timeout=300s'` — output SHA-256 `305b1ce180e65bad40e397e71c87d1adb2c994b0ef98f7980b99d5e52cb999e3`.
@@ -123,9 +123,20 @@ virtual audio-device setup errors. Its captured output SHA-256 is
 second same-command rerun passed; its captured output SHA-256 is
 `50775893e240d7b364ec1162979ed916553d2d25ca8a9a45a93d0b838f070ae3`.
 
+After fetching and merging review-time `origin/main` `97d3dcfb1e97a2611aa26b203a7f893442db4768`
+(isolated merge commit `37f773eea`), the final-head reruns also all exited 0:
+
+- Focused C156 normal 50× output SHA-256: `0920c9440d326364061e087c9db08aaad126b04741ddf146699166c2e4be2a8d`.
+- Focused C156 race 20× output SHA-256: `e289e85a642781c8579d2ca2423e75166521a4816223e9a2f9a38c79a3454758`.
+- Full agentsession normal 10× and race 5× output SHA-256s: `64c549fe7215236aa5be893b79c7fb15c9f7de7cc6a9c65d2953bb23242ee670` and `4b2d56f74b5ea26cb0745a9f26619d5273e90e6ff3373620e96a2caac600f0d9`.
+- Accumulated lifecycle regression output SHA-256: `b6543c13602de9139a2296761e3d1882e3a5c7180539d9507033697cc2900998`.
+- Final merged-head `make coverage` output SHA-256: `38b09267937154f9507382d3de71a98f2fe5032b77b768a0ce8132683549e519`; full profile SHA-256 `a743c8c00682fc2b40ed8f58108803e9b30eb902dc93256ec31275e18ccc554f`, with agentsession 76/76 (100.00%).
+
 ## SCRIPT CI handoff
 
 - Implementation checkpoint commit: `fa598fca7ac70ae531d56d68d4626d9c96a52816`.
+- Review-time main integration: merged fetched `origin/main` `97d3dcfb1e97a2611aa26b203a7f893442db4768` into the isolated candidate; its merge base with the candidate is the planning main `4a1c399ccbb3d780be95eb04316e84b8f11a6646`.
+- Review-time merge commit: `37f773eea` (the final evidence checkpoint is a descendant of this merge).
 - Pushed branch: `codex/audio-runtime-c156-repair-agentsession-coverage-regression`.
 - Pull request opened: `https://github.com/portpowered/go-agent-harness/pull/517`.
 - The executor stops here after submitting the exact pushed candidate to SCRIPT
