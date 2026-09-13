@@ -1,4 +1,4 @@
-package agentruntime
+package service
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"encoding/json"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
 
 func parseRoomReplayToleranceProfile(manifest roomReplayJSONObject) (RoomReplayToleranceProfile, error) {
@@ -21,83 +22,122 @@ func parseRoomReplayToleranceProfile(manifest roomReplayJSONObject) (RoomReplayT
 	if err != nil {
 		return RoomReplayToleranceProfile{}, fmt.Errorf("%w: profile must be a JSON object: %w", ErrRoomReplayToleranceProfile, err)
 	}
-	if name, present, nameErr := firstRoomReplayStringField(object, nil, "name", "profile", "id"); nameErr != nil && present {
-		return RoomReplayToleranceProfile{}, fmt.Errorf("%w: name: %w", ErrRoomReplayToleranceProfile, nameErr)
-	} else if present && strings.TrimSpace(name) != "" {
-		profile.Name = strings.TrimSpace(name)
-	}
-
-	stream := &profile.StreamConfig
-	roomConfig := &profile.RoomConfig
-	roomConfig.StreamConfig = profile.StreamConfig
-	if err := applyRoomReplayProfileDuration(object, "frame_duration", &stream.FrameDuration, "stream.frame_duration"); err != nil {
+	if err := applyRoomReplayProfileName(&profile, object); err != nil {
 		return RoomReplayToleranceProfile{}, err
 	}
-	if err := applyRoomReplayProfileFloat(object, "silence_floor_dbfs", &stream.SilenceFloorDBFS, "stream.silence_floor_dbfs"); err != nil {
+	if err := applyRoomReplayStreamProfile(&profile, object); err != nil {
 		return RoomReplayToleranceProfile{}, err
 	}
-	if err := applyRoomReplayProfileDuration(object, "max_natural_pause", &stream.MaxNaturalPause, "stream.max_natural_pause"); err != nil {
+	if err := applyRoomReplayRoomProfile(&profile, object); err != nil {
 		return RoomReplayToleranceProfile{}, err
 	}
-	if err := applyRoomReplayProfileInt(object, "boundary_delta", &stream.BoundaryDelta, "stream.boundary_delta"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	if err := applyRoomReplayProfileFloat(object, "boundary_quiet_dbfs", &stream.BoundaryQuietDBFS, "stream.boundary_quiet_dbfs"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	if err := applyRoomReplayProfileInt(object, "clip_sample_threshold", &stream.ClipSampleThreshold, "stream.clip_sample_threshold"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	if err := applyRoomReplayProfileInt(object, "edge_sample_threshold", &stream.EdgeSampleThreshold, "stream.edge_sample_threshold"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	if err := applyRoomReplayProfileFloat(object, "final_frame_max_rms_dbfs", &stream.FinalFrameMaxRMSDBFS, "stream.final_frame_max_rms_dbfs"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-
-	lagRaw, lagPresent := roomReplayProfileRawField(object, "correlation_lag_window", "routing_lag_window")
-	if lagPresent {
-		lagObject, lagErr := roomReplayObject(lagRaw)
-		if lagErr != nil {
-			return RoomReplayToleranceProfile{}, fmt.Errorf("%w: correlation_lag_window must be an object: %w", ErrRoomReplayToleranceProfile, lagErr)
-		}
-		if err := applyRoomReplayProfileDurationFromObject(lagObject, "min", &roomConfig.CorrelationLagWindow.Min, "correlation_lag_window.min"); err != nil {
-			return RoomReplayToleranceProfile{}, err
-		}
-		if err := applyRoomReplayProfileDurationFromObject(lagObject, "max", &roomConfig.CorrelationLagWindow.Max, "correlation_lag_window.max"); err != nil {
-			return RoomReplayToleranceProfile{}, err
-		}
-	}
-	if err := applyRoomReplayProfileFloat(object, "correlation_silence_floor_dbfs", &roomConfig.CorrelationSilenceFloorDBFS, "correlation_silence_floor_dbfs"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	if err := applyRoomReplayProfileFloat(object, "min_peer_correlation", &roomConfig.MinPeerCorrelation, "min_peer_correlation"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	if err := applyRoomReplayProfileFloat(object, "max_self_correlation", &roomConfig.MaxSelfCorrelation, "max_self_correlation"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	if err := applyRoomReplayProfileFloat(object, "barge_in_speech_threshold_dbfs", &roomConfig.BargeInSpeechThresholdDBFS, "barge_in_speech_threshold_dbfs"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	if err := applyRoomReplayProfileDuration(object, "max_barge_in_latency", &roomConfig.MaxBargeInLatency, "max_barge_in_latency"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	if err := applyRoomReplayProfileFloat(object, "max_loudness_difference_db", &roomConfig.MaxLoudnessDifferenceDB, "max_loudness_difference_db"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	if err := applyRoomReplayProfileDuration(object, "max_drift_absolute", &roomConfig.MaxDriftAbsolute, "max_drift_absolute"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	if err := applyRoomReplayProfileFloat(object, "max_drift_fraction", &roomConfig.MaxDriftFraction, "max_drift_fraction"); err != nil {
-		return RoomReplayToleranceProfile{}, err
-	}
-	roomConfig.StreamConfig = *stream
 
 	if err := validateRoomReplayToleranceTightening(profile); err != nil {
 		return RoomReplayToleranceProfile{}, err
 	}
 	return profile, nil
+}
+
+func applyRoomReplayProfileName(profile *RoomReplayToleranceProfile, object roomReplayJSONObject) error {
+	name, present, err := firstRoomReplayStringField(object, nil, "name", "profile", "id")
+	if err != nil && present {
+		return fmt.Errorf("%w: name: %w", ErrRoomReplayToleranceProfile, err)
+	}
+	if present && strings.TrimSpace(name) != "" {
+		profile.Name = strings.TrimSpace(name)
+	}
+	return nil
+}
+
+func applyRoomReplayStreamProfile(profile *RoomReplayToleranceProfile, object roomReplayJSONObject) error {
+	stream := &profile.StreamConfig
+	checks := []func() error{
+		func() error {
+			return applyRoomReplayProfileDuration(object, "frame_duration", &stream.FrameDuration, "stream.frame_duration")
+		},
+		func() error {
+			return applyRoomReplayProfileFloat(object, "silence_floor_dbfs", &stream.SilenceFloorDBFS, "stream.silence_floor_dbfs")
+		},
+		func() error {
+			return applyRoomReplayProfileDuration(object, "max_natural_pause", &stream.MaxNaturalPause, "stream.max_natural_pause")
+		},
+		func() error {
+			return applyRoomReplayProfileInt(object, "boundary_delta", &stream.BoundaryDelta, "stream.boundary_delta")
+		},
+		func() error {
+			return applyRoomReplayProfileFloat(object, "boundary_quiet_dbfs", &stream.BoundaryQuietDBFS, "stream.boundary_quiet_dbfs")
+		},
+		func() error {
+			return applyRoomReplayProfileInt(object, "clip_sample_threshold", &stream.ClipSampleThreshold, "stream.clip_sample_threshold")
+		},
+		func() error {
+			return applyRoomReplayProfileInt(object, "edge_sample_threshold", &stream.EdgeSampleThreshold, "stream.edge_sample_threshold")
+		},
+		func() error {
+			return applyRoomReplayProfileFloat(object, "final_frame_max_rms_dbfs", &stream.FinalFrameMaxRMSDBFS, "stream.final_frame_max_rms_dbfs")
+		},
+	}
+	for _, check := range checks {
+		if err := check(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func applyRoomReplayRoomProfile(profile *RoomReplayToleranceProfile, object roomReplayJSONObject) error {
+	roomConfig := &profile.RoomConfig
+	roomConfig.StreamConfig = profile.StreamConfig
+	if err := applyRoomReplayCorrelationWindow(roomConfig, object); err != nil {
+		return err
+	}
+	checks := []func() error{
+		func() error {
+			return applyRoomReplayProfileFloat(object, "correlation_silence_floor_dbfs", &roomConfig.CorrelationSilenceFloorDBFS, "correlation_silence_floor_dbfs")
+		},
+		func() error {
+			return applyRoomReplayProfileFloat(object, "min_peer_correlation", &roomConfig.MinPeerCorrelation, "min_peer_correlation")
+		},
+		func() error {
+			return applyRoomReplayProfileFloat(object, "max_self_correlation", &roomConfig.MaxSelfCorrelation, "max_self_correlation")
+		},
+		func() error {
+			return applyRoomReplayProfileFloat(object, "barge_in_speech_threshold_dbfs", &roomConfig.BargeInSpeechThresholdDBFS, "barge_in_speech_threshold_dbfs")
+		},
+		func() error {
+			return applyRoomReplayProfileDuration(object, "max_barge_in_latency", &roomConfig.MaxBargeInLatency, "max_barge_in_latency")
+		},
+		func() error {
+			return applyRoomReplayProfileFloat(object, "max_loudness_difference_db", &roomConfig.MaxLoudnessDifferenceDB, "max_loudness_difference_db")
+		},
+		func() error {
+			return applyRoomReplayProfileDuration(object, "max_drift_absolute", &roomConfig.MaxDriftAbsolute, "max_drift_absolute")
+		},
+		func() error {
+			return applyRoomReplayProfileFloat(object, "max_drift_fraction", &roomConfig.MaxDriftFraction, "max_drift_fraction")
+		},
+	}
+	for _, check := range checks {
+		if err := check(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func applyRoomReplayCorrelationWindow(roomConfig *roomanalysis.PCM16RoomAnalysisConfig, object roomReplayJSONObject) error {
+	lagRaw, present := roomReplayProfileRawField(object, "correlation_lag_window", "routing_lag_window")
+	if !present {
+		return nil
+	}
+	lagObject, err := roomReplayObject(lagRaw)
+	if err != nil {
+		return fmt.Errorf("%w: correlation_lag_window must be an object: %w", ErrRoomReplayToleranceProfile, err)
+	}
+	if err := applyRoomReplayProfileDurationFromObject(lagObject, "min", &roomConfig.CorrelationLagWindow.Min, "correlation_lag_window.min"); err != nil {
+		return err
+	}
+	return applyRoomReplayProfileDurationFromObject(lagObject, "max", &roomConfig.CorrelationLagWindow.Max, "correlation_lag_window.max")
 }
 
 func roomReplayProfileRawField(object roomReplayJSONObject, names ...string) (json.RawMessage, bool) {
