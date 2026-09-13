@@ -28,8 +28,9 @@ BASELINE_LINES = 147
 BASELINE_SHA256 = "48000dcd73b85ebbe93fd40a3996529878a99c799b67b0779d60f55dbb43fc1e"
 OWNED_PREFIX = "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/"
 ARCHITECTURE_POLICY = "docs/architecture/architecture-policy.json"
+WIRE_REGISTRY = "scripts/wire-packages.txt"
+CONTINUATION_WIRE = "go-agent-runtime/services/sessioncontinuation/wire"
 FORBIDDEN_PATHS = {
-    "scripts/wire-packages.txt",
     "docs/architecture/architecture-size-baseline.json",
     "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
 }
@@ -164,6 +165,7 @@ def verify_source_and_scope() -> dict[str, Any]:
         "go-agent-runtime/services/sessioncontinuation/",
         "coverage-manifest/go-agent-runtime/services/sessioncontinuation/",
         ARCHITECTURE_POLICY,
+        WIRE_REGISTRY,
         OWNED_PREFIX,
     }
     outside = sorted(
@@ -198,11 +200,26 @@ def verify_source_and_scope() -> dict[str, Any]:
     require("agent-cli" not in source_text, "reusable continuation package imports CLI code")
     require("os.Getenv" not in source_text and "os.LookupEnv" not in source_text, "continuation package reads environment")
     require("func init(" not in source_text and "time.Sleep" not in source_text, "continuation package contains hidden or sleeping policy")
+    base_registry = git("show", f"{INTEGRATED_MAIN}:{WIRE_REGISTRY}")
+    base_registry_entries = base_registry.splitlines()
+    require(CONTINUATION_WIRE not in base_registry_entries, "integrated main already contains the C111 Wire registry entry")
+    try:
+        registry_insert_at = base_registry_entries.index("go-agent-runtime/services/sessiondiagnostics/wire")
+    except ValueError as exc:
+        raise VerificationFailure("integrated main Wire registry anchor is missing") from exc
+    expected_registry_entries = list(base_registry_entries)
+    expected_registry_entries.insert(registry_insert_at, CONTINUATION_WIRE)
+    current_registry = (ROOT / WIRE_REGISTRY).read_text(encoding="utf-8")
+    require(
+        current_registry == "\n".join(expected_registry_entries) + "\n",
+        "Wire registry differs beyond the released C111 sessioncontinuation entry",
+    )
     return {
         "baseline_lines": BASELINE_LINES,
         "baseline_sha256": BASELINE_SHA256,
         "integrated_main": INTEGRATED_MAIN,
         "final_adapter_lines": len(current.splitlines()),
+        "wire_registry": CONTINUATION_WIRE,
         "changed_paths": sorted(changed),
     }
 
