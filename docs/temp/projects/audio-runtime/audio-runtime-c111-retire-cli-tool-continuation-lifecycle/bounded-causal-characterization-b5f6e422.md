@@ -100,3 +100,22 @@ nor its test changed. The exact test passed `20/20` under `CGO_ENABLED=0` with
 C111-owned cause is demonstrated, so no peer source, assertion, timeout, or
 ownership was changed. This rejection remains non-green Script CI evidence;
 submit the changed C111 evidence head to the same task gate without polling.
+
+## Final current-main characterization
+
+Fresh `origin/main` advanced to `915ed982d23f2e549e529ff43c4f370b4b51e394`; it
+was integrated into the candidate with the no-reset merge
+`342ddb41819596b6744bf443e5b964cc936be7f2`. Against that current-main base,
+the C111 verifier accepted both `positive-and-negative-controls` and
+`retirement-and-owned-paths`, the public replay accepted, the four accumulated
+continuation regressions passed, and the public contract/Wire tests passed in
+normal and race modes. The unchanged peer split-delta test passed `20/20` in
+both bounded normal and race characterization. The exact local
+`YUI_AUDIO_STRESS=1` `trial_10` also passed in `41.126s` total, with the named
+subtest passing in `1.96s`.
+
+The resulting final candidate diff against current `origin/main` still changes
+only the C111-owned lifecycle adapter and its owned contract/evidence paths;
+the earlier hermetic rejection remains recorded at pre-merge head `c1b5f1cdf`
+and does not establish a C111-owned cause. These are executor checks only;
+Script CI is the next external gate and is not claimed green.

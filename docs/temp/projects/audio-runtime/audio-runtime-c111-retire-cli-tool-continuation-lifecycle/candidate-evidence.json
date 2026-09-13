@@ -6,7 +6,7 @@
   "session": "~default",
   "server": "http://127.0.0.1:7439",
   "branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
-  "implementationRevision": "c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db",
+  "implementationRevision": "342ddb41819596b6744bf443e5b964cc936be7f2",
   "admission": {
     "verifyWork": "admitted",
     "secondProject": false,
@@ -14,7 +14,7 @@
     "startupIsAncestor": true,
     "acceptedMainIsAncestor": true,
     "integratedMainIsAncestor": true,
-    "integratedMainRevision": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "integratedMainRevision": "915ed982d23f2e549e529ff43c4f370b4b51e394",
     "prdBranchMatches": true,
     "baselineRevision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
   },
@@ -88,45 +88,45 @@
       "result": "passed"
     },
     {
-      "command": "GOWORK=off CGO_ENABLED=0 go test ./internal/services/internal/agentruntime -tags=nomicrophone -run '^TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas$' -count=20 -timeout=120s",
+      "command": "GOWORK=off CGO_ENABLED=0 go test ./internal/services/internal/agentruntime -tags=nomicrophone -run '^TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas$' -count=20 -timeout=240s",
       "result": "passed: 20/20; unchanged peer test not C111-owned"
     },
     {
-      "command": "GOWORK=off CGO_ENABLED=0 go test -race ./internal/services/internal/agentruntime -tags=nomicrophone -run '^TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas$' -count=20 -timeout=240s",
+      "command": "GOWORK=off CGO_ENABLED=0 go test -race ./internal/services/internal/agentruntime -tags=nomicrophone -run '^TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas$' -count=20 -timeout=360s",
       "result": "passed: 20/20; unchanged peer test not C111-owned"
     },
     {
       "command": "verify.py --mode retirement-and-owned-paths",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789313364-22131.json",
-      "sha256": "e59e8299374d4c36fdf77ed4c52a89f4125b36fab5c8da20aa69bfade9a6ad08",
-      "sourceRevision": "c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db"
+      "artifact": "artifacts/verify-1789314329-50736.json",
+      "sha256": "0e5d0f735e5e680feb6c3bf42d87ee1a46a46b1f170112900f1b32a3382593c6",
+      "sourceRevision": "342ddb41819596b6744bf443e5b964cc936be7f2"
     },
     {
       "command": "verify.py --mode positive-and-negative-controls",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789313352-20716.json",
-      "sha256": "299d1b006c04acbb23795f4821a3c5be088922b51d974e67ea00b6a2f58182e9",
-      "sourceRevision": "c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db"
+      "artifact": "artifacts/verify-1789314328-50215.json",
+      "sha256": "5d8c9b1fd62ac6d604da5b393c5d1d7c285ec859ab8bb70f850cca8e1d55c0b5",
+      "sourceRevision": "342ddb41819596b6744bf443e5b964cc936be7f2"
     }
   ],
   "postMergeValidation": {
-    "sourceRevision": "c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db",
-    "freshOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "sourceRevision": "342ddb41819596b6744bf443e5b964cc936be7f2",
+    "freshOriginMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
     "verification": {
       "result": "accepted",
-      "artifact": "artifacts/verify-1789313352-20716.json",
-      "sha256": "299d1b006c04acbb23795f4821a3c5be088922b51d974e67ea00b6a2f58182e9",
+      "artifact": "artifacts/verify-1789314328-50215.json",
+      "sha256": "5d8c9b1fd62ac6d604da5b393c5d1d7c285ec859ab8bb70f850cca8e1d55c0b5",
       "checks": "runtime contract, race, GOWORK=off external consumer, and four accumulated regressions; all exited 0, timed_out=false, reaped=true",
       "retirement": "147-line immutable baseline/hash verified; 48-line legacy adapter; 99 net production lines retired; owned-path verifier accepted",
       "coverageRegistration": "188 workspace packages across 6 modules"
     },
     "publicReplay": {
       "result": "accepted",
-      "artifact": "artifacts/run-1789313453-24354.json",
-      "sha256": "2798eb12bfb0124a17d5a0bb954ea314221ef85d8ea596886834331e02d05d65",
-      "binaryBytes": 51122754,
-      "binarySha256": "3a29a36dda5da23a4ff1f856dadbcbc4f77b165a453a114995454c25efde44a4",
+      "artifact": "artifacts/run-1789314385-50837.json",
+      "sha256": "d8b872279d1a746eebc19cf0c2ef97ebc6445334b14aa86171b2f835a2e5c61f",
+      "binaryBytes": 51123010,
+      "binarySha256": "a6d6ee2222cd3cd19d799f5027cd1ed656c4c4a0efc4fc4c3ff4e83b95809f64",
       "credentialFree": true,
       "realtimeSessions": 0,
       "cases": ["missing-tool-continuation", "corrupt-audio-delta", "non-tool-audio-regression"],
@@ -137,11 +137,12 @@
       "historical": false,
       "command": "GOWORK=off YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 120s -- go test ./test/integration -run '^TestAgentBinaryTest46HighRateToolAudioRegression/trial_10$' -count=1 -timeout 120s -v",
       "result": "passed",
-      "durationSeconds": 11.368,
-      "subtestDurationSeconds": 1.38,
+      "durationSeconds": 41.126,
+      "subtestDurationSeconds": 1.96,
       "priorFailureReproduced": false,
       "repair": "none; no C111-owned cause demonstrated"
     },
+    "qualityScope": "The quality sweep below ran at the pre-merge C111 source checkpoint; final-head focused controls were rerun after the no-reset current-main merge.",
     "quality": [
       "make fmt passed",
       "make wire-check passed: 12 Wire packages regenerated without drift",
@@ -152,13 +153,13 @@
       "make staticcheck passed: pinned staticcheck 2026.1 across 15 modules",
       "git diff --check passed"
     ],
-    "scriptCI": "run 34763400175 rejected the tested source head; the evidence checkpoint is a changed head for resubmission and no CI-green claim is made"
+    "scriptCI": "run 34764898583 rejected pre-merge candidate head c1b5f1c on an unchanged peer hermetic test; final candidate head 342ddb4 integrates current origin/main and is ready for same-task resubmission with no CI-green claim"
   },
   "accumulatedRegressions": {
     "result": "passed",
     "command": "verify.py --mode positive-and-negative-controls",
     "lanes": ["normal"],
-    "highRateTrials": "current C111-focused verifier excludes the C127-owned stress path; exact latest Script CI failure is retained in ci-rejection-34763400175.json",
+    "highRateTrials": "current C111-focused verifier excludes the C127-owned stress path; exact trial_10 passed locally after current C127 main integration in 41.126s (subtest 1.96s); prior Script CI failure remains retained in ci-rejection-34763400175.json",
     "tests": [
       "TestSessionToolResultConversationMissingContinuationIsBounded",
       "TestSessionToolResultConversationCorruptAudioDeltaIsRejected",
@@ -168,12 +169,12 @@
   },
   "replay": {
     "result": "accepted",
-    "artifact": "artifacts/run-1789311721-89052.json",
-    "sha256": "c60d610413600cc65fab695cc40859f6c0b573f1586c6a0f9b7d69769484f68d",
-    "sourceRevision": "bf05d90c64b556f68834d7dfa3150ad8ba1c1931",
+    "artifact": "artifacts/run-1789314385-50837.json",
+    "sha256": "d8b872279d1a746eebc19cf0c2ef97ebc6445334b14aa86171b2f835a2e5c61f",
+    "sourceRevision": "342ddb41819596b6744bf443e5b964cc936be7f2",
     "binary": {
-      "bytes": 51122754,
-      "sha256": "3a29a36dda5da23a4ff1f856dadbcbc4f77b165a453a114995454c25efde44a4"
+      "bytes": 51123010,
+      "sha256": "a6d6ee2222cd3cd19d799f5027cd1ed656c4c4a0efc4fc4c3ff4e83b95809f64"
     },
     "credentialFree": true,
     "realtimeSessions": 0,
@@ -217,18 +218,18 @@
     }
   },
   "currentOriginMain": {
-    "revision": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "revision": "915ed982d23f2e549e529ff43c4f370b4b51e394",
     "integrated": true,
-    "reason": "C79 reviewed guarded merge released the shared prerequisites; the freshly fetched current origin/main was integrated with a no-reset merge commit"
+    "reason": "C79 prerequisites and the freshly fetched C127 current origin/main were integrated with a no-reset merge commit"
   },
   "latestMainIntegration": {
-    "originMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
-    "candidateRevision": "44747db8fca0a1f5e11ce9722b709976316b943a",
-    "mergeCommit": "44747db8fca0a1f5e11ce9722b709976316b943a",
+    "originMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+    "candidateRevision": "342ddb41819596b6744bf443e5b964cc936be7f2",
+    "mergeCommit": "342ddb41819596b6744bf443e5b964cc936be7f2",
     "requiredAncestry": {
       "factoryStartup": "8bdafc7f947a3a2c9856220abdc539437035bd21",
       "acceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "currentOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f"
+      "currentOriginMain": "915ed982d23f2e549e529ff43c4f370b4b51e394"
     },
     "resetUsed": false
   },
@@ -239,15 +240,18 @@
     "currentRun": "34763400175",
     "currentHead": "bf05d90c64b556f68834d7dfa3150ad8ba1c1931",
     "currentResult": "rejected: agent-cli/internal/services/agentsession 61.80% versus 80.00%; C111 diff under that package is empty",
-    "floorChanged": false
+    "floorChanged": false,
+    "latestObservedRun": "34764898583",
+    "latestObservedHead": "c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db",
+    "latestObservedResult": "hermetic peer audio-output assertion failed; coverage remained pending at inspection"
   },
   "causalCharacterization": {
     "historical": false,
     "command": "GOWORK=off YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 120s -- go test ./test/integration -run '^TestAgentBinaryTest46HighRateToolAudioRegression/trial_10$' -count=1 -timeout 120s -v",
     "result": "passed",
-    "durationSeconds": 11.368,
-    "subtestDurationSeconds": 1.38,
-    "sourceRevision": "c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db",
+    "durationSeconds": 41.126,
+    "subtestDurationSeconds": 1.96,
+    "sourceRevision": "342ddb41819596b6744bf443e5b964cc936be7f2",
     "priorFailureReproduced": false,
     "repair": "none; no C111-owned cause demonstrated",
     "dependency": "preserve the prior playback-drain observation as separate C64 terminal-drain evidence if it recurs",
@@ -288,7 +292,7 @@
       "coverage: pending at inspection"
     ],
     "static": "passed",
-    "postRejectionLocalRepair": "C111 contract, four named regressions, external consumer, verifier, source-pinned replay, exact stress trial_10, and unchanged audio-output normal/race characterization pass at c1b5f1c; no C111 source repair is demonstrated",
+    "postRejectionLocalRepair": "C111 contract, four named regressions, external consumer, verifier, source-pinned replay, exact stress trial_10, and unchanged audio-output normal/race characterization pass at final head 342ddb4 after the no-reset current-main merge; no C111 source repair is demonstrated",
     "pendingAtInspection": ["coverage"],
     "statusAtInspection": "in_progress",
     "observedCompletedRun": false,
@@ -315,12 +319,12 @@
     "status": "all known review findings have a repair commit and final-head causal validation; no self-review performed"
   },
   "latestLocalRerun": {
-    "sourceRevision": "c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db",
+    "sourceRevision": "342ddb41819596b6744bf443e5b964cc936be7f2",
     "causal": {
       "command": "GOWORK=off YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 120s -- go test ./test/integration -run '^TestAgentBinaryTest46HighRateToolAudioRegression/trial_10$' -count=1 -timeout 120s -v",
       "result": "passed",
-      "testDurationSeconds": 1.40,
-      "processDurationSeconds": 11.368,
+      "testDurationSeconds": 1.96,
+      "processDurationSeconds": 41.126,
       "nomicrophone": "not applicable to the exact stress characterization; prior nomicrophone verifier lane passed",
       "coverpkg": "not run as aggregate coverage; CI rejection retained as authoritative"
     },
@@ -328,25 +332,25 @@
       "command": "verify.py --mode positive-and-negative-controls",
       "result": "passed",
       "lanes": ["normal"],
-      "highRateTrials": "CI run 34763400175 failed TestAgentBinaryTest46HighRateToolAudioRegression/trial_10; local exact YUI_AUDIO_STRESS=1 trial_10 passed in 11.368s; C127 owns the unchanged path",
+      "highRateTrials": "CI run 34763400175 failed TestAgentBinaryTest46HighRateToolAudioRegression/trial_10 before C127 main integration; local exact YUI_AUDIO_STRESS=1 trial_10 passed after current-main integration in 41.126s (subtest 1.96s)",
       "namedC111Regressions": "4/4"
     },
     "sourceRepair": "No new C111 source repair after e618a6a3 plus 4921c375; current rejection is outside the changed C111 paths",
     "publicReplay": {
       "result": "accepted",
-      "artifact": "artifacts/run-1789313453-24354.json",
-      "sha256": "2798eb12bfb0124a17d5a0bb954ea314221ef85d8ea596886834331e02d05d65",
-      "binaryBytes": 51122754,
-      "binarySha256": "3a29a36dda5da23a4ff1f856dadbcbc4f77b165a453a114995454c25efde44a4",
+      "artifact": "artifacts/run-1789314385-50837.json",
+      "sha256": "d8b872279d1a746eebc19cf0c2ef97ebc6445334b14aa86171b2f835a2e5c61f",
+      "binaryBytes": 51123010,
+      "binarySha256": "a6d6ee2222cd3cd19d799f5027cd1ed656c4c4a0efc4fc4c3ff4e83b95809f64",
       "credentialFree": true,
       "realtimeSessions": 0,
       "processGroupsReaped": true,
       "outputCapExceeded": false
     },
-    "scriptCI": "latest rejection run 34764898583 was inspected at current head; this changed evidence checkpoint is ready for script CI submission and makes no CI-green claim"
+    "scriptCI": "latest rejection run 34764898583 was inspected at pre-merge head c1b5f1c; final head 342ddb4 integrates current origin/main and this changed evidence checkpoint is ready for script CI submission with no CI-green claim"
   },
   "handoff": {
-    "ci": "run 34764898583 was inspected at current head: CI (hermetic) failed unchanged audio-output split-delta test TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas at session_audio_out_test.go:146 (14 bytes vs 974 expected), while integration, race, static, unit, WebMCP, macOS, and Windows completed successfully and coverage was still pending; C111-specific gates remain green and no C111 repair is demonstrated",
+    "ci": "run 34764898583 was inspected at pre-merge head c1b5f1c: CI (hermetic) failed unchanged audio-output split-delta test TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas at session_audio_out_test.go:146 (14 bytes vs 974 expected), while integration, race, static, unit, WebMCP, macOS, and Windows completed successfully and coverage was still pending; after the no-reset merge to final head 342ddb4, C111-specific gates remain green and no C111 repair is demonstrated",
     "review": "prior independent findings and the exact image-continuation rejection are repaired at e618a6a33/4921c3751f0; no self-review performed",
     "nextAction": "Commit and push this exact-head evidence checkpoint, update PR #496, and return ACCEPTED to the script-owned CI gate without polling; on any C111-specific rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge."
   }
