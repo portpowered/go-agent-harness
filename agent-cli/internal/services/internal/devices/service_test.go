@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
+	runtimeRTCTransportWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -95,7 +96,7 @@ func TestServiceRunVirtualProbeUsesInputAndOutputContracts(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	var observedInstructions string
-	probeService := runtimeDevicesWire.NewProbeService(registry, nil)
+	probeService := runtimeDevicesWire.NewProbeService(registry, nil, runtimeRTCTransportWire.NewService())
 	observation, err := probeService.Run(ctx, serviceDevices.DeviceProbeRequest{
 		Scenario:             serviceProbeScenario(),
 		CaptureTime:          700 * time.Millisecond,
@@ -127,7 +128,7 @@ func TestServiceRunVirtualProbeRejectsUnavailableAndCancelledRuns(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtimeDevicesWire.NewProbeService(outputOnly, nil).Run(context.Background(), serviceDevices.DeviceProbeRequest{Scenario: serviceProbeScenario()}); err == nil || !bytes.Contains([]byte(err.Error()), []byte("status \"skip\"")) {
+	if _, err := runtimeDevicesWire.NewProbeService(outputOnly, nil, runtimeRTCTransportWire.NewService()).Run(context.Background(), serviceDevices.DeviceProbeRequest{Scenario: serviceProbeScenario()}); err == nil || !bytes.Contains([]byte(err.Error()), []byte("status \"skip\"")) {
 		t.Fatalf("Run unavailable registry error = %v, want explicit skip status", err)
 	}
 
@@ -137,7 +138,7 @@ func TestServiceRunVirtualProbeRejectsUnavailableAndCancelledRuns(t *testing.T) 
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := runtimeDevicesWire.NewProbeService(registry, nil).Run(ctx, serviceDevices.DeviceProbeRequest{Scenario: serviceProbeScenario()}); !errors.Is(err, context.Canceled) {
+	if _, err := runtimeDevicesWire.NewProbeService(registry, nil, runtimeRTCTransportWire.NewService()).Run(ctx, serviceDevices.DeviceProbeRequest{Scenario: serviceProbeScenario()}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Run cancelled context error = %v, want context.Canceled", err)
 	}
 }

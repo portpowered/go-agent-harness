@@ -22,6 +22,7 @@ import (
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	runtimeRTCTransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -50,8 +51,8 @@ func NewDeviceProbeSessionFactory(modelCatalog runtimeProviders.ModelCatalog) se
 
 // NewDeviceProbeService exposes the reusable runtime probe service through the
 // CLI's device contract; registry and media workers remain private to runtime.
-func NewDeviceProbeService(registry devicegw.DeviceRegistry, sessionFactory serviceDevices.DeviceProbeSessionFactory) serviceDevices.DeviceProbeService {
-	return runtimeDevicesWire.NewProbeService(registry, sessionFactory)
+func NewDeviceProbeService(registry devicegw.DeviceRegistry, sessionFactory serviceDevices.DeviceProbeSessionFactory, rtcTransport runtimeRTCTransport.Service) serviceDevices.DeviceProbeService {
+	return runtimeDevicesWire.NewProbeService(registry, sessionFactory, rtcTransport)
 }
 
 // NewRoomService keeps room orchestration behind the public room contract. The

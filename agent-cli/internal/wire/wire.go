@@ -30,6 +30,7 @@ import (
 	recordingwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording/wire"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	runtimeRTCTransportWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -300,6 +301,7 @@ var CliSet = wire.NewSet(
 	cli.NewInteractionReplayCommand,
 	cli.NewProbeCommand,
 	servicewire.DeviceSet,
+	runtimeRTCTransportWire.NewService,
 	servicewire.RoomSet,
 	servicewire.SessionSet,
 	servicewire.NewReplayService,

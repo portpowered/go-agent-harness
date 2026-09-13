@@ -17,6 +17,7 @@ import (
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	runtimeRTCTransportWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"github.com/spf13/cobra"
@@ -205,7 +206,6 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 			t.Fatalf("seed authored microphone frame %d: %v", i, err)
 		}
 	}
-
 	session := newDeviceProbeSession()
 	if !session.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionOpen}) {
 		t.Fatal("queue session open")
@@ -255,7 +255,7 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 		}
 	}()
 
-	observation, err := servicewire.NewDeviceProbeService(registry, nil).Run(runContext, serviceDevices.DeviceProbeRequest{
+	observation, err := servicewire.NewDeviceProbeService(registry, nil, runtimeRTCTransportWire.NewService()).Run(runContext, serviceDevices.DeviceProbeRequest{
 		Scenario:             scenario,
 		SessionInferencer:    &deviceProbeSessionInferencer{session: session},
 		CaptureTime:          750 * time.Millisecond,
@@ -264,6 +264,7 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run device probe runtime: %v", err)
 	}
+
 	var capturedAudio []byte
 drainAudio:
 	for {

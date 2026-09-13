@@ -10,7 +10,6 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
-	rtctransportwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
@@ -21,13 +20,17 @@ const (
 )
 
 type liveDeviceProbeMediaLink struct {
-	peers    *liveDeviceProbePeerPair
-	outbound rtctransport.OutboundTrack
-	inbound  rtctransport.InboundTrack
-	decoder  *codec.OpusDecoder
+	peers        *liveDeviceProbePeerPair
+	rtcTransport rtctransport.Service
+	outbound     rtctransport.OutboundTrack
+	inbound      rtctransport.InboundTrack
+	decoder      *codec.OpusDecoder
 }
 
-func newLiveDeviceProbeMediaLink() (*liveDeviceProbeMediaLink, error) {
+func newLiveDeviceProbeMediaLink(rtcTransport rtctransport.Service) (*liveDeviceProbeMediaLink, error) {
+	if rtcTransport == nil {
+		return nil, errors.New("RTC transport service is required")
+	}
 	peers, err := newLiveDeviceProbePeerPair()
 	if err != nil {
 		return nil, err
@@ -36,7 +39,7 @@ func newLiveDeviceProbeMediaLink() (*liveDeviceProbeMediaLink, error) {
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("create RTC Opus encoder: %w", err), peers.Close())
 	}
-	outbound, err := rtctransportwire.NewService().NewOutboundTrack(rtctransport.OutboundTrackConfig{
+	outbound, err := rtcTransport.NewOutboundTrack(rtctransport.OutboundTrackConfig{
 		SourceRate: deviceProbeInputSampleRate,
 		Encoder:    encoder,
 		Writer:     liveDeviceProbeRTPWriter{track: peers.localTrack},
@@ -45,7 +48,7 @@ func newLiveDeviceProbeMediaLink() (*liveDeviceProbeMediaLink, error) {
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("create outbound RTC track: %w", err), peers.Close(), encoder.Close())
 	}
-	return &liveDeviceProbeMediaLink{peers: peers, outbound: outbound}, nil
+	return &liveDeviceProbeMediaLink{peers: peers, rtcTransport: rtcTransport, outbound: outbound}, nil
 }
 
 func (l *liveDeviceProbeMediaLink) RoundTrip(ctx context.Context, samples []int16) ([]int16, error) {
@@ -64,7 +67,7 @@ func (l *liveDeviceProbeMediaLink) RoundTrip(ctx context.Context, samples []int1
 		if err != nil {
 			return nil, fmt.Errorf("create RTC Opus decoder: %w", err)
 		}
-		l.inbound, err = rtctransportwire.NewService().NewInboundTrack(liveDeviceProbeRTPPacketSource{track: remote}, l.decoder, rtctransport.InboundTrackConfig{
+		l.inbound, err = l.rtcTransport.NewInboundTrack(liveDeviceProbeRTPPacketSource{track: remote}, l.decoder, rtctransport.InboundTrackConfig{
 			SampleRate:    deviceProbeInputSampleRate,
 			FrameDuration: deviceProbeFrameDuration,
 			JitterDepth:   deviceProbeFrameDuration,
