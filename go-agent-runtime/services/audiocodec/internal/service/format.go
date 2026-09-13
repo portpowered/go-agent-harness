@@ -53,34 +53,52 @@ func formatFromHint(hint string) (audiocodec.InputFormat, bool) {
 }
 
 func formatFromBytes(input []byte) (audiocodec.InputFormat, bool) {
-	if len(input) >= 4 && bytes.Equal(input[:4], []byte("RIFF")) {
+	if format, ok := formatFromMagic(input); ok {
+		return format, true
+	}
+	if format, ok := formatFromFrameSync(input); ok {
+		return format, true
+	}
+	return formatFromMIME(input)
+}
+
+func formatFromMagic(input []byte) (audiocodec.InputFormat, bool) {
+	switch {
+	case len(input) >= 4 && bytes.Equal(input[:4], []byte("RIFF")):
 		return audiocodec.FormatWAV, true
-	}
-	if len(input) >= 4 && bytes.Equal(input[:4], []byte("fLaC")) {
+	case len(input) >= 4 && bytes.Equal(input[:4], []byte("fLaC")):
 		return audiocodec.FormatFLAC, true
-	}
-	if len(input) >= 4 && bytes.Equal(input[:4], []byte("OggS")) {
-		if bytes.Contains(input, []byte("OpusHead")) {
-			return audiocodec.FormatOpus, true
-		}
-		return audiocodec.FormatOGG, true
-	}
-	if len(input) >= 8 && bytes.Equal(input[4:8], []byte("ftyp")) {
+	case len(input) >= 4 && bytes.Equal(input[:4], []byte("OggS")):
+		return oggFormat(input), true
+	case len(input) >= 8 && bytes.Equal(input[4:8], []byte("ftyp")):
 		return audiocodec.FormatM4A, true
-	}
-	if len(input) >= 4 && bytes.Equal(input[:4], []byte{0x1a, 0x45, 0xdf, 0xa3}) {
+	case len(input) >= 4 && bytes.Equal(input[:4], []byte{0x1a, 0x45, 0xdf, 0xa3}):
 		return audiocodec.FormatWebM, true
-	}
-	if len(input) >= 3 && bytes.Equal(input[:3], []byte("ID3")) {
+	case len(input) >= 3 && bytes.Equal(input[:3], []byte("ID3")):
 		return audiocodec.FormatMP3, true
+	default:
+		return "", false
 	}
+}
+
+func oggFormat(input []byte) audiocodec.InputFormat {
+	if bytes.Contains(input, []byte("OpusHead")) {
+		return audiocodec.FormatOpus
+	}
+	return audiocodec.FormatOGG
+}
+
+func formatFromFrameSync(input []byte) (audiocodec.InputFormat, bool) {
 	if isMP3Sync(input) {
 		return audiocodec.FormatMP3, true
 	}
 	if isAACSync(input) {
 		return audiocodec.FormatAAC, true
 	}
+	return "", false
+}
 
+func formatFromMIME(input []byte) (audiocodec.InputFormat, bool) {
 	switch http.DetectContentType(input) {
 	case "audio/wav", "audio/x-wav":
 		return audiocodec.FormatWAV, true

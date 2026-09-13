@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -51,65 +52,19 @@ func newWithRunner(process runner) *Service {
 
 // Convert implements audiocodec.Service.
 func (s *Service) Convert(ctx context.Context, request audiocodec.Request) (audiocodec.Result, error) {
-	if ctx == nil {
-		return audiocodec.Result{}, newError(audiocodec.ErrorInvalidRequest, nil, "nil context")
-	}
-	if s == nil || s.runner == nil {
-		return audiocodec.Result{}, newError(audiocodec.ErrorInvalidRequest, nil, "nil service")
-	}
-	if err := request.Limits.Validate(); err != nil {
-		return audiocodec.Result{}, err
-	}
-	if len(request.Input) > request.Limits.MaxInputBytes {
-		return audiocodec.Result{}, newError(
-			audiocodec.ErrorInputTooLarge,
-			nil,
-			fmt.Sprintf("got %d bytes, want at most %d", len(request.Input), request.Limits.MaxInputBytes),
-		)
-	}
-	format, err := detectFormat(request.Input, request.FormatHint)
+	format, err := s.validateRequest(ctx, request)
 	if err != nil {
 		return audiocodec.Result{}, err
 	}
 
-	conversionContext := ctx
-	if request.Limits.MaxDuration > 0 {
-		var cancel context.CancelFunc
-		conversionContext, cancel = context.WithTimeout(ctx, request.Limits.MaxDuration)
-		defer cancel()
-	}
-
-	tmp, err := os.CreateTemp("", "audiocodec-input-*")
+	conversionContext, cancel := contextForConversion(ctx, request.Limits.MaxDuration)
+	defer cancel()
+	output, err := s.decode(conversionContext, request.Input, request.Limits)
 	if err != nil {
-		return audiocodec.Result{}, newError(audiocodec.ErrorInputFile, err, "create temporary input")
-	}
-	tmpPath := tmp.Name()
-	defer removeTempFile(tmpPath)
-
-	if _, err := tmp.Write(request.Input); err != nil {
-		_ = tmp.Close()
-		return audiocodec.Result{}, newError(audiocodec.ErrorInputFile, err, "write temporary input")
-	}
-	if err := tmp.Close(); err != nil {
-		return audiocodec.Result{}, newError(audiocodec.ErrorInputFile, err, "close temporary input")
-	}
-
-	output, err := s.runner.run(conversionContext, tmpPath, request.Limits)
-	if err != nil {
-		if isTypedCodecError(err) {
-			return audiocodec.Result{}, err
-		}
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return audiocodec.Result{}, newError(audiocodec.ErrorCanceled, err, "decoder context ended")
-		}
-		return audiocodec.Result{}, newError(audiocodec.ErrorProcessWait, err, "decoder process")
+		return audiocodec.Result{}, normalizeDecodeError(err)
 	}
 	if err := codec.ValidatePCM16(output.stdout, request.Limits.MaxOutputBytes); err != nil {
-		kind := audiocodec.ErrorInvalidPCM16
-		if errors.Is(err, codec.ErrPayloadTooLarge) {
-			kind = audiocodec.ErrorOutputTooLarge
-		}
-		return audiocodec.Result{}, newError(kind, err, "validate decoder output")
+		return audiocodec.Result{}, invalidPCM16Error(err)
 	}
 
 	return audiocodec.Result{
@@ -119,6 +74,69 @@ func (s *Service) Convert(ctx context.Context, request audiocodec.Request) (audi
 		Channels:    audiocodec.PCM16Channels,
 		Encoding:    audiocodec.PCM16Encoding,
 	}, nil
+}
+
+func (s *Service) validateRequest(ctx context.Context, request audiocodec.Request) (audiocodec.InputFormat, error) {
+	if ctx == nil {
+		return "", newError(audiocodec.ErrorInvalidRequest, nil, "nil context")
+	}
+	if s == nil || s.runner == nil {
+		return "", newError(audiocodec.ErrorInvalidRequest, nil, "nil service")
+	}
+	if err := request.Limits.Validate(); err != nil {
+		return "", err
+	}
+	if len(request.Input) > request.Limits.MaxInputBytes {
+		return "", newError(
+			audiocodec.ErrorInputTooLarge,
+			nil,
+			fmt.Sprintf("got %d bytes, want at most %d", len(request.Input), request.Limits.MaxInputBytes),
+		)
+	}
+	return detectFormat(request.Input, request.FormatHint)
+}
+
+func contextForConversion(ctx context.Context, duration time.Duration) (context.Context, context.CancelFunc) {
+	if duration <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, duration)
+}
+
+func (s *Service) decode(ctx context.Context, input []byte, limits audiocodec.Limits) (runResult, error) {
+	tmp, err := os.CreateTemp("", "audiocodec-input-*")
+	if err != nil {
+		return runResult{}, newError(audiocodec.ErrorInputFile, err, "create temporary input")
+	}
+	tmpPath := tmp.Name()
+	defer removeTempFile(tmpPath)
+
+	if _, err := tmp.Write(input); err != nil {
+		_ = tmp.Close()
+		return runResult{}, newError(audiocodec.ErrorInputFile, err, "write temporary input")
+	}
+	if err := tmp.Close(); err != nil {
+		return runResult{}, newError(audiocodec.ErrorInputFile, err, "close temporary input")
+	}
+	return s.runner.run(ctx, tmpPath, limits)
+}
+
+func normalizeDecodeError(err error) error {
+	if isTypedCodecError(err) {
+		return err
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return newError(audiocodec.ErrorCanceled, err, "decoder context ended")
+	}
+	return newError(audiocodec.ErrorProcessWait, err, "decoder process")
+}
+
+func invalidPCM16Error(err error) error {
+	kind := audiocodec.ErrorInvalidPCM16
+	if errors.Is(err, codec.ErrPayloadTooLarge) {
+		kind = audiocodec.ErrorOutputTooLarge
+	}
+	return newError(kind, err, "validate decoder output")
 }
 
 func isTypedCodecError(err error) bool {

@@ -73,27 +73,38 @@ func (r *processRunner) run(ctx context.Context, inputPath string, limits audioc
 		return runResult{}, newError(audiocodec.ErrorProcessStart, err, "start "+r.executable)
 	}
 	waitErr := cmd.wait()
-	if stdout.exceeded {
-		return runResult{}, newError(audiocodec.ErrorOutputTooLarge, stdout.limitError(), "capture decoder stdout")
-	}
-	if stderr.exceeded {
-		return runResult{}, newError(audiocodec.ErrorStderrTooLarge, stderr.limitError(), "capture decoder stderr")
+	if err := decoderLimitError(stdout, stderr); err != nil {
+		return runResult{}, err
 	}
 	if waitErr != nil {
-		if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return runResult{}, newError(audiocodec.ErrorCanceled, ctx.Err(), "decoder context ended")
-		}
-		var exitErr *exec.ExitError
-		if errors.As(waitErr, &exitErr) {
-			detail := "decoder exited unsuccessfully"
-			if stderr.Len() != 0 {
-				detail += ": " + stderr.String()
-			}
-			return runResult{}, newError(audiocodec.ErrorDecode, waitErr, detail)
-		}
-		return runResult{}, newError(audiocodec.ErrorProcessWait, waitErr, "wait for "+r.executable)
+		return runResult{}, decoderWaitError(ctx, waitErr, stderr, r.executable)
 	}
 	return runResult{stdout: stdout.Bytes()}, nil
+}
+
+func decoderLimitError(stdout, stderr *boundedBuffer) error {
+	if stdout.exceeded {
+		return newError(audiocodec.ErrorOutputTooLarge, stdout.limitError(), "capture decoder stdout")
+	}
+	if stderr.exceeded {
+		return newError(audiocodec.ErrorStderrTooLarge, stderr.limitError(), "capture decoder stderr")
+	}
+	return nil
+}
+
+func decoderWaitError(ctx context.Context, waitErr error, stderr *boundedBuffer, executable string) error {
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return newError(audiocodec.ErrorCanceled, ctx.Err(), "decoder context ended")
+	}
+	var exitErr *exec.ExitError
+	if errors.As(waitErr, &exitErr) {
+		detail := "decoder exited unsuccessfully"
+		if stderr.Len() != 0 {
+			detail += ": " + stderr.String()
+		}
+		return newError(audiocodec.ErrorDecode, waitErr, detail)
+	}
+	return newError(audiocodec.ErrorProcessWait, waitErr, "wait for "+executable)
 }
 
 type boundedBuffer struct {
