@@ -671,7 +671,6 @@ func (s *orderedTerminalDrainSession) Receive() *messages.TypedBuffer[messages.S
 	s.trace.record("provider_receipt", 0, terminalDrainBoundarySamples)
 	if !claimed {
 		s.trace.record("provider_media_release", 0, terminalDrainBoundarySamples)
-		_ = s.media.Close()
 	}
 	return s.testSession.Receive()
 }
