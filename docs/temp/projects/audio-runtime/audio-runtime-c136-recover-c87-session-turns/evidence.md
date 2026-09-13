@@ -129,3 +129,39 @@ review, merge, vertical-probe, or acceptance result. The next action remains
 to retain C136 while C110/C111/C112/C119 release the shared paths and the
 C127-owned coverage-manifest residual is resolved, then integrate the released
 accepted main and apply only the demonstrated C136 registry/baseline changes.
+
+## Exact-head owned recheck and current-main lease checkpoint — 2026-09-13T17:06:37Z
+
+Admission remains `admitted` for `audio-runtime/audio-runtime-v1`; the branch
+still matches `prd.json.branchName`, PR #513 remains open at
+`d9278bf5d9c6a5ee514695a1139ecab66864e94a`, and the historical C87 branch/PR
+476 remains unchanged at `28b5a9b18f67a4343ef9e12141ad5e5fc84ef18f`. A fresh
+`git fetch origin main` reports `origin/main=b8650efd95f6a2e2e675a3dfd0969a9d311a877b`,
+which contains the guarded C127 and C112 merges; it was not merged into this
+candidate because C110, C111, and C119 still hold the shared registry/policy
+leases. The worktree is clean and no predecessor or host checkout was reset.
+
+The exact C136-owned recheck at `d9278bf5d` passed sessionturns normal/race,
+deprecated CLI compatibility normal/race, the separate `GOWORK=off` consumer,
+all three C136 verifier modes, and `go list -deps`. The bounded public runner
+passed both requested cases (`3/3` tests each), bounded output, clean reaping,
+and zero survivors. `COUNT=1 scripts/test-session-ci-regressions.sh all`
+passed normal, coverage, and race, including all 20 high-rate trials and the
+retained negative controls. `make fmt`, `make wire-check`, and `git diff
+--check` passed; generated Wire output was unchanged.
+
+The dependency gates remain fail-closed and unchanged: `make coverage-registration`
+reports only the unregistered C127-owned package
+`go-agent-runtime/services/session/internal/live/causal`, while
+`make architecture-size-check` reports exactly the same 13 findings recorded
+above (12 stale C87 entries and the unregistered sessionturns generated Wire
+file). No C136 source/test failure, shared registry/policy edit, or new review
+finding exists. This is evidence-only; it does not claim green CI, review,
+merge, vertical validation, or acceptance.
+
+Next action: retain C136 while C110/C111/C119 complete guarded merges and the
+C127 coverage-manifest owner resolves its residual. Then fetch/integrate the
+released accepted main while preserving the C136 sessionturns implementation,
+apply only the demonstrated sessionturns registry/baseline entries, rerun the
+bounded gates, commit/push the same PR, and submit its changed head to SCRIPT
+CI without polling.
