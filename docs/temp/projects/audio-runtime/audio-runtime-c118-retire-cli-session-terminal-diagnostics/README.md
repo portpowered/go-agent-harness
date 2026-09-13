@@ -16,8 +16,9 @@ retirement verifier measures 40,981 candidate CLI production lines versus
 pinned at 287 lines and its recorded SHA-256.
 
 The evidence is vertical only. Focused normal/race tests, the accumulated
-session regression matrix, pinned lint/staticcheck/vet, Wire generation, the
-external consumer, and both causal mutants pass. Shared Wire registration and
-architecture-size baseline edits remain deferred until the C79 lease is
-released. Script CI, independent review, guarded merge, and the post-merge
-probe remain external handoff gates.
+session regression matrix, pinned lint/staticcheck/vet, Wire generation and
+architecture checks, the external consumer, and both causal mutants pass.
+After the released main integration, only the demonstrated generated-file
+registration and stale retired-source fragment were applied; no baseline
+ceiling was raised. Script CI, independent review, guarded merge, and the
+post-merge probe remain external handoff gates.

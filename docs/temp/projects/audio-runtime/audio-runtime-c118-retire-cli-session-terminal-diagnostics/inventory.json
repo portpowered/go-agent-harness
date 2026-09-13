@@ -90,13 +90,15 @@
     ]
   },
   "implementationCheckpoint": {
-    "testedSourceRevision": "26365f5383d2e9ddad27e7920240d9c837d8ebc0",
+    "testedSourceRevision": "55a652fc61bcee8ab87171f00fd930fad57b67e0",
     "commits": [
       "360d2a973d01e572daa9c1725b370474a88bb429",
-      "26365f5383d2e9ddad27e7920240d9c837d8ebc0"
+      "26365f5383d2e9ddad27e7920240d9c837d8ebc0",
+      "1130e84db55b9b1be89fbb4277ee8d6763ed5c77",
+      "55a652fc61bcee8ab87171f00fd930fad57b67e0"
     ],
     "retirementLineReduction": 227,
     "focusedValidation": "candidate-evidence.json",
-    "sharedGateStatus": "only C79-owned Wire registry and architecture baseline findings remain"
+    "sharedGateStatus": "passed after integrating released main and applying only demonstrated C118 registration/stale-fragment repairs"
   }
 }

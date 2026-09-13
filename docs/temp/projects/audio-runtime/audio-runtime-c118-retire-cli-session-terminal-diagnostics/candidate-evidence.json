@@ -1,9 +1,9 @@
 {
   "schema": "audio-runtime-c118-session-terminal-diagnostics/v1",
-  "candidate_revision": "26365f5383d2e9ddad27e7920240d9c837d8ebc0",
+  "candidate_revision": "55a652fc61bcee8ab87171f00fd930fad57b67e0",
   "baseline_revision": "3963bc3566da24f8214634c17a9d0f79a6724171",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
+  "origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
   "admission": {
     "project": "audio-runtime",
     "task": "audio-runtime-c118-retire-cli-session-terminal-diagnostics",
@@ -18,7 +18,9 @@
   "implementation": {
     "commits": [
       "360d2a973d01e572daa9c1725b370474a88bb429",
-      "26365f5383d2e9ddad27e7920240d9c837d8ebc0"
+      "26365f5383d2e9ddad27e7920240d9c837d8ebc0",
+      "1130e84db55b9b1be89fbb4277ee8d6763ed5c77",
+      "55a652fc61bcee8ab87171f00fd930fad57b67e0"
     ],
     "public_contract": "go-agent-runtime/services/sessionterminal",
     "private_implementation": "go-agent-runtime/services/sessionterminal/internal/service",
@@ -61,12 +63,17 @@
     "retirement_callers_and_owned_paths": "passed: old source absent, adapter delegates, Wire present, pinned baseline, 227-line reduction"
   },
   "shared_gate_boundary": {
-    "wire_check": "deferred: unregistered go-agent-runtime/services/sessionterminal/wire/wire_gen.go",
-    "architecture_size_check": "deferred: 10 findings, all shared C79-owned baseline or generated-Wire registration",
-    "owner": "C79/work-task-114; work-review-239; PR470",
-    "shared_files_not_modified": [
-      "scripts/wire-packages.txt",
-      "docs/architecture/architecture-size-baseline.json"
+    "wire_check": "passed: auto-discovered Wire inventory and regeneration",
+    "architecture_size_check": "passed: 189 packages, 1904 files, 28101 functions",
+    "released_by_integrated_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+    "demonstrated_shared_repairs": [
+      "registered services/sessionterminal/wire/wire_gen.go in architecture policy",
+      "deleted the stale retired-source architecture baseline fragment",
+      "preserved the 237-file package ceiling without raising it"
+    ],
+    "shared_files_not_modified_directly": [
+      "scripts/wire-packages.txt (removed by integrated main)",
+      "docs/architecture/architecture-size-baseline.json (replaced by integrated main fragments)"
     ],
     "no_local_c118_findings_remain": true
   },
