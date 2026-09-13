@@ -69,7 +69,7 @@ type filesystemScopeError struct{ error }
 func (e filesystemScopeError) As(target any) bool { return errors.As(e.error, target) }
 
 func (l loader) Stat(path string) error { _, err := os.Stat(path); return err }
-func (l loader) ReadFile(path string) ([]byte, error) {
+func (l loader) ReadFile(path string) (data []byte, err error) {
 	if _, err := cliTools.ResolveFilesystemPolicy(l.w); err != nil {
 		return nil, filesystemScopeError{err}
 	}
@@ -77,7 +77,7 @@ func (l loader) ReadFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = file.Close() }()
+	defer func() { err = errors.Join(err, file.Close()) }()
 	return io.ReadAll(io.LimitReader(file, si.MaxInstructionBytes+1))
 }
 func (l loader) SkillsSummary() (string, error) { return skills.NewLoader(l.w, l.c).BuildSummary() }
