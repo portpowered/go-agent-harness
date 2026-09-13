@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -409,10 +410,10 @@ func TestParticipantTrackerPreservesFirstSpecificFailure(t *testing.T) {
 	if after.TerminationTrigger != before.TerminationTrigger || after.TerminationDisposition != before.TerminationDisposition || after.Classification != before.Classification || after.TerminalReason != before.TerminalReason || after.TerminalProvenance != before.TerminalProvenance || after.OutputState != before.OutputState || after.Failure != before.Failure {
 		t.Fatalf("duplicate failure changed terminal observation: before=%+v after=%+v", before, after)
 	}
-	if after.Err != firstCause || !errors.Is(after.Err, firstCause) || errors.Is(after.Err, lateCause) {
+	if reflect.ValueOf(after.Err).Pointer() != reflect.ValueOf(firstCause).Pointer() || !errors.Is(after.Err, firstCause) || errors.Is(after.Err, lateCause) {
 		t.Fatalf("duplicate failure changed first cause identity: got=%v, first=%v, late=%v", after.Err, firstCause, lateCause)
 	}
-	if _, terminalErr, observed := lifecycle.Terminal(); !observed || terminalErr != firstCause || !errors.Is(terminalErr, firstCause) {
+	if _, terminalErr, observed := lifecycle.Terminal(); !observed || reflect.ValueOf(terminalErr).Pointer() != reflect.ValueOf(firstCause).Pointer() || !errors.Is(terminalErr, firstCause) {
 		t.Fatalf("terminal error identity = %v, observed=%v, want %v", terminalErr, observed, firstCause)
 	}
 }
