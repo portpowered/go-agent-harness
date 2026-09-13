@@ -1,0 +1,43 @@
+Yui is a cross-platform voice-agent CLI for realtime conversations, local tools, recordings, replay, and structured WebMCP browser control.
+
+Set an OpenAI key, then start the default microphone and speaker session:
+
+  export OPENAI_API_KEY=<redacted>
+  yui session
+
+Run `yui session --help` for audio, model, voice, recording, and browser options.
+
+Usage:
+  yui [command]
+
+Examples:
+  # Start a voice session in the current project
+  yui --workdir "$PWD" session
+
+  # Open a page and expose its WebMCP tools
+  yui session --browser-tools webmcp --browser-open https://example.com/
+
+Available Commands:
+  ask         Ask the agent a question and get a response
+  chat        Start an interactive chat session with the agent
+  completion  Generate the autocompletion script for the specified shell
+  config      Configuration management commands
+  devices     Discover available audio devices
+  help        Help about any command
+  interaction Inspect provider-neutral gateway interactions
+  media       Inspect external media sources
+  probe       Run deterministic offline probes
+  room        Run participant rooms
+  session     Run or manage agent sessions
+  tool        Invoke a tool directly by name and key=value args (for debugging)
+  webmcp      Inspect WebMCP browser readiness
+
+Flags:
+      --allow-path stringArray   Additional filesystem-tool root (repeatable; relative to --workdir)
+  -C, --config-dir string        Directory for agent CLI config (default: ~/.agent-cli)
+  -h, --help                     help for yui
+      --log-to-stdout            Log to stdout/stderr instead of file (default: logs to file in config directory)
+  -v, --verbose count            Enable verbose output (use -v for info, -vv for debug)
+      --workdir string           Filesystem-tool workdir (default: the process current directory)
+
+Use "yui [command] --help" for more information about a command.
