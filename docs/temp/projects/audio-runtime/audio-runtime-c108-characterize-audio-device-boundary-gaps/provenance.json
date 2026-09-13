@@ -18,37 +18,16 @@
       "status": "admitted"
     }
   },
+  "analyzed_candidate_revision": "c1c69000d2d239415bdf5646f4f873e5305d4156",
   "ancestry": {
+    "analyzed_source_in_integrated_base": true,
+    "integrated_base_in_origin_main": true,
     "origin_main_in_head": true,
+    "startup_in_head": true,
     "startup_integration_in_head": true
   },
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "board_task_rows": [
-    {
-      "content": null,
-      "last_output": null,
-      "rejection_feedback": null,
-      "state": {
-        "name": "to-complete",
-        "type": "PROCESSING"
-      },
-      "workId": "batch-audio-runtime-c108-audio-device-boundary-characterization-20260912T1920Z-audio-runtime-c108-characterize-audio-device-boundary-gaps"
-    },
-    {
-      "content": [
-        {
-          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"branch\": \"codex/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
-          "type": "text"
-        }
-      ],
-      "last_output": null,
-      "rejection_feedback": null,
-      "state": {
-        "name": "init",
-        "type": "PROCESSING"
-      },
-      "workId": "work-task-222"
-    },
     {
       "content": null,
       "last_output": null,
@@ -70,6 +49,16 @@
       "workId": "work-review-243"
     },
     {
+      "content": null,
+      "last_output": null,
+      "rejection_feedback": null,
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "workId": "batch-audio-runtime-c108-audio-device-boundary-characterization-20260912T1920Z-audio-runtime-c108-characterize-audio-device-boundary-gaps"
+    },
+    {
       "content": [
         {
           "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"branch\": \"codex/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
@@ -83,11 +72,52 @@
         "type": "TERMINAL"
       },
       "workId": "work-plan-221"
+    },
+    {
+      "content": null,
+      "last_output": null,
+      "rejection_feedback": null,
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "workId": "work-review-252"
+    },
+    {
+      "content": [
+        {
+          "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"branch\": \"codex/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+          "type": "text"
+        }
+      ],
+      "last_output": null,
+      "rejection_feedback": null,
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "workId": "work-task-222"
+    },
+    {
+      "content": [
+        {
+          "text": "{\"request\":{\"requestId\":\"audio-runtime-c113-c116-c108-probe-and-boundary-repairs-20260913T0025Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c113-c108-audio-device-boundary-vertical-probe\",\"workTypeName\":\"validation\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"scope\":\"vertical\",\"vertical\":\"audio-runtime-c108-characterize-audio-device-boundary-gaps\",\"sourceRevision\":\"3963bc3566da24f8214634c17a9d0f79a6724171\",\"role\":\"engineering\",\"criteria\":[{\"id\":\"AUDIO\",\"rubric\":\"One independently testable audio subsystem owns packet parsing, formats, clocks, sample timing, DSP and buffer operations; the core loop uses buffers without direct device IO.\"},{\"id\":\"DEVICE\",\"rubric\":\"The adjacent device gateway owns physical device abstractions and lifecycle; playback evidence distinguishes actual consumption from queue admission.\"},{\"id\":\"EMBED\",\"rubric\":\"A separate Go module constructs and exercises the runtime without CLI imports, flags, terminal state or hidden global initialization.\"},{\"id\":\"SERVICE\",\"rubric\":\"Services expose thin services/X contracts with private services/X/internal implementations and per-service Wire construction. The legacy agent-cli/internal/services/internal/agentruntime production package is fully deprecated: all production callers use service-owned contracts and transport integrations, and the package contains no business policy, reusable runtime behavior, composition ownership, or device/audio implementation. Any temporary compatibility symbols are explicit Deprecated: aliases or thin adapters with no independent decisions or mutable state. CLI packages own only presentation, argument/input adaptation, and transport integration into those services.\"},{\"id\":\"TRACE\",\"rubric\":\"Correlated device capture/playback, provider send/receive, tool lifecycle, cancellation, queues/drops and terminal evidence use explicit timing domains and bounded recording resources.\"},{\"id\":\"REPLAY\",\"rubric\":\"Credential-free replay preserves recorded audio packets, ordering, tool events, interruption and termination; hardware and external nondeterminism limits are explicit.\"},{\"id\":\"FAILURES\",\"rubric\":\"Truncated/no playback, barge-in failure, long-conversation slowdown and tool-continuation collisions have reproducible characterization, fixes where demonstrated, and exact residual limitations without false completion claims.\"},{\"id\":\"QUALITY\",\"rubric\":\"Architecture boundaries, package/file/function size, complexity, mutable globals, generated Wire consistency and relevant compile/static/race checks pass without growing migration baselines or weakening assertions.\"},{\"id\":\"PARITY\",\"rubric\":\"Supported CLI behavior is preserved and final integrated behavior has fresh independent customer and engineering evidence, with authorized bounded Realtime proof and explicit physical-device evidence limits.\"}],\"budget\":{\"timeSeconds\":1800,\"realtimeSessions\":0,\"realtimeSeconds\":0},\"mission\":\"Independently validate the reviewed and merged C108 characterization at source 3963bc3566da24f8214634c17a9d0f79a6724171 and the exact staged YUI built from that source. Verify every staged hash before and after; do not rebuild or substitute the executable, use credentials or Realtime, or edit a worktree. Extract the source archive privately and read the complete C108 README, provenance, ownership, canonical board, inventory, classifications, call paths, determinism, candidate, proof-level, public-run and verifier evidence. Run the C108 fail-closed verifier and independently check that all cited symbols and current production callers exist, five candidate writer sets are pairwise disjoint, active/preserved ownership is not silently reassigned, canonical go-audio and go-device-gateway responsibilities are not duplicated, and queue admission, buffer/file receipt, simulated callback consumption, physical-device consumption and acoustic proof remain distinct. Mutate only probe-owned copies for at least one stale-source/citation case and one receipt-equals-consumption or proof-upgrade case; both must fail for the intended reason. Launch the staged YUI for --help, then exercise the archived credential-free public tool/audio replay through the staged executable with probe-owned audio-out, record-dir and trace-audio paths. Require the tool marker, continuation output, nonempty PCM/WAV, finalized trace/manifest with matching hashes, fixture_complete/provider_close, bounded output and clean process-group shutdown. Recheck the malformed/truncated archived provider on a probe-owned copy: require nonzero typed failure, no accepted audio receipt, no false terminal success and no surviving child. Classify all evidence as process smoke, software replay or simulated callback proof; native Windows hardware/endpoints and physical acoustics are OUT OF SCOPE under the admitted amendment and never PASS. Judge only C108's characterization contribution, record exact commands, effects, limitations and canonical validationWorkId, and do not close any broad project criterion or treat candidate proposals as implemented repairs.\",\"reportPath\":\"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/audio-runtime-c113-c108-audio-device-boundary-vertical-probe.json\",\"build\":{\"identity\":\"c108-merged-yui-3963bc35\",\"path\":\"/private/tmp/audio-runtime-c108-3963bc35/yui\",\"sha256\":\"27896a6907f5c8e02e185acf9338f07d38e56ebe21896d0b1a740ecde1f2a20d\"},\"fixtures\":[{\"identity\":\"source-3963bc3566da24f8214634c17a9d0f79a6724171\",\"path\":\"/private/tmp/audio-runtime-c108-3963bc35/source.tar.gz\",\"sha256\":\"2df6a0da4b14c40b6bd85cdca4d8cc846377ff8b9962941d1bbbaec2e332b201\"}]}},{\"name\":\"audio-runtime-c114-retire-cli-audio-rate-contract\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Centralize session PCM conversion and rate negotiation\",\"requestedOutcome\":\"From accepted main 3963bc3566da24f8214634c17a9d0f79a6724171, implement C108-CANDIDATE-AUDIO-RATE-CONTRACT. Move convertSessionAudioPCM, convertScheduledAudioInputs, resolveSessionAudioSampleRate and configureSessionAudioContract from the two owned CLI files behind a thin public go-agent-runtime/services/audiorate contract, private internal implementation and dedicated Wire construction, using the canonical go-audio PCM16/resampler contracts. Leave only explicit Deprecated aliases or decision-free request adapters in the CLI; preserve provider format setters, accepted 16/24/48 kHz behavior, exact sample timing, partial-tail rejection and caller error identity. Measure and report the net reduction in the two legacy production files. C101 has no writer overlap but its provider-session branch is a caller recheck dependency: inspect it read-only and preserve compatibility without editing its branch or owned files. Do not edit active C79 shared Wire/architecture files until its reviewed guarded merge releases them; checkpoint disjoint code/tests now and later apply only demonstrated ordered Wire registration and downward/stale baseline updates. Do not edit C110-C112 or C107/C109 evidence paths.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan; factory/projects/audio-runtime/acceptance.md; docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates.json#C108-CANDIDATE-AUDIO-RATE-CONTRACT\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_audio_rate.go\",\"agent-cli/internal/services/internal/agentruntime/session_audio_format.go\",\"agent-cli/internal/services/internal/agentruntime/session_audio_rate_test.go\",\"agent-cli/internal/services/internal/agentruntime/session_audio_format_test.go\",\"go-agent-runtime/services/audiorate/\",\"coverage-manifest/go-agent-runtime/services/audiorate/\",\"docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/\"],\"verification\":\"Record exact source/symbol/caller and legacy-line baselines. Prove the public contract from a separate GOWORK=off consumer with no agent-cli imports, flags, device IO or hidden initialization. Run focused normal/race tests for deterministic 16/24/48 kHz conversion and negotiation, no-op conversion with input immutability, scheduled-input ordering, odd PCM16, unsupported 22050 Hz, conflicting input/output/provider rates, cancellation and exact errors. The causal negative controls must reject odd PCM, unsupported rates and conflicting negotiation before provider/device work. Recheck C21 rate/consumption fixtures, C50 credential-free audio/tool replay and CLI room/scheduled-audio callers with observable PCM/timing effects and clean shutdown; queue or file receipt is not physical consumption. Run formatting, vet, pinned lint/staticcheck, coverage, architecture/size/complexity and generated Wire checks without baseline growth. Submit changed current-head script CI, require fresh independent review and guarded merge, then a fresh immutable engineering scope=vertical probe for AUDIO, DEVICE, EMBED, SERVICE, REPLAY, FAILURES, QUALITY and PARITY. No Realtime, native endpoint or acoustic claim.\",\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}},{\"name\":\"audio-runtime-c115-centralize-filesystem-audio-codec\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Centralize filesystem-tool audio decoding behind an audio codec service\",\"requestedOutcome\":\"From accepted main 3963bc3566da24f8214634c17a9d0f79a6724171, implement C108-CANDIDATE-TOOL-AUDIO-CONVERSION. Move audioToPCM16k and its reusable format detection, ffmpeg execution, bounded input/output and typed conversion errors from go-agent-runtime/services/tools/internal/filesystem/tool_filesystem.go behind a thin public go-agent-runtime/services/audiocodec contract, private internal implementation and dedicated Wire construction. Retain only a decision-free filesystem-tool adapter that preserves current allowed-path and temporary-file cleanup policy, message construction and error identity. Use canonical go-audio PCM16 validation where applicable and report the measured reduction in the owned legacy production file. Do not edit C111 continuation lifecycle, C78 tool execution, C79 shared registries, or any provider/session audio files. Checkpoint disjoint implementation/tests now; after C79 releases the registries, apply only this service's demonstrated Wire registration and downward/stale architecture changes.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan; factory/projects/audio-runtime/acceptance.md; docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates.json#C108-CANDIDATE-TOOL-AUDIO-CONVERSION\",\"ownedPaths\":[\"go-agent-runtime/services/tools/internal/filesystem/tool_filesystem.go\",\"go-agent-runtime/services/tools/internal/filesystem/tool_filesystem_test.go\",\"go-agent-runtime/services/tools/internal/filesystem/tool_filesystem_validation_test.go\",\"go-agent-runtime/services/audiocodec/\",\"coverage-manifest/go-agent-runtime/services/audiocodec/\",\"docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/\"],\"verification\":\"Record exact source/symbol/caller and file-line baselines. Prove the public codec from a separate GOWORK=off consumer with no CLI imports, flags or globals. Run focused normal/race tests for supported WAV/encoded input, deterministic 16 kHz mono PCM16 output, bounded stdin/stdout/stderr, context cancellation, executable/start/wait failures, temporary cleanup, input immutability and typed errors. Malformed/truncated audio, odd PCM16 and ffmpeg decode failure must reject before any tool message is published; a probe-owned fake decoder that overproduces must hit the output bound. Preserve filesystem confinement and no-overwrite behavior. Launch the credential-free shipped audio-tool workflow, require observable tool continuation/audio effects and clean shutdown, then recheck C21 consumption replay, C50 public replay and C108 malformed-truncated regression. Distinguish buffer/file receipt from device/acoustic proof. Run formatting, vet, pinned lint/staticcheck, coverage, architecture/size/complexity and Wire checks without baseline growth. Submit changed-head script CI, independent review and guarded merge, followed by a fresh immutable engineering vertical probe for AUDIO, SERVICE, EMBED, REPLAY, FAILURES, QUALITY and PARITY. No credentials or Realtime.\",\"remainingGateIDs\":[\"AUDIO\",\"SERVICE\",\"EMBED\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}},{\"name\":\"audio-runtime-c116-centralize-rtc-track-transport\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Centralize RTP track parsing, timing and PCM framing\",\"requestedOutcome\":\"From accepted main 3963bc3566da24f8214634c17a9d0f79a6724171, implement C108-CANDIDATE-RTC-TRANSPORT. Move NewInboundTrack, InboundTrack.readLoop, InboundTrack.ReadFrame, NewOutboundTrack and OutboundTrack.WriteFrame from go-llm-gateway/pkg/transport/rtc/track_in.go and track_out.go behind the C108-specified thin go-agent-runtime/services/rtctransport contract, private internal implementation and dedicated Wire construction, with a narrow agent-cli/internal/wire/rtc_runtime.go adapter. Centralize RTP v2 parsing, payload/SSRC continuity, sequence/timestamp/sample-clock accounting, Opus/PCM framing, bounded queues and close/error identity while keeping physical endpoint ownership in go-device-gateway. Resolve module direction without introducing an import cycle: if the proposed destination cannot be imported by the gateway, preserve the gateway as a dependency-free transport adapter and put reusable orchestration/policy in the runtime service; record the exact boundary rather than forcing a cycle. Measure the reduction in the two owned transport files. C101 is a read-only caller recheck dependency with no writer overlap. Do not edit C79 registries before release or C96/device-pump/provider-media paths.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan; factory/projects/audio-runtime/acceptance.md; docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates.json#C108-CANDIDATE-RTC-TRANSPORT\",\"ownedPaths\":[\"go-llm-gateway/pkg/transport/rtc/track_in.go\",\"go-llm-gateway/pkg/transport/rtc/track_out.go\",\"go-llm-gateway/pkg/transport/rtc/track_in_test.go\",\"go-llm-gateway/pkg/transport/rtc/track_out_test.go\",\"agent-cli/internal/wire/rtc_runtime.go\",\"go-agent-runtime/services/rtctransport/\",\"coverage-manifest/go-agent-runtime/services/rtctransport/\",\"docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/\"],\"verification\":\"Record exact source/symbol/caller/module-edge and two-file line baselines. Prove the public runtime service from a separate GOWORK=off consumer without CLI imports, flags, terminal state, devices or hidden initialization, and prove neither module gains an import cycle. Run focused normal/race tests for RTP v2, deterministic sequence/timestamp/sample-clock progression, inbound/outbound PCM frame identity, short/partial frames, bounded queues, cancellation and idempotent close. Negative controls must reject non-v2 RTP, SSRC or payload changes, impossible timestamps, invalid sample rates, odd frames and queue overflow with exact typed errors and no survivor. Recheck existing RTC track/media-source suites, device-probe/external-media transport regressions, C21 correlated consumption replay and one credential-free audio/tool workflow with observable output and clean shutdown. Software RTP/PCM receipt is not physical or acoustic proof. Run formatting, vet, pinned lint/staticcheck, coverage, architecture/size/complexity and Wire checks without baseline growth. Submit changed-head script CI, independent review and guarded merge, then a fresh immutable engineering vertical probe for AUDIO, DEVICE, EMBED, SERVICE, TRACE, REPLAY, FAILURES, QUALITY and PARITY. No credentials or Realtime.\",\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}",
+          "type": "text"
+        }
+      ],
+      "last_output": null,
+      "rejection_feedback": null,
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "workId": "work-thoughts-254"
     }
   ],
-  "branch": "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps",
+  "branch": "codex/audio-runtime-c117-repair-c113-public-trace-publication",
   "candidate_revision": "c1c69000d2d239415bdf5646f4f873e5305d4156",
   "contract_revision": "audio-runtime-v1",
+  "current_descendant_revision": "9c0f19c9323cee11e71bcc6a57483fab14f52ad6",
   "factory_server": "http://127.0.0.1:7439",
   "factory_session": "~default",
   "fetch": {
@@ -98,9 +128,9 @@
       "main"
     ],
     "cwd": ".",
-    "elapsed_seconds": 0.552,
+    "elapsed_seconds": 0.404,
     "exit_code": 0,
-    "stderr": "From https://github.com/portpowered/go-agent-harness\n * branch              main       -> FETCH_HEAD\nAuto packing the repository in background for optimum performance.\nSee \"git help gc\" for manual housekeeping.\nwarning: The last gc run reported the following. Please correct the root cause\nand remove /Users/abdifamily/work/harness/go-agent-harness/.git/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/gc.log\nAutomatic cleanup will not be performed until the file is removed.\n\nwarning: There are too many unreachable loose objects; run 'git prune' to remove them.\n\n",
+    "stderr": "From https://github.com/portpowered/go-agent-harness\n * branch                main       -> FETCH_HEAD\nAuto packing the repository in background for optimum performance.\nSee \"git help gc\" for manual housekeeping.\nwarning: The last gc run reported the following. Please correct the root cause\nand remove /Users/abdifamily/work/harness/go-agent-harness/.git/worktrees/audio-runtime-c117-repair-c113-public-trace-publication/gc.log\nAutomatic cleanup will not be performed until the file is removed.\n\nwarning: There are too many unreachable loose objects; run 'git prune' to remove them.\n\n",
     "stdout": "",
     "timed_out": false
   },
@@ -3591,80 +3621,68 @@
       "sha256": "92179de02917e2e397147eea0e2c16b8189c790b0582c0c3c3fdd52c3331c169"
     }
   ],
+  "integrated_base_revision": "3963bc3566da24f8214634c17a9d0f79a6724171",
   "manifest_sha256": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
   "meta_planner_handoff_sha256": "4eeb912f1f619a4c839f52817eba3fb080a3b1f3232e01ed9366e2c9a5ae52c8",
   "native_windows_hardware_and_acoustics": "OUT_OF_SCOPE_AND_NEVER_PASS",
   "operating_policy_sha256": "048a8cc51681b49c2c9443faffc66976cd1c6aac177ecfd2c198222dd5c869e2",
-  "origin_main_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "origin_main_revision": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
   "passes": true,
-  "prd_sha256": "5784f8cc4d8a97aa56732de0d74dca2109c35fc8db52055ce7125d8d96de4a7b",
+  "prd_sha256": "eaa7dc2a7f173315b68c5f98bc9ac7414a187faa93ff766bb344cb9694d1fb07",
   "progress_sha256": "4ce380ea1a579cdf16b6e3b6706db47daa31a83899d9228d37a00e066e89941d",
   "project": "audio-runtime",
   "realtime_used": false,
   "schema_version": "c108-provenance-v1",
   "source_archive_sha256": "d3d02949213d8822047a7d723a487e692f153c6bfe8ca5eb6b927823ee90dbf4",
+  "source_equivalence": {
+    "analyzed_candidate_to_integrated_base": true,
+    "immutable_source_to_integrated_base_production_diff": []
+  },
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "status_paths_at_capture": [
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/README.md",
+    "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/SHA256SUMS",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/analysis.md",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/call-paths.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/classifications.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/determinism.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/inventory-validation.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analysis/inventory.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/analyze.py",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates-validation.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/candidates.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/canonical-board.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/ci-rejection-34724763555.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/ownership.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/proof-levels.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/release.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/run_public_checks.py",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/agentruntime-causal.stderr",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/agentruntime-causal.stdout",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/go-audio-boundary.stderr",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/go-audio-boundary.stdout",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/go-device-gateway-boundary.stderr",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/go-device-gateway-boundary.stdout",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/report.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/rtc-transport-causal.stderr",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/focused-checks/rtc-transport-causal.stdout",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/negative-controls/report.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/evidence/runs/exec-invocations-v4.log",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/malformed.session.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/yui-malformed-truncated.stderr",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/malformed-truncated/yui-malformed-truncated.stdout",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/audio.wav",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/evidence/runs/exec-invocations-v4.log",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/agent.transcript.jsonl",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/audio-trace/speaker-enqueued.wav",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/audio-trace/timeline.jsonl",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/audio/out-000.pcm",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/client.transcript.jsonl",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/manifest.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/provider.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/tool-record/session-log.jsonl",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/yui-replay.stderr",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/replay/yui-replay.stdout",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/runs/public/report.json",
-    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py"
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/README.md",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/admission.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/c108-source-base-and-checksums.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/census.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/pre-c112-scope.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/reproduce_c113.py",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/c113-reproduction.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/package-budget-repair.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/pre-c112-test.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/verify.py"
   ],
+  "successor_changed_paths": [
+    "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/SHA256SUMS",
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/README.md",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/admission.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/c108-source-base-and-checksums.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/census.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/pre-c112-scope.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/reproduce_c113.py",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/c113-reproduction.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/package-budget-repair.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/pre-c112-test.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/verify.py"
+  ],
+  "successor_unexpected_paths": [],
   "toolchain": {
     "go_env": [
       "go1.26.7",
       "darwin",
       "arm64",
-      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps/go.work",
+      "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication/go.work",
       "/Users/abdifamily/go/pkg/mod"
     ],
     "go_version": "go version go1.26.7 darwin/arm64",
     "module_list_sha256": "332e5b0f4a9c8705f531fab2958607432c9f4d5e1332f2098fc1a2c71f69945c"
   },
   "work": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
-  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps"
+  "worktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication"
 }

@@ -1,0 +1,942 @@
+{
+  "board": {
+    "command": [
+      "rtk",
+      "proxy",
+      "you",
+      "--server",
+      "http://127.0.0.1:7439",
+      "--json",
+      "work",
+      "list",
+      "--session",
+      "~default",
+      "--max-results",
+      "500",
+      "--all"
+    ],
+    "payload_sha256": "9fc8987b74439004f8d24b34b545acdd76f42c5b95b9457168056b68302f7135",
+    "rows": [
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+        "rejection_feedback": null,
+        "state": {
+          "name": "to-complete",
+          "type": "PROCESSING"
+        },
+        "workId": "batch-audio-runtime-c110-c112-residual-retirement-20260912T2010Z-audio-runtime-c112-retire-cli-session-trace-evidence",
+        "workTypeName": "idea",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c117-repair-c113-public-trace-publication",
+        "rejection_feedback": null,
+        "state": {
+          "name": "to-complete",
+          "type": "PROCESSING"
+        },
+        "workId": "batch-audio-runtime-c117-repair-c113-public-trace-publication-20260913T0102Z-audio-runtime-c117-repair-c113-public-trace-publication",
+        "workTypeName": "idea",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "to-complete",
+          "type": "PROCESSING"
+        },
+        "workId": "batch-audio-runtime-c79-c80-retirement-capacity-20260912T0430Z-audio-runtime-c79-retire-cli-response-lifecycle",
+        "workTypeName": "idea",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "init",
+          "type": "PROCESSING"
+        },
+        "workId": "work-task-114",
+        "workTypeName": "task",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication\", \"branch\": \"codex/audio-runtime-c117-repair-c113-public-trace-publication\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c117-repair-c113-public-trace-publication",
+        "rejection_feedback": null,
+        "state": {
+          "name": "init",
+          "type": "PROCESSING"
+        },
+        "workId": "work-task-268",
+        "workTypeName": "task",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-152",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-167",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-176",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-185",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-211",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-225",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-239",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-246",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-250",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-253",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-266",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-270",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-278",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence\", \"branch\": \"codex/audio-runtime-c112-retire-cli-session-trace-evidence\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+        "rejection_feedback": null,
+        "state": {
+          "name": "failed",
+          "type": "FAILED"
+        },
+        "workId": "work-task-238",
+        "workTypeName": "task",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        "workId": "work-plan-113",
+        "workTypeName": "plan",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence\", \"branch\": \"codex/audio-runtime-c112-retire-cli-session-trace-evidence\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+        "rejection_feedback": null,
+        "state": {
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        "workId": "work-plan-237",
+        "workTypeName": "plan",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication\", \"branch\": \"codex/audio-runtime-c117-repair-c113-public-trace-publication\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c117-repair-c113-public-trace-publication",
+        "rejection_feedback": null,
+        "state": {
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        "workId": "work-plan-267",
+        "workTypeName": "plan",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "Reconciled wake `audio-runtime-c79-retire-cli-response-lifecycle`.\n\n- Preserved C79 at clean PR #470 head `63d411f2`.\n- Confirmed terminal worker failure was infrastructure-related, not validation.\n- Found exact static defects: one Wire registration and one stale architecture-baseline entry.\n- Verified C57/C61 leases are released and no active branch touches those shared files.\n- Resumed existing `work-task-114` from `failed` \u2192 `init`; Luna is running.\n- All 8 executor slots are now occupied.\n- Updated `meta-status.md` and `implementation-handoff.md`.\n- No vertical or project criterion was accepted; all nine remain open.",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        "workId": "work-thoughts-130",
+        "workTypeName": "thoughts",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "Reconciled the C79 review-failure wake.\n\n- Returned existing C79 `work-task-114` from `failed` to `init`.\n- Preserved clean PR #470 head `c23acde2`; all nine CI checks pass, but four concrete lifecycle defects require repair.\n- Scheduler is now at 8/8 executor slots; no duplicate idea or validation was dispatched.\n- C79 retains exclusive Wire/architecture registry ownership.\n- All nine project criteria remain open.\n- Updated [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md:3) with evidence and the exact next decision.",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        "workId": "work-thoughts-212",
+        "workTypeName": "thoughts",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "{\"request\":{\"requestId\":\"audio-runtime-c117-repair-c113-public-trace-publication-20260913T0102Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c117-repair-c113-public-trace-publication\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Repair C113 public trace-audio publication failure\",\"requestedOutcome\":\"Reproduce the C113 exact-artifact failure on accepted main, then repair the shipped runtime-live --record-dir/--trace-audio path so it uses the public sessiontrace contract, captures the observable provider/device/runtime edges available to software replay, closes with a bounded join, and atomically publishes audio-trace/timeline.jsonl beside the finalized recording bundle. Start with a fail-closed livehost contract test now; consume C112 only after its reviewed guarded merge and do not edit C112-owned service files. Reconcile C108 verifier provenance against explicit immutable source/base identities without weakening its stale-source, caller, ownership or proof-level negative controls.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"agent-cli/internal/transport/cli/internal/livehost/run.go\",\"agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go\",\"agent-cli/internal/transport/cli/session_observability.go\",\"agent-cli/internal/transport/cli/session_observability_test.go\",\"docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py\",\"docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json\",\"docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/SHA256SUMS\",\"docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/\"],\"verification\":\"Before mutation, preserve a bounded reproduction showing exit 0 with missing audio-trace/timeline.jsonl. Add normal/race tests proving TraceAudio propagation, credential redaction, enqueued-versus-rendered distinction, bounded close, failure retention and no overwrite. After C112 is reviewed and guarded-merged, integrate accepted main and compose only its public sessiontrace service at the CLI host boundary; do not import peer Wire packages from a runtime service or edit C112/C79 ownership. Launch the shipped yui with the C113 credential-free tool/audio replay and require marker, continuation, nonempty PCM/WAV, finalized bundle plus audio-trace/timeline.jsonl, matching hashes, provider_close/fixture_complete and clean process-group shutdown. Recheck malformed odd-byte PCM, stale provenance/caller and proof-upgrade negatives, session help/completion and an existing audio/tool replay. Run focused normal/race, Wire, architecture, static and current-head script CI; require independent review, guarded merge, then a fresh immutable engineering vertical probe. Software/file and simulated callback evidence are not physical-device or acoustic proof.\",\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+        "rejection_feedback": null,
+        "state": {
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        "workId": "work-thoughts-257",
+        "workTypeName": "thoughts",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "{\"request\":{\"requestId\":\"audio-runtime-c118-session-terminal-diagnostics-retirement-20260913T0221Z\",\"type\":\"FACTORY_REQUEST_BATCH\",\"works\":[{\"name\":\"audio-runtime-c118-retire-cli-session-terminal-diagnostics\",\"workTypeName\":\"idea\",\"payload\":{\"project\":\"audio-runtime\",\"contractRevision\":\"audio-runtime-v1\",\"title\":\"Retire CLI session terminal diagnostics policy\",\"requestedOutcome\":\"Move the terminal precedence, provider/error classification, output-state selection, unresolved-continuation terminal metadata, final accounting and terminal metrics publication now implemented in agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go behind a thin public go-agent-runtime/services/sessionterminal contract, a private internal implementation and dedicated Wire construction. Preserve exactly-once terminal emission, cancellation precedence, typed error identity, terminal reason/output-state semantics, final byte/turn accounting and bounded clean shutdown. Delete the owned legacy production file and retire at least 180 accepted-main physical production lines; new runtime code, generated Wire, tests, fixtures, evidence and wrapper-only movement do not count. Keep any required CLI compatibility surface as decision-free adapters outside the deleted file. C107 characterization is evidence only and grants no mutation lease; independently re-verify every caller before mutation. Do not edit C79 response-lifecycle source, C110-C117 owned paths, or the two shared registry/baseline files while C79's lease is active. Checkpoint disjoint implementation now; after C79 guarded-merges, reconcile accepted main and obtain explicit ownership before applying only the demonstrated sessionterminal Wire registration and downward/stale architecture entries before changed-head script CI.\",\"sourcePlanRef\":\"factory/projects/audio-runtime/source-plan.md#governing-execution-plan\",\"ownedPaths\":[\"agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go\",\"agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal_test.go\",\"go-agent-runtime/services/sessionterminal/\",\"coverage-manifest/go-agent-runtime/services/sessionterminal/\",\"docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/\"],\"verification\":\"First inventory every production caller of emitTerminal, emitUserCancelledTerminal, userCancellationOutputState, finish, finalAccounting and emitMetricsMatrix, and preserve a fail-closed scope/caller report against the admitted source revision. Add focused normal and race coverage for TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic, TestSessionProgressObserver_IgnoresNonTerminalProviderDiagnostic and TestSessionCancellation_RecordsTerminalDiagnosticOnce, plus a causal mutation that drops final failure or changes cancellation/output-state precedence and must fail. Add a GOWORK=off external consumer importing only services/sessionterminal and proving typed classifications, output state and accounting without CLI imports or hidden initialization. Run the credential-free shipped yui replay and cancellation/error workflows and scripts/test-session-ci-regressions.sh all, checking exactly one terminal diagnostic, correct terminal reason/output state, final accounting, observable output and clean shutdown. Enforce deletion of the owned legacy production file and at least 180 net accepted-main legacy physical lines without baseline increases. Keep the shared Wire/baseline checks blocked, not bypassed, until C79 releases ownership; then integrate accepted main, update only demonstrated sessionterminal entries, run current-head script CI, obtain fresh independent review and guarded merge. After merge the meta-planner must send a fresh immutable-executable Luna engineering scope=vertical probe for SERVICE, TRACE, REPLAY, FAILURES, QUALITY and PARITY, exercising the changed public terminal workflow and an existing audio/tool replay regression.\",\"remainingGateIDs\":[\"AUDIO\",\"DEVICE\",\"EMBED\",\"SERVICE\",\"TRACE\",\"REPLAY\",\"FAILURES\",\"QUALITY\",\"PARITY\"]}}],\"relations\":[]}}",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+        "rejection_feedback": null,
+        "state": {
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        "workId": "work-thoughts-274",
+        "workTypeName": "thoughts",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "Reconciled the C79 wake.\n\n- Independent review failed on concrete malformed tool-event ownership/state-retention defects and stale evidence.\n- Moved the existing C79 `work-task-114` from `failed` to `init`; no duplicate Work was created.\n- Eight workers remain active; C79 and C120 are queued. The ten-item delivery backlog is full.\n- PR 470 remains unmerged and no vertical probe or acceptance was issued.\n- All nine project criteria remain open.\n- Updated [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md:3) with the evidence and exact next decision.",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        "workId": "work-thoughts-285",
+        "workTypeName": "thoughts",
+        "worktree": null
+      }
+    ]
+  },
+  "c112": {
+    "branch": "codex/audio-runtime-c112-retire-cli-session-trace-evidence",
+    "pr": {
+      "diff": {
+        "command": [
+          "rtk",
+          "gh",
+          "pr",
+          "diff",
+          "498",
+          "--name-only"
+        ],
+        "paths": [
+          "agent-cli/internal/services/internal/agentruntime/service.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_trace_test.go",
+          "agent-cli/internal/services/internal/agentruntime/trace.go",
+          "agent-cli/internal/services/internal/agentruntime/trace_c112_test.go",
+          "coverage-manifest/go-agent-runtime/services/sessiontrace/internal/service/package.json",
+          "coverage-manifest/go-agent-runtime/services/sessiontrace/package.json",
+          "coverage-manifest/go-agent-runtime/services/sessiontrace/wire/package.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/README.md",
+          "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/candidate-evidence.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/go.mod",
+          "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/go.sum",
+          "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/main.go",
+          "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/main_test.go",
+          "go-agent-runtime/services/sessiontrace/internal/service/service.go",
+          "go-agent-runtime/services/sessiontrace/internal/service/service_test.go",
+          "go-agent-runtime/services/sessiontrace/service.go",
+          "go-agent-runtime/services/sessiontrace/wire/providers.go",
+          "go-agent-runtime/services/sessiontrace/wire/wire_gen.go",
+          "go-agent-runtime/services/sessiontrace/wire/wire_test.go"
+        ],
+        "sha256": "682c2ba114763f6e3f66da711409b23e992f51233d5556f7ddf6987be90d9116"
+      },
+      "metadata": {
+        "baseRefName": "main",
+        "headRefName": "codex/audio-runtime-c112-retire-cli-session-trace-evidence",
+        "headRefOid": "8b2983338ea449fd739994e8fbbc958581bd2e7b",
+        "number": 498,
+        "state": "OPEN",
+        "statusCheckRollup": [
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-12T22:29:52Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345381",
+            "name": "CI (static)",
+            "startedAt": "2026-09-12T22:25:16Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-12T22:28:16Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345425",
+            "name": "CI (unit)",
+            "startedAt": "2026-09-12T22:26:12Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-12T22:36:21Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345201",
+            "name": "CI (integration)",
+            "startedAt": "2026-09-12T22:25:15Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-12T22:35:37Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345412",
+            "name": "CI (coverage)",
+            "startedAt": "2026-09-12T22:25:15Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-12T22:26:37Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345355",
+            "name": "CI (race)",
+            "startedAt": "2026-09-12T22:25:15Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-12T22:31:45Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345404",
+            "name": "CI (hermetic)",
+            "startedAt": "2026-09-12T22:25:16Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-12T22:26:11Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345304",
+            "name": "CI (WebMCP Chrome)",
+            "startedAt": "2026-09-12T22:25:21Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-12T22:28:38Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345367",
+            "name": "CI (macOS audio release)",
+            "startedAt": "2026-09-12T22:25:25Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-09-12T22:27:38Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345488",
+            "name": "CI (Windows audio portable)",
+            "startedAt": "2026-09-12T22:26:38Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          }
+        ],
+        "title": "feat(runtime): retire CLI session trace orchestration",
+        "url": "https://github.com/portpowered/go-agent-harness/pull/498"
+      }
+    },
+    "work": "audio-runtime-c112-retire-cli-session-trace-evidence"
+  },
+  "c79": {
+    "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+    "pr": {
+      "diff": {
+        "command": [
+          "rtk",
+          "gh",
+          "pr",
+          "diff",
+          "470",
+          "--name-only"
+        ],
+        "paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_test.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+          "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+          "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+          "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go",
+          "agent-cli/internal/services/internal/agentruntime/session_response_admission.go",
+          "agent-cli/internal/services/internal/agentruntime/session_response_admission_test.go",
+          "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_regression_test.go",
+          "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_test.go",
+          "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/internal/service/package.json",
+          "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/package.json",
+          "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/wire/package.json",
+          "docs/architecture/architecture-policy.json",
+          "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go.json",
+          "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go.json",
+          "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go.json",
+          "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_liveness.go.json",
+          "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720884934.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34738737840.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-retirement-and-scope.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/credential-free-audio-tool-replay.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/scheduled-tool-continuation.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/terminal-and-malformed.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/static-repair-2f6713d4.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/go.mod",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/main_test.go",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/run.py",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/verify.py",
+          "go-agent-runtime/services/sessiondiagnostics/internal/service/continuation.go",
+          "go-agent-runtime/services/sessiondiagnostics/internal/service/events.go",
+          "go-agent-runtime/services/sessiondiagnostics/internal/service/helpers.go",
+          "go-agent-runtime/services/sessiondiagnostics/internal/service/response.go",
+          "go-agent-runtime/services/sessiondiagnostics/internal/service/scheduled.go",
+          "go-agent-runtime/services/sessiondiagnostics/internal/service/service.go",
+          "go-agent-runtime/services/sessiondiagnostics/service.go",
+          "go-agent-runtime/services/sessiondiagnostics/service_test.go",
+          "go-agent-runtime/services/sessiondiagnostics/wire/providers.go",
+          "go-agent-runtime/services/sessiondiagnostics/wire/wire_gen.go",
+          "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
+          "scripts/wire-packages.txt"
+        ],
+        "sha256": "5989f02dbd89e7dcfbb2d2c2ee1ae5ca3ef84f01fbdc9bc0e3fbc7c5e2c76d6d"
+      },
+      "metadata": {
+        "baseRefName": "main",
+        "headRefName": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+        "headRefOid": "6390bc9dd0ab7c669507533d77cb4667bf302e3b",
+        "number": 470,
+        "state": "OPEN",
+        "statusCheckRollup": [
+          {
+            "__typename": "CheckRun",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412741",
+            "name": "CI (static)",
+            "startedAt": "2026-09-13T05:23:05Z",
+            "status": "QUEUED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412695",
+            "name": "CI (unit)",
+            "startedAt": "2026-09-13T05:23:04Z",
+            "status": "QUEUED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412744",
+            "name": "CI (integration)",
+            "startedAt": "2026-09-13T05:23:05Z",
+            "status": "QUEUED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412732",
+            "name": "CI (coverage)",
+            "startedAt": "2026-09-13T05:23:05Z",
+            "status": "QUEUED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412601",
+            "name": "CI (race)",
+            "startedAt": "2026-09-13T05:23:04Z",
+            "status": "QUEUED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412726",
+            "name": "CI (hermetic)",
+            "startedAt": "2026-09-13T05:23:05Z",
+            "status": "QUEUED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412721",
+            "name": "CI (WebMCP Chrome)",
+            "startedAt": "2026-09-13T05:23:04Z",
+            "status": "QUEUED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412715",
+            "name": "CI (macOS audio release)",
+            "startedAt": "2026-09-13T05:23:04Z",
+            "status": "QUEUED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412755",
+            "name": "CI (Windows audio portable)",
+            "startedAt": "2026-09-13T05:23:05Z",
+            "status": "QUEUED",
+            "workflowName": "CI"
+          }
+        ],
+        "title": "refactor: retire CLI response lifecycle",
+        "url": "https://github.com/portpowered/go-agent-harness/pull/470"
+      }
+    },
+    "work": "audio-runtime-c79-retire-cli-response-lifecycle"
+  },
+  "current_head": "f573593fe5a97414ba92289bd630ae5740130527",
+  "host_source_and_test_paths": {
+    "c108_artifacts_at_planning_main": [
+      {
+        "path": "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py",
+        "planning_main_sha256": "546ed3269ea62289388964cb96288f8a13fa0cdcbad8148bb608eb662931c91a"
+      },
+      {
+        "path": "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json",
+        "planning_main_sha256": "a25032ab3f9b3b0a1c01de7153a055701ac0be3429a3e875e08a483f62682a7d"
+      },
+      {
+        "path": "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/SHA256SUMS",
+        "planning_main_sha256": "aaaeb4474a2d8636b6a3aa26b072c83c88d5dc13022bfbc82521c7780677927a"
+      }
+    ],
+    "caller_searches": [
+      {
+        "exit_code": 0,
+        "needle": "livehost.Run",
+        "stdout": "agent-cli/internal/transport/cli/session_observability.go:173:\treturn adaptLiveRuntimeCompatibility(livehost.Run(ctx, out, request, livehost.Dependencies{\n",
+        "stdout_sha256": "446027abb010df300bddf674c3612d7605bfa33bafcaf28538f56280d01fae94"
+      },
+      {
+        "exit_code": 0,
+        "needle": "NewSessionCommandWithLive",
+        "stdout": "agent-cli/internal/wire/wire.go:337:\tcli.NewSessionCommandWithLive,\nagent-cli/internal/wire/wire_gen.go:101:\tsessionCommand := cli.NewSessionCommandWithLive(askFlags, globalFlags, agentsessionSessionService, selfplayService, liveService, replayService, devicesService, fileDeviceService, sessionToolCapabilitiesFactory, liveCredentialReference, fileStoreFactory, recordingService, modelAdmission)\nagent-cli/internal/wire/wire_gen.go:387:\tprovideSessionRTCRuntimeFactory, cli.NewSessionToolCapabilitiesFactoryFromService, cli.NewSessionCommandWithLive, wire2.SelfPlaySet, cli.NewSessionReplayCommand, cli.NewRoomRunCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,\nagent-cli/internal/transport/cli/session_observability.go:61:// NewSessionCommandWithLive adds the reusable continuous-session and device\nagent-cli/internal/transport/cli/session_observability.go:65:func NewSessionCommandWithLive(\n",
+        "stdout_sha256": "e1ccfaffc51f0ce126b07e243f36411818d11aa439d1ad25139d9a057dce6ce9"
+      },
+      {
+        "exit_code": 0,
+        "needle": "TraceAudio",
+        "stdout": "agent-cli/internal/transport/cli/session_observability.go:145:\t\trequest.TraceAudio,\nagent-cli/internal/transport/cli/session_command_support.go:63:\tTraceAudio           bool\nagent-cli/internal/transport/cli/session_command_support.go:141:\t\tTraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed(\"prompt\")},\nagent-cli/internal/transport/cli/internal/livehost/run.go:172:\t\tif err != nil || !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/run.go:210:\tif !request.TraceAudio {\nagent-cli/internal/transport/cli/session.go:486:\t\t\t\tTraceAudio: traceAudio, Transport: transport, Signaling: signaling,\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:71:\t\t\tassertTraceAudioFrame(t, frame, wantSamples)\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:85:func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:215:\t\t\trequest := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, \"bundle\")}\n",
+        "stdout_sha256": "70d0d8e346318589aefe655b1b9757c7aa3803948d7d052fd2d015baa359bc1a"
+      },
+      {
+        "exit_code": 1,
+        "needle": "sessiontrace",
+        "stdout": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "host_paths": [
+      {
+        "current_sha256": "6b1ec0b5bd04ea75d1c3a0dcad8eafbcc4aedc271e0b44effb96dddc674bcf4c",
+        "path": "agent-cli/internal/transport/cli/internal/livehost/run.go",
+        "planning_main_sha256": "6b1ec0b5bd04ea75d1c3a0dcad8eafbcc4aedc271e0b44effb96dddc674bcf4c",
+        "present_at_planning_main": true,
+        "present_current": true
+      },
+      {
+        "current_sha256": "f5bb9339aa57fb7a9571609ab5aefd36c527e6581c36abe9fbb432c940ef4317",
+        "path": "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
+        "planning_main_sha256": "fc12cc3243ade701c5a65adb98cc709f8bbf0574838c0d8dc4e582b7d07b50c9",
+        "present_at_planning_main": true,
+        "present_current": true
+      },
+      {
+        "current_sha256": "58eaf7b8b06d08e0787a3f23fd4486170512b952684c20f1a66c4eba43ab9abc",
+        "path": "agent-cli/internal/transport/cli/session_observability.go",
+        "planning_main_sha256": "58eaf7b8b06d08e0787a3f23fd4486170512b952684c20f1a66c4eba43ab9abc",
+        "present_at_planning_main": true,
+        "present_current": true
+      },
+      {
+        "current_sha256": null,
+        "path": "agent-cli/internal/transport/cli/session_observability_test.go",
+        "planning_main_sha256": null,
+        "present_at_planning_main": false,
+        "present_current": false
+      }
+    ]
+  },
+  "peer_exclusions": {
+    "c112_consumption": "withheld until exact head has green SCRIPT CI, independent approval and guarded merge",
+    "c112_owned_paths": [
+      "agent-cli/internal/services/internal/agentruntime/service.go",
+      "agent-cli/internal/services/internal/agentruntime/session_audio_trace.go",
+      "agent-cli/internal/services/internal/agentruntime/session_audio_trace_test.go",
+      "agent-cli/internal/services/internal/agentruntime/trace.go",
+      "agent-cli/internal/services/internal/agentruntime/trace_c112_test.go",
+      "coverage-manifest/go-agent-runtime/services/sessiontrace/internal/service/package.json",
+      "coverage-manifest/go-agent-runtime/services/sessiontrace/package.json",
+      "coverage-manifest/go-agent-runtime/services/sessiontrace/wire/package.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/README.md",
+      "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/candidate-evidence.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/go.mod",
+      "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/go.sum",
+      "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/main.go",
+      "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/consumer/main_test.go",
+      "go-agent-runtime/services/sessiontrace/internal/service/service.go",
+      "go-agent-runtime/services/sessiontrace/internal/service/service_test.go",
+      "go-agent-runtime/services/sessiontrace/service.go",
+      "go-agent-runtime/services/sessiontrace/wire/providers.go",
+      "go-agent-runtime/services/sessiontrace/wire/wire_gen.go",
+      "go-agent-runtime/services/sessiontrace/wire/wire_test.go"
+    ],
+    "c79_owned_paths": [
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_test.go",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+      "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+      "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+      "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go",
+      "agent-cli/internal/services/internal/agentruntime/session_response_admission.go",
+      "agent-cli/internal/services/internal/agentruntime/session_response_admission_test.go",
+      "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_regression_test.go",
+      "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_test.go",
+      "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/internal/service/package.json",
+      "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/package.json",
+      "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/wire/package.json",
+      "docs/architecture/architecture-policy.json",
+      "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go.json",
+      "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go.json",
+      "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go.json",
+      "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_liveness.go.json",
+      "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720884934.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34738737840.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-retirement-and-scope.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/credential-free-audio-tool-replay.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/scheduled-tool-continuation.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/terminal-and-malformed.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/static-repair-2f6713d4.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/go.mod",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/main_test.go",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/run.py",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/verify.py",
+      "go-agent-runtime/services/sessiondiagnostics/internal/service/continuation.go",
+      "go-agent-runtime/services/sessiondiagnostics/internal/service/events.go",
+      "go-agent-runtime/services/sessiondiagnostics/internal/service/helpers.go",
+      "go-agent-runtime/services/sessiondiagnostics/internal/service/response.go",
+      "go-agent-runtime/services/sessiondiagnostics/internal/service/scheduled.go",
+      "go-agent-runtime/services/sessiondiagnostics/internal/service/service.go",
+      "go-agent-runtime/services/sessiondiagnostics/service.go",
+      "go-agent-runtime/services/sessiondiagnostics/service_test.go",
+      "go-agent-runtime/services/sessiondiagnostics/wire/providers.go",
+      "go-agent-runtime/services/sessiondiagnostics/wire/wire_gen.go",
+      "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
+      "scripts/wire-packages.txt"
+    ]
+  },
+  "schema_version": "audio-runtime-c117-census-v1",
+  "source_revision": "3963bc3566da24f8214634c17a9d0f79a6724171"
+}

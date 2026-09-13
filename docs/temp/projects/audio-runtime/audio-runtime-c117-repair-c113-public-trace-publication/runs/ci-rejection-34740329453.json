@@ -1,0 +1,33 @@
+{
+  "schema_version": "audio-runtime-c117-ci-rejection-v1",
+  "run": 34740329453,
+  "head": "73a8bd6cfa5b2d389cc6ddc8c152a22ab7f904f6",
+  "checks": [
+    {
+      "name": "CI (coverage)",
+      "job_id": 103678844002,
+      "command": "make coverage",
+      "classification": "test failure (non-timeout command exit)",
+      "exit_code": 2,
+      "failure": "TestTraceRequiredFailsClosedWithoutPublicService/trace_audio and /record_directory: trace_test.go:230: Run error = <nil>, want fail-closed public trace-service diagnostic"
+    },
+    {
+      "name": "CI (hermetic)",
+      "job_id": 103678843933,
+      "command": "make test-hermetic",
+      "exit_code": 2,
+      "failure": "TestTraceRequiredFailsClosedWithoutPublicService/trace_audio and /record_directory: trace_test.go:230: Run error = <nil>, want fail-closed public trace-service diagnostic"
+    }
+  ],
+  "cause": "The deliberate pre-C112 fail-closed host oracle is running against the accepted-main host, which has no public sessiontrace service to compose.",
+  "c112": {
+    "pr": 498,
+    "head": "8b2983338ea449fd739994e8fbbc958581bd2e7b",
+    "state": "OPEN",
+    "reviews": 0,
+    "script_ci_green": false,
+    "guarded_merge": false,
+    "canonical_board_row": "missing"
+  },
+  "required_next_step": "C112 must be admitted, pass current-head SCRIPT CI, receive independent approval and guarded merge; then C117 integrates accepted main and implements only the public sessiontrace host composition."
+}

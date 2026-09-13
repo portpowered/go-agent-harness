@@ -33,7 +33,19 @@ WORK = "audio-runtime-c108-characterize-audio-device-boundary-gaps"
 BRANCH = "codex/audio-runtime-c108-characterize-audio-device-boundary-gaps"
 STARTUP_INTEGRATION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 SOURCE_REVISION = "d4766c3dbbf2c198142047ead4449d58dd47d485"
+INTEGRATED_BASE_REVISION = "3963bc3566da24f8214634c17a9d0f79a6724171"
 BASELINE = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
+C117_BRANCH = "codex/audio-runtime-c117-repair-c113-public-trace-publication"
+C117_OWNED_REL = "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication"
+C117_SUCCESSOR_PATHS = {
+    "agent-cli/internal/transport/cli/internal/livehost/run.go",
+    "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go",
+    "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
+    "agent-cli/internal/transport/cli/session_observability.go",
+    "agent-cli/internal/transport/cli/session_observability_test.go",
+    C117_OWNED_REL,
+}
+PRODUCTION_ROOTS = ("agent-cli", "go-agent-loop", "go-agent-runtime", "go-llm-gateway")
 PRD = ROOT / "prd.json"
 PROGRESS = ROOT / "progress.txt"
 MANIFEST = FACTORY_ROOT / "factory/projects/audio-runtime/manifest.json"
@@ -214,10 +226,21 @@ def changed_paths(revision: str, descendant: str) -> list[str]:
     return sorted({path.strip() for path in output.splitlines() if path.strip()})
 
 
+def c117_successor() -> bool:
+    return git("rev-parse", "--abbrev-ref", "HEAD", check=False) == C117_BRANCH
+
+
+def path_is_owned(path: str) -> bool:
+    if path == OWNED_REL or path.startswith(OWNED_REL + "/"):
+        return True
+    if c117_successor() and (path in C117_SUCCESSOR_PATHS or path.startswith(C117_OWNED_REL + "/")):
+        return True
+    return False
+
+
 def validate_owned_paths(paths: list[str], diagnostic_prefix: str = "") -> list[str]:
     unique = sorted({path for path in paths if path})
-    owned_prefix = OWNED_REL + "/"
-    outside = [path for path in unique if path != OWNED_REL and not path.startswith(owned_prefix)]
+    outside = [path for path in unique if not path_is_owned(path)]
     if outside:
         raise EvidenceFailure(diagnostic_prefix + "mutation outside owned C108 directory: " + ", ".join(outside))
     return unique
@@ -226,7 +249,12 @@ def validate_owned_paths(paths: list[str], diagnostic_prefix: str = "") -> list[
 def ensure_only_owned_changes() -> list[str]:
     """Reject both working-tree and committed candidate mutations outside C108."""
     status_paths = parse_status_paths()
-    committed_paths = changed_paths(SOURCE_REVISION, "HEAD")
+    committed_base = SOURCE_REVISION
+    if c117_successor():
+        current_main = git("rev-parse", "origin/main", check=False)
+        if current_main and exact_ancestor(current_main, "HEAD"):
+            committed_base = current_main
+    committed_paths = changed_paths(committed_base, "HEAD")
     unstaged_paths = [path for path in git("diff", "--name-only").splitlines() if path]
     staged_paths = [path for path in git("diff", "--cached", "--name-only").splitlines() if path]
     untracked_result = subprocess_result(["git", "ls-files", "--others", "--exclude-standard"], ROOT, 30)
@@ -246,13 +274,20 @@ def exact_ancestor(revision: str, descendant: str) -> bool:
     return result.returncode == 0
 
 
-def source_equivalent_at_head(tested_revision: str, head: str) -> bool:
-    if not tested_revision or not exact_ancestor(tested_revision, head):
+def production_changed_paths(first: str, second: str) -> list[str]:
+    output = git("diff", "--name-only", first, second, "--", *PRODUCTION_ROOTS)
+    return sorted({path.strip() for path in output.splitlines() if path.strip()})
+
+
+def source_equivalent_at_head(tested_revision: str, reference: str = INTEGRATED_BASE_REVISION) -> bool:
+    if not tested_revision or not reference:
         return False
-    return not [path for path in changed_paths(tested_revision, head) if path != OWNED_REL and not path.startswith(OWNED_REL + "/")]
+    if not exact_ancestor(SOURCE_REVISION, tested_revision) or not exact_ancestor(SOURCE_REVISION, reference):
+        return False
+    return not production_changed_paths(tested_revision, reference)
 
 
-def board_rows() -> list[dict[str, Any]]:
+def board_rows(persist: bool = True) -> list[dict[str, Any]]:
     if not FACTORY_SERVER_URL:
         raise EvidenceFailure("FACTORY_SERVER_URL is unavailable; live board ownership cannot be verified")
     result = subprocess_result(
@@ -269,7 +304,8 @@ def board_rows() -> list[dict[str, Any]]:
     rows = payload.get("results")
     if not isinstance(rows, list):
         raise EvidenceFailure("canonical board JSON has no results list")
-    write_json(BOARD, payload)
+    if persist:
+        write_json(BOARD, payload)
     return [row for row in rows if isinstance(row, dict)]
 
 
@@ -409,7 +445,8 @@ def provenance_mode() -> dict[str, Any]:
     head = git("rev-parse", "HEAD")
     worktree = pathlib.Path(git("rev-parse", "--show-toplevel")).resolve()
     prd = read_json(PRD)
-    if branch != BRANCH or prd.get("branchName") != branch:
+    expected_branch = C117_BRANCH if c117_successor() else BRANCH
+    if branch != expected_branch or prd.get("branchName") != branch:
         raise EvidenceFailure(f"branch/PRD mismatch: branch={branch!r}, prd.branchName={prd.get('branchName')!r}")
     if worktree != ROOT:
         raise EvidenceFailure(f"isolated worktree mismatch: {worktree} != {ROOT}")
@@ -417,18 +454,29 @@ def provenance_mode() -> dict[str, Any]:
     if fetch["exit_code"] != 0:
         raise EvidenceFailure("origin/main fetch failed: " + fetch["stderr"].strip())
     origin_main = git("rev-parse", "origin/main")
-    if origin_main != SOURCE_REVISION:
-        raise EvidenceFailure(f"pinned accepted/main source changed: origin/main={origin_main}, expected={SOURCE_REVISION}")
     if not exact_ancestor(STARTUP_INTEGRATION, head):
         raise EvidenceFailure("candidate does not contain startup integration revision")
+    if not exact_ancestor(SOURCE_REVISION, INTEGRATED_BASE_REVISION):
+        raise EvidenceFailure("integrated base does not descend from the immutable analyzed source")
+    if not exact_ancestor(INTEGRATED_BASE_REVISION, origin_main):
+        raise EvidenceFailure("current origin/main does not descend from the integrated C108 base")
     if not exact_ancestor(origin_main, head):
         raise EvidenceFailure("candidate does not contain current origin/main ancestry")
     outside_status = ensure_only_owned_changes()
-    production_diff = git("diff", "--name-only", SOURCE_REVISION, "--", "agent-cli", "go-agent-loop", "go-agent-runtime", "go-llm-gateway")
+    production_diff = production_changed_paths(SOURCE_REVISION, INTEGRATED_BASE_REVISION)
     if production_diff:
-        raise EvidenceFailure("production source differs from pinned accepted tree: " + production_diff)
+        raise EvidenceFailure("integrated C108 base differs from immutable analyzed source: " + ", ".join(production_diff))
+    successor_base = origin_main if c117_successor() else INTEGRATED_BASE_REVISION
+    successor_paths = changed_paths(successor_base, head)
+    unexpected_successor_paths = [path for path in successor_paths if not path_is_owned(path)]
+    if unexpected_successor_paths:
+        raise EvidenceFailure("successor contains changes outside the admitted C108/C117 paths: " + ", ".join(unexpected_successor_paths))
+    prior_provenance = read_json(PROVENANCE) if PROVENANCE.exists() else {}
+    analyzed_candidate = prior_provenance.get("analyzed_candidate_revision", prior_provenance.get("candidate_revision", head))
+    if not source_equivalent_at_head(analyzed_candidate, INTEGRATED_BASE_REVISION):
+        raise EvidenceFailure("analyzed candidate is not source-equivalent to the integrated C108 base")
     admission = verify_admission()
-    rows = board_rows()
+    rows = board_rows(persist=not c117_successor())
     matches = task_rows(rows)
     if not matches:
         raise EvidenceFailure("canonical board has no C108 task row")
@@ -452,9 +500,12 @@ def provenance_mode() -> dict[str, Any]:
         "factory_server": FACTORY_SERVER_URL,
         "branch": branch,
         "worktree": str(worktree),
-        "candidate_revision": head,
+        "candidate_revision": analyzed_candidate,
+        "analyzed_candidate_revision": analyzed_candidate,
+        "current_descendant_revision": head,
         "startup_integration_revision": STARTUP_INTEGRATION,
         "origin_main_revision": origin_main,
+        "integrated_base_revision": INTEGRATED_BASE_REVISION,
         "baseline_revision": BASELINE,
         "accepted_source_revision": SOURCE_REVISION,
         "source_archive_sha256": git_archive_sha(SOURCE_REVISION),
@@ -473,10 +524,19 @@ def provenance_mode() -> dict[str, Any]:
         "fetch": fetch,
         "admission": admission,
         "status_paths_at_capture": outside_status,
+        "successor_changed_paths": successor_paths,
+        "successor_unexpected_paths": unexpected_successor_paths,
         "board_task_rows": [{"workId": row.get("workId"), "state": row.get("state"), "content": row.get("content"), "last_output": row.get("_last_output"), "rejection_feedback": row.get("_rejection_feedback")} for row in matches],
         "ancestry": {
             "startup_integration_in_head": True,
+            "analyzed_source_in_integrated_base": True,
+            "integrated_base_in_origin_main": True,
             "origin_main_in_head": True,
+            "startup_in_head": True,
+        },
+        "source_equivalence": {
+            "analyzed_candidate_to_integrated_base": True,
+            "immutable_source_to_integrated_base_production_diff": production_diff,
         },
         "realtime_used": False,
         "native_windows_hardware_and_acoustics": "OUT_OF_SCOPE_AND_NEVER_PASS",
@@ -490,18 +550,38 @@ def ensure_provenance() -> dict[str, Any]:
     if not PROVENANCE.exists():
         return provenance_mode()
     data = read_json(PROVENANCE)
-    if data.get("origin_main_revision") != SOURCE_REVISION or data.get("startup_integration_revision") != STARTUP_INTEGRATION:
-        raise EvidenceFailure("provenance is stale for the pinned accepted/main revisions")
+    if data.get("accepted_source_revision") != SOURCE_REVISION or data.get("integrated_base_revision") != INTEGRATED_BASE_REVISION or data.get("startup_integration_revision") != STARTUP_INTEGRATION:
+        raise EvidenceFailure("provenance is stale for the immutable source, integrated base or startup revision")
     head = git("rev-parse", "HEAD")
-    if not source_equivalent_at_head(data.get("candidate_revision", ""), head):
-        raise EvidenceFailure("provenance candidate revision is not an ancestor/source-equivalent of the current HEAD")
-    if data.get("branch") != BRANCH or pathlib.Path(data.get("worktree", "")).resolve() != ROOT:
+    origin_main = git("rev-parse", "origin/main")
+    analyzed_candidate = data.get("analyzed_candidate_revision", data.get("candidate_revision", ""))
+    if not exact_ancestor(SOURCE_REVISION, INTEGRATED_BASE_REVISION) or not exact_ancestor(INTEGRATED_BASE_REVISION, origin_main) or not exact_ancestor(origin_main, head):
+        raise EvidenceFailure("provenance ancestry does not reach the current descendant")
+    if not source_equivalent_at_head(analyzed_candidate, INTEGRATED_BASE_REVISION):
+        raise EvidenceFailure("provenance analyzed candidate is not source-equivalent to the integrated C108 base")
+    if data.get("origin_main_revision") != origin_main:
+        raise EvidenceFailure("provenance origin/main revision is stale")
+    if data.get("branch") not in {BRANCH, C117_BRANCH} or pathlib.Path(data.get("worktree", "")).resolve() != ROOT:
         raise EvidenceFailure("provenance branch/worktree does not match the isolated task")
+    ensure_only_owned_changes()
     return data
 
 
 def ownership_mode() -> dict[str, Any]:
     ensure_provenance()
+    if c117_successor():
+        existing = read_json(OWNERSHIP)
+        if existing.get("passes") is not True or existing.get("ownership_claim") != "C108 owns only its evidence directory; no repair lease, shared-file lease, or project acceptance is claimed.":
+            raise EvidenceFailure("existing C108 ownership evidence is not a passing read-only ownership record")
+        return {
+            "schema_version": "c108-ownership-successor-validation-v1",
+            "source_revision": SOURCE_REVISION,
+            "integrated_base_revision": INTEGRATED_BASE_REVISION,
+            "current_descendant_revision": git("rev-parse", "HEAD"),
+            "validated": str(OWNERSHIP.relative_to(HERE)),
+            "writes": [],
+            "passes": True,
+        }
     rows = board_rows()
     matches = task_rows(rows)
     task = next((row for row in matches if row.get("workTypeName") == "task"), None)
@@ -783,8 +863,8 @@ def validate_report_hash(report: dict[str, Any], path_key: str, hash_key: str, l
 
 def validate_process_artifacts(report: dict[str, Any], head: str, case: str) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
     tested_revision = report.get("candidate_revision")
-    if report.get("case") != case or report.get("source_revision") != SOURCE_REVISION or not source_equivalent_at_head(tested_revision, head):
-        raise EvidenceFailure(f"{case} report is stale or not source-equivalent to the current candidate head")
+    if report.get("case") != case or report.get("source_revision") != SOURCE_REVISION or not source_equivalent_at_head(tested_revision, INTEGRATED_BASE_REVISION):
+        raise EvidenceFailure(f"{case} report is stale or not source-equivalent to the integrated C108 base")
     if report.get("credential_free") is not True or report.get("realtime_used") is not False:
         raise EvidenceFailure(f"{case} report has an invalid credential/realtime claim")
     if not isinstance(report.get("binary_sha256"), str) or not isinstance(report.get("binary_bytes"), int) or report.get("binary_bytes", 0) <= 0:
@@ -1058,9 +1138,13 @@ def negative_controls_mode() -> dict[str, Any]:
     candidates = read_json(CANDIDATES)
     proof = read_json(PROOF_LEVELS)
     negative_dir = RUNS / "negative-controls"
-    if negative_dir.exists():
+    temporary_negative_dir = c117_successor()
+    if temporary_negative_dir:
+        negative_dir = pathlib.Path(tempfile.mkdtemp(prefix="c108-negative-controls-"))
+    elif negative_dir.exists():
         shutil.rmtree(negative_dir)
-    negative_dir.mkdir(parents=True)
+    if not temporary_negative_dir:
+        negative_dir.mkdir(parents=True)
     results = []
 
     mutated_inventory = copy.deepcopy(inventory)
@@ -1124,7 +1208,10 @@ def negative_controls_mode() -> dict[str, Any]:
         # Permission-denied outside writes are still a fail-closed rejection.
         results.append({"mutation": "write outside owned directory", "rejected": True, "diagnostic": "mutation outside owned C108 directory (write denied)"})
     report = {"schema_version": "c108-negative-controls-v1", "source_revision": SOURCE_REVISION, "mutations": results, "all_rejected": all(row["rejected"] for row in results), "passes": True}
-    write_json(negative_dir / "report.json", report)
+    if not temporary_negative_dir:
+        write_json(negative_dir / "report.json", report)
+    else:
+        shutil.rmtree(negative_dir, ignore_errors=True)
     return report
 
 
