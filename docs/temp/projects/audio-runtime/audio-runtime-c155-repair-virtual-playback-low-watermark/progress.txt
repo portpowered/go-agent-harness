@@ -65,3 +65,28 @@ Static rejection repair checkpoint:
   branch, update PR `#516` with exact head/ancestry and this evidence, and
   return `ACCEPTED` to the script-owned current-head gate without polling;
   retain C155 ownership through `CONTINUE` for any exact rejection or repair.
+
+# C155 exact-head causal and accumulated revalidation 2026-09-13T23:42:40Z
+
+- Admission remains `admitted` for the sole `audio-runtime` project and task
+  `audio-runtime-c155-repair-virtual-playback-low-watermark`; the isolated
+  branch still matches `prd.json`. Fresh `origin/main` is
+  `2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`, and the clean candidate
+  `e62378e32e2ed892ab2ef0315cb6277d4b73a7d6` contains accepted planning main
+  `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, startup integration
+  `8bdafc7f947a3a2c9856220abdc539437035bd21`, and current main as ancestors.
+- Exact-head causal scheduling controls all exited 0: subtest 08 passed `200`
+  normal trials, `100` race trials, `100` at `GOMAXPROCS=1`, and `100` at
+  `GOMAXPROCS=8`. Accumulated device regressions all exited 0: adversarial
+  scenarios 04-20 passed `900` normal trials, the full adversarial race matrix
+  passed `420`, and typed/loopback regressions passed `80` trials.
+- The ordered evidence still proves the first read leaves the throttled waiter
+  above low (`2400`) and only the final read reaches low (`1920`); no production
+  virtual-device source, watermark, error identity, FIFO or lifecycle contract
+  changed. The owned diff remains only the adversarial test and C155 evidence;
+  `device_virtual.go` and `device_virtual_test.go` are unchanged.
+- This is executor evidence only. No script-CI polling or CI-success claim is
+  made; independent review, guarded merge, the C155 vertical probe, C144
+  recovery, hardware/acoustic proof and project completion remain open. The
+  exact next action is commit this ledger checkpoint, push/update PR `#516`,
+  and return `ACCEPTED` to the script-owned current-head gate without polling.
