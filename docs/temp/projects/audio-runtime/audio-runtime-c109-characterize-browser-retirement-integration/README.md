@@ -188,3 +188,31 @@ and negative `29d86a3d783de76a04558560c26208c9a6908820f9eb0b3aa60b58bb678431d2`.
 This remains evidence-only: no CI-green, review, merge, vertical probe,
 candidate acceptance, hardware/acoustic proof, or project completion claim is
 made.
+
+## Final exact-head causal revalidation
+
+The exact source-bound runner at `5eb90be6eeafeb5ea63e3e192ccd0544eed7da0c`
+was revalidated from current executor HEAD `8f918bbf055fe1e96b1291fb7ede8225b9cf3838`.
+`origin/main` remains `09c70f51243caeaf1184c4806b99bbf7749e3044`; accepted main,
+startup integration, and the immutable C61/C83 refs remain unchanged and
+ancestral. The worktree stayed clean and the preserved C61/C83 worktrees stayed
+at their pinned heads.
+
+`test_analyze.py -v` passes 3/3. `verify.py --mode all` passes all eight
+checks, determinism, caller-tree mutation control, and all 19 negative
+fixtures; its exact output remains
+`428b51023f41139de5286101084533980de95af8ad768728f8f1b58c111c8f89`.
+The fresh credential-free browser/audio/tool report passes 18/18 in 263.082s
+under 90/300 seconds with clean process groups; its SHA-256 is
+`dffa6d16e3febd78d45310bcea295c53b10873fbae5500954170304644176da5`.
+The fresh malformed/canceled report passes 3/3 in 35.361s under 60/180
+seconds with clean process groups; its SHA-256 is
+`5de8e764d1db19a698738a1758354c0260fe192aaa7af5167454cc09432b6cf1`.
+
+The prior hosted CI failures remain external, exact, and unwaived: the
+WebMCP TempDir cleanup and agent-loop cancellation-isolation failures from run
+`34737204831`, plus the C79/provider-audio terminal-drain history. C109 made no
+peer-source or shared-registry change. This checkpoint still claims no
+CI-green result, candidate acceptance, C61/C83 fix/merge/probe, hardware or
+acoustic proof, or project completion. The next action is to push this exact
+owned evidence head, update PR #495, and return it to script CI without polling.
