@@ -1,0 +1,213 @@
+{
+  "boundary": {
+    "forbidden_new_package_tokens": [],
+    "legacy_lines": 87
+  },
+  "consumer": {
+    "imports": {
+      "forbidden": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "flag",
+        "fmt",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire",
+        "io/fs",
+        "os",
+        "strings"
+      ],
+      "package": "audio-runtime-c110-sessioninstructions-consumer"
+    },
+    "invalid": {
+      "cancellation": "context.Canceled",
+      "cli_imports": false,
+      "credentials": false,
+      "hidden_global_io": false,
+      "invalid_loader_phase": "validation",
+      "mode": "invalid",
+      "private_imports": false,
+      "service_instances": 2,
+      "status": "accepted"
+    },
+    "positive": {
+      "cli_imports": false,
+      "composition": "consumer AGENTS instructions\n\n---\n\nconsumer skill summary\n\nWebMCP browser selection:\n- A browser endpoint is connected, but no page is selected.\n- Before any page work, call webmcp_list_tabs.\n- If multiple eligible tabs are returned, first match them against the current requested page by title, paraphrase, purpose, or category; only ask the customer which page to use when multiple tabs still match that current step. The mere presence of unrelated eligible tabs is not ambiguity.\n- If the customer explicitly requests work on multiple pages in an order, the first unfinished page is the current requested page. Select and finish it, then list and select the next named page; never ask which page comes first when the customer already supplied the order.\n- After the customer chooses, call webmcp_select_tab with the exact browser_id and target_id returned by webmcp_list_tabs.\n- Until exact selection succeeds, do not invoke page tools, say that browser access is unavailable, or suggest uploads, links, manual page descriptions, shell commands, or other workarounds.\n\nTool-grounding requirements:\n- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.\n- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.\n- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.\n- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.\n- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.\n\nWebMCP tab selection calibration:\n- Distinguish tab selection from navigation. When the customer asks to switch to or select an already-open tab or page, call webmcp_list_tabs (or use the most recently returned tab catalog) before answering. When the customer asks to open a new tab, call webmcp_open_tab. When the customer asks to change, redirect, or navigate the currently selected tab to an absolute website URL, call webmcp_navigate_tab directly; do not open or select another tab first. This preserves the selected target and any active cast of that target.\n- A customer request to switch or select an already-open browser tab or page is real page work, even when a page is already selected. Selection ambiguity is never a reason to say that switching tabs, or browsing generally, is unavailable -- either resolve the one clear match or ask the customer; do not deny the capability.\n- Treat a listed tab as an eligible match for the request when it matches by exact title, by an obvious paraphrase of that title, or by the page's stated purpose or category (for example, a request for \"the document editor\" matches a writing app and not a game). Do not require the customer's wording to be a literal, word-for-word match of the tab's title.\n- For an explicit ordered request spanning multiple pages, resolve only the first unfinished page when deciding the current match. Complete that page, then list and select the next named page in the customer's order; do not treat the ordered set itself as selection ambiguity.\n- Exactly one eligible tab: call webmcp_select_tab with its exact browser_id and target_id immediately. Do not ask a clarifying or confirmation question first, and do not list eligible tabs the customer did not ask about. Confirm only after the switch succeeds, for example \"Okay, you're on <title> now.\"\n- Two or more tabs matching the same current step: ask exactly one concise question naming every matching candidate by its title before calling webmcp_select_tab. Do not guess and do not select by list order.\n\nWebMCP ambiguity recovery:\n- A failed WebMCP result with error.code \"ambiguous_browser\" or error.code \"ambiguous_tab\" and details.recovery.action \"ask_customer\" is a pending customer choice, not permission to retry the same call.\n- Ask exactly one concise spoken/text question before any additional browser tool call. For ambiguous_tab, name every candidate in details.candidate_choices with its safe title and origin; if a label is unavailable, name its exact candidate ID. For ambiguous_browser, name every exact ID in details.candidate_browser_ids. Do not claim that a page was selected.\n- Until the customer answers, do not repeat webmcp_get_context, webmcp_list_tabs, or webmcp_select_tab, and do not invoke a page tool. Never retry with an omitted, unchanged, title-based, URL-based, or inferred selector, and never request multiple continuations for the same ambiguity result.\n- After the customer answers, map the answer to one advertised exact candidate ID. For a page selection, pass the exact browser_id and target_id from that candidate once; for a browser selection, pass its exact browser_id once. Do not substitute by list order or act on an unchosen page.\n\nSight routing requirements:\n- For questions about the rendered visual appearance of the selected browser page, use show_page. Its result is the authoritative page sight for broad visual requests and literal visual follow-up questions.\n- When a discovered page tool returns structured state that directly answers the request, use that state as authoritative and do not call show_page merely to restate, verify, or translate it. For example, a board-state tool is authoritative for positions, pieces, alignment, and solved status; show_page is still required if the customer asks how the board visually looks on screen.\n- Never use host-display sight as a fallback for a browser-page request. If page sight is unavailable or fails, report that page sight is unavailable.\n- Use show_screen only when the customer explicitly asks about the computer's physical display; it is a separate capability and does not answer browser-page questions.",
+      "credentials": false,
+      "hidden_global_io": false,
+      "mode": "positive",
+      "private_imports": false,
+      "resolved": "consumer AGENTS instructions\n\n---\n\nconsumer skill summary",
+      "service_instances": 2,
+      "status": "accepted"
+    },
+    "print": {
+      "cli_imports": false,
+      "composition": "customer instructions\n\nTool-grounding requirements:\n- For requests about actual files, commands, web resources, images, or other machine state, use the relevant advertised tool before making factual claims about what exists, happened, or was observed. Use only tools advertised in this session; if no relevant advertised tool exists, say that you cannot inspect the real state instead of guessing.\n- Do not claim that an action ran or that state was observed without its corresponding tool result. Wait for the result and base the response on its returned facts.\n- Report tool errors, missing resources, permission denials, and non-zero command exits as failures. Never invent output, turn a failure into apparent success, or present memory or assumptions as observations.\n- A filesystem refusal envelope means the requested operation was refused and not performed. Explain that it was refused and not performed, preserve the reported operation, path, workdir, reason, and remediation, and never describe it as a successful read or mutation.\n- Mention --allow-path as a remedy only for outside-permitted-roots refusals involving a non-sensitive location; protected or sensitive reads cannot be authorized by widening the allowlist.",
+      "credentials": false,
+      "hidden_global_io": false,
+      "mode": "print",
+      "private_imports": false,
+      "service_instances": 2,
+      "status": "accepted"
+    }
+  },
+  "mode": "retirement-and-owned-paths",
+  "retirement": {
+    "agentruntime_production_lines": {
+      "candidate": 40293,
+      "origin_main": 40483,
+      "retired_lines": 190
+    },
+    "ancestry": {
+      "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
+      "head": "a761ad40e00d111b0aa5d9f673af6b99629b5d1f",
+      "origin_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+      "required_ancestors": {
+        "accepted_main": {
+          "is_ancestor": true,
+          "revision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
+        },
+        "origin_main": {
+          "is_ancestor": true,
+          "revision": "09c70f51243caeaf1184c4806b99bbf7749e3044"
+        },
+        "startup_ancestor": {
+          "is_ancestor": true,
+          "revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
+        }
+      }
+    },
+    "c79_lease": {
+      "candidate_changes": [
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_instructions.go.json",
+        "scripts/wire-packages.txt"
+      ],
+      "guard": "released by C79 guarded merge; C110 owns the demonstrated shared registry repairs",
+      "review_id": "work-review-31",
+      "shared_paths": [
+        "scripts/wire-packages.txt",
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_instructions.go.json"
+      ],
+      "state_at_admission_check": "released-after-guarded-merge",
+      "work_id": "work-task-25"
+    },
+    "changed_paths": [
+      "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
+      "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
+      "coverage-manifest/go-agent-runtime/services/sessioninstructions/internal/service/package.json",
+      "coverage-manifest/go-agent-runtime/services/sessioninstructions/package.json",
+      "coverage-manifest/go-agent-runtime/services/sessioninstructions/wire/package.json",
+      "docs/architecture/architecture-policy.json",
+      "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_instructions.go.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/README.md",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/admission.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/artifacts/yui-build.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/baseline.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/ci-rejection-34745856689.md",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/go.mod",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/main.go",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/provenance.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-positive-and-guard-mutations.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-public-contract.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-retirement-and-owned-paths.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py",
+      "go-agent-runtime/services/session/instructions.go",
+      "go-agent-runtime/services/session/internal/instructions/service.go",
+      "go-agent-runtime/services/session/internal/instructions/service_test.go",
+      "go-agent-runtime/services/session/wire/providers.go",
+      "go-agent-runtime/services/session/wire/wire_gen.go",
+      "go-agent-runtime/services/sessioninstructions/contract.go",
+      "go-agent-runtime/services/sessioninstructions/contract_test.go",
+      "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
+      "go-agent-runtime/services/sessioninstructions/internal/service/service_test.go",
+      "go-agent-runtime/services/sessioninstructions/wire/wire.go",
+      "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go",
+      "scripts/wire-packages.txt"
+    ],
+    "legacy": {
+      "baseline_lines": 277,
+      "baseline_sha256": "57a1e2b77f282e8c7a8351b3b1bf966baacf1d4674764b92542a9b2cfc6e8adc",
+      "candidate_lines": 87,
+      "candidate_sha256": "60f0ac50b42d55eb4e652cf7aa8db3056cb37eed6960853da8659fa73f5a1bb4",
+      "retired_lines": 190
+    },
+    "ownership": {
+      "allowed_exact": [
+        "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
+        "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_instructions.go.json",
+        "go-agent-runtime/services/session/instructions.go",
+        "go-agent-runtime/services/session/internal/instructions/service.go",
+        "go-agent-runtime/services/session/internal/instructions/service_test.go",
+        "go-agent-runtime/services/session/wire/providers.go",
+        "go-agent-runtime/services/session/wire/wire_gen.go",
+        "scripts/wire-packages.txt"
+      ],
+      "allowed_prefixes": [
+        "go-agent-runtime/services/sessioninstructions/",
+        "coverage-manifest/go-agent-runtime/services/sessioninstructions/",
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/"
+      ],
+      "caller_evidence": [
+        {
+          "path": "agent-cli/internal/services/internal/agentruntime/service.go",
+          "sha256": "d3a1650dfb0a50b8cfcdf9376422d1e054f747a00e4b1951753cff6f9fca82b0",
+          "symbols": [
+            "RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration",
+            "RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration"
+          ]
+        },
+        {
+          "path": "agent-cli/internal/services/internal/agentruntime/session_audio_in.go",
+          "sha256": "3fbd1ff188f7d22f53727ea16543bb7fe249dd7050917ae3f170eeace47b5a24",
+          "symbols": [
+            "RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration",
+            "RunSessionWithInstructionsAndAudioInputAndTextSeedAndMaxDuration",
+            "RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration"
+          ]
+        },
+        {
+          "path": "agent-cli/internal/services/internal/agentruntime/session_image.go",
+          "sha256": "b3ad86a6259a59c789f6b758b9fffacee672f0cb9f2bce6ab5be3e59e6372436",
+          "symbols": [
+            "RunSessionWithInstructionsAndAudioInputAndOutputAndTextSeedAndMaxDuration"
+          ]
+        },
+        {
+          "path": "agent-cli/internal/services/internal/agentruntime/session_recording.go",
+          "sha256": "a48ca98b269ee9df2197c2e91e34ff6c0a805f85189f28a10ace8189c1086e5d",
+          "symbols": [
+            "RunSessionWithInstructionsAndAudioOutAndTextSeedAndMaxDuration"
+          ]
+        }
+      ],
+      "compatibility_api": {
+        "constructor": "NewInstructionService",
+        "delegates_to": "sessioninstructions/wire.NewInstructionService",
+        "path": "go-agent-runtime/services/session/wire/providers.go"
+      },
+      "unexpected": []
+    },
+    "source_hashes": {
+      "agent-cli/internal/services/internal/agentruntime/session_instructions.go": "60f0ac50b42d55eb4e652cf7aa8db3056cb37eed6960853da8659fa73f5a1bb4",
+      "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go": "4a20587fdc8a10db45605d0b6e3aa0354506b87c6059e929fe03d370c34027df",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py": "d028157394d41be33703c9d97044c02e42caf939a808052f6b2a783570854996",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py": "7f52eb16085deac4fdb030a0c46371cf27cc531e974298ce592f8c88ce514557",
+      "go-agent-runtime/services/session/instructions.go": "edae2ebe95d618f0c3fd13236e101772652350e97174ecd31cc6024c479bbff4",
+      "go-agent-runtime/services/session/wire/providers.go": "05387aa7f8585b6cda36c6c737dfac3744ee160cd8bab3cbd699309a2b11ba2f",
+      "go-agent-runtime/services/session/wire/wire_gen.go": "e51b980c1207cfa95b72350fb4882f048d448860ce4cf1890633140224ff53f5",
+      "go-agent-runtime/services/sessioninstructions/contract.go": "6be7bda79d80db665fe5e88aaa6f23fb02515e297149db7d8169046fc78f44ef",
+      "go-agent-runtime/services/sessioninstructions/internal/service/service.go": "b6411cb12f5ff21e6607be4fcd3b574e9c42f72714182ca491c4d66a7b359a1a",
+      "go-agent-runtime/services/sessioninstructions/wire/wire.go": "838410e1f09036c75792b2031b3530509c02bc6e1b93f9d0ef74df8faeb78978",
+      "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go": "b69e8fe21fb582d60388b2f0773988993a830e1ef875fe91bb67ab4a8172d1f9"
+    }
+  },
+  "status": "accepted"
+}
