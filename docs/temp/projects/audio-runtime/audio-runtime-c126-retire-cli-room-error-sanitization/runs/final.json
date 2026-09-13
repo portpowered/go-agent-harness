@@ -118,7 +118,7 @@
   },
   "handoff": {
     "accepted_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
-    "candidate_head": "d809b4e5ce07ea4d16accbd0ff70db7343a53690",
+    "candidate_head": "e67c40fc09817fb14ed8df4416f62dbb14a22a0b",
     "ci_polling": "not performed by executor",
     "review": "not performed by executor",
     "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21"
