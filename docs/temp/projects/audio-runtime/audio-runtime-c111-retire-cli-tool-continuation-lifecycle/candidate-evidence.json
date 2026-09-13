@@ -6,7 +6,7 @@
   "session": "~default",
   "server": "http://127.0.0.1:7439",
   "branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
-  "implementationRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
+  "implementationRevision": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94",
   "admission": {
     "verifyWork": "admitted",
     "secondProject": false,
@@ -14,7 +14,7 @@
     "startupIsAncestor": true,
     "acceptedMainIsAncestor": true,
     "integratedMainIsAncestor": true,
-    "integratedMainRevision": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+    "integratedMainRevision": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
     "prdBranchMatches": true,
     "baselineRevision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
   },
@@ -69,11 +69,11 @@
     },
     {
       "command": "make architecture-size-check",
-      "result": "passed: 199 package(s), 1929 file(s), 28675 function(s) checked"
+      "result": "passed: 202 package(s), 1938 file(s), 28756 function(s) checked after current-main integration"
     },
     {
       "command": "make wire-check",
-      "result": "passed: 12 Wire packages regenerated without drift; the released C111 sessioncontinuation entry is registered exactly once"
+      "result": "passed: 13 Wire packages regenerated without drift after current-main integration; the released C111 sessioncontinuation entry is registered exactly once"
     },
     {
       "command": "make verify-architecture",
@@ -102,25 +102,25 @@
     {
       "command": "verify.py --mode retirement-and-owned-paths",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789316620-30031.json",
-      "sha256": "097d616c67028abfef44857175dc70c31b46b67e1b72385805b23ddbb73e2ced",
-      "sourceRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6"
+      "artifact": "artifacts/verify-1789318235-83849.json",
+      "sha256": "edace4984a35679949b1721c8a49d56151ea8c51308b56fde7047ff943a96c0a",
+      "sourceRevision": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94"
     },
     {
       "command": "verify.py --mode positive-and-negative-controls",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789316641-30032.json",
-      "sha256": "e0c8daeda1aac7193e0cc2ee21ea3fccdcee6491e6db30519907ad4acbd5ce0b",
-      "sourceRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6"
+      "artifact": "artifacts/verify-1789318268-83995.json",
+      "sha256": "480539363b42ca789424b349135cb3040579671900cd2aad174db7cd0e826bf9",
+      "sourceRevision": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94"
     }
   ],
   "postMergeValidation": {
-    "sourceRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
-    "freshOriginMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+    "sourceRevision": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94",
+    "freshOriginMain": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
     "verification": {
       "result": "accepted",
-      "artifact": "artifacts/verify-1789316641-30032.json",
-      "sha256": "e0c8daeda1aac7193e0cc2ee21ea3fccdcee6491e6db30519907ad4acbd5ce0b",
+      "artifact": "artifacts/verify-1789318268-83995.json",
+      "sha256": "480539363b42ca789424b349135cb3040579671900cd2aad174db7cd0e826bf9",
       "checks": "runtime contract, race, GOWORK=off external consumer, and four accumulated regressions; all exited 0, timed_out=false, reaped=true",
       "retirement": "147-line immutable baseline/hash verified; 48-line legacy adapter; 99 net production lines retired; owned-path verifier accepted",
       "coverageRegistration": "pre-merge checkpoint passed 188 workspace packages across 6 modules; current-main rerun is blocked by unchanged C127 package github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/causal"
@@ -151,15 +151,15 @@
     "qualityScope": "The quality sweep below ran across the C111 source and released registry checkpoint; final-head focused controls and both owned verifiers were rerun after the no-reset current-main merge.",
     "quality": [
       "make fmt passed",
-      "make wire-check passed: 12 Wire packages regenerated without drift; released C111 registry entry exact",
-      "make architecture-size-check passed: 199 packages, 1929 files, 28675 functions",
+      "make wire-check passed: 13 Wire packages regenerated without drift after current-main integration; released C111 registry entry exact",
+      "make architecture-size-check passed: 202 packages, 1938 files, 28756 functions",
       "make coverage-registration pre-merge checkpoint passed 188 packages; current-main rerun reports unchanged C127 package go-agent-runtime/services/session/internal/live/causal",
       "make vet passed",
       "make lint passed: pinned golangci-lint 2.9.0, 0 issues across 15 modules",
       "make staticcheck passed: pinned staticcheck 2026.1 across 15 modules",
       "git diff --check passed"
     ],
-    "scriptCI": "run 34766920601 rejected pre-registry candidate head 6525d6c on the unchanged agentsession coverage floor; final implementation head d9e1458 integrates the released Wire registry entry and is ready for same-task resubmission with no CI-green claim"
+    "scriptCI": "run 34768795618 rejected head 3e9c6e67 on the unchanged agentsession coverage floor; current-main merge 5d5bfe7 integrates b8650efd and the released Wire registry entry, and the changed same-task head is ready for resubmission with no CI-green claim"
   },
   "accumulatedRegressions": {
     "result": "passed",
@@ -209,7 +209,7 @@
     "status": "released by reviewed guarded merge; current origin/main integrated",
     "wireRegistry": {
       "path": "scripts/wire-packages.txt",
-      "gateResult": "make wire-check passed: 12 Wire packages regenerated without drift; sessioncontinuation is registered exactly once",
+      "gateResult": "make wire-check passed: 13 Wire packages regenerated without drift after current-main integration; sessioncontinuation is registered exactly once",
       "c111Registration": "docs/architecture/architecture-policy.json generated_files entry"
     },
     "architectureBaseline": {
@@ -224,18 +224,18 @@
     }
   },
   "currentOriginMain": {
-    "revision": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+    "revision": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
     "integrated": true,
-    "reason": "C79 prerequisites and the freshly fetched C127 current origin/main were integrated with a no-reset merge commit"
+    "reason": "C79 prerequisites and the freshly fetched current origin/main including the reviewed C112 merge were integrated with a no-reset merge commit"
   },
   "latestMainIntegration": {
-    "originMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
-    "candidateRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
-    "mergeCommit": "342ddb41819596b6744bf443e5b964cc936be7f2",
+    "originMain": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
+    "candidateRevision": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94",
+    "mergeCommit": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94",
     "requiredAncestry": {
       "factoryStartup": "8bdafc7f947a3a2c9856220abdc539437035bd21",
       "acceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "currentOriginMain": "915ed982d23f2e549e529ff43c4f370b4b51e394"
+      "currentOriginMain": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b"
     },
     "resetUsed": false
   },
@@ -247,8 +247,8 @@
     "currentHead": "bf05d90c64b556f68834d7dfa3150ad8ba1c1931",
     "currentResult": "rejected: agent-cli/internal/services/agentsession 61.80% versus 80.00%; C111 diff under that package is empty",
     "floorChanged": false,
-    "latestObservedRun": "34766920601",
-    "latestObservedHead": "6525d6c2518dcba1a9456d7587311370091432f9",
+    "latestObservedRun": "34768795618",
+    "latestObservedHead": "3e9c6e67cceacaa978c0494039713ebdd62efcc8",
     "latestObservedResult": "rejected: CI (coverage) agentsession 61.80% versus unchanged 80.00% floor; no C111-owned path changed"
   },
   "causalCharacterization": {
@@ -264,12 +264,12 @@
     "evidence": "bounded-causal-characterization-b5f6e422.md"
   },
   "latestCIRejection": {
-    "run": 34766920601,
-    "head": "6525d6c2518dcba1a9456d7587311370091432f9",
+    "run": 34768795618,
+    "head": "3e9c6e67cceacaa978c0494039713ebdd62efcc8",
     "conclusion": "failure",
-    "rawJson": "ci-rejection-34766920601.json",
+    "rawJson": "ci-rejection-34768795618.json",
     "failedChecks": [
-      {"name": "CI (coverage)", "job": 103749418631, "step": "Run coverage profiles and coverage gate"}
+      {"name": "CI (coverage)", "job": 103754464594, "step": "Run coverage profiles and coverage gate"}
     ],
     "coveragePackage": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession",
     "coverageFailure": "expected minimum 80.00%, actual 61.80%, delta -18.20%",
@@ -279,13 +279,13 @@
       "exit status 1",
       "make: *** [Makefile:303: coverage] Error 1"
     ],
-    "ownership": "The C111 diff against origin/main does not change agent-cli/internal/services/agentsession or the coverage floor, so this completed coverage rejection is outside C111 and no source repair is demonstrated.",
-    "priorRejection": "ci-rejection-34764898583.json records the prior unchanged peer hermetic audio-output assertion; earlier C127 high-rate/agentsession and repaired image-continuation findings remain retained in their exact records.",
+    "ownership": "The C111 diff does not change agent-cli/internal/services/agentsession, its tests, or the coverage floor, so this completed coverage rejection is outside C111 and no source repair is demonstrated.",
+    "priorRejection": "ci-rejection-34766920601.json records the prior identical unchanged agentsession coverage rejection; ci-rejection-34764898583.json retains the earlier peer hermetic audio-output assertion, and all earlier findings remain in their exact records.",
     "claimedGreen": false
   },
   "currentHeadCI": {
-    "run": "34766920601",
-    "head": "6525d6c2518dcba1a9456d7587311370091432f9",
+    "run": "34768795618",
+    "head": "3e9c6e67cceacaa978c0494039713ebdd62efcc8",
     "passed": [
       "CI (hermetic)",
       "CI (integration)",
@@ -299,8 +299,8 @@
     "failed": [
       "coverage: agent-cli/internal/services/agentsession 61.80% versus 80.00% floor"
     ],
-    "postRejectionLocalRepair": "C111 contract, Wire, four named regressions, external consumer, both owned verifiers, source-pinned replay, exact stress trial_10, and unchanged audio-output normal/race characterization pass at the final integrated-main source; the coverage failure is not C111-owned",
-    "resubmissionHead": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
+    "postRejectionLocalRepair": "After the no-reset b8650efd current-main merge, C111 contract, Wire, four named regressions, external consumer, both owned verifiers, and an unfiltered continuation race run pass; the coverage failure remains outside C111 ownership",
+    "resubmissionHead": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94",
     "statusAtInspection": "completed_failure",
     "observedCompletedRun": true,
     "claimedGreen": false
@@ -326,7 +326,7 @@
     "status": "all known review findings have a repair commit and final-head causal validation; no self-review performed"
   },
   "latestLocalRerun": {
-    "sourceRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
+    "sourceRevision": "5d5bfe72c9f2d7495e08ca4ef2c05f2b37cc0c94",
     "causal": {
       "command": "GOWORK=off YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 120s -- go test ./test/integration -run '^TestAgentBinaryTest46HighRateToolAudioRegression/trial_10$' -count=1 -timeout 120s -v",
       "result": "passed",
@@ -356,11 +356,11 @@
       "processGroupsReaped": true,
       "outputCapExceeded": false
     },
-    "scriptCI": "latest rejection run 34766920601 was inspected at pre-registry head 6525d6c; final implementation head d9e1458 integrates current origin/main plus the released registry entry and this changed evidence checkpoint is ready for script CI submission with no CI-green claim"
+    "scriptCI": "latest rejection run 34768795618 was inspected at head 3e9c6e67; current implementation head 5d5bfe7 integrates b8650efd plus the released registry entry, and the changed evidence checkpoint is ready for script CI submission with no CI-green claim"
   },
   "handoff": {
-    "ci": "run 34766920601 was inspected at pre-registry head 6525d6c: CI (coverage) failed unchanged agent-cli/internal/services/agentsession at 61.80% versus its 80.00% floor, while hermetic, integration, race, static, unit, WebMCP, macOS, and Windows completed successfully; the exact log and ownership analysis are in ci-rejection-34766920601.json, and no C111 repair is demonstrated",
+    "ci": "run 34768795618 was inspected at head 3e9c6e67: CI (coverage) failed unchanged agent-cli/internal/services/agentsession at 61.80% versus its 80.00% floor after the full 304.260s integration run, while hermetic, integration, race, static, unit, WebMCP, macOS, and Windows completed successfully; the exact log and ownership analysis are in ci-rejection-34768795618.json, and no C111 repair is demonstrated",
     "review": "prior independent findings and the exact image-continuation rejection are repaired at e618a6a33/4921c3751f0; no self-review performed",
-    "nextAction": "Commit and push this exact-head evidence checkpoint, update PR #496, and return ACCEPTED to the script-owned CI gate without polling; on any C111-specific rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge."
+    "nextAction": "Commit and push the current-main merge and exact rejection evidence, update PR #496, and return ACCEPTED to the script-owned CI gate without polling; on any C111-specific rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge."
   }
 }

@@ -1,0 +1,40 @@
+{
+  "schema": "audio-runtime.c111.ci-rejection.v1",
+  "run": 34768795618,
+  "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34768795618",
+  "head": "3e9c6e67cceacaa978c0494039713ebdd62efcc8",
+  "conclusion": "failure",
+  "failedChecks": [
+    {
+      "name": "CI (coverage)",
+      "job": 103754464594,
+      "step": "Run coverage profiles and coverage gate",
+      "command": "make coverage",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession",
+      "expectedMinimum": "80.00%",
+      "actual": "61.80%",
+      "delta": "-18.20%",
+      "logExcerpt": [
+        "agent-cli/test/integration completed successfully in 304.260s",
+        "coverage gate found coverage floor violations:",
+        "- github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession: expected minimum 80.00%, actual 61.80%, delta -18.20%",
+        "exit status 1",
+        "make: *** [Makefile:303: coverage] Error 1"
+      ]
+    }
+  ],
+  "passedChecks": [
+    "CI (hermetic)",
+    "CI (integration)",
+    "CI (race)",
+    "WebMCP Chrome",
+    "macOS audio release",
+    "Windows audio portable",
+    "unit",
+    "static"
+  ],
+  "inspection": "Exact failed log inspected with gh run view 34768795618 --repo portpowered/go-agent-harness --job 103754464594 --log-failed.",
+  "ownership": "The C111 diff does not change agent-cli/internal/services/agentsession, its tests, or the 80.00% floor. No C111-owned cause is demonstrated; do not lower the floor, absorb peer paths, or claim CI green.",
+  "nextAction": "Preserve this unchanged peer coverage rejection, submit the changed current-main C111 head to the script-owned CI gate, and retain the same task for any C111-specific rejection.",
+  "claimedGreen": false
+}
