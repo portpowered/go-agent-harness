@@ -9,25 +9,25 @@
   "ancestry": {
     "accepted_source": {
       "ancestor": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-      "descendant": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
+      "descendant": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
       "exit_code": 0,
       "passed": true
     },
     "baseline": {
       "ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
-      "descendant": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
+      "descendant": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
       "exit_code": 0,
       "passed": true
     },
     "current_origin_main": {
-      "ancestor": "3963bc3566da24f8214634c17a9d0f79a6724171",
-      "descendant": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
+      "ancestor": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+      "descendant": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
       "exit_code": 0,
       "passed": true
     },
     "startup_integration": {
       "ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-      "descendant": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
+      "descendant": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
       "exit_code": 0,
       "passed": true
     }
@@ -42,18 +42,18 @@
   "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
   "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
   "candidate_pr": {
-    "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+    "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
     "base_branch": "main",
-    "head": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
+    "head": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
     "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "number": 494,
     "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
     "task_work_id": "work-task-218"
   },
-  "candidate_revision": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
+  "candidate_revision": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
   "contract_revision": "audio-runtime-v1",
   "credentials": "not used; command environment for public replay removes credential variables",
-  "current_origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
+  "current_origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
   "factory_server": "http://127.0.0.1:7439",
   "factory_session": "~default",
   "fetch": {
@@ -67,7 +67,7 @@
     "stderr_sha256": "54b759e2f9e31c5995466467866508754527b8f2fd6fc1d047eb9db48c604c61",
     "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
-  "observed_at": "2026-09-13T03:00:19Z",
+  "observed_at": "2026-09-13T03:40:51Z",
   "prd_identity": {
     "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "project": "audio-runtime"

@@ -133,9 +133,20 @@
       "work_type": "review"
     },
     {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR #494 current head f7b28826ee39f617941d587b934654861cb09c42 has all nine required checks green (run 34734731495), and independent build, help, replay, focused, and race checks passed. Evidence is stale: verification-summary.json, provenance.json, state-capture.json, pr-inventory.json, public/regression reports and negative-controls report still bind to b91853cfb315c80137d01da8b2b6e8e31e27ce06; validate-copy nevertheless passes. Same executor must recapture current board/PR state, regenerate all head-bound evidence and SHA256SUMS at the final pushed HEAD, preserve deletion-row/PR-438/active-task negative controls and cumulative regressions, commit only the owned C107 directory, submit the changed exact head to SCRIPT CI without polling, and request fresh review. Do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-286",
+      "work_type": "review"
+    },
+    {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"branch\": \"codex/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
       "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "rejection_feedback": "PR 494 is green at current head 8853510dad106948b4594aa657866ac05ccec3e2 (run 34731886748, all 9 required checks), and independent analyzer, YUI replay, focused and race checks pass. However, checked-in verification-summary.json, provenance.json, state-capture.json, pr-inventory.json and public/regression reports still bind to f741115c90163e83542bf3302e98bb0dc32ba5b9. Repair the release binding workflow, regenerate all head-bound evidence against the final pushed head/current board, update SHA256SUMS, push only owned paths, submit the changed head to SCRIPT CI without polling, and request fresh review. Do not merge.",
+      "rejection_feedback": "PR #494 current head f7b28826ee39f617941d587b934654861cb09c42 has all nine required checks green (run 34734731495), and independent build, help, replay, focused, and race checks passed. Evidence is stale: verification-summary.json, provenance.json, state-capture.json, pr-inventory.json, public/regression reports and negative-controls report still bind to b91853cfb315c80137d01da8b2b6e8e31e27ce06; validate-copy nevertheless passes. Same executor must recapture current board/PR state, regenerate all head-bound evidence and SHA256SUMS at the final pushed HEAD, preserve deletion-row/PR-438/active-task negative controls and cumulative regressions, commit only the owned C107 directory, submit the changed exact head to SCRIPT CI without polling, and request fresh review. Do not merge.",
       "state": {
         "name": "init",
         "type": "PROCESSING"
@@ -221,11 +232,22 @@
       "work_type": "review"
     },
     {
+      "last_output": "",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "rejection_feedback": "PR #495 head 509a3a8df8ed0ae4027a5177cabeb1bc2f1b2649 has all nine current-head CI lanes green in run 34733735358, but the evidence analyzer is incorrect. analyze.py omits '.' tokens, constructs duplicated module import paths, matches bare names across packages, and mislabels anonymous func closures; the checked-in ledger consequently reports 372 C83→C61 edges, including 50 edges targeting the keyword for, with zero qualified/public-import edges. C83 actually imports browserrunner only and its standalone packages compile, so c83_requires_c61_api=true is unsupported. Fix analyzer package/type resolution and add regressions for anonymous functions, qualified symbols, module paths, and same-name cross-package symbols. Then regenerate both required/control evidence, verification.json, and both public reports from clean pinned trees; rerun verify.py --mode all, both bounded public cases, git diff --check, push the same task/PR, and submit the new exact head to script CI. Preserve ci-rejection-34732547786.json and C79/provider-audio ownership; do not relabel or repair it in C109. Separately, prd.json references missing factory/docs/implementation-handoff.md; reconcile that sourcePlanRef before the next review without inventing approval evidence. Independent live public checks passed, but they do not clear this ledger defect.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-284",
+      "work_type": "review"
+    },
+    {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration\", \"branch\": \"codex/audio-runtime-c109-characterize-browser-retirement-integration\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
       "name": "audio-runtime-c109-characterize-browser-retirement-integration",
-      "rejection_feedback": "CI checks failed for PR #495 at head 0185f03afbd2bf81e6d2cdb32d3a1586576aad7d: required checks failed on current head 0185f03afbd2bf81e6d2cdb32d3a1586576aad7d: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34732547786/job/103657892852). Return this task to the executor with the listed failures.",
+      "rejection_feedback": "PR #495 head 509a3a8df8ed0ae4027a5177cabeb1bc2f1b2649 has all nine current-head CI lanes green in run 34733735358, but the evidence analyzer is incorrect. analyze.py omits '.' tokens, constructs duplicated module import paths, matches bare names across packages, and mislabels anonymous func closures; the checked-in ledger consequently reports 372 C83→C61 edges, including 50 edges targeting the keyword for, with zero qualified/public-import edges. C83 actually imports browserrunner only and its standalone packages compile, so c83_requires_c61_api=true is unsupported. Fix analyzer package/type resolution and add regressions for anonymous functions, qualified symbols, module paths, and same-name cross-package symbols. Then regenerate both required/control evidence, verification.json, and both public reports from clean pinned trees; rerun verify.py --mode all, both bounded public cases, git diff --check, push the same task/PR, and submit the new exact head to script CI. Preserve ci-rejection-34732547786.json and C79/provider-audio ownership; do not relabel or repair it in C109. Separately, prd.json references missing factory/docs/implementation-handoff.md; reconcile that sourcePlanRef before the next review without inventing approval evidence. Independent live public checks passed, but they do not clear this ledger defect.",
       "state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "work_id": "work-task-224",
@@ -314,7 +336,7 @@
       "rejection_feedback": "",
       "state": {
         "name": "init",
-        "type": "PROCESSING"
+        "type": "INITIAL"
       },
       "work_id": "work-task-268",
       "work_type": "task"
@@ -885,8 +907,8 @@
       "name": "audio-runtime-c79-retire-cli-response-lifecycle",
       "rejection_feedback": "Independent GOWORK=off probes show malformed tool events are accepted: orphan EventToolResultAccepted mutates continuation state, and EventToolCall with foreign ResponseID is Accepted=true (continuation.go:10-44). Fix ownership/conflicting-ID validation while preserving valid early results within an active lifecycle; make the CLI adapter retain unresolved state on rejection and add regressions. Evidence is stale: ledgers and replay artifacts cite 7dc1429, not reviewed HEAD a9099ec. Rebuild yui, rerun all verify.py modes and three run.py cases, refresh exact provenance, commit/push, and submit changed-head CI. Preserve prior cumulative regressions; do not merge.",
       "state": {
-        "name": "failed",
-        "type": "FAILED"
+        "name": "init",
+        "type": "PROCESSING"
       },
       "work_id": "work-task-114",
       "work_type": "task"
@@ -1090,6 +1112,6 @@
       "work_type": "task"
     }
   ],
-  "observed_at": "2026-09-13T03:00:18Z",
+  "observed_at": "2026-09-13T03:40:50Z",
   "schema_version": "c107-previous-review-findings-v1"
 }

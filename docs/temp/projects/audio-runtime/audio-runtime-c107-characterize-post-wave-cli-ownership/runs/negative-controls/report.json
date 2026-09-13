@@ -2,7 +2,7 @@
   "active_task_head_mutation": {
     "diagnostic": "{\"error\": \"subtraction active-task identity mismatch: audio-runtime-c107-characterize-post-wave-cli-ownership fields=['head']\", \"mode\": \"validate-copy\", \"status\": \"failed\"}",
     "exit_code": 1,
-    "mutated_from": "b91853cfb315c80137d01da8b2b6e8e31e27ce06",
+    "mutated_from": "57b422242f3e646079ab6f858afcd3bbef5ea4c8",
     "mutated_to": "0000000000000000000000000000000000000000",
     "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership"
   },
@@ -19,9 +19,9 @@
     "self_reported_retirement_list_adjusted": true
   },
   "pristine_validation": {
-    "active_tasks": 9,
+    "active_tasks": 10,
     "owned_source_paths": 84,
-    "preserved_checkpoints": 56,
+    "preserved_checkpoints": 55,
     "retirement_pr_numbers": [
       365,
       415,
@@ -77,7 +77,6 @@
       499,
       500,
       501,
-      502,
       503
     ],
     "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
