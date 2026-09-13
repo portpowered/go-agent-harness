@@ -15,7 +15,7 @@
       "500",
       "--all"
     ],
-    "payload_sha256": "76c0c55bfd7cf7248baf433cbc9d3276532ef1ec4396018a6b9357ca3feb4fa4",
+    "payload_sha256": "98aef6444c6a8b9676163620b2c57b7c267b4dd01332993b279e99ad5ca7b8ac",
     "rows": [
       {
         "baseRevision": null,
@@ -636,6 +636,7 @@
           "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
           "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
           "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+          "agent-cli/internal/services/internal/agentruntime/session_diagnostics_test.go",
           "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
           "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
           "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
@@ -676,102 +677,102 @@
           "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
           "scripts/wire-packages.txt"
         ],
-        "sha256": "5b221d18f4a615057ef4628b37544f13d5b97a6637066eaa2cb6b763c0e10afd"
+        "sha256": "853952f358f7c1c8967073490365118bdccc74037a4ade0487846cf6fc7943f2"
       },
       "metadata": {
         "baseRefName": "main",
         "headRefName": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-        "headRefOid": "a9099ec555644517fc10f0d4ecbddd3f3cf7c56b",
+        "headRefOid": "99bc9500634676182e987711e21da805b8837ead",
         "number": 470,
         "state": "OPEN",
         "statusCheckRollup": [
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T02:25:47Z",
-            "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697025",
+            "completedAt": "2026-09-13T03:53:37Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34736382993/job/103668456377",
             "name": "CI (static)",
-            "startedAt": "2026-09-13T02:21:07Z",
+            "startedAt": "2026-09-13T03:48:26Z",
             "status": "COMPLETED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T02:23:07Z",
+            "completedAt": "2026-09-13T03:50:25Z",
             "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697090",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34736382993/job/103668456420",
             "name": "CI (unit)",
-            "startedAt": "2026-09-13T02:21:07Z",
+            "startedAt": "2026-09-13T03:48:26Z",
             "status": "COMPLETED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T02:32:26Z",
-            "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658696990",
+            "completedAt": "2026-09-13T03:59:45Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34736382993/job/103668456370",
             "name": "CI (integration)",
-            "startedAt": "2026-09-13T02:21:08Z",
+            "startedAt": "2026-09-13T03:48:26Z",
             "status": "COMPLETED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T02:31:24Z",
-            "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697078",
+            "completedAt": "2026-09-13T03:55:01Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34736382993/job/103668456417",
             "name": "CI (coverage)",
-            "startedAt": "2026-09-13T02:21:07Z",
+            "startedAt": "2026-09-13T03:48:27Z",
             "status": "COMPLETED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T02:22:30Z",
+            "completedAt": "2026-09-13T03:50:07Z",
             "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697011",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34736382993/job/103668456360",
             "name": "CI (race)",
-            "startedAt": "2026-09-13T02:21:07Z",
+            "startedAt": "2026-09-13T03:48:26Z",
             "status": "COMPLETED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T02:30:55Z",
-            "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697024",
+            "completedAt": "2026-09-13T03:56:51Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34736382993/job/103668456462",
             "name": "CI (hermetic)",
-            "startedAt": "2026-09-13T02:21:08Z",
+            "startedAt": "2026-09-13T03:48:26Z",
             "status": "COMPLETED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T02:22:04Z",
+            "completedAt": "2026-09-13T03:49:24Z",
             "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658696928",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34736382993/job/103668456425",
             "name": "CI (WebMCP Chrome)",
-            "startedAt": "2026-09-13T02:21:11Z",
+            "startedAt": "2026-09-13T03:48:31Z",
             "status": "COMPLETED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T02:24:43Z",
+            "completedAt": "2026-09-13T03:52:06Z",
             "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697013",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34736382993/job/103668456460",
             "name": "CI (macOS audio release)",
-            "startedAt": "2026-09-13T02:21:11Z",
+            "startedAt": "2026-09-13T03:48:31Z",
             "status": "COMPLETED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T02:22:09Z",
+            "completedAt": "2026-09-13T03:49:38Z",
             "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34732829282/job/103658697072",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34736382993/job/103668456356",
             "name": "CI (Windows audio portable)",
-            "startedAt": "2026-09-13T02:21:08Z",
+            "startedAt": "2026-09-13T03:48:26Z",
             "status": "COMPLETED",
             "workflowName": "CI"
           }
@@ -782,7 +783,7 @@
     },
     "work": "audio-runtime-c79-retire-cli-response-lifecycle"
   },
-  "current_head": "78e6cb9e2f3d75c04efbbc35a5750f5712a0f3d8",
+  "current_head": "5fb113cf6cf792bde581dcd4f94aef59201356c9",
   "host_source_and_test_paths": {
     "c108_artifacts_at_planning_main": [
       {
@@ -814,8 +815,8 @@
       {
         "exit_code": 0,
         "needle": "TraceAudio",
-        "stdout": "agent-cli/internal/transport/cli/session_observability.go:145:\t\trequest.TraceAudio,\nagent-cli/internal/transport/cli/session_command_support.go:63:\tTraceAudio           bool\nagent-cli/internal/transport/cli/session_command_support.go:141:\t\tTraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed(\"prompt\")},\nagent-cli/internal/transport/cli/session.go:486:\t\t\t\tTraceAudio: traceAudio, Transport: transport, Signaling: signaling,\nagent-cli/internal/transport/cli/internal/livehost/run_trace_test.go:31:\t\t\trequest := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, \"bundle\")}\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:66:\t\t\tassertTraceAudioFrame(t, frame, wantSamples)\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:80:func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {\nagent-cli/internal/transport/cli/internal/livehost/run.go:172:\t\tif err != nil || !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/run.go:210:\tif !request.TraceAudio {\n",
-        "stdout_sha256": "e2034284e162b95b0fd7578480b23923b314ccf4d4be5d7833782dbb79e71fed"
+        "stdout": "agent-cli/internal/transport/cli/session_observability.go:145:\t\trequest.TraceAudio,\nagent-cli/internal/transport/cli/session_command_support.go:63:\tTraceAudio           bool\nagent-cli/internal/transport/cli/session_command_support.go:141:\t\tTraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed(\"prompt\")},\nagent-cli/internal/transport/cli/session.go:486:\t\t\t\tTraceAudio: traceAudio, Transport: transport, Signaling: signaling,\nagent-cli/internal/transport/cli/internal/livehost/run.go:172:\t\tif err != nil || !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/run.go:210:\tif !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:71:\t\t\tassertTraceAudioFrame(t, frame, wantSamples)\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:85:func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:215:\t\t\trequest := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, \"bundle\")}\n",
+        "stdout_sha256": "34d3677a2b9e725db8d17a50dee9288dc201d53b8e0b687fd98a46c1a410a1d6"
       },
       {
         "exit_code": 1,
@@ -833,10 +834,10 @@
         "present_current": true
       },
       {
-        "current_sha256": "e6e90545d3946b921193eeef6cb17465fd31b1f56fb252d7c7de28db4395ef3f",
-        "path": "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go",
-        "planning_main_sha256": null,
-        "present_at_planning_main": false,
+        "current_sha256": "f5bb9339aa57fb7a9571609ab5aefd36c527e6581c36abe9fbb432c940ef4317",
+        "path": "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
+        "planning_main_sha256": "fc12cc3243ade701c5a65adb98cc709f8bbf0574838c0d8dc4e582b7d07b50c9",
+        "present_at_planning_main": true,
         "present_current": true
       },
       {
@@ -884,6 +885,7 @@
       "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
       "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
       "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_test.go",
       "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
       "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
       "agent-cli/internal/services/internal/agentruntime/session_liveness.go",

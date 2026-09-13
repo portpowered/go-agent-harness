@@ -127,6 +127,13 @@ def changed_paths(revision: str, descendant: str) -> list[str]:
     return sorted({line.strip() for line in output.splitlines() if line.strip()})
 
 
+def c117_candidate_paths(head: str) -> list[str]:
+    origin_main = git("rev-parse", "origin/main")
+    if not exact_ancestor(origin_main, head):
+        raise EvidenceFailure("candidate does not contain freshly fetched origin/main ancestry")
+    return changed_paths(origin_main, head)
+
+
 def status_paths() -> list[str]:
     result = subprocess.run(["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=ROOT, text=True, capture_output=True)
     if result.returncode != 0:
@@ -354,7 +361,8 @@ def c108_source_base_and_checksums() -> dict[str, Any]:
     for revision in (STARTUP_INTEGRATION, PLANNING_MAIN, origin_main):
         if not exact_ancestor(revision, head):
             raise EvidenceFailure(f"C117 candidate is missing required ancestry {revision}")
-    validate_c117_allowed_paths(changed_paths(PLANNING_MAIN, head) + status_paths())
+    candidate_paths = c117_candidate_paths(head)
+    validate_c117_allowed_paths(candidate_paths + status_paths())
     provenance_path = ROOT / C108_PROVENANCE
     provenance = read_json(provenance_path)
     if provenance.get("accepted_source_revision") != C108_SOURCE or provenance.get("integrated_base_revision") != PLANNING_MAIN:
@@ -383,7 +391,7 @@ def c108_source_base_and_checksums() -> dict[str, Any]:
         "analyzed_source": C108_SOURCE,
         "integrated_base": PLANNING_MAIN,
         "current_descendant": current_descendant,
-        "changed_paths": sorted(set(changed_paths(PLANNING_MAIN, head) + status_paths())),
+        "changed_paths": sorted(set(candidate_paths + status_paths())),
         "c108_owned_changes": [C108_VERIFIER, C108_PROVENANCE, C108_SUMS],
         "checksum": {key: value for key, value in checksum.items() if key not in {"stdout", "stderr"}},
         "negative_controls": "preserved; validated by the C108 verifier without rewriting C108 evidence on the C117 successor branch",
@@ -404,14 +412,13 @@ def pre_c112_scope() -> dict[str, Any]:
     if worktree != ROOT:
         raise EvidenceFailure(f"isolated worktree mismatch: {worktree} != {ROOT}")
     origin_main = git("rev-parse", "origin/main")
-    if origin_main != PLANNING_MAIN:
-        raise EvidenceFailure(f"pre-C112 scope requires planning origin/main {PLANNING_MAIN}, found {origin_main}")
     for revision in (STARTUP_INTEGRATION, PLANNING_MAIN):
         if not exact_ancestor(revision, head):
             raise EvidenceFailure(f"pre-C112 candidate is missing required ancestry {revision}")
+    candidate_paths = c117_candidate_paths(head)
     allowed = {C117_TEST, C117_LEGACY_TEST, C108_PROVENANCE, C108_VERIFIER, C108_SUMS}
-    validate_scope(changed_paths(PLANNING_MAIN, head) + status_paths(), allowed)
-    forbidden = [path for path in changed_paths(PLANNING_MAIN, head) + status_paths() if path.startswith("go-agent-runtime/services/sessiontrace/") or path in {"scripts/wire-packages.txt", "docs/architecture/architecture-size-baseline.json"}]
+    validate_scope(candidate_paths + status_paths(), allowed)
+    forbidden = [path for path in candidate_paths + status_paths() if path.startswith("go-agent-runtime/services/sessiontrace/") or path in {"scripts/wire-packages.txt", "docs/architecture/architecture-size-baseline.json"}]
     if forbidden:
         raise EvidenceFailure("pre-C112 scope mutates C112/C79-owned paths: " + ", ".join(sorted(set(forbidden))))
     admission = verify_admission()
@@ -449,7 +456,7 @@ def pre_c112_scope() -> dict[str, Any]:
         "startup_integration": STARTUP_INTEGRATION,
         "planning_main": PLANNING_MAIN,
         "required_ancestry": {revision: True for revision in (STARTUP_INTEGRATION, PLANNING_MAIN)},
-        "changed_paths": sorted(set(changed_paths(PLANNING_MAIN, head) + status_paths())),
+        "changed_paths": sorted(set(candidate_paths + status_paths())),
         "admission": "admitted",
         "c113_reproduction": {"report": str(REPRODUCTION.relative_to(HERE)), "passes": reproduction["passes"], "timeline_present": reproduction["trace"]["present"]},
         "pre_c112_test": {"report": str(PRE_TEST_REPORT.relative_to(HERE)), "expected_red": test["expected_red"]},

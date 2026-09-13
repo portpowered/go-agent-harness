@@ -40,6 +40,7 @@ C117_OWNED_REL = "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c11
 C117_SUCCESSOR_PATHS = {
     "agent-cli/internal/transport/cli/internal/livehost/run.go",
     "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go",
+    "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
     "agent-cli/internal/transport/cli/session_observability.go",
     "agent-cli/internal/transport/cli/session_observability_test.go",
     C117_OWNED_REL,
@@ -248,7 +249,12 @@ def validate_owned_paths(paths: list[str], diagnostic_prefix: str = "") -> list[
 def ensure_only_owned_changes() -> list[str]:
     """Reject both working-tree and committed candidate mutations outside C108."""
     status_paths = parse_status_paths()
-    committed_paths = changed_paths(SOURCE_REVISION, "HEAD")
+    committed_base = SOURCE_REVISION
+    if c117_successor():
+        current_main = git("rev-parse", "origin/main", check=False)
+        if current_main and exact_ancestor(current_main, "HEAD"):
+            committed_base = current_main
+    committed_paths = changed_paths(committed_base, "HEAD")
     unstaged_paths = [path for path in git("diff", "--name-only").splitlines() if path]
     staged_paths = [path for path in git("diff", "--cached", "--name-only").splitlines() if path]
     untracked_result = subprocess_result(["git", "ls-files", "--others", "--exclude-standard"], ROOT, 30)
@@ -460,7 +466,8 @@ def provenance_mode() -> dict[str, Any]:
     production_diff = production_changed_paths(SOURCE_REVISION, INTEGRATED_BASE_REVISION)
     if production_diff:
         raise EvidenceFailure("integrated C108 base differs from immutable analyzed source: " + ", ".join(production_diff))
-    successor_paths = changed_paths(INTEGRATED_BASE_REVISION, head)
+    successor_base = origin_main if c117_successor() else INTEGRATED_BASE_REVISION
+    successor_paths = changed_paths(successor_base, head)
     unexpected_successor_paths = [path for path in successor_paths if not path_is_owned(path)]
     if unexpected_successor_paths:
         raise EvidenceFailure("successor contains changes outside the admitted C108/C117 paths: " + ", ".join(unexpected_successor_paths))

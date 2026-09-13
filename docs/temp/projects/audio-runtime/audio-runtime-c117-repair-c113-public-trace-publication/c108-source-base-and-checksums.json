@@ -8,7 +8,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/SHA256SUMS"
   ],
   "changed_paths": [
-    "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go",
+    "agent-cli/internal/transport/cli/internal/livehost/trace_test.go",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/SHA256SUMS",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py",
@@ -19,6 +19,7 @@
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/pre-c112-scope.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/reproduce_c113.py",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/c113-reproduction.json",
+    "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/package-budget-repair.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/pre-c112-test.json",
     "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/verify.py"
   ],
@@ -31,16 +32,16 @@
       "SHA256SUMS"
     ],
     "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication/docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps",
-    "elapsed_seconds": 0.104,
+    "elapsed_seconds": 0.037,
     "exit_code": 0,
     "timed_out": false
   },
-  "current_descendant": "aedfb8fcfad94bb8725ee029f2f43b55fe75615e",
-  "head": "78e6cb9e2f3d75c04efbbc35a5750f5712a0f3d8",
+  "current_descendant": "5fb113cf6cf792bde581dcd4f94aef59201356c9",
+  "head": "5fb113cf6cf792bde581dcd4f94aef59201356c9",
   "integrated_base": "3963bc3566da24f8214634c17a9d0f79a6724171",
   "native_windows_hardware_and_acoustics": "OUT_OF_SCOPE_AND_NEVER_PASS",
   "negative_controls": "preserved; validated by the C108 verifier without rewriting C108 evidence on the C117 successor branch",
-  "origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
+  "origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
   "passes": true,
   "schema_version": "audio-runtime-c117-c108-source-base-checksums-v1",
   "startup_integration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
