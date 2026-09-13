@@ -27,3 +27,13 @@ It passed in `24.991s` total (`12.39s` subtest), with the named subtest reportin
 The current PR #496 head `b5f6e422` has unit, race, integration, coverage, hermetic, WebMCP Chrome, macOS audio software, and Windows portable software checks green. Static fails only at `make wire-check` and `make architecture-size-check` because `go-agent-runtime/services/sessioncontinuation/wire/wire_gen.go` is not yet registered; C79/work-task-114 exclusively owns that shared registry and architecture baseline and has not released them. The isolated worktree remains clean and the shared paths remain untouched.
 
 After C79's reviewed guarded merge explicitly releases those files, fetch and merge the then-current `origin/main` without reset, apply only the demonstrated C111 Wire registration and any directly demonstrated downward baseline delta, rerun bounded gates, update PR #496, and submit that changed head to Script CI without polling. Until then, retain this same task and do not edit the shared files.
+
+## Fresh current-main revalidation
+
+After the no-reset merge of freshly fetched `origin/main` `071b0abfd67501db61e3c1929971c6dd6e77eb62`, source revision `eea5834ebe11d4bdb1a88d6bb369dcb2f7d75c25` passed the same bounded characterization:
+
+```text
+GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v
+```
+
+The command exited `0` in `22.211s`; the named `provider_burst` subtest passed in `12.44s`, with the strict final PCM marker reached. The prior timeout did not reproduce, so no C111-owned repair was made; retain the separate C64 terminal-drain observation if it recurs. Post-merge public replay and the four accumulated C111 regressions also exited `0` with bounded, reaped process groups. Script CI remains the next external gate and is not claimed green.

@@ -14,7 +14,7 @@
     "startupIsAncestor": true,
     "acceptedMainIsAncestor": true,
     "integratedMainIsAncestor": true,
-    "integratedMainRevision": "1a8467246c6607a06ffc7289075da2595724ce8b",
+    "integratedMainRevision": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
     "prdBranchMatches": true,
     "baselineRevision": "d4766c3dbbf2c198142047ead4449d58dd47d485"
   },
@@ -101,6 +101,49 @@
       "sourceRevision": "ea515cb356047e7b014247f44cfc1cddc90ff6a5"
     }
   ],
+  "postMergeValidation": {
+    "sourceRevision": "eea5834ebe11d4bdb1a88d6bb369dcb2f7d75c25",
+    "freshOriginMain": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+    "verification": {
+      "result": "accepted",
+      "artifact": "artifacts/verify-1789299769-61869.json",
+      "sha256": "83b1119ad811a5f63a4dfc47d4dee7346f4771d89f314a05edad2c30014fcefe",
+      "checks": "runtime contract, race, GOWORK=off external consumer, and four accumulated regressions; all exited 0, timed_out=false, reaped=true",
+      "retirement": "147-line immutable baseline/hash verified; 57-line legacy adapter; owned-path verifier accepted",
+      "coverageRegistration": "188 workspace packages across 6 modules"
+    },
+    "publicReplay": {
+      "result": "accepted",
+      "artifact": "artifacts/run-1789299913-65449.json",
+      "sha256": "b53d6afac2bd22d234c50b5a4852d2fc81fe429004feb27dea432e1c210e9fc9",
+      "binaryBytes": 51139410,
+      "binarySha256": "45db870aeeb79091cd291c3692071a207c01eb84a0b72bf05de07814b8024f7a",
+      "credentialFree": true,
+      "realtimeSessions": 0,
+      "cases": ["missing-tool-continuation", "corrupt-audio-delta", "non-tool-audio-regression"],
+      "processGroupsReaped": true,
+      "outputCapExceeded": false
+    },
+    "highRateCharacterization": {
+      "command": "GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v",
+      "result": "passed",
+      "durationSeconds": 22.211,
+      "subtestDurationSeconds": 12.44,
+      "priorFailureReproduced": false,
+      "repair": "none; no C111-owned cause demonstrated"
+    },
+    "quality": [
+      "make fmt passed",
+      "make wire-check passed: 12 Wire packages regenerated without drift",
+      "make architecture-size-check passed: 198 packages, 1926 files, 28335 functions",
+      "make coverage-registration passed: 188 workspace packages across 6 modules",
+      "make vet passed",
+      "make lint passed: pinned golangci-lint 2.9.0, 0 issues across 15 modules",
+      "make staticcheck passed: pinned staticcheck 2026.1 across 15 modules",
+      "git diff --check passed"
+    ],
+    "scriptCI": "not submitted yet; no CI green claim"
+  },
   "accumulatedRegressions": {
     "result": "passed",
     "command": "COUNT=1 bash scripts/test-session-ci-regressions.sh all",
@@ -149,7 +192,7 @@
     "status": "released by reviewed guarded merge; current origin/main integrated",
     "wireRegistry": {
       "path": "scripts/check-wire.py (auto-discovery)",
-      "gateResult": "make wire-check passed: 10 Wire packages discovered, including sessioncontinuation",
+      "gateResult": "make wire-check passed: 12 Wire packages discovered, including sessioncontinuation",
       "c111Registration": "docs/architecture/architecture-policy.json generated_files entry"
     },
     "architectureBaseline": {
@@ -164,7 +207,7 @@
     }
   },
   "currentOriginMain": {
-    "revision": "1a8467246c6607a06ffc7289075da2595724ce8b",
+    "revision": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
     "integrated": true,
     "reason": "C79 reviewed guarded merge released the shared prerequisites; integrated with a no-reset merge commit"
   },
@@ -209,6 +252,6 @@
   "handoff": {
     "ci": "completed run 34729269748 inspected for exact failure; current integrated candidate is ready for a fresh script CI submission; no CI green claim",
     "review": "not self-reviewed; no C111 review findings were present at admission",
-    "nextAction": "Push ea515cb and the evidence-only update, update PR #496, and submit this same task to script CI without polling; on any exact rejection inspect its logs, repair the same task, and resubmit before independent review and guarded merge."
+    "nextAction": "Commit and push the fresh-current-main provenance/evidence checkpoint, update PR #496, and submit this same task to script CI without polling; on any exact rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge."
   }
 }
