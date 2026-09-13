@@ -122,3 +122,12 @@ virtual audio-device setup errors. Its captured output SHA-256 is
 `7899403245aa2dc21d56e7c36aeb28142a7a29273b6048173c7db5192c12fa5e`. The
 second same-command rerun passed; its captured output SHA-256 is
 `50775893e240d7b364ec1162979ed916553d2d25ca8a9a45a93d0b838f070ae3`.
+
+## SCRIPT CI handoff
+
+- Implementation checkpoint commit: `fa598fca7ac70ae531d56d68d4626d9c96a52816`.
+- Pushed branch: `codex/audio-runtime-c156-repair-agentsession-coverage-regression`.
+- Pull request opened: `https://github.com/portpowered/go-agent-harness/pull/517`.
+- The executor stops here after submitting the exact pushed candidate to SCRIPT
+  CI. CI owns current-head polling and any rejection returns to this same task;
+  no CI status is inferred or claimed by this evidence.
