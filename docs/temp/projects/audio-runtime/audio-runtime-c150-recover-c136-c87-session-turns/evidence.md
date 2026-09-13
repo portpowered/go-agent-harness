@@ -55,3 +55,43 @@ Next action: integrate the preserved C136 implementation into this C150
 worktree without losing current-main or peer ancestry, then wait for or verify
 release of the exact shared leases before applying only the demonstrated
 session-turns registry and downward baseline repairs.
+
+## Adopted candidate focused recheck — 2026-09-13
+
+The C150 branch preserves the exact C136 checkpoint through merge commit
+`7fee7f7826a16a898557d95c171b79ce4f18feef` and the verifier-only checkpoint
+`8a3a5b9`. The C136 evidence file's carried-forward append has SHA-256
+`e10d62497e8b8a293574e482c754e4f863800c57c97a991da360f2a47b0f7a77`, equal
+to the untouched C136 worktree file. Required startup, C136, and fresh-main
+ancestry checks pass; `git diff --check` is clean and the C136 checkout remains
+dirty only in its original evidence file.
+
+Focused evidence on the adopted candidate:
+
+- sessionturns normal and race tests: 48 passed in three packages each;
+- deprecated CLI compatibility: 6 normal and 2 race tests passed;
+- GOWORK=off external consumer: passed;
+- inherited mutation, retirement/adapter, and owned/excluded-path verifiers:
+  passed after allowing only the C150 evidence namespace;
+- bounded credential-free audio/tool and interruption/tool runner: both cases
+  passed with bounded output, reaped children, and zero survivors;
+- accumulated session regressions: normal, coverage, and race passed, including
+  all 20 high-rate trials and expected negative controls;
+- targeted vet, pinned staticcheck 2026.1, pinned golangci-lint 2.9.0, format,
+  Wire regeneration/check, coverage registration (195 packages across six
+  modules), and diff checks: passed.
+
+The bounded architecture check still reports exactly the known 13 findings:
+the twelve stale session-turns entries and the unregistered
+`go-agent-runtime/services/sessionturns/wire/wire_gen.go`. C110 PR #497, C111
+PR #496, and C119 PR #505 are still open, so C150 has not edited either shared
+registry/policy path. The WebMCP TempDir failure remains out-of-lease and
+non-reproduced (10/10 normal and 5/5 coverage focused repetitions); it is not
+called fixed. No CI-green, review, merge, vertical, or project-acceptance claim
+is made.
+
+Next action: recheck the exact C110/C111/C119 guarded-merge lease state; once
+released, fetch current main, apply only the demonstrated sessionturns Wire
+registration and twelve downward baseline deletions while preserving peers,
+rerun the focused and accumulated gates, then push the changed head to PR #513
+through SCRIPT CI without polling.
