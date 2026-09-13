@@ -42,6 +42,8 @@
     {"command": "verify.py --mode retirement-callers-and-c101-readonly", "result": "pass"},
     {"command": "verify.py --mode final-scope-and-provenance", "result": "pass"},
     {"command": "run.py --case c21-rate-consumption --case c50-audio-tool-replay --case room-scheduled-audio", "result": "pass"},
+    {"command": "go test ./go-device-gateway/pkg/runtime ./go-device-gateway/pkg/devices -run 'TestC21|TestDeviceSinkSampleOnly' -count=1", "result": "pass"},
+    {"command": "go test -race ./go-device-gateway/pkg/runtime ./go-device-gateway/pkg/devices -run 'TestC21|TestDeviceSinkSampleOnly' -count=1", "result": "pass"},
     {"command": "make fmt && make vet && make lint && make staticcheck && make size-check && make coverage-registration", "result": "pass"},
     {"command": "make test-architecture-gate", "result": "pass"},
     {"command": "git diff --check", "result": "pass"}

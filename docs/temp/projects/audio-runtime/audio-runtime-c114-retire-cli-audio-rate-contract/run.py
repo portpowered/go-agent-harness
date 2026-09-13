@@ -18,8 +18,8 @@ ROOT = HERE.parents[4]
 RUNS = HERE / "runs"
 CASES = {
     "c21-rate-consumption": [
-        "go", "test", "./go-agent-runtime/services/audiorate/...",
-        "-run", "Test(Convert|Resolve|Configure|Service|NewService)", "-count=1", "-timeout=180s",
+        "go", "test", "./go-agent-runtime/services/audiorate/...", "./go-device-gateway/pkg/runtime", "./go-device-gateway/pkg/devices",
+        "-run", "Test(Convert|Resolve|Configure|Service|NewService|C21|DeviceSinkSampleOnly)", "-count=1", "-timeout=240s",
     ],
     "c50-audio-tool-replay": [
         "go", "test", "./agent-cli/internal/services/internal/agentruntime",

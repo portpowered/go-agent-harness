@@ -31,6 +31,7 @@ Passed local evidence:
 - audiorate normal and race tests, focused CLI audio/rate/replay/scheduled tests, and the GOWORK-off consumer;
 - bounded `verify.py` positive/causal-negative, retirement/C101-read-only, and final-scope modes;
 - bounded `run.py` cases `c21-rate-consumption`, `c50-audio-tool-replay`, and `room-scheduled-audio`;
+- C21 runtime/device sink consumption boundaries passed in normal and race modes; these are simulated callback/software observations, not physical or acoustic proof;
 - `make fmt`, `make vet`, pinned `make lint` (golangci-lint v2.9.0), pinned `make staticcheck` (2026.1), `make size-check`, `make coverage-registration`, and the architecture-gate unit tests;
 - `git diff --check`.
 
