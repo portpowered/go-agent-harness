@@ -14,9 +14,10 @@ injected loader. Resolution rejects malformed or oversized text, preserves
 causes with phase-specific `ResolutionError` values, checks cancellation around
 loader calls, and clones capability snapshots before policy composition. The
 implementation type is unexported under `sessioninstructions/internal/service`;
-the dedicated instruction Wire uses that private provider package, while the
-historical `session/wire` constructor preserves its source-compatible API with
-the session service's own private implementation.
+the dedicated instruction Wire owns construction, while the compatibility
+`session/wire` constructor delegates to that same canonical graph. The
+external consumer constructs two independent public services and verifies that
+their loader state does not cross-contaminate.
 
 The committed verification command is:
 

@@ -16,10 +16,13 @@ import (
 )
 
 const (
-	workspacePath = "/consumer/workspace"
-	agentsText    = "consumer AGENTS instructions"
-	summaryText   = "consumer skill summary"
-	filePrompt    = "consumer file prompt"
+	workspacePath       = "/consumer/workspace"
+	secondWorkspacePath = "/consumer/second-workspace"
+	agentsText          = "consumer AGENTS instructions"
+	secondAgentsText    = "independent alternate AGENTS instructions"
+	summaryText         = "consumer skill summary"
+	secondSummaryText   = "second consumer skill summary"
+	filePrompt          = "consumer file prompt"
 )
 
 type memoryLoader struct {
@@ -62,25 +65,30 @@ func main() {
 }
 
 func run(mode string, report map[string]any) error {
-	service := sessioninstructionswire.NewInstructionService()
+	first := sessioninstructionswire.NewInstructionService()
+	second := sessioninstructionswire.NewInstructionService()
+	if first == nil || second == nil {
+		return errors.New("instruction service construction returned nil")
+	}
+	report["service_instances"] = 2
 	switch mode {
 	case "positive":
-		return runPositive(service, report)
+		return runPositive(first, second, report)
 	case "invalid":
-		return runInvalid(service, report)
+		return runInvalid(first, report)
 	case "print":
-		return runPrint(service, report)
+		return runPrint(first, report)
 	default:
 		return fmt.Errorf("unknown mode %q", mode)
 	}
 }
 
-func runPositive(service sessioninstructions.InstructionService, report map[string]any) error {
+func runPositive(first, second sessioninstructions.InstructionService, report map[string]any) error {
 	loader := &memoryLoader{
 		files:   map[string][]byte{workspacePath + "/AGENTS.md": []byte(agentsText), workspacePath + "/prompt.md": []byte(filePrompt)},
 		summary: summaryText,
 	}
-	resolved, err := service.Resolve(context.Background(), sessioninstructions.InstructionRequest{
+	resolved, err := first.Resolve(context.Background(), sessioninstructions.InstructionRequest{
 		WorkspaceDir: workspacePath,
 		Loader:       loader,
 	})
@@ -92,7 +100,7 @@ func runPositive(service sessioninstructions.InstructionService, report map[stri
 		return fmt.Errorf("resolved instructions = %q, want %q", resolved.Instructions, want)
 	}
 
-	fileResolved, err := service.Resolve(context.Background(), sessioninstructions.InstructionRequest{
+	fileResolved, err := first.Resolve(context.Background(), sessioninstructions.InstructionRequest{
 		Prompt:       workspacePath + "/prompt.md",
 		WorkspaceDir: workspacePath,
 		Loader:       loader,
@@ -101,16 +109,16 @@ func runPositive(service sessioninstructions.InstructionService, report map[stri
 		return fmt.Errorf("explicit file resolution = %q, err=%v", fileResolved.Instructions, err)
 	}
 
-	literal, err := service.Resolve(context.Background(), sessioninstructions.InstructionRequest{Prompt: "literal consumer prompt"})
+	literal, err := first.Resolve(context.Background(), sessioninstructions.InstructionRequest{Prompt: "literal consumer prompt"})
 	if err != nil || literal.Instructions != "literal consumer prompt" {
 		return fmt.Errorf("literal resolution = %q, err=%v", literal.Instructions, err)
 	}
-	none, err := service.Resolve(context.Background(), sessioninstructions.InstructionRequest{Prompt: "none", WorkspaceDir: workspacePath})
+	none, err := first.Resolve(context.Background(), sessioninstructions.InstructionRequest{Prompt: "none", WorkspaceDir: workspacePath})
 	if err != nil || none.Instructions != "" {
 		return fmt.Errorf("none resolution = %q, err=%v", none.Instructions, err)
 	}
 
-	scoped, err := service.Resolve(context.Background(), sessioninstructions.InstructionRequest{
+	scoped, err := first.Resolve(context.Background(), sessioninstructions.InstructionRequest{
 		Prompt:                     "literal consumer prompt",
 		FilesystemScopeSet:         true,
 		FilesystemScopeDescription: "root=/consumer/workspace",
@@ -119,7 +127,23 @@ func runPositive(service sessioninstructions.InstructionService, report map[stri
 		return fmt.Errorf("scope resolution = %q, err=%v", scoped.Instructions, err)
 	}
 
-	composition := service.Compose(sessioninstructions.InstructionComposition{
+	secondLoader := &memoryLoader{
+		files:   map[string][]byte{secondWorkspacePath + "/AGENTS.md": []byte(secondAgentsText)},
+		summary: secondSummaryText,
+	}
+	secondResolved, err := second.Resolve(context.Background(), sessioninstructions.InstructionRequest{
+		WorkspaceDir: secondWorkspacePath,
+		Loader:       secondLoader,
+	})
+	if err != nil {
+		return fmt.Errorf("resolve second independent service: %w", err)
+	}
+	secondWant := secondAgentsText + "\n\n---\n\n" + secondSummaryText
+	if secondResolved.Instructions != secondWant || strings.Contains(secondResolved.Instructions, agentsText) {
+		return fmt.Errorf("second service leaked first service state: %q", secondResolved.Instructions)
+	}
+
+	composition := first.Compose(sessioninstructions.InstructionComposition{
 		Instructions:           resolved.Instructions,
 		ToolDefinitions:        []messages.ToolDefinition{{Name: "show_page"}, {Name: "webmcp_list_tabs"}},
 		BrowserCapabilityState: sessioninstructions.BrowserCapabilityConnectedUnselected,

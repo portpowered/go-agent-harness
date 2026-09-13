@@ -42,6 +42,7 @@ ALLOWED_EXACT = {
     "go-agent-runtime/services/session/internal/instructions/service_test.go",
     "go-agent-runtime/services/session/wire/providers.go",
     "go-agent-runtime/services/session/wire/wire_gen.go",
+    "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
 }
 ALLOWED_PREFIXES = (
     "go-agent-runtime/services/sessioninstructions/",
@@ -331,17 +332,12 @@ def verify_retirement() -> dict[str, Any]:
     unexpected = [path for path in paths if not path_allowed(path)]
     require(not unexpected, f"changed paths outside C110 ownership: {unexpected}")
     shared_changes = [path for path in paths if path in SHARED_LEASE_PATHS]
-    require(
-        sorted(shared_changes) == sorted(SHARED_LEASE_PATHS),
-        f"C110 shared registry repair set is incomplete or unexpected: {shared_changes}",
-    )
-    compatibility_service_rel = Path("go-agent-runtime/services/session/internal/instructions/service.go")
-    compatibility_service = REPO_ROOT / compatibility_service_rel
-    require(
-        compatibility_service.is_file()
-        and compatibility_service.read_bytes() == git_file("origin/main", compatibility_service_rel),
-        "historical session instruction service compatibility source changed",
-    )
+    require(not shared_changes, f"C110 changed released shared paths unexpectedly: {shared_changes}")
+    for duplicate in (
+        REPO_ROOT / "go-agent-runtime/services/session/internal/instructions/service.go",
+        REPO_ROOT / "go-agent-runtime/services/session/internal/instructions/service_test.go",
+    ):
+        require(not duplicate.exists(), f"duplicate session instruction implementation remains: {duplicate}")
 
     callers: list[dict[str, Any]] = []
     for relative in CALLER_PATHS:
@@ -354,7 +350,14 @@ def verify_retirement() -> dict[str, Any]:
     compatibility = REPO_ROOT / "go-agent-runtime/services/session/wire/providers.go"
     compatibility_text = compatibility.read_text(encoding="utf-8")
     require("func NewInstructionService()" in compatibility_text, "session Wire compatibility constructor is missing")
-    require("instructionservice.New" in compatibility_text, "session Wire compatibility constructor does not preserve its private implementation boundary")
+    require(
+        "sessioninstructionswire.NewInstructionService" in compatibility_text,
+        "session Wire compatibility constructor does not delegate to the canonical instruction Wire",
+    )
+    require(
+        "session/internal/instructions" not in compatibility_text,
+        "session Wire compatibility constructor still imports the duplicate instruction implementation",
+    )
 
     evidence_paths = [
         str(LEGACY_REL),
@@ -363,9 +366,9 @@ def verify_retirement() -> dict[str, Any]:
         "go-agent-runtime/services/sessioninstructions/wire/wire.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go",
         "go-agent-runtime/services/session/instructions.go",
-        "go-agent-runtime/services/session/internal/instructions/service.go",
         "go-agent-runtime/services/session/wire/providers.go",
         "go-agent-runtime/services/session/wire/wire_gen.go",
+        "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
         str(ROOT.relative_to(REPO_ROOT) / "verify.py"),
         str(ROOT.relative_to(REPO_ROOT) / "run.py"),
     ]
@@ -392,7 +395,7 @@ def verify_retirement() -> dict[str, Any]:
             "compatibility_api": {
                 "path": str(compatibility.relative_to(REPO_ROOT)),
                 "constructor": "NewInstructionService",
-                "delegates_to": "session/internal/instructions.New",
+                "delegates_to": "sessioninstructions/wire.NewInstructionService",
             },
         },
         "c79_lease": {
@@ -401,7 +404,7 @@ def verify_retirement() -> dict[str, Any]:
             "state_at_admission_check": "released-after-guarded-merge",
             "shared_paths": list(SHARED_LEASE_PATHS),
             "candidate_changes": shared_changes,
-            "guard": "released by C79 guarded merge 1a8467246c6607a06ffc7289075da2595724ce8b",
+            "guard": "released by C79 guarded merge; shared registry state is inherited from current origin/main",
         },
         "source_hashes": source_hashes(evidence_paths),
     }

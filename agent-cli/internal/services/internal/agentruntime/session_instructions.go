@@ -68,6 +68,7 @@ type loader struct{ w, c string }
 type filesystemScopeError struct{ error }
 
 func (e filesystemScopeError) As(target any) bool { return errors.As(e.error, target) }
+func (e filesystemScopeError) Unwrap() error      { return e.error }
 func (l loader) Stat(path string) error           { _, err := os.Stat(path); return err }
 func closeInstructionFile(file *os.File) error    { return file.Close() }
 func (l loader) ReadFile(path string) (data []byte, err error) {
