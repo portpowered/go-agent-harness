@@ -320,7 +320,7 @@ func planSessionRuntime(opts SessionRunOptions) (sessionRuntimePlan, error) {
 		// production service entrypoints install runtimeFactory from Wire.
 		factory = newDefaultSessionRuntimeFactory()
 	}
-	return planSessionRuntimeWithFactory(opts, factory)
+	return suppressDuplicateSessionToolAdvertisement(planSessionRuntimeWithFactory(opts, factory))
 }
 
 func planSessionRuntimeWithFactory(opts SessionRunOptions, factory sessionRuntimeFactory) (plan sessionRuntimePlan, planErr error) {

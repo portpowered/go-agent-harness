@@ -43,6 +43,15 @@ type sessionInstructionsInferencer struct {
 	tools        []messages.ToolDefinition
 }
 
+// suppressDuplicateSessionToolAdvertisement keeps the compatibility wrapper's
+// complete instruction/tool update as the single injected-session update.
+func suppressDuplicateSessionToolAdvertisement(plan sessionRuntimePlan, planErr error) (sessionRuntimePlan, error) {
+	if _, wrapped := plan.inferencer.(*sessionInstructionsInferencer); wrapped {
+		plan.loop.AdvertiseToolDefinitions = false
+	}
+	return plan, planErr
+}
+
 var _ messages.SessionInferencer = (*sessionInstructionsInferencer)(nil)
 
 func newSessionInstructionsInferencer(inner messages.SessionInferencer, instructions string, toolDefinitions []messages.ToolDefinition) messages.SessionInferencer {
