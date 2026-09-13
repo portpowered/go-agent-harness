@@ -30,7 +30,6 @@ import (
 )
 
 const deviceProbeExpectedTranscript = "device round trip"
-
 const deviceProbeScenarioPath = "testdata/probe-scenarios/s2s-v9-webrtc-device-roundtrip.scenario.json"
 
 // TestS2SV9WebRTCDeviceProbeIsReachableThroughPublicCLI proves the device-tier
@@ -139,8 +138,7 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create RTC Opus encoder: %v", err)
 	}
-	transportService := rtctransportwire.NewService()
-	track, err := transportService.NewOutboundTrack(rtctransport.OutboundTrackConfig{
+	track, err := rtctransportwire.NewService().NewOutboundTrack(rtctransport.OutboundTrackConfig{
 		SourceRate: audio.SampleRate,
 		Encoder:    encoder,
 		Writer:     deviceProbeRTPWriter{track: peers.localTrack},
@@ -201,7 +199,7 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	// Pion exposes RTP attributes alongside the packet; the harness seam
 	// deliberately keeps those protocol details out of InboundTrack.
 	// deviceProbeRTPPacketSource performs that boundary adaptation.
-	inbound, err := transportService.NewInboundTrack(deviceProbeRTPPacketSource{track: remote}, decoder, rtctransport.InboundTrackConfig{
+	inbound, err := rtctransportwire.NewService().NewInboundTrack(deviceProbeRTPPacketSource{track: remote}, decoder, rtctransport.InboundTrackConfig{
 		SampleRate:    audio.SampleRate,
 		FrameDuration: codec.OpusFrameDuration,
 		JitterDepth:   codec.OpusFrameDuration,
