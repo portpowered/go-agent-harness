@@ -1,83 +1,79 @@
 # C112 session-trace evidence
 
-The original extraction source checkpoint was
-`ecdf54bc138b58b0454240b519cd1038acd2aec6`, based on accepted
-`origin/main d4766c3dbbf2c198142047ead4449d58dd47d485`. The immutable source
-baseline is the 119-line `trace.go` with SHA-256
-`db9fab41dd02578db5e7b024af869eb762b21ec14c48c64442d4ad9ca3149710`; the
-candidate adapter is 49 lines with SHA-256
-`6abfe4c37125209159d18a28fa9544fbfcb1c7a630a3cf0b193adf6e34aab177`.
+This is the admitted `audio-runtime` evidence for
+`audio-runtime-c112-retire-cli-session-trace-evidence`. The final implementation
+checkpoint is `77de2f9cd7e3ea5496537f96cde7203249250e6f` on branch
+`codex/audio-runtime-c112-retire-cli-session-trace-evidence`.
 
-See `candidate-evidence.json` for caller inventory, focused/race/consumer and
-shipped-YUI results, exact shared-gate findings, and the acceptance boundary.
+## Admission, ancestry, and census
 
-This admitted evidence directory contains `consumer`, a separate Go module
-that imports only the public `go-agent-runtime/services/sessiontrace` contract
-and its generated Wire constructor. It has no `agent-cli` or private-runtime
-imports.
+- `project-control.py verify-work --type task --name audio-runtime-c112-retire-cli-session-trace-evidence` returns the admitted `audio-runtime` task.
+- Accepted planning baseline: `d4766c3dbbf2c198142047ead4449d58dd47d485`.
+- Current fetched `origin/main`: `09c70f51243caeaf1184c4806b99bbf7749e3044`; it is an ancestor of the final candidate.
+- Required startup ancestor: `8bdafc7f947a3a2c9856220abdc539437035bd21`.
+- The current mainline was integrated by merge commit `97ec64687135f12f915096080f5a8c4af901084f`, preserving the predecessor and C79 merge ancestry.
+- The immutable pre-extraction `trace.go` is 119 lines with SHA-256 `db9fab41dd02578db5e7b024af869eb762b21ec14c48c64442d4ad9ca3149710`.
+- The final CLI seam is 43 lines with SHA-256 `939fa231d9b182536297cf18f923a6f358fec46a7dcbf5ea64bb7db548ed5d75`; 76 lines of CLI lifecycle/orchestration are retired.
 
-The consumer test constructs two independent services with deterministic
-clocks, records all four PCM edges plus a runtime event, publishes both
-bundles, verifies that same-length PCM mutation changes the immutable WAV
-identity, rejects a missing clock, and retains the staged trace without
-overwriting an existing destination.
+## Boundary repair
 
-Run the public consumer with:
+`agent-cli/internal/services/internal/agentruntime/trace.go` now performs only
+request, device-callback, and observation type adaptation. The prior runtime
+observer is passed into `go-agent-runtime/services/sessiontrace`; the private
+service owns ordered fanout, payload isolation, redaction, preferences, bounded
+close, retention, and atomic no-overwrite publication. The old
+`session_audio_trace.go` implementation is absent. Device ownership remains in
+the device gateway and trace storage remains in `go-audio/pkg/recording`.
+
+`Finish(ctx, "", false)` now returns the staged-path diagnostic even after a
+successful close, and `errors.Join` preserves a distinct close-error identity.
+The focused regression and its mutation control cover both behaviors.
+
+The external consumer is exactly at `external-consumer/`; it imports only the
+public sessiontrace contract and generated Wire constructor. It passes:
 
 ```text
 GOWORK=off go test ./... -count=1
+GOWORK=off go build .
 ```
 
-The repository’s accumulated session regression set, focused normal/race
-tests, pinned lint/staticcheck, vet, formatting, and coverage registration were
-green from the earlier implementation worktree. The historical shipped
-credential-free replay probe explicitly made no physical-device or acoustic
-claim. The exact post-C79 validation is recorded below; script CI, independent
-review, guarded merge, and the post-merge vertical probe remain external
-handoff gates.
+## Bounded verifier and replay runner
 
-The historical same-task continuation at `8b2983338ea449fd739994e8fbbc958581bd2e7b`
-repeated the owned checks: sessiontrace normal `24` tests across 3 packages,
-sessiontrace race `20` tests across 3 packages, CLI trace normal `25`, CLI trace
-race `24`, the GOWORK=off consumer, and accumulated normal regressions at
-`COUNT=1` all passed. Fetched `origin/main` is
-`ea53be13ce5e4ef14fd8c89c695c21744a1f7686` and is not yet an ancestor. The
-shared gates still fail only on the C79-leased findings: Wire registration for
-`go-agent-runtime/services/sessiontrace/wire/wire_gen.go` and the stale
-`prepareTrace` architecture baseline/generated-file entries. At that
-checkpoint C79 `work-task-25` was still `in-review` with PR #470 open, so those
-files remained untouched. C79 has since been guarded-merged and released;
-the current candidate applies only the demonstrated shared repairs.
+The restored evidence entrypoints are:
 
-## Post-C79 integration and current candidate
+```text
+python3 .../verify.py --mode provenance
+python3 .../verify.py --mode retirement-and-owned-paths
+python3 .../verify.py --mode positive-and-three-mutations
+python3 .../run.py --case trace-audio-tool-replay --case interruption-replay --child-timeout 60 --aggregate-timeout 180
+```
 
-C79 PR #470 merged to `origin/main` at
-`1a8467246c6607a06ffc7289075da2595724ce8b`. This isolated worktree merged
-that exact main revision with the prior C112 candidate at
-`8e0465c9f9c1bea49afb422713de5313d900407a`, preserving both parents. The
-demonstrated shared repairs are committed at
-`55565b8bc6cb31cf574ebca0761c698dee812351`. The
-only post-release shared changes are the sessiontrace Wire registration in
-`scripts/wire-packages.txt`, the corresponding generated-file registration in
-`docs/architecture/architecture-policy.json`, and deletion of the stale
-`prepareTrace` baseline fragment.
+The verifier passes admission, branch/ancestry, ownership, host-neutral imports,
+normal/race focused tests, the external consumer, and three causal mutations:
+empty unpublished retention, dropped prior-observer wiring, and shared payload
+copying. The runner strips credential environment variables, caps output,
+reaps the child process group, and checks source-pinned fixture and PCM hashes.
 
-At the current source checkpoint, focused sessiontrace normal tests passed
-`33` tests across 3 packages, race tests passed `55` tests across 3 packages,
-CLI trace/audio normal passed `25`, CLI trace race passed `24`, and the
-external `GOWORK=off` consumer passed. The accumulated regression matrix
-passed at `COUNT=1` in normal, coverage, and race modes, including 20
-high-rate tool/audio trials. `make build`, `make fmt`, `make vet`, pinned lint
-(`golangci-lint 2.9.0`), pinned staticcheck (`2026.1`), coverage registration,
-`make wire-check`, and `make architecture-size-check` all passed; the latter
-checked 192 packages, 1911 files, and 28244 functions.
+Final runner result from the committed source used artifact
+`artifacts/yui` SHA-256 `e2d1d5fbd1398c3955682fefd82397a159e5042a14d8827a01992835fb6c093e`:
 
-The rebuilt `/tmp/yui-c112-current.2AiBKY/yui` replayed both credential-free
-fixtures with `--record-dir` and `--trace-audio`. The tool fixture preserved
-`PROBE_TOOL_MARKER_9182` and `strict replay continuation`, produced the exact
-4800-byte recorded PCM and a 4844-byte speaker-enqueued trace WAV. The
-interruption fixture completed with a 3840-byte recording, a 3884-byte trace
-WAV, and the exact 2400-byte healthy tail after the 1440-byte interrupted
-prefix. Both manifests and contiguous transcripts matched their fixtures, and
-no credential-like strings were found. Native Windows hardware and physical
-acoustic testing remain explicitly out of scope.
+- Tool replay: exit 0, no timeout/survivors, 27 timeline events/20 runtime events, provider PCM 4,800 bytes (`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`), rendered PCM 3,200 bytes (`7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`), speaker trace 4,844 bytes (`305d40c0fa1b687133be6a7841654dcbe89310b7b7f9800cb624c25bcffd880c`), and `PROBE_TOOL_MARKER_9182` plus `strict replay continuation`.
+- Interruption replay: exit 0, no timeout/survivors, 20 timeline events/15 runtime events, provider PCM 3,840 bytes (`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`), rendered PCM 3,360 bytes (`302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff`), speaker trace 3,884 bytes (`001ff24159be9c44e5ba33e39c15cea64818fb488b14b860b623fe95c7a4f2ca`), and replay-complete terminal evidence.
+- Fixtures: tool `38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169`; interruption `154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206`.
+
+This is credential-free software/file replay evidence. Native Windows hardware,
+physical devices, and physical/acoustic claims are OUT OF SCOPE and are never
+represented as PASS.
+
+## Handoff
+
+The prior review rejection is preserved in `candidate-evidence.json`. It required
+the empty-bundle lifecycle repair, service-owned observer boundary, mandated
+verifier/runner/external-consumer paths, fresh final-head evidence, and exact
+provenance. Those repairs are complete. Focused causal tests, accumulated
+replay regressions, formatting, vet, Wire, architecture-size, coverage
+registration, pinned lint, pinned staticcheck, and `git diff --check` pass.
+
+The candidate is ready for the Script CI gate. Script CI and independent review
+remain external gates; this implementation does not poll CI or self-review, and
+green local checks do not claim CI acceptance.
