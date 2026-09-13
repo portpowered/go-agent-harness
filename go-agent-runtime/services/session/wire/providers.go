@@ -16,7 +16,7 @@ import (
 	agent "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
 	persistence "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/service"
-	sessioninstructionswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire"
+	sessioninstructions "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -46,8 +46,12 @@ func NewService(deps Dependencies) session.Service {
 // NewInstructionService assembles the stateless session instruction policy
 // service while exposing only its public contract to hosts and embedders.
 func NewInstructionService() session.InstructionService {
-	wire.Build(sessioninstructionswire.NewInstructionService)
+	wire.Build(newInstructionService)
 	return nil
+}
+
+func newInstructionService() session.InstructionService {
+	return sessioninstructions.Factory{}.Build()
 }
 
 // NewFileStoreFactory assembles the built-in durable store factory. The

@@ -26,7 +26,7 @@ REPORTS = ROOT / "reports"
 LEGACY_REL = Path("agent-cli/internal/services/internal/agentruntime/session_instructions.go")
 LEGACY = REPO_ROOT / LEGACY_REL
 NEW_PACKAGE = REPO_ROOT / "go-agent-runtime/services/sessioninstructions"
-SERVICE = NEW_PACKAGE / "internal/service/service.go"
+SERVICE = NEW_PACKAGE / "service.go"
 BASELINE = ROOT / "baseline.json"
 RUNNER = ROOT / "run.py"
 MAX_OUTPUT_BYTES = 1 << 20
@@ -40,9 +40,10 @@ ALLOWED_EXACT = {
     "go-agent-runtime/services/session/instructions.go",
     "go-agent-runtime/services/session/internal/instructions/service.go",
     "go-agent-runtime/services/session/internal/instructions/service_test.go",
+    "coverage-manifest/go-agent-runtime/services/session/internal/instructions/package.json",
     "go-agent-runtime/services/session/wire/providers.go",
     "go-agent-runtime/services/session/wire/wire_gen.go",
-    "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
+    "agent-cli/internal/services/internal/agentruntime/session_instructions_test.go",
 }
 ALLOWED_PREFIXES = (
     "go-agent-runtime/services/sessioninstructions/",
@@ -60,8 +61,6 @@ CALLER_PATHS = (
     "agent-cli/internal/services/internal/agentruntime/session_image.go",
     "agent-cli/internal/services/internal/agentruntime/session_recording.go",
 )
-
-
 class VerificationError(Exception):
     pass
 
@@ -212,7 +211,7 @@ def copy_mutation_workspace(destination: Path) -> tuple[Path, Path]:
 def mutate_and_kill() -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="c110-guard-mutants-") as temporary:
         mutation_root, consumer_copy = copy_mutation_workspace(Path(temporary) / "repo")
-        mutant_none = mutation_root / "go-agent-runtime/services/sessioninstructions/internal/service/service.go"
+        mutant_none = mutation_root / "go-agent-runtime/services/sessioninstructions/service.go"
         source = mutant_none.read_text(encoding="utf-8")
         needle = 'if value == "none" {'
         require(source.count(needle) == 1, "none guard mutant anchor is not unique")
@@ -220,11 +219,11 @@ def mutate_and_kill() -> dict[str, Any]:
         consumer_result = run(["go", "run", ".", "--mode", "positive"], consumer_copy, timeout=MUTATION_TIMEOUT_SECONDS)
         require(consumer_result["exit_code"] != 0 and not consumer_result["timed_out"], f"none mutant survived: {consumer_result}")
 
-        mutant_cancel = mutation_root / "go-agent-runtime/services/sessioninstructions/internal/service/service.go"
+        mutant_cancel = mutation_root / "go-agent-runtime/services/sessioninstructions/service.go"
         source = mutant_cancel.read_text(encoding="utf-8")
         guard = (
             "\tsummary, summaryErr := skillsSummary(ctx, loader)\n"
-            "\tif err := checkContext(ctx, sessioninstructions.PhaseSkillsSummary, workspaceDir); err != nil {\n"
+            "\tif err := checkContext(ctx, PhaseSkillsSummary, workspaceDir); err != nil {\n"
             "\t\treturn \"\", err\n\t}\n"
         )
         mutated, count = source.replace(guard, "\tsummary, summaryErr := skillsSummary(ctx, loader)\n", 1), source.count(guard)
@@ -339,6 +338,7 @@ def verify_retirement() -> dict[str, Any]:
     for duplicate in (
         REPO_ROOT / "go-agent-runtime/services/session/internal/instructions/service.go",
         REPO_ROOT / "go-agent-runtime/services/session/internal/instructions/service_test.go",
+        REPO_ROOT / "coverage-manifest/go-agent-runtime/services/session/internal/instructions/package.json",
     ):
         require(not duplicate.exists(), f"duplicate session instruction implementation remains: {duplicate}")
 
@@ -352,26 +352,34 @@ def verify_retirement() -> dict[str, Any]:
         callers.append({"path": relative, "sha256": sha256_file(path), "symbols": symbols})
     compatibility = REPO_ROOT / "go-agent-runtime/services/session/wire/providers.go"
     compatibility_text = compatibility.read_text(encoding="utf-8")
-    require("func NewInstructionService()" in compatibility_text, "session Wire compatibility constructor is missing")
     require(
-        "sessioninstructionswire.NewInstructionService" in compatibility_text,
-        "session Wire compatibility constructor does not delegate to the canonical instruction Wire",
+        "func NewInstructionService()" in compatibility_text,
+        "session Wire compatibility constructor is missing",
+    )
+    require(
+        "sessioninstructions.Factory{}.Build()" in compatibility_text,
+        "session Wire compatibility constructor does not delegate to the canonical instruction factory",
     )
     require(
         "session/internal/instructions" not in compatibility_text,
         "session Wire compatibility constructor still imports the duplicate instruction implementation",
     )
+    require(
+        "sessioninstructions/wire" not in compatibility_text,
+        "session Wire compatibility constructor crosses into the peer instruction Wire",
+    )
 
     evidence_paths = [
         str(LEGACY_REL),
         "go-agent-runtime/services/sessioninstructions/contract.go",
+        "go-agent-runtime/services/sessioninstructions/service.go",
         "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go",
         "go-agent-runtime/services/session/instructions.go",
         "go-agent-runtime/services/session/wire/providers.go",
         "go-agent-runtime/services/session/wire/wire_gen.go",
-        "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_instructions_test.go",
         str(ROOT.relative_to(REPO_ROOT) / "verify.py"),
         str(ROOT.relative_to(REPO_ROOT) / "run.py"),
     ]
@@ -398,7 +406,8 @@ def verify_retirement() -> dict[str, Any]:
             "compatibility_api": {
                 "path": str(compatibility.relative_to(REPO_ROOT)),
                 "constructor": "NewInstructionService",
-                "delegates_to": "sessioninstructions/wire.NewInstructionService",
+                "reason": "compatibility constructor delegates to the canonical instruction factory",
+                "delegates_to": "sessioninstructions.Factory{}.Build",
             },
         },
         "c79_lease": {
