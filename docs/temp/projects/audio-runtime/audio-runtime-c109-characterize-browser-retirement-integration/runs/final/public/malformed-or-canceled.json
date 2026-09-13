@@ -2,7 +2,7 @@
   "bounded": {
     "aggregate_timeout_seconds": 180,
     "child_timeout_seconds": 60,
-    "elapsed_seconds": 37.107,
+    "elapsed_seconds": 29.832,
     "process_groups_clean": true
   },
   "case": "malformed-or-canceled",
@@ -17,7 +17,7 @@
       "command": "go run docs/temp/projects/audio-runtime/audio-runtime-c61-retire-cli-browser-scenario-contract/verify.go --mode malformed-credential-overflow-timeout-cleanup",
       "credential_environment_scrubbed": true,
       "credential_output_markers_absent": true,
-      "elapsed_seconds": 1.634,
+      "elapsed_seconds": 1.355,
       "exit_code": 0,
       "forbidden_markers_scanned_before_truncation": true,
       "label": "malformed credential overflow timeout cleanup",
@@ -54,21 +54,21 @@
       "command": "go test ./internal/services/internal/agentruntime -run TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation -count=3 -timeout=180s",
       "credential_environment_scrubbed": true,
       "credential_output_markers_absent": true,
-      "elapsed_seconds": 11.652,
+      "elapsed_seconds": 8.388,
       "exit_code": 0,
       "forbidden_markers_scanned_before_truncation": true,
       "label": "canceled browser scenario normal",
-      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.502s\n",
+      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.469s\n",
       "output_bytes": 102,
       "output_capped": false,
-      "output_sha256": "f1347cfe64d2dc5d547655f18459aa6ce6d231f4228856f8e6041090c79dfe61",
+      "output_sha256": "36cd92d2951a3a677e067cde0f7a638ae3263d19de524f0fad0f518784b67e83",
       "process_group_gone": true,
-      "raw_output_sha256": "f1347cfe64d2dc5d547655f18459aa6ce6d231f4228856f8e6041090c79dfe61",
+      "raw_output_sha256": "36cd92d2951a3a677e067cde0f7a638ae3263d19de524f0fad0f518784b67e83",
       "removed_credential_environment_names": [
         "NPM_TOKEN",
         "groq_key"
       ],
-      "retained_output_sha256": "f1347cfe64d2dc5d547655f18459aa6ce6d231f4228856f8e6041090c79dfe61",
+      "retained_output_sha256": "36cd92d2951a3a677e067cde0f7a638ae3263d19de524f0fad0f518784b67e83",
       "status": "passed",
       "test_discovery": {
         "no_test_packages": 0,
@@ -93,21 +93,21 @@
       "command": "go test -race ./internal/services/internal/agentruntime -run TestRunBrowserConversationInterruptsInFlightWorkAndPreservesDetachedTab|TestBrowserConversationHoldsStandaloneCancelUntilInFlightInvocation -count=3 -timeout=240s",
       "credential_environment_scrubbed": true,
       "credential_output_markers_absent": true,
-      "elapsed_seconds": 17.621,
+      "elapsed_seconds": 14.913,
       "exit_code": 0,
       "forbidden_markers_scanned_before_truncation": true,
       "label": "canceled browser scenario race",
-      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.915s\n",
+      "output": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.886s\n",
       "output_bytes": 102,
       "output_capped": false,
-      "output_sha256": "9aab57a4fc7b8afb8628dcab61a32251ced355889f3de6aeffb1f81f9b117edf",
+      "output_sha256": "fb4910e416dc38e6c9ba22a7606dd2ed91d74c6d9c6ff02125e4bdabba831286",
       "process_group_gone": true,
-      "raw_output_sha256": "9aab57a4fc7b8afb8628dcab61a32251ced355889f3de6aeffb1f81f9b117edf",
+      "raw_output_sha256": "fb4910e416dc38e6c9ba22a7606dd2ed91d74c6d9c6ff02125e4bdabba831286",
       "removed_credential_environment_names": [
         "NPM_TOKEN",
         "groq_key"
       ],
-      "retained_output_sha256": "9aab57a4fc7b8afb8628dcab61a32251ced355889f3de6aeffb1f81f9b117edf",
+      "retained_output_sha256": "fb4910e416dc38e6c9ba22a7606dd2ed91d74c6d9c6ff02125e4bdabba831286",
       "status": "passed",
       "test_discovery": {
         "no_test_packages": 0,
@@ -140,7 +140,7 @@
       {
         "classification": "SOFTWARE_LOCAL_PROCESS_ONLY",
         "kind": "negative-control-output",
-        "sha256": "d34895e404bec0cf1150d17a74cdb5813506f69b6d922aa495cea1555fe6884c"
+        "sha256": "d724fafa8e35ea193574f97b1c85eb640a46a195b9aada54e2fd183d2718bf85"
       }
     ],
     "cleanup_claim": true,
@@ -153,7 +153,7 @@
     "fixture_path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json",
     "fixture_sha256": "ce0644ddfb42fc0714346e76466b5dabdd86b18c5a56081b3ad714938f1ed082",
     "runner_path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
-    "runner_sha256": "91e02bcddb92d17f8167f0295bfa28113f51eaa51b0551a6c6b5d90828034182"
+    "runner_sha256": "4cdbbbf41bb66c7e7d65c0d097b64923dec00b5214048a19117c737a559fdb90"
   },
   "schema": "audio-runtime-c109-public-checks-v2",
   "status": "passed",

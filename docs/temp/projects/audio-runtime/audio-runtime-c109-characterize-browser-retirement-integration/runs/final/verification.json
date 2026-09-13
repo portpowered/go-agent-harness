@@ -57,6 +57,11 @@
       "fixture": "heuristic-ledger",
       "status": "rejected-as-required"
     },
+    "incomplete-public-report": {
+      "diagnostic": "public check set is incomplete or does not match command_set",
+      "fixture": "incomplete-public-report",
+      "status": "rejected-as-required"
+    },
     "incomplete-sequence": {
       "diagnostic": "sequence expected_observables is missing at step 2",
       "fixture": "incomplete-sequence",
@@ -126,19 +131,19 @@
   "source_bindings": {
     "analyzer_tests": {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/test_analyze.py",
-      "sha256": "d07a668ae174dcc2e1e0791f4b570b0c41f22bd9f47989fb2b2f2ee469d40395"
+      "sha256": "6ed6034e69fd17adc3988c932e9f09ed78e2a3283b755e51bd8c658628958b15"
     },
     "negative_fixture": {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json",
-      "sha256": "0f51a143cf809d20df04bbf4350473a14961979f7ffc854eff1f7fea6b9b3840"
+      "sha256": "ce0644ddfb42fc0714346e76466b5dabdd86b18c5a56081b3ad714938f1ed082"
     },
     "public_runner": {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
-      "sha256": "705bc3167678b83158fc925e132fe39d1fdd4315c845360a8686eee8db9b6efe"
+      "sha256": "4cdbbbf41bb66c7e7d65c0d097b64923dec00b5214048a19117c737a559fdb90"
     },
     "verifier": {
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py",
-      "sha256": "0afd5eb44b4fbbf21d6f8e149d6831dfe763329bf21f0f928d8378e9ef9a432f"
+      "sha256": "ae24ac45f48a4f527a58156efb37f3d617d36371a621954000016a1e4660e37f"
     }
   },
   "status": "passed"
