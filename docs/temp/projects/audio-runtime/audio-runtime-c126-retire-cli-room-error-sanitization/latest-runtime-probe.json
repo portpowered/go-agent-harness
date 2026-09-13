@@ -1,41 +1,41 @@
 {
   "artifact": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/artifacts/yui",
   "artifact_sha256": "8ce3cd006c10bac06e4e08ee4bf90367ffc42d086235a2feaef954b3789d7172",
-  "candidate_revision": "22aaaec88f8d6dd5cc79fa36e76806ee4055105c",
+  "candidate_revision": "37329b4def5bb620a3912c3ed1f43e70318b3235",
   "cases": {
     "non-room-audio-tool-replay": {
       "fixture": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
       "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
-      "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/non-room-audio-tool-replay/record/manifest.json",
-      "marker": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/non-room-audio-tool-replay/workdir/evidence/runs/exec-invocations-v4.log",
+      "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/non-room-audio-tool-replay/record/manifest.json",
+      "marker": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/non-room-audio-tool-replay/workdir/evidence/runs/exec-invocations-v4.log",
       "pcm_bytes": 4800,
       "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
       "process": {
         "argv": [
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/artifacts/yui",
           "-C",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/non-room-audio-tool-replay/config",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/non-room-audio-tool-replay/config",
           "--workdir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/non-room-audio-tool-replay/workdir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/non-room-audio-tool-replay/workdir",
           "--allow-path",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/non-room-audio-tool-replay/workdir",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/non-room-audio-tool-replay/workdir",
           "session",
           "--replay",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json",
           "--audio-out",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/non-room-audio-tool-replay/audio.wav",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/non-room-audio-tool-replay/audio.wav",
           "--record-dir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/non-room-audio-tool-replay/record",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/non-room-audio-tool-replay/record",
           "--trace-audio"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/non-room-audio-tool-replay/workdir",
-        "elapsed_seconds": 0.072345,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/non-room-audio-tool-replay/workdir",
+        "elapsed_seconds": 0.071069,
         "label": "non-room-audio-tool-replay",
         "returncode": 0,
         "stderr": "",
         "stderr_bytes": 0,
         "stderr_truncated": false,
-        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/non-room-audio-tool-replay/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/non-room-audio-tool-replay/workdir; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
         "stdout_bytes": 872,
         "stdout_truncated": false,
         "survivors": false,
@@ -46,24 +46,24 @@
       "argv": [
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/artifacts/yui",
         "-C",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/room-failure-disconnect/config",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/room-failure-disconnect/config",
         "--workdir",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/room-failure-disconnect/workdir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/room-failure-disconnect/workdir",
         "--allow-path",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/room-failure-disconnect/workdir",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/room-failure-disconnect/workdir",
         "room",
         "run",
         "--replay",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/room-source-bundle",
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/room-source-bundle",
         "--out",
-        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/room-failure-disconnect/output"
+        "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/room-failure-disconnect/output"
       ],
-      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/room-failure-disconnect/workdir",
-      "elapsed_seconds": 0.510186,
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/room-failure-disconnect/workdir",
+      "elapsed_seconds": 0.139192,
       "evidence": {
         "artifact_count": 25,
-        "bytes": 57437,
-        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/room-failure-disconnect/output/run-manifest.json",
+        "bytes": 55918,
+        "manifest": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/room-failure-disconnect/output/run-manifest.json",
         "participants": {
           "disconnect-agent": {
             "artifacts": {
@@ -72,7 +72,7 @@
                 "owner": "participant:disconnect-agent:capture",
                 "path": "participants/disconnect-agent/capture.json",
                 "role": "capture",
-                "sha256": "fcd85242cb39bda1d4e0a99de35586448327a9edb928b7aee9119038e7126afe",
+                "sha256": "9b845aa4793e4659713ec96856910ea8898fbe800c60ffa67a202e5bd44a10ea",
                 "size": 7124
               },
               "deltas": {
@@ -89,16 +89,16 @@
                 "owner": "participant:disconnect-agent:diagnostics",
                 "path": "agent-disconnect-agent.diagnostics.jsonl",
                 "role": "diagnostics",
-                "sha256": "3e0b8b03a59982d93a323eeb08f5157d7e7ab8ff53806dfd19270af4e2c66791",
-                "size": 1011
+                "sha256": "20c5dad80f3c962ca773af385e701fe759169441c925b9fdef31c848ac1528b4",
+                "size": 861
               },
               "events": {
                 "name": "events.jsonl",
                 "owner": "participant:disconnect-agent:events",
                 "path": "participants/disconnect-agent/events.jsonl",
                 "role": "events",
-                "sha256": "7b9e8fb31ca508c3c8da0fe1677342836481dc7c791244e9049a40317ffe220f",
-                "size": 765
+                "sha256": "85877bc070356f571d0cd15984ff93b39502512666c8f877d1d1e5d7e472d56c",
+                "size": 615
               },
               "received_pcm": {
                 "empty": true,
@@ -150,7 +150,7 @@
                 "owner": "participant:failed-agent:capture",
                 "path": "participants/failed-agent/capture.json",
                 "role": "capture",
-                "sha256": "11f29df38f921bfcefed5014403324a9d37342db282814047f8cc095653dfc0c",
+                "sha256": "e27d006b0242d022707f66805427914160fec8c5c7ae3ab0a92d179dfbb24650",
                 "size": 7616
               },
               "deltas": {
@@ -167,16 +167,16 @@
                 "owner": "participant:failed-agent:diagnostics",
                 "path": "agent-failed-agent.diagnostics.jsonl",
                 "role": "diagnostics",
-                "sha256": "ad1e3382adfcb14e0680f7a4a4e45534d439ecd4b4a7827ffc3427d924d9bb97",
-                "size": 1069
+                "sha256": "f56dc7ee91575680bef25abbc88ff4fa8871ce2c380ca2298ccd51df15e5c105",
+                "size": 1068
               },
               "events": {
                 "name": "events.jsonl",
                 "owner": "participant:failed-agent:events",
                 "path": "participants/failed-agent/events.jsonl",
                 "role": "events",
-                "sha256": "96e4fac6cd54e11aa999e7c1227e6e7a55284345fd6b00611783e4b32dd6a831",
-                "size": 765
+                "sha256": "c3b7cf742ac1a6524ac551cdab351de05672029cbb7894aa3d47d10643441e41",
+                "size": 766
               },
               "received_pcm": {
                 "empty": true,
@@ -228,8 +228,8 @@
                 "owner": "participant:survivor-agent:capture",
                 "path": "participants/survivor-agent/capture.json",
                 "role": "capture",
-                "sha256": "f3c65d5feb69730a14f9fae0fd0355c7b1b5f6d667a937e2c9d0accd69b5f00d",
-                "size": 8139
+                "sha256": "6ddeb5bbb91500770ea717d9435d2c486c4533f87bed0bb775830e960fd98356",
+                "size": 8146
               },
               "deltas": {
                 "empty": true,
@@ -245,16 +245,16 @@
                 "owner": "participant:survivor-agent:diagnostics",
                 "path": "agent-survivor-agent.diagnostics.jsonl",
                 "role": "diagnostics",
-                "sha256": "ca839d97793c36b582c99b85601a7b2f52a8635bd3b3169d4c88eed4cd1579f9",
-                "size": 1402
+                "sha256": "edc7614cbdb6a046175e1e4ba7bed7a62c699e5d09b20ee819d968c8c148d531",
+                "size": 1398
               },
               "events": {
                 "name": "events.jsonl",
                 "owner": "participant:survivor-agent:events",
                 "path": "participants/survivor-agent/events.jsonl",
                 "role": "events",
-                "sha256": "b0ca996fe70d552fb5761f36dfc19072c25655024a2d3cce853a888a5f8a0848",
-                "size": 1225
+                "sha256": "2cce58a2e53c78f0cc9e19630ad3e2a27c51b32926167602ec298ae78c7e0126",
+                "size": 1224
               },
               "received_pcm": {
                 "empty": true,
@@ -307,7 +307,7 @@
       "stderr": "",
       "stderr_bytes": 0,
       "stderr_truncated": false,
-      "stdout": "room starting: participants=3 output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T113551Z-47328/room-failure-disconnect/output\nparticipant \"disconnect-agent\" ready: kind=agent input= output= provider=openai model=gpt-realtime\nparticipant \"failed-agent\" ready: kind=agent input= output= provider=openai model=gpt-realtime\nparticipant \"survivor-agent\" ready: kind=agent input= output= provider=openai model=gpt-realtime\nroom running: participants=3\nparticipant \"disconnect-agent\": error turns=0 connected=false\nparticipant \"failed-agent\": error turns=0 connected=false\nparticipant \"survivor-agent\": ended turns=0 connected=true\nroom stopped: reason=stopped participants=3 active=0\nparticipant \"disconnect-agent\": error turns=0 connected=false classification=terminal_failure\nparticipant \"failed-agent\": error turns=0 connected=false classification=terminal_failure\nparticipant \"survivor-agent\": ended turns=0 connected=true classification=provider_close\n",
+      "stdout": "room starting: participants=3 output=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c126-retire-cli-room-error-sanitization/docs/temp/projects/audio-runtime/audio-runtime-c126-retire-cli-room-error-sanitization/runs/shipped-20260913T114939Z-68622/room-failure-disconnect/output\nparticipant \"disconnect-agent\" ready: kind=agent input= output= provider=openai model=gpt-realtime\nparticipant \"failed-agent\" ready: kind=agent input= output= provider=openai model=gpt-realtime\nparticipant \"survivor-agent\" ready: kind=agent input= output= provider=openai model=gpt-realtime\nroom running: participants=3\nparticipant \"disconnect-agent\": error turns=0 connected=false\nparticipant \"failed-agent\": error turns=0 connected=false\nparticipant \"survivor-agent\": ended turns=0 connected=true\nroom stopped: reason=stopped participants=3 active=0\nparticipant \"disconnect-agent\": error turns=0 connected=false classification=terminal_failure\nparticipant \"failed-agent\": error turns=0 connected=false classification=terminal_failure\nparticipant \"survivor-agent\": ended turns=0 connected=true classification=provider_close\n",
       "stdout_bytes": 1145,
       "stdout_truncated": false,
       "survivors": false,
@@ -315,6 +315,6 @@
     }
   },
   "credential_free": true,
-  "elapsed_seconds": 0.638533,
+  "elapsed_seconds": 0.267606,
   "realtime": "not used; offline fixtures only"
 }
