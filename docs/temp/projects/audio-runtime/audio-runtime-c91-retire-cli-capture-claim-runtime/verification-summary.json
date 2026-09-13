@@ -1,0 +1,71 @@
+{
+  "schema": "audio-runtime.c91.verification-summary.v1",
+  "task": "audio-runtime-c91-retire-cli-capture-claim-runtime",
+  "project": "audio-runtime",
+  "branch": "codex/audio-runtime-c91-retire-cli-capture-claim-runtime",
+  "source_revision": "59af6325614d80173447fe2018a0471e27b4e7b1",
+  "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "candidate_revision": "054a5917853881dfa5bef79d90581d9f6dac19bd",
+  "fresh_origin_main_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "legacy_baseline": {
+    "path": "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go",
+    "lines": 317,
+    "sha256": "1747b40578f4788b1b698495652f7e8f85abbff278eab904581cd38edcc8b6cc"
+  },
+  "retirement": {
+    "candidate_lines": 77,
+    "retired_lines": 240,
+    "public_adapter_only": true
+  },
+  "focused_tests": [
+    {
+      "command": "rtk go test ./go-agent-runtime/services/captureclaim/... ./agent-cli/internal/services/internal/agentruntime -run 'SessionRecordingClaim|ClaimError|Acquire|Publish|Release|ObserveHolder|MutationOracle|Independent' -count=3 -timeout 360s",
+      "result": "228 passed in 4 packages"
+    },
+    {
+      "command": "rtk go test -race ./go-agent-runtime/services/captureclaim/... -count=3 -timeout 360s",
+      "result": "105 passed in 3 packages"
+    },
+    {
+      "command": "rtk go test ./agent-cli/internal/services/internal/agentruntime -run 'SessionRecordingClaim|Record.*Replay|Conflicting.*Record|AudioOut|Clean.*Shutdown' -count=1 -timeout 360s",
+      "result": "30 passed in 1 package"
+    },
+    {
+      "command": "rtk go test -race ./agent-cli/internal/services/internal/agentruntime -run 'SessionRecordingClaim|Conflicting.*Record|AudioOut|Clean.*Shutdown' -count=1 -timeout 420s",
+      "result": "26 passed in 1 package"
+    },
+    {
+      "command": "rtk proxy env GOWORK=off go test ./... -count=1 -timeout 120s",
+      "working_directory": "docs/temp/projects/audio-runtime/audio-runtime-c91-retire-cli-capture-claim-runtime/external-consumer",
+      "result": "passed"
+    }
+  ],
+  "coverage": {
+    "github.com/portpowered/go-agent-harness/go-agent-runtime/services/captureclaim": "100.0%",
+    "github.com/portpowered/go-agent-harness/go-agent-runtime/services/captureclaim/internal/service": "81.1%",
+    "github.com/portpowered/go-agent-harness/go-agent-runtime/services/captureclaim/wire": "100.0%",
+    "registration": "179 workspace packages checked across 6 modules"
+  },
+  "quality": {
+    "gofmt": "passed",
+    "vet": "passed",
+    "staticcheck": "pinned 2026.1 passed",
+    "golangci_lint": "pinned 2.9.0 passed",
+    "wire_generation": "passed; generated output stable",
+    "evidence_verifier_modes": "boundaries, failure-matrix, retirement-and-adapter, mutations, owned-and-excluded-paths, all passed"
+  },
+  "deferred_shared_prerequisites": [
+    {
+      "gate": "architecture-size-check",
+      "result": "blocked by four shared baseline/registration findings",
+      "findings": "three stale legacy entries for the retired adapter function and one unregistered captureclaim Wire generated file",
+      "owner": "C79 shared registry/baseline lease",
+      "action": "after C79 releases scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json, add only the captureclaim Wire registration and delete the demonstrated stale entries"
+    }
+  ],
+  "delivery": {
+    "script_ci": "not submitted while the C79 shared prerequisite remains unreleased",
+    "independent_review": "not claimed",
+    "vertical_probe": "not claimed"
+  }
+}
