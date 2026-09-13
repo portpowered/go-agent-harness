@@ -34,7 +34,6 @@ MUTATION_TIMEOUT_SECONDS = 120
 
 ALLOWED_EXACT = {
     str(LEGACY_REL),
-    "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
     "go-agent-runtime/services/session/instructions.go",
     "go-agent-runtime/services/session/internal/instructions/service.go",
     "go-agent-runtime/services/session/internal/instructions/service_test.go",

@@ -33,7 +33,6 @@ REAP_TIMEOUT_SECONDS = 2.0
 OUTPUT_LIMIT = 1 << 20
 SOURCE_FILES = (
     "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
-    "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
     "go-agent-runtime/services/session/instructions.go",
     "go-agent-runtime/services/sessioninstructions/contract.go",
     "go-agent-runtime/services/sessioninstructions/contract_test.go",
@@ -366,7 +365,7 @@ def run_invalid_instruction(budget: Budget) -> dict[str, Any]:
     environment, removed = sanitized_environment({"GOWORK": str(REPO_ROOT / "go.work")})
     result = run_bounded(
         label,
-        ["go", "test", "./agent-cli/internal/services/internal/agentruntime", "-run", "^TestC110InstructionResolutionRejectsMalformedAndOversizedFilesBeforePlan$", "-count=1"],
+        ["go", "test", "./go-agent-runtime/services/sessioninstructions/internal/service", "-run", "^TestResolveAttributesLoaderFailuresAndBounds$", "-count=1"],
         REPO_ROOT,
         environment,
         budget,
@@ -377,6 +376,7 @@ def run_invalid_instruction(budget: Budget) -> dict[str, Any]:
     return {
         "label": label,
         "cases": ["malformed NUL", "oversized"],
+        "test": "TestResolveAttributesLoaderFailuresAndBounds",
         "rejected_before_provider": True,
         "rejected_before_session_plan": True,
         "clean_shutdown": result["reaped"],

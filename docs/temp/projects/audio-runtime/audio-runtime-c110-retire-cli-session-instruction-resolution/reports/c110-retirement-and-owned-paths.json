@@ -1,7 +1,7 @@
 {
   "boundary": {
     "forbidden_new_package_tokens": [],
-    "legacy_lines": 86
+    "legacy_lines": 87
   },
   "consumer": {
     "imports": {
@@ -54,14 +54,14 @@
   "mode": "retirement-and-owned-paths",
   "retirement": {
     "agentruntime_production_lines": {
-      "candidate": 41017,
+      "candidate": 41018,
       "origin_main": 41208,
-      "retired_lines": 191
+      "retired_lines": 190
     },
     "ancestry": {
       "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "head": "8b7b71bb9c9e547049f8549b25a6547c78568584",
-      "origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "head": "7a6be0677f7b14974739f920e519c36f20fb7d28",
+      "origin_main": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
       "required_ancestors": {
         "accepted_main": {
           "is_ancestor": true,
@@ -69,7 +69,7 @@
         },
         "origin_main": {
           "is_ancestor": true,
-          "revision": "3963bc3566da24f8214634c17a9d0f79a6724171"
+          "revision": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686"
         },
         "startup_ancestor": {
           "is_ancestor": true,
@@ -90,7 +90,6 @@
     },
     "changed_paths": [
       "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
-      "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
       "coverage-manifest/go-agent-runtime/services/sessioninstructions/internal/service/package.json",
       "coverage-manifest/go-agent-runtime/services/sessioninstructions/package.json",
       "coverage-manifest/go-agent-runtime/services/sessioninstructions/wire/package.json",
@@ -106,30 +105,23 @@
       "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-retirement-and-owned-paths.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py",
       "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py",
-      "go-agent-runtime/services/session/instructions.go",
-      "go-agent-runtime/services/session/internal/instructions/service.go",
-      "go-agent-runtime/services/session/internal/instructions/service_test.go",
-      "go-agent-runtime/services/session/wire/providers.go",
-      "go-agent-runtime/services/session/wire/wire_gen.go",
       "go-agent-runtime/services/sessioninstructions/contract.go",
       "go-agent-runtime/services/sessioninstructions/contract_test.go",
       "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
       "go-agent-runtime/services/sessioninstructions/internal/service/service_test.go",
-      "go-agent-runtime/services/sessioninstructions/service.go",
       "go-agent-runtime/services/sessioninstructions/wire/wire.go",
       "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go"
     ],
     "legacy": {
       "baseline_lines": 277,
       "baseline_sha256": "57a1e2b77f282e8c7a8351b3b1bf966baacf1d4674764b92542a9b2cfc6e8adc",
-      "candidate_lines": 86,
-      "candidate_sha256": "38ea95be89eb667ddcdfd695026e81064f74ecfce2f3f0cb37090aade88970eb",
-      "retired_lines": 191
+      "candidate_lines": 87,
+      "candidate_sha256": "0fcfb133658b89d681036ba9262258a712796db2477c5a164efbaaa9d316377d",
+      "retired_lines": 190
     },
     "ownership": {
       "allowed_exact": [
         "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
-        "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
         "go-agent-runtime/services/session/instructions.go",
         "go-agent-runtime/services/session/internal/instructions/service.go",
         "go-agent-runtime/services/session/internal/instructions/service_test.go",
@@ -176,20 +168,21 @@
       ],
       "compatibility_api": {
         "constructor": "NewInstructionService",
-        "delegates_to": "sessioninstructions.Factory{}.Build",
+        "delegates_to": "session/internal/instructions.New",
         "path": "go-agent-runtime/services/session/wire/providers.go"
       },
       "unexpected": []
     },
     "source_hashes": {
-      "agent-cli/internal/services/internal/agentruntime/session_instructions.go": "38ea95be89eb667ddcdfd695026e81064f74ecfce2f3f0cb37090aade88970eb",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py": "4b6d9fb9abccf3fb00fc9d6250742c0f423040b493b4c0f6aa8ff780daaa0fb4",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py": "49ffc6c4ffe37d1a53dccfe5d58435d9985b82b8a52baf1a90a2c0c122f24fe5",
-      "go-agent-runtime/services/session/wire/providers.go": "12bc273963372c52e13aa40edb8e7452f958b31adba21b021392a856d4739a6f",
-      "go-agent-runtime/services/session/wire/wire_gen.go": "68c9ef7000bf2542e9676c2cd5674ffb946108221d095f39f058856dee7e812b",
-      "go-agent-runtime/services/sessioninstructions/contract.go": "b1c39771fd9d3757499ea0137c1dc6efc55db1145af1a03294c1bfcc317e8001",
-      "go-agent-runtime/services/sessioninstructions/internal/service/service.go": "c9db21817142ca2e05450b4d3ee9a5f6c2862a7577b382c4b700650a6fbd247e",
-      "go-agent-runtime/services/sessioninstructions/service.go": "acc2b61e1fbdc8e2d5f6aa67dc69777205d5abda7b8317afb04951b0a0bed05d",
+      "agent-cli/internal/services/internal/agentruntime/session_instructions.go": "0fcfb133658b89d681036ba9262258a712796db2477c5a164efbaaa9d316377d",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py": "d028157394d41be33703c9d97044c02e42caf939a808052f6b2a783570854996",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py": "062411c466013974c3534bdd0db6a45442b29b6ac8c6347ceffc0a0ec9926826",
+      "go-agent-runtime/services/session/instructions.go": "e4e18a756f87005c7631c333a9c82c9f68ab983e34a4f8e6e98b87eb482caedb",
+      "go-agent-runtime/services/session/internal/instructions/service.go": "15b134651b2edcc6ce2cb2df5a06e938fb7eb026a910e68ea8aefab7bd781b19",
+      "go-agent-runtime/services/session/wire/providers.go": "7da89b3b1009c7dc1b89633e48bd53e2700a12cd11e19124acfc60525efb8c88",
+      "go-agent-runtime/services/session/wire/wire_gen.go": "1deabf0aaae1296989c61650264ce448d8296c29994908ff69b53c61be7c964d",
+      "go-agent-runtime/services/sessioninstructions/contract.go": "6be7bda79d80db665fe5e88aaa6f23fb02515e297149db7d8169046fc78f44ef",
+      "go-agent-runtime/services/sessioninstructions/internal/service/service.go": "b6411cb12f5ff21e6607be4fcd3b574e9c42f72714182ca491c4d66a7b359a1a",
       "go-agent-runtime/services/sessioninstructions/wire/wire.go": "838410e1f09036c75792b2031b3530509c02bc6e1b93f9d0ef74df8faeb78978",
       "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go": "b69e8fe21fb582d60388b2f0773988993a830e1ef875fe91bb67ab4a8172d1f9"
     }
