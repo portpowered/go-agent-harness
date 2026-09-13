@@ -43,6 +43,7 @@ OWNED = (
     "coverage-manifest/go-agent-runtime/services/sessionfailure/",
     "docs/temp/projects/audio-runtime/audio-runtime-c119-retire-cli-session-failure-projection/",
 )
+RECOVERY_EVIDENCE = "docs/temp/projects/audio-runtime/audio-runtime-c147-recover-c119-session-failure-projection/"
 FORBIDDEN = {
     "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": "0584e3acc16e29b8fb79ece8a19199f0f8690de39099af922f08781edd957eb8",
     "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go": "400eba47b433673f95929d56d68f2d610cd145eab99d0712f571f1125a6c0281",
@@ -164,12 +165,16 @@ def verify_admission() -> dict[str, Any]:
 
 def verify_scope() -> dict[str, Any]:
     paths = changed_paths()
-    outside = [path for path in paths if path not in SHARED_RECONCILIATION and not any(path == prefix or path.startswith(prefix) for prefix in OWNED)]
+    outside = [path for path in paths if path not in SHARED_RECONCILIATION and not any(path == prefix or path.startswith(prefix) for prefix in OWNED + (RECOVERY_EVIDENCE,))]
     require(not outside, f"changed path outside C119 ownership: {outside}")
     forbidden_changed = sorted(path for path in paths if path in FORBIDDEN)
     require(not forbidden_changed, f"excluded caller/shared path changed: {forbidden_changed}")
     for path in FORBIDDEN:
         current = ROOT / path
+        current_main_has_path = bool(git("ls-tree", "-r", "--name-only", CURRENT_MAIN, "--", path))
+        if not current_main_has_path:
+            require(not current.exists(), f"excluded path was restored after current origin/main removed it: {path}")
+            continue
         accepted_main = git_bytes("show", f"{CURRENT_MAIN}:{path}")
         require(current.is_file() and current.read_bytes() == accepted_main, f"excluded fingerprint changed from current origin/main: {path}")
     require(not LEGACY.exists(), "legacy session failure source remains")
@@ -235,13 +240,13 @@ def causal_mutations() -> list[dict[str, Any]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=("excluded-paths-and-adapter", "positive-and-two-mutations", "retirement-and-owned-paths", "final"), default="excluded-paths-and-adapter")
+    parser.add_argument("--mode", choices=("excluded-paths-and-adapter", "positive-and-two-mutations", "retirement-and-owned-paths", "final", "all"), default="excluded-paths-and-adapter")
     parser.add_argument("--base", default=BASELINE)
     args = parser.parse_args()
     try:
         require(args.base == BASELINE, f"verification base must remain accepted main {BASELINE}")
         report: dict[str, Any] = {"schema": "audio-runtime.c119.verification.v1", "mode": args.mode, "admission": verify_admission(), "scope": verify_scope()}
-        if args.mode in {"positive-and-two-mutations", "final"}:
+        if args.mode in {"positive-and-two-mutations", "final", "all"}:
             report["checks"] = focused_checks()
             report["mutations"] = causal_mutations()
         report["status"] = "accepted"
