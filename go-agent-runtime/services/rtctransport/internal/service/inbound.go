@@ -112,14 +112,20 @@ func nilValue(value any) bool {
 }
 
 type InboundTrack struct {
-	source    packetSource
-	decoder   rtctransport.OpusDecoder
-	config    inboundTrackConfig
-	frames    chan frameResult
-	done      chan struct{}
-	closed    atomic.Bool
-	closeOnce sync.Once
-	closeErr  error
+	source      packetSource
+	decoder     rtctransport.OpusDecoder
+	config      inboundTrackConfig
+	frames      chan frameResult
+	done        chan struct{}
+	closedDone  chan struct{}
+	closed      atomic.Bool
+	closeOnce   sync.Once
+	stopOnce    sync.Once
+	sourceOnce  sync.Once
+	sourceErr   error
+	terminalMu  sync.RWMutex
+	terminalErr error
+	closeErr    error
 }
 
 type frameResult struct {
@@ -152,7 +158,9 @@ func (s *Service) NewInboundTrack(source, opus any, config rtctransport.InboundT
 	}
 	track := &InboundTrack{
 		source: packetSource, decoder: decoder, config: cfg,
-		frames: make(chan frameResult, cfg.jitterPackets+1), done: make(chan struct{}),
+		frames:     make(chan frameResult, cfg.jitterPackets+1),
+		done:       make(chan struct{}),
+		closedDone: make(chan struct{}),
 	}
 	go track.readLoop()
 	return track, nil
@@ -182,18 +190,19 @@ func (t *InboundTrack) readLoop() {
 
 func (t *InboundTrack) handlePacketEvent(state *inboundPlayout, event packetEvent, ok bool, timer *<-chan time.Time) bool {
 	if !ok {
-		close(t.frames)
+		t.finish(io.EOF)
 		return true
 	}
 	if event.err != nil {
-		return t.finishPacketEvent(state, event.err)
+		return t.finishSourceEvent(state, event.err)
 	}
 	if event.packet == nil {
 		t.finish(inboundTrackError(rtctransport.ErrInvalidInboundRTPPacket, "packet", errors.New("source returned nil without an error")))
 		return true
 	}
 	if err := state.push(event.packet); err != nil {
-		return t.finishPacketEvent(state, err)
+		t.finish(err)
+		return true
 	}
 	if *timer == nil && !state.started {
 		*timer = t.config.newTimer(t.config.jitterDepth)
@@ -201,7 +210,7 @@ func (t *InboundTrack) handlePacketEvent(state *inboundPlayout, event packetEven
 	return false
 }
 
-func (t *InboundTrack) finishPacketEvent(state *inboundPlayout, eventErr error) bool {
+func (t *InboundTrack) finishSourceEvent(state *inboundPlayout, eventErr error) bool {
 	if err := state.flush(); err != nil {
 		t.finish(err)
 	} else {
@@ -249,9 +258,11 @@ func (t *InboundTrack) finish(err error) {
 	if err == nil {
 		err = io.EOF
 	}
-	select {
-	case t.frames <- frameResult{err: err}:
-	case <-t.done:
+	t.terminalMu.Lock()
+	t.terminalErr = err
+	t.terminalMu.Unlock()
+	if closeErr := t.stop(); closeErr != nil {
+		t.recordSourceCloseError(closeErr)
 	}
 	close(t.frames)
 }
@@ -270,7 +281,7 @@ func (t *InboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, err
 	default:
 	}
 	select {
-	case <-t.done:
+	case <-t.closedDone:
 		return sharedaudio.PCMFrame{}, rtctransport.ErrInboundTrackClosed
 	case <-ctx.Done():
 		return sharedaudio.PCMFrame{}, ctx.Err()
@@ -279,7 +290,7 @@ func (t *InboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, err
 			return sharedaudio.PCMFrame{}, rtctransport.ErrInboundTrackClosed
 		}
 		if !ok {
-			return sharedaudio.PCMFrame{}, io.EOF
+			return sharedaudio.PCMFrame{}, t.terminal()
 		}
 		if result.err != nil {
 			return sharedaudio.PCMFrame{}, result.err
@@ -294,10 +305,46 @@ func (t *InboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, err
 func (t *InboundTrack) Close() error {
 	t.closeOnce.Do(func() {
 		t.closed.Store(true)
-		close(t.done)
-		if err := t.source.close(); err != nil {
+		close(t.closedDone)
+		if err := t.stop(); err != nil {
 			t.closeErr = inboundTrackError(rtctransport.ErrInboundTrackSource, "close source", err)
 		}
 	})
 	return t.closeErr
+}
+
+func (t *InboundTrack) stop() error {
+	var stopErr error
+	t.stopOnce.Do(func() {
+		close(t.done)
+		stopErr = t.closeSource()
+	})
+	if stopErr != nil {
+		return stopErr
+	}
+	return t.closeSource()
+}
+
+func (t *InboundTrack) closeSource() error {
+	t.sourceOnce.Do(func() {
+		t.sourceErr = t.source.close()
+	})
+	return t.sourceErr
+}
+
+func (t *InboundTrack) recordSourceCloseError(err error) {
+	t.terminalMu.Lock()
+	defer t.terminalMu.Unlock()
+	if t.terminalErr == nil {
+		t.terminalErr = inboundTrackError(rtctransport.ErrInboundTrackSource, "close source", err)
+	}
+}
+
+func (t *InboundTrack) terminal() error {
+	t.terminalMu.RLock()
+	defer t.terminalMu.RUnlock()
+	if t.terminalErr == nil {
+		return io.EOF
+	}
+	return t.terminalErr
 }

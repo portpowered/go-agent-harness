@@ -49,10 +49,10 @@ type OutboundTrack struct {
 }
 
 func (s *Service) NewOutboundTrack(config rtctransport.OutboundTrackConfig) (rtctransport.OutboundTrack, error) {
-	if config.Encoder == nil {
+	if nilValue(config.Encoder) {
 		return nil, rtctransport.ErrOutboundNilEncoder
 	}
-	if config.Writer == nil {
+	if nilValue(config.Writer) {
 		return nil, rtctransport.ErrOutboundNilWriter
 	}
 	sourceSamples, err := normalizeOutboundFrame(config)
@@ -74,6 +74,8 @@ func (s *Service) NewOutboundTrack(config rtctransport.OutboundTrackConfig) (rtc
 	}
 	if config.Pacer == nil {
 		config.Pacer = newWallClockPacer()
+	} else if nilValue(config.Pacer) {
+		return nil, rtctransport.ErrOutboundNilPacer
 	}
 	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
 	track := &OutboundTrack{

@@ -94,6 +94,13 @@ func testInboundRejection(t *testing.T, name string, packet *rtp.Packet, want er
 		if !errors.Is(readErr, want) {
 			t.Fatalf("terminal error = %v, want errors.Is(..., %v)", readErr, want)
 		}
+		var typedErr *rtctransport.InboundTrackError
+		if !errors.As(readErr, &typedErr) {
+			t.Fatalf("terminal error = %T, want *InboundTrackError", readErr)
+		}
+		if !errors.Is(typedErr.Kind, want) {
+			t.Fatalf("terminal error kind = %v, want %v", typedErr.Kind, want)
+		}
 		return
 	}
 }
@@ -260,10 +267,253 @@ func TestTransportConstructionRejectsInvalidDependencies(t *testing.T) {
 	}
 }
 
+func TestInboundTerminalErrorDoesNotBlockWhenFrameQueueIsFull(t *testing.T) {
+	sourceErr := errors.New("packet source stopped")
+	source := &terminalPacketSource{
+		packets: []*rtp.Packet{
+			testPacket(1, 1000, 1, 111, 1),
+			testPacket(2, 1960, 1, 111, 2),
+		},
+		err: sourceErr,
+	}
+	track, err := NewService().NewInboundTrack(source, &testDecoder{}, rtctransport.InboundTrackConfig{
+		FrameDuration: 20 * time.Millisecond,
+		JitterDepth:   20 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("NewInboundTrack() error = %v", err)
+	}
+	defer func() {
+		if closeErr := track.Close(); closeErr != nil {
+			t.Errorf("Close() error = %v", closeErr)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	for index := 0; index < 2; index++ {
+		if _, readErr := track.ReadFrame(ctx); readErr != nil {
+			t.Fatalf("ReadFrame(%d) error = %v", index, readErr)
+		}
+	}
+	_, terminalErr := track.ReadFrame(ctx)
+	if !errors.Is(terminalErr, sourceErr) || !errors.Is(terminalErr, rtctransport.ErrInboundTrackSource) {
+		t.Fatalf("terminal error = %v, want source cause and identity", terminalErr)
+	}
+}
+
+func TestInboundTerminalFailureClosesBlockedPacketSource(t *testing.T) {
+	source := newBlockedAfterInvalidSource()
+	track, err := NewService().NewInboundTrack(source, &testDecoder{}, rtctransport.InboundTrackConfig{})
+	if err != nil {
+		t.Fatalf("NewInboundTrack() error = %v", err)
+	}
+	defer func() {
+		if closeErr := track.Close(); closeErr != nil {
+			t.Errorf("Close() error = %v", closeErr)
+		}
+	}()
+
+	select {
+	case <-source.blocked:
+	case <-time.After(time.Second):
+		t.Fatal("packet source did not reach its blocked read")
+	}
+	select {
+	case <-source.closed:
+	case <-time.After(time.Second):
+		t.Fatal("terminal failure did not close the packet source")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, terminalErr := track.ReadFrame(ctx)
+	assertInboundKind(t, terminalErr, rtctransport.ErrInvalidInboundRTPPacket)
+}
+
+func TestInboundObsoletePacketStillValidatesTrackIdentity(t *testing.T) {
+	firstTimer := make(chan time.Time)
+	timerCreated := make(chan struct{})
+	secondPacket := make(chan struct{})
+	timerCalls := 0
+	source := &stagedPacketSource{
+		first:         testPacket(10, 1000, 1, 111, 1),
+		second:        testPacket(10, 1000, 2, 111, 1),
+		releaseSecond: secondPacket,
+	}
+	track, err := NewService().NewInboundTrack(source, &testDecoder{}, rtctransport.InboundTrackConfig{
+		NewTimer: func(time.Duration) <-chan time.Time {
+			timerCalls++
+			if timerCalls == 1 {
+				close(timerCreated)
+				return firstTimer
+			}
+			return make(chan time.Time)
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewInboundTrack() error = %v", err)
+	}
+	defer func() {
+		if closeErr := track.Close(); closeErr != nil {
+			t.Errorf("Close() error = %v", closeErr)
+		}
+	}()
+
+	select {
+	case <-timerCreated:
+	case <-time.After(time.Second):
+		t.Fatal("inbound playout timer was not created")
+	}
+	close(firstTimer)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, readErr := track.ReadFrame(ctx); readErr != nil {
+		t.Fatalf("first ReadFrame() error = %v", readErr)
+	}
+	close(secondPacket)
+	_, terminalErr := track.ReadFrame(ctx)
+	assertInboundKind(t, terminalErr, rtctransport.ErrInvalidInboundRTPPacket)
+}
+
+func TestOutboundConstructionRejectsTypedNilDependencies(t *testing.T) {
+	service := NewService()
+	validWriter := rtctransport.RTPWriterFunc(func(context.Context, *rtp.Packet) error { return nil })
+	validEncoder := rtctransport.OpusEncoderFunc(func(context.Context, []int16) ([]byte, error) { return []byte{1}, nil })
+	validPacer := rtctransport.PacerFunc(func(context.Context, uint64) error { return nil })
+
+	var encoder *typedNilEncoder
+	if _, err := service.NewOutboundTrack(rtctransport.OutboundTrackConfig{
+		SourceRate: 48000, Encoder: encoder, Writer: validWriter, Pacer: validPacer,
+	}); !errors.Is(err, rtctransport.ErrOutboundNilEncoder) {
+		t.Fatalf("typed nil encoder error = %v, want encoder identity", err)
+	}
+
+	var writer *typedNilWriter
+	if _, err := service.NewOutboundTrack(rtctransport.OutboundTrackConfig{
+		SourceRate: 48000, Encoder: validEncoder, Writer: writer, Pacer: validPacer,
+	}); !errors.Is(err, rtctransport.ErrOutboundNilWriter) {
+		t.Fatalf("typed nil writer error = %v, want writer identity", err)
+	}
+
+	var pacer *typedNilPacer
+	if _, err := service.NewOutboundTrack(rtctransport.OutboundTrackConfig{
+		SourceRate: 48000, Encoder: validEncoder, Writer: validWriter, Pacer: pacer,
+	}); !errors.Is(err, rtctransport.ErrOutboundNilPacer) {
+		t.Fatalf("typed nil pacer error = %v, want pacer identity", err)
+	}
+}
+
+func assertInboundKind(t *testing.T, err error, want error) {
+	t.Helper()
+	if !errors.Is(err, want) {
+		t.Fatalf("error = %v, want errors.Is(..., %v)", err, want)
+	}
+	var typedErr *rtctransport.InboundTrackError
+	if !errors.As(err, &typedErr) {
+		t.Fatalf("error = %T, want *InboundTrackError", err)
+	}
+	if !errors.Is(typedErr.Kind, want) {
+		t.Fatalf("error kind = %v, want %v", typedErr.Kind, want)
+	}
+}
+
 type testPacketSource struct {
 	packets []*rtp.Packet
 	index   int
 }
+
+type terminalPacketSource struct {
+	packets []*rtp.Packet
+	index   int
+	err     error
+	closed  chan struct{}
+	once    sync.Once
+}
+
+func (s *terminalPacketSource) ReadRTP() (*rtp.Packet, error) {
+	if s.index < len(s.packets) {
+		packet := s.packets[s.index]
+		s.index++
+		return packet, nil
+	}
+	return nil, s.err
+}
+
+func (s *terminalPacketSource) Close() error {
+	s.once.Do(func() {
+		if s.closed != nil {
+			close(s.closed)
+		}
+	})
+	return nil
+}
+
+type blockedAfterInvalidSource struct {
+	reads     int
+	blocked   chan struct{}
+	closed    chan struct{}
+	blockOnce sync.Once
+	closeOnce sync.Once
+}
+
+func newBlockedAfterInvalidSource() *blockedAfterInvalidSource {
+	return &blockedAfterInvalidSource{
+		blocked: make(chan struct{}),
+		closed:  make(chan struct{}),
+	}
+}
+
+func (s *blockedAfterInvalidSource) ReadRTP() (*rtp.Packet, error) {
+	s.reads++
+	switch s.reads {
+	case 1:
+		return testPacket(1, 1000, 1, 111, 1), nil
+	case 2:
+		return testPacket(1, 1000, 2, 111, 1), nil
+	default:
+		s.blockOnce.Do(func() { close(s.blocked) })
+		<-s.closed
+		return nil, errors.New("source closed")
+	}
+}
+
+func (s *blockedAfterInvalidSource) Close() error {
+	s.closeOnce.Do(func() { close(s.closed) })
+	return nil
+}
+
+type stagedPacketSource struct {
+	first         *rtp.Packet
+	second        *rtp.Packet
+	releaseSecond <-chan struct{}
+	reads         int
+}
+
+func (s *stagedPacketSource) ReadRTP() (*rtp.Packet, error) {
+	s.reads++
+	switch s.reads {
+	case 1:
+		return s.first, nil
+	case 2:
+		<-s.releaseSecond
+		return s.second, nil
+	default:
+		return nil, io.EOF
+	}
+}
+
+type typedNilEncoder struct{}
+
+func (*typedNilEncoder) Encode(context.Context, []int16) ([]byte, error) { return nil, nil }
+
+type typedNilWriter struct{}
+
+func (*typedNilWriter) WriteRTP(context.Context, *rtp.Packet) error { return nil }
+
+type typedNilPacer struct{}
+
+func (*typedNilPacer) Wait(context.Context, uint64) error { return nil }
 
 func (s *testPacketSource) ReadRTP() (*rtp.Packet, error) {
 	if s.index == len(s.packets) {

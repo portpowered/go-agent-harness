@@ -67,7 +67,10 @@ func (l *liveDeviceProbeMediaLink) RoundTrip(ctx context.Context, samples []int1
 		if err != nil {
 			return nil, fmt.Errorf("create RTC Opus decoder: %w", err)
 		}
-		l.inbound, err = l.transport.NewInboundTrack(liveDeviceProbeRTPPacketSource{track: remote}, l.decoder, rtctransport.InboundTrackConfig{
+		l.inbound, err = l.transport.NewInboundTrack(liveDeviceProbeRTPPacketSource{
+			track:    remote,
+			receiver: l.peers.receiver,
+		}, l.decoder, rtctransport.InboundTrackConfig{
 			SampleRate:    deviceProbeInputSampleRate,
 			FrameDuration: deviceProbeFrameDuration,
 			JitterDepth:   deviceProbeFrameDuration,
@@ -116,11 +119,21 @@ func (w liveDeviceProbeRTPWriter) WriteRTP(ctx context.Context, packet *rtp.Pack
 	}
 }
 
-type liveDeviceProbeRTPPacketSource struct{ track *webrtc.TrackRemote }
+type liveDeviceProbeRTPPacketSource struct {
+	track    *webrtc.TrackRemote
+	receiver *webrtc.PeerConnection
+}
 
 func (s liveDeviceProbeRTPPacketSource) ReadRTP() (*rtp.Packet, error) {
 	packet, _, err := s.track.ReadRTP()
 	return packet, err
+}
+
+func (s liveDeviceProbeRTPPacketSource) Close() error {
+	if s.receiver == nil {
+		return nil
+	}
+	return s.receiver.Close()
 }
 
 type liveDeviceProbePeerPair struct {

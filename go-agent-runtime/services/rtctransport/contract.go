@@ -52,6 +52,7 @@ const (
 	ErrOutboundFrameSize          Error = "rtc outbound PCM frame has invalid size"
 	ErrOutboundNilEncoder         Error = "rtc outbound Opus encoder is nil"
 	ErrOutboundNilWriter          Error = "rtc outbound RTP writer is nil"
+	ErrOutboundNilPacer           Error = "rtc outbound media pacer is nil"
 	ErrOutboundEmptyPayload       Error = "rtc outbound encoder produced an empty payload"
 	ErrOutboundFrameTooLarge      Error = "rtc outbound PCM frame is too large"
 	ErrOutboundQueueOverflow      Error = "rtc outbound track queue is full"

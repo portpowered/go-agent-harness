@@ -32,14 +32,14 @@ func (s *inboundPlayout) push(packet *rtp.Packet) error {
 		s.initialize(packet)
 	}
 	extended := unwrapSequence(packet.SequenceNumber, s.maxSeq)
+	if err := s.validatePacket(packet, extended); err != nil {
+		return err
+	}
 	if s.isObsolete(extended) {
 		return nil
 	}
 	if _, exists := s.packets[extended]; exists {
 		return nil
-	}
-	if err := s.validatePacket(packet, extended); err != nil {
-		return err
 	}
 	if err := s.validateWindow(packet, extended); err != nil {
 		return err
