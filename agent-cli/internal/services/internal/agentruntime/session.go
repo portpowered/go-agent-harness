@@ -205,17 +205,13 @@ func (s *sessionInstructionsSession) Receive() *messages.TypedBuffer[messages.St
 	return s.receive
 }
 
-func (s *sessionInstructionsSession) Done() <-chan struct{} {
-	return s.done
-}
+func (s *sessionInstructionsSession) Done() <-chan struct{} { return s.done }
 
 func (s *sessionInstructionsSession) rtcMedia() (RTCMediaEndpoints, bool) {
 	return rtcMediaFromSession(s.inner)
 }
 
-func (s *sessionInstructionsSession) TerminalError() error {
-	return terminalSessionError(s.inner)
-}
+func (s *sessionInstructionsSession) TerminalError() error { return terminalSessionError(s.inner) }
 
 func (s *sessionInstructionsSession) Close() error {
 	s.cancel()
