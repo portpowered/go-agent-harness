@@ -32,6 +32,7 @@ BRANCH = "codex/audio-runtime-c127-repair-current-main-terminal-drain-regression
 LIVE_TEST = "TestTerminalDrainOrderedBoundaryTrace"
 C64_TEST = "TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio"
 LIVE_TEST_FILE = Path("go-agent-runtime/services/session/internal/live/service_test.go")
+CAUSAL_TEST_FILE = Path("go-agent-runtime/services/session/internal/live/terminal_drain_test.go")
 MAX_CHILD_SECONDS = 60.0
 MAX_AGGREGATE_SECONDS = 600.0
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -208,12 +209,13 @@ def candidate_control(deadline: float) -> dict[str, object]:
     return result
 
 
-def baseline_control(deadline: float, candidate_test: Path) -> dict[str, object]:
+def baseline_control(deadline: float, candidate_test: Path, causal_test: Path) -> dict[str, object]:
     if time.monotonic() > deadline:
         raise RunnerError("aggregate deadline exceeded before current-main control")
     with detached_worktree(PINNED_CURRENT_MAIN, "audio-runtime-c127-current-main-") as baseline:
-        overlay = baseline / LIVE_TEST_FILE
-        shutil.copy2(candidate_test, overlay)
+        for source, relative in ((candidate_test, LIVE_TEST_FILE), (causal_test, CAUSAL_TEST_FILE)):
+            overlay = baseline / relative
+            shutil.copy2(source, overlay)
         result = run_bounded(
             [
                 "go", "test", "-count=1", "-v", "./services/session/internal/live",
@@ -229,6 +231,10 @@ def baseline_control(deadline: float, candidate_test: Path) -> dict[str, object]
             raise RunnerError("current-main negative control did not prove the preclaim failure")
         result["source_revision"] = PINNED_CURRENT_MAIN
         result["test_overlay_sha256"] = sha256_file(candidate_test)
+        result["test_overlay_sha256s"] = {
+            str(LIVE_TEST_FILE): sha256_file(candidate_test),
+            str(CAUSAL_TEST_FILE): sha256_file(causal_test),
+        }
         result["failure_marker"] = "provider media admitted during Receive: context deadline exceeded"
         return result
 
@@ -396,7 +402,7 @@ def main() -> int:
         print(json.dumps({"output": str(output), "candidate_revision": candidate_revision, "origin_main_at_run": origin_main, "aggregate_elapsed_ms": report["bounds"]["aggregate_elapsed_ms"]}, sort_keys=True))
         return 0
     candidate = candidate_control(deadline)
-    baseline = baseline_control(deadline, REPO_ROOT / LIVE_TEST_FILE)
+    baseline = baseline_control(deadline, REPO_ROOT / LIVE_TEST_FILE, REPO_ROOT / CAUSAL_TEST_FILE)
     c64 = c64_control(deadline)
     report = {
         "schema": "audio-runtime.c127.ordered-causal-run.v1",
