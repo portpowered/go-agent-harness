@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	cliOutput "github.com/portpowered/go-agent-harness/agent-cli/internal/output"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
@@ -20,6 +21,7 @@ import (
 	runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 // FileDeviceService is the host-composed file media service and its timing
@@ -158,9 +160,7 @@ type publicTraceRun struct {
 	binding  runtimeSessionTrace.DeviceBinding
 	observer runtimeSessionTrace.RuntimeObserver
 
-	capturePreGateBound  atomic.Bool
-	captureUploadedBound atomic.Bool
-	terminalOnce         sync.Once
+	terminalOnce sync.Once
 }
 
 // sessiontracePrepared is kept as the narrow public contract used by the host.
@@ -248,7 +248,6 @@ func (r *publicTraceRun) wrapFileSource(source sharedaudio.AudioSource, rate int
 	if rate <= 0 {
 		rate = sharedaudio.SampleRate
 	}
-	r.capturePreGateBound.Store(true)
 	if sampleSource, ok := source.(sharedaudio.SampleSource); ok {
 		return &traceSampleSource{source: sampleSource, rate: rate, observer: r.binding.PreGateSamplesObserver}
 	}
@@ -428,18 +427,6 @@ func (r *publicTraceRecorder) observeAudio(ctx context.Context, record runtimeSe
 		}
 	}
 	samples := append([]int16(nil), record.Frame.Samples...)
-	if len(samples) > 0 {
-		switch {
-		case record.Direction == runtimeSession.LiveRecordClient && record.Admission == runtimeSession.LiveAudioQueueAdmitted:
-			if !r.run.capturePreGateBound.Load() && r.binding.PreGateSamplesObserver != nil {
-				r.binding.PreGateSamplesObserver(rate, samples)
-			}
-		case record.Direction == runtimeSession.LiveRecordClient:
-			if !r.run.captureUploadedBound.Load() && r.binding.UploadedSamplesObserver != nil {
-				r.binding.UploadedSamplesObserver(rate, samples)
-			}
-		}
-	}
 	payload, marshalErr := json.Marshal(struct {
 		Direction string `json:"direction"`
 		Admission string `json:"admission"`
@@ -566,16 +553,26 @@ func (s publicTraceDeviceService) Open(ctx context.Context, request runtimeDevic
 		return handle, err
 	}
 	ports := handle.Media()
-	if request.CaptureEnabled && ports.Capture != nil {
+	var capture runtimeDevices.Capture
+	if ports.Capture != nil {
 		if setter, ok := ports.Capture.(traceCapturePreGateSetter); ok {
 			setter.SetPreGateSamplesObserver(s.trace.binding.PreGateSamplesObserver)
-			s.trace.capturePreGateBound.Store(true)
 		}
 		if setter, ok := ports.Capture.(traceCaptureUploadedSetter); ok {
 			setter.SetUploadedSamplesObserver(s.trace.binding.UploadedSamplesObserver)
-			s.trace.captureUploadedBound.Store(true)
+		} else if s.trace.binding.UploadedSamplesObserver != nil {
+			// File-backed capture has no device-owned upload setter. Wrap the
+			// exact outbound handoff instead: a frame is uploaded only after the
+			// provider endpoint accepts it, never from queue admission or replay
+			// bookkeeping. Physical device sources use their own callback above.
+			capture = &traceCapture{
+				inner:    ports.Capture,
+				observer: s.trace.binding.UploadedSamplesObserver,
+				rate:     request.SampleRate,
+			}
 		}
 	}
+	var monitor *remoteRenderMonitor
 	if request.PlaybackEnabled && ports.Playback != nil {
 		if setter, ok := ports.Playback.(tracePlaybackSetter); ok {
 			setter.SetPlaybackSamplesObserver(s.trace.binding.PlaybackSamplesObserver)
@@ -587,11 +584,236 @@ func (s publicTraceDeviceService) Open(ctx context.Context, request runtimeDevic
 			setter.SetPlaybackRenderObserver(sharedaudio.PlaybackRenderObserver(s.trace.binding.RenderedSamplesObserver))
 			rendered = true
 		}
-		if !rendered && s.trace.binding.RenderedSamplesUnavailable != nil {
+		if !rendered && strings.TrimSpace(request.RemoteEndpoint) != "" {
+			var monitorErr error
+			monitor, monitorErr = newRemoteRenderMonitor(ctx, request, ports.Playback, s.trace.binding.RenderedSamplesObserver)
+			if monitorErr == nil {
+				monitor.Start()
+			}
+		}
+		if !rendered && monitor == nil && s.trace.binding.RenderedSamplesUnavailable != nil {
 			s.trace.binding.RenderedSamplesUnavailable()
 		}
 	}
+	if capture != nil || monitor != nil {
+		return &publicTraceDeviceHandle{inner: handle, capture: capture, monitor: monitor}, nil
+	}
 	return handle, nil
+}
+
+type publicTraceDeviceHandle struct {
+	inner   runtimeDevices.Handle
+	capture runtimeDevices.Capture
+	monitor *remoteRenderMonitor
+
+	closeOnce sync.Once
+	closeErr  error
+}
+
+func (h *publicTraceDeviceHandle) Media() runtimeDevices.MediaPorts {
+	if h == nil || h.inner == nil {
+		return runtimeDevices.MediaPorts{}
+	}
+	ports := h.inner.Media()
+	if h.capture != nil {
+		ports.Capture = h.capture
+	}
+	return ports
+}
+
+func (h *publicTraceDeviceHandle) Close() error {
+	if h == nil {
+		return nil
+	}
+	h.closeOnce.Do(func() {
+		if h.monitor != nil {
+			h.monitor.Stop()
+		}
+		if h.inner != nil {
+			h.closeErr = h.inner.Close()
+		}
+	})
+	return h.closeErr
+}
+
+type traceCapture struct {
+	inner    runtimeDevices.Capture
+	observer runtimeSessionTrace.CaptureSamplesObserver
+	rate     int
+}
+
+func (c *traceCapture) Pump(ctx context.Context, outbound sharedaudio.OutboundMedia) error {
+	if c == nil || c.inner == nil {
+		return runtimeDevices.ErrUnavailable
+	}
+	if outbound == nil {
+		return fmt.Errorf("%w: provider outbound media is nil", runtimeDevices.ErrInvalidRequest)
+	}
+	return c.inner.Pump(ctx, &traceCaptureOutbound{target: outbound, observer: c.observer, rate: c.rate})
+}
+
+func (c *traceCapture) Close() error {
+	if c == nil || c.inner == nil {
+		return nil
+	}
+	return c.inner.Close()
+}
+
+type traceCaptureOutbound struct {
+	target   sharedaudio.OutboundMedia
+	observer runtimeSessionTrace.CaptureSamplesObserver
+	rate     int
+}
+
+func (o *traceCaptureOutbound) WriteFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
+	if o == nil || o.target == nil {
+		return fmt.Errorf("%w: provider outbound media is nil", runtimeDevices.ErrInvalidRequest)
+	}
+	if err := o.target.WriteFrame(ctx, frame); err != nil {
+		return err
+	}
+	if o.observer != nil && len(frame.Samples) > 0 {
+		rate := frame.Format.SampleRate
+		if rate <= 0 {
+			rate = o.rate
+		}
+		o.observer(rate, append([]int16(nil), frame.Samples...))
+	}
+	return nil
+}
+
+func (o *traceCaptureOutbound) Close() error {
+	if o == nil || o.target == nil {
+		return nil
+	}
+	return o.target.Close()
+}
+
+var _ runtimeDevices.Capture = (*traceCapture)(nil)
+var _ sharedaudio.OutboundMedia = (*traceCaptureOutbound)(nil)
+
+type traceDeviceSampleRate interface {
+	DeviceSampleRate() int
+}
+
+// remoteRenderMonitor mirrors the cumulative PCM retained by the public
+// loopback device-server snapshot. The server records samples only after its
+// simulated device callback consumes the playback queue, so this is an
+// invocation-scoped transport mirror of the render boundary, never a queue
+// admission or provider/file fallback.
+type remoteRenderMonitor struct {
+	endpoint string
+	rate     int
+	observer runtimeSessionTrace.CaptureSamplesObserver
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	done   chan struct{}
+
+	mu   sync.Mutex
+	seen int
+}
+
+func newRemoteRenderMonitor(ctx context.Context, request runtimeDevices.Request, playback runtimeDevices.Playback, observer runtimeSessionTrace.CaptureSamplesObserver) (*remoteRenderMonitor, error) {
+	if strings.TrimSpace(request.RemoteEndpoint) == "" || observer == nil {
+		return nil, errors.New("remote render observer is unavailable")
+	}
+	probeContext := ctx
+	if probeContext == nil {
+		probeContext = context.Background()
+	}
+	probeContext, cancel := context.WithTimeout(probeContext, time.Second)
+	defer cancel()
+	snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(probeContext, request.RemoteEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	rate := request.SampleRate
+	if sampleRate, ok := playback.(traceDeviceSampleRate); ok && sampleRate.DeviceSampleRate() > 0 {
+		rate = sampleRate.DeviceSampleRate()
+	}
+	if rate <= 0 {
+		rate = sharedaudio.SampleRate
+	}
+	return &remoteRenderMonitor{
+		endpoint: strings.TrimSpace(request.RemoteEndpoint),
+		rate:     rate,
+		observer: observer,
+		ctx:      context.Background(),
+		cancel:   func() {},
+		done:     make(chan struct{}),
+		seen:     len(snapshot.RenderedSamples),
+	}, nil
+}
+
+func (m *remoteRenderMonitor) Start() {
+	if m == nil {
+		return
+	}
+	m.ctx, m.cancel = context.WithCancel(context.Background())
+	go m.run()
+}
+
+func (m *remoteRenderMonitor) run() {
+	if m == nil {
+		return
+	}
+	defer close(m.done)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-ticker.C:
+			m.poll(m.ctx)
+		}
+	}
+}
+
+func (m *remoteRenderMonitor) poll(ctx context.Context) {
+	if m == nil || m.observer == nil {
+		return
+	}
+	pollContext, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(pollContext, m.endpoint)
+	cancel()
+	if err != nil {
+		return
+	}
+	m.mu.Lock()
+	if len(snapshot.RenderedSamples) < m.seen {
+		m.mu.Unlock()
+		return
+	}
+	if len(snapshot.RenderedSamples) == m.seen {
+		m.mu.Unlock()
+		return
+	}
+	samples := append([]int16(nil), snapshot.RenderedSamples[m.seen:]...)
+	m.seen = len(snapshot.RenderedSamples)
+	rate := m.rate
+	m.mu.Unlock()
+	if len(samples) > 0 {
+		m.observer(rate, samples)
+	}
+}
+
+func (m *remoteRenderMonitor) Stop() {
+	if m == nil {
+		return
+	}
+	if m.cancel != nil {
+		m.cancel()
+	}
+	select {
+	case <-m.done:
+	default:
+		<-m.done
+	}
+	// The final poll happens before the owning device handle closes so samples
+	// from the last callback are not lost to a fast session teardown.
+	m.poll(context.Background())
 }
 
 func wrapTraceDeviceService(service runtimeDevices.Service, trace *publicTraceRun) runtimeDevices.Service {
@@ -784,6 +1006,12 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		deviceRequest.FileInput = filePorts.Input
 		deviceRequest.FileOutput = filePorts.Output
 		deviceService, deviceRequest = selectFileDevices(deviceService, deps.FileDeviceService.Service, deviceRequest, filePorts)
+		if filePorts.Input != nil {
+			// FileInput owns the physical capture role in the composite device
+			// service, but the live lifecycle still needs to know that capture is
+			// active so it waits for the source boundary before finishing.
+			deviceRequest.CaptureEnabled = true
+		}
 	}
 	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0) {
 		deviceService = nil

@@ -352,10 +352,13 @@ func TestPublicSessionTracePublishesRedactedRuntimeAndAudioAfterRecording(t *tes
 			t.Fatalf("timeline missing runtime kind %q: %s", kind, timeline)
 		}
 	}
-	for _, name := range []string{"microphone-pre-gate.wav", "microphone-uploaded.wav", "speaker-enqueued.wav"} {
+	for _, name := range []string{"microphone-pre-gate.wav", "microphone-uploaded.wav", "speaker-enqueued.wav", "speaker-rendered.wav"} {
 		if _, err := os.Stat(filepath.Join(bundle, "audio-trace", name)); err != nil {
 			t.Fatalf("trace audio %s: %v", name, err)
 		}
+	}
+	if strings.Contains(string(timeline), `"runtime_kind":"audio_render_tap_unavailable"`) {
+		t.Fatalf("callback-capable renderer was marked unavailable: %s", timeline)
 	}
 	if got := capture.preGateSamples(); !equalTraceSamples(got, []int16{11, -12, 13}) {
 		t.Fatalf("pre-gate callback samples = %v, want callback payload", got)

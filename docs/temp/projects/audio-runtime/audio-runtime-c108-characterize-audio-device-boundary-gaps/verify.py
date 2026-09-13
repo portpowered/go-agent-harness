@@ -46,6 +46,7 @@ C117_SUCCESSOR_PATHS = {
     "agent-cli/internal/wire/wire.go",
     "agent-cli/internal/wire/wire_gen.go",
     C117_OWNED_REL,
+    "docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication",
 }
 PRODUCTION_ROOTS = ("agent-cli", "go-agent-loop", "go-agent-runtime", "go-llm-gateway")
 PRD = ROOT / "prd.json"
