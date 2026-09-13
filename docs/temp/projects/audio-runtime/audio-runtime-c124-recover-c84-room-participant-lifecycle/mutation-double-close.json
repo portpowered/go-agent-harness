@@ -1,0 +1,56 @@
+{
+  "mutation": {
+    "new": "s.closeOnce()",
+    "old": "s.once.Do(s.closeOnce)",
+    "source": "go-agent-runtime/services/rooms/internal/lifecycle/participant_session.go"
+  },
+  "name": "mutation-double-close",
+  "negative": {
+    "command": [
+      "rtk",
+      "proxy",
+      "go",
+      "test",
+      "-mod=readonly",
+      "./...",
+      "-count=1",
+      "-timeout=90s"
+    ],
+    "exit_code": 1,
+    "stderr": "",
+    "stdout": "--- FAIL: TestExternalConsumerOwnsParticipantLifecycle (0.00s)\n    participant_lifecycle_test.go:99: underlying close calls = 2, want one\nFAIL\nFAIL\texample.com/audio-runtime-c124-external-consumer\t0.331s\nFAIL\n",
+    "timed_out": false
+  },
+  "positive": {
+    "command": [
+      "rtk",
+      "proxy",
+      "go",
+      "test",
+      "-mod=readonly",
+      "./...",
+      "-count=1",
+      "-timeout=90s"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "ok  \texample.com/audio-runtime-c124-external-consumer\t0.484s\n",
+    "timed_out": false
+  },
+  "restored": {
+    "command": [
+      "rtk",
+      "proxy",
+      "go",
+      "test",
+      "-mod=readonly",
+      "./...",
+      "-count=1",
+      "-timeout=90s"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "ok  \texample.com/audio-runtime-c124-external-consumer\t0.175s\n",
+    "timed_out": false
+  }
+}
