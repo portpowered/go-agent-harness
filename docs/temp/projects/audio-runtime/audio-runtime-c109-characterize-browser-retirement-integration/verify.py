@@ -96,7 +96,7 @@ def sha256_file(path: Path) -> str:
 
 def source_bindings(root: Path) -> dict[str, dict[str, str]]:
     bindings: dict[str, dict[str, str]] = {}
-    for name, relative in (("verifier", OWNED_PREFIX + "verify.py"), ("public_runner", RUNNER_RELATIVE), ("negative_fixture", FIXTURE_RELATIVE)):
+    for name, relative in (("verifier", OWNED_PREFIX + "verify.py"), ("public_runner", RUNNER_RELATIVE), ("negative_fixture", FIXTURE_RELATIVE), ("analyzer_tests", OWNED_PREFIX + "test_analyze.py")):
         path = root / relative
         require(path.is_file(), f"C109 source binding path is missing: {relative}")
         bindings[name] = {"path": relative, "sha256": sha256_file(path)}

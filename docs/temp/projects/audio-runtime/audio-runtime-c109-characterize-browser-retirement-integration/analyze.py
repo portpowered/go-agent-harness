@@ -347,6 +347,7 @@ def diff_paths(root: Path, base: str, head: str) -> list[str]:
 
 
 GO_IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
+GO_PUNCTUATION = frozenset("{}().,;=*[]:.")
 
 
 def mask_go_non_code(text: str) -> str:
@@ -405,7 +406,7 @@ def go_tokens(text: str) -> list[dict[str, Any]]:
                 }
             )
         for position, value in enumerate(line, 1):
-            if value in "{}().,;=*[]":
+            if value in GO_PUNCTUATION:
                 tokens.append({"value": value, "line": line_number, "column_start": position, "column_end": position})
     return sorted(tokens, key=lambda token: (token["line"], token["column_start"]))
 
@@ -439,25 +440,51 @@ def matching_brace_line(tokens: list[dict[str, Any]], start: int) -> int:
     return tokens[start]["line"] if start < len(tokens) else 1
 
 
+def matching_delimiter_index(
+    tokens: list[dict[str, Any]], start: int, opening: str, closing: str
+) -> int | None:
+    depth = 0
+    for index in range(start, len(tokens)):
+        value = tokens[index]["value"]
+        if value == opening:
+            depth += 1
+        elif value == closing:
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def skip_type_parameters(tokens: list[dict[str, Any]], start: int) -> int:
+    if start >= len(tokens) or tokens[start]["value"] != "[":
+        return start
+    end = matching_delimiter_index(tokens, start, "[", "]")
+    return len(tokens) if end is None else end + 1
+
+
 def declaration_name_token(tokens: list[dict[str, Any]], index: int, kind: str) -> dict[str, Any] | None:
     if index >= len(tokens):
         return None
     if kind == "func":
         cursor = index + 1
         if cursor < len(tokens) and tokens[cursor]["value"] == "(":
-            depth = 0
-            while cursor < len(tokens):
-                if tokens[cursor]["value"] == "(":
-                    depth += 1
-                elif tokens[cursor]["value"] == ")":
-                    depth -= 1
-                    if depth == 0:
-                        cursor += 1
-                        break
-                cursor += 1
-        while cursor < len(tokens) and not GO_IDENTIFIER.fullmatch(tokens[cursor]["value"]):
-            cursor += 1
-        return tokens[cursor] if cursor < len(tokens) else None
+            receiver_end = matching_delimiter_index(tokens, cursor, "(", ")")
+            if receiver_end is None:
+                return None
+            cursor = receiver_end + 1
+        if cursor >= len(tokens) or not GO_IDENTIFIER.fullmatch(tokens[cursor]["value"]):
+            # A func followed by a parameter list is an anonymous function,
+            # not a declaration.  Do not turn the first keyword in its body
+            # into a fabricated symbol (for example, "for").
+            return None
+        name = tokens[cursor]
+        after_name = skip_type_parameters(tokens, cursor + 1)
+        if after_name >= len(tokens) or tokens[after_name]["value"] != "(":
+            # An anonymous function may have a named return type.  Requiring
+            # the declaration name to be followed by its parameter list
+            # distinguishes that form from a named function or method.
+            return None
+        return name
     cursor = index + 1
     while cursor < len(tokens) and not GO_IDENTIFIER.fullmatch(tokens[cursor]["value"]):
         cursor += 1
@@ -477,15 +504,8 @@ def declarations(text: str) -> list[dict[str, Any]]:
             continue
         name = name_token["value"]
         if kind == "function" and index + 1 < len(tokens) and tokens[index + 1]["value"] == "(":
-            receiver_end = index + 2
-            depth = 1
-            while receiver_end < len(tokens) and depth:
-                if tokens[receiver_end]["value"] == "(":
-                    depth += 1
-                elif tokens[receiver_end]["value"] == ")":
-                    depth -= 1
-                receiver_end += 1
-            receiver_tokens = tokens[index + 2 : receiver_end]
+            receiver_end = matching_delimiter_index(tokens, index + 1, "(", ")")
+            receiver_tokens = tokens[index + 2 : receiver_end] if receiver_end is not None else []
             receiver_identifiers = [item["value"] for item in receiver_tokens if GO_IDENTIFIER.fullmatch(item["value"])]
             if receiver_identifiers:
                 name = f"{receiver_identifiers[-1]}.{name}"
@@ -544,6 +564,61 @@ def source_scope(text: str, path: str, line_number: int) -> dict[str, Any]:
     return declaration_for_line(declarations(text), line_number) or package_scope(text, path)
 
 
+@lru_cache(maxsize=256)
+def module_directory_for_path(root: Path, ref: str, path: str) -> str | None:
+    parts = Path(path).parts
+    for count in range(len(parts) - 1, 0, -1):
+        candidate = Path(*parts[:count]).as_posix()
+        if maybe_blob(root, ref, f"{candidate}/go.mod") is not None:
+            return candidate
+    return None
+
+
+def package_import_path_for_file(root: Path, ref: str, path: str) -> str | None:
+    module_directory = module_directory_for_path(root, ref, path)
+    if module_directory is None:
+        return None
+    return module_import_path(
+        module_path(root, ref, module_directory),
+        module_directory,
+        package_directory(path),
+    )
+
+
+def source_reference_matches(
+    root: Path,
+    ref: str,
+    target_path: str,
+    search_path: str,
+    tokens: list[dict[str, Any]],
+    token_index: int,
+    term: str,
+    imports: list[dict[str, Any]],
+) -> bool:
+    target_package = package_directory(target_path)
+    source_package = package_directory(search_path)
+    if source_package == target_package:
+        return token_index == 0 or tokens[token_index - 1]["value"] != "."
+    target_import = package_import_path_for_file(root, ref, target_path)
+    if target_import is None:
+        return False
+    target_package_name = package_name(source_model(root, ref, target_path)[3])
+    for item in imports:
+        if item["path"] != target_import or item.get("explicit_alias") == "_":
+            continue
+        if item.get("explicit_alias") == ".":
+            return True
+        alias = item.get("explicit_alias") or target_package_name
+        if (
+            token_index >= 2
+            and tokens[token_index - 2]["value"] == alias
+            and tokens[token_index - 1]["value"] == "."
+            and tokens[token_index]["value"] == term
+        ):
+            return True
+    return False
+
+
 def caller_edges(
     root: Path,
     ref: str,
@@ -559,8 +634,14 @@ def caller_edges(
         if not text:
             continue
         lines = text.splitlines()
-        for token in tokens:
+        imports = go_imports(text)
+        import_lines = {item["line"] for item in imports}
+        for token_index, token in enumerate(tokens):
             if token["value"] != term:
+                continue
+            if token["line"] in import_lines or not source_reference_matches(
+                root, ref, path, search_path, tokens, token_index, term, imports
+            ):
                 continue
             if declaration and search_path == path and token_in_span(token, declaration) and token.get("column_start") == declaration.get("name_span", {}).get("start_column"):
                 continue
@@ -849,10 +930,12 @@ def go_imports(text: str) -> list[dict[str, Any]]:
         if not in_group and not re.match(r"^import\s+", stripped) and not (stripped.startswith('"') or re.match(r"^[A-Za-z_.]\w*\s+\"", stripped)):
             continue
         for match in re.finditer(r"(?:(?P<alias>[A-Za-z_]\w*|\.)\s+)?\"(?P<path>[^\"]+)\"", line):
-            alias = match.group("alias") or match.group("path").rsplit("/", 1)[-1]
+            explicit_alias = match.group("alias")
+            alias = explicit_alias or match.group("path").rsplit("/", 1)[-1]
             imports.append(
                 {
                     "alias": alias,
+                    "explicit_alias": explicit_alias,
                     "path": match.group("path"),
                     "line": line_number,
                     "source_span": {
@@ -866,6 +949,57 @@ def go_imports(text: str) -> list[dict[str, Any]]:
                 }
             )
     return imports
+
+
+def package_directory(path: str) -> str:
+    return Path(path).parent.as_posix()
+
+
+def package_name(scope: dict[str, Any]) -> str:
+    symbol = str(scope.get("symbol", ""))
+    return symbol.partition(":")[2] or symbol
+
+
+def module_import_path(module: str, module_directory: str, package_dir: str) -> str:
+    module_directory = module_directory.rstrip("/")
+    if package_dir == module_directory:
+        return module
+    prefix = module_directory + "/"
+    require(package_dir.startswith(prefix), f"package is outside module: {package_dir}")
+    return f"{module}/{package_dir[len(prefix):]}"
+
+
+def exported_symbol(symbol: str) -> bool:
+    name = symbol.rsplit(".", 1)[-1]
+    return bool(name) and name[0].isupper()
+
+
+def package_declaration_identity(
+    root: Path, ref: str, package_dir: str, paths: list[str]
+) -> dict[str, Any]:
+    source_path = next(
+        (path for path in sorted(paths) if path.endswith(".go") and package_directory(path) == package_dir),
+        None,
+    )
+    if source_path is None:
+        return {"ref": ref, "path": package_dir, "line": None, "text": "", "span": {}}
+    scope = source_model(root, ref, source_path)[3]
+    return declaration_identity(ref, source_path, scope)
+
+
+@lru_cache(maxsize=64)
+def ref_go_paths(root: Path, ref: str) -> tuple[str, ...]:
+    output = git_output(root, ["ls-tree", "-r", "--name-only", ref])
+    return tuple(sorted(path for path in output.splitlines() if path.endswith(".go")))
+
+
+def package_symbols(root: Path, ref: str, package_dir: str) -> set[str]:
+    symbols: set[str] = set()
+    for path in ref_go_paths(root, ref):
+        if package_directory(path) != package_dir:
+            continue
+        symbols.update(item["symbol"] for item in source_model(root, ref, path)[2])
+    return symbols
 
 
 def declaration_identity(ref: str, path: str, item: dict[str, Any]) -> dict[str, Any]:
@@ -923,18 +1057,29 @@ def api_relationship(root: Path, c61: str, c83: str, c61_paths: list[str], c83_p
     c61_go_paths = sorted(path for path in set(c61_paths) if path.endswith(".go"))
     c61_public_paths = sorted(
         {
-            str(Path(path).parent).replace("\\", "/")
+            package_directory(path)
             for path in c61_go_paths
-            if path.startswith("go-agent-runtime/services/browserscenario/") and "/internal/" not in path
+            if package_directory(path).startswith("go-agent-runtime/services/browserscenario")
+            and "/internal/" not in package_directory(path)
         }
     )
     runtime_module = module_path(root, c61, "go-agent-runtime")
-    public_imports = sorted(f"{runtime_module}/{path}" for path in c61_public_paths)
+    public_import_to_directory = {
+        module_import_path(runtime_module, "go-agent-runtime", package_dir): package_dir
+        for package_dir in c61_public_paths
+    }
+    public_imports = sorted(public_import_to_directory)
+    c61_package_names: dict[str, str] = {}
+    for path in c61_go_paths:
+        package_dir = package_directory(path)
+        if package_dir not in c61_package_names:
+            c61_package_names[package_dir] = package_name(source_model(root, c61, path)[3])
     c61_only_symbols: list[dict[str, Any]] = []
     for path in c61_go_paths:
         candidate_items = source_model(root, c61, path)[2]
         base_items = {item["symbol"] for item in source_model(root, ACCEPTED_MAIN, path)[2]}
         for item in candidate_items:
+            package_dir = package_directory(path)
             if item["symbol"] not in base_items:
                 c61_only_symbols.append(
                     {
@@ -944,13 +1089,21 @@ def api_relationship(root: Path, c61: str, c83: str, c61_paths: list[str], c83_p
                         "ref": c61,
                         "span": item["span"],
                         "declaration": declaration_identity(c61, path, item),
-                        "public_api": any(path.startswith(prefix + "/") or path == prefix for prefix in c61_public_paths),
+                        "public_api": package_dir in c61_public_paths and exported_symbol(item["symbol"]),
                     }
                 )
     c61_only_symbols.sort(key=lambda item: (item["path"], item["span"]["start_line"], item["symbol"]))
-    symbol_targets = {item["symbol"]: item for item in c61_only_symbols}
+    c83_package_symbols = {
+        package_dir: package_symbols(root, c83, package_dir)
+        for package_dir in {package_directory(path) for path in scanned_paths}
+    }
+    same_package_targets = {
+        (package_directory(item["path"]), item["symbol"]): item
+        for item in c61_only_symbols
+        if item["symbol"] not in c83_package_symbols.get(package_directory(item["path"]), set())
+    }
     public_targets = {
-        (item["path"], item["symbol"]): item
+        (package_directory(item["path"]), item["symbol"]): item
         for item in c61_only_symbols
         if item["public_api"]
     }
@@ -959,7 +1112,9 @@ def api_relationship(root: Path, c61: str, c83: str, c61_paths: list[str], c83_p
     for path in scanned_paths:
         text, tokens, local_declarations, _ = source_model(root, c83, path)
         imports = go_imports(text)
-        import_by_alias = {item["alias"]: item for item in imports}
+        import_by_alias: dict[str, str] = {}
+        dot_import_directories: set[str] = set()
+        import_lines = {item["line"] for item in imports}
         scans.append(
             {
                 "path": path,
@@ -972,15 +1127,20 @@ def api_relationship(root: Path, c61: str, c83: str, c61_paths: list[str], c83_p
             }
         )
         for item in imports:
-            if item["path"] not in public_imports:
+            target_package_dir = public_import_to_directory.get(item["path"])
+            if target_package_dir is None or item.get("explicit_alias") == "_":
                 continue
-            target_path = next((candidate for candidate in c61_public_paths if item["path"] == f"{runtime_module}/{candidate}"), c61_public_paths[0] if c61_public_paths else "")
-            target_item = next((value for (candidate_path, _), value in public_targets.items() if candidate_path == target_path), None)
+            explicit_alias = item.get("explicit_alias")
+            if explicit_alias == ".":
+                dot_import_directories.add(target_package_dir)
+            else:
+                alias = explicit_alias or c61_package_names.get(target_package_dir, item["alias"])
+                import_by_alias[alias] = target_package_dir
             target = {
-                "symbol": f"package:{item['path']}",
-                "path": target_path,
+                "symbol": f"package:{c61_package_names.get(target_package_dir, item['alias'])}",
+                "path": target_package_dir,
                 "ref": c61,
-                "declaration": target_item["declaration"] if target_item else {"ref": c61, "path": f"{target_path}/", "line": None, "text": ""},
+                "declaration": package_declaration_identity(root, c61, target_package_dir, c61_go_paths),
             }
             edges.append(api_edge(kind="public-import", target=target, ref=c83, path=path, text=text, source_span=item["source_span"]))
         for index, token in enumerate(tokens):
@@ -988,10 +1148,9 @@ def api_relationship(root: Path, c61: str, c83: str, c61_paths: list[str], c83_p
                 continue
             imported = import_by_alias.get(token["value"])
             target_symbol = tokens[index + 2]["value"]
-            if imported is None or imported["path"] not in public_imports:
+            if imported is None:
                 continue
-            target_path = next((candidate for candidate in c61_public_paths if imported["path"] == f"{runtime_module}/{candidate}"), "")
-            target_item = public_targets.get((target_path, target_symbol))
+            target_item = public_targets.get((imported, target_symbol))
             if target_item is None:
                 continue
             edges.append(
@@ -999,7 +1158,7 @@ def api_relationship(root: Path, c61: str, c83: str, c61_paths: list[str], c83_p
                     kind="qualified-public-symbol",
                     target={
                         "symbol": target_symbol,
-                        "path": target_path,
+                        "path": imported,
                         "ref": c61,
                         "declaration": target_item["declaration"],
                     },
@@ -1013,13 +1172,39 @@ def api_relationship(root: Path, c61: str, c83: str, c61_paths: list[str], c83_p
                     },
                 )
             )
+        for index, token in enumerate(tokens):
+            if token["value"] in {".", "_"} or token["line"] in import_lines:
+                continue
+            for target_package_dir in sorted(dot_import_directories):
+                target_item = public_targets.get((target_package_dir, token["value"]))
+                if target_item is None:
+                    continue
+                edges.append(
+                    api_edge(
+                        kind="qualified-public-symbol",
+                        target={
+                            "symbol": target_item["symbol"],
+                            "path": target_package_dir,
+                            "ref": c61,
+                            "declaration": target_item["declaration"],
+                        },
+                        ref=c83,
+                        path=path,
+                        text=text,
+                        source_span=token_span(token),
+                    )
+                )
         declaration_names = {
             (item["span"]["start_line"], item.get("name_span", {}).get("start_column"), item["symbol"].rsplit(".", 1)[-1])
             for item in local_declarations
         }
         for index, token in enumerate(tokens):
-            target_item = symbol_targets.get(token["value"])
-            if target_item is None or (token["line"], token["column_start"], token["value"]) in declaration_names:
+            target_item = same_package_targets.get((package_directory(path), token["value"]))
+            if (
+                target_item is None
+                or token["line"] in import_lines
+                or (token["line"], token["column_start"], token["value"]) in declaration_names
+            ):
                 continue
             if index > 0 and tokens[index - 1]["value"] == ".":
                 continue
@@ -1558,7 +1743,7 @@ def main() -> int:
 
     source_head = revision(root, "HEAD")
     source_tree = tree(root, "HEAD")
-    source_files = ("analyze.py", "verify.py", "run_public_checks.py")
+    source_files = ("analyze.py", "verify.py", "run_public_checks.py", "test_analyze.py")
     source_bindings: list[dict[str, Any]] = []
     for filename in source_files:
         relative = OWNED_PREFIX + filename
