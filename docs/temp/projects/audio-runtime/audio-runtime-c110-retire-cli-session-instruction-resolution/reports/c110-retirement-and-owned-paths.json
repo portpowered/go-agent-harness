@@ -1,7 +1,7 @@
 {
   "boundary": {
     "forbidden_new_package_tokens": [],
-    "legacy_lines": 87
+    "legacy_lines": 86
   },
   "consumer": {
     "imports": {
@@ -57,14 +57,14 @@
   "mode": "retirement-and-owned-paths",
   "retirement": {
     "agentruntime_production_lines": {
-      "candidate": 39424,
+      "candidate": 39423,
       "origin_main": 39614,
-      "retired_lines": 190
+      "retired_lines": 191
     },
     "ancestry": {
       "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "head": "0f5aff70b04315a5daf4087e9f53c96f127e09dd",
-      "origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+      "head": "ebca77c8ec21cbe4e412945f0114d0006627298e",
+      "origin_main": "915ed982d23f2e549e529ff43c4f370b4b51e394",
       "required_ancestors": {
         "accepted_main": {
           "is_ancestor": true,
@@ -72,7 +72,7 @@
         },
         "origin_main": {
           "is_ancestor": true,
-          "revision": "bd6a1289218d1bef1a3af36e64e9d4496062416f"
+          "revision": "915ed982d23f2e549e529ff43c4f370b4b51e394"
         },
         "startup_ancestor": {
           "is_ancestor": true,
@@ -97,6 +97,7 @@
       "work_id": "work-task-25"
     },
     "changed_paths": [
+      "agent-cli/internal/services/internal/agentruntime/session.go",
       "agent-cli/internal/services/internal/agentruntime/session_instructions.go",
       "agent-cli/internal/services/internal/agentruntime/session_instructions_test.go",
       "agent-cli/internal/services/internal/agentruntime/session_runtime_plan.go",
@@ -140,9 +141,9 @@
     "legacy": {
       "baseline_lines": 277,
       "baseline_sha256": "57a1e2b77f282e8c7a8351b3b1bf966baacf1d4674764b92542a9b2cfc6e8adc",
-      "candidate_lines": 87,
-      "candidate_sha256": "60f0ac50b42d55eb4e652cf7aa8db3056cb37eed6960853da8659fa73f5a1bb4",
-      "retired_lines": 190
+      "candidate_lines": 86,
+      "candidate_sha256": "aa3115b405a1c66ef977a85f43f1be22e348d3fd54c9e95114098febd0bb77fa",
+      "retired_lines": 191
     },
     "ownership": {
       "allowed_exact": [
@@ -225,8 +226,8 @@
       "unexpected": []
     },
     "source_hashes": {
-      "agent-cli/internal/services/internal/agentruntime/session_instructions.go": "60f0ac50b42d55eb4e652cf7aa8db3056cb37eed6960853da8659fa73f5a1bb4",
-      "agent-cli/internal/services/internal/agentruntime/session_instructions_test.go": "b023b101e87ef6cbcc8edc10d8c22efbae4525b5ac53ef1399b99e38da9cff57",
+      "agent-cli/internal/services/internal/agentruntime/session_instructions.go": "aa3115b405a1c66ef977a85f43f1be22e348d3fd54c9e95114098febd0bb77fa",
+      "agent-cli/internal/services/internal/agentruntime/session_instructions_test.go": "a8b5106d667d1c7dea81f6b0aeca99b3a1397f64ba2cdd42eedfda934da9df0c",
       "agent-cli/internal/transport/cli/internal/livehost/request.go": "fe94c3c1116fa3ee989b37dee7436175eac4fc7b2661c8ba13248c0ce70b6e1e",
       "agent-cli/internal/transport/cli/internal/livehost/request_test.go": "44aa76867265ffc23ebf9b83bf5b3dc4f91beca4ecd4bccbed3b9596d657b240",
       "agent-cli/internal/transport/cli/session_observability.go": "ad98b191c8fab1462ea5f6b4849518ce360636ebc1c7844be0b10550b5cb1c74",
