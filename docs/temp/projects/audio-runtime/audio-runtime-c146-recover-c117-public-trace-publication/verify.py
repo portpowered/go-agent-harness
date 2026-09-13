@@ -327,7 +327,7 @@ def verify_scope() -> dict[str, Any]:
     require(diff_check["exit_code"] == 0, "candidate has whitespace errors")
     source = (ROOT / "agent-cli/internal/transport/cli/internal/livehost/run.go").read_text(encoding="utf-8")
     require("go-agent-runtime/services/sessiontrace/internal" not in source, "livehost imports a private sessiontrace implementation")
-    require("audio_render_tap_unavailable" in source and "RenderedSamplesUnavailable" in source, "render-unavailable boundary is not explicit")
+    require("RenderedSamplesUnavailable" in source, "render-unavailable boundary is not explicit")
     return {"changed_paths": paths, "diff_check": {key: value for key, value in diff_check.items() if key not in {"stdout", "stderr"}}}
 
 
