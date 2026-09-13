@@ -7,7 +7,6 @@
 package wire
 
 import (
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/evidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
@@ -16,29 +15,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
-
-// Injectors from participant_lifecycle.go:
-
-// NewParticipantLifecycle is the dedicated Wire entry point for the
-// invocation-scoped participant state machine.
-func NewParticipantLifecycle(options rooms.ParticipantLifecycleOptions) rooms.ParticipantLifecycle {
-	participantLifecycle := lifecycle.NewParticipantLifecycle(options)
-	return participantLifecycle
-}
-
-// NewTrackedSession is the dedicated Wire entry point for session ownership
-// and selective post-bound admission.
-func NewTrackedSession(session messages.Session, participant rooms.ParticipantLifecycle, admissionClosed <-chan struct{}) rooms.TrackedSession {
-	trackedSession := lifecycle.NewTrackedSession(session, participant, admissionClosed)
-	return trackedSession
-}
-
-// NewConnectionTracker is the dedicated Wire entry point for the first
-// connection outcome and transport cleanup boundary.
-func NewConnectionTracker(inner messages.SessionInferencer, participant rooms.ParticipantLifecycle, admissionClosed <-chan struct{}) rooms.ParticipantConnectionTracker {
-	participantConnectionTracker := lifecycle.NewConnectionTracker(inner, participant, admissionClosed)
-	return participantConnectionTracker
-}
 
 // Injectors from providers.go:
 

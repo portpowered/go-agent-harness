@@ -1,32 +1,28 @@
-//go:build wireinject
-// +build wireinject
-
 package wire
 
 import (
-	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle"
 )
 
-// NewParticipantLifecycle is the dedicated Wire entry point for the
-// invocation-scoped participant state machine.
+// NewParticipantLifecycle is the dedicated rooms composition entry point for
+// the invocation-scoped participant state machine. The rooms package keeps
+// providers.go as the sole Wire injector; these small adapters keep the
+// participant constructors available from the same host-neutral composition
+// boundary without creating a second generator input.
 func NewParticipantLifecycle(options rooms.ParticipantLifecycleOptions) rooms.ParticipantLifecycle {
-	wire.Build(lifecycle.NewParticipantLifecycle)
-	return nil
+	return lifecycle.NewParticipantLifecycle(options)
 }
 
-// NewTrackedSession is the dedicated Wire entry point for session ownership
-// and selective post-bound admission.
+// NewTrackedSession keeps session ownership and selective post-bound admission
+// behind the rooms composition boundary.
 func NewTrackedSession(session messages.Session, participant rooms.ParticipantLifecycle, admissionClosed <-chan struct{}) rooms.TrackedSession {
-	wire.Build(lifecycle.NewTrackedSession)
-	return nil
+	return lifecycle.NewTrackedSession(session, participant, admissionClosed)
 }
 
-// NewConnectionTracker is the dedicated Wire entry point for the first
-// connection outcome and transport cleanup boundary.
+// NewConnectionTracker keeps the first connection outcome and transport
+// cleanup boundary behind the rooms composition boundary.
 func NewConnectionTracker(inner messages.SessionInferencer, participant rooms.ParticipantLifecycle, admissionClosed <-chan struct{}) rooms.ParticipantConnectionTracker {
-	wire.Build(lifecycle.NewConnectionTracker)
-	return nil
+	return lifecycle.NewConnectionTracker(inner, participant, admissionClosed)
 }
