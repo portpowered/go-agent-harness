@@ -4074,3 +4074,119 @@ Active reservations before move: C20 review99, C28 review97, C27 task84 CI; mana
   same PR `#435`, update its body with the repair/evidence map, then return
   `ACCEPTED` to the script-owned current-head CI gate without polling; retain
   this task through `CONTINUE` for any exact CI rejection or actionable repair.
+
+# C84 bounded quality checkpoint 2026-09-12T19:58Z
+
+- Admission remains exact for the sole `audio-runtime` project: `project-control.py
+  verify-work --type task --name audio-runtime-c84-retire-cli-room-participant-lifecycle`
+  returned `admitted`; `prd.json.branchName` matches the isolated branch, and
+  fetched `origin/main=d4766c3dbbf2c198142047ead4449d58dd47d485` is an ancestor
+  of clean candidate `6fa9d041d501ce475745490f0e2fe71b94b74bff`. The prior C84
+  extraction and quality repair commits remain intact; no host checkout or
+  predecessor worktree was reset or changed.
+- C84-owned rooms normal and race matrices pass `COUNT=3`; the CLI lifecycle
+  normal and race matrices pass `COUNT=5`; the isolated bound-duration and
+  bound-turn regressions pass `10/10` each. The one broad parallel normal run
+  exposed a timing-only bound-duration miss, which passed `10/10` in isolation
+  and was not a C84-owned path repair signal.
+- The separate `GOWORK=off` rooms consumer passes; both post-bound complete-tool
+  admission and double-close mutation controls pass positive, intended failing
+  mutation, and byte-for-byte restored controls. Retirement remains `522`
+  legacy lines (`427+95`) and `869` removed against the fixed `1,391` baseline;
+  excluded-byte and diff checks pass. Coverage registration passes `176`
+  packages; Wire, vet, pinned golangci-lint `2.9.0`, and pinned staticcheck
+  `2026.1` pass.
+- `COUNT=3 scripts/test-session-ci-regressions.sh` passes in normal, coverage,
+  and race modes, including expected mismatch/PCM/transcript negative controls,
+  shipped session/duplex, high-rate audio, simulated-device and provider
+  composition regressions. `make architecture-size-check` remains blocked by
+  exactly `15` C79-owned findings: one `session_room_lifecycle.go` baseline
+  drift and fourteen stale complexity entries. C79 `work-task-114` is still
+  `ci-pending` with PR `#470` unmerged and retains both shared registry leases.
+- Existing source-pinned C84 replay evidence remains bound to `6fa9d041` and
+  artifact SHA-256 `c4624fa67f18394d147efc917075837e105a13a23487725d547e9c8350d3de1`;
+  it proves the credential-free two-participant room projection, two tool
+  markers, malformed/late-terminal rejection, non-room replay and clean
+  process-group shutdown. No script CI, review, merge, vertical acceptance or
+  project acceptance is claimed. Next action: after C79's reviewed guarded
+  merge releases `scripts/wire-packages.txt` and
+  `docs/architecture/architecture-size-baseline.json`, integrate refreshed
+  `origin/main` into this same branch, apply only demonstrated C84 registry and
+  baseline changes, rerun bounded gates, and submit the changed head to script
+  CI without polling.
+
+# C84 executor regression checkpoint 2026-09-12T20:19Z
+
+- Reverified the sole admitted `audio-runtime/audio-runtime-v1` task with
+  `project-control.py verify-work --type task --name
+  audio-runtime-c84-retire-cli-room-participant-lifecycle`; the isolated branch
+  still exactly matches `prd.json`, and fetched `origin/main=d4766c3d` remains
+  an ancestor. The canonical `~default` inbox has no C84 review/rejection row;
+  C79 `work-task-114` remains active with open PR `#470` and retains the shared
+  Wire/baseline leases. No host checkout or predecessor worktree was reset or
+  changed.
+- Focused C84 lifecycle/Wire normal testing passed `15` tests; focused lifecycle
+  race testing passed `45` tests at `COUNT=3`; the complete lifecycle package
+  passed `84` tests at `COUNT=3` in both normal and race modes. The separate
+  `GOWORK=off` consumer passed. Each post-bound-tool and double-close mutation
+  control passed its positive control, intended failing mutation, and restored
+  positive control.
+- The accumulated `COUNT=3 scripts/test-session-ci-regressions.sh all` matrix
+  passed normal, coverage, and race modes, including the expected negative
+  controls, 20-trial high-rate audio, simulated-device and provider-composition
+  regressions. A broad parallel CLI race selection had two timing-only misses;
+  the exact `TestRunRoom_BoundGraceExpiryCancelsActiveResponseCleanly` control
+  passed `30/30` in both normal and race isolation, so no C84-owned source
+  repair is demonstrated.
+- Direct retirement remains `427 + 95 = 522` legacy lines and `869` retired
+  against the fixed `1,391` baseline. The excluded-byte check reports no
+  changed excluded paths. `make architecture-size-check` reproduces exactly
+  `15` C79-owned findings: one `session_room_lifecycle.go` baseline drift and
+  fourteen stale complexity/function entries; no C84-owned finding is present.
+- This evidence-only ledger descendant does not change executable inputs; the
+  existing C84 artifact remains bound to source checkpoint `6fa9d041` and its
+  recorded SHA-256. No script CI, independent review, guarded merge, vertical
+  acceptance or project acceptance is claimed. Next action: retain this same
+  task until C79's reviewed guarded merge releases the shared paths, then
+  integrate refreshed `origin/main`, apply only demonstrated downward C84
+  baseline/registry changes, rerun bounded gates, push the changed PR and
+  return `ACCEPTED` to script CI without polling.
+
+# C84 focused and accumulated regression checkpoint 2026-09-12T20:53Z
+
+- Admission remains exact for the sole `audio-runtime/audio-runtime-v1` project:
+  `project-control.py verify-work --type task --name
+  audio-runtime-c84-retire-cli-room-participant-lifecycle` returned `admitted`;
+  `prd.json.branchName` matches `codex/audio-runtime-c84-retire-cli-room-participant-lifecycle`.
+  Refreshed `origin/main=d4766c3dbbf2c198142047ead4449d58dd47d485` and the
+  required startup, accepted-main and current-main ancestry checks pass. The
+  working tree is clean at the pre-checkpoint head `5421d908`; no host checkout,
+  predecessor worktree, second project or waiver was changed.
+- The preserved 6fa9d041 quality repair is still in place: the owned participant
+  tracker is `370` physical lines, the lifecycle implementation is `15` Go files,
+  and the two legacy adapters remain `427 + 95 = 522` lines, retiring `869` of
+  the fixed `1,391`-line baseline. Wire regeneration produced no source diff.
+- Focused evidence is green: rooms normal `15` tests, rooms race `45` tests at
+  `COUNT=3`, CLI lifecycle/replay normal `127` tests, CLI race `41` tests, and
+  the separate `GOWORK=off` consumer. Both causal mutation controls pass their
+  positive control, intended failing assertion, and restored control: removing
+  post-bound complete-tool admission rejects the pending tool result, while
+  removing `sync.Once` produces two underlying closes.
+- `COUNT=3 scripts/test-session-ci-regressions.sh all` exits successfully in
+  normal, coverage and race modes, including the expected mismatch/PCM/transcript
+  negative controls, shipped session/duplex, high-rate audio, simulated-device
+  and provider-composition regressions. Wire, coverage registration (`176`
+  packages), vet, pinned staticcheck `2026.1`, pinned golangci-lint `2.9.0`,
+  gofmt and diff-check are green.
+- `make architecture-size-check` still reports exactly `15` C79-owned findings:
+  one `session_room_lifecycle.go` baseline drift and fourteen stale complexity
+  entries. C79 `work-task-114` remains active and retains both shared registry
+  leases, so no C84 source or shared registry/baseline repair is authorized.
+  No script CI, independent review, guarded merge, vertical acceptance or
+  project acceptance is claimed.
+- Exact next action: retain this same task until C79's reviewed guarded merge
+  releases `scripts/wire-packages.txt` and
+  `docs/architecture/architecture-size-baseline.json`; then integrate refreshed
+  `origin/main`, apply only demonstrated C84 Wire/baseline changes, rerun the
+  bounded gates, push the changed PR and return `ACCEPTED` to script CI without
+  polling.
