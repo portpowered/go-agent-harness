@@ -104,6 +104,17 @@
     "staticcheck": "passed; pinned staticcheck 2026.1 reported 0 issues across all modules",
     "diffCheck": "passed"
   },
+  "delivery": {
+    "sourceCandidateHead": "b6f28cd1a059d79def3292107835669301f3bca0",
+    "pullRequest": 518,
+    "baseRef": "main@2c79ec6a931c3e86944d6a625d0a5060b4f85aa0",
+    "remoteHeadVerified": true,
+    "pullRequestState": "OPEN",
+    "scriptCIGate": "ready for exact pushed head; not polled",
+    "independentReview": "open; not performed by executor",
+    "guardedMerge": "open",
+    "verticalProbe": "open for meta-planner"
+  },
   "ciRepair": {
     "rejectedHead": "172f8705da36ef44309008e83a9525b537e1730f",
     "workflowRun": "34786405617",

@@ -73,6 +73,12 @@ nonblocking behavior.
   1,942 files and 28,795 functions; Wire regeneration is unchanged; focused vet
   and `git diff --check` pass. The worktree is clean after the merged-source
   verification.
-- Next action: commit this ledger update, push the same branch, update PR #518
-  to the changed head, and return `ACCEPTED` to SCRIPT-owned CI without polling.
-  No review, merge, vertical probe or project acceptance is claimed here.
+- Delivery checkpoint `b6f28cd1a059d79def3292107835669301f3bca0` is pushed on the
+  same branch and PR #518 is OPEN at that exact head with base
+  `main@2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`. The PR update records the
+  current-main merge, exact bounded checks, and the retained remote-device race
+  failures. This closeout changes only the owned evidence ledger; executable
+  source inputs remain pinned to the recorded source checkpoint.
+- Next action: return `ACCEPTED` to SCRIPT-owned CI for the changed pushed head
+  without polling. No review, merge, vertical probe or project acceptance is
+  claimed here; actionable CI rejection returns to this same task.
