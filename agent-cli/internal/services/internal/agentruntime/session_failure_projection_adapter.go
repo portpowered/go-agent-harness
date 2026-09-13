@@ -11,7 +11,7 @@ func failureFactsFromPublic(f sf.Facts) *failureFacts {
 	return &failureFacts{f.Classification, f.TerminalReason, f.Provenance, f.OutputState, f.ErrorType, f.Code, f.FailingEvent}
 }
 func publicFailureFacts(f *failureFacts) sf.Facts {
-	return sf.Facts{f.classification, f.terminalReason, f.provenance, f.outputState, f.errorType, f.code, f.failingEvent}
+	return sf.Facts{Classification: f.classification, TerminalReason: f.terminalReason, Provenance: f.provenance, OutputState: f.outputState, ErrorType: f.errorType, Code: f.code, FailingEvent: f.failingEvent}
 }
 func (o *sessionProgressObserver) failureSnapshot() *failureFacts {
 	o.livenessMu.Lock()

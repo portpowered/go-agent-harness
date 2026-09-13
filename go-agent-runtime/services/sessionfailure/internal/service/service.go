@@ -29,29 +29,9 @@ func New(dependencies sessionfailure.Dependencies) *Service {
 }
 
 func (s *Service) NormalizeErrorValue(v *messages.ErrorValue) (sessionfailure.Facts, error) {
-	if v == nil || v.IsNonTerminal() || ignoredCancellation(v) {
+	facts := normalizedErrorFacts(v)
+	if facts.FailingEvent == "" {
 		return sessionfailure.Facts{}, nil
-	}
-	facts := sessionfailure.Facts{
-		Classification: v.Classification,
-		TerminalReason: string(v.TerminalReason),
-		Provenance:     string(v.TerminalProvenance),
-		OutputState:    string(v.OutputState),
-		ErrorType:      v.ErrorType,
-		Code:           v.Code,
-		FailingEvent:   string(messages.StreamTypeError),
-	}
-	if facts.Classification == "" {
-		facts.Classification = sessionfailure.ErrorClassUnknown
-	}
-	if facts.TerminalReason == "" {
-		facts.TerminalReason = string(messages.TerminalReasonTerminalFailure)
-	}
-	if facts.Provenance == "" {
-		facts.Provenance = string(messages.TerminalProvenanceProvider)
-	}
-	if facts.OutputState == "" {
-		facts.OutputState = string(messages.TerminalOutputNone)
 	}
 	var err error = v.Err
 	if err == nil && v.Message != "" {
@@ -74,11 +54,39 @@ func (s *Service) FactsFromSessionRunError(err error) *sessionfailure.Facts {
 	if !errors.As(err, &delta) || delta == nil || delta.Value == nil {
 		return nil
 	}
-	facts, _ := s.NormalizeErrorValue(delta.Value)
+	facts := normalizedErrorFacts(delta.Value)
 	if facts.FailingEvent == "" {
 		return nil
 	}
 	return &facts
+}
+
+func normalizedErrorFacts(v *messages.ErrorValue) sessionfailure.Facts {
+	if v == nil || v.IsNonTerminal() || ignoredCancellation(v) {
+		return sessionfailure.Facts{}
+	}
+	facts := sessionfailure.Facts{
+		Classification: v.Classification,
+		TerminalReason: string(v.TerminalReason),
+		Provenance:     string(v.TerminalProvenance),
+		OutputState:    string(v.OutputState),
+		ErrorType:      v.ErrorType,
+		Code:           v.Code,
+		FailingEvent:   string(messages.StreamTypeError),
+	}
+	if facts.Classification == "" {
+		facts.Classification = sessionfailure.ErrorClassUnknown
+	}
+	if facts.TerminalReason == "" {
+		facts.TerminalReason = string(messages.TerminalReasonTerminalFailure)
+	}
+	if facts.Provenance == "" {
+		facts.Provenance = string(messages.TerminalProvenanceProvider)
+	}
+	if facts.OutputState == "" {
+		facts.OutputState = string(messages.TerminalOutputNone)
+	}
+	return facts
 }
 
 func (s *Service) NormalizeClose(v *messages.SessionCloseValue, progress sessionfailure.Progress) sessionfailure.Facts {
@@ -94,6 +102,13 @@ func (s *Service) NormalizeClose(v *messages.SessionCloseValue, progress session
 		messages.TerminalReasonTerminalFailure,
 		messages.TerminalReasonReplayDivergence,
 		messages.TerminalReasonReplayIncomplete:
+	case messages.TerminalReasonProviderAuthoredCompletion,
+		messages.TerminalReasonLoopSynthesizedCompletion,
+		messages.TerminalReasonCancellation,
+		messages.TerminalReasonReplayComplete,
+		messages.TerminalReasonSessionClose,
+		messages.TerminalReasonPartialOutput:
+		return sessionfailure.Facts{}
 	default:
 		return sessionfailure.Facts{}
 	}

@@ -51,7 +51,7 @@ func TestNormalizeErrorValue(t *testing.T) {
 			if facts.Classification != tc.classification || facts.TerminalReason != tc.reason || facts.Provenance != tc.provenance || facts.OutputState != tc.output {
 				t.Fatalf("normalized facts = %#v", facts)
 			}
-			if tc.name == "typed fields" && err != typed {
+			if tc.name == "typed fields" && !errors.Is(err, typed) {
 				t.Fatalf("original error identity was not retained: %v", err)
 			}
 		})
@@ -114,7 +114,7 @@ func TestAcceptPublishesBeforeCallbacksAndPreservesCause(t *testing.T) {
 	svc = New(sessionfailure.Dependencies{Publish: func(observation sessionfailure.Observation) bool {
 		callbackCount.Add(1)
 		snapshot := svc.Snapshot()
-		if snapshot == nil || snapshot.Facts != observation.Facts || snapshot.Err != original {
+		if snapshot == nil || snapshot.Facts != observation.Facts || !errors.Is(snapshot.Err, original) {
 			t.Errorf("snapshot was not published before callback: snapshot=%#v observation=%#v", snapshot, observation)
 		}
 		if svc.Accept(terminalFacts(), errors.New("reentrant")) {
