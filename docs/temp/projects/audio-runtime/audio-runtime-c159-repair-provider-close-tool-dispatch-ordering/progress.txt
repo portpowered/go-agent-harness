@@ -1,0 +1,33 @@
+# C159 implementation checkpoint
+
+## Admission and ancestry
+
+- Admitted task: `audio-runtime-c159-repair-provider-close-tool-dispatch-ordering`.
+- Branch: `codex/audio-runtime-c159-repair-provider-close-tool-dispatch-ordering`.
+- Starting and fetched `origin/main`: `4a1c399ccbb3d780be95eb04316e84b8f11a6646`.
+- Required startup integration: `8bdafc7f947a3a2c9856220abdc539437035bd21`.
+- Preserved predecessor C148 source/report and PR 510; no predecessor checkout was reset or merged.
+
+## Causal repair
+
+C148 identified the first owned boundary as provider-close terminal publication
+overtaking the tool batch's executor start. C159 now starts the tool and kernel
+participants before the provider-facing model runner, and the hot-loop engine
+waits after Coordinator tool-batch creation until every newly admitted non-empty
+call ID crosses the ToolRunner executor-start boundary. Tool execution remains
+parallel; duplicate admission remains exactly once; manual ticks retain their
+nonblocking behavior.
+
+## Focused evidence
+
+- `go test ./go-agent-loop/pkg/participants ./go-agent-loop/pkg/engine`: passed, including the new executor-start and engine-barrier tests.
+- Provider-close oracle, unchanged: `-count=10` passed at `GOMAXPROCS=1`, `2`, and `4`.
+- Coverage passed at 6.6% aggregate over the requested coverpkg set and retained
+  `provider-close.cover.out`; the exact provider-close race passed 20/20.
+- Focused live normal/race passed 850/340 tests; focused engine/tool-runner
+  normal/race passed 800/320 tests.
+- The broader prescribed integration race also ran the C159 controls cleanly,
+  but two long-prior-input remote audio-device subcases failed at the external
+  playback `advance` boundary with zero rendered PCM. This is retained as an
+  unrelated environmental regression; the normal counterpart passed 66/66 and
+  the credential-free C159 replay controls passed in the race run.

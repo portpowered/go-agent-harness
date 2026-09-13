@@ -41,6 +41,14 @@ type ToolRunner struct {
 	execMu     sync.Mutex
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
 
+	// dispatchMu protects the causal admission boundary exposed to the engine.
+	// A call is marked started immediately before its executor is invoked. The
+	// engine uses this boundary to keep later terminal output behind every
+	// admitted invocation in the batch.
+	dispatchMu     sync.Mutex
+	dispatchWake   chan struct{}
+	startedCallIDs map[string]struct{}
+
 	acknowledgementThreshold time.Duration
 	isLongRunningTool        func(string) bool
 	sendAcknowledgement      func(context.Context, []messages.ToolCall)
@@ -50,6 +58,8 @@ func NewToolRunner(executor messages.ToolExecutor, bufferCapacity int) *ToolRunn
 	return &ToolRunner{
 		executor:        executor,
 		admittedCallIDs: make(map[string]struct{}),
+		dispatchWake:    make(chan struct{}),
+		startedCallIDs:  make(map[string]struct{}),
 		Inbox:           messages.NewTypedBuffer[messages.ToolBatchRequest](bufferCapacity),
 		DeltaOutbox:     messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
 	}
@@ -83,6 +93,59 @@ func (r *ToolRunner) CancelCurrentExecution() {
 	defer r.execMu.Unlock()
 	if r.execCancel != nil {
 		r.execCancel()
+	}
+}
+
+// WaitForCallsStarted waits until every non-empty call ID in calls has crossed
+// the executor-start boundary for this runner. Call IDs are session-scoped by
+// the runner's exactly-once admission map, so an already-started duplicate is
+// already satisfied and does not create a second wait obligation.
+//
+// Empty call IDs remain executable for compatibility, but they cannot be
+// correlated with a provider lifecycle boundary and are intentionally omitted
+// from this identity-aware wait.
+func (r *ToolRunner) WaitForCallsStarted(ctx context.Context, calls []messages.ToolCall) error {
+	if r == nil {
+		return nil
+	}
+	if ctx == nil {
+		return errors.New("tool dispatch wait context is required")
+	}
+
+	expected := make(map[string]struct{}, len(calls))
+	for _, call := range calls {
+		if call.ID != "" {
+			expected[call.ID] = struct{}{}
+		}
+	}
+	if len(expected) == 0 {
+		return nil
+	}
+
+	for {
+		r.dispatchMu.Lock()
+		allStarted := true
+		for callID := range expected {
+			if _, ok := r.startedCallIDs[callID]; !ok {
+				allStarted = false
+				break
+			}
+		}
+		if allStarted {
+			r.dispatchMu.Unlock()
+			return nil
+		}
+		if r.dispatchWake == nil {
+			r.dispatchWake = make(chan struct{})
+		}
+		wake := r.dispatchWake
+		r.dispatchMu.Unlock()
+
+		select {
+		case <-wake:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
@@ -268,6 +331,7 @@ func (r *ToolRunner) executeBatch(ctx context.Context, calls []messages.ToolCall
 
 	for i, tc := range calls {
 		go func(idx int, call messages.ToolCall) {
+			r.markCallStarted(call)
 			resp, err := r.executor.Execute(ctx, call)
 			resultCh <- executionResult{index: idx, response: resp, err: err}
 		}(i, tc)
@@ -353,4 +417,25 @@ func (r *ToolRunner) admitCalls(calls []messages.ToolCall) []messages.ToolCall {
 		admitted = append(admitted, call)
 	}
 	return admitted
+}
+
+// markCallStarted records the causal point immediately before invoking the
+// executor. The wake channel is replaced under the same lock as the map check
+// in WaitForCallsStarted, so a waiter cannot miss a start notification.
+func (r *ToolRunner) markCallStarted(call messages.ToolCall) {
+	if r == nil || call.ID == "" {
+		return
+	}
+	r.dispatchMu.Lock()
+	if r.startedCallIDs == nil {
+		r.startedCallIDs = make(map[string]struct{})
+	}
+	r.startedCallIDs[call.ID] = struct{}{}
+	if r.dispatchWake == nil {
+		r.dispatchWake = make(chan struct{})
+	}
+	wake := r.dispatchWake
+	r.dispatchWake = make(chan struct{})
+	r.dispatchMu.Unlock()
+	close(wake)
 }

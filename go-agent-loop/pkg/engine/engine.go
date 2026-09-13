@@ -38,6 +38,7 @@ type Engine struct {
 
 	// Active participant runners
 	modelRunner       *participants.ModelRunner
+	toolRunner        *participants.ToolRunner
 	interactionRunner *participants.InteractionRunner
 	userRunner        *participants.UserRunner
 	kernelRunner      *participants.KernelRunner
@@ -46,6 +47,12 @@ type Engine struct {
 	toolParticipant   *participants.ActiveParticipant
 	userParticipant   *participants.ActiveParticipant
 	kernelParticipant *participants.ActiveParticipant
+
+	// enforceToolDispatchOrdering is enabled only by the running hot loop. It
+	// keeps provider-facing terminal deltas behind the executor-start boundary
+	// for tool batches created by the Coordinator. Manual tick control remains
+	// non-blocking and retains its existing inspection semantics.
+	enforceToolDispatchOrdering bool
 }
 
 // TickState provides a read-only snapshot of engine state for inspection during
@@ -90,6 +97,7 @@ func NewEngine(
 		mode:         mode,
 		logger:       logger,
 		modelRunner:  modelRunner,
+		toolRunner:   toolRunner,
 		kernelRunner: kernelRunner,
 		clock:        clock.Real{},
 	}
@@ -178,7 +186,9 @@ func (e *Engine) RunHotLoopContinuous(ctx context.Context) error {
 
 func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) error {
 	e.state.SetRunState(RunStateRunning)
+	e.enforceToolDispatchOrdering = true
 	defer func() {
+		e.enforceToolDispatchOrdering = false
 		if e.state.GetRunState() == RunStateRunning {
 			e.state.SetRunState(RunStateStopped)
 		}
@@ -188,11 +198,9 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 		e.userParticipant.Start(ctx)
 		defer e.userParticipant.Stop()
 	}
-	// Start active participants
-	if e.modelParticipant != nil {
-		e.modelParticipant.Start(ctx)
-		defer e.modelParticipant.Stop()
-	}
+	// Start consumers before the provider-facing model runner. This makes the
+	// first model response eligible for dispatch as soon as it is produced; the
+	// coordinator barrier below then closes the remaining executor-start race.
 	if e.toolParticipant != nil {
 		e.toolParticipant.Start(ctx)
 		defer e.toolParticipant.Stop()
@@ -200,6 +208,10 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 	if e.kernelParticipant != nil {
 		e.kernelParticipant.Start(ctx)
 		defer e.kernelParticipant.Stop()
+	}
+	if e.modelParticipant != nil {
+		e.modelParticipant.Start(ctx)
+		defer e.modelParticipant.Stop()
 	}
 
 	if sendInitialInference {
@@ -318,8 +330,34 @@ func (e *Engine) executeWorldState(ctx context.Context, state *SharedState) erro
 			e.logError("engine: subsystem execute failed", wrapped)
 			return wrapped
 		}
+		if e.enforceToolDispatchOrdering && h.TickGroup() == subsystems.TickGroupCoordinator {
+			if err := e.waitForToolDispatch(ctx, state.LoopState); err != nil {
+				wrapped := fmt.Errorf("tool dispatch start barrier failed: %w", err)
+				e.logError("engine: tool dispatch start barrier failed", wrapped)
+				return wrapped
+			}
+		}
 	}
 	return nil
+}
+
+// waitForToolDispatch establishes the causal boundary between a completed
+// provider tool-call message and later kernel output. Coordinator has already
+// published the batch into the ToolRunner inbox when this is called; waiting
+// here lets the runner cross into every admitted executor before
+// CoordinatorDelta can publish a provider-close terminal.
+func (e *Engine) waitForToolDispatch(ctx context.Context, loopState *state.LoopState) error {
+	if e.toolRunner == nil || loopState == nil || !loopState.ToolExecutionAvailable {
+		return nil
+	}
+	var calls []messages.ToolCall
+	for _, message := range loopState.Inputs.ModelOutputMessage {
+		calls = append(calls, message.ToolCalls...)
+	}
+	if len(calls) == 0 {
+		return nil
+	}
+	return e.toolRunner.WaitForCallsStarted(ctx, calls)
 }
 
 func (e *Engine) AddMessages(messages []messages.Message) {

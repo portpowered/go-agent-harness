@@ -1,0 +1,86 @@
+{
+  "schema": "audio-runtime.c159.dispatch-ordering-evidence.v1",
+  "work": "audio-runtime-c159-repair-provider-close-tool-dispatch-ordering",
+  "branch": "codex/audio-runtime-c159-repair-provider-close-tool-dispatch-ordering",
+  "planningMain": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+  "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "predecessorReport": {
+    "sourceRevision": "4459d56ef3213c2fdb173180b3f4f159bb2b89c0",
+    "sha256": "e867fc0551fe3c1f81938dcdcaf65024c5804884c89b36560f4fb2ff9464c389",
+    "oracle": "provider-close-while-unresolved",
+    "gomaxprocs": {
+      "1": "10/10 pass",
+      "2": "9/10 pass; one unchanged executor wait timeout",
+      "4": "6/10 pass; four unchanged executor wait timeouts"
+    },
+    "firstObservedBoundary": "gated executor does not observe the tool batch before provider-close terminal handling",
+    "ownedPaths": [
+      "go-agent-runtime/services/session/internal/live/lifecycle.go:365-368",
+      "go-agent-runtime/services/session/internal/live/start_support.go:336-343",
+      "go-agent-loop/pkg/engine/engine.go:187-203",
+      "go-agent-loop/pkg/participants/tool_runner.go:243-273",
+      "agent-cli/test/integration/session_tool_result_conversation_lifecycle_test.go:323-362"
+    ]
+  },
+  "repair": {
+    "candidateBase": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+    "orderedBoundaries": [
+      {
+        "sequence": 1,
+        "boundary": "tool-batch-created",
+        "callID": "call_weather_1",
+        "source": "Coordinator completed model tool-call message"
+      },
+      {
+        "sequence": 2,
+        "boundary": "dispatch-visible",
+        "callID": "call_weather_1",
+        "source": "Coordinator published ToolBatchRequest to ToolRunner.Inbox"
+      },
+      {
+        "sequence": 3,
+        "boundary": "executor-started",
+        "callID": "call_weather_1",
+        "source": "ToolRunner markCallStarted immediately before executor invocation"
+      },
+      {
+        "sequence": 4,
+        "boundary": "provider-close",
+        "callID": "call_weather_1",
+        "source": "credential-free replay session.closed fixture"
+      },
+      {
+        "sequence": 5,
+        "boundary": "terminal",
+        "callID": "call_weather_1",
+        "source": "ErrSessionUnresolvedToolResults with exact call ID"
+      }
+    ],
+    "focusedChecks": {
+      "participantAndEngineUnit": "passed",
+      "providerCloseGOMAXPROCS1": "10/10 pass",
+      "providerCloseGOMAXPROCS2": "10/10 pass",
+      "providerCloseGOMAXPROCS4": "10/10 pass",
+      "providerCloseCoverpkg": "passed; 6.6% aggregate coverage; profile retained",
+      "providerCloseRace": "20/20 pass",
+      "liveFocusedNormal": "850/850 pass",
+      "liveFocusedRace": "340/340 pass",
+      "engineToolFocusedNormal": "800/800 pass",
+      "engineToolFocusedRace": "320/320 pass",
+      "acceptedResultConversation": "passed 10/10 at GOMAXPROCS 1, 2 and 4"
+    }
+  },
+  "replayRegression": {
+    "credentialFreeFocusedNormal": "66/66 pass",
+    "credentialFreeFocusedRace": "C159 conversation-close and missing-continuation controls passed",
+    "unrelatedRemoteAudioRace": {
+      "status": "environmental-failure-retained",
+      "failures": [
+        "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test45/long_prior_input_61s",
+        "TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/long_prior_input_61s"
+      ],
+      "cause": "remote audio-device advance timed out with rendered_pcm=0; provider responsesSent=9, responseCreates=7, toolResults=7",
+      "candidatePathsTouched": ["go-agent-loop/pkg/engine", "go-agent-loop/pkg/participants"]
+    }
+  }
+}
