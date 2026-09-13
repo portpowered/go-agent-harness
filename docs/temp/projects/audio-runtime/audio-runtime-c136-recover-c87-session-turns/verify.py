@@ -20,6 +20,7 @@ RUNTIME = "go-agent-runtime/services/sessionturns"
 EVIDENCE = "docs/temp/projects/audio-runtime/audio-runtime-c136-recover-c87-session-turns"
 C87_EVIDENCE = "docs/temp/projects/audio-runtime/audio-runtime-c87-retire-cli-session-turns"
 C150_EVIDENCE = "docs/temp/projects/audio-runtime/audio-runtime-c150-recover-c136-c87-session-turns"
+C166_EVIDENCE = "docs/temp/projects/audio-runtime/audio-runtime-c166-recover-c150-session-turns-handoff"
 SHARED_EXCLUSIONS = {
     "scripts/wire-packages.txt",
     "docs/architecture/architecture-size-baseline.json",
@@ -125,7 +126,7 @@ def run_test(cwd: Path, package: str, pattern: str) -> None:
 def check_scope() -> None:
     paths = changed_paths()
     for path in paths:
-        allowed = path == ADAPTER or path == ADAPTER_TEST or path.startswith(RUNTIME + "/") or path.startswith("coverage-manifest/go-agent-runtime/services/sessionturns/") or path.startswith(EVIDENCE + "/") or path.startswith(C87_EVIDENCE + "/") or path.startswith(C150_EVIDENCE + "/") or path in C166_SHARED_PATHS
+        allowed = path == ADAPTER or path == ADAPTER_TEST or path.startswith(RUNTIME + "/") or path.startswith("coverage-manifest/go-agent-runtime/services/sessionturns/") or path.startswith(EVIDENCE + "/") or path.startswith(C87_EVIDENCE + "/") or path.startswith(C150_EVIDENCE + "/") or path.startswith(C166_EVIDENCE + "/") or path in C166_SHARED_PATHS
         require(allowed, f"unowned changed path: {path}")
     require(not (paths & (SHARED_EXCLUSIONS - C166_SHARED_PATHS)), "shared registry or architecture baseline changed outside the C166 lease")
 
