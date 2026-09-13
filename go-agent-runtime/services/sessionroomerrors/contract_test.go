@@ -22,7 +22,7 @@ func (participantFailureProbe) ParticipantID() string { return "participant" }
 type serviceProbe struct{}
 
 func (serviceProbe) ParticipantFailure(ParticipantFailureRequest) error { return nil }
-func (serviceProbe) ParticipantFailureID(error) (string, bool) { return "", false }
+func (serviceProbe) ParticipantFailureID(error) (string, bool)          { return "", false }
 func (serviceProbe) ParticipantFailureReason(ParticipantFailureReasonRequest) string {
 	return ""
 }
