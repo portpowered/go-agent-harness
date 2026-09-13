@@ -68,3 +68,10 @@ All commands below exited 0 on the candidate worktree:
 - `git diff --check`
 
 The implementation checkpoint, PR, and script-CI handoff boundary are recorded in `progress.txt`; the final pushed handoff head is supplied in the task response.
+
+## Current-main integration and recheck
+
+- The canonical task is `work-task-46`; concluded review `work-review-68` found no C155 code defect. It rejected the prior handoff only because `origin/main` had advanced to `97d3dcfb1e97a2611aa26b203a7f893442db4768` while the candidate stopped at `4a1c399ccbb3d780be95eb04316e84b8f11a6646`. The exact prior static rejection remains `34783651640`/`51ddc49edeefc9f3fc318d96246e6d2f5065b92b` with the four baseline drifts recorded above.
+- `git fetch origin main` confirmed `origin/main=97d3dcfb1e97a2611aa26b203a7f893442db4768`. The isolated branch merged it as `1caea9e119f9396b8110a2847e463ee6270c2714`; merge-base is the planned `4a1c399ccbb3d780be95eb04316e84b8f11a6646`, and startup integration `8bdafc7f947a3a2c9856220abdc539437035bd21` remains an ancestor. The running host checkout and peer worktrees were not reset or modified.
+- On merged source `1caea9e1`, the causal subtest passed `200` normal, `100` race, `100` `GOMAXPROCS=1`, and `100` `GOMAXPROCS=8` trials; adversarial normal/race passed `900/420`, typed/loopback regressions passed `80`, the device package passed `2530` normal and `759` race tests, the full gateway module passed `285`, and gateway vet passed. `make architecture-size-check` passed at `202` packages, `1940` files and `28768` functions; `make fmt`, `make wire-check` and `git diff --check` passed.
+- This refresh is executor evidence only: no script-CI success, independent review, guarded merge, vertical acceptance, physical/acoustic proof or project completion is claimed. The evidence-only descendant changes no executable inputs. Next action is to push this same admitted branch, update its PR with the current-main and focused evidence, and return `ACCEPTED` to the script-owned CI gate without polling; retain C155 ownership for any exact rejection.
