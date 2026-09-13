@@ -22,7 +22,6 @@ rtk proxy go build -trimpath -o docs/temp/projects/audio-runtime/audio-runtime-c
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication/run.py --case c141-simulated-duplex-four-tap --case render-tap-unavailable --case malformed-odd-pcm --case stale-provenance --case healthy-audio-tool --case interruption --child-timeout 60 --aggregate-timeout 300
 rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c146-recover-c117-public-trace-publication/verify.py --mode all
 ```
-
 The four-tap runner first records the exact C141 device-input preflight failure
 against the immutable text-only source fixture, then uses one captured PCM
 frame in a derived, resealed fixture so the final replay is finite and strict.
