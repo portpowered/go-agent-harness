@@ -231,7 +231,11 @@ def shipped() -> dict:
 def final_scope() -> dict:
     admission = manifest_and_c130()
     history = ancestry()
-    changed = [line for line in command(["git", "diff", "--name-only", "origin/main...HEAD"]).splitlines() if line]
+    changed = [
+        line.strip()
+        for line in command(["git", "diff", "--name-only", "origin/main...HEAD"]).splitlines()
+        if line.strip() and line.strip() != "Changes:"
+    ]
     outside = [
         path for path in changed
         if not any(path == prefix or path.startswith(prefix) for prefix in OWNED_PREFIXES)
