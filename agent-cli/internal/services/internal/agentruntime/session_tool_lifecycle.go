@@ -3,31 +3,10 @@ package agentruntime
 import (
 	"errors"
 	"fmt"
-	"sort"
-	"strings"
 
 	sessionpublic "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sessioncontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-)
-
-const (
-	// SessionScheduledAudioClassification identifies a terminal session failure
-	// caused by a configured scheduled input or its assistant response not
-	// completing before shutdown.
-	SessionScheduledAudioClassification = "scheduled_audio_incomplete"
-	// SessionUnresolvedToolResultClassification identifies a terminal session
-	// failure caused by a result that never reached the provider-facing send
-	// boundary.
-	SessionUnresolvedToolResultClassification = "unresolved_tool_result"
-	// SessionImageContinuationClassification identifies a terminal session
-	// failure after a read_image result was accepted but its model continuation
-	// never reached a terminal response.
-	SessionImageContinuationClassification = "image_tool_continuation"
-	// SessionToolContinuationClassification identifies a terminal session
-	// failure after an ordinary tool result was accepted but its grounded model
-	// continuation never reached a terminal response.
-	SessionToolContinuationClassification = "tool_continuation"
 )
 
 var (
@@ -85,22 +64,6 @@ func withUnresolvedToolResults(err error, observer *sessionProgressObserver) err
 // preventing a private host observer type from leaking into the runtime API.
 type SessionImageContinuationError = sessioncontract.LiveImageContinuationError
 type SessionToolContinuationError = sessioncontract.LiveToolContinuationError
-
-func formatContinuationMetadata(values map[string]string) string {
-	if len(values) == 0 {
-		return ""
-	}
-	ids := make([]string, 0, len(values))
-	for id := range values {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	parts := make([]string, 0, len(ids))
-	for _, id := range ids {
-		parts = append(parts, id+"="+values[id])
-	}
-	return strings.Join(parts, ", ")
-}
 
 // withPendingToolContinuations preserves any primary provider, cancellation,
 // or timeout cause while adding the typed continuation failure once. Image

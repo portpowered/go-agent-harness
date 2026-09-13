@@ -1,0 +1,44 @@
+{
+  "schema": "audio-runtime-c118-ci-rejection/v1",
+  "run": {
+    "conclusion": "failure",
+    "createdAt": "2026-09-13T04:19:48Z",
+    "databaseId": 34737625163,
+    "displayTitle": "refactor(runtime): retire CLI session terminal diagnostics",
+    "event": "pull_request",
+    "headBranch": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+    "headSha": "4b59e09b4b04163392f0ae04a7ef4e20ac9d23bd",
+    "status": "completed",
+    "updatedAt": "2026-09-13T04:32:45Z",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34737625163",
+    "workflowName": "CI"
+  },
+  "job": {
+    "databaseId": 103671708708,
+    "name": "CI (coverage)",
+    "startedAt": "2026-09-13T04:19:50Z",
+    "completedAt": "2026-09-13T04:30:16Z",
+    "conclusion": "failure",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34737625163/job/103671708708"
+  },
+  "checksAtHead": {
+    "CI (static)": "SUCCESS",
+    "CI (unit)": "SUCCESS",
+    "CI (integration)": "SUCCESS",
+    "CI (coverage)": "FAILURE",
+    "CI (race)": "SUCCESS",
+    "CI (hermetic)": "SUCCESS",
+    "CI (WebMCP Chrome)": "SUCCESS",
+    "CI (macOS audio release)": "SUCCESS",
+    "CI (Windows audio portable)": "SUCCESS"
+  },
+  "failure": {
+    "step": "Run coverage profiles and coverage gate",
+    "command": "make coverage",
+    "finalOutput": "coverage gate found manifest packages without measured coverage:\n- github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal",
+    "cause": "The public sessionterminal contract contains declarations and interfaces only, so Go emits no executable statements or coverage profile entry for that package. Its manifest entry incorrectly required an 80.00% measured floor instead of the repository's declaration-only exception.",
+    "repair": "Changed coverage-manifest/go-agent-runtime/services/sessionterminal/package.json to the declaration-only exception; internal/service and wire coverage registrations remain unchanged."
+  },
+  "boardFeedback": "CI checks failed for PR #504 at head 4b59e09b4b04163392f0ae04a7ef4e20ac9d23bd: required checks failed on current head 4b59e09b4b04163392f0ae04a7ef4e20ac9d23bd: CI (coverage)=FAILURE; checks: CI (coverage)=FAILURE.",
+  "reviewFindings": []
+}

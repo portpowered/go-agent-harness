@@ -1,0 +1,60 @@
+{
+  "schema": "audio-runtime-c118-ci-rejection/v1",
+  "run": {
+    "conclusion": "failure",
+    "createdAt": "2026-09-13T08:43:04Z",
+    "databaseId": 34748383831,
+    "displayTitle": "refactor(runtime): retire CLI session terminal diagnostics",
+    "event": "pull_request",
+    "headBranch": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+    "headSha": "a949546b612010767dde0e036bc1975cde7b7fd7",
+    "status": "completed",
+    "updatedAt": "2026-09-13T08:54:42Z",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34748383831",
+    "workflowName": "CI"
+  },
+  "job": {
+    "databaseId": 103700381424,
+    "name": "CI (integration)",
+    "startedAt": "2026-09-13T08:43:14Z",
+    "completedAt": "2026-09-13T08:54:31Z",
+    "conclusion": "failure",
+    "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34748383831/job/103700381424"
+  },
+  "checksAtHead": {
+    "CI (static)": "SUCCESS",
+    "CI (unit)": "SUCCESS",
+    "CI (integration)": "FAILURE",
+    "CI (coverage)": "SUCCESS",
+    "CI (race)": "SUCCESS",
+    "CI (hermetic)": "SUCCESS",
+    "CI (WebMCP Chrome)": "SUCCESS",
+    "CI (macOS audio release)": "SUCCESS",
+    "CI (Windows audio portable)": "SUCCESS"
+  },
+  "failure": {
+    "step": "Run production-binary audio-device replay integration",
+    "command": "make test-audio-device-server-integration",
+    "test": "TestAgentBinaryTest45HighRateToolAudioRegression/trial_05",
+    "finalOutput": "test45_high_rate process-boundary audio verification: remote device rendered 171191/177591 compared samples (lost 6400, 96.4% retained) (playback={Format:16000 Hz, 1 channel, 16-bit pcm16 LatencyTarget:250ms CapacitySamples:4000 QueuedSamples:0 PeakQueuedSamples:2880 DroppedSamples:0 OverflowEvents:0 DiscardedSamples:0 DiscardEvents:0 CallbackCount:372 RenderedSamples:178560 UnderflowEvents:16 UnderflowSamples:7360 ZeroFilledSamples:7360 MinimumQueuedSamples:0} provider={responsesSent:9 responseCreates:7 initialRequests:0 inputHistories:0 inputSamplesSeen:267839 toolResults:7 protocolError:})",
+    "commandExit": "go test ./test/integration -run ^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryAudioOutRecordsRemoteDevicePCM|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryTest45HighRateToolAudioRegression|AgentBinaryTest46HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$ -count=1 -timeout 480s exited with status 1; make exited with status 2",
+    "causeClassification": "production-binary remote-device playback underflow/loss; no dropped, overflow, or discarded samples were reported"
+  },
+  "scopeAnalysis": {
+    "c118OwnedPathsUnchangedByFailure": [
+      "go-agent-runtime/services/sessionterminal/",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal_adapter.go"
+    ],
+    "peerPathsNotOwnedByC118": [
+      "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go",
+      "go-audio",
+      "go-device-gateway",
+      "go-llm-gateway",
+      "audio transport/device drain"
+    ],
+    "localCurrentHeadEvidence": "5c423b654c5702d966516dedd590555f07e96636 passes focused C118 normal/race tests, both causal mutants, GOWORK=off external consumer, shipped YUI, and COUNT=3 accumulated normal/coverage/race regressions including the 20-trial high-rate simulated regression",
+    "peerContext": "The related C64 provider/audio terminal-drain change is merged at 59af63256; the hosted failure still demonstrates an audio-device underflow/loss path rather than a C118 session-terminal defect.",
+    "requiredNextAction": "Primary/C64 owner must transfer ownership or land an accepted peer repair for the production-binary audio-device replay failure. Then integrate the repaired accepted origin/main into this same task, rerun focused and accumulated gates, push the changed candidate, and submit it to script CI without polling."
+  },
+  "boardFeedback": "CI checks failed for PR #504 at head a949546b612010767dde0e036bc1975cde7b7fd7: required checks failed on current head a949546b612010767dde0e036bc1975cde7b7fd7; checks: CI (integration)=FAILURE."
+}

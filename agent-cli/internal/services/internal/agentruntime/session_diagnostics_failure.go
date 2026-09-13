@@ -172,46 +172,6 @@ func (o *sessionProgressObserver) captureFailureFromClose(v *messages.SessionClo
 	}
 }
 
-func (o *sessionProgressObserver) unresolvedToolResultFailureFacts(failingEvent string) *failureFacts {
-	return &failureFacts{
-		classification: SessionUnresolvedToolResultClassification,
-		terminalReason: string(messages.TerminalReasonTerminalFailure),
-		provenance:     string(messages.TerminalProvenanceSession),
-		outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
-		failingEvent:   failingEvent,
-	}
-}
-
-func (o *sessionProgressObserver) imageContinuationFailureFacts(failingEvent string) *failureFacts {
-	return &failureFacts{
-		classification: SessionImageContinuationClassification,
-		terminalReason: string(messages.TerminalReasonTerminalFailure),
-		provenance:     string(messages.TerminalProvenanceSession),
-		outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
-		failingEvent:   failingEvent,
-	}
-}
-
-func (o *sessionProgressObserver) toolContinuationFailureFacts(failingEvent string) *failureFacts {
-	return &failureFacts{
-		classification: SessionToolContinuationClassification,
-		terminalReason: string(messages.TerminalReasonTerminalFailure),
-		provenance:     string(messages.TerminalProvenanceSession),
-		outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
-		failingEvent:   failingEvent,
-	}
-}
-
-func (o *sessionProgressObserver) scheduledAudioFailureFacts(failingEvent string) *failureFacts {
-	return &failureFacts{
-		classification: SessionScheduledAudioClassification,
-		terminalReason: string(messages.TerminalReasonTerminalFailure),
-		provenance:     string(messages.TerminalProvenanceSession),
-		outputState:    deriveOutputState(o.sawSessionOpen, o.turnsCompleted),
-		failingEvent:   failingEvent,
-	}
-}
-
 // emitToolCallRecord reports a provider tool-call event that cannot be
 // executed because this session has no tool executor. Tool-enabled sessions
 // resolve the call through their participant-local executor instead.
