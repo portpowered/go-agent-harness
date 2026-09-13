@@ -395,6 +395,10 @@ def validate_review_compatibility_run(run: dict[str, Any], base: str, expected_o
                 require(conflict.get("kind") in {"content-conflict", "modify-delete", "delete-modify"}, "review-main conflict kind is unsupported")
                 require(isinstance(conflict.get("index_stages"), list) and len(conflict["index_stages"]) >= 2, "review-main conflict index stages are missing")
                 require(isinstance(conflict.get("patch_sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", conflict["patch_sha256"]), "review-main conflict patch identity is missing")
+            abort = merge.get("abort", {})
+            require(abort.get("status") == "passed" and abort.get("exit_code") == 0, "review-main conflict abort result is missing or failed")
+            require(isinstance(abort.get("output_sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", abort["output_sha256"]), "review-main abort output identity is missing")
+            require(merge.get("post_abort_status") == [], "review-main conflict worktree remained dirty after abort")
             require(merge.get("conflict_resolution", "").startswith("aborted;") and merge.get("resolution", {}).get("status") == "aborted", "review-main conflict was resolved by C109")
             require(merge.get("post_status"), "review-main conflict status was not retained")
     if saw_failure:

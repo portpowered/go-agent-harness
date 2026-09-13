@@ -1371,15 +1371,29 @@ def commit_rehearsal(root: Path, base: str, order: list[tuple[str, str]], role: 
                     }
                 )
             else:
+                pre_abort_status = status_lines(root, cwd=worktree)
+                abort = git(root, ["merge", "--abort"], cwd=worktree, check=False)
+                post_abort_status = status_lines(root, cwd=worktree)
                 record.update(
                     {
                         "conflict_diff": "\n".join(item["patch"] for item in conflicts),
-                        "post_status": status_lines(root, cwd=worktree),
-                        "conflict_resolution": "aborted; C109 does not resolve candidate conflicts",
+                        "post_status": pre_abort_status,
+                        "abort": {
+                            "command": abort["command"],
+                            "status": abort["status"],
+                            "exit_code": abort["exit_code"],
+                            "output_sha256": abort["output_sha256"],
+                            "output": abort["output"],
+                        },
+                        "post_abort_status": post_abort_status,
+                        "conflict_resolution": (
+                            "aborted; C109 does not resolve candidate conflicts"
+                            if abort["exit_code"] == 0 and not post_abort_status
+                            else "abort-failed; C109 did not resolve candidate conflicts"
+                        ),
                         "resolution": {"status": "aborted", "owner": "C61/work-task-34 or C83/work-task-125"},
                     }
                 )
-                git(root, ["merge", "--abort"], cwd=worktree, check=False)
             merge_records.append(record)
             if merge["exit_code"] != 0:
                 break

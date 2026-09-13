@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
 import signal
 import shutil
 import subprocess
@@ -31,6 +32,8 @@ SHIPPED_REPORT = f"{C61_DIR}/runs/shipped-yui-browser-audio-tool-replay.json"
 RUNNER_RELATIVE = "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py"
 FIXTURE_RELATIVE = "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json"
 OUTPUT_CAP = 2 * 1024 * 1024
+OUTPUT_RETAINED_TAIL = 16 * 1024
+OUTPUT_READ_CHUNK = 64 * 1024
 SHIPPED_OUTPUT_MARKERS = ("PROBE_TOOL_MARKER_9182", "strict replay continuation")
 
 
@@ -65,17 +68,9 @@ def safe_environment(extra: dict[str, str] | None = None) -> tuple[dict[str, str
     return env, removed
 
 
-def append_output(left: str, right: str | bytes | None) -> str:
-    if right is None:
-        return left
-    if isinstance(right, bytes):
-        right = right.decode(errors="replace")
-    return left + right
-
-
-def terminate_group(process: subprocess.Popen[str]) -> dict[str, Any]:
+def terminate_group(process: subprocess.Popen[Any], *, force: bool = False) -> dict[str, Any]:
     result = {"term_sent": False, "kill_sent": False, "wait_status": "not-needed"}
-    if process.poll() is not None:
+    if process.poll() is not None and not force:
         result["wait_status"] = "already-exited"
         return result
     try:
@@ -87,9 +82,10 @@ def terminate_group(process: subprocess.Popen[str]) -> dict[str, Any]:
     try:
         process.wait(timeout=1)
         result["wait_status"] = "terminated-after-term"
-        return result
     except subprocess.TimeoutExpired:
         pass
+    if not force or process_group_gone(process.pid):
+        return result
     try:
         os.killpg(process.pid, signal.SIGKILL)
         result["kill_sent"] = True
@@ -141,38 +137,99 @@ def bounded(argv: list[str], cwd: Path, timeout: int, *, env_extra: dict[str, st
         argv,
         cwd=cwd,
         env=env,
-        text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    output = ""
+    if process.stdout is None:
+        raise PublicCheckError("bounded child did not expose stdout")
+    stream = process.stdout
+    stream_fd = stream.fileno()
+    os.set_blocking(stream_fd, False)
+    selector = selectors.DefaultSelector()
+    selector.register(stream, selectors.EVENT_READ)
+    retained = bytearray()
+    output_digest = hashlib.sha256()
+    output_bytes = 0
+    output_capped = False
+    forbidden_output_markers = ("OPENAI_API_KEY=", "ANTHROPIC_API_KEY=", "C109_SECRET_MARKER", "PROBE_CREDENTIAL_MARKER")
+    forbidden_marker_bytes = tuple(marker.encode() for marker in forbidden_output_markers)
+    marker_scan_tail = b""
+    forbidden_markers_absent = True
     timed_out = False
     cleanup = {"term_sent": False, "kill_sent": False, "wait_status": "not-needed", "drain_status": "not-needed"}
-    try:
-        output, _ = process.communicate(timeout=max(1, timeout))
-    except subprocess.TimeoutExpired as exc:
-        timed_out = True
-        output = append_output(output, exc.stdout)
-        cleanup.update(terminate_group(process))
+
+    def record(chunk: bytes) -> None:
+        nonlocal output_bytes, output_capped, marker_scan_tail, forbidden_markers_absent
+        output_digest.update(chunk)
+        output_bytes += len(chunk)
+        scan = marker_scan_tail + chunk
+        if any(marker in scan for marker in forbidden_marker_bytes):
+            forbidden_markers_absent = False
+        max_marker_length = max(map(len, forbidden_marker_bytes))
+        marker_scan_tail = scan[-(max_marker_length - 1) :]
+        if output_capped:
+            retained.extend(chunk)
+            del retained[:-OUTPUT_RETAINED_TAIL]
+            return
+        retained.extend(chunk)
+        if len(retained) > OUTPUT_CAP:
+            output_capped = True
+            del retained[:-OUTPUT_RETAINED_TAIL]
+
+    def read_ready() -> bool:
         try:
-            tail, _ = process.communicate(timeout=1)
-            output = append_output(output, tail)
-            cleanup["drain_status"] = "drained-after-termination"
-        except subprocess.TimeoutExpired as drain_exc:
-            output = append_output(output, drain_exc.stdout)
-            cleanup["drain_status"] = "bounded-drain-timeout"
-            if process.stdout is not None:
-                process.stdout.close()
+            chunk = os.read(stream_fd, OUTPUT_READ_CHUNK)
+        except BlockingIOError:
+            return False
+        except OSError:
+            chunk = b""
+        if not chunk:
+            try:
+                selector.unregister(stream)
+            except KeyError:
+                pass
+            return False
+        record(chunk)
+        return True
+
+    deadline = time.monotonic() + max(1, timeout)
+    pipe_drain_deadline: float | None = None
+    try:
+        while True:
+            now = time.monotonic()
+            if process.poll() is not None and selector.get_map() and pipe_drain_deadline is None:
+                pipe_drain_deadline = min(deadline, now + 1)
+            effective_deadline = pipe_drain_deadline or deadline
+            remaining = effective_deadline - now
+            if remaining <= 0:
+                timed_out = True
+                cleanup.update(terminate_group(process, force=True))
+                drain_deadline = time.monotonic() + 1
+                while selector.get_map() and time.monotonic() < drain_deadline:
+                    for _key, _mask in selector.select(max(0, drain_deadline - time.monotonic())):
+                        while read_ready():
+                            pass
+                cleanup["drain_status"] = "drained-after-termination" if not selector.get_map() else "bounded-drain-timeout"
+                break
+            if process.poll() is not None and not selector.get_map():
+                break
+            if selector.get_map():
+                for _key, _mask in selector.select(min(0.1, remaining)):
+                    while read_ready():
+                        pass
+            else:
+                time.sleep(min(0.05, remaining))
+    finally:
+        selector.close()
+        stream.close()
+    if process.poll() is None:
+        cleanup.update(terminate_group(process, force=True))
+        timed_out = True
     elapsed = round(time.monotonic() - started, 3)
     process_group_clean = process_group_gone(process.pid)
-    raw_output = output
-    output_bytes = len(raw_output.encode())
-    output_capped = output_bytes > OUTPUT_CAP
-    retained_output = raw_output[-16000:] if output_capped else raw_output
-    forbidden_output_markers = ("OPENAI_API_KEY=", "ANTHROPIC_API_KEY=", "C109_SECRET_MARKER", "PROBE_CREDENTIAL_MARKER")
-    forbidden_markers_absent = not any(marker in raw_output for marker in forbidden_output_markers)
-    discovery = test_discovery(" ".join(argv), raw_output)
+    retained_output = bytes(retained).decode(errors="replace")
+    discovery = test_discovery(" ".join(argv), retained_output)
     status = "passed" if process.returncode == 0 and not timed_out and process_group_clean and not output_capped and discovery["valid"] else ("timeout" if timed_out else "failed")
     return {
         "label": label,
@@ -186,9 +243,9 @@ def bounded(argv: list[str], cwd: Path, timeout: int, *, env_extra: dict[str, st
         "process_group_gone": process_group_clean,
         "cleanup": cleanup,
         "output_bytes": output_bytes,
-        "raw_output_sha256": hashlib.sha256(raw_output.encode()).hexdigest(),
-        "retained_output_sha256": hashlib.sha256(retained_output.encode()).hexdigest(),
-        "output_sha256": hashlib.sha256(raw_output.encode()).hexdigest(),
+        "raw_output_sha256": output_digest.hexdigest(),
+        "retained_output_sha256": hashlib.sha256(bytes(retained)).hexdigest(),
+        "output_sha256": output_digest.hexdigest(),
         "output_capped": output_capped,
         "forbidden_markers_scanned_before_truncation": True,
         "credential_environment_scrubbed": True,
@@ -246,7 +303,11 @@ def tree_observation(tree_root: Path) -> dict[str, Any]:
 
 def tree_identity_unchanged(tree_root: Path, expected: dict[str, Any]) -> bool:
     observed = tree_observation(tree_root)
-    return observed["head"] == expected["head"] and observed["tree"] == expected["final_tree"] and observed["status"] == []
+    return (
+        observed["head"] == expected["head"]
+        and observed["tree"] == expected["final_tree"]
+        and observed["status"] == expected.get("status", [])
+    )
 
 
 def source_binding() -> dict[str, str]:
@@ -461,10 +522,17 @@ def main() -> int:
     tree_violation: dict[str, Any] | None = None
     started = time.monotonic()
     result: dict[str, Any] = {}
+    caller_binding: dict[str, Any] | None = None
     try:
         if args.tree:
             worktree = args.tree.resolve()
             require(worktree.is_dir(), f"provided synthetic tree does not exist: {worktree}")
+            caller_observed = tree_observation(worktree)
+            caller_binding = {
+                "head": caller_observed["head"],
+                "final_tree": caller_observed["tree"],
+                "status": caller_observed["status"],
+            }
             expected_root, expected_worktree, expected_tree = create_required_tree()
             try:
                 synthetic = synthetic_tree_binding(worktree, expected_tree)
@@ -568,8 +636,15 @@ def main() -> int:
         if auxiliary_cleanup:
             result["auxiliary_cleanup"] = auxiliary_cleanup
     except Exception as exc:
-        if worktree is not None and temporary_root is not None:
-            cleanup_tree(temporary_root, worktree)
+        exception_cleanup: dict[str, Any] | None = None
+        if worktree is not None:
+            expected_binding = synthetic or caller_binding
+            exception_cleanup = cleanup_tree(
+                temporary_root,
+                worktree,
+                expected_binding=expected_binding,
+                status_before_cleanup=(expected_binding or {}).get("status", []),
+            )
         result = {
             "schema": "audio-runtime-c109-public-checks-v2",
             "case": args.case,
@@ -578,6 +653,10 @@ def main() -> int:
             "error": str(exc),
             "checks": checks,
         }
+        if exception_cleanup is not None:
+            result["cleanup"] = exception_cleanup
+        if auxiliary_cleanup:
+            result["auxiliary_cleanup"] = auxiliary_cleanup
         write_result(args.output, result)
         print(json.dumps({"case": args.case, "status": "failed", "error": str(exc)}, sort_keys=True))
         return 2
