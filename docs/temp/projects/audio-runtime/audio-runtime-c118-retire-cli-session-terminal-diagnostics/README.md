@@ -1,8 +1,9 @@
 # C118 session-terminal retirement evidence
 
 `inventory.json` records the admitted project, immutable source baseline,
-dual-ancestry checks, caller census, peer lease exclusions, and the absence of
-prior C118 review or CI rejection findings.
+dual-ancestry checks, caller census, peer lease exclusions, and the current
+task-board CI rejection/repair provenance. No independent C118 review finding
+exists.
 
 `external-consumer` is a separate Go module. With `GOWORK=off`, its test imports
 only the public `go-agent-runtime/services/sessionterminal` contract, its
@@ -18,13 +19,24 @@ pinned at 287 lines and its recorded SHA-256.
 
 The bounded `run.py` runner builds no provider connection and executes the
 source-pinned shipped YUI with a credential-free environment. Report
-`runs/session-terminal-t6l5etfn/report.json` passes all four required cases:
+`runs/session-terminal-y4m5bp0m/report.json` passes all four required cases:
 replay completion, SIGINT user cancellation with partial output, provider
 error, and the existing audio/tool replay. Each case records one terminal
 diagnostic, final accounting, fixture/binary hashes, and reaped process-group
 state; the tool replay retains the marker, strict continuation text, and the
 expected `audio/out-000.pcm` SHA-256
 `0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`.
+
+The exact-head CI rejection is preserved in
+`ci-rejection-34737625163.json`. All other required checks passed; coverage
+failed because the public contract package has no executable statements. The
+manifest-only repair commit `2ba46424` changes its registration to the
+declaration-only exception already used by the recording and devices public
+contracts. Focused normal/race tests, the GOWORK=off consumer, both causal
+mutants, retirement verification, and the accumulated normal/coverage/race
+session regression matrix pass after the repair. The shipped artifact is
+unchanged and remains SHA-256
+`06a497e0467f009f32dac20984500b11661272addad719d5941228fe096f20ca`.
 
 The evidence is vertical only. Focused normal/race tests, the accumulated
 session regression matrix, pinned lint/staticcheck/vet, Wire generation and

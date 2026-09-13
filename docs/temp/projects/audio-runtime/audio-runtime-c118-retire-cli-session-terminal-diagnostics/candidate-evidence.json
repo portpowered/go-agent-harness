@@ -1,6 +1,6 @@
 {
   "schema": "audio-runtime-c118-session-terminal-diagnostics/v1",
-  "candidate_revision": "55a652fc61bcee8ab87171f00fd930fad57b67e0",
+  "candidate_revision": "2ba46424eca1641157a84cfefb4a40fcff7af6ca",
   "baseline_revision": "3963bc3566da24f8214634c17a9d0f79a6724171",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
@@ -22,7 +22,8 @@
       "1130e84db55b9b1be89fbb4277ee8d6763ed5c77",
       "55a652fc61bcee8ab87171f00fd930fad57b67e0",
       "084de02fe95ab246fe3d15410c93600182d2cb92",
-      "9a440390e10e1f995268aab49b4adf90fb489e60"
+      "9a440390e10e1f995268aab49b4adf90fb489e60",
+      "2ba46424eca1641157a84cfefb4a40fcff7af6ca"
     ],
     "public_contract": "go-agent-runtime/services/sessionterminal",
     "private_implementation": "go-agent-runtime/services/sessionterminal/internal/service",
@@ -48,7 +49,15 @@
     "service_normal": "passed: 8 tests in 3 packages",
     "service_race": "passed: 8 tests in 3 packages",
     "external_consumer": "passed: GOWORK=off go test ./... -count=1 -timeout=120s",
-    "session_ci_regressions": "passed: scripts/test-session-ci-regressions.sh all; normal, coverage, race; count=3",
+    "session_ci_regressions": "passed: scripts/test-session-ci-regressions.sh all; normal, coverage, race; count=3 after 2ba46424",
+    "coverage_registration": "passed: 179 workspace packages across 6 modules; declaration-only sessionterminal contract is registered as an exception",
+    "coverage_rejection_repair": {
+      "evidence": "ci-rejection-34737625163.json",
+      "repair_commit": "2ba46424eca1641157a84cfefb4a40fcff7af6ca",
+      "manifest_sha256": "183accd1cde7d41edf66d782bbc951ef1d65ad8d5a8c8afe222d681c30eea1dc",
+      "hosted_failure": "CI (coverage) only; all other 8 required checks passed",
+      "local_full_gate": "make coverage reached agent-cli coverage but stopped on unrelated macOS TestShippedSessionSIGINTDuringToolExecutionFinalizesCleanly timing failure before the coverage gate"
+    },
     "pinned_golangci_lint": "passed: 0 issues in go-agent-runtime and agent-cli working-tree scans",
     "scoped_staticcheck": "passed: go-agent-runtime and agentruntime packages",
     "scoped_vet": "passed: sessionterminal and agentruntime packages",
@@ -57,11 +66,11 @@
     "shipped_yui": {
       "status": "passed",
       "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/run.py --case replay-terminal --case user-cancellation --case provider-error --case existing-audio-tool-replay --child-timeout 60 --aggregate-timeout 300",
-      "report": "runs/session-terminal-t6l5etfn/report.json",
-      "source_revision": "9cbe87e8b0e925d7a307e116d895aa8bf6b4acbe",
+      "report": "runs/session-terminal-y4m5bp0m/report.json",
+      "source_revision": "2ba46424eca1641157a84cfefb4a40fcff7af6ca",
       "origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
       "yui_sha256": "06a497e0467f009f32dac20984500b11661272addad719d5941228fe096f20ca",
-      "elapsed_seconds": 2.354841,
+      "elapsed_seconds": 1.947373,
       "cases": {
         "replay-terminal": "exit 0; replay_complete/replay/complete terminal; 2 final accounting records; descendants_reaped=true",
         "user-cancellation": "exit 0 after SIGINT; user_cancelled/cancellation/cli/partial terminal; partial audio accounting; descendants_reaped=true",

@@ -71,9 +71,10 @@
     ]
   },
   "priorFindings": {
-    "taskBoard": "task work-task-277 is admitted in init with the ready worktree checkpoint",
+    "taskBoard": "task work-task-277 is admitted in init after CI run 34737625163 returned the same task for repair",
     "matchingReviewRows": 0,
     "matchingCiRejectionRows": 0,
+    "taskCiRejection": "ci-rejection-34737625163.json",
     "localC118Progress": "no C118 entry in progress.txt or docs/factory inbox"
   },
   "ownership": {
@@ -90,7 +91,7 @@
     ]
   },
   "implementationCheckpoint": {
-    "testedSourceRevision": "55a652fc61bcee8ab87171f00fd930fad57b67e0",
+    "testedSourceRevision": "2ba46424eca1641157a84cfefb4a40fcff7af6ca",
     "evidenceRunnerRevision": "9a440390e10e1f995268aab49b4adf90fb489e60",
     "commits": [
       "360d2a973d01e572daa9c1725b370474a88bb429",
@@ -98,11 +99,12 @@
       "1130e84db55b9b1be89fbb4277ee8d6763ed5c77",
       "55a652fc61bcee8ab87171f00fd930fad57b67e0",
       "084de02fe95ab246fe3d15410c93600182d2cb92",
-      "9a440390e10e1f995268aab49b4adf90fb489e60"
+      "9a440390e10e1f995268aab49b4adf90fb489e60",
+      "2ba46424eca1641157a84cfefb4a40fcff7af6ca"
     ],
     "retirementLineReduction": 227,
     "focusedValidation": "candidate-evidence.json",
-    "shippedYuiEvidence": "passed: runs/session-terminal-t6l5etfn/report.json; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI; no surviving process groups",
-    "sharedGateStatus": "passed after integrating released main and applying only demonstrated C118 registration/stale-fragment repairs"
+    "shippedYuiEvidence": "passed: runs/session-terminal-y4m5bp0m/report.json at 2ba46424; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI; no surviving process groups",
+    "sharedGateStatus": "coverage registration passes after the exact CI rejection repair; full local make coverage also encountered the unrelated macOS SIGINT timing failure before reaching the coverage gate"
   }
 }
