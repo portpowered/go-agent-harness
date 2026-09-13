@@ -86,29 +86,17 @@ func (s *recordingAudioSink) WriteFrame(context.Context, []int16) error {
 
 func (s *recordingAudioSink) Close() error { return nil }
 
+// This fixture pins observation timestamps while delegating timers, waits,
+// and context deadlines to the host scheduler. Keeping the scheduler
+// implementation embedded avoids a second test clock and preserves the
+// production admission contract. The virtual-time behavior is tested
+// separately.
 type recordingClock struct {
+	clock.Real
 	now time.Time
 }
 
 func (c *recordingClock) Now() time.Time { return c.now }
-
-// These composition tests pin observation timestamps while session lifecycle
-// deadlines retain live scheduling. Virtual-time behavior is tested separately.
-func (*recordingClock) NewTimer(duration time.Duration) clock.Timer {
-	return clock.Real{}.NewTimer(duration)
-}
-
-func (*recordingClock) Wait(ctx context.Context, duration time.Duration) error {
-	return clock.Real{}.Wait(ctx, duration)
-}
-
-func (*recordingClock) WithDeadline(ctx context.Context, deadline time.Time) (context.Context, context.CancelFunc) {
-	return clock.Real{}.WithDeadline(ctx, deadline)
-}
-
-func (*recordingClock) WithTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
-	return clock.Real{}.WithTimeout(ctx, timeout)
-}
 
 type recordingSessionRuntimeObserver struct{}
 
