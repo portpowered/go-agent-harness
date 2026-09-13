@@ -119,12 +119,22 @@ func (p *prepared) Finish(ctx context.Context, bundle string, published bool) er
 }
 
 func (p *prepared) close(ctx context.Context) error {
+	started := false
 	p.once.Do(func() {
+		started = true
 		go func() {
 			p.closeErr = p.closeTrace()
 			close(p.closed)
 		}()
 	})
+	if !started {
+		select {
+		case <-p.closed:
+			return p.closeErr
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	timer := time.NewTimer(p.timeout)
 	defer timer.Stop()
 	select {
