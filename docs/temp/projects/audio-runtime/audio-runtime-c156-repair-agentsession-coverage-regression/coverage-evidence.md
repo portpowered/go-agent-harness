@@ -142,3 +142,34 @@ After fetching and merging review-time `origin/main` `97d3dcfb1e97a2611aa26b203a
 - The executor stops here after submitting the exact pushed candidate to SCRIPT
   CI. CI owns current-head polling and any rejection returns to this same task;
   no CI status is inferred or claimed by this evidence.
+
+## Rejected static head and bounded repair
+
+- The full raw log for PR 517's rejected `CI (static)` job
+  `103800583639` from run `34785669810` was retrieved at the completed job
+  boundary; its raw-job metadata, capture provenance and extracted findings
+  are preserved in `ci-rejection-34785669810.json`. The raw 938-line log
+  SHA-256 is
+  `791524d1c71c3a69315fa7c18ed497fb3eabe2eb917133217720cb1fec8c909b`.
+  There was no C156 review row; this was a CI rejection of the pushed head
+  `aab19728058b5783a279aa2301681ab7da976585`.
+- The complete log identifies only owned-test findings: cognitive complexity
+  `25 > 20` in `TestC156AudioInTurnBargeContract`, `21 > 20` in
+  `TestC156VoiceContractIsOrderedAndCopyIsolated`, three `errorlint` direct
+  error comparisons, and one `goconst` repeated `"mutated"` literal. No
+  production, coverage-manifest, threshold, exclusion, or C145 path was
+  implicated.
+- The bounded repair keeps the public behavior assertions intact, factors
+  barge and invalid-voice checks into small assertion helpers, uses
+  `errors.Is` for wrapped-error identity, and names the shared mutation value
+  as a test constant. No production behavior or acceptance threshold changed.
+- Post-repair validation before the evidence update: focused C156 normal
+  `-count=50` and race `-count=20` pass; full agentsession normal `-count=10`
+  and race `-count=5` pass; the candidate package profile is `76/76`
+  statements (`100.0%`) with SHA-256
+  `f494ac5dc338340d18dd9a2c4f4229b90a44b6e1f94034c45f1316583ab29029`; the
+  seven-profile coverage gate passes with `192` registered packages; the
+  accumulated `TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle`
+  regression passes; architecture-size, Wire, vet, lint (`0 issues`) and
+  Staticcheck pass. The full `make coverage` run generated all seven profiles,
+  and the exact coverage gate was rechecked without rerunning tests.

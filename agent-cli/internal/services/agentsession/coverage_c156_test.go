@@ -13,6 +13,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+const c156MutationValue = "mutated"
+
 func TestC156SessionMaxDurationContract(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -42,16 +44,16 @@ func TestC156SessionMaxDurationContract(t *testing.T) {
 	if got, want := durationErr.Error(), "--max-duration must be non-negative, got -1s"; got != want {
 		t.Fatalf("duration error text = %q, want %q", got, want)
 	}
-	if got := durationErr.Unwrap(); got != ErrInvalidSessionMaxDuration {
-		t.Fatalf("duration unwrap = %v, want stable sentinel", got)
+	if !errors.Is(durationErr, ErrInvalidSessionMaxDuration) {
+		t.Fatalf("duration error = %v, want stable sentinel", durationErr)
 	}
 
 	var nilDurationErr *SessionMaxDurationError
 	if got := nilDurationErr.Error(); got != ErrInvalidSessionMaxDuration.Error() {
 		t.Fatalf("nil duration error text = %q, want sentinel text", got)
 	}
-	if got := nilDurationErr.Unwrap(); got != ErrInvalidSessionMaxDuration {
-		t.Fatalf("nil duration unwrap = %v, want stable sentinel", got)
+	if !errors.Is(nilDurationErr, ErrInvalidSessionMaxDuration) {
+		t.Fatalf("nil duration error = %v, want stable sentinel", nilDurationErr)
 	}
 }
 
@@ -80,22 +82,7 @@ func TestC156AudioInTurnBargeContract(t *testing.T) {
 				return
 			}
 
-			var bargeErr *SessionAudioInTurnBargeError
-			if !errors.As(err, &bargeErr) {
-				t.Fatalf("barge error = %T, want *SessionAudioInTurnBargeError", err)
-			}
-			if !errors.Is(err, ErrSessionAudioInTurnBargeRequiresSequence) {
-				t.Fatalf("barge error = %v, want stable sentinel", err)
-			}
-			if bargeErr.TurnCount != test.wantTurns {
-				t.Fatalf("barge error turn count = %d, want %d", bargeErr.TurnCount, test.wantTurns)
-			}
-			if !strings.Contains(bargeErr.Error(), "got "+strconv.Itoa(test.wantTurns)) {
-				t.Fatalf("barge error text = %q, want reported turn count %d", bargeErr.Error(), test.wantTurns)
-			}
-			if got := bargeErr.Unwrap(); got != ErrSessionAudioInTurnBargeRequiresSequence {
-				t.Fatalf("barge unwrap = %v, want stable sentinel", got)
-			}
+			assertC156BargeError(t, err, test.wantTurns)
 		})
 	}
 
@@ -103,8 +90,29 @@ func TestC156AudioInTurnBargeContract(t *testing.T) {
 	if got := nilBargeErr.Error(); got != ErrSessionAudioInTurnBargeRequiresSequence.Error() {
 		t.Fatalf("nil barge error text = %q, want sentinel text", got)
 	}
-	if got := nilBargeErr.Unwrap(); got != ErrSessionAudioInTurnBargeRequiresSequence {
-		t.Fatalf("nil barge unwrap = %v, want stable sentinel", got)
+	if !errors.Is(nilBargeErr, ErrSessionAudioInTurnBargeRequiresSequence) {
+		t.Fatalf("nil barge error = %v, want stable sentinel", nilBargeErr)
+	}
+}
+
+func assertC156BargeError(t *testing.T, err error, wantTurns int) {
+	t.Helper()
+
+	var bargeErr *SessionAudioInTurnBargeError
+	if !errors.As(err, &bargeErr) {
+		t.Fatalf("barge error = %T, want *SessionAudioInTurnBargeError", err)
+	}
+	if !errors.Is(err, ErrSessionAudioInTurnBargeRequiresSequence) {
+		t.Fatalf("barge error = %v, want stable sentinel", err)
+	}
+	if bargeErr.TurnCount != wantTurns {
+		t.Fatalf("barge error turn count = %d, want %d", bargeErr.TurnCount, wantTurns)
+	}
+	if !strings.Contains(bargeErr.Error(), "got "+strconv.Itoa(wantTurns)) {
+		t.Fatalf("barge error text = %q, want reported turn count %d", bargeErr.Error(), wantTurns)
+	}
+	if !errors.Is(bargeErr.Unwrap(), ErrSessionAudioInTurnBargeRequiresSequence) {
+		t.Fatalf("barge unwrap = %v, want stable sentinel", bargeErr.Unwrap())
 	}
 }
 
@@ -305,7 +313,7 @@ func TestC156DiagnosticCallbacksPreservePublicRecords(t *testing.T) {
 	if len(toolRecords) != 1 {
 		t.Fatalf("tool diagnostic records = %d, want exactly one", len(toolRecords))
 	}
-	if got := toolRecords[0]; got.ToolCallID != diagnostic.ToolCallID || got.ToolName != diagnostic.ToolName || got.Source != diagnostic.Source || got.ErrorCode != diagnostic.ErrorCode || got.Error != originalErr {
+	if got := toolRecords[0]; got.ToolCallID != diagnostic.ToolCallID || got.ToolName != diagnostic.ToolName || got.Source != diagnostic.Source || got.ErrorCode != diagnostic.ErrorCode || !errors.Is(got.Error, originalErr) {
 		t.Fatalf("tool diagnostic record = %#v, want %#v", got, diagnostic)
 	}
 }
@@ -332,7 +340,7 @@ func TestC156UnresolvedToolResultsPreserveDeterministicOutcome(t *testing.T) {
 		t.Fatalf("unresolved call IDs = %v, want %v", got, wantIDs)
 	}
 	copyOfIDs := unresolvedErr.UnresolvedCallIDs()
-	copyOfIDs[0] = "mutated"
+	copyOfIDs[0] = c156MutationValue
 	if got := unresolvedErr.UnresolvedCallIDs(); !reflect.DeepEqual(got, wantIDs) {
 		t.Fatalf("unresolved call IDs changed after caller mutation: %v", got)
 	}
@@ -342,8 +350,8 @@ func TestC156UnresolvedToolResultsPreserveDeterministicOutcome(t *testing.T) {
 	if got, want := unresolvedErr.Error(), "tool results were not delivered for 2 unresolved call(s): call-a, call-z (send outcomes: call-z=cancelled)"; got != want {
 		t.Fatalf("unresolved tool error text = %q, want %q", got, want)
 	}
-	if got := unresolvedErr.Unwrap(); got != ErrSessionUnresolvedToolResults {
-		t.Fatalf("unresolved tool unwrap = %v, want stable sentinel", got)
+	if !errors.Is(unresolvedErr, ErrSessionUnresolvedToolResults) {
+		t.Fatalf("unresolved tool error = %v, want stable sentinel", unresolvedErr)
 	}
 
 	if got := NewSessionUnresolvedToolResultsError(nil, nil).Error(); got != ErrSessionUnresolvedToolResults.Error() {
@@ -364,7 +372,7 @@ func TestC156VoiceContractIsOrderedAndCopyIsolated(t *testing.T) {
 	if !reflect.DeepEqual(voices, wantVoices) {
 		t.Fatalf("supported voices = %v, want %v", voices, wantVoices)
 	}
-	voices[0] = "mutated"
+	voices[0] = c156MutationValue
 	if got := SupportedOpenAIRealtimeVoices(); !reflect.DeepEqual(got, wantVoices) {
 		t.Fatalf("supported voice registry changed after caller mutation: %v", got)
 	}
@@ -375,28 +383,7 @@ func TestC156VoiceContractIsOrderedAndCopyIsolated(t *testing.T) {
 		}
 	}
 	for _, voice := range []string{"Alloy", " alloy ", "not-a-voice"} {
-		err := ValidateOpenAIRealtimeVoice(voice)
-		var voiceErr *InvalidOpenAIRealtimeVoiceError
-		if !errors.As(err, &voiceErr) {
-			t.Fatalf("invalid voice error = %T, want *InvalidOpenAIRealtimeVoiceError", err)
-		}
-		if !errors.Is(err, ErrInvalidOpenAIRealtimeVoice) {
-			t.Fatalf("invalid voice error = %v, want stable sentinel", err)
-		}
-		if voiceErr.Voice != voice || !reflect.DeepEqual(voiceErr.SupportedVoices, wantVoices) {
-			t.Fatalf("invalid voice details = %#v, want voice %q and ordered registry", voiceErr, voice)
-		}
-		wantMessage := `invalid OpenAI Realtime voice "` + voice + `"; supported voices: ` + strings.Join(wantVoices, ", ")
-		if got := voiceErr.Error(); got != wantMessage {
-			t.Fatalf("invalid voice error text = %q, want %q", got, wantMessage)
-		}
-		voiceErr.SupportedVoices[0] = "mutated"
-		if got := SupportedOpenAIRealtimeVoices(); !reflect.DeepEqual(got, wantVoices) {
-			t.Fatalf("voice registry changed through typed error: %v", got)
-		}
-		if got := voiceErr.Unwrap(); got != ErrInvalidOpenAIRealtimeVoice {
-			t.Fatalf("invalid voice unwrap = %v, want stable sentinel", got)
-		}
+		assertC156InvalidVoice(t, voice, wantVoices)
 	}
 
 	var nilVoiceErr *InvalidOpenAIRealtimeVoiceError
@@ -405,5 +392,35 @@ func TestC156VoiceContractIsOrderedAndCopyIsolated(t *testing.T) {
 	}
 	if got := nilVoiceErr.Unwrap(); got != nil {
 		t.Fatalf("nil voice unwrap = %v, want nil", got)
+	}
+}
+
+func assertC156InvalidVoice(t *testing.T, voice string, wantVoices []string) {
+	t.Helper()
+
+	err := ValidateOpenAIRealtimeVoice(voice)
+	var voiceErr *InvalidOpenAIRealtimeVoiceError
+	if !errors.As(err, &voiceErr) {
+		t.Fatalf("invalid voice error = %T, want *InvalidOpenAIRealtimeVoiceError", err)
+	}
+	if !errors.Is(err, ErrInvalidOpenAIRealtimeVoice) {
+		t.Fatalf("invalid voice error = %v, want stable sentinel", err)
+	}
+	if voiceErr.Voice != voice {
+		t.Fatalf("invalid voice value = %q, want %q", voiceErr.Voice, voice)
+	}
+	if !reflect.DeepEqual(voiceErr.SupportedVoices, wantVoices) {
+		t.Fatalf("invalid voice supported values = %v, want %v", voiceErr.SupportedVoices, wantVoices)
+	}
+	wantMessage := `invalid OpenAI Realtime voice "` + voice + `"; supported voices: ` + strings.Join(wantVoices, ", ")
+	if got := voiceErr.Error(); got != wantMessage {
+		t.Fatalf("invalid voice error text = %q, want %q", got, wantMessage)
+	}
+	voiceErr.SupportedVoices[0] = c156MutationValue
+	if got := SupportedOpenAIRealtimeVoices(); !reflect.DeepEqual(got, wantVoices) {
+		t.Fatalf("voice registry changed through typed error: %v", got)
+	}
+	if !errors.Is(voiceErr.Unwrap(), ErrInvalidOpenAIRealtimeVoice) {
+		t.Fatalf("invalid voice unwrap = %v, want stable sentinel", voiceErr.Unwrap())
 	}
 }
