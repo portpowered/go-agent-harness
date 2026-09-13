@@ -2,12 +2,14 @@
 
 This evidence belongs to the admitted `audio-runtime` project and task
 `audio-runtime-c116-centralize-rtc-track-transport`. It describes the source
-tree tested at the current candidate head
-`82eed81dcb022b6ace632423a44f52f83d4b016f`. The current candidate includes
-the adapter lint/coverage repair `3b40b8b8dd20a7f1816165c65e95aaa7967e3e2d`,
-the split coverage-test checkpoint
-`7d0a4e80a8a5c97bc9ab13c715f437aa9fb44aba`, and the clean current-main merge
-at the candidate head.
+tree tested at implementation checkpoint
+`82eed81dcb022b6ace632423a44f52f83d4b016f` and the exact reviewed/pushed
+candidate head `418855f756c13f96aadafa6a7932ed6a80ecc9ad`. The reviewed head is
+a documentation-only descendant of the implementation checkpoint. The
+candidate includes the adapter lint/coverage repair
+`3b40b8b8dd20a7f1816165c65e95aaa7967e3e2d`, the split coverage-test
+checkpoint `7d0a4e80a8a5c97bc9ab13c715f437aa9fb44aba`, and the clean
+current-main merge at the implementation checkpoint.
 
 ## Current candidate checkpoint
 
@@ -40,7 +42,14 @@ at the candidate head.
   its 3x race run (261 tests).
 - The earlier Script-CI rejection at the pre-repair head identified exactly
   the two repaired gates: static exhaustive-switch diagnostics and the RTC
-  coverage floor. No green Script-CI result is claimed for this new head.
+  coverage floor.
+- Exact-head Script-CI run `34749451614` evaluated reviewed head
+  `418855f756c13f96aadafa6a7932ed6a80ecc9ad`; all nine required checks were
+  green: static, unit, integration, coverage, race, hermetic, WebMCP Chrome,
+  macOS audio release, and Windows audio portable. The workflow is
+  `https://github.com/portpowered/go-agent-harness/actions/runs/34749451614`.
+  This handoff repair is a new documentation-only descendant, so no CI result
+  is claimed for that changed head until the script-owned gate evaluates it.
 
 ## Admission and ancestry
 
@@ -164,8 +173,10 @@ regressions:
 4. Resampled playout frames are cloned before returning, with an ownership
    regression test.
 5. Evidence pins the admitted manifest identity, baseline revision, startup,
-   accepted main, fresh main, current implementation checkpoint, and exact
-   scope. The final handoff records the exact pushed descendant head.
+   accepted main, fresh main, implementation checkpoint, exact reviewed head
+   `418855f756c13f96aadafa6a7932ed6a80ecc9ad`, green Script-CI run
+   `34749451614`, and exact scope. The changed handoff descendant is explicitly
+   marked for a fresh Script-CI submission.
 6. `run.py` enforces the aggregate timeout rather than merely accepting the
    option.
 
@@ -178,13 +189,14 @@ C116; physical Windows hardware and acoustic proof are also out of scope.
 ## Script-CI handoff
 
 Historical Script-CI results for earlier heads are retained only as context;
-they do not certify this candidate. In particular, the prior rejection's
-provider-burst residual remains excluded, and the earlier green result was for
-an older head. No CI result is claimed for `26b1d45a...` or its docs-only
-descendant until the script-owned gate evaluates the exact pushed head.
+they do not certify the changed handoff descendant. The exact reviewed head
+`418855f756c13f96aadafa6a7932ed6a80ecc9ad` was evaluated by run `34749451614`
+with all nine required checks green, including the current `origin/main`
+ancestry recorded above. The prior provider-burst residual remains excluded.
 
-The next executor action is to push the final descendant, update PR #500 with
-that exact head, and submit this same task to script CI. The executor must not
-poll CI. Independent review, guarded merge, and the immutable engineering
-vertical probe remain open; any exact-head rejection that touches C116 returns
-to this task for repair and resubmission.
+The next executor action is to commit and push this evidence-only descendant,
+update PR #500 with its exact head and this reviewed-head/run binding, and
+submit the same task to script CI. The executor must not poll CI. Independent
+review, guarded merge, and the immutable engineering vertical probe remain
+open; any exact-head rejection that touches C116 returns to this task for
+repair and resubmission.
