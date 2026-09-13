@@ -55,7 +55,7 @@
   "cause": "session_liveness.go still records the first watchdog and explicit-empty facts in the legacy observer.failure field. The new service snapshot was empty for those paths, so terminal emission fell back to generic CLI facts before the adapter bridge.",
   "repair": {
     "commits": [
-      "19393b9ec4f4eeb8b2cb4e52bff9cd6f3a6b2e06",
+      "19393b9ec03db7ba05dcdb3de070a4b063c3c148",
       "666e518d4c3016751c7915b7016956c604abc7fb"
     ],
     "description": "Keep the sessionfailure service first for normal state, then read the legacy liveness latch under livenessMu only when the service has no accepted facts. Preserve nil-safe forwarding, typed projection constants, the 86-line adapter limit, and unchanged callers.",
@@ -105,6 +105,13 @@
       "credential_free": true,
       "realtime_sessions": 0,
       "children_reaped": true
+    },
+    "final_verifier": {
+      "artifact": "artifacts/verify-52019.json",
+      "source_head": "d67705291b181fe0f98aee3415e51e91b3755c23",
+      "status": "accepted",
+      "causal_mutants_survived": false,
+      "scope_cleanup_exit_code": 0
     }
   },
   "scope_cleanup": {
@@ -113,5 +120,5 @@
     "initial_error": "changed path outside C119 ownership: ['progress.txt']",
     "checkpoint": "The root progress checkpoint is inherited from a338dceb2, remains recoverable in Git history, and is copied into this owned evidence and PR handoff. Its root-file diff is being removed without a reset or acceptance waiver before final verification."
   },
-  "status": "executor-repair-recorded; Script CI has not been polled or claimed green"
+  "status": "executor-repair-ready; Script CI has not been polled or claimed green"
 }
