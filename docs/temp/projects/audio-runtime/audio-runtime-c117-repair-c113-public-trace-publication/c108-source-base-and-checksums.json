@@ -36,8 +36,8 @@
     "exit_code": 0,
     "timed_out": false
   },
-  "current_descendant": "9da4455d3565104d4bb536f1ec29490ab84e1281",
-  "head": "9da4455d3565104d4bb536f1ec29490ab84e1281",
+  "current_descendant": "9c0f19c9323cee11e71bcc6a57483fab14f52ad6",
+  "head": "9c0f19c9323cee11e71bcc6a57483fab14f52ad6",
   "integrated_base": "3963bc3566da24f8214634c17a9d0f79a6724171",
   "native_windows_hardware_and_acoustics": "OUT_OF_SCOPE_AND_NEVER_PASS",
   "negative_controls": "preserved; validated by the C108 verifier without rewriting C108 evidence on the C117 successor branch",

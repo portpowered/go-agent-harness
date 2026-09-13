@@ -11,17 +11,17 @@
     "--replay",
     "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
     "--audio-out",
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-iukqp171/audio.wav",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-o3nr59pn/audio.wav",
     "--record-dir",
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-iukqp171/tool-record",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-o3nr59pn/tool-record",
     "--trace-audio",
     "--workdir",
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-iukqp171",
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-o3nr59pn",
     "--allow-path",
-    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-iukqp171"
+    "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-o3nr59pn"
   ],
   "credential_free": true,
-  "current_head": "9da4455d3565104d4bb536f1ec29490ab84e1281",
+  "current_head": "9c0f19c9323cee11e71bcc6a57483fab14f52ad6",
   "defect": "credential-free live replay exits 0 while omitting audio-trace/timeline.jsonl",
   "expected_artifact_sha256": "27896a6907f5c8e02e185acf9338f07d38e56ebe21896d0b1a740ecde1f2a20d",
   "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
@@ -43,22 +43,22 @@
       "--replay",
       "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
       "--audio-out",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-iukqp171/audio.wav",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-o3nr59pn/audio.wav",
       "--record-dir",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-iukqp171/tool-record",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-o3nr59pn/tool-record",
       "--trace-audio",
       "--workdir",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-iukqp171",
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-o3nr59pn",
       "--allow-path",
-      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-iukqp171"
+      "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-o3nr59pn"
     ],
-    "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-iukqp171",
-    "elapsed_seconds": 0.117,
+    "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-o3nr59pn",
+    "elapsed_seconds": 0.108,
     "exit_code": 0,
     "output_limited": false,
     "process_group_gone": true,
     "stderr": "",
-    "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-iukqp171; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+    "stdout": "Filesystem scope: workdir=/private/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c117-c113-o3nr59pn; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
     "timed_out": false
   },
   "proof_level": "SOFTWARE_REPLAY",
@@ -67,19 +67,19 @@
     "manifest": {
       "artifacts": [
         {
-          "bytes": 51329,
+          "bytes": 51325,
           "path": "client.transcript.jsonl",
-          "sha256": "d403d317c171627f598f2880dc5e212eb55bfd6e33aef60e1fa73ea04d76e6d9"
+          "sha256": "bf4e39b38b7d76caf8e765b12a04e7db8d0b342ab0a6f2c5064a3c4b022f8db0"
         },
         {
-          "bytes": 51323,
+          "bytes": 51319,
           "path": "agent.transcript.jsonl",
-          "sha256": "c9c224d39cc44634fad0d5f25d5c071a8c4bee65c2cfde53f6b5c53942747718"
+          "sha256": "fd7ebe4eb85d2cacd1b62a69f26113485e43bec8f735ba5599bb74fc226ed8b1"
         },
         {
           "bytes": 748,
           "path": "session-log.jsonl",
-          "sha256": "5eb9097840bc3bd31400ee36021f1f820ffaa18f8aefd665410c2cfbca2cde13"
+          "sha256": "efdd499c591a3241375ecce29dce291253a29b503e8a5d55addbf46c144dbc5f"
         },
         {
           "bytes": 4800,
@@ -89,12 +89,12 @@
         {
           "bytes": 13728,
           "path": "provider.json",
-          "sha256": "030084f1047f65494c0d64b296f95ef9dc9b2b4c496518e608ae7063ad245e29"
+          "sha256": "b9c2ecdfd8d7fd4b3db2b607bc248d273fcdbc4be6b3257f283f58c67cb5b9e2"
         }
       ],
       "bytes": 1065,
       "path": "tool-record/manifest.json",
-      "sha256": "a39c41f039981ccd2666bef4d6fe614ed4fe0cb29b383c405809434a2016916a",
+      "sha256": "2c4554f08307952bb43bdd10f33ab14cc821787165174b81b9678188db480b25",
       "terminal": {
         "classification": "provider_close",
         "output_state": "not_applicable",
@@ -106,7 +106,7 @@
     "session_log": {
       "bytes": 748,
       "path": "tool-record/session-log.jsonl",
-      "sha256": "5eb9097840bc3bd31400ee36021f1f820ffaa18f8aefd665410c2cfbca2cde13"
+      "sha256": "efdd499c591a3241375ecce29dce291253a29b503e8a5d55addbf46c144dbc5f"
     }
   },
   "schema_version": "audio-runtime-c117-c113-reproduction-v1",
