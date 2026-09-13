@@ -1,0 +1,91 @@
+{
+  "schema": "audio-runtime.c139.recovery-checkpoint.v1",
+  "task": "audio-runtime-c139-recover-c91-capture-claim-runtime",
+  "project": "audio-runtime",
+  "contract_revision": "audio-runtime-v1",
+  "branch": "codex/audio-runtime-c139-recover-c91-capture-claim-runtime",
+  "checkpoint_revision": "c08de7d5f1b70470061e74f3c72bf43ff8ee0ac1",
+  "implementation_revision": "5ed7ddb48",
+  "origin_main": "915ed982d23f2e549e529ff43c4f370b4b51e394",
+  "startup_integration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "preserved_c91": {
+    "pull_request": 481,
+    "head": "055301c6c8b46f1bdf98cbfacb25a917ef85e05d",
+    "branch": "codex/audio-runtime-c91-retire-cli-capture-claim-runtime",
+    "state": "OPEN",
+    "review_rows": [],
+    "historical_static_findings": [
+      "register go-agent-runtime/services/captureclaim/wire/wire_gen.go",
+      "delete stale cognitive-complexity baseline for acquireSessionRecordingClaim",
+      "delete stale cyclomatic-complexity baseline for acquireSessionRecordingClaim",
+      "delete stale function-lines baseline for acquireSessionRecordingClaim"
+    ],
+    "historical_coverage_failure": {
+      "result": "preserved-unrelated",
+      "test": "TestSession_RTCMediaBridgesProviderAudioPath",
+      "owner": "C127/Grok RTC media path",
+      "symptom": "read RTC inbound frame: context deadline exceeded"
+    }
+  },
+  "retirement": {
+    "path": "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go",
+    "baseline_lines": 317,
+    "candidate_lines": 77,
+    "retired_lines": 240,
+    "candidate_sha256": "9a6cc07336a0bfeff5fef79dbb48d117aacc218597d4a3167884717cadd8dfa2"
+  },
+  "focused_evidence": {
+    "normal_captureclaim_and_cli": "231 passed in 4 packages",
+    "race_captureclaim": "54 passed in 3 packages",
+    "cli_record_replay_normal": "33 passed in 1 package",
+    "cli_record_replay_race": "26 passed in 1 package",
+    "gowork_off_consumer": "passed",
+    "verifier_modes": [
+      "boundaries",
+      "failure-matrix",
+      "owned-and-excluded-paths",
+      "retirement-and-adapter",
+      "mutations"
+    ],
+    "accumulated_session_regressions": "COUNT=1 normal, coverage, and race passed",
+    "vet": "passed",
+    "pinned_lint": "golangci-lint 2.9.0 passed with 0 issues",
+    "pinned_staticcheck": "2026.1 passed",
+    "wire_generation": "generated output stable"
+  },
+  "current_main_findings": {
+    "architecture_size": {
+      "result": "blocked-by-shared-lease",
+      "findings": [
+        "three stale session_capture_claim.go:acquireSessionRecordingClaim baseline entries",
+        "unregistered captureclaim/wire/wire_gen.go"
+      ],
+      "authorized_future_mutation": "only after explicit release: one Wire registry entry and three demonstrated downward baseline deletions"
+    },
+    "coverage_registration": {
+      "result": "out-of-scope-current-main-failure",
+      "missing_package": "go-agent-runtime/services/session/internal/live/causal",
+      "owner": "not C139"
+    }
+  },
+  "dependencies": {
+    "c138": {
+      "result": "accepted-vertical-only",
+      "artifact_sha256": "bd16f87f373c63299d8fc416dfdcaf30e308a11834c778264162cbd9fa9ed696",
+      "evidence": "exact 6,400-sample terminal-block software consumption, tool/interruption replay, negative controls, zero survivors"
+    },
+    "shared_registry_owners": {
+      "C110": "init",
+      "C112": "ci-pending",
+      "C119": "init",
+      "required_action": "wait for guarded merges and obtain an explicit smallest exact ownership release"
+    }
+  },
+  "delivery": {
+    "script_ci": "not submitted; shared registry lease remains active",
+    "independent_review": "not claimed",
+    "merge": "not claimed",
+    "vertical_probe": "not claimed",
+    "next_action": "push this C139 checkpoint, open/update its PR, retain ownership, then integrate current accepted main and apply only the four released shared-path repairs after explicit ownership"
+  }
+}
