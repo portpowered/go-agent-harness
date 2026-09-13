@@ -60,11 +60,6 @@ const (
 	fieldOutputTextBytes  = "output_text_bytes"
 	fieldOutputToolBytes  = "output_tool_bytes"
 
-	fieldProviderPromptTokens     = "provider_prompt_tokens"
-	fieldProviderCompletionTokens = "provider_completion_tokens"
-	fieldProviderTotalTokens      = "provider_total_tokens"
-	fieldProviderReasoningTokens  = "provider_reasoning_tokens"
-
 	fieldToolName              = "tool_name"
 	fieldToolCallID            = "tool_call_id"
 	fieldFailureClassification = "failure_classification"
@@ -330,6 +325,7 @@ type sessionProgressObserver struct {
 
 	emitOnce    sync.Once
 	metricsOnce sync.Once
+	finishMu    sync.Mutex
 }
 
 func (o *sessionProgressObserver) markRoomBoundCancellation() {

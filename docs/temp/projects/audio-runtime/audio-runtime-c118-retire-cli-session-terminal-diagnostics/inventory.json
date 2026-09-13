@@ -1,0 +1,92 @@
+{
+  "task": "audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "admission": {
+    "command": "python3 $FACTORY_ROOT/factory/scripts/project-control.py verify-work --type task --name audio-runtime-c118-retire-cli-session-terminal-diagnostics --root $FACTORY_ROOT",
+    "result": "{\"status\": \"admitted\", \"project\": \"audio-runtime\", \"name\": \"audio-runtime-c118-retire-cli-session-terminal-diagnostics\"}",
+    "session": "~default",
+    "server": "http://127.0.0.1:7439",
+    "soleAdmittedProject": "audio-runtime"
+  },
+  "worktree": {
+    "path": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+    "branch": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+    "prdBranchName": "codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+    "head": "3963bc3566da24f8214634c17a9d0f79a6724171",
+    "originMain": "3963bc3566da24f8214634c17a9d0f79a6724171",
+    "baseRevision": "3963bc3566da24f8214634c17a9d0f79a6724171",
+    "requiredIntegrationRevision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "ancestryChecks": [
+      "required integration revision is an ancestor of origin/main",
+      "worktree head is an ancestor of origin/main"
+    ],
+    "initialStatus": "clean"
+  },
+  "manifestHashes": {
+    "manifest.json": "47971e0cb27bcf4d8a863d7931e0956bff7aceca6fd2b6daa02417b7f165ec34",
+    "source-plan.md": "f715163fb20f46a18837d4a4d19ff6d880aaadf8dbf40acfff88a0a6c5800d37",
+    "request.md": "4d53be6795ea189d5ae3aac727a76ea5dc5ac3f07c3a5e6280a2bc1e9ddcfeb0",
+    "acceptance.md": "edd1f5cbca1de8b49f96cdf8f039732d28a0082ef3718015e10535ff2e6a441a"
+  },
+  "sourceBaseline": {
+    "revision": "3963bc3566da24f8214634c17a9d0f79a6724171",
+    "path": "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go",
+    "lineCount": 287,
+    "sha256": "4608c5c35277c97375c89e989e8a9c88dc6376968239ee66d713a0ee3f65b369",
+    "plannedRetirement": "delete the 287-line CLI policy source after the adapter and public service are verified"
+  },
+  "directCensus": {
+    "definitionsAndCalls": [
+      "emitTerminal: defined and called only in session_diagnostics_terminal.go",
+      "emitUserCancelledTerminal: defined and called only in session_diagnostics_terminal.go",
+      "finalAccounting: defined in session_diagnostics_terminal.go and called by finish plus session_runtime_observation_test.go",
+      "emitMetricsMatrix: defined and called only in session_diagnostics_terminal.go",
+      "userCancellationOutputState: defined in session_diagnostics_terminal.go; called by session_live.go and session_room_terminal.go"
+    ],
+    "finishCallers": [
+      "session_duration_loop.go",
+      "session_live.go",
+      "session_cancellation_test.go",
+      "session_liveness_test.go",
+      "session_scheduled_audio_test.go",
+      "session_tool_lifecycle_test.go",
+      "session_runtime_observation_test.go"
+    ],
+    "observerConstruction": [
+      "session_diagnostics.go:newSessionProgressObserver",
+      "session_room_run.go"
+    ],
+    "supportingPrivateDependencies": [
+      "session_diagnostics_failure.go failureFacts and failure classification helpers",
+      "session_diagnostics_observation.go counters and response observations",
+      "session_diagnostics_tools.go unresolved and continuation snapshots",
+      "session_diagnostics_response.go scheduled-input/output snapshots",
+      "session_runtime_observation.go SessionFinalAccounting and terminalWithAccounting"
+    ],
+    "excludedFromThisVertical": [
+      "session_terminal_outcome.go independent terminal outcome reporter",
+      "session_diagnostics.go, *_audio.go, *_failure.go, *_observation.go, *_response.go, *_tools.go policy support retained as adapter inputs",
+      "shared scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json while C79 owns the lease"
+    ]
+  },
+  "priorFindings": {
+    "taskBoard": "task work-task-277 is admitted in init with the ready worktree checkpoint",
+    "matchingReviewRows": 0,
+    "matchingCiRejectionRows": 0,
+    "localC118Progress": "no C118 entry in progress.txt or docs/factory inbox"
+  },
+  "ownership": {
+    "sharedRegistryOwner": "C79 (in-review; work-review-239; PR470 head a5d26045)",
+    "sharedFilesNotModified": [
+      "scripts/wire-packages.txt",
+      "docs/architecture/architecture-size-baseline.json"
+    ],
+    "implementationScope": [
+      "go-agent-runtime/services/sessionterminal/",
+      "coverage-manifest/go-agent-runtime/services/sessionterminal/",
+      "agent-cli/internal/services/internal/agentruntime/session_diagnostics_terminal.go retirement and compatibility adapter",
+      "this task evidence directory"
+    ]
+  }
+}
