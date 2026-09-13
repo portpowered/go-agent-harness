@@ -12,7 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/file"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/media"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/probe"
-	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 	"github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )

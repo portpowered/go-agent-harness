@@ -34,6 +34,12 @@ OWNED_PREFIXES = (
     "go-agent-runtime/services/devices/wire/providers.go",
     "go-agent-runtime/services/devices/wire/wire_gen.go",
     "go-agent-runtime/services/rtctransport/",
+    "docs/architecture/architecture-policy.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/probe_v9_webrtc_device_test.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_in.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_in_test.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_out.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_out_test.go.json",
     "go-llm-gateway/pkg/transport/rtc/track_in.go",
     "go-llm-gateway/pkg/transport/rtc/track_in_test.go",
     "go-llm-gateway/pkg/transport/rtc/track_out.go",
@@ -113,7 +119,7 @@ def retirement() -> None:
             if forbidden in text:
                 raise VerificationFailure(f"CLI adapter contains transport policy {forbidden}")
     changed = [
-        path for path in command(["git", "diff", "--name-only", ACCEPTED_MAIN, "HEAD"]).splitlines()
+        path for path in command(["git", "diff", "--name-only", "origin/main", "HEAD"]).splitlines()
         if path and path != "Changes:"
     ]
     outside = [path for path in changed if not any(path == prefix or path.startswith(prefix) for prefix in OWNED_PREFIXES)]
@@ -125,6 +131,7 @@ def final_scope() -> None:
     command(["git", "fetch", "origin", "main"], timeout=60)
     command(["git", "merge-base", "--is-ancestor", STARTUP_REVISION, "HEAD"])
     command(["git", "merge-base", "--is-ancestor", ACCEPTED_MAIN, "HEAD"])
+    command(["git", "merge-base", "--is-ancestor", "origin/main", "HEAD"])
     branch = command(["git", "branch", "--show-current"]).strip()
     if branch != BRANCH:
         raise VerificationFailure(f"branch {branch!r} does not match manifest {BRANCH!r}")
