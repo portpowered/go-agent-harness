@@ -33,25 +33,18 @@ type Engine struct {
 	tickRate time.Duration
 	clock    clock.TimerSource
 
-	// Global ordering: assigns strictly increasing indices to consumed messages/deltas.
 	ordering *GlobalOrdering
 
-	// Active participant runners
 	modelRunner       *participants.ModelRunner
 	toolRunner        *participants.ToolRunner
 	interactionRunner *participants.InteractionRunner
 	userRunner        *participants.UserRunner
 	kernelRunner      *participants.KernelRunner
-	// Active participant lifecycle
 	modelParticipant  *participants.ActiveParticipant
 	toolParticipant   *participants.ActiveParticipant
 	userParticipant   *participants.ActiveParticipant
 	kernelParticipant *participants.ActiveParticipant
 
-	// enforceToolDispatchOrdering is enabled only by the running hot loop. It
-	// keeps provider-facing terminal deltas behind the executor-start boundary
-	// for tool batches created by the Coordinator. Manual tick control remains
-	// non-blocking and retains its existing inspection semantics.
 	enforceToolDispatchOrdering bool
 }
 
@@ -168,18 +161,12 @@ func (e *Engine) GetModelRunner() *participants.ModelRunner {
 	return e.modelRunner
 }
 
-// RunHotLoop runs a select-based hot loop over active participant outboxes.
-// It seeds an initial inference request from the current conversation history,
-// so a user message must be present in history before calling this.
-// The model and tool runners operate as background goroutines; the loop dispatches
-// messages between them and runs passive helpers (recorder, token counter) inline.
+// RunHotLoop runs the hot loop and seeds inference from the current history.
 func (e *Engine) RunHotLoop(ctx context.Context) error {
 	return e.runHotLoop(ctx, true)
 }
 
-// RunHotLoopContinuous starts the hot loop without sending an initial inference
-// request. Used for turn-taking mode where user messages are injected externally
-// via Send; the Coordinator will trigger inference once a user message arrives.
+// RunHotLoopContinuous starts the hot loop without initial inference.
 func (e *Engine) RunHotLoopContinuous(ctx context.Context) error {
 	return e.runHotLoop(ctx, false)
 }
@@ -198,25 +185,15 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 		e.userParticipant.Start(ctx)
 		defer e.userParticipant.Stop()
 	}
-	// Start consumers before the provider-facing model runner. This makes the
-	// first model response eligible for dispatch as soon as it is produced; the
-	// coordinator barrier below then closes the remaining executor-start race.
-	if e.toolParticipant != nil {
-		e.toolParticipant.Start(ctx)
-		defer e.toolParticipant.Stop()
-	}
-	if e.kernelParticipant != nil {
-		e.kernelParticipant.Start(ctx)
-		defer e.kernelParticipant.Stop()
-	}
-	if e.modelParticipant != nil {
-		e.modelParticipant.Start(ctx)
-		defer e.modelParticipant.Stop()
+	for _, participant := range []*participants.ActiveParticipant{e.toolParticipant, e.kernelParticipant, e.modelParticipant} {
+		if participant != nil {
+			participant.Start(ctx)
+			defer participant.Stop()
+		}
 	}
 
 	if sendInitialInference {
 		e.loopMu.Lock()
-		// Send initial inference request seeded from current conversation history.
 		e.state.LoopState.History.ModelDeltaStartIndex = len(e.state.LoopState.History.ConversationDeltaBuffer)
 		e.state.LoopState.History.CurrentModelDeltaCount = 0
 		e.state.LoopState.History.CurrentPassID++
@@ -267,16 +244,12 @@ func (e *Engine) Tick(ctx context.Context) error {
 	return nil
 }
 
-// TickOnce executes exactly one tick cycle (ReadTick + UpdateWorldHistory +
-// executeWorldState + FlushInputs) and returns. Designed for manual, deterministic
-// engine stepping in tests. Data must be present in participant outboxes or the
-// call will block until data arrives or ctx is cancelled.
+// TickOnce executes one deterministic tick cycle.
 func (e *Engine) TickOnce(ctx context.Context) error {
 	return e.Tick(ctx)
 }
 
-// TickN executes exactly n tick cycles sequentially. Returns on the first error
-// encountered. The tick count reflects the number of successful ticks completed.
+// TickN executes n tick cycles and returns the first error.
 func (e *Engine) TickN(ctx context.Context, n int) error {
 	for i := 0; i < n; i++ {
 		if err := e.Tick(ctx); err != nil {
@@ -286,10 +259,7 @@ func (e *Engine) TickN(ctx context.Context, n int) error {
 	return nil
 }
 
-// TickUntil ticks until predicate returns true or maxTicks is reached. The predicate
-// is checked before each tick, so if already satisfied, zero ticks are executed.
-// Returns the number of ticks executed and an error if maxTicks was exceeded without
-// the predicate being satisfied, or if a tick returned an error.
+// TickUntil ticks until predicate succeeds or maxTicks is reached.
 func (e *Engine) TickUntil(ctx context.Context, predicate func() bool, maxTicks int) (int, error) {
 	for i := 0; i < maxTicks; i++ {
 		if predicate() {
@@ -305,8 +275,7 @@ func (e *Engine) TickUntil(ctx context.Context, predicate func() bool, maxTicks 
 	return maxTicks, fmt.Errorf("predicate not satisfied after %d ticks", maxTicks)
 }
 
-// TickState returns a read-only snapshot of the current engine state including
-// tick count and buffer occupancy. Safe to call between manual ticks.
+// TickState returns a read-only snapshot of tick and buffer state.
 func (e *Engine) TickState() TickState {
 	e.loopMu.RLock()
 	defer e.loopMu.RUnlock()
@@ -341,11 +310,6 @@ func (e *Engine) executeWorldState(ctx context.Context, state *SharedState) erro
 	return nil
 }
 
-// waitForToolDispatch establishes the causal boundary between a completed
-// provider tool-call message and later kernel output. Coordinator has already
-// published the batch into the ToolRunner inbox when this is called; waiting
-// here lets the runner cross into every admitted executor before
-// CoordinatorDelta can publish a provider-close terminal.
 func (e *Engine) waitForToolDispatch(ctx context.Context, loopState *state.LoopState) error {
 	if e.toolRunner == nil || loopState == nil || !loopState.ToolExecutionAvailable {
 		return nil
@@ -353,9 +317,6 @@ func (e *Engine) waitForToolDispatch(ctx context.Context, loopState *state.LoopS
 	var calls []messages.ToolCall
 	for _, message := range loopState.Inputs.ModelOutputMessage {
 		calls = append(calls, message.ToolCalls...)
-	}
-	if len(calls) == 0 {
-		return nil
 	}
 	return e.toolRunner.WaitForCallsStarted(ctx, calls)
 }

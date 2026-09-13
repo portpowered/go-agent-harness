@@ -69,8 +69,17 @@
       "liveFocusedRace": "340/340 pass",
       "engineToolFocusedNormal": "800/800 pass",
       "engineToolFocusedRace": "320/320 pass",
+      "architectureSizeGate": "passed locally; 202 packages, 1941 files, 28778 functions",
       "acceptedResultConversation": "passed 10/10 at GOMAXPROCS 1, 2 and 4"
     }
+  },
+  "ciRepair": {
+    "rejectedHead": "172f8705da36ef44309008e83a9525b537e1730f",
+    "workflowRun": "34786405617",
+    "staticJob": "103802577340",
+    "failedStep": "make architecture-size-check",
+    "repair": "reduced dispatch helper metrics and removed the two stale executeBatch baseline entries",
+    "localGate": "passed; 202 packages, 1941 files, 28778 functions"
   },
   "replayRegression": {
     "credentialFreeFocusedNormal": "66/66 pass",

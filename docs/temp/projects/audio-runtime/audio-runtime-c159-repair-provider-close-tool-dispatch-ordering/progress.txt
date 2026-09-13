@@ -35,3 +35,16 @@ nonblocking behavior.
   playback `advance` boundary with zero rendered PCM. This is retained as an
   unrelated environmental regression; the normal counterpart passed 66/66 and
   the credential-free C159 replay controls passed in the race run.
+
+## CI repair
+
+- Script CI rejected initial candidate `172f8705da36ef44309008e83a9525b537e1730f`
+  only at `CI (static)`, job `103802577340`, step `make architecture-size-check`.
+- The exact failures were two `executeBatch` baseline drifts, excessive
+  `WaitForCallsStarted` cognitive complexity, and 430/441-line production files.
+- The repair reduced the dispatch helpers, kept the executor-start barrier
+  unchanged, and removed the two stale `executeBatch` baseline entries required
+  by the gate. Local architecture-size-check now passes: 202 packages, 1,941
+  files, and 28,778 functions checked.
+- Post-repair engine/participant focused tests passed 800/800 normal and 320/320
+  race; the same PR is ready for script-gate resubmission after commit and push.
