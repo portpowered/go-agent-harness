@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "package": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "file": "coverage.go",
+      "symbol": "LoadManifestDir",
+      "value": 19,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "package": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "file": "coverage.go",
+      "symbol": "parseProfile",
+      "value": 32,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "package": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "file": "coverage.go",
+      "symbol": "validateManifest",
+      "value": 17,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "package": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "file": "coverage.go",
+      "symbol": "parseEntry",
+      "value": 16,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "package": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "file": "coverage.go",
+      "symbol": "parseProfile",
+      "value": 19,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    },
+    {
+      "rule": "file-lines",
+      "module": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "package": "github.com/portpowered/go-agent-harness/tools/coveragegate",
+      "file": "coverage.go",
+      "symbol": "",
+      "value": 696,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    }
+  ]
+}

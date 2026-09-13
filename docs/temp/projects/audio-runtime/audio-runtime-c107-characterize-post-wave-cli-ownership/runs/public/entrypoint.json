@@ -1,0 +1,21 @@
+{
+  "child_report": "runs/public/report.json",
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py",
+    "--mode",
+    "public",
+    "--child-timeout",
+    "60",
+    "--total-timeout",
+    "300"
+  ],
+  "credential_free": true,
+  "elapsed_seconds": 10.665169,
+  "exit_code": 0,
+  "realtime": "not used; delegated offline fixture replay",
+  "schema_version": "c107-public-regressions-entrypoint-v1",
+  "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "00e16ffb7c3775538e0ab485cb6f91f0eca1c9bfe1efab7f909dfec3a5ea4d40"
+}

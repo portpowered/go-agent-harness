@@ -1,0 +1,1117 @@
+{
+  "findings": [
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c101-retire-cli-provider-session-runtime\", \"branch\": \"codex/audio-runtime-c101-retire-cli-provider-session-runtime\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c101-retire-cli-provider-session-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-194",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c103-retire-cli-rtc-session-runtime\", \"branch\": \"codex/audio-runtime-c103-retire-cli-rtc-session-runtime\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c103-retire-cli-rtc-session-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-200",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"branch\": \"codex/audio-runtime-c104-retire-cli-session-finalization-boundary\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c104-retire-cli-session-finalization-boundary",
+      "rejection_feedback": "CI checks failed for PR #492 at head d5734d2c05d681794806ed367e72d2b92466e36b: required checks failed on current head d5734d2c05d681794806ed367e72d2b92466e36b: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34711933877/job/103602137349). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-202",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c105-characterize-browser-cancel-coverage-regression\", \"branch\": \"codex/audio-runtime-c105-characterize-browser-cancel-coverage-regression\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c105-characterize-browser-cancel-coverage-regression",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-206",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c106-repair-c68-cross-rate-probe-oracle\", \"branch\": \"codex/audio-runtime-c106-repair-c68-cross-rate-probe-oracle\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c106-repair-c68-cross-rate-probe-oracle",
+      "rejection_feedback": "CI checks failed for PR #491 at head d8f3cb273afe3bd1738577dcf6d94b590aca32fe: required checks failed on current head d8f3cb273afe3bd1738577dcf6d94b590aca32fe: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34707684304/job/103590601473). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-210",
+      "work_type": "task"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR #494 head 8593f08f has all nine CI checks green, and independent pinned analyzer/public replay passed. However, verify.py:720-782 fails open: removing one symbol row and its edges, then adjusting self-reported totals, still passes with 2,488 instead of 2,489 symbols. verify.py:1007-1029 also accepts subtraction with preserved PR #438 removed (40 instead of 41 checkpoints). Repair verifier completeness checks and add deletion-row regressions; require all active/preserved PR identities, then rerun release evidence, push, and resubmit the exact head to SCRIPT CI without polling. Do not merge 8593f08f.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-234",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR #494 is at df07c2be with all nine required checks green (run 34719242893), but actionable defects remain. verify.py:714-782 accepts deletion of one symbol when self-reported totals are adjusted (2488 symbols). verify.py:1007-1029 accepts subtraction with preserved PR #438 removed (40 instead of 41 checkpoints). Add canonical completeness checks and deletion-row regressions. Checked-in provenance/release/public/subtraction evidence still pins 8593f08f, not df07c2be. Repair verifier/evidence, regenerate all artifacts and checksums at the final head, commit/push owned C107 changes, submit that exact head to SCRIPT CI without polling, then request fresh review; do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-242",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR #494 current head is be743f506f1db606fb88ad23c5432359a677c74a1; CI run 34721910571 is green. Independent pinned CLI replay passed with 4,800-byte PCM, 3,244-byte WAV, tool marker, manifest, and clean shutdown. However all checked-in release/provenance/state/public/regression evidence still pins cf20ae6fe0277b5534c3a352983223b79ac65250, while the PR description is older still. This violates exact-head evidence and repeats the prior stale-artifact finding. Regenerate the complete release evidence and SHA256SUMS for the final submitted head, update PR #494 metadata with the exact head/current candidates, commit and push only owned paths, submit that exact head to SCRIPT CI without polling, then obtain fresh independent review. Do not merge; preserve the canonical completeness, subtraction-deletion, focused, accumulated-regression, and independent replay findings.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-245",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR #494 head 98352dfe20456b1db8bcb9e559fc44ddd8371e6d has all nine required checks green in run 34725036123. Independent analyzer, verifier, candidate/subtraction, scope, and credential-free replay checks passed. However checked-in provenance, PR inventory, state, public replay, regression, and release summaries still pin be743f506f1db606fb88ad23c5432359a677c74a, so evidence is stale for the current head. Same C107 executor must regenerate all release evidence and SHA256SUMS at 98352dfe, refresh exact board/PR/head/ancestry/artifact references, commit and push only the owned C107 directory, submit the changed head to SCRIPT CI without polling, then request fresh review. Preserve prior completeness/deletion negative controls; do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-249",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR #494 head dfc705578e65dcc8a4c92a16574888a6d435487 has 9 green CI checks, and independent analyzer/YUI replay passed. Reject: current origin/main is 3963bc3566da24f8214634c17a9d0f79a6724171 and is not an ancestor; provenance/release artifacts still pin d4766c3 and f2df9cc7. verify.py also fails open: a fabricated symbol service dependency and a mutated active-task head both pass validate-copy. Fix source-derived dependency validation and full active-task identity validation with causal negatives, integrate current origin/main, regenerate/rebind all evidence and SHA256SUMS to the final pushed head, push, and resubmit exact HEAD to SCRIPT CI without polling. Preserve existing deletion-row controls; do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-255",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR #494 head 376f71a2b27008eb1bf207cdb872214d848b6eb3 has 9/9 required checks green (run 34729346947). Independent validate-copy and credential-free YUI replay passed. Evidence is stale: verification-summary.json, provenance.json, state-capture.json, public/regression reports, and pr-inventory.json bind to pre-evidence bb494b4775038a21df3e9d76de682c0d1fb30939, not the reviewed PR head; this repeats the prior exact-head finding. Harden the verifier to enforce final PR/HEAD identity, recapture board/PR state, regenerate all evidence and SHA256SUMS at the final submitted head, update PR metadata, push only owned paths, submit the new exact head to SCRIPT CI without polling, and request fresh review. Do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-269",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR 494 is green at current head 8853510dad106948b4594aa657866ac05ccec3e2 (run 34731886748, all 9 required checks), and independent analyzer, YUI replay, focused and race checks pass. However, checked-in verification-summary.json, provenance.json, state-capture.json, pr-inventory.json and public/regression reports still bind to f741115c90163e83542bf3302e98bb0dc32ba5b9. Repair the release binding workflow, regenerate all head-bound evidence against the final pushed head/current board, update SHA256SUMS, push only owned paths, submit the changed head to SCRIPT CI without polling, and request fresh review. Do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-273",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR #494 current head f7b28826ee39f617941d587b934654861cb09c42 has all nine required checks green (run 34734731495), and independent build, help, replay, focused, and race checks passed. Evidence is stale: verification-summary.json, provenance.json, state-capture.json, pr-inventory.json, public/regression reports and negative-controls report still bind to b91853cfb315c80137d01da8b2b6e8e31e27ce06; validate-copy nevertheless passes. Same executor must recapture current board/PR state, regenerate all head-bound evidence and SHA256SUMS at the final pushed HEAD, preserve deletion-row/PR-438/active-task negative controls and cumulative regressions, commit only the owned C107 directory, submit the changed exact head to SCRIPT CI without polling, and request fresh review. Do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-286",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"branch\": \"codex/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "CI checks failed for PR #494 at head 34eef50f56b9215aeaa6b09b3dbd255d70bb29e2: required checks failed on current head 34eef50f56b9215aeaa6b09b3dbd255d70bb29e2: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34736427083/job/103668570977). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-218",
+      "work_type": "task"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
+      "rejection_feedback": "PR #493 head 336cc2aa7591cbf0b1ffdf35bec29095e4dcf898 changes only the owned evidence directory and reported required CI is green. Independent replay and malformed-PCM runs passed with clean shutdown. Reject: analyze.py:93-115 uses bare-name caller matching and truncates results, producing false cross-provider and unrelated ConnectSession/ReadFrame/WriteFrame caller edges; exact caller ownership is unproven. Inventory omits reachable paths including go-agent-runtime/services/session/internal/live/invoke.go:191-225 pump lifecycle, devices/internal/probe/capture.go:48 and bridge.go:190 resampling, and services/tools/internal/filesystem/tool_filesystem.go:232-233 audioToPCM16k; classify or justify each and regenerate findings/candidates. provenance.json pins 22d7f712 and release.json pins 0ec1ea3, while HEAD is 336cc2a; public artifacts likewise lack a verified final-head equivalence. Refresh provenance, release, hashes, and both public cases at final HEAD, then rerun pristine and causal-negative verification. ownership.json has only prose recheck placeholders for C83/C84/C99/C101/C103/C104/C107 and lacks timestamped live PR/head/diff/writer-path observations; re-query those peers and update intersections. Harden verify.py:168,248,763 to reject committed mutations across all tracked paths and validate actual artifact hashes/effects, not only metadata. Correct candidate Wire destinations from services/X/internal/wire to the required services/X/wire layout. Executor must make these owned-evidence/analyzer/verifier corrections, regenerate evidence, submit the exact new HEAD to script CI, and obtain a fresh review.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-230",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
+      "rejection_feedback": "PR #493 at fb826e2a has green CI, but the malformed evidence is invalid. run_public_checks.py:221-233 mutates the audio delta without recomputing the v2 integrity digest; the recorded run exits solely on integrity_checksum_mismatch before audio decoding. Independently re-sealing that fixture produced the intended PCM16 odd-byte rejection and no PCM/WAV receipt. Fix the mutation to reseal the fixture, regenerate malformed reports/release/SHA256SUMS, rerun verification and focused checks, then submit the changed exact head to script CI without polling.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-243",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"branch\": \"codex/audio-runtime-c108-characterize-audio-device-boundary-gaps\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c108-characterize-audio-device-boundary-gaps",
+      "rejection_feedback": "CI checks failed for PR #493 at head c75c87547ff52c416e0fadd92385958d4b24cc78: required checks failed on current head c75c87547ff52c416e0fadd92385958d4b24cc78: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34724763555/job/103636855490). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "work_id": "work-task-222",
+      "work_type": "task"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "rejection_feedback": "PR #495 at 4b0a763d has green current-head CI (run 34716813540), and independent normal plus malformed/canceled public runs passed, but the evidence gate fails. analyze.py truncates git output before parsing refs/worktrees; the report is visibly truncated, omits required C61/C83 refs, and records both preserved worktrees absent while verify.py accepts absent as unchanged. The ledger is heuristic and hand-coded: it lacks exact source spans, callers, conflict kinds, evidence IDs, and live CI/log attribution. The bounded sequence omits required inputs, preconditions, commands, expected observables, timeouts, stop conditions, and rollback checkpoints. run_public_checks.py hard-codes effects, discards the detailed shipped workflow report, accepts arbitrary --tree input, ignores cleanup failures, and has an unbounded timeout-path communicate. The emitted broadGates are not the manifest’s nine exact gate IDs, and fetch failure is not fatal. Amend only the C109 directory: capture structured, complete refs/worktree provenance and fail closed on missing preservation; implement and verify the exact ledger and sequence schema; bind public evidence to the exact synthetic main->C61->C83 tree with retained hashes/effects and bounded cleanup; emit/assert all nine manifest gates OPEN; require successful fetch and current-head identity. Regenerate both orders, determinism, negative fixtures, and both public workflows, commit/push a new PR head, and submit it to the script CI gate. Preserve C61/C83 and C79 ownership; leave all nine project gates open, retain C61 OPEN_RECONCILE_TEST_REWRITTEN, and retain the C83 6400-sample loss as C79/provider-audio evidence.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-233",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "rejection_feedback": "PR #495 head e0af439b has all nine required CI checks green in run 34718968843, but actionable evidence defects remain. Independent runs passed: required/reverse analyzer, 12/12 positive checks, 3/3 malformed/canceled checks; however analyzer output records both preserved C61/C83 worktrees as present:false and verify.py still accepts this as unchanged (analyze.py:158-173; verify.py:67-72). git output is truncated before ref/worktree parsing (analyze.py:46-86), and the ledger is hard-coded/heuristic, omitting exact spans, callers, conflict kinds and evidence IDs while matching historical JSON instead of source (analyze.py:181-200,329-375). The sequence lacks required inputs, preconditions, commands, observables, timeouts, stop conditions and rollback/checkpoints (analyze.py:462-498). broadGates emits six non-manifest keys instead of the nine exact manifest gates, and verification only checks values are OPEN (analyze.py:635-642; verify.py:138). run_public_checks.py accepts arbitrary --tree, does not bind/verify the exact main->C61->C83 tree, captures only the shipped child summary instead of its detailed effects/artifact/shutdown report, ignores cleanup failures, and has an unbounded communicate after timeout (run_public_checks.py:44-103,177-240). Fresh required/control verification also failed on mutable unrelated worktree inventory, proving determinism is not normalized. Amend only the C109 directory on the same task/PR: capture complete structured refs and actual preserved-worktree identity, require successful fetch/current-head identity and fail closed on missing preservation; implement the exact symbol/API/conflict/ownership ledger and full bounded sequence; bind public evidence to the exact synthetic tree with retained hashes/effects/cleanup and test discovery; emit/assert all nine gates OPEN; add causal negatives for these failures and regenerate both orders, determinism, attribution and public reports. Preserve C61/C83/C79 ownership, retain C61 OPEN_RECONCILE_TEST_REWRITTEN and the C79/provider-audio 6400-sample loss, then push the changed head and resubmit to SCRIPT CI. Do not merge this head.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-241",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "rejection_feedback": "PR #495 head e3cde9327bf7f8d562bdbe7ba77aecbee77f6a76 has green required CI, and independent verify/public probes passed, but evidence defects remain: (1) C109-03 explicitly requires ci-attribution.json; it is absent. analyze.py:867-917 emits only hard-coded nested attribution with no exact-head/job evidence or failed-lane signatures. Historical run 34713381619 is head 22cc6769aaf06d1e2c1275b064cc7ec29de3e371 and has static/integration failures; retain all seven passing lanes plus exact failure ownership. (2) Ledger caller_edges are raw textual references without containing caller symbols/declarations; api_relationship uses a hard-coded five-symbol list and added-line search, so c83_requires_c61_api=false is not source-complete. Make the ledger AST/source-derived and require caller identity/spans in verify.py. (3) Checked-in final provenance was generated at e0af439b with dirty scripts and differs from a clean e3cde932 analyzer run; bind final evidence to the committed head and regenerate required/control artifacts. (4) run_public_checks.py scans forbidden markers only after output truncation and ignores auxiliary cleanup failure for --tree. Fix these fail-closed paths. Amend only the C109 directory on the same task/PR, regenerate ledger/attribution/sequence/public reports and negatives, rerun verify and public probes, push the new head, and resubmit exact HEAD to SCRIPT CI; do not modify C61, C83, or C79-owned files.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-247",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "rejection_feedback": "PR #495 head 399b60809e986c6e468716b44c75bd8e636d0a66 has all nine required checks green, but independent review found actionable defects. run_public_checks.py:115-128 accepts `ok ... [no tests to run]` as discovered tests; a live unmatched-test control returned exit 0/status passed with tests_discovered=1. Its caller-owned --tree path also returns passed after a child creates an untracked file; cleanup_claim is false but top-level status remains passed (around lines 429-461). The mandated browser run at --child-timeout 90 --aggregate-timeout 300 failed when accumulated session CI regressions exceeded 90s; only the looser 480/900 run passed, so checked-in public evidence does not satisfy the admitted command. Final public reports were last regenerated before the later runner changes and are not bound/hash-checked to the current runner. Executor: amend only the C109 directory; make test discovery and caller-tree immutability fail closed with regression controls, make the full positive case pass under the admitted 90/300 bounds (or split its bounded children without changing acceptance), regenerate both public reports and verification with current source/artifact/fixture hashes, rerun verify.py --mode all and exact public commands, push the same PR, and submit the changed head to SCRIPT CI without polling. Do not merge; preserve C61/C83/C79 ownership and refs.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-258",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "rejection_feedback": "PR #495 head 509a3a8df8ed0ae4027a5177cabeb1bc2f1b2649 has all nine current-head CI lanes green in run 34733735358, but the evidence analyzer is incorrect. analyze.py omits '.' tokens, constructs duplicated module import paths, matches bare names across packages, and mislabels anonymous func closures; the checked-in ledger consequently reports 372 C83→C61 edges, including 50 edges targeting the keyword for, with zero qualified/public-import edges. C83 actually imports browserrunner only and its standalone packages compile, so c83_requires_c61_api=true is unsupported. Fix analyzer package/type resolution and add regressions for anonymous functions, qualified symbols, module paths, and same-name cross-package symbols. Then regenerate both required/control evidence, verification.json, and both public reports from clean pinned trees; rerun verify.py --mode all, both bounded public cases, git diff --check, push the same task/PR, and submit the new exact head to script CI. Preserve ci-rejection-34732547786.json and C79/provider-audio ownership; do not relabel or repair it in C109. Separately, prd.json references missing factory/docs/implementation-handoff.md; reconcile that sourcePlanRef before the next review without inventing approval evidence. Independent live public checks passed, but they do not clear this ledger defect.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-284",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration\", \"branch\": \"codex/audio-runtime-c109-characterize-browser-retirement-integration\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "rejection_feedback": "CI checks failed for PR #495 at head 0c31a7b01581a1fed95fecabed97558762d3e32a: required checks failed on current head 0c31a7b01581a1fed95fecabed97558762d3e32a: CI (coverage)=FAILURE; checks: CI (coverage)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34737204831/job/103670624526). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-224",
+      "work_type": "task"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
+      "rejection_feedback": "Reviewed PR #497 at head 877866206b1372d4ef5a5836344ab0a6fccc06d7; all nine required checks are green, and independent service/CLI tests, race tests, external consumer, Wire, and architecture checks pass. Actionable blockers remain: the diff violates C110 ownership and the active C79 lease by changing unowned runtime/transport files, session_playback_diagnostics.go, scripts/wire-packages.txt, and docs/architecture/architecture-size-baseline.json; restore those changes and integrate shared-file edits only after C79’s guarded merge. The 277-line CLI file shrinks to 73 only because 204 lines were moved into session_audio_dispatch.go; agentruntime production lines increase 41208→41217, so the required 190-line net retirement is not demonstrated. verify.py lacks the required retirement-and-owned-paths mode and its guard-mutations mode performs no mutations; required caller/lease/exclusion evidence, run.py, yui artifact, provenance hashes, text-seed/invalid-pre-provider/clean-shutdown/audio-tool-replay evidence are missing, while the ignored report is stale at 68 lines. Also fix cancellation handling after legacy Stat/ReadFile/SkillsSummary calls, retain final playback diagnostics when the session context is canceled during teardown, and preserve the removed exported session/wire.NewInstructionService compatibility API. Exact next action: executor restore the allowed path set, implement the real bounded fail-closed behavior and compatibility/lifecycle fixes, produce the required source-pinned evidence and causal mutants, then submit the repaired head to the script CI gate; no merge performed.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-244",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"branch\": \"codex/audio-runtime-c110-retire-cli-session-instruction-resolution\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c110-retire-cli-session-instruction-resolution",
+      "rejection_feedback": "CI checks failed for PR #497 at head 87d0bb9516c24ac59fca920f69636deb8efaea25: required checks failed on current head 87d0bb9516c24ac59fca920f69636deb8efaea25: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34726522404/job/103641480861). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-232",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"branch\": \"codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-236",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence\", \"branch\": \"codex/audio-runtime-c112-retire-cli-session-trace-evidence\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
+      "rejection_feedback": "CI checks failed for PR #498 at head 8b2983338ea449fd739994e8fbbc958581bd2e7b: required checks failed on current head 8b2983338ea449fd739994e8fbbc958581bd2e7b: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345381). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-238",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c114-retire-cli-audio-rate-contract\", \"branch\": \"codex/audio-runtime-c114-retire-cli-audio-rate-contract\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c114-retire-cli-audio-rate-contract",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-260",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c115-centralize-filesystem-audio-codec\", \"branch\": \"codex/audio-runtime-c115-centralize-filesystem-audio-codec\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c115-centralize-filesystem-audio-codec",
+      "rejection_feedback": "",
+      "state": {
+        "name": "in-review",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-262",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c116-centralize-rtc-track-transport\", \"branch\": \"codex/audio-runtime-c116-centralize-rtc-track-transport\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c116-centralize-rtc-track-transport",
+      "rejection_feedback": "CI checks failed for PR #500 at head 26eb5977f986c0f54a5010e292f39c17c0071d8f: required checks failed on current head 26eb5977f986c0f54a5010e292f39c17c0071d8f: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34736407143/job/103668520476). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "work_id": "work-task-265",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication\", \"branch\": \"codex/audio-runtime-c117-repair-c113-public-trace-publication\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c117-repair-c113-public-trace-publication",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-268",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c118-retire-cli-session-terminal-diagnostics\", \"branch\": \"codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-277",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c119-retire-cli-session-failure-projection\", \"branch\": \"codex/audio-runtime-c119-retire-cli-session-failure-projection\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c119-retire-cli-session-failure-projection",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "work_id": "work-task-281",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"branch\": \"codex/audio-runtime-c120-retire-cli-session-duration-terminal-boundary\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c120-retire-cli-session-duration-terminal-boundary",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-283",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c23-long-session-tool-characterization\", \"branch\": \"codex/audio-runtime-c23-long-session-tool-characterization\", \"baseRevision\": \"17abc4288718bc635af496672086eab13b67a10a\", \"reused\": true}",
+      "name": "audio-runtime-c23-long-session-tool-characterization",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-21",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c47-live-probe-output-bound\", \"branch\": \"codex/audio-runtime-c47-live-probe-output-bound\", \"baseRevision\": \"49d809eac72688d3c5e8bf0f3934bb1632341005\", \"reused\": true}",
+      "name": "audio-runtime-c47-live-probe-output-bound",
+      "rejection_feedback": "CI checks failed for PR #439 at head 584a393608debbae9f0ef3944f37eebefceba4aa: required checks failed on current head 584a393608debbae9f0ef3944f37eebefceba4aa: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34638493032/job/103392143324). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "work_id": "work-task-22",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c54-room-document-admission\", \"branch\": \"codex/audio-runtime-c54-room-document-admission\", \"baseRevision\": \"8f6d95039328ef3b41f4afcf261255913d93e79a\", \"reused\": true}",
+      "name": "audio-runtime-c54-room-document-admission",
+      "rejection_feedback": "CI checks failed for PR #445 at head c8c3a173230940cffe61fb24d3cbf3f22c3307f9: required checks failed on current head c8c3a173230940cffe61fb24d3cbf3f22c3307f9: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34657803912/job/103453870579). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-23",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c55-room-participant-mesh\", \"branch\": \"codex/audio-runtime-c55-room-participant-mesh\", \"baseRevision\": \"c74f740c1aa38fb3aea7450a004c68202c011b39\", \"reused\": true}",
+      "name": "audio-runtime-c55-room-participant-mesh",
+      "rejection_feedback": "CI checks failed for PR #446 at head 48ce53e80a516dae13d995b198b330d1103395d1: required checks failed on current head 48ce53e80a516dae13d995b198b330d1103395d1: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34634760206/job/103379843397). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-24",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c56-retire-cli-recording-orchestration\", \"branch\": \"codex/audio-runtime-c56-retire-cli-recording-orchestration\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": true}",
+      "name": "audio-runtime-c56-retire-cli-recording-orchestration",
+      "rejection_feedback": "CI checks failed for PR #448 at head 4f02c1e17c98a6666330adb62385d0585fce06e0: required checks failed on current head 4f02c1e17c98a6666330adb62385d0585fce06e0: CI (hermetic)=FAILURE, CI (integration)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34663786271/job/103471496057); CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34663786271/job/103471496073). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-25",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c57-retire-cli-self-play-runtime\", \"branch\": \"codex/audio-runtime-c57-retire-cli-self-play-runtime\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": true}",
+      "name": "audio-runtime-c57-retire-cli-self-play-runtime",
+      "rejection_feedback": "CI checks failed for PR #449 at head af45bd3faee185d6ddc7b92d2432080d37a99c54: required checks failed on current head af45bd3faee185d6ddc7b92d2432080d37a99c54: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34651018208/job/103432936653). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-26",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c58-retire-cli-duration-runtime\", \"branch\": \"codex/audio-runtime-c58-retire-cli-duration-runtime\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": true}",
+      "name": "audio-runtime-c58-retire-cli-duration-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-27",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c59-retire-cli-audio-input-runtime\", \"branch\": \"codex/audio-runtime-c59-retire-cli-audio-input-runtime\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": true}",
+      "name": "audio-runtime-c59-retire-cli-audio-input-runtime",
+      "rejection_feedback": "CI checks failed for PR #450 at head 78fcd2e623c661f9000e54b17becae8159a365cb: required checks failed on current head 78fcd2e623c661f9000e54b17becae8159a365cb: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34658959087/job/103457270695). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-3",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair\", \"branch\": \"codex/audio-runtime-c60-c52-failed-case-attribution-repair\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": true}",
+      "name": "audio-runtime-c60-c52-failed-case-attribution-repair",
+      "rejection_feedback": "CI checks failed for PR #447 at head 3940ef20c8a3f001e568ac40c98a937f673c8ed7: required checks failed on current head 3940ef20c8a3f001e568ac40c98a937f673c8ed7: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34653353769/job/103440293707). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-6",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c61-retire-cli-browser-scenario-contract\", \"branch\": \"codex/audio-runtime-c61-retire-cli-browser-scenario-contract\", \"baseRevision\": \"904e1f4c3be6c1e629138632573bd2fb55d50938\", \"reused\": false}",
+      "name": "audio-runtime-c61-retire-cli-browser-scenario-contract",
+      "rejection_feedback": "CI checks failed for PR #452 at head 8e8177c031a7b3b9322d712af19970e13fa7a1bc: required checks failed on current head 8e8177c031a7b3b9322d712af19970e13fa7a1bc: CI (hermetic)=FAILURE; checks: CI (hermetic)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34658619207/job/103456263118). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-34",
+      "work_type": "task"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c62-validation-contract-anchor-repair",
+      "rejection_feedback": "Independent tests pass, and PR #453 head dc3e4fbc has all nine checks green. Delivery is stale: origin/main is 3d3e7278, while the branch/evidence integrate only 59af6325; evidence also records revision 5323b76e and old SCRIPT CI run 34660505714. Additionally, test_prepare_validation.py:459 mutates DEVICE (criteria[1]), not strengthened SERVICE (criteria[3]), so required SERVICE negatives for C47/C54/C55 are unproven. Executor: integrate origin/main, add/run per-packet SERVICE-rubric mutation negatives through production preflight with no staging, refresh evidence to the post-integration head and checks, push, and submit to SCRIPT CI without polling. Preserve prior C47/C64 audio-loss rejections and the exit-75 no-merge-SHA checkpoint; do not merge this head.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-165",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c62-validation-contract-anchor-repair",
+      "rejection_feedback": "PR #453 is green at head 3d26878e2602dbf8a8a67e62d31b72ca79a88e7b, but has actionable defects. At project_scope_amendment.py:986, prepare-validation writes successor authority edd1f5cb while amended-report validation expects original authority e08b64af; an isolated end-to-end run prepares then rejects with report does not match the staged amended mission. Repair the authority lifecycle and add a successor completion regression. test_prepare_validation.py:19,57-105 depends on ignored running-root inputs; with FACTORY_ROOT unset, all five tests fail, while Makefile:38 omits this module, so green CI does not exercise it. Make the required focused tests clean-checkout runnable and run the mandated selector/direct modules. Refresh submission-evidence.json for the actual reviewed head and dependent evidence, then push the repaired head and resubmit to SCRIPT CI; do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-56",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c62-validation-contract-anchor-repair",
+      "rejection_feedback": "Independent successor contract/preflight and legacy amendment proofs pass; PR #453 checks are green at 05f4c86bae78d5c14fa05a5d5b3e0dca828bee61. However submission-evidence.json still records candidate/revalidation revision de85685cdffe02c986e78d45e8a50dcff19ab521 and no current run. Update evidence to the actual head, record run 34660505714 and required-check results, commit/push the same PR, and resubmit to SCRIPT CI without polling.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-69",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c62-validation-contract-anchor-repair\", \"branch\": \"codex/audio-runtime-c62-validation-contract-anchor-repair\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c62-validation-contract-anchor-repair",
+      "rejection_feedback": "Independent tests pass, and PR #453 head dc3e4fbc has all nine checks green. Delivery is stale: origin/main is 3d3e7278, while the branch/evidence integrate only 59af6325; evidence also records revision 5323b76e and old SCRIPT CI run 34660505714. Additionally, test_prepare_validation.py:459 mutates DEVICE (criteria[1]), not strengthened SERVICE (criteria[3]), so required SERVICE negatives for C47/C54/C55 are unproven. Executor: integrate origin/main, add/run per-packet SERVICE-rubric mutation negatives through production preflight with no staging, refresh evidence to the post-integration head and checks, push, and submit to SCRIPT CI without polling. Preserve prior C47/C64 audio-loss rejections and the exit-75 no-merge-SHA checkpoint; do not merge this head.",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "work_id": "work-task-55",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c63-retire-cli-terminal-outcome\", \"branch\": \"codex/audio-runtime-c63-retire-cli-terminal-outcome\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c63-retire-cli-terminal-outcome",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-60",
+      "work_type": "task"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c64-provider-audio-terminal-drain-repair",
+      "rejection_feedback": "Independent focused, race, and 20-trial Test45/Test46 process-boundary runs pass with exact 6400-sample accounting. PR459's nine checks are green at f13c1b7d, but this head is stale: origin/main is 84c91ee1 while the candidate contains only d5d6f843 ancestry; the verifier fails immediately. run.py also ignores --expect accepted-source-failure, runs only the repaired candidate, and merely copies static negative JSON without binding a pre-repair hash/log. The barrier test preloads only SESSION_CLOSE and one media block (rtc_device_runtime_test.go:375-405), so it does not prove the required multi-tool continuation/final-response ordering. Executor: integrate current origin/main into the same C64 branch while retaining d5 as the accepted-source baseline, update the runner/verifier to record both revisions and execute/capture a real pre-repair failure with source/test/artifact hashes, extend the barrier to the exact continuation/final-response sequence, rerun evidence and scoped checks, push the changed head, and resubmit to SCRIPT CI. Do not merge this head.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-117",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c64-provider-audio-terminal-drain-repair",
+      "rejection_feedback": "Independent runtime checks passed, including C64 normal/race paths and 20-trial Test45/Test46 regressions. However, checked-in negative-evidence.json is stale: candidate/fixture revision 9742efc and diff SHA 25aa18be, while reviewed HEAD is bfc25d2b and current diff SHA is f6c5bca5. verify.py only accepts an ancestor and any 64-hex diff, so it does not enforce current-head provenance. Regenerate both source-control and repaired evidence at bfc25d2b, record current head/diff plus complete executable-input/toolchain/flag/artifact hashes, or add explicit hash-bound evidence-only descendant proof; strengthen verification accordingly, rerun focused evidence/tests, commit and push, then resubmit through script CI. Do not merge this head.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-141",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c64-provider-audio-terminal-drain-repair",
+      "rejection_feedback": "PR #459 head 996f69fcb2b1ddb002ff449d810f984b6ac46643 has green required checks, and independent focused, race, 20-repeat, package, gateway, and public integration runs pass. However, C64 evidence is insufficient: rtc_device_runtime_test.go:361 uses PlaybackSamplesObserver, which proves post-enqueue admission, while lines 390-453 only compare admittedPCM and zero drop/overflow/discard counters. It never asserts SimulatedDuplexRegistry.RenderedSamples(), consumed samples, final queue state, or rendered/underflow accounting, so an admitted-but-not-rendered block could pass. Extend the deterministic test/evidence to assert the actual simulated render boundary and reconciled provider/admitted/consumed/queued counters plus shutdown, retain the negative control, then rerun focused normal/race checks and submit a changed head through SCRIPT CI before returning to review.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-91",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c64-provider-audio-terminal-drain-repair\", \"branch\": \"codex/audio-runtime-c64-provider-audio-terminal-drain-repair\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c64-provider-audio-terminal-drain-repair",
+      "rejection_feedback": "Independent runtime checks passed, including C64 normal/race paths and 20-trial Test45/Test46 regressions. However, checked-in negative-evidence.json is stale: candidate/fixture revision 9742efc and diff SHA 25aa18be, while reviewed HEAD is bfc25d2b and current diff SHA is f6c5bca5. verify.py only accepts an ancestor and any 64-hex diff, so it does not enforce current-head provenance. Regenerate both source-control and repaired evidence at bfc25d2b, record current head/diff plus complete executable-input/toolchain/flag/artifact hashes, or add explicit hash-bound evidence-only descendant proof; strengthen verification accordingly, rerun focused evidence/tests, commit and push, then resubmit through script CI. Do not merge this head.",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "work_id": "work-task-63",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c65-agentloop-delta-publication-barrier-repair\", \"branch\": \"codex/audio-runtime-c65-agentloop-delta-publication-barrier-repair\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c65-agentloop-delta-publication-barrier-repair",
+      "rejection_feedback": "CI checks failed for PR #455 at head 9fb29c504da68bb48b121309ce79221b0b9a9af3: required checks failed on current head 9fb29c504da68bb48b121309ce79221b0b9a9af3: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34663256624/job/103469965579). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "work_id": "work-task-67",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c66-retire-cli-dynamic-tool-publication\", \"branch\": \"codex/audio-runtime-c66-retire-cli-dynamic-tool-publication\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c66-retire-cli-dynamic-tool-publication",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-71",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c67-retire-cli-image-turn-runtime\", \"branch\": \"codex/audio-runtime-c67-retire-cli-image-turn-runtime\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c67-retire-cli-image-turn-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-74",
+      "work_type": "task"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c68-c23-zero-audio-attribution",
+      "rejection_feedback": "PR #457 head f734127904290bfa47f0ca78f37c54d358c0069d has green required checks, and independent exact C23/C56 runs reproduce nonempty provider/public PCM with recording accepted_audio=0 and no audio output. Evidence is not acceptance-ready: required attribution.json is missing; source/archive/build-input/executable binding is not fail-closed because C23_SOURCE_REVISION is injected and trusted (verified by running a C56-built binary while reporting C23); c21-regressions.json is bound to base d5d6f843, not final head f7341279; stop_group can leave surviving grandchildren, and negative control accepts arbitrary nonzero exit or absent provider capture. Additional ignored positive-run artifacts show no duplicate-run guard. Executor action: update the C68 harness/evidence, add canonical attribution.json with required provenance and owner action, validate immutable source/build/executable hashes and final-head C21 evidence, make cleanup/negative/disk/duplicate checks fail closed, rerun the bounded four-case comparison once in a clean output, then submit the changed head to script CI. Preserve prior race finding: run 34665087212, TestVirtualPlaybackCapacityAdversarial/08_waiter_remains_blocked_above_low_watermark.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-86",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c68-c23-zero-audio-attribution\", \"branch\": \"codex/audio-runtime-c68-c23-zero-audio-attribution\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c68-c23-zero-audio-attribution",
+      "rejection_feedback": "CI checks failed for PR #457 at head 0efdb49b53cb4bb0edf925f2d3ba1c35d3866760: required checks failed on current head 0efdb49b53cb4bb0edf925f2d3ba1c35d3866760: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34671293029/job/103493004872). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "complete",
+        "type": "TERMINAL"
+      },
+      "work_id": "work-task-77",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c69-retire-cli-bare-session-admission\", \"branch\": \"codex/audio-runtime-c69-retire-cli-bare-session-admission\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c69-retire-cli-bare-session-admission",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-80",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c70-retire-cli-metrics-replay\", \"branch\": \"codex/audio-runtime-c70-retire-cli-metrics-replay\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c70-retire-cli-metrics-replay",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-82",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c71-retire-cli-text-seed-runtime\", \"branch\": \"codex/audio-runtime-c71-retire-cli-text-seed-runtime\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c71-retire-cli-text-seed-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-87",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c72-retire-cli-instruction-transport\", \"branch\": \"codex/audio-runtime-c72-retire-cli-instruction-transport\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c72-retire-cli-instruction-transport",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-89",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c73-retire-cli-conversation-log\", \"branch\": \"codex/audio-runtime-c73-retire-cli-conversation-log\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c73-retire-cli-conversation-log",
+      "rejection_feedback": "CI checks failed for PR #464 at head 9300d1aeed7acabf3e823e96f5354bd5ccde9e5b: required checks failed on current head 9300d1aeed7acabf3e823e96f5354bd5ccde9e5b: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34672099665/job/103495254542). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-95",
+      "work_type": "task"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c74-retire-cli-session-config",
+      "rejection_feedback": "Reviewed PR #467 at head 41edd2b4de2ca603f66b93519140c2f692519481. Independent service, race, consumer, runner, and Wire checks pass, but actionable gaps remain: verify.py:175-211 does not perform either mutation; the transport control tests quic instead of conflicting aliases, and the turn-detection control repeats the same test. Implement isolated fail-closed mutations whose independent oracles fail, restore a clean tree, and record both results. Also, contract.go:168-176 promises omitted/explicit distinction, but service.go:238-253 ignores ProviderProvided and service.go:320-335 ignores ModelProvided for Grok, so explicit empty values can fall back to configured defaults. Enforce those distinctions and add literal regression rows. Commit/push the repairs, rerun the frozen matrix and relevant behavior checks, then submit the changed head to script-owned CI without polling. No merge performed. implementation-handoff.md and a prior-finding file are absent under FACTORY_ROOT; no evidence was fabricated, so the policy/handoff documents, PR body, evidence ledger, and GitHub review state were used.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-132",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c74-retire-cli-session-config\", \"branch\": \"codex/audio-runtime-c74-retire-cli-session-config\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c74-retire-cli-session-config",
+      "rejection_feedback": "CI checks failed for PR #467 at head 67f38e0e9aaaea7047ccedfe9bdc2636ea308fd8: required checks failed on current head 67f38e0e9aaaea7047ccedfe9bdc2636ea308fd8: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34683471540/job/103526211116). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-98",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c75-retire-cli-room-replay-bundle\", \"branch\": \"codex/audio-runtime-c75-retire-cli-room-replay-bundle\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c75-retire-cli-room-replay-bundle",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-100",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c76-retire-cli-playback-observability\", \"branch\": \"codex/audio-runtime-c76-retire-cli-playback-observability\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c76-retire-cli-playback-observability",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-105",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c77-retire-cli-session-replay-runtime\", \"branch\": \"codex/audio-runtime-c77-retire-cli-session-replay-runtime\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c77-retire-cli-session-replay-runtime",
+      "rejection_feedback": "CI checks failed for PR #469 at head 0054acadba5a3a297debbf3869fc71c0af84c722: required checks failed on current head 0054acadba5a3a297debbf3869fc71c0af84c722: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34676193333/job/103506376510). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-107",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c78-retire-cli-tool-execution-runtime\", \"branch\": \"codex/audio-runtime-c78-retire-cli-tool-execution-runtime\", \"baseRevision\": \"d5d6f84363d8569d5dc1a59985f8d45cf50e1d06\", \"reused\": false}",
+      "name": "audio-runtime-c78-retire-cli-tool-execution-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-109",
+      "work_type": "task"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head c4bd115b has all nine CI checks green, and independent normal/race service, GOWORK=off consumer, CLI, and scheduled-continuation tests passed. Code defect: public EventResponseFinish dispatches to internal/service/response.go:129-142 without ownership validation; an independent probe opened response-a, finished response-b, and observed active=false, violating wrong-ID protection. Fix ownership validation, add a regression test, push a new head, and rerun CI. Boundary defect: service.go:60 and 163-185 export EventSyncLegacy/LegacyState, while continuation.go:61-81 restores caller-supplied maps, ledgers, and ownership, violating private-state requirements; remove this public escape hatch or isolate it behind a private adapter bridge. Evidence is stale: latest matrix/retirement/mutation evidence cites af2657ea and static evidence cites 2f6713d, not c4bd115b; run.py only executes the built binary for --help and runs tests, without executable lifecycle output or artifact/source hashes. Refresh all evidence on the repaired final head with real executable observations and provenance, then resubmit for review.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-152",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head 0f25f076 is independently behavior-tested and all nine GitHub checks pass, but freshly fetched origin/main is 3d3e7278 (parent 59af6325) and is not an ancestor of the candidate. C79 evidence is also stale: replay, mutation, retirement, and response-matrix records cite 7ba0ba97; static repair cites be237ef2. Executor must integrate origin/main, reconcile C65 changes while preserving C79, rebuild yui, regenerate all affected evidence on the resulting SHA with fresh provenance and mutation controls, push PR #470, and run the script-owned current-head CI gate without polling. Return for review; do not merge this head.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-167",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head 5ea7aec83731 has all nine required checks green, but independent proof found defects: service.go:85-99 Reset replaces a locked mutex and panics with sync: unlock of unlocked mutex; observation.go:100-111 resets only CLI projections, so SESSION.OPEN followed by an untagged response can complete stale response-old; scheduled.go:296-327 accepts bogus dispositions and counts them completed; scheduled.go:49-92 permits rebinding disposed slots. Repair these with regressions, rerun focused normal/race/external and shipped replay, regenerate evidence from the repaired pushed head, then submit one new head to SCRIPT CI without polling. Preserve prior ownership, escape-hatch, and ancestry regressions.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-176",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 is not merge-eligible: reviewed HEAD d3c4db3427d035b0b9ba7be48084b5843ed1037d does not contain freshly fetched origin/main d4766c3dbbf2c198142047ead4449d58dd47d485. C79 evidence is also stale (matrix/mutation at 5ea7aec8; replay source at 32e9a739; artifact provenance differs). Independent normal, race, GOWORK=off consumer, healthy replay, and malformed replay checks passed; GitHub run 34695798923 has all required checks green, but cannot waive ancestry or evidence requirements. Executor action: integrate current origin/main into the same branch without reset, preserve C79 and peer/C62 work, resolve conflicts, rebuild the shipped artifact, rerun focused verification and replay controls, refresh all evidence to the final head/artifact identity, then submit changed-head script CI without polling and request fresh review. Do not merge now.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-185",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "Reviewed PR #470 at head c23acde29231bda381603c72c45cb04dd7e999d3. All nine required checks were SUCCESS on that exact head; independent normal/race service tests, GOWORK=off consumer, CLI compatibility, targeted integration, candidate-built yui healthy/malformed replay, and git diff --check passed. Code defects block merge: (1) sessiondiagnostics/internal/service/continuation.go:61-89 computes Candidate without consulting activePurpose, so a tool-acknowledgement response returns Candidate=true; Observation.Admitted is never set. Enforce purpose at terminal admission and add a public regression. (2) response.go:23-44 retires the active ID and accepts a different EventResponseOpen while the prior response is still active; reject foreign/out-of-order opens unless an explicit terminal/continuation boundary permits replacement. (3) service.go:144-159 clears retired IDs on Reset, and continuation.go reopens inactive IDs, so an old response end after Reset reclaims a new lifecycle; preserve generation/stale-ID ownership and add the reset-late-event regression. (4) The CLI still owns an independent toolContinuationState and completion/failure/obligation decisions in session_diagnostics_tools.go:12-30,78-120,138-237,322-501; session_diagnostics_response.go:130-147 rehydrates it with OR-merging, while session_response_admission.go:68-79 and session_liveness.go:125-139 consume it. This violates the thin-adapter boundary and permits reducer/adapter disagreement. Move lifecycle decisions and queries to the service, remove the local lifecycle map/projection, and test reset/overlap behavior. Executor must repair these findings, refresh affected evidence, commit/push the new head, and resubmit once to SCRIPT CI; do not merge current head. Preserve the prior peer-owned high-rate audio drain regression (6400 samples lost) separately as non-C79 cumulative context.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-211",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head ccfc3ee8 is green on all nine reported checks, and independent focused/race, GOWORK=off consumer, and credential-free replay checks pass. Code defects remain: response.go:66-75 accepts foreign response-b before any explicit boundary, replacing active response-a; response.go:191-194 leaves purpose/terminal state stale, so tool-ack finish followed by terminal-only normal end is not admitted; continuation.go:74-89 reports duplicate response ends as Candidate/Admitted=true. Add public regressions and fix ownership, per-generation reset, and duplicate handling while preserving stale-ID rejection. Checked-in evidence is source-pinned to 795ac1bc8147353cb36a806e9acd641512cc9110 rather than reviewed head ccfc3ee8; regenerate or explicitly bind evidence to the resulting head, rebuilding replay artifacts as needed. Commit/push PR 470, submit changed-head script CI without polling, and preserve the peer-owned 6400-sample high-rate audio-drain regression.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-225",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head a5d26045b7e39f21a0b5d663826db0394af87b6a has green required checks, but code and evidence block merge. Reducer events.go:55-58 clears messageEndSeen for untagged content; adapter session_diagnostics_response.go:282-292 applies that content boundary before validating response ownership. Independent probe: open/end response A, process untagged content, then duplicate end A; duplicate was incorrectly Accepted/Candidate/Admitted. Fix ownership ordering and add a regression preserving the existing identity, purpose, reset-generation, disposition, continuation-owner, and retry assertions. Evidence is stale: response, retirement, mutation, static, and all replay ledgers identify 724a2e0b, not reviewed head a5d26045; replay metadata records artifact 1ff1d25c.../53103442 while the retained artifacts/yui is f7720680.../53101346. Executor: commit the fix, rebuild yui, rerun run.py for all three cases and verify.py for response-matrix, retirement-and-scope, and both mutation modes with --expect-failure; refresh every ledger and artifact/source digest, commit/push, submit changed-head CI without running ci-wait.py, then request fresh review.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-239",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head 40702f55 has all required checks green, and independent current-head tests, external consumer, healthy replay, and malformed replay passed. Prior lifecycle findings are repaired. Required evidence is stale: ledgers/replays point to b930e1f8, static evidence to 996ce66e, and artifact f222823d was built from b930; required ancestry pins are absent. run.py:174-194 lacks process-group TERM/KILL/reap and survivor checks. run.py:240-241 only runs a healthy audio fixture with no tool events, so shipped-binary tool continuation is unproven. Fix runner cleanup, add a credential-free shipped-yui tool-call/result/continuation/scheduled-follow-on fixture with output, diagnostics, malformed, and shutdown assertions. Rebuild at final HEAD; rerun all verify.py modes, both mutation negatives, and all three replay cases; record exact HEAD, artifact hash, required ancestry pins, fresh origin/main, clean status, and survivor results; commit/push, let script CI run without polling, then request fresh review. implementation-handoff.md is absent under FACTORY_ROOT.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-246",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "Independent service, race, external-consumer, adapter, integration, replay, and shipped-CLI checks passed. PR #470 head a8e45355fe495f58c3ba1078a80050492ae6f864 has all required checks green in run 34725100606. However every C79 evidence ledger and artifact records candidate 05a6ea5a39927d224fe81200a2698e68c0a25005, not the current head; runner/evidence logic changed afterward. Rebuild the exact-head artifact, rerun response/retirement/mutation and all three bounded replay cases, refresh provenance to a8e45355, commit/push, and submit the new head to SCRIPT CI without polling. Historical CI failures remain recorded and are not waived.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-250",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head b2e3648d608919033649f54230db86efd2b7a121 has green required checks, but C79 evidence is stale: ledgers/artifact record a8e45355fe495f58c3ba1078a80050492ae6f864, and static evidence records 996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7. Independent runtime probes passed, but a reset→ensure→bind-old-response probe reproduced stale ID reclamation in scheduled.go:49-124 (Accepted:true), violating reset ownership. Repair with generation/known-ID protection and regression coverage, rebuild artifacts at the new exact head, rerun response/retirement/mutation and all bounded replay cases, refresh provenance, commit/push, and submit the changed head to script CI without polling. Historical failures remain recorded; no waiver or merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-253",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "Independent normal/race service and adapter tests, GOWORK=off consumer, and rebuilt shipped workflows passed; all nine current-head checks pass on e3212e4d. However, every checked-in C79 evidence ledger and artifact provenance still records e9ce4894, not the reviewed PR head e3212e4d (the PR body is older still). Executor must rebuild yui and rerun response/retirement/mutation and all three shipped replay cases at e3212e4d, refresh ledgers with final_head=candidate=e3212e4d and current origin/main=3963bc3, commit/push the evidence refresh, then submit that new head to script CI for re-review.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-266",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head e78f9644 has all 9 required checks green, but an independent public reducer probe accepted Candidate/Admitted=true for duplicate response end after untagged content; events.go:55-58 clears messageEndSeen without ownership validation. Fix response ownership/generation and add this regression while retaining prior ID, purpose, reset, continuation, disposition, retry, audio-drain, cleanup, and shipped-tool assertions. Evidence is also stale: all ledgers/replay artifacts record e3212e4, not e78f9644. Executor must fix, rebuild yui, run all three run.py cases and verify.py response-matrix, retirement-and-scope, and both mutation modes with --expect-failure, refresh every ledger/artifact digest to final_head=candidate=e78f9644 and origin_main=3963bc3, commit/push, submit changed-head CI, and request fresh review.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-270",
+      "work_type": "review"
+    },
+    {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "Independent GOWORK=off probes show malformed tool events are accepted: orphan EventToolResultAccepted mutates continuation state, and EventToolCall with foreign ResponseID is Accepted=true (continuation.go:10-44). Fix ownership/conflicting-ID validation while preserving valid early results within an active lifecycle; make the CLI adapter retain unresolved state on rejection and add regressions. Evidence is stale: ledgers and replay artifacts cite 7dc1429, not reviewed HEAD a9099ec. Rebuild yui, rerun all verify.py modes and three run.py cases, refresh exact provenance, commit/push, and submit changed-head CI. Preserve prior cumulative regressions; do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-278",
+      "work_type": "review"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "CI checks failed for PR #470 at head 99bc9500634676182e987711e21da805b8837ead: required checks failed on current head 99bc9500634676182e987711e21da805b8837ead: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34736382993/job/103668456377). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-114",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c80-retire-cli-room-evidence-runtime\", \"branch\": \"codex/audio-runtime-c80-retire-cli-room-evidence-runtime\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c80-retire-cli-room-evidence-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-116",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c81-retire-cli-room-audio-bundle\", \"branch\": \"codex/audio-runtime-c81-retire-cli-room-audio-bundle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c81-retire-cli-room-audio-bundle",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-121",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c82-retire-cli-live-session-orchestration\", \"branch\": \"codex/audio-runtime-c82-retire-cli-live-session-orchestration\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c82-retire-cli-live-session-orchestration",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-123",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c83-retire-cli-browser-scenario-runner\", \"branch\": \"codex/audio-runtime-c83-retire-cli-browser-scenario-runner\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c83-retire-cli-browser-scenario-runner",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-125",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"branch\": \"codex/audio-runtime-c84-retire-cli-room-participant-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c84-retire-cli-room-participant-lifecycle",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-136",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c85-retire-cli-room-replay-scheduler\", \"branch\": \"codex/audio-runtime-c85-retire-cli-room-replay-scheduler\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c85-retire-cli-room-replay-scheduler",
+      "rejection_feedback": "CI checks failed for PR #477 at head f22179dc729cbb24264194ebb6595769341dc657: required checks failed on current head f22179dc729cbb24264194ebb6595769341dc657: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34686754247/job/103534962321). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-140",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c86-retire-cli-rate-limit-retry-policy\", \"branch\": \"codex/audio-runtime-c86-retire-cli-rate-limit-retry-policy\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c86-retire-cli-rate-limit-retry-policy",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-144",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c87-retire-cli-session-turns\", \"branch\": \"codex/audio-runtime-c87-retire-cli-session-turns\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c87-retire-cli-session-turns",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-146",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c88-retire-cli-room-tool-capabilities\", \"branch\": \"codex/audio-runtime-c88-retire-cli-room-tool-capabilities\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c88-retire-cli-room-tool-capabilities",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-148",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c89-retire-cli-provider-liveness\", \"branch\": \"codex/audio-runtime-c89-retire-cli-provider-liveness\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+      "name": "audio-runtime-c89-retire-cli-provider-liveness",
+      "rejection_feedback": "CI checks failed for PR #478 at head c5e29d61e21d297714846d1e508881082da5c784: required checks failed on current head c5e29d61e21d297714846d1e508881082da5c784: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34688382696/job/103539274300). Return this task to the executor with the listed failures.",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-151",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c91-retire-cli-capture-claim-runtime\", \"branch\": \"codex/audio-runtime-c91-retire-cli-capture-claim-runtime\", \"baseRevision\": \"59af6325614d80173447fe2018a0471e27b4e7b1\", \"reused\": false}",
+      "name": "audio-runtime-c91-retire-cli-capture-claim-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-160",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c92-retire-cli-audio-output-runtime\", \"branch\": \"codex/audio-runtime-c92-retire-cli-audio-output-runtime\", \"baseRevision\": \"59af6325614d80173447fe2018a0471e27b4e7b1\", \"reused\": false}",
+      "name": "audio-runtime-c92-retire-cli-audio-output-runtime",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-163",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c93-retire-cli-room-media-io\", \"branch\": \"codex/audio-runtime-c93-retire-cli-room-media-io\", \"baseRevision\": \"3d3e72786ac6fc1fd47c7e029589e5117674b035\", \"reused\": false}",
+      "name": "audio-runtime-c93-retire-cli-room-media-io",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-169",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c94-retire-cli-room-terminal-policy\", \"branch\": \"codex/audio-runtime-c94-retire-cli-room-terminal-policy\", \"baseRevision\": \"3d3e72786ac6fc1fd47c7e029589e5117674b035\", \"reused\": false}",
+      "name": "audio-runtime-c94-retire-cli-room-terminal-policy",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-171",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics\", \"branch\": \"codex/audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics\", \"baseRevision\": \"3d3e72786ac6fc1fd47c7e029589e5117674b035\", \"reused\": false}",
+      "name": "audio-runtime-c95-retire-cli-room-audio-ingress-diagnostics",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-175",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c96-retire-cli-rtc-device-binding\", \"branch\": \"codex/audio-runtime-c96-retire-cli-rtc-device-binding\", \"baseRevision\": \"3d3e72786ac6fc1fd47c7e029589e5117674b035\", \"reused\": false}",
+      "name": "audio-runtime-c96-retire-cli-rtc-device-binding",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-180",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c97-retire-cli-session-observation\", \"branch\": \"codex/audio-runtime-c97-retire-cli-session-observation\", \"baseRevision\": \"3d3e72786ac6fc1fd47c7e029589e5117674b035\", \"reused\": false}",
+      "name": "audio-runtime-c97-retire-cli-session-observation",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-182",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c99-retire-cli-room-participant-planning\", \"branch\": \"codex/audio-runtime-c99-retire-cli-room-participant-planning\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
+      "name": "audio-runtime-c99-retire-cli-room-participant-planning",
+      "rejection_feedback": "",
+      "state": {
+        "name": "failed",
+        "type": "FAILED"
+      },
+      "work_id": "work-task-192",
+      "work_type": "task"
+    }
+  ],
+  "observed_at": "2026-09-13T04:20:20Z",
+  "schema_version": "c107-previous-review-findings-v1"
+}
