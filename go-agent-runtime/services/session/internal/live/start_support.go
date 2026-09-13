@@ -392,3 +392,8 @@ func (s *terminalDrainSession) forwardMessage(ctx context.Context, msg messages.
 	}
 	return s.receive.WriteWaitContextOrDone(ctx, s.stop, msg).OK()
 }
+
+func (s *terminalDrainSession) InitialSessionConfigSent() bool {
+	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
+	return ok && marker.InitialSessionConfigSent()
+}
