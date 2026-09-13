@@ -1,5 +1,5 @@
 {
-  "candidate": "44e6d6835461efa60c52e7efd7d4c19dff473f6e",
+  "candidate": "36d19401b62709ae45c9dc1f4a09f89b0facb476",
   "mode": "retirement-and-scope",
   "payload": {
     "diff_check": {
@@ -8,7 +8,7 @@
         "diff",
         "--check"
       ],
-      "elapsed_seconds": 0.251,
+      "elapsed_seconds": 0.05,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
@@ -40,7 +40,7 @@
       "violations": {}
     },
     "scope": {
-      "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+      "base": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
       "outside_owned_paths": [],
       "paths": [
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
