@@ -57,11 +57,11 @@
     "shipped_yui": {
       "status": "passed",
       "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/run.py --case replay-terminal --case user-cancellation --case provider-error --case existing-audio-tool-replay --child-timeout 60 --aggregate-timeout 300",
-      "report": "runs/session-terminal-36ncezax/report.json",
-      "source_revision": "9a440390e10e1f995268aab49b4adf90fb489e60",
+      "report": "runs/session-terminal-t6l5etfn/report.json",
+      "source_revision": "9cbe87e8b0e925d7a307e116d895aa8bf6b4acbe",
       "origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
       "yui_sha256": "06a497e0467f009f32dac20984500b11661272addad719d5941228fe096f20ca",
-      "elapsed_seconds": 2.26175,
+      "elapsed_seconds": 2.354841,
       "cases": {
         "replay-terminal": "exit 0; replay_complete/replay/complete terminal; 2 final accounting records; descendants_reaped=true",
         "user-cancellation": "exit 0 after SIGINT; user_cancelled/cancellation/cli/partial terminal; partial audio accounting; descendants_reaped=true",

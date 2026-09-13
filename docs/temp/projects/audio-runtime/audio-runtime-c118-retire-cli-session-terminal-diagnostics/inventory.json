@@ -102,7 +102,7 @@
     ],
     "retirementLineReduction": 227,
     "focusedValidation": "candidate-evidence.json",
-    "shippedYuiEvidence": "passed: runs/session-terminal-36ncezax/report.json; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI; no surviving process groups",
+    "shippedYuiEvidence": "passed: runs/session-terminal-t6l5etfn/report.json; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI; no surviving process groups",
     "sharedGateStatus": "passed after integrating released main and applying only demonstrated C118 registration/stale-fragment repairs"
   }
 }

@@ -18,7 +18,7 @@ pinned at 287 lines and its recorded SHA-256.
 
 The bounded `run.py` runner builds no provider connection and executes the
 source-pinned shipped YUI with a credential-free environment. Report
-`runs/session-terminal-36ncezax/report.json` passes all four required cases:
+`runs/session-terminal-t6l5etfn/report.json` passes all four required cases:
 replay completion, SIGINT user cancellation with partial output, provider
 error, and the existing audio/tool replay. Each case records one terminal
 diagnostic, final accounting, fixture/binary hashes, and reaped process-group
