@@ -59,9 +59,11 @@ exemptions.
 The gate loads every JSON fragment recursively in lexical order and rejects
 duplicate issue keys, conflicting source identities, and conflicting rename
 mappings across fragments. Retiring a source file normally deletes only its
-fragment. To translate an older branch that still edits the monolith, run
-`python3 -B scripts/shard-architecture-baseline.py <old-json> docs/architecture/baselines --replace`
-after rebasing, then retain the owner-fragment changes produced by that branch.
+fragment. To translate an older branch that still edits the monolith, preserve
+that JSON before rebasing, run
+`python3 -B scripts/shard-architecture-baseline.py <old-json> /tmp/<task>/baselines`,
+then apply only that branch's owned fragment changes to the rebased tree. Do not
+replace the rebased directory wholesale because it may contain newer reductions.
 
 `make test-architecture-gate` verifies the rules and baseline behavior with
 positive and negative fixtures. `make verify-architecture` adds generated Wire

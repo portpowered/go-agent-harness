@@ -81,7 +81,9 @@ debt exemption.
 Fragments mirror ownership: file debt is stored below the module and source
 path, while package-wide debt uses `_package.json` in the mirrored package.
 `scripts/shard-architecture-baseline.py` performs the deterministic one-way
-migration from the former monolith and can translate a pre-migration branch.
+migration from the former monolith. A pre-migration branch should generate into
+a temporary directory named `baselines`, then apply only its owned fragment
+diffs after rebasing so newer reductions are not overwritten.
 
 The pinned `golangci-lint` configuration enables the staged correctness and
 policy checks (`errcheck`, `ineffassign`, `unused`, `nilerr`, `errorlint`,
