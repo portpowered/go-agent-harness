@@ -106,7 +106,7 @@ func nilValue(value any) bool {
 	}
 }
 
-type inboundTrack struct {
+type InboundTrack struct {
 	source    packetSource
 	decoder   rtctransport.OpusDecoder
 	config    inboundTrackConfig
@@ -127,7 +127,7 @@ type packetEvent struct {
 	err    error
 }
 
-var _ rtctransport.InboundTrack = (*inboundTrack)(nil)
+var _ rtctransport.InboundTrack = (*InboundTrack)(nil)
 
 func (s *Service) NewInboundTrack(source, opus any, config rtctransport.InboundTrackConfig) (rtctransport.InboundTrack, error) {
 	cfg, err := normalizeInboundConfig(config)
@@ -145,7 +145,7 @@ func (s *Service) NewInboundTrack(source, opus any, config rtctransport.InboundT
 	if !ok {
 		return nil, rtctransport.ErrUnsupportedOpusDecoder
 	}
-	track := &inboundTrack{
+	track := &InboundTrack{
 		source: packetSource, decoder: decoder, config: cfg,
 		frames: make(chan frameResult, cfg.jitterPackets+1), done: make(chan struct{}),
 	}
@@ -153,7 +153,7 @@ func (s *Service) NewInboundTrack(source, opus any, config rtctransport.InboundT
 	return track, nil
 }
 
-func (t *inboundTrack) readLoop() {
+func (t *InboundTrack) readLoop() {
 	events := make(chan packetEvent)
 	go t.readSource(events)
 	state := inboundPlayout{track: t, packets: make(map[int64]*rtp.Packet, t.config.jitterPackets)}
@@ -201,7 +201,7 @@ func (t *inboundTrack) readLoop() {
 	}
 }
 
-func (t *inboundTrack) readSource(events chan<- packetEvent) {
+func (t *InboundTrack) readSource(events chan<- packetEvent) {
 	defer close(events)
 	for {
 		packet, err := t.source.read()
@@ -216,7 +216,7 @@ func (t *inboundTrack) readSource(events chan<- packetEvent) {
 	}
 }
 
-func (t *inboundTrack) emit(samples []int16) error {
+func (t *InboundTrack) emit(samples []int16) error {
 	select {
 	case t.frames <- frameResult{frame: sharedaudio.PCMFrame{Samples: samples}}:
 		return nil
@@ -225,7 +225,7 @@ func (t *inboundTrack) emit(samples []int16) error {
 	}
 }
 
-func (t *inboundTrack) finish(err error) {
+func (t *InboundTrack) finish(err error) {
 	if err == nil {
 		err = io.EOF
 	}
@@ -236,7 +236,7 @@ func (t *inboundTrack) finish(err error) {
 	close(t.frames)
 }
 
-func (t *inboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
+func (t *InboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -270,7 +270,7 @@ func (t *inboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, err
 	}
 }
 
-func (t *inboundTrack) Close() error {
+func (t *InboundTrack) Close() error {
 	t.closeOnce.Do(func() {
 		t.closed.Store(true)
 		close(t.done)
@@ -282,7 +282,7 @@ func (t *inboundTrack) Close() error {
 }
 
 type inboundPlayout struct {
-	track                            *inboundTrack
+	track                            *InboundTrack
 	packets                          map[int64]*rtp.Packet
 	have, started                    bool
 	baseSeq, minSeq, nextSeq, maxSeq int64

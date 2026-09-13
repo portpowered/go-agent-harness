@@ -16,9 +16,9 @@ const (
 	defaultOutboundSSRC    uint32 = 1
 )
 
-var _ rtctransport.OutboundTrack = (*outboundTrack)(nil)
+var _ rtctransport.OutboundTrack = (*OutboundTrack)(nil)
 
-type outboundTrack struct {
+type OutboundTrack struct {
 	encoder    rtctransport.OpusEncoder
 	writer     rtctransport.RTPWriter
 	pacer      rtctransport.Pacer
@@ -63,7 +63,7 @@ func (s *Service) NewOutboundTrack(config rtctransport.OutboundTrackConfig) (rtc
 		config.Pacer = newWallClockPacer()
 	}
 	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
-	track := &outboundTrack{
+	track := &OutboundTrack{
 		encoder: config.Encoder, writer: config.Writer, pacer: config.Pacer,
 		sourceRate: config.SourceRate, payloadType: config.PayloadType,
 		ssrc: config.SSRC, sequence: config.InitialSequenceNumber,
@@ -74,7 +74,7 @@ func (s *Service) NewOutboundTrack(config rtctransport.OutboundTrackConfig) (rtc
 	return track, nil
 }
 
-func (t *outboundTrack) WriteFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
+func (t *OutboundTrack) WriteFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
 	operationCtx, finish, err := t.beginWrite(ctx)
 	if err != nil {
 		return err
@@ -133,7 +133,7 @@ func (t *outboundTrack) WriteFrame(ctx context.Context, frame sharedaudio.PCMFra
 	return nil
 }
 
-func (t *outboundTrack) Close() error {
+func (t *OutboundTrack) Close() error {
 	t.closeOnce.Do(func() {
 		t.lifecycleMu.Lock()
 		t.closed = true
@@ -152,7 +152,7 @@ func (t *outboundTrack) Close() error {
 	return t.closeErr
 }
 
-func (t *outboundTrack) beginWrite(ctx context.Context) (context.Context, func(), error) {
+func (t *OutboundTrack) beginWrite(ctx context.Context) (context.Context, func(), error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -177,7 +177,7 @@ func (t *outboundTrack) beginWrite(ctx context.Context) (context.Context, func()
 	return operationCtx, finish, nil
 }
 
-func (t *outboundTrack) endWrite() {
+func (t *OutboundTrack) endWrite() {
 	t.lifecycleMu.Lock()
 	defer t.lifecycleMu.Unlock()
 	t.active--
