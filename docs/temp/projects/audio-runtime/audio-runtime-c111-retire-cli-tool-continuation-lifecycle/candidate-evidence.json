@@ -6,7 +6,7 @@
   "session": "~default",
   "server": "http://127.0.0.1:7439",
   "branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
-  "implementationRevision": "342ddb41819596b6744bf443e5b964cc936be7f2",
+  "implementationRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
   "admission": {
     "verifyWork": "admitted",
     "secondProject": false,
@@ -61,7 +61,7 @@
     },
     {
       "command": "make coverage-registration",
-      "result": "passed: 188 workspace packages across 6 modules"
+      "result": "pre-merge checkpoint passed: 188 workspace packages across 6 modules; current-main rerun reports an unchanged C127 package outside the C111 manifest"
     },
     {
       "command": "make coverage",
@@ -69,11 +69,15 @@
     },
     {
       "command": "make architecture-size-check",
-      "result": "passed: 198 package(s), 1928 file(s), 28650 function(s) checked"
+      "result": "passed: 199 package(s), 1929 file(s), 28675 function(s) checked"
     },
     {
       "command": "make wire-check",
-      "result": "passed: 12 Wire packages auto-discovered and regenerated without drift"
+      "result": "passed: 12 Wire packages regenerated without drift; the released C111 sessioncontinuation entry is registered exactly once"
+    },
+    {
+      "command": "make verify-architecture",
+      "result": "passed: architecture gate and all registered Wire packages"
     },
     {
       "command": "make build",
@@ -98,33 +102,35 @@
     {
       "command": "verify.py --mode retirement-and-owned-paths",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789314329-50736.json",
-      "sha256": "0e5d0f735e5e680feb6c3bf42d87ee1a46a46b1f170112900f1b32a3382593c6",
-      "sourceRevision": "342ddb41819596b6744bf443e5b964cc936be7f2"
+      "artifact": "artifacts/verify-1789316620-30031.json",
+      "sha256": "097d616c67028abfef44857175dc70c31b46b67e1b72385805b23ddbb73e2ced",
+      "sourceRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6"
     },
     {
       "command": "verify.py --mode positive-and-negative-controls",
       "result": "accepted",
-      "artifact": "artifacts/verify-1789314328-50215.json",
-      "sha256": "5d8c9b1fd62ac6d604da5b393c5d1d7c285ec859ab8bb70f850cca8e1d55c0b5",
-      "sourceRevision": "342ddb41819596b6744bf443e5b964cc936be7f2"
+      "artifact": "artifacts/verify-1789316641-30032.json",
+      "sha256": "e0c8daeda1aac7193e0cc2ee21ea3fccdcee6491e6db30519907ad4acbd5ce0b",
+      "sourceRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6"
     }
   ],
   "postMergeValidation": {
-    "sourceRevision": "342ddb41819596b6744bf443e5b964cc936be7f2",
+    "sourceRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
     "freshOriginMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
     "verification": {
       "result": "accepted",
-      "artifact": "artifacts/verify-1789314328-50215.json",
-      "sha256": "5d8c9b1fd62ac6d604da5b393c5d1d7c285ec859ab8bb70f850cca8e1d55c0b5",
+      "artifact": "artifacts/verify-1789316641-30032.json",
+      "sha256": "e0c8daeda1aac7193e0cc2ee21ea3fccdcee6491e6db30519907ad4acbd5ce0b",
       "checks": "runtime contract, race, GOWORK=off external consumer, and four accumulated regressions; all exited 0, timed_out=false, reaped=true",
       "retirement": "147-line immutable baseline/hash verified; 48-line legacy adapter; 99 net production lines retired; owned-path verifier accepted",
-      "coverageRegistration": "188 workspace packages across 6 modules"
+      "coverageRegistration": "pre-merge checkpoint passed 188 workspace packages across 6 modules; current-main rerun is blocked by unchanged C127 package github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/causal"
     },
     "publicReplay": {
       "result": "accepted",
-      "artifact": "artifacts/run-1789314385-50837.json",
-      "sha256": "d8b872279d1a746eebc19cf0c2ef97ebc6445334b14aa86171b2f835a2e5c61f",
+      "artifact": "artifacts/run-1789316605-29143.json",
+      "sha256": "c142c45ab46facdc3f5c07b35c10cd33303ff4e8c0f43636cbfcf4bf036afb45",
+      "sourceRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
+      "durationSeconds": 30.27525,
       "binaryBytes": 51123010,
       "binarySha256": "a6d6ee2222cd3cd19d799f5027cd1ed656c4c4a0efc4fc4c3ff4e83b95809f64",
       "credentialFree": true,
@@ -142,18 +148,18 @@
       "priorFailureReproduced": false,
       "repair": "none; no C111-owned cause demonstrated"
     },
-    "qualityScope": "The quality sweep below ran at the pre-merge C111 source checkpoint; final-head focused controls were rerun after the no-reset current-main merge.",
+    "qualityScope": "The quality sweep below ran across the C111 source and released registry checkpoint; final-head focused controls and both owned verifiers were rerun after the no-reset current-main merge.",
     "quality": [
       "make fmt passed",
-      "make wire-check passed: 12 Wire packages regenerated without drift",
-      "make architecture-size-check passed: 198 packages, 1928 files, 28650 functions",
-      "make coverage-registration passed: 188 workspace packages across 6 modules",
+      "make wire-check passed: 12 Wire packages regenerated without drift; released C111 registry entry exact",
+      "make architecture-size-check passed: 199 packages, 1929 files, 28675 functions",
+      "make coverage-registration pre-merge checkpoint passed 188 packages; current-main rerun reports unchanged C127 package go-agent-runtime/services/session/internal/live/causal",
       "make vet passed",
       "make lint passed: pinned golangci-lint 2.9.0, 0 issues across 15 modules",
       "make staticcheck passed: pinned staticcheck 2026.1 across 15 modules",
       "git diff --check passed"
     ],
-    "scriptCI": "run 34764898583 rejected pre-merge candidate head c1b5f1c on an unchanged peer hermetic test; final candidate head 342ddb4 integrates current origin/main and is ready for same-task resubmission with no CI-green claim"
+    "scriptCI": "run 34766920601 rejected pre-registry candidate head 6525d6c on the unchanged agentsession coverage floor; final implementation head d9e1458 integrates the released Wire registry entry and is ready for same-task resubmission with no CI-green claim"
   },
   "accumulatedRegressions": {
     "result": "passed",
@@ -169,9 +175,9 @@
   },
   "replay": {
     "result": "accepted",
-    "artifact": "artifacts/run-1789314385-50837.json",
-    "sha256": "d8b872279d1a746eebc19cf0c2ef97ebc6445334b14aa86171b2f835a2e5c61f",
-    "sourceRevision": "342ddb41819596b6744bf443e5b964cc936be7f2",
+    "artifact": "artifacts/run-1789316605-29143.json",
+    "sha256": "c142c45ab46facdc3f5c07b35c10cd33303ff4e8c0f43636cbfcf4bf036afb45",
+    "sourceRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
     "binary": {
       "bytes": 51123010,
       "sha256": "a6d6ee2222cd3cd19d799f5027cd1ed656c4c4a0efc4fc4c3ff4e83b95809f64"
@@ -202,8 +208,8 @@
     "owner": "C79 / work-task-114",
     "status": "released by reviewed guarded merge; current origin/main integrated",
     "wireRegistry": {
-      "path": "scripts/check-wire.py (auto-discovery)",
-      "gateResult": "make wire-check passed: 12 Wire packages discovered, including sessioncontinuation",
+      "path": "scripts/wire-packages.txt",
+      "gateResult": "make wire-check passed: 12 Wire packages regenerated without drift; sessioncontinuation is registered exactly once",
       "c111Registration": "docs/architecture/architecture-policy.json generated_files entry"
     },
     "architectureBaseline": {
@@ -224,7 +230,7 @@
   },
   "latestMainIntegration": {
     "originMain": "915ed982d23f2e549e529ff43c4f370b4b51e394",
-    "candidateRevision": "342ddb41819596b6744bf443e5b964cc936be7f2",
+    "candidateRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
     "mergeCommit": "342ddb41819596b6744bf443e5b964cc936be7f2",
     "requiredAncestry": {
       "factoryStartup": "8bdafc7f947a3a2c9856220abdc539437035bd21",
@@ -241,9 +247,9 @@
     "currentHead": "bf05d90c64b556f68834d7dfa3150ad8ba1c1931",
     "currentResult": "rejected: agent-cli/internal/services/agentsession 61.80% versus 80.00%; C111 diff under that package is empty",
     "floorChanged": false,
-    "latestObservedRun": "34764898583",
-    "latestObservedHead": "c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db",
-    "latestObservedResult": "hermetic peer audio-output assertion failed; coverage remained pending at inspection"
+    "latestObservedRun": "34766920601",
+    "latestObservedHead": "6525d6c2518dcba1a9456d7587311370091432f9",
+    "latestObservedResult": "rejected: CI (coverage) agentsession 61.80% versus unchanged 80.00% floor; no C111-owned path changed"
   },
   "causalCharacterization": {
     "historical": false,
@@ -258,44 +264,45 @@
     "evidence": "bounded-causal-characterization-b5f6e422.md"
   },
   "latestCIRejection": {
-    "run": 34764898583,
-    "head": "c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db",
+    "run": 34766920601,
+    "head": "6525d6c2518dcba1a9456d7587311370091432f9",
     "conclusion": "failure",
-    "rawJson": "ci-rejection-34764898583.json",
+    "rawJson": "ci-rejection-34766920601.json",
     "failedChecks": [
-      {"name": "CI (hermetic)", "job": 103744017535, "step": "Run hermetic test pipeline"}
+      {"name": "CI (coverage)", "job": 103749418631, "step": "Run coverage profiles and coverage gate"}
     ],
-    "hermeticFailureTest": "TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas",
-    "hermeticFailureSource": "agent-cli/internal/services/internal/agentruntime/session_audio_out_test.go:146",
+    "coveragePackage": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession",
+    "coverageFailure": "expected minimum 80.00%, actual 61.80%, delta -18.20%",
     "failureExcerpt": [
-      "split-delta raw output = 14 bytes, want exact 974-byte PCM16 stream",
-      "agent-cli test command exited with status 1: command=go test ./... -tags=nomicrophone -timeout 480s",
-      "make: *** [Makefile:456: test-hermetic] Error 1"
+      "coverage gate found coverage floor violations:",
+      "- github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession: expected minimum 80.00%, actual 61.80%, delta -18.20%",
+      "exit status 1",
+      "make: *** [Makefile:303: coverage] Error 1"
     ],
-    "ownership": "The PR-base diff changes only C111 session_tool_lifecycle.go; audio-output implementation and test are unchanged, so this hermetic failure is outside C111 and no source repair is demonstrated.",
-    "priorRejection": "ci-rejection-34763400175.json records the prior C127 high-rate/agentsession coverage rejection; ci-rejection-34759945739.json records the repaired image-continuation failure.",
+    "ownership": "The C111 diff against origin/main does not change agent-cli/internal/services/agentsession or the coverage floor, so this completed coverage rejection is outside C111 and no source repair is demonstrated.",
+    "priorRejection": "ci-rejection-34764898583.json records the prior unchanged peer hermetic audio-output assertion; earlier C127 high-rate/agentsession and repaired image-continuation findings remain retained in their exact records.",
     "claimedGreen": false
   },
   "currentHeadCI": {
-    "run": "34764898583",
-    "head": "c1b5f1cdfa24fd40f9d5c935f8ed59744bd599db",
+    "run": "34766920601",
+    "head": "6525d6c2518dcba1a9456d7587311370091432f9",
     "passed": [
-      "unit",
-      "race",
-      "integration",
+      "CI (hermetic)",
+      "CI (integration)",
+      "CI (race)",
       "WebMCP Chrome",
       "macOS audio release",
-      "Windows audio portable"
+      "Windows audio portable",
+      "unit",
+      "static"
     ],
     "failed": [
-      "hermetic: TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas (14 bytes vs 974 expected)",
-      "coverage: pending at inspection"
+      "coverage: agent-cli/internal/services/agentsession 61.80% versus 80.00% floor"
     ],
-    "static": "passed",
-    "postRejectionLocalRepair": "C111 contract, four named regressions, external consumer, verifier, source-pinned replay, exact stress trial_10, and unchanged audio-output normal/race characterization pass at final head 342ddb4 after the no-reset current-main merge; no C111 source repair is demonstrated",
-    "pendingAtInspection": ["coverage"],
-    "statusAtInspection": "in_progress",
-    "observedCompletedRun": false,
+    "postRejectionLocalRepair": "C111 contract, Wire, four named regressions, external consumer, both owned verifiers, source-pinned replay, exact stress trial_10, and unchanged audio-output normal/race characterization pass at the final integrated-main source; the coverage failure is not C111-owned",
+    "resubmissionHead": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
+    "statusAtInspection": "completed_failure",
+    "observedCompletedRun": true,
     "claimedGreen": false
   },
   "reviewFindings": {
@@ -319,7 +326,7 @@
     "status": "all known review findings have a repair commit and final-head causal validation; no self-review performed"
   },
   "latestLocalRerun": {
-    "sourceRevision": "342ddb41819596b6744bf443e5b964cc936be7f2",
+    "sourceRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
     "causal": {
       "command": "GOWORK=off YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 120s -- go test ./test/integration -run '^TestAgentBinaryTest46HighRateToolAudioRegression/trial_10$' -count=1 -timeout 120s -v",
       "result": "passed",
@@ -338,19 +345,21 @@
     "sourceRepair": "No new C111 source repair after e618a6a3 plus 4921c375; current rejection is outside the changed C111 paths",
     "publicReplay": {
       "result": "accepted",
-      "artifact": "artifacts/run-1789314385-50837.json",
-      "sha256": "d8b872279d1a746eebc19cf0c2ef97ebc6445334b14aa86171b2f835a2e5c61f",
+      "artifact": "artifacts/run-1789316605-29143.json",
+      "sha256": "c142c45ab46facdc3f5c07b35c10cd33303ff4e8c0f43636cbfcf4bf036afb45",
       "binaryBytes": 51123010,
       "binarySha256": "a6d6ee2222cd3cd19d799f5027cd1ed656c4c4a0efc4fc4c3ff4e83b95809f64",
+      "sourceRevision": "d9e1458ecc4f129d041439ac6515e59b0851c8d6",
+      "durationSeconds": 30.27525,
       "credentialFree": true,
       "realtimeSessions": 0,
       "processGroupsReaped": true,
       "outputCapExceeded": false
     },
-    "scriptCI": "latest rejection run 34764898583 was inspected at pre-merge head c1b5f1c; final head 342ddb4 integrates current origin/main and this changed evidence checkpoint is ready for script CI submission with no CI-green claim"
+    "scriptCI": "latest rejection run 34766920601 was inspected at pre-registry head 6525d6c; final implementation head d9e1458 integrates current origin/main plus the released registry entry and this changed evidence checkpoint is ready for script CI submission with no CI-green claim"
   },
   "handoff": {
-    "ci": "run 34764898583 was inspected at pre-merge head c1b5f1c: CI (hermetic) failed unchanged audio-output split-delta test TestRunSessionWithAudioOut_PreservesNonFrameAlignedSplitDeltas at session_audio_out_test.go:146 (14 bytes vs 974 expected), while integration, race, static, unit, WebMCP, macOS, and Windows completed successfully and coverage was still pending; after the no-reset merge to final head 342ddb4, C111-specific gates remain green and no C111 repair is demonstrated",
+    "ci": "run 34766920601 was inspected at pre-registry head 6525d6c: CI (coverage) failed unchanged agent-cli/internal/services/agentsession at 61.80% versus its 80.00% floor, while hermetic, integration, race, static, unit, WebMCP, macOS, and Windows completed successfully; the exact log and ownership analysis are in ci-rejection-34766920601.json, and no C111 repair is demonstrated",
     "review": "prior independent findings and the exact image-continuation rejection are repaired at e618a6a33/4921c3751f0; no self-review performed",
     "nextAction": "Commit and push this exact-head evidence checkpoint, update PR #496, and return ACCEPTED to the script-owned CI gate without polling; on any C111-specific rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge."
   }

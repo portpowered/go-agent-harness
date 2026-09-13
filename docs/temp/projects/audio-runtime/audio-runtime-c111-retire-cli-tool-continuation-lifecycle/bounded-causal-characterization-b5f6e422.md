@@ -119,3 +119,33 @@ only the C111-owned lifecycle adapter and its owned contract/evidence paths;
 the earlier hermetic rejection remains recorded at pre-merge head `c1b5f1cdf`
 and does not establish a C111-owned cause. These are executor checks only;
 Script CI is the next external gate and is not claimed green.
+
+## Latest complete current-head Script CI rejection
+
+Script CI run `34766920601` rejected pre-registry candidate head
+`6525d6c2518dcba1a9456d7587311370091432f9` only on completed coverage job
+`103749418631` (`CI (coverage)`). Its exact failed log is retained in
+`ci-rejection-34766920601.json`:
+
+```text
+coverage gate found coverage floor violations:
+- github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession: expected minimum 80.00%, actual 61.80%, delta -18.20%
+exit status 1
+make: *** [Makefile:303: coverage] Error 1
+```
+
+Hermetic, integration, race, WebMCP Chrome, macOS audio release, Windows
+audio portable, unit, and static jobs completed successfully. The C111 diff
+against freshly integrated `origin/main` does not change
+`agent-cli/internal/services/agentsession` or the coverage floor, so this is
+not a C111 causal signal and no peer repair or waiver is justified. The
+current-main local `make coverage-registration` characterization likewise
+reports only unchanged C127 package
+`go-agent-runtime/services/session/internal/live/causal`; the pre-merge C111
+registration checkpoint passed 188 packages across 6 modules.
+
+After the released exact Wire registry entry was added, implementation head
+`d9e1458ecc4f129d041439ac6515e59b0851c8d6` passed both owned verifier modes,
+the four accumulated regressions, the GOWORK=off external consumer, and the
+credential-free three-case replay. Script CI remains the next external gate;
+these executor results do not claim CI green.
