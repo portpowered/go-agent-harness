@@ -435,13 +435,20 @@ def cleanup_tree(
     }
 
 
+def write_result(path: Path | None, result: dict[str, Any]) -> None:
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=("browser-audio-tool", "malformed-or-canceled"), required=True)
     parser.add_argument("--tree", type=Path, help="caller-provided exact main -> C61 -> C83 tree; arbitrary trees are rejected")
     parser.add_argument("--child-timeout", type=int, default=90)
     parser.add_argument("--aggregate-timeout", type=int, default=300)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path, help="optional JSON report path; stdout remains the status channel when omitted")
     args = parser.parse_args()
     require(args.child_timeout > 0 and args.aggregate_timeout > 0, "timeouts must be positive")
     temporary_root: Path | None = None
@@ -571,13 +578,11 @@ def main() -> int:
             "error": str(exc),
             "checks": checks,
         }
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        write_result(args.output, result)
         print(json.dumps({"case": args.case, "status": "failed", "error": str(exc)}, sort_keys=True))
         return 2
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"case": args.case, "status": result["status"], "output": str(args.output)}, sort_keys=True))
+    write_result(args.output, result)
+    print(json.dumps({"case": args.case, "status": result["status"], "output": str(args.output) if args.output else None}, sort_keys=True))
     return 0 if result["status"] == "passed" else 1
 
 

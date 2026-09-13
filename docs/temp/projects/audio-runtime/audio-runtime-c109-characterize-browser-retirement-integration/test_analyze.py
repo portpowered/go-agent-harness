@@ -11,6 +11,7 @@ import unittest
 
 
 ANALYZER_PATH = Path(__file__).with_name("analyze.py")
+PUBLIC_RUNNER_PATH = Path(__file__).with_name("run_public_checks.py")
 SPEC = importlib.util.spec_from_file_location("c109_analyze", ANALYZER_PATH)
 assert SPEC is not None and SPEC.loader is not None
 ANALYZER = importlib.util.module_from_spec(SPEC)
@@ -139,6 +140,34 @@ func Use() {
                 ANALYZER.ACCEPTED_MAIN = original_main
                 ANALYZER.source_model.cache_clear()
                 ANALYZER.ref_go_paths.cache_clear()
+
+
+class PublicRunnerArgumentTests(unittest.TestCase):
+    def test_declared_public_command_accepts_omitted_output_path(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="c109-public-runner-test-") as temporary:
+            missing_tree = Path(temporary) / "missing-tree"
+            completed = subprocess.run(
+                [
+                    "python3",
+                    str(PUBLIC_RUNNER_PATH),
+                    "--case",
+                    "malformed-or-canceled",
+                    "--tree",
+                    str(missing_tree),
+                    "--child-timeout",
+                    "1",
+                    "--aggregate-timeout",
+                    "1",
+                ],
+                cwd=PUBLIC_RUNNER_PATH.parents[5],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn("provided synthetic tree does not exist", completed.stdout)
+            self.assertNotIn("the following arguments are required: --output", completed.stdout)
 
 
 if __name__ == "__main__":
