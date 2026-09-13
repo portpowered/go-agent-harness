@@ -15,7 +15,7 @@
       "500",
       "--all"
     ],
-    "payload_sha256": "52703427e01f4a1bd7456d8be743b64842c42429285151f05a786ddcdfa85fb6",
+    "payload_sha256": "9fc8987b74439004f8d24b34b545acdd76f42c5b95b9457168056b68302f7135",
     "rows": [
       {
         "baseRevision": null,
@@ -656,6 +656,7 @@
           "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go.json",
           "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json",
           "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720884934.json",
+          "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34738737840.json",
           "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
           "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
           "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
@@ -681,103 +682,103 @@
           "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
           "scripts/wire-packages.txt"
         ],
-        "sha256": "81d4efce80364997a8122b4dcbbb0870e1da8f79fa933901e1d0ba69ae7e9905"
+        "sha256": "5989f02dbd89e7dcfbb2d2c2ee1ae5ca3ef84f01fbdc9bc0e3fbc7c5e2c76d6d"
       },
       "metadata": {
         "baseRefName": "main",
         "headRefName": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
-        "headRefOid": "323a60cf8dab76e8bd36ec0534e6330a55caeb95",
+        "headRefOid": "6390bc9dd0ab7c669507533d77cb4667bf302e3b",
         "number": 470,
         "state": "OPEN",
         "statusCheckRollup": [
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T04:54:18Z",
-            "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34738737840/job/103674685538",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412741",
             "name": "CI (static)",
-            "startedAt": "2026-09-13T04:50:48Z",
-            "status": "COMPLETED",
+            "startedAt": "2026-09-13T05:23:05Z",
+            "status": "QUEUED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T04:51:59Z",
-            "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34738737840/job/103674685520",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412695",
             "name": "CI (unit)",
-            "startedAt": "2026-09-13T04:50:00Z",
-            "status": "COMPLETED",
+            "startedAt": "2026-09-13T05:23:04Z",
+            "status": "QUEUED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T05:00:43Z",
-            "conclusion": "FAILURE",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34738737840/job/103674685450",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412744",
             "name": "CI (integration)",
-            "startedAt": "2026-09-13T04:49:34Z",
-            "status": "COMPLETED",
+            "startedAt": "2026-09-13T05:23:05Z",
+            "status": "QUEUED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T05:04:57Z",
-            "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34738737840/job/103674685579",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412732",
             "name": "CI (coverage)",
-            "startedAt": "2026-09-13T04:54:34Z",
-            "status": "COMPLETED",
+            "startedAt": "2026-09-13T05:23:05Z",
+            "status": "QUEUED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T04:54:57Z",
-            "conclusion": "FAILURE",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34738737840/job/103674685519",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412601",
             "name": "CI (race)",
-            "startedAt": "2026-09-13T04:53:39Z",
-            "status": "COMPLETED",
+            "startedAt": "2026-09-13T05:23:04Z",
+            "status": "QUEUED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T04:56:37Z",
-            "conclusion": "FAILURE",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34738737840/job/103674685537",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412726",
             "name": "CI (hermetic)",
-            "startedAt": "2026-09-13T04:49:53Z",
-            "status": "COMPLETED",
+            "startedAt": "2026-09-13T05:23:05Z",
+            "status": "QUEUED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T04:55:09Z",
-            "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34738737840/job/103674685555",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412721",
             "name": "CI (WebMCP Chrome)",
-            "startedAt": "2026-09-13T04:54:23Z",
-            "status": "COMPLETED",
+            "startedAt": "2026-09-13T05:23:04Z",
+            "status": "QUEUED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T04:54:32Z",
-            "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34738737840/job/103674685569",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412715",
             "name": "CI (macOS audio release)",
-            "startedAt": "2026-09-13T04:51:14Z",
-            "status": "COMPLETED",
+            "startedAt": "2026-09-13T05:23:04Z",
+            "status": "QUEUED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-09-13T04:54:44Z",
-            "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34738737840/job/103674685541",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34740162933/job/103678412755",
             "name": "CI (Windows audio portable)",
-            "startedAt": "2026-09-13T04:53:40Z",
-            "status": "COMPLETED",
+            "startedAt": "2026-09-13T05:23:05Z",
+            "status": "QUEUED",
             "workflowName": "CI"
           }
         ],
@@ -787,7 +788,7 @@
     },
     "work": "audio-runtime-c79-retire-cli-response-lifecycle"
   },
-  "current_head": "9c0f19c9323cee11e71bcc6a57483fab14f52ad6",
+  "current_head": "f573593fe5a97414ba92289bd630ae5740130527",
   "host_source_and_test_paths": {
     "c108_artifacts_at_planning_main": [
       {
@@ -819,8 +820,8 @@
       {
         "exit_code": 0,
         "needle": "TraceAudio",
-        "stdout": "agent-cli/internal/transport/cli/session_observability.go:145:\t\trequest.TraceAudio,\nagent-cli/internal/transport/cli/session_command_support.go:63:\tTraceAudio           bool\nagent-cli/internal/transport/cli/session_command_support.go:141:\t\tTraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed(\"prompt\")},\nagent-cli/internal/transport/cli/session.go:486:\t\t\t\tTraceAudio: traceAudio, Transport: transport, Signaling: signaling,\nagent-cli/internal/transport/cli/internal/livehost/run.go:172:\t\tif err != nil || !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/run.go:210:\tif !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:71:\t\t\tassertTraceAudioFrame(t, frame, wantSamples)\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:85:func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:215:\t\t\trequest := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, \"bundle\")}\n",
-        "stdout_sha256": "34d3677a2b9e725db8d17a50dee9288dc201d53b8e0b687fd98a46c1a410a1d6"
+        "stdout": "agent-cli/internal/transport/cli/session_observability.go:145:\t\trequest.TraceAudio,\nagent-cli/internal/transport/cli/session_command_support.go:63:\tTraceAudio           bool\nagent-cli/internal/transport/cli/session_command_support.go:141:\t\tTraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed(\"prompt\")},\nagent-cli/internal/transport/cli/internal/livehost/run.go:172:\t\tif err != nil || !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/run.go:210:\tif !request.TraceAudio {\nagent-cli/internal/transport/cli/session.go:486:\t\t\t\tTraceAudio: traceAudio, Transport: transport, Signaling: signaling,\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:71:\t\t\tassertTraceAudioFrame(t, frame, wantSamples)\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:85:func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:215:\t\t\trequest := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, \"bundle\")}\n",
+        "stdout_sha256": "70d0d8e346318589aefe655b1b9757c7aa3803948d7d052fd2d015baa359bc1a"
       },
       {
         "exit_code": 1,
@@ -909,6 +910,7 @@
       "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720884934.json",
+      "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34738737840.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
