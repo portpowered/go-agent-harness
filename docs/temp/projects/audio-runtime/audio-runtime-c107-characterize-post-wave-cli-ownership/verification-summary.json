@@ -1,11 +1,11 @@
 {
   "all_project_criteria": "OPEN",
-  "candidate_revision": "bb494b4775038a21df3e9d76de682c0d1fb30939",
+  "candidate_revision": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
   "ci": "submitted by script gate after this handoff; not polled by executor",
-  "observed_at": "2026-09-13T00:56:53Z",
+  "observed_at": "2026-09-13T01:56:12Z",
   "reports": {
     "accumulated_regressions": {
-      "candidate_revision_at_run": "bb494b4775038a21df3e9d76de682c0d1fb30939",
+      "candidate_revision_at_run": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
       "ci_polling": "not performed",
       "command": "COUNT=1 scripts/test-session-ci-regressions.sh all",
       "count": 1,
@@ -18,21 +18,21 @@
           "all"
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
-        "deadline_seconds": 297,
-        "elapsed_seconds": 161.126325,
+        "deadline_seconds": 311,
+        "elapsed_seconds": 166.538792,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
           "GOWORK": "",
           "HOME": "/Users/abdifamily",
-          "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0LRUS3y:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+          "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0xfeo8W:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
           "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
         },
         "exit_code": 0,
         "label": "session-ci-regressions-count-1-all",
         "output_limited": false,
         "process_group_gone": true,
-        "process_group_id": 30912,
+        "process_group_id": 27566,
         "schema_version": "c107-command-run-v1",
         "stderr_bytes": 0,
         "stderr_path": "runs/accumulated-regressions/session-ci-regressions-count-1-all.stderr",
@@ -59,7 +59,7 @@
         "*.pyc"
       ],
       "path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/SHA256SUMS",
-      "sha256": "730701f2c8cc51c34f78609bce775ff5a00cf2a0091b23f77f3ec015f1a122ec"
+      "sha256": "dd289f154d07ebead6949b88921afad3d882a9d78301199d9083a256bd0625ac"
     },
     "focused_regressions": {
       "ci_polling": "not performed",
@@ -79,13 +79,13 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/agent-cli",
           "deadline_seconds": 150,
-          "elapsed_seconds": 2.755575,
+          "elapsed_seconds": 3.562997,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
             "GOWORK": "",
             "HOME": "/Users/abdifamily",
-            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0LRUS3y:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0xfeo8W:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
             "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
           },
           "exit_code": 0,
@@ -97,7 +97,7 @@
           "label": "agentruntime-normal",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 30826,
+          "process_group_id": 27405,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/focused-regressions/agentruntime-normal.stderr",
@@ -122,13 +122,13 @@
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/agent-cli",
           "deadline_seconds": 150,
-          "elapsed_seconds": 3.742798,
+          "elapsed_seconds": 5.219611,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
             "GOWORK": "",
             "HOME": "/Users/abdifamily",
-            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0LRUS3y:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0xfeo8W:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
             "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
           },
           "exit_code": 0,
@@ -140,7 +140,7 @@
           "label": "agentruntime-race",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 30868,
+          "process_group_id": 27497,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/focused-regressions/agentruntime-race.stderr",
@@ -167,13 +167,13 @@
         },
         "inventory.json": {
           "byte_identical_after_run_timestamp_normalization": true,
-          "first_sha256": "bcc0b1287581612575d4560c6b1f336a5eaff4efd71fcec4b04b75078e3247c9",
-          "second_sha256": "bcc0b1287581612575d4560c6b1f336a5eaff4efd71fcec4b04b75078e3247c9"
+          "first_sha256": "1d17083089e9d09c5e576a9a6c341467e13203d74f456ea99f2773cfd7923c24",
+          "second_sha256": "1d17083089e9d09c5e576a9a6c341467e13203d74f456ea99f2773cfd7923c24"
         },
         "inventory.md": {
           "byte_identical_after_run_timestamp_normalization": true,
-          "first_sha256": "26293a5320ee3ceb17ab58af4171e46d760c2dc3e12fe9e8151c1ea6992427aa",
-          "second_sha256": "26293a5320ee3ceb17ab58af4171e46d760c2dc3e12fe9e8151c1ea6992427aa"
+          "first_sha256": "b5cc7c9cfe1ef9c852eeda927986b85e9786fdb6622c732b39587522629db595",
+          "second_sha256": "b5cc7c9cfe1ef9c852eeda927986b85e9786fdb6622c732b39587522629db595"
         }
       },
       "normalization": "remove only run_timestamp keys; wall durations remain in analysis-run.json",
@@ -188,26 +188,26 @@
             "--source",
             "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "--output-dir",
-            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-1-84e8rq2m",
+            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-1-pzhy18bm",
             "--subtraction",
             "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json"
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
           "deadline_seconds": 240,
-          "elapsed_seconds": 9.806731,
+          "elapsed_seconds": 9.85851,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
             "GOWORK": "",
             "HOME": "/Users/abdifamily",
-            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0LRUS3y:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0xfeo8W:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
             "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
           },
           "exit_code": 0,
           "label": "analyzer",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 20486,
+          "process_group_id": 15752,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/inventory/analyzer.stderr",
@@ -226,26 +226,26 @@
             "--source",
             "d4766c3dbbf2c198142047ead4449d58dd47d485",
             "--output-dir",
-            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-2-_33jdwo3",
+            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-run-2-qqsop9e9",
             "--subtraction",
             "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json"
           ],
           "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership",
           "deadline_seconds": 240,
-          "elapsed_seconds": 14.406197,
+          "elapsed_seconds": 9.677812,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
             "GOWORK": "",
             "HOME": "/Users/abdifamily",
-            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0LRUS3y:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0xfeo8W:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
             "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
           },
           "exit_code": 0,
           "label": "analyzer",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 20639,
+          "process_group_id": 15783,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/inventory/analyzer.stderr",
@@ -262,7 +262,7 @@
       "active_task_head_mutation": {
         "diagnostic": "{\"error\": \"subtraction active-task identity mismatch: audio-runtime-c107-characterize-post-wave-cli-ownership fields=['head']\", \"mode\": \"validate-copy\", \"status\": \"failed\"}",
         "exit_code": 1,
-        "mutated_from": "bb494b4775038a21df3e9d76de682c0d1fb30939",
+        "mutated_from": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
         "mutated_to": "0000000000000000000000000000000000000000",
         "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership"
       },
@@ -279,9 +279,9 @@
         "self_reported_retirement_list_adjusted": true
       },
       "pristine_validation": {
-        "active_tasks": 7,
+        "active_tasks": 10,
         "owned_source_paths": 84,
-        "preserved_checkpoints": 51,
+        "preserved_checkpoints": 54,
         "retirement_pr_numbers": [
           365,
           415,
@@ -333,7 +333,10 @@
           495,
           496,
           497,
-          498
+          498,
+          499,
+          500,
+          501
         ],
         "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
         "unsubtracted_source_paths": 23
@@ -369,25 +372,25 @@
       "ancestry": {
         "accepted_source": {
           "ancestor": "d4766c3dbbf2c198142047ead4449d58dd47d485",
-          "descendant": "bb494b4775038a21df3e9d76de682c0d1fb30939",
+          "descendant": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
           "exit_code": 0,
           "passed": true
         },
         "baseline": {
           "ancestor": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
-          "descendant": "bb494b4775038a21df3e9d76de682c0d1fb30939",
+          "descendant": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
           "exit_code": 0,
           "passed": true
         },
         "current_origin_main": {
           "ancestor": "3963bc3566da24f8214634c17a9d0f79a6724171",
-          "descendant": "bb494b4775038a21df3e9d76de682c0d1fb30939",
+          "descendant": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
           "exit_code": 0,
           "passed": true
         },
         "startup_integration": {
           "ancestor": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-          "descendant": "bb494b4775038a21df3e9d76de682c0d1fb30939",
+          "descendant": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
           "exit_code": 0,
           "passed": true
         }
@@ -401,7 +404,16 @@
       },
       "baseline_revision": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
       "branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "candidate_revision": "bb494b4775038a21df3e9d76de682c0d1fb30939",
+      "candidate_pr": {
+        "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+        "base_branch": "main",
+        "head": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
+        "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
+        "number": 494,
+        "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+        "task_work_id": "work-task-218"
+      },
+      "candidate_revision": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
       "contract_revision": "audio-runtime-v1",
       "credentials": "not used; command environment for public replay removes credential variables",
       "current_origin_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
@@ -418,7 +430,7 @@
         "stderr_sha256": "5734d4f16efc02917bc8fcad6a99bca535438180ce08197ee6e22031f788af7b",
         "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       },
-      "observed_at": "2026-09-13T00:49:41Z",
+      "observed_at": "2026-09-13T01:49:06Z",
       "prd_identity": {
         "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
         "project": "audio-runtime"
@@ -451,7 +463,7 @@
           "tests"
         ]
       },
-      "candidate_revision_at_run": "bb494b4775038a21df3e9d76de682c0d1fb30939",
+      "candidate_revision_at_run": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
       "credential_free": true,
       "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
       "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
@@ -459,26 +471,26 @@
         "session": {
           "aggregate_deadline_seconds": 600,
           "argv": [
-            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-i8biqq00/yui",
+            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-d3k9to0x/yui",
             "session",
             "--help"
           ],
-          "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-i8biqq00/archive",
+          "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-d3k9to0x/archive",
           "deadline_seconds": 60,
-          "elapsed_seconds": 0.034811,
+          "elapsed_seconds": 0.039675,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
             "GOWORK": "",
             "HOME": "/Users/abdifamily",
-            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0LRUS3y:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0xfeo8W:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
             "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
           },
           "exit_code": 0,
           "label": "yui-session-help",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 30791,
+          "process_group_id": 27374,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/public/yui-session-help.stderr",
@@ -490,25 +502,25 @@
         "top": {
           "aggregate_deadline_seconds": 600,
           "argv": [
-            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-i8biqq00/yui",
+            "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-d3k9to0x/yui",
             "--help"
           ],
-          "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-i8biqq00/archive",
+          "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-d3k9to0x/archive",
           "deadline_seconds": 60,
-          "elapsed_seconds": 0.53666,
+          "elapsed_seconds": 0.532926,
           "environment": {
             "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
             "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
             "GOWORK": "",
             "HOME": "/Users/abdifamily",
-            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0LRUS3y:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+            "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0xfeo8W:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
             "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
           },
           "exit_code": 0,
           "label": "yui-help",
           "output_limited": false,
           "process_group_gone": true,
-          "process_group_id": 30782,
+          "process_group_id": 27367,
           "schema_version": "c107-command-run-v1",
           "stderr_bytes": 0,
           "stderr_path": "runs/public/yui-help.stderr",
@@ -518,8 +530,8 @@
           "timed_out": false
         }
       },
-      "observed_at": "2026-09-13T00:54:04Z",
-      "owned_output_bytes": 149648,
+      "observed_at": "2026-09-13T01:53:15Z",
+      "owned_output_bytes": 149637,
       "raw_pcm": {
         "bytes": 4800,
         "path": "runs/public/replay/tool-record/audio/out-000.pcm",
@@ -529,10 +541,10 @@
       "replay": {
         "aggregate_deadline_seconds": 600,
         "argv": [
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-i8biqq00/yui",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-d3k9to0x/yui",
           "session",
           "--replay",
-          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-i8biqq00/archive/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
+          "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c107-yui-d3k9to0x/archive/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
           "--audio-out",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/runs/public/replay/audio.wav",
           "--record-dir",
@@ -545,20 +557,20 @@
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership/docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/runs/public/replay",
         "deadline_seconds": 240,
-        "elapsed_seconds": 0.078816,
+        "elapsed_seconds": 0.08181,
         "environment": {
           "FACTORY_ROOT": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness",
           "FACTORY_SERVER_URL": "http://127.0.0.1:7439",
           "GOWORK": "",
           "HOME": "/Users/abdifamily",
-          "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0LRUS3y:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+          "PATH": "/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/Users/abdifamily/go/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/usr/local/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0xfeo8W:/Users/abdifamily/work/harness/go-agent-harness/.git/factory-bin:/Users/abdifamily/.bun/bin:/Users/abdifamily/.local/bin:/Users/abdifamily/.nvm/versions/node/v22.18.0/bin:/Users/abdifamily/go/bin:/Users/abdifamily/.codex/tmp/arg0/codex-arg0nLzAd6:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/abdifamily/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
           "TMPDIR": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/"
         },
         "exit_code": 0,
         "label": "yui-local-replay",
         "output_limited": false,
         "process_group_gone": true,
-        "process_group_id": 30792,
+        "process_group_id": 27375,
         "schema_version": "c107-command-run-v1",
         "stderr_bytes": 0,
         "stderr_path": "runs/public/yui-local-replay.stderr",
@@ -652,9 +664,9 @@
       "shared_paths_unchanged": true
     },
     "subtraction": {
-      "active_tasks": 7,
+      "active_tasks": 10,
       "owned_source_paths": 84,
-      "preserved_checkpoints": 51,
+      "preserved_checkpoints": 54,
       "retirement_pr_numbers": [
         365,
         415,
@@ -706,7 +718,10 @@
         495,
         496,
         497,
-        498
+        498,
+        499,
+        500,
+        501
       ],
       "source_revision": "d4766c3dbbf2c198142047ead4449d58dd47d485",
       "unsubtracted_source_paths": 23

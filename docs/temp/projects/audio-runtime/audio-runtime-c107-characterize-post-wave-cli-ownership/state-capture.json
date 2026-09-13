@@ -1,15 +1,24 @@
 {
-  "active_task_count": 7,
+  "active_task_count": 10,
   "board_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/canonical-board.json",
-  "board_sha256": "8f6e6939887e746d5eefabc05e2afd47ac74f7086a9af4ab491653b9d0fcdfa7",
+  "board_sha256": "38ff907a843f6119358fa1cb3f67e89cd627a6c8892044edc72ede8dc4f4443a",
   "candidate_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-  "candidate_head": "bb494b4775038a21df3e9d76de682c0d1fb30939",
+  "candidate_head": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
+  "candidate_pr": {
+    "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+    "base_branch": "main",
+    "head": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
+    "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
+    "number": 494,
+    "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+    "task_work_id": "work-task-218"
+  },
   "contract_revision": "audio-runtime-v1",
-  "observed_at": "2026-09-13T00:49:40Z",
-  "open_pr_count": 51,
-  "open_retirement_pr_count": 51,
+  "observed_at": "2026-09-13T01:49:04Z",
+  "open_pr_count": 54,
+  "open_retirement_pr_count": 54,
   "pr_inventory_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/pr-inventory.json",
-  "pr_inventory_sha256": "c12aeab6ac142cbd3824c20015187f7153c64172da79286556f08a9e870ffa0e",
+  "pr_inventory_sha256": "5a5ccac63bf8056d983c7e40226d85e38d101b1843a12b4572d182981e28d6f7",
   "prd_identity": {
     "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "project": "audio-runtime"
@@ -19,5 +28,5 @@
   "server": "http://127.0.0.1:7439",
   "session": "~default",
   "subtraction_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json",
-  "subtraction_sha256": "2dc3e42eb296aca6e579a1c1952485404b84531236d1a2534cc8f922e3cbd1c4"
+  "subtraction_sha256": "594498e9fc205ddae921bc7316f58b9b764f8f90b186023c9f69188878653e7c"
 }

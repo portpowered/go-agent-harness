@@ -111,9 +111,20 @@
       "work_type": "review"
     },
     {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR #494 head 376f71a2b27008eb1bf207cdb872214d848b6eb3 has 9/9 required checks green (run 34729346947). Independent validate-copy and credential-free YUI replay passed. Evidence is stale: verification-summary.json, provenance.json, state-capture.json, public/regression reports, and pr-inventory.json bind to pre-evidence bb494b4775038a21df3e9d76de682c0d1fb30939, not the reviewed PR head; this repeats the prior exact-head finding. Harden the verifier to enforce final PR/HEAD identity, recapture board/PR state, regenerate all evidence and SHA256SUMS at the final submitted head, update PR metadata, push only owned paths, submit the new exact head to SCRIPT CI without polling, and request fresh review. Do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-269",
+      "work_type": "review"
+    },
+    {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"branch\": \"codex/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
       "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "rejection_feedback": "PR #494 head dfc705578e65dcc8a4c92a16574888a6d435487 has 9 green CI checks, and independent analyzer/YUI replay passed. Reject: current origin/main is 3963bc3566da24f8214634c17a9d0f79a6724171 and is not an ancestor; provenance/release artifacts still pin d4766c3 and f2df9cc7. verify.py also fails open: a fabricated symbol service dependency and a mutated active-task head both pass validate-copy. Fix source-derived dependency validation and full active-task identity validation with causal negatives, integrate current origin/main, regenerate/rebind all evidence and SHA256SUMS to the final pushed head, push, and resubmit exact HEAD to SCRIPT CI without polling. Preserve existing deletion-row controls; do not merge.",
+      "rejection_feedback": "PR #494 head 376f71a2b27008eb1bf207cdb872214d848b6eb3 has 9/9 required checks green (run 34729346947). Independent validate-copy and credential-free YUI replay passed. Evidence is stale: verification-summary.json, provenance.json, state-capture.json, public/regression reports, and pr-inventory.json bind to pre-evidence bb494b4775038a21df3e9d76de682c0d1fb30939, not the reviewed PR head; this repeats the prior exact-head finding. Harden the verifier to enforce final PR/HEAD identity, recapture board/PR state, regenerate all evidence and SHA256SUMS at the final submitted head, update PR metadata, push only owned paths, submit the new exact head to SCRIPT CI without polling, and request fresh review. Do not merge.",
       "state": {
         "name": "init",
         "type": "PROCESSING"
@@ -188,11 +199,22 @@
       "work_type": "review"
     },
     {
+      "last_output": "",
+      "name": "audio-runtime-c109-characterize-browser-retirement-integration",
+      "rejection_feedback": "PR #495 head 399b60809e986c6e468716b44c75bd8e636d0a66 has all nine required checks green, but independent review found actionable defects. run_public_checks.py:115-128 accepts `ok ... [no tests to run]` as discovered tests; a live unmatched-test control returned exit 0/status passed with tests_discovered=1. Its caller-owned --tree path also returns passed after a child creates an untracked file; cleanup_claim is false but top-level status remains passed (around lines 429-461). The mandated browser run at --child-timeout 90 --aggregate-timeout 300 failed when accumulated session CI regressions exceeded 90s; only the looser 480/900 run passed, so checked-in public evidence does not satisfy the admitted command. Final public reports were last regenerated before the later runner changes and are not bound/hash-checked to the current runner. Executor: amend only the C109 directory; make test discovery and caller-tree immutability fail closed with regression controls, make the full positive case pass under the admitted 90/300 bounds (or split its bounded children without changing acceptance), regenerate both public reports and verification with current source/artifact/fixture hashes, rerun verify.py --mode all and exact public commands, push the same PR, and submit the changed head to SCRIPT CI without polling. Do not merge; preserve C61/C83/C79 ownership and refs.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-258",
+      "work_type": "review"
+    },
+    {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration\", \"branch\": \"codex/audio-runtime-c109-characterize-browser-retirement-integration\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
       "name": "audio-runtime-c109-characterize-browser-retirement-integration",
-      "rejection_feedback": "PR #495 head e3cde9327bf7f8d562bdbe7ba77aecbee77f6a76 has green required CI, and independent verify/public probes passed, but evidence defects remain: (1) C109-03 explicitly requires ci-attribution.json; it is absent. analyze.py:867-917 emits only hard-coded nested attribution with no exact-head/job evidence or failed-lane signatures. Historical run 34713381619 is head 22cc6769aaf06d1e2c1275b064cc7ec29de3e371 and has static/integration failures; retain all seven passing lanes plus exact failure ownership. (2) Ledger caller_edges are raw textual references without containing caller symbols/declarations; api_relationship uses a hard-coded five-symbol list and added-line search, so c83_requires_c61_api=false is not source-complete. Make the ledger AST/source-derived and require caller identity/spans in verify.py. (3) Checked-in final provenance was generated at e0af439b with dirty scripts and differs from a clean e3cde932 analyzer run; bind final evidence to the committed head and regenerate required/control artifacts. (4) run_public_checks.py scans forbidden markers only after output truncation and ignores auxiliary cleanup failure for --tree. Fix these fail-closed paths. Amend only the C109 directory on the same task/PR, regenerate ledger/attribution/sequence/public reports and negatives, rerun verify and public probes, push the new head, and resubmit exact HEAD to SCRIPT CI; do not modify C61, C83, or C79-owned files.",
+      "rejection_feedback": "PR #495 head 399b60809e986c6e468716b44c75bd8e636d0a66 has all nine required checks green, but independent review found actionable defects. run_public_checks.py:115-128 accepts `ok ... [no tests to run]` as discovered tests; a live unmatched-test control returned exit 0/status passed with tests_discovered=1. Its caller-owned --tree path also returns passed after a child creates an untracked file; cleanup_claim is false but top-level status remains passed (around lines 429-461). The mandated browser run at --child-timeout 90 --aggregate-timeout 300 failed when accumulated session CI regressions exceeded 90s; only the looser 480/900 run passed, so checked-in public evidence does not satisfy the admitted command. Final public reports were last regenerated before the later runner changes and are not bound/hash-checked to the current runner. Executor: amend only the C109 directory; make test discovery and caller-tree immutability fail closed with regression controls, make the full positive case pass under the admitted 90/300 bounds (or split its bounded children without changing acceptance), regenerate both public reports and verification with current source/artifact/fixture hashes, rerun verify.py --mode all and exact public commands, push the same PR, and submit the changed head to SCRIPT CI without polling. Do not merge; preserve C61/C83/C79 ownership and refs.",
       "state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "work_id": "work-task-224",
@@ -236,8 +258,8 @@
       "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
       "rejection_feedback": "CI checks failed for PR #498 at head 8b2983338ea449fd739994e8fbbc958581bd2e7b: required checks failed on current head 8b2983338ea449fd739994e8fbbc958581bd2e7b: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345381). Return this task to the executor with the listed failures.",
       "state": {
-        "name": "failed",
-        "type": "FAILED"
+        "name": "init",
+        "type": "PROCESSING"
       },
       "work_id": "work-task-238",
       "work_type": "task"
@@ -259,9 +281,31 @@
       "rejection_feedback": "",
       "state": {
         "name": "init",
-        "type": "PROCESSING"
+        "type": "INITIAL"
       },
       "work_id": "work-task-262",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c116-centralize-rtc-track-transport\", \"branch\": \"codex/audio-runtime-c116-centralize-rtc-track-transport\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c116-centralize-rtc-track-transport",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-265",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication\", \"branch\": \"codex/audio-runtime-c117-repair-c113-public-trace-publication\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c117-repair-c113-public-trace-publication",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "work_id": "work-task-268",
       "work_type": "task"
     },
     {
@@ -760,11 +804,22 @@
       "work_type": "review"
     },
     {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "Independent normal/race service and adapter tests, GOWORK=off consumer, and rebuilt shipped workflows passed; all nine current-head checks pass on e3212e4d. However, every checked-in C79 evidence ledger and artifact provenance still records e9ce4894, not the reviewed PR head e3212e4d (the PR body is older still). Executor must rebuild yui and rerun response/retirement/mutation and all three shipped replay cases at e3212e4d, refresh ledgers with final_head=candidate=e3212e4d and current origin/main=3963bc3, commit/push the evidence refresh, then submit that new head to script CI for re-review.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-266",
+      "work_type": "review"
+    },
+    {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
       "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-      "rejection_feedback": "PR #470 head b2e3648d608919033649f54230db86efd2b7a121 has green required checks, but C79 evidence is stale: ledgers/artifact record a8e45355fe495f58c3ba1078a80050492ae6f864, and static evidence records 996ce66ea7ca52f7f6c7c5229cdf54c97417a5c7. Independent runtime probes passed, but a reset→ensure→bind-old-response probe reproduced stale ID reclamation in scheduled.go:49-124 (Accepted:true), violating reset ownership. Repair with generation/known-ID protection and regression coverage, rebuild artifacts at the new exact head, rerun response/retirement/mutation and all bounded replay cases, refresh provenance, commit/push, and submit the changed head to script CI without polling. Historical failures remain recorded; no waiver or merge.",
+      "rejection_feedback": "Independent normal/race service and adapter tests, GOWORK=off consumer, and rebuilt shipped workflows passed; all nine current-head checks pass on e3212e4d. However, every checked-in C79 evidence ledger and artifact provenance still records e9ce4894, not the reviewed PR head e3212e4d (the PR body is older still). Executor must rebuild yui and rerun response/retirement/mutation and all three shipped replay cases at e3212e4d, refresh ledgers with final_head=candidate=e3212e4d and current origin/main=3963bc3, commit/push the evidence refresh, then submit that new head to script CI for re-review.",
       "state": {
-        "name": "ci-pending",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "work_id": "work-task-114",
@@ -969,6 +1024,6 @@
       "work_type": "task"
     }
   ],
-  "observed_at": "2026-09-13T00:49:40Z",
+  "observed_at": "2026-09-13T01:49:04Z",
   "schema_version": "c107-previous-review-findings-v1"
 }

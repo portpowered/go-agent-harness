@@ -50,7 +50,10 @@
     495,
     496,
     497,
-    498
+    498,
+    499,
+    500,
+    501
   ],
   "all_open_retirement_pr_numbers": [
     365,
@@ -103,7 +106,10 @@
     495,
     496,
     497,
-    498
+    498,
+    499,
+    500,
+    501
   ],
   "commands": [
     [
@@ -120,7 +126,7 @@
       "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
     ]
   ],
-  "observed_at": "2026-09-13T00:49:40Z",
+  "observed_at": "2026-09-13T01:49:04Z",
   "prs": [
     {
       "accepted_main_changed_production_paths": [],
@@ -2173,7 +2179,7 @@
         "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
         "scripts/wire-packages.txt"
       ],
-      "head": "e3212e4dd55ef57137572da69ed3ec7067c7c1b9",
+      "head": "e78f96443527ea5cae78fcb811f40002a72351b9",
       "head_branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
       "is_retirement_checkpoint": true,
       "number": 470,
@@ -2222,7 +2228,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c79-retire-cli-response-lifecycle",
       "task_state": {
-        "name": "ci-pending",
+        "name": "in-review",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-114",
@@ -4084,7 +4090,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verification-summary.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py"
       ],
-      "head": "bb494b4775038a21df3e9d76de682c0d1fb30939",
+      "head": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
       "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "is_retirement_checkpoint": true,
       "number": 494,
@@ -4200,7 +4206,7 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c109-characterize-browser-retirement-integration",
       "task_state": {
-        "name": "in-review",
+        "name": "init",
         "type": "PROCESSING"
       },
       "task_work_id": "work-task-224",
@@ -4220,6 +4226,7 @@
         "coverage-manifest/go-agent-runtime/services/sessioncontinuation/package.json",
         "coverage-manifest/go-agent-runtime/services/sessioncontinuation/wire/package.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/admission.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/bounded-causal-characterization-b5f6e422.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/candidate-evidence.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/external-consumer/go.mod",
         "docs/temp/projects/audio-runtime/audio-runtime-c111-retire-cli-tool-continuation-lifecycle/external-consumer/go.sum",
@@ -4236,7 +4243,7 @@
         "go-agent-runtime/services/sessioncontinuation/wire/wire_gen.go",
         "go-agent-runtime/services/sessioncontinuation/wire/wire_test.go"
       ],
-      "head": "9712ed8b2a7879d08dd620eb0a64a895b7309e24",
+      "head": "87f2505c93a7a3cd5d9d339c51e13f670a2088f2",
       "head_branch": "codex/audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
       "is_retirement_checkpoint": true,
       "number": 496,
@@ -4289,7 +4296,7 @@
       "accepted_main_changed_production_paths": [
         "agent-cli/internal/services/internal/agentruntime/session_instructions.go"
       ],
-      "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
       "base_branch": "main",
       "draft": false,
       "files": [
@@ -4319,10 +4326,11 @@
         "go-agent-runtime/services/sessioninstructions/contract_test.go",
         "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
         "go-agent-runtime/services/sessioninstructions/internal/service/service_test.go",
+        "go-agent-runtime/services/sessioninstructions/service.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go"
       ],
-      "head": "87d0bb9516c24ac59fca920f69636deb8efaea25",
+      "head": "97e690ba29556ba7537e1954b7b7a56babe8429b",
       "head_branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
       "is_retirement_checkpoint": true,
       "number": 497,
@@ -4446,12 +4454,236 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c112-retire-cli-session-trace-evidence",
       "task_state": {
-        "name": "failed",
-        "type": "FAILED"
+        "name": "init",
+        "type": "PROCESSING"
       },
       "task_work_id": "work-task-238",
       "title": "feat(runtime): retire CLI session trace orchestration",
       "url": "https://github.com/portpowered/go-agent-harness/pull/498"
+    },
+    {
+      "accepted_main_changed_production_paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go"
+      ],
+      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "base_branch": "main",
+      "draft": false,
+      "files": [
+        "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+        "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go",
+        "coverage-manifest/go-agent-runtime/services/audiorate/internal/service/package.json",
+        "coverage-manifest/go-agent-runtime/services/audiorate/package.json",
+        "coverage-manifest/go-agent-runtime/services/audiorate/wire/package.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/README.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer/go.sum",
+        "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer/main.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/run.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/run-cases.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/verify-final-scope-and-provenance.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/verify-positive-and-causal-negative-controls.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/runs/verify-retirement-callers-and-c101-readonly.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/verification-summary.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/verify.py",
+        "go-agent-runtime/services/audiorate/contract.go",
+        "go-agent-runtime/services/audiorate/contract_test.go",
+        "go-agent-runtime/services/audiorate/internal/service/service.go",
+        "go-agent-runtime/services/audiorate/internal/service/service_test.go",
+        "go-agent-runtime/services/audiorate/wire/providers.go",
+        "go-agent-runtime/services/audiorate/wire/wire_gen.go",
+        "go-agent-runtime/services/audiorate/wire/wire_test.go"
+      ],
+      "head": "3cc1764098975476e1a923094b98879de9fe1b82",
+      "head_branch": "codex/audio-runtime-c114-retire-cli-audio-rate-contract",
+      "is_retirement_checkpoint": true,
+      "number": 499,
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "499",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [
+          "agent-cli/internal/services/internal/agentruntime/session_audio_format.go",
+          "agent-cli/internal/services/internal/agentruntime/session_audio_rate.go"
+        ],
+        "title_branch_keywords": [
+          "audio",
+          "retire",
+          "runtime"
+        ]
+      },
+      "state": "OPEN",
+      "task_name": "audio-runtime-c114-retire-cli-audio-rate-contract",
+      "task_state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "task_work_id": "work-task-260",
+      "title": "refactor(runtime): retire CLI audio rate contract",
+      "url": "https://github.com/portpowered/go-agent-harness/pull/499"
+    },
+    {
+      "accepted_main_changed_production_paths": [],
+      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "base_branch": "main",
+      "draft": false,
+      "files": [
+        "agent-cli/internal/wire/rtc_runtime.go",
+        "coverage-manifest/go-agent-runtime/services/rtctransport/internal/service/package.json",
+        "coverage-manifest/go-agent-runtime/services/rtctransport/package.json",
+        "coverage-manifest/go-agent-runtime/services/rtctransport/wire/package.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/evidence.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/external-consumer/consumer_test.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/external-consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/external-consumer/go.sum",
+        "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/run.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/verify.py",
+        "go-agent-runtime/services/rtctransport/contract.go",
+        "go-agent-runtime/services/rtctransport/internal/service/inbound.go",
+        "go-agent-runtime/services/rtctransport/internal/service/outbound.go",
+        "go-agent-runtime/services/rtctransport/internal/service/service.go",
+        "go-agent-runtime/services/rtctransport/rtctransport_test.go",
+        "go-agent-runtime/services/rtctransport/wire/providers.go",
+        "go-agent-runtime/services/rtctransport/wire/wire_gen.go"
+      ],
+      "head": "49e6474c1509faf9459d716b1846f8946cf5c0e8",
+      "head_branch": "codex/audio-runtime-c116-centralize-rtc-track-transport",
+      "is_retirement_checkpoint": true,
+      "number": 500,
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "500",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "audio",
+          "runtime"
+        ]
+      },
+      "state": "OPEN",
+      "task_name": "audio-runtime-c116-centralize-rtc-track-transport",
+      "task_state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "task_work_id": "work-task-265",
+      "title": "feat(runtime): centralize RTC track transport policy",
+      "url": "https://github.com/portpowered/go-agent-harness/pull/500"
+    },
+    {
+      "accepted_main_changed_production_paths": [],
+      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "base_branch": "main",
+      "draft": true,
+      "files": [
+        "coverage-manifest/go-agent-runtime/services/audiocodec/internal/service/package.json",
+        "coverage-manifest/go-agent-runtime/services/audiocodec/package.json",
+        "coverage-manifest/go-agent-runtime/services/audiocodec/wire/package.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-5b23b484.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/external-consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/external-consumer/go.sum",
+        "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/external-consumer/main.go",
+        "go-agent-runtime/services/audiocodec/contract.go",
+        "go-agent-runtime/services/audiocodec/contract_test.go",
+        "go-agent-runtime/services/audiocodec/internal/service/format.go",
+        "go-agent-runtime/services/audiocodec/internal/service/format_test.go",
+        "go-agent-runtime/services/audiocodec/internal/service/process.go",
+        "go-agent-runtime/services/audiocodec/internal/service/service.go",
+        "go-agent-runtime/services/audiocodec/internal/service/service_test.go",
+        "go-agent-runtime/services/audiocodec/wire/wire.go",
+        "go-agent-runtime/services/audiocodec/wire/wire_gen.go",
+        "go-agent-runtime/services/audiocodec/wire/wire_test.go",
+        "go-agent-runtime/services/tools/internal/filesystem/tool_filesystem.go"
+      ],
+      "head": "541fdacbdcea5979371dfdee51aa64e12009252b",
+      "head_branch": "codex/audio-runtime-c115-centralize-filesystem-audio-codec",
+      "is_retirement_checkpoint": true,
+      "number": 501,
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "501",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "audio",
+          "runtime"
+        ]
+      },
+      "state": "OPEN",
+      "task_name": "audio-runtime-c115-centralize-filesystem-audio-codec",
+      "task_state": {
+        "name": "init",
+        "type": "INITIAL"
+      },
+      "task_work_id": "work-task-262",
+      "title": "refactor: centralize filesystem audio codec",
+      "url": "https://github.com/portpowered/go-agent-harness/pull/501"
     }
   ],
   "schema_version": "c107-open-pr-inventory-v1"
