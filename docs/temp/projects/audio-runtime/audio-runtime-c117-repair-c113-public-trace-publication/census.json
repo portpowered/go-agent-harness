@@ -15,28 +15,8 @@
       "500",
       "--all"
     ],
-    "payload_sha256": "af1c0af932746b72ab5e1a8f5f211bad36b7ee2a087097d424d2fa1c9c3c1d34",
+    "payload_sha256": "4d9b44726e39cf5feaa0d60bbb8e49f636d747a351bce3445b8e419880bcc42c",
     "rows": [
-      {
-        "baseRevision": null,
-        "branch": null,
-        "content": [
-          {
-            "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
-            "type": "text"
-          }
-        ],
-        "last_output": null,
-        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-        "rejection_feedback": null,
-        "state": {
-          "name": "init",
-          "type": "INITIAL"
-        },
-        "workId": "work-task-114",
-        "workTypeName": "task",
-        "worktree": null
-      },
       {
         "baseRevision": null,
         "branch": null,
@@ -80,6 +60,26 @@
         },
         "workId": "batch-audio-runtime-c79-c80-retirement-capacity-20260912T0430Z-audio-runtime-c79-retire-cli-response-lifecycle",
         "workTypeName": "idea",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "init",
+          "type": "PROCESSING"
+        },
+        "workId": "work-task-114",
+        "workTypeName": "task",
         "worktree": null
       },
       {
@@ -712,22 +712,22 @@
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "0001-01-01T00:00:00Z",
-            "conclusion": "",
+            "completedAt": "2026-09-13T05:00:43Z",
+            "conclusion": "FAILURE",
             "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34738737840/job/103674685450",
             "name": "CI (integration)",
             "startedAt": "2026-09-13T04:49:34Z",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "0001-01-01T00:00:00Z",
-            "conclusion": "",
+            "completedAt": "2026-09-13T05:04:57Z",
+            "conclusion": "SUCCESS",
             "detailsUrl": "https://github.com/portpowered/go-agent-harness/actions/runs/34738737840/job/103674685579",
             "name": "CI (coverage)",
             "startedAt": "2026-09-13T04:54:34Z",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETED",
             "workflowName": "CI"
           },
           {
@@ -787,7 +787,7 @@
     },
     "work": "audio-runtime-c79-retire-cli-response-lifecycle"
   },
-  "current_head": "65547a9d645fe7e59f7f11ebcf741c729fd5e32e",
+  "current_head": "9da4455d3565104d4bb536f1ec29490ab84e1281",
   "host_source_and_test_paths": {
     "c108_artifacts_at_planning_main": [
       {
@@ -819,8 +819,8 @@
       {
         "exit_code": 0,
         "needle": "TraceAudio",
-        "stdout": "agent-cli/internal/transport/cli/session_observability.go:145:\t\trequest.TraceAudio,\nagent-cli/internal/transport/cli/session.go:486:\t\t\t\tTraceAudio: traceAudio, Transport: transport, Signaling: signaling,\nagent-cli/internal/transport/cli/internal/livehost/run.go:172:\t\tif err != nil || !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/run.go:210:\tif !request.TraceAudio {\nagent-cli/internal/transport/cli/session_command_support.go:63:\tTraceAudio           bool\nagent-cli/internal/transport/cli/session_command_support.go:141:\t\tTraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed(\"prompt\")},\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:71:\t\t\tassertTraceAudioFrame(t, frame, wantSamples)\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:85:func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:215:\t\t\trequest := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, \"bundle\")}\n",
-        "stdout_sha256": "e213bd8d845e8c2bbb9f3095297eb9a20390c2edec8a3349ad896252e3bab68f"
+        "stdout": "agent-cli/internal/transport/cli/session_observability.go:145:\t\trequest.TraceAudio,\nagent-cli/internal/transport/cli/session_command_support.go:63:\tTraceAudio           bool\nagent-cli/internal/transport/cli/session_command_support.go:141:\t\tTraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed(\"prompt\")},\nagent-cli/internal/transport/cli/session.go:486:\t\t\t\tTraceAudio: traceAudio, Transport: transport, Signaling: signaling,\nagent-cli/internal/transport/cli/internal/livehost/run.go:172:\t\tif err != nil || !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/run.go:210:\tif !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:71:\t\t\tassertTraceAudioFrame(t, frame, wantSamples)\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:85:func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:215:\t\t\trequest := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, \"bundle\")}\n",
+        "stdout_sha256": "34d3677a2b9e725db8d17a50dee9288dc201d53b8e0b687fd98a46c1a410a1d6"
       },
       {
         "exit_code": 1,

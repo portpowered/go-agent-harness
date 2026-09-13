@@ -9,7 +9,7 @@
     "-timeout=180s"
   ],
   "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c117-repair-c113-public-trace-publication",
-  "elapsed_seconds": 0.982,
+  "elapsed_seconds": 0.746,
   "exit_code": 1,
   "expected_red": true,
   "stderr": "",
