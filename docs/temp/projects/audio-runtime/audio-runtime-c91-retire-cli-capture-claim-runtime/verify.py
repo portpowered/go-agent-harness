@@ -24,13 +24,21 @@ ROOT = Path(
     ).stdout.strip()
 )
 TASK = "audio-runtime-c91-retire-cli-capture-claim-runtime"
-BRANCH = "codex/audio-runtime-c91-retire-cli-capture-claim-runtime"
+# The verifier is preserved with the C91 evidence, but the recovery task runs
+# it from a deliberately separate admitted branch. Derive the branch from the
+# current task manifest so the fail-closed checks validate the active isolated
+# worktree instead of rejecting the recovery before exercising behavior.
+_prd = json.loads((ROOT / "prd.json").read_text(encoding="utf-8"))
+BRANCH = os.environ.get("CAPTURE_CLAIM_VERIFY_BRANCH", _prd.get("branchName", ""))
 BASELINE = "59af6325614d80173447fe2018a0471e27b4e7b1"
 STARTUP_INTEGRATION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 SCOPE_BASE = "origin/main"
 LEGACY = "agent-cli/internal/services/internal/agentruntime/session_capture_claim.go"
 LEGACY_SHA256 = "1747b40578f4788b1b698495652f7e8f85abbff278eab904581cd38edcc8b6cc"
-EVIDENCE_PREFIX = "docs/temp/projects/audio-runtime/audio-runtime-c91-retire-cli-capture-claim-runtime/"
+EVIDENCE_PREFIXES = (
+    "docs/temp/projects/audio-runtime/audio-runtime-c91-retire-cli-capture-claim-runtime/",
+    "docs/temp/projects/audio-runtime/audio-runtime-c139-recover-c91-capture-claim-runtime/",
+)
 CAPTURE_PREFIX = "go-agent-runtime/services/captureclaim/"
 COVERAGE_PREFIX = "coverage-manifest/go-agent-runtime/services/captureclaim/"
 
@@ -162,7 +170,13 @@ def check_scope() -> None:
     require(changed, "candidate diff is empty")
     allowed_exact = {LEGACY, "agent-cli/internal/services/internal/agentruntime/session_capture_claim_test.go"}
     require(
-        all(path in allowed_exact or path.startswith(CAPTURE_PREFIX) or path.startswith(COVERAGE_PREFIX) or path.startswith(EVIDENCE_PREFIX) for path in changed),
+        all(
+            path in allowed_exact
+            or path.startswith(CAPTURE_PREFIX)
+            or path.startswith(COVERAGE_PREFIX)
+            or any(path.startswith(prefix) for prefix in EVIDENCE_PREFIXES)
+            for path in changed
+        ),
         f"candidate escaped C91 ownership: {sorted(changed)}",
     )
     for path in EXCLUDED:
