@@ -61,3 +61,11 @@ trials and the four named C111 continuation regressions. The integrated main
 change is outside C111 ownership; no C111 source repair was demonstrated or
 made. These are executor checks only and do not claim Script CI, review, merge,
 or acceptance.
+
+## Latest current-head Script CI rejection
+
+Script CI run `34761695693` rejected candidate head `6a75279f5d0cc812ced76b2a77ae430847853ee3` on two independent signals. The production-binary audio-device step failed `TestAgentBinaryTest46HighRateToolAudioRegression/trial_03` at `session_tool_audio_remote_e2e_test.go:219`: the remote device rendered `167991/174391` compared samples, losing `6400` samples (`96.3%` retained). The provider completed `9` responses, `7` response-create continuations, and `7` tool results with no protocol error; playback reported zero dropped, overflow, discarded, or queued samples, with `32` underflow events and `15360` underflow samples. The exact rejected-run record is `ci-rejection-34761695693.json`.
+
+The same run's coverage gate reported `github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession` at `61.80%` against its unchanged `80.00%` floor. `git diff origin/main...HEAD -- agent-cli/internal/services/agentsession` is empty, and the C111 diff also does not change the remote-audio test path. The high-rate test/device path is owned by the active C127 task; C111 does not lower the floor or absorb either unrelated repair.
+
+A bounded local attempt of the exact `trial_03` selector exited during setup because the fresh CLI reported `tool "webmcp_list_tabs" is not available in the current capability set` before the mock provider topology began (`responsesSent=1`, `responseCreates=0`, `toolResults=0`). This is not a causal reproduction of the CI loss and was not used to justify a source change. The C111-focused contract, race, consumer, four-regression, image-repair, and source-pinned replay checks all pass at `6a75279f`; the current CI residual remains preserved for the C127 owner and Script CI gate.

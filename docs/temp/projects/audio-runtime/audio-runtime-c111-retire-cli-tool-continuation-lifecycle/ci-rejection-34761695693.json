@@ -1,0 +1,62 @@
+{
+  "schema": "audio-runtime.c111.ci-rejection.v1",
+  "run": 34761695693,
+  "url": "https://github.com/portpowered/go-agent-harness/actions/runs/34761695693",
+  "head": "6a75279f5d0cc812ced76b2a77ae430847853ee3",
+  "conclusion": "failure",
+  "checks": [
+    {
+      "name": "CI (integration)",
+      "failedStep": "Run production-binary audio-device replay integration",
+      "test": "TestAgentBinaryTest46HighRateToolAudioRegression",
+      "subtest": "trial_03",
+      "source": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go:219",
+      "failure": "remote device rendered 167991/174391 compared samples (lost 6400, 96.3% retained)",
+      "playback": {
+        "format": "16000 Hz, 1 channel, 16-bit pcm16",
+        "queuedSamples": 0,
+        "peakQueuedSamples": 2880,
+        "droppedSamples": 0,
+        "overflowEvents": 0,
+        "discardedSamples": 0,
+        "discardEvents": 0,
+        "callbackCount": 382,
+        "renderedSamples": 183360,
+        "underflowEvents": 32,
+        "underflowSamples": 15360,
+        "zeroFilledSamples": 15360
+      },
+      "provider": {
+        "responsesSent": 9,
+        "responseCreates": 7,
+        "initialRequests": 0,
+        "inputHistories": 0,
+        "inputSamplesSeen": 275039,
+        "toolResults": 7,
+        "protocolError": ""
+      }
+    },
+    {
+      "name": "CI (coverage)",
+      "failedStep": "Run coverage profiles and coverage gate",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession",
+      "expectedPercent": 80.0,
+      "actualPercent": 61.8,
+      "deltaPercent": -18.2
+    }
+  ],
+  "scope": {
+    "c111DiffPathsUnderAgentsession": [],
+    "c111DiffPathsUnderRemoteAudioTest": [],
+    "c127Owner": "audio-runtime-c127-repair-terminal-device-drain",
+    "c127OwnedPaths": [
+      "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go",
+      "agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go",
+      "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go",
+      "go-device-gateway/pkg/runtime/rtc_device_sink.go"
+    ],
+    "agentsessionCoverageManifestUnchanged": true,
+    "action": "Preserve both exact CI failures as external residuals; do not edit C127-owned audio paths, lower the coverage floor, or absorb the unchanged agentsession package into C111."
+  },
+  "claimedGreen": false
+}
