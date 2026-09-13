@@ -63,7 +63,7 @@
     },
     "ancestry": {
       "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "head": "29e8ff57a76ca4bf02f30bbdab829dc274634846",
+      "head": "e67c44fec0e004c2b707890dfbf73b8369f96363",
       "origin_main": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
       "required_ancestors": {
         "accepted_main": {
@@ -115,6 +115,7 @@
       "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/go.mod",
       "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/main.go",
       "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/merge-current-main-071b0abf.md",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/merge-current-main-bd6a1289.md",
       "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/provenance.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-positive-and-guard-mutations.json",
       "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/reports/c110-public-contract.json",

@@ -39,10 +39,11 @@ claim CI, review, merge, or project-wide acceptance.
 
 ## Current implementation handoff
 
-The executable-input checkpoint is `29e8ff57a76ca4bf02f30bbdab829dc274634846`,
-with `origin/main=bd6a1289218d1bef1a3af36e64e9d4496062416f). The bounded
-`run.py` replay was accepted in
-`runs/run-20260913T131916Z-14414`; its nomicrophone YUI artifact is
+The exact current executable-input checkpoint is
+`e67c44fec0e004c2b707890dfbf73b8369f96363`, with
+`origin/main=bd6a1289218d1bef1a3af36e64e9d4496062416f`. The bounded `run.py`
+replay was accepted in
+`runs/run-20260913T135439Z-75526`; its nomicrophone YUI artifact is
 `40fd2c92fa56ad58b572edceee84c6d73a24e43efca045071d392c632de4a531`, and
 the artifact, provenance, and run summary all bind to that source revision.
 The positive instruction/text-seed path, invalid pre-provider path, clean
@@ -51,7 +52,8 @@ shutdown, and C16 audio/tool replay are recorded there.
 Focused session-instruction normal/race, CLI normal/race, consumer, mutation,
 retirement, Wire, architecture-size, coverage-registration, accumulated
 normal/coverage/race regressions, vet, pinned staticcheck, pinned lint, format,
-and diff gates passed. The known peer high-rate audio/tool finding remains
-preserved in its historical rejection record. The evidence-only checkpoint
-after the executable-input commit is handoff evidence, not CI/review/merge
+and diff gates passed. The known peer high-rate audio/tool finding and the
+current peer-owned Windows audio-portable CI failure remain preserved as
+external evidence; neither is waived or relabeled as a C110 defect. This
+exact-head evidence checkpoint is handoff evidence, not CI/review/merge
 approval.
