@@ -7,7 +7,7 @@
         "."
       ],
       "cwd": "docs/temp/projects/audio-runtime/audio-runtime-c114-retire-cli-audio-rate-contract/external-consumer",
-      "elapsedSeconds": 0.164,
+      "elapsedSeconds": 0.131,
       "exitCode": 0,
       "label": "external-consumer",
       "stderr": "",
@@ -25,15 +25,15 @@
         "-timeout=240s"
       ],
       "cwd": ".",
-      "elapsedSeconds": 4.143,
+      "elapsedSeconds": 2.817,
       "exitCode": 0,
       "label": "cli-audio-regressions",
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.713s\n",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.061s\n",
       "timedOut": false
     }
   ],
-  "elapsedSeconds": 5.063,
+  "elapsedSeconds": 3.65,
   "mode": "final-scope-and-provenance",
   "scope": {
     "admission": {
@@ -49,7 +49,7 @@
         "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness"
       ],
       "cwd": ".",
-      "elapsedSeconds": 0.177,
+      "elapsedSeconds": 0.117,
       "exitCode": 0,
       "label": "admission",
       "stderr": "",
@@ -81,7 +81,7 @@
       "go-agent-runtime/services/audiorate/wire/wire_gen.go",
       "go-agent-runtime/services/audiorate/wire/wire_test.go"
     ],
-    "head": "3cc1764098975476e1a923094b98879de9fe1b82",
+    "head": "008ad4a44c4d956b64c1ed4c76acb672e8d0328d",
     "legacy": {
       "agent-cli/internal/services/internal/agentruntime/session_audio_format.go": {
         "baselineLines": 84,

@@ -2,6 +2,13 @@
 
 This is the admitted `audio-runtime` task `audio-runtime-c114-retire-cli-audio-rate-contract` on branch `codex/audio-runtime-c114-retire-cli-audio-rate-contract`, pushed checkpoint `3cc1764098975476e1a923094b98879de9fe1b82`.
 
+Executor resumption verification at the current branch head
+(`008ad4a44c4d956b64c1ed4c76acb672e8d0328d`): admission remains valid, the
+branch still matches `prd.json`, and freshly fetched `origin/main` remains
+`3963bc3566da24f8214634c17a9d0f79a6724171`. The implementation source is
+unchanged from `3cc1764098975476e1a923094b98879de9fe1b82`; this refresh is
+evidence-only.
+
 Admission and ancestry were verified in the isolated worktree from the
 immutable project manifest:
 
@@ -36,6 +43,15 @@ Passed local evidence:
 - `make fmt`, `make vet`, pinned `make lint` (golangci-lint v2.9.0), pinned `make staticcheck` (2026.1), `make size-check`, `make coverage-registration`, and the architecture-gate unit tests;
 - `git diff --check`.
 
+The resumed focused checks pass: audiorate normal (21 tests), audiorate race
+(63 tests across three repetitions), the GOWORK-off external consumer, focused
+CLI audio/rate/replay/scheduled regressions (30 tests), all three bounded
+C21/C50/scheduled cases, and the accumulated normal/coverage/race session
+regression matrix at `COUNT=1` (including high-rate and expected-negative
+controls). The non-shared quality checks `make fmt`, `make vet`, pinned
+`make lint`, pinned `make staticcheck`, `make size-check`,
+`make coverage-registration`, and `make test-architecture-gate` also pass.
+
 The architecture check reports one shared prerequisite only:
 `generated-file-spoof services/audiorate/wire/wire_gen.go`. C79 currently owns
 the shared `scripts/wire-packages.txt` registry and
@@ -45,3 +61,15 @@ the lease, fetch and reconcile current main in this isolated branch, register
 the generated graph, rerun the final gates, then commit/push and submit this
 same task to script CI. No CI, review, merge, or broad project acceptance is
 claimed by this checkpoint.
+
+The exact requested `$FACTORY_ROOT/factory/docs/implementation-handoff.md` is
+absent from the admitted checkout and available Git history; the canonical
+`operating-policy.md`, `handoff-plan.md`, `meta-planner-handoff.md`, and
+implementer workstation instructions were read instead. The strict handoff
+therefore remains blocked pending restoration of that required document and
+explicit C79 release of the shared paths. Do not modify either shared file or
+submit this known-red architecture candidate. Once both prerequisites are
+available, fetch/reconcile `origin/main`, add only the audiorate Wire and
+downward baseline registrations, rerun Wire/architecture/coverage and the
+focused gates, then update PR #499 and submit the same task to script CI
+without polling it.
