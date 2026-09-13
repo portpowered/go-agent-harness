@@ -52,6 +52,8 @@ type providerSession struct {
 	closeOnce   sync.Once
 	mu          sync.Mutex
 	trace       *boundaryTrace
+	claimed     bool
+	claimedLate bool
 	receiveSeen chan struct{}
 	receiveOnce sync.Once
 }
@@ -66,6 +68,11 @@ func newProviderSession(trace *boundaryTrace) *providerSession {
 
 func (p *providerSession) Send(context.Context, messages.StreamMessage) bool { return true }
 func (p *providerSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	p.mu.Lock()
+	if !p.claimed {
+		p.claimedLate = true
+	}
+	p.mu.Unlock()
 	p.receiveOnce.Do(func() { close(p.receiveSeen) })
 	p.trace.record("provider_receipt", 0, boundarySamples)
 	return p.receive
@@ -77,7 +84,8 @@ func (p *providerSession) Close() error {
 }
 func (p *providerSession) RTCMedia() sharedaudio.MediaEndpoints {
 	p.mu.Lock()
-	first := len(p.trace.snapshot()) == 0
+	first := !p.claimed
+	p.claimed = true
 	p.mu.Unlock()
 	if first {
 		p.trace.record("rtc_forwarding", 0, boundarySamples)
@@ -114,6 +122,12 @@ func waitForProviderReceive(t *testing.T, provider *providerSession) {
 	case <-provider.receiveSeen:
 	case <-time.After(time.Second):
 		t.Fatal("provider Receive was not called")
+	}
+	provider.mu.Lock()
+	claimedLate := provider.claimedLate
+	provider.mu.Unlock()
+	if claimedLate {
+		t.Fatal("provider media admitted during Receive: context deadline exceeded")
 	}
 }
 
