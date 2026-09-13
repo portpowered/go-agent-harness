@@ -1,10 +1,10 @@
 {
   "schema": "audio-runtime-c118-session-terminal-diagnostics/v1",
-  "candidate_revision": "2ba46424eca1641157a84cfefb4a40fcff7af6ca",
-  "integration_revision": "ec3de1bc4f723dc619213aff904cc22818e8c96e",
+  "candidate_revision": "9cf7a04f17a8bd735327d50cec21990134e6327e",
+  "integration_revision": "668d7b48f0f44e2f2aa545ac44ee714bb11c4ad4",
   "baseline_revision": "3963bc3566da24f8214634c17a9d0f79a6724171",
   "startup_integration_revision": "8bdafc7f947a3a2c9856220abdc539437035bd21",
-  "origin_main": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+  "origin_main": "1a8467246c6607a06ffc7289075da2595724ce8b",
   "previous_origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
   "admission": {
     "project": "audio-runtime",
@@ -26,7 +26,10 @@
       "55a652fc61bcee8ab87171f00fd930fad57b67e0",
       "084de02fe95ab246fe3d15410c93600182d2cb92",
       "9a440390e10e1f995268aab49b4adf90fb489e60",
-      "2ba46424eca1641157a84cfefb4a40fcff7af6ca"
+      "2ba46424eca1641157a84cfefb4a40fcff7af6ca",
+      "4b4b10c1af1970aa8fc0f1772b05f6ba41621f2f",
+      "668d7b48f0f44e2f2aa545ac44ee714bb11c4ad4",
+      "9cf7a04f17a8bd735327d50cec21990134e6327e"
     ],
     "public_contract": "go-agent-runtime/services/sessionterminal",
     "private_implementation": "go-agent-runtime/services/sessionterminal/internal/service",
@@ -40,25 +43,25 @@
     },
     "cli_production_lines": {
       "baseline": 41208,
-      "candidate": 40981,
-      "net_reduction": 227,
+      "candidate": 40353,
+      "net_reduction": 855,
       "required_minimum": 180
     }
   },
   "validation": {
     "full_agentruntime": "passed: 1071 tests",
-    "fresh_main_ancestry": "passed: startup, planning baseline, and origin/main ea53be13 are ancestors of integration ec3de1bc",
-    "focused_cli_normal": "passed: 9 test executions across 3 repeats",
-    "focused_cli_race": "passed: 15 test executions across 5 repeats",
-    "service_normal": "passed: 18 test executions in 3 packages across 3 repeats",
-    "service_race": "passed: 20 test executions in 3 packages across 5 repeats",
-    "external_consumer": "passed: GOWORK=off go test ./... -count=1 -timeout=120s",
-    "session_ci_regressions": "passed: scripts/test-session-ci-regressions.sh all; normal, coverage, race; COUNT=3 after ec3de1bc",
-    "retirement_callers_and_owned_paths": "passed at ec3de1bc: old source absent, adapter delegates, Wire present, pinned baseline, 227-line reduction",
-    "positive_and_causal_mutations": "passed at ec3de1bc: both positive controls pass; drop-final-failure-record and erase-cancellation-partial-output each exit 1",
-    "coverage_registration": "passed: 179 workspace packages across 6 modules; declaration-only sessionterminal contract is registered as an exception",
+    "fresh_main_ancestry": "passed: startup, planning baseline, and origin/main 1a8467246c6607a06ffc7289075da2595724ce8b are ancestors of final candidate 9cf7a04",
+    "focused_cli_normal": "passed: 9 test executions across 3 repeats before the final one-line architecture-budget repair",
+    "focused_cli_race": "passed: 15 test executions across 5 repeats before the final one-line architecture-budget repair",
+    "service_normal": "passed: 36 tests in 3 packages across 3 repeats at final source content",
+    "service_race": "passed: 36 tests in 3 packages across 3 repeats at final source content",
+    "external_consumer": "passed at final candidate: GOWORK=off go test ./... -count=1 -timeout=120s",
+    "session_ci_regressions": "passed after merged implementation 668d7b48: scripts/test-session-ci-regressions.sh all; normal, coverage, race; COUNT=3",
+    "retirement_callers_and_owned_paths": "passed at final candidate 9cf7a04: old source absent, adapter delegates, Wire present, pinned baseline, 855-line reduction",
+    "positive_and_causal_mutations": "passed at final candidate 9cf7a04: both positive controls pass; drop-final-failure-record and erase-cancellation-partial-output each exit 1",
+    "coverage_registration": "passed: 182 workspace packages across 6 modules; declaration-only sessionterminal contract is registered as an exception",
     "wire_check": "passed: Wire regeneration leaves checked-in generated output unchanged",
-    "architecture_size_check": "passed: 189 packages, 1904 files, 28101 functions",
+    "architecture_size_check": "passed: 192 packages, 1914 files, 28232 functions; final session_diagnostics.go is 400 lines",
     "vet": "passed: all 15 configured modules",
     "staticcheck": "passed: pinned 2026.1 across all 15 configured modules",
     "lint": "passed: pinned golangci-lint 2.9.0 reports 0 issues across all 15 configured modules",
@@ -69,6 +72,15 @@
       "hosted_failure": "CI (coverage) only; all other 8 required checks passed",
       "local_full_gate": "make coverage reached agent-cli coverage but stopped on unrelated macOS TestShippedSessionSIGINTDuringToolExecutionFinalizesCleanly timing failure before the coverage gate"
     },
+    "review_finding_repair": {
+      "source": "task work-task-23 and concluded review work-review-34 _rejection_feedback",
+      "finding": "The nil-error/no-continuation shortcut ignored Scheduled.Incomplete and continuation metadata, so scheduled-incomplete Finalize could emit metrics without a terminal failure and metadata-only continuations were not classified as lifecycle failures.",
+      "repair_commit": "4b4b10c1af1970aa8fc0f1772b05f6ba41621f2f",
+      "repair": "Lifecycle obligations now take precedence over nil/context-only suppression; scheduled incomplete and metadata-only continuations receive typed terminal failure classifications with direct nil/context regression coverage.",
+      "fresh_main_merge": "668d7b48f0f44e2f2aa545ac44ee714bb11c4ad4",
+      "architecture_budget_repair": "9cf7a04f17a8bd735327d50cec21990134e6327e",
+      "status": "repaired and covered; no actionable local C118 review finding remains"
+    },
     "pinned_golangci_lint": "passed: 0 issues in go-agent-runtime and agent-cli working-tree scans",
     "scoped_staticcheck": "passed: go-agent-runtime and agentruntime packages",
     "scoped_vet": "passed: sessionterminal and agentruntime packages",
@@ -77,11 +89,11 @@
     "shipped_yui": {
       "status": "passed",
       "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/run.py --case replay-terminal --case user-cancellation --case provider-error --case existing-audio-tool-replay --child-timeout 60 --aggregate-timeout 300",
-      "report": "runs/session-terminal-y4m5bp0m/report.json",
-      "source_revision": "2ba46424eca1641157a84cfefb4a40fcff7af6ca",
-      "origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
-      "yui_sha256": "06a497e0467f009f32dac20984500b11661272addad719d5941228fe096f20ca",
-      "elapsed_seconds": 1.947373,
+      "report": "runs/session-terminal-emttqwq9/report.json",
+      "source_revision": "9cf7a04f17a8bd735327d50cec21990134e6327e",
+      "origin_main": "1a8467246c6607a06ffc7289075da2595724ce8b",
+      "yui_sha256": "2c731108827f2461d60fcfa2ed60291e8bf50adee3156799090e44de60b9e701",
+      "elapsed_seconds": 2.696218,
       "cases": {
         "replay-terminal": "exit 0; replay_complete/replay/complete terminal; 2 final accounting records; descendants_reaped=true",
         "user-cancellation": "exit 0 after SIGINT; user_cancelled/cancellation/cli/partial terminal; partial audio accounting; descendants_reaped=true",
@@ -97,12 +109,12 @@
         {"mutant": "erase-cancellation-partial-output", "exit": 1}
       ]
     },
-    "retirement_callers_and_owned_paths": "passed: old source absent, adapter delegates, Wire present, pinned baseline, 227-line reduction"
+    "retirement_callers_and_owned_paths": "passed: old source absent, adapter delegates, Wire present, pinned baseline, 855-line reduction"
   },
   "shared_gate_boundary": {
     "wire_check": "passed: auto-discovered Wire inventory and regeneration",
-    "architecture_size_check": "passed: 189 packages, 1904 files, 28101 functions",
-    "released_by_integrated_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+    "architecture_size_check": "passed: 192 packages, 1914 files, 28232 functions",
+    "released_by_integrated_main": "1a8467246c6607a06ffc7289075da2595724ce8b",
     "demonstrated_shared_repairs": [
       "registered services/sessionterminal/wire/wire_gen.go in architecture policy",
       "deleted the stale retired-source architecture baseline fragment",
@@ -115,7 +127,7 @@
     "no_local_c118_findings_remain": true
   },
   "handoff": {
-    "script_ci": "submit current integration head ec3de1bc through the script gate after push; do not poll",
+    "script_ci": "submit final candidate 9cf7a04f17a8bd735327d50cec21990134e6327e through the script gate after push; do not poll",
     "ci_polling": "not performed",
     "review": "not claimed; independent review remains external",
     "merge": "not claimed",
