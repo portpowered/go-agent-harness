@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/scenario_v2_validation.go",
+      "symbol": "parseScenarioV2Expectation",
+      "value": 42,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/scenario_v2_validation.go",
+      "symbol": "validateScenarioV2ExpectationRequiredFields",
+      "value": 39,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/scenario_v2_validation.go",
+      "symbol": "validateScenarioV2StepRequiredFields",
+      "value": 29,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/scenario_v2_validation.go",
+      "symbol": "parseScenarioV2Expectation",
+      "value": 33,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/scenario_v2_validation.go",
+      "symbol": "validateScenarioV2ExpectationRequiredFields",
+      "value": 36,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/scenario_v2_validation.go",
+      "symbol": "validateScenarioV2StepRequiredFields",
+      "value": 28,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/scenario_v2_validation.go",
+      "symbol": "parseScenarioV2Expectation",
+      "value": 98,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/scenario_v2_validation.go",
+      "symbol": "validateScenarioV2ExpectationRequiredFields",
+      "value": 83,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/scenario_v2_validation.go",
+      "symbol": "parseScenarioV2Expectation",
+      "value": 76,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
+      "file": "pkg/probe/scenario_v2_validation.go",
+      "symbol": "validateScenarioV2ExpectationRequiredFields",
+      "value": 53,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    }
+  ]
+}

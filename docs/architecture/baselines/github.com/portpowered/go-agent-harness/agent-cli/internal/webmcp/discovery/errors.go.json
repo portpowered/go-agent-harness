@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "newAmbiguousTabForTargets",
+      "value": 16,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "file-lines",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "value": 413,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrAmbiguousBrowser",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrAmbiguousTab",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrBrowserDisconnected",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrBrowserProtocolInvalid",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrEndpointNotFound",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrEndpointUnreachable",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrNoEligibleTab",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrRemoteEndpointDenied",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrStaleSelection",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrTargetAttachFailed",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrTargetDetached",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery",
+      "file": "internal/webmcp/discovery/errors.go",
+      "symbol": "ErrUnsupportedWebMCP",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    }
+  ]
+}

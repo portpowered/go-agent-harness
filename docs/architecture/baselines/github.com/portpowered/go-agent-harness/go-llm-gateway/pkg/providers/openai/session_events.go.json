@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
+      "file": "pkg/providers/openai/session_events.go",
+      "symbol": "realtimeInboundMessages",
+      "value": 23,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
+      "file": "pkg/providers/openai/session_events.go",
+      "symbol": "realtimeOutboundEvents",
+      "value": 26,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
+      "file": "pkg/providers/openai/session_events.go",
+      "symbol": "realtimeInboundMessages",
+      "value": 33,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
+      "file": "pkg/providers/openai/session_events.go",
+      "symbol": "realtimeOutboundEvents",
+      "value": 23,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "file-lines",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
+      "file": "pkg/providers/openai/session_events.go",
+      "value": 454,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
+      "file": "pkg/providers/openai/session_events.go",
+      "symbol": "realtimeInboundMessages",
+      "value": 158,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
+      "file": "pkg/providers/openai/session_events.go",
+      "symbol": "realtimeOutboundEvents",
+      "value": 97,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/go-llm-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai",
+      "file": "pkg/providers/openai/session_events.go",
+      "symbol": "realtimeInboundMessages",
+      "value": 76,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    }
+  ]
+}

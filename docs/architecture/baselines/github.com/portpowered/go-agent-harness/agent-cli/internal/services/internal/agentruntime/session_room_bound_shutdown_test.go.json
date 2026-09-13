@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "TestRunRoom_BoundGraceExpiryCancelsActiveResponseCleanly",
+      "value": 102,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "TestRunRoom_BoundGraceProviderFailureRemainsAuthoritative",
+      "value": 27,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "TestRunRoom_MaxTurnsDrainsResponseAlreadyInFlight",
+      "value": 22,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "func-literal@173:24",
+      "value": 49,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "TestRunRoom_BoundGraceExpiryCancelsActiveResponseCleanly",
+      "value": 38,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "TestRunRoom_BoundGraceProviderFailureRemainsAuthoritative",
+      "value": 34,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "TestRunRoom_MaxTurnsDrainsResponseAlreadyInFlight",
+      "value": 26,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "func-literal@173:24",
+      "value": 37,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "TestRunRoom_BoundGraceExpiryCancelsActiveResponseCleanly",
+      "value": 156,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "func-literal@173:24",
+      "value": 131,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "TestRunRoom_BoundGraceExpiryCancelsActiveResponseCleanly",
+      "value": 95,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_room_bound_shutdown_test.go",
+      "symbol": "func-literal@173:24",
+      "value": 90,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    }
+  ]
+}
