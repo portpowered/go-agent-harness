@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging",
+      "file": "pkg/logging/logger_test.go",
+      "symbol": "TestCrossingEmitterConcurrentRecordsAreCompleteAndMonotonic",
+      "value": 21,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging",
+      "file": "pkg/logging/logger_test.go",
+      "symbol": "eventFromFields",
+      "value": 27,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging",
+      "file": "pkg/logging/logger_test.go",
+      "symbol": "benchmarkCrossingEvent",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging",
+      "file": "pkg/logging/logger_test.go",
+      "symbol": "crossingFixtures",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    },
+    {
+      "rule": "mutable-global",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging",
+      "file": "pkg/logging/logger_test.go",
+      "symbol": "updateCrossingGolden",
+      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0",
+      "message": "mutable package state must be owned by an injected service"
+    }
+  ]
+}

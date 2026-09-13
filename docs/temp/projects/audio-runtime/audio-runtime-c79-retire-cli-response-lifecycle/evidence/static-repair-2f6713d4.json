@@ -1,0 +1,84 @@
+{
+  "schema": "audio-runtime-c79-evidence/v1",
+  "mode": "static-repair",
+  "candidate": "36d19401b62709ae45c9dc1f4a09f89b0facb476",
+  "parent": "323a60cf8dab76e8bd36ec0534e6330a55caeb95",
+  "branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
+  "origin_main": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+  "source_provenance": {
+    "tested_revision": "36d19401b62709ae45c9dc1f4a09f89b0facb476",
+    "tracked_input_count": 11353,
+    "tracked_input_sha256": "430b0a5042a70e2c8ef1a61e4680224b0e459f6488fb01d40338e920524463ff",
+    "replay_artifact_sha256": "a91af31ed9f53ad51389b630b52eee8c717a650c5cd2124ee5e2b4d125e12d1b"
+  },
+  "changes": {
+    "wire_registry": "go-agent-runtime/services/sessiondiagnostics/wire",
+    "architecture_policy_generator": "services/sessiondiagnostics/wire/wire_gen.go",
+    "baseline_deletions": [
+      "file-lines:session_diagnostics_response.go",
+      "cognitive-complexity:*sessionProgressObserver.adoptObservedResponseID",
+      "cyclomatic-complexity:*sessionProgressObserver.adoptObservedResponseID",
+      "cognitive-complexity:*sessionProgressObserver.beginObservedResponseForPurpose",
+      "cyclomatic-complexity:*sessionProgressObserver.beginObservedResponseForPurpose",
+      "cyclomatic-complexity:*sessionProgressObserver.claimScheduledRateLimitRetry",
+      "cognitive-complexity:*sessionProgressObserver.observeProviderMessageEndForResponse",
+      "cyclomatic-complexity:*sessionProgressObserver.observeProviderMessageEndForResponse",
+      "cognitive-complexity:*sessionProgressObserver.ownsObservedResponseEnd",
+      "cyclomatic-complexity:*sessionProgressObserver.ownsObservedResponseEnd",
+      "cognitive-complexity:recordContinuationTerminalLocked",
+      "cyclomatic-complexity:recordContinuationTerminalLocked"
+    ],
+    "response_finish_owner_validation": "EventResponseFinish rejects a mismatched active response ID; TestResponseFinishRejectsWrongIDWithoutClearingActiveResponse covers the regression",
+    "private_adapter_bridge": "public EventSyncLegacy/LegacyState and reducer restore helpers removed; CLI tool acknowledgements and continuation requests use lifecycle events",
+    "replay_provenance": "run.py v2 records shipped binary, fixture, source-tree, and executable lifecycle observations",
+    "reset_mutex_repair": "Reset reuses the existing mutex and resetLocked state path; TestResetClearsReducerStateWithoutReplacingMutex covers the regression",
+    "disposed_slot_repair": "completed and cancelled scheduled slots reject ID/owner rebinding; invalid dispositions return ErrMalformedSequence",
+    "session_open_repair": "SESSION.OPEN dispatches lifecycle.reset before clearing the adapter projection so an untagged response cannot finish a prior response",
+    "foreign_response_open_repair": "unmatched response opens are rejected until an explicit boundary; active scheduled dispatch uses a private pending-boundary check",
+    "finish_state_reset": "matching response finish clears purpose, terminal boundary, content, and tool-turn state before the next response",
+    "duplicate_response_end_repair": "duplicate model response ends are rejected before finish while the active response remains owned",
+    "response_content_ownership_ordering": "responseEventBelongsToActive validates the response envelope before applying the untagged content boundary; TestSessionProgressObserver_ForeignContentCannotClearTerminalBoundary preserves the terminal marker"
+  },
+  "gates": {
+    "fmt": "pass: affected Go files gofmt-clean",
+    "wire_check": "pass: all registered Wire injectors regenerated without drift",
+    "architecture_size": "pass: 189 packages, 1906 files, 28180 functions",
+    "coverage_registration": "pass: 179 packages across 6 modules",
+    "vet": "pass: current workspace target",
+    "lint": "pass: pinned golangci-lint 2.9.0 current workspace target",
+    "staticcheck": "pass: pinned staticcheck 2026.1 current workspace target",
+    "diff_check": "pass",
+    "coverage_floor": "not run locally; full behavioral coverage remains script-CI-owned per implementation handoff; focused causal and accumulated controls pass"
+  },
+  "causal_regressions": {
+    "response_matrix": "pass: reducer, adapter, and GOWORK=off consumer matrix",
+    "service_race": "pass: focused service race 24 invocations and adapter race 442 invocations (COUNT=2)",
+    "external_consumer": "pass: GOWORK=off",
+    "mutation_remove_continuation_owner": "expected failure",
+    "mutation_duplicate_scheduled_disposition": "expected failure",
+    "cli_normal": "pass: accumulated COUNT=1 normal regressions",
+    "cli_race": "pass: accumulated COUNT=1 race regressions",
+    "accumulated_normal": "pass: scripts/test-session-ci-regressions.sh normal COUNT=1 across CLI, integration, simulated devices, and composed OpenAI provider",
+    "accumulated_race": "pass: scripts/test-session-ci-regressions.sh race COUNT=1 across CLI, integration, simulated devices, and composed OpenAI provider",
+    "public_scheduled_tool_continuation": "pass",
+    "public_terminal_and_malformed": "pass",
+    "public_credential_free_audio_tool_replay": "pass"
+  },
+  "prior_ci_rejection": {
+    "run": "work-review-225",
+    "job": "independent review",
+    "old_head": "ccfc3ee8089cecfff4c97387f2a1e5a0b6d41c64",
+    "code_findings": "foreign response-open replacement, stale finish purpose/terminal boundary, and duplicate response-end admission",
+    "remaining_findings": "the historical three findings were repaired in 66211b7b and the lint-clean test repair in 724a2e0b; the work-review-239 ownership-ordering repair is ecf09f5a, and this refreshed ledger is source-pinned to the final evidence head 996ce66e; script CI remains authoritative"
+  },
+  "latest_ci_rejection": "ci-rejection-34738737840.json",
+  "latest_review_repair": {
+    "review": "work-review-239",
+    "reviewed_head": "a5d26045b7e39f21a0b5d663826db0394af87b6a",
+    "defect": "an untagged content boundary was applied before response ownership validation, allowing a duplicate end for the prior response to be admitted after foreign content",
+    "repair_revision": "ecf09f5a7b08c6b63612802ed8253b5fb5b7e669",
+    "regression": "TestSessionProgressObserver_ForeignContentCannotClearTerminalBoundary fails before the reorder and passes after it; duplicate end remains neither Accepted, Candidate, nor Admitted"
+  },
+  "known_scope_helper_limitation": "none; the retirement-and-scope verifier records the handoff-released Wire and architecture leases explicitly",
+  "acceptance": "executor evidence only; no script-CI success, review, merge, vertical probe or project acceptance claimed"
+}
