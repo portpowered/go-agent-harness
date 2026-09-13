@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
+      "file": "pkg/transcript/client_test.go",
+      "symbol": "TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades",
+      "value": 26,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
+      "file": "pkg/transcript/client_test.go",
+      "symbol": "TestClientCaptureRecordsOrderedDeviceAndWebSocketBoundaries",
+      "value": 27,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
+      "file": "pkg/transcript/client_test.go",
+      "symbol": "TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades",
+      "value": 46,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
+      "file": "pkg/transcript/client_test.go",
+      "symbol": "TestClientCaptureRecordsOrderedDeviceAndWebSocketBoundaries",
+      "value": 23,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
+      "file": "pkg/transcript/client_test.go",
+      "symbol": "TestClientCaptureLeavesLiveResultsUnchangedWhenTranscriptDegrades",
+      "value": 124,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    }
+  ]
+}

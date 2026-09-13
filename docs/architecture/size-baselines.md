@@ -41,11 +41,13 @@ Makefile resolver rather than assuming PATH matches the repository pin.
 
 ## Exact baseline and ratchet
 
-[architecture-size-baseline.json](architecture-size-baseline.json) records exact
-pre-existing size and architecture debt. Each entry identifies its rule, module,
-package, file or symbol, measured ceiling or diagnostic, rationale, and migration
-phase. The initial baseline is validated against the source at the merge base;
-it is not permission to accept the current checkout's violations.
+The [baselines](baselines) directory records exact pre-existing size and
+architecture debt in deterministic owner fragments. File-specific debt mirrors
+its module-relative source path; package-wide debt uses `_package.json` in the
+mirrored package. Each entry retains its rule, module, package, file or symbol,
+measured ceiling or diagnostic, rationale, and migration phase. The combined
+baseline is validated against the source at the merge base; it is not permission
+to accept the current checkout's violations.
 
 Run `make architecture-check` and `make size-check`. Both compare their baseline
 lane with `ARCHITECTURE_BASE` (default `origin/main`). New violations and growth
@@ -53,6 +55,13 @@ fail. Resolved entries must be removed, reduced measurements must lower their
 ceilings, and stale exemptions fail. Explicit one-to-one rename mappings cannot
 multiply debt or raise its ceiling. New runtime packages receive no copied-code
 exemptions.
+
+The gate loads every JSON fragment recursively in lexical order and rejects
+duplicate issue keys, conflicting source identities, and conflicting rename
+mappings across fragments. Retiring a source file normally deletes only its
+fragment. To translate an older branch that still edits the monolith, run
+`python3 -B scripts/shard-architecture-baseline.py <old-json> docs/architecture/baselines --replace`
+after rebasing, then retain the owner-fragment changes produced by that branch.
 
 `make test-architecture-gate` verifies the rules and baseline behavior with
 positive and negative fixtures. `make verify-architecture` adds generated Wire

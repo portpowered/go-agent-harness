@@ -24,14 +24,14 @@ measured phases. A reviewed baseline can be supplied explicitly:
 GOWORK=off go run . \
   -repo ../.. \
   -manifest docs/architecture/architecture-policy.json \
-  -baseline docs/architecture/architecture-size-baseline.json \
+  -baseline docs/architecture/baselines \
   -baseline-base origin/main \
   -check size
 ```
 
-The same baseline flags may be used with `-check architecture` once the
-reviewed file contains architecture debt entries. The driver filters entries
-by the selected lane, so one file can carry both size and architecture debt.
+The same baseline flags may be used with `-check architecture`. The driver
+combines every JSON fragment recursively, validates the combined deletion-only
+baseline, and filters entries by the selected lane.
 
 Composition authority is explicit. A whole package may be registered for an
 external application module; a repository test gets a single exact
@@ -72,11 +72,16 @@ selected host matrix. Registered generated files are excluded only when they
 have a standard generated header and match a manifest generator entry. A
 header without a registration is reported as `generated-file-spoof`.
 
-The baseline is deletion-only. A new issue fails; a metric increase fails; a
+The baseline directory is deletion-only. A new issue fails; a metric increase fails; a
 metric reduction requires the recorded value to be lowered; and a resolved
 entry must be deleted. There is no automatic accept-current or update flag.
 Renames are explicit one-to-one entries in the baseline and cannot multiply a
 debt exemption.
+
+Fragments mirror ownership: file debt is stored below the module and source
+path, while package-wide debt uses `_package.json` in the mirrored package.
+`scripts/shard-architecture-baseline.py` performs the deterministic one-way
+migration from the former monolith and can translate a pre-migration branch.
 
 The pinned `golangci-lint` configuration enables the staged correctness and
 policy checks (`errcheck`, `ineffassign`, `unused`, `nilerr`, `errorlint`,

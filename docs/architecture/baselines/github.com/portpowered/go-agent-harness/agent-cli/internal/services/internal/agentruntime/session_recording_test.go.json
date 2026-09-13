@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_recording_test.go",
+      "symbol": "TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput",
+      "value": 55,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_recording_test.go",
+      "symbol": "TestSessionDirectoryRecordingCapturesBothPerspectivesAndExactPCM",
+      "value": 61,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_recording_test.go",
+      "symbol": "TestSessionDirectoryRecordingFinalizesBufferedEvidenceAfterRecordingError",
+      "value": 24,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_recording_test.go",
+      "symbol": "TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput",
+      "value": 39,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_recording_test.go",
+      "symbol": "TestSessionDirectoryRecordingCapturesBothPerspectivesAndExactPCM",
+      "value": 44,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_recording_test.go",
+      "symbol": "TestSessionDirectoryRecordingFinalizesBufferedEvidenceAfterRecordingError",
+      "value": 22,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "file-lines",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_recording_test.go",
+      "value": 1291,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_recording_test.go",
+      "symbol": "TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput",
+      "value": 165,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_recording_test.go",
+      "symbol": "TestSessionDirectoryRecordingCapturesBothPerspectivesAndExactPCM",
+      "value": 197,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_recording_test.go",
+      "symbol": "TestRunSessionWithRecordingDirectoryUsesRunnerAndPreservesPairedOutput",
+      "value": 89,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
+      "file": "internal/services/internal/agentruntime/session_recording_test.go",
+      "symbol": "TestSessionDirectoryRecordingCapturesBothPerspectivesAndExactPCM",
+      "value": 97,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    }
+  ]
+}
