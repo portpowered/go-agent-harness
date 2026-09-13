@@ -40,20 +40,22 @@ claim CI, review, merge, or project-wide acceptance.
 ## Current implementation handoff
 
 The exact current executable-input checkpoint is
-`e67c44fec0e004c2b707890dfbf73b8369f96363`, with
+`0f5aff70b04315a5daf4087e9f53c96f127e09dd`, with
 `origin/main=bd6a1289218d1bef1a3af36e64e9d4496062416f`. The bounded `run.py`
 replay was accepted in
-`runs/run-20260913T135439Z-75526`; its nomicrophone YUI artifact is
-`40fd2c92fa56ad58b572edceee84c6d73a24e43efca045071d392c632de4a531`, and
-the artifact, provenance, and run summary all bind to that source revision.
-The positive instruction/text-seed path, invalid pre-provider path, clean
-shutdown, and C16 audio/tool replay are recorded there.
+`runs/run-20260913T151801Z-9525`; its nomicrophone YUI artifact is
+`9a8a3d752ecf57ea4a830db80276210671db8873c29d395414d879c88617c66b`, and
+the artifact, provenance, and run summary all bind to that tested source
+revision. The subsequent evidence ledger commits are docs-only descendants
+with unchanged executable-input hashes. The positive instruction/text-seed
+path, invalid pre-provider path, clean shutdown, and C16 audio/tool replay are
+recorded there.
 
-Focused session-instruction normal/race, CLI normal/race, consumer, mutation,
-retirement, Wire, architecture-size, coverage-registration, accumulated
-normal/coverage/race regressions, vet, pinned staticcheck, pinned lint, format,
-and diff gates passed. The known peer high-rate audio/tool finding and the
-current peer-owned Windows audio-portable CI failure remain preserved as
-external evidence; neither is waived or relabeled as a C110 defect. This
-exact-head evidence checkpoint is handoff evidence, not CI/review/merge
-approval.
+Focused session-instruction normal/race, CLI normal/race, the one-update
+provider regression, consumer, mutation, retirement, Wire,
+architecture-size, coverage-registration, accumulated normal/coverage/race
+regressions, vet, pinned staticcheck, pinned lint, format, and diff gates
+passed. The known peer high-rate audio/tool finding and the current
+peer-owned Windows audio-portable CI failure remain preserved as external
+evidence; neither is waived or relabeled as a C110 defect. This exact-source
+evidence checkpoint is handoff evidence, not CI/review/merge approval.
