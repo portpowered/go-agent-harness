@@ -7,7 +7,7 @@ This checkpoint belongs to the admitted `audio-runtime` project and task
 
 - Worktree: `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c116-centralize-rtc-track-transport`
 - Branch: `codex/audio-runtime-c116-centralize-rtc-track-transport`
-- Candidate head: `b74b7bd7` (PR #500, https://github.com/portpowered/go-agent-harness/pull/500)
+- Candidate implementation head: `5d708990` (PR #500, https://github.com/portpowered/go-agent-harness/pull/500)
 - Accepted main: `3963bc3566da24f8214634c17a9d0f79a6724171`
 - Startup revision: `8bdafc7f947a3a2c9856220abdc539437035bd21`
 - Manifest hash: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`
@@ -44,7 +44,10 @@ C96/device-pump or provider-media path was edited.
 
 The former gateway policy is retired. `track_in.go` is a four-line retirement
 marker and `track_out.go` is a seven-line Pion-facing clock compatibility
-constant; the old gateway track tests were removed with the retired policy.
+constant; the policy-duplicating gateway track tests were removed with the
+retired policy. The legacy race-gate names now cover only the remaining Pion
+edge: inbound adapter ingest/read/close and local-track write/bind/unbind
+concurrency. They do not reintroduce runtime transport policy.
 
 C79 still holds the shared `scripts/wire-packages.txt` and architecture size
 baseline lease. Those files were deliberately not edited in this checkpoint.
@@ -55,6 +58,11 @@ The following completed successfully:
 
 - `go test ./services/rtctransport/...` — 10 tests across the public, private,
   and Wire packages; the focused race run passed 27 tests across 3 packages.
+- `make test-rtc-race` — all four required race-gate tests passed, including
+  `TestInboundTrackS8ConcurrentIngestReadCancelClose`,
+  `TestOutboundTrackSerializesConcurrentWrites`, and
+  `TestOutboundTrackConcurrentWriteCancelClose` restored by checkpoint
+  `5d708990`.
 - The accumulated bounded cases passed 93 CLI wire tests, 6 software v9
   device-probe tests, 3 C21 consumption tests, and 3 credential-free
   audio-tool tests.
@@ -73,6 +81,9 @@ The following completed successfully:
 - Workspace `fmt`, `vet`, pinned Staticcheck 2026.1, and pinned golangci-lint
   v2.9.0 — all passed with zero findings; coverage registration passed for 179
   packages across 6 modules; `git diff --check` is clean.
+- The modified gateway RTC package independently passes `GOWORK=off go test`,
+  `go vet`, pinned Staticcheck 2026.1, and pinned golangci-lint v2.9.0 with
+  zero findings after the race-gate repair.
 - The strict gateway retirement count is `4 + 7 = 11`, below the accepted-main
   `453 + 418 = 871` threshold.
 
@@ -86,12 +97,28 @@ C79 retains `scripts/wire-packages.txt` and
 `docs/architecture/architecture-size-baseline.json`, so those registration,
 stale-entry, and downward-baseline edits were not made early.
 
-Prior script-CI run `34730867802` on head `49e6474c` recorded static and
-integration failures while unit, race, coverage, Wire-adjacent, and platform
-checks passed. The static findings were repaired and reproduced locally above.
-The integration log's high-rate remote-device tail loss (trial 15: exactly
-6,400 samples, with no drop/overflow/discard counters) remains the documented
-C64/provider-audio owner issue; CI was not polled or duplicated locally.
+Script-CI run `34734522403` on head `6a241da0` was rejected while unit,
+coverage, hermetic, and platform checks passed. Its exact actionable findings
+were:
+
+- the race gate could not find the three legacy gateway test names; checkpoint
+  `5d708990` restores those names as Pion-edge concurrency tests and the exact
+  `make test-rtc-race` gate now passes locally;
+- the static job still reports the unregistered
+  `go-agent-runtime/services/rtctransport/wire/wire_gen.go`, 42 stale
+  architecture entries for retired gateway files/generated composition, and
+  downward size drift (`device-probe` 215 versus baseline 216 and the RTC
+  package 17 versus baseline 19); these are C79-owned shared registry and
+  architecture-baseline edits;
+- integration still reports the C64/provider-audio-owned high-rate remote
+  device tail loss of exactly 6,400 samples (`63197/69597`, with zero
+  drop/overflow/discard counters) and the provider-burst deadline
+  (`rendered_pcm=465600`, `nonzero=150871`, `expected=174391`,
+  `final_marker=false`).
+
+The static and integration findings remain documented owner handoffs; this
+task did not edit C79 shared files or C64/provider-media/device-pump paths, and
+no duplicate full integration run was performed locally.
 
 The live board still shows C79's active task in review with its shared Wire
 registry and architecture-baseline lease retained. C96 and C107 are terminal,
@@ -100,8 +127,9 @@ were not mutated.
 
 ## Next action
 
-Retain C116 ownership through the shared-file handoff. Push `b74b7bd7`; after
-C79's reviewed guarded merge and explicit lease transfer, apply only the
+Retain C116 ownership through the shared-file handoff. Push the checkpoint
+containing implementation `5d708990` and this evidence update; after C79's
+reviewed guarded merge and explicit lease transfer, apply only the
 demonstrated ordered Wire registration plus deleted/stale and downward C116
 baseline entries, rerun the Wire/architecture gates, and submit this same PR
 head to Script CI without polling it here. Any exact-head CI rejection returns
