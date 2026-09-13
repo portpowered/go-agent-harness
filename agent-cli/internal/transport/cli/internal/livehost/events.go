@@ -237,11 +237,7 @@ func newRemoteRenderMonitor(ctx context.Context, request runtimeDevices.Request,
 	if strings.TrimSpace(request.RemoteEndpoint) == "" || observer == nil {
 		return nil, errors.New("remote render observer is unavailable")
 	}
-	probeContext := ctx
-	if probeContext == nil {
-		probeContext = context.Background()
-	}
-	probeContext, cancel := context.WithTimeout(probeContext, time.Second)
+	probeContext, cancel := context.WithTimeout(remoteRenderProbeContext(ctx), time.Second)
 	defer cancel()
 	snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(probeContext, request.RemoteEndpoint)
 	if err != nil {
@@ -263,6 +259,13 @@ func newRemoteRenderMonitor(ctx context.Context, request runtimeDevices.Request,
 		done:     make(chan struct{}),
 		seen:     len(snapshot.RenderedSamples),
 	}, nil
+}
+
+func remoteRenderProbeContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 
 func (m *remoteRenderMonitor) Start() {

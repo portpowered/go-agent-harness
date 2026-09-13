@@ -286,7 +286,7 @@ func TestPublicSessionTracePublishesRedactedRuntimeAndAudioAfterRecording(t *tes
 	}
 	assertPublicTraceBundle(t, bundle, secret, capture, playback)
 }
-func runPublicTraceScenario(t *testing.T, capture *traceCaptureProbe, playback *tracePlaybackProbe, secret string, options runtimeSession.LiveRunOptions) error {
+func runPublicTraceScenario(t *testing.T, capture *traceCaptureProbe, playback *tracePlaybackProbe, secret string, options runtimeSession.LiveRunOptions) (runErr error) {
 	if options.Recorder == nil {
 		t.Fatal("live options recorder is nil")
 	}
@@ -294,7 +294,7 @@ func runPublicTraceScenario(t *testing.T, capture *traceCaptureProbe, playback *
 	if err != nil {
 		return err
 	}
-	defer handle.Close()
+	defer func() { runErr = errors.Join(runErr, handle.Close()) }()
 	capture.emitPreGate(16_000, []int16{11, -12, 13})
 	capture.emitUploaded(16_000, []int16{14, -15, 16})
 	if err := playback.emitEnqueued(context.Background(), 16_000, []int16{17, -18, 19}); err != nil {
@@ -367,12 +367,12 @@ func TestPublicSessionTraceMarksUnsupportedRenderBoundary(t *testing.T) {
 	bundle := filepath.Join(root, "bundle")
 	playback := &tracePlaybackProbe{}
 	devices := &traceDeviceProbe{handle: &traceDeviceHandle{ports: runtimeDevices.MediaPorts{Playback: playback}}}
-	probe := &traceHostProbe{run: func(options runtimeSession.LiveRunOptions) error {
+	probe := &traceHostProbe{run: func(options runtimeSession.LiveRunOptions) (runErr error) {
 		handle, err := options.Devices.Open(context.Background(), options.DeviceRequest)
 		if err != nil {
 			return err
 		}
-		defer handle.Close()
+		defer func() { runErr = errors.Join(runErr, handle.Close()) }()
 		return options.Recorder.Finalize(context.Background(), nil)
 	}}
 	err := Run(context.Background(), nil, serviceSession.Request{TraceAudio: true, RecordDirectory: bundle, AudioOutputDevicePresent: true}, Dependencies{
@@ -399,6 +399,7 @@ func TestPublicSessionTraceMarksUnsupportedRenderBoundary(t *testing.T) {
 		t.Fatalf("unsupported render unexpectedly published speaker-rendered.wav: %v", err)
 	}
 }
+
 func TestPublicSessionTraceDoesNotOverwriteExistingDestination(t *testing.T) {
 	root := t.TempDir()
 	bundle := filepath.Join(root, "bundle")
