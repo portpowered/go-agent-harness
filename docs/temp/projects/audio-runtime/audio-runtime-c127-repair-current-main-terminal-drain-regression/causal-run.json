@@ -1,0 +1,177 @@
+{
+  "accepted_c64": "59af6325614d80173447fe2018a0471e27b4e7b1",
+  "bounds": {
+    "aggregate_elapsed_ms": 17813,
+    "aggregate_seconds": 600.0,
+    "per_process_seconds": 60.0
+  },
+  "branch": "codex/audio-runtime-c127-repair-current-main-terminal-drain-regression",
+  "candidate_revision": "bb88393e41ff93d3f1663b4085c8b03ac11baf6b",
+  "controls": {
+    "accepted_c64_healthy": {
+      "cleanup": {
+        "group_alive_after": false,
+        "parent_reaped": true
+      },
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./internal/services/internal/agentruntime",
+        "-run",
+        "^TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio$",
+        "-timeout=60s"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c127-c64-control-i_nefz80/source/agent-cli",
+      "elapsed_ms": 7008,
+      "output_bounded": true,
+      "output_tail": "=== RUN   TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio\n    rtc_device_runtime_test.go:441: C64_SEQUENCE_EVIDENCE provider_events=17 tool_calls=2 continuation=two-tool final_response=terminal-drain-final-response order=tool-turn-before-final-audio\n    rtc_device_runtime_test.go:495: C64_RENDER_EVIDENCE provider_samples=9600 admitted_samples=6400 consumed_samples=6400 rendered_samples=6720 queued_samples=0 underflow_samples=320 callback_count=14 shutdown=complete\n--- PASS: TestRTCDeviceBoundSessionTerminalDrainPreservesAcceptedProviderAudio (0.03s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.473s\n",
+      "render": {
+        "admitted_samples": 6400,
+        "callback_count": 14,
+        "consumed_samples": 6400,
+        "provider_samples": 9600,
+        "queued_samples": 0,
+        "rendered_samples": 6720,
+        "shutdown": "complete",
+        "underflow_samples": 320
+      },
+      "returncode": 0,
+      "sequence": {
+        "continuation": "two-tool",
+        "final_response": "terminal-drain-final-response",
+        "order": "tool-turn-before-final-audio",
+        "provider_events": 17,
+        "tool_calls": 2
+      },
+      "source_revision": "59af6325614d80173447fe2018a0471e27b4e7b1",
+      "timed_out": false
+    },
+    "candidate_repaired": {
+      "cleanup": {
+        "group_alive_after": false,
+        "parent_reaped": true
+      },
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./go-agent-runtime/services/session/internal/live/causal",
+        "-run",
+        "^TestTerminalDrainOrderedBoundaryTrace$",
+        "-timeout=30s"
+      ],
+      "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c127-repair-current-main-terminal-drain-regression",
+      "elapsed_ms": 516,
+      "output_bounded": true,
+      "output_tail": "=== RUN   TestTerminalDrainOrderedBoundaryTrace\n    terminal_drain_test.go:240: C127_ORDERED_BOUNDARY_TRACE events=[{\"sequence\":1,\"boundary\":\"rtc_forwarding\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":558917},{\"sequence\":2,\"boundary\":\"provider_receipt\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":561542},{\"sequence\":3,\"boundary\":\"sink_admission\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":612667},{\"sequence\":4,\"boundary\":\"device_render\",\"sample_start\":0,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":621500},{\"sequence\":5,\"boundary\":\"response_terminal\",\"sample_start\":6400,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":694708},{\"sequence\":6,\"boundary\":\"graceful_drain\",\"sample_start\":6400,\"sample_end\":6400,\"timing_domain\":\"monotonic-process\",\"elapsed_nanos\":695458}]\n--- PASS: TestTerminalDrainOrderedBoundaryTrace (0.00s)\nPASS\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/causal\t0.176s\n",
+      "returncode": 0,
+      "timed_out": false,
+      "trace": [
+        {
+          "boundary": "rtc_forwarding",
+          "elapsed_nanos": 558917,
+          "sample_end": 6400,
+          "sample_start": 0,
+          "sequence": 1,
+          "timing_domain": "monotonic-process"
+        },
+        {
+          "boundary": "provider_receipt",
+          "elapsed_nanos": 561542,
+          "sample_end": 6400,
+          "sample_start": 0,
+          "sequence": 2,
+          "timing_domain": "monotonic-process"
+        },
+        {
+          "boundary": "sink_admission",
+          "elapsed_nanos": 612667,
+          "sample_end": 6400,
+          "sample_start": 0,
+          "sequence": 3,
+          "timing_domain": "monotonic-process"
+        },
+        {
+          "boundary": "device_render",
+          "elapsed_nanos": 621500,
+          "sample_end": 6400,
+          "sample_start": 0,
+          "sequence": 4,
+          "timing_domain": "monotonic-process"
+        },
+        {
+          "boundary": "response_terminal",
+          "elapsed_nanos": 694708,
+          "sample_end": 6400,
+          "sample_start": 6400,
+          "sequence": 5,
+          "timing_domain": "monotonic-process"
+        },
+        {
+          "boundary": "graceful_drain",
+          "elapsed_nanos": 695458,
+          "sample_end": 6400,
+          "sample_start": 6400,
+          "sequence": 6,
+          "timing_domain": "monotonic-process"
+        }
+      ]
+    },
+    "current_main_unmodified": {
+      "cleanup": {
+        "group_alive_after": false,
+        "parent_reaped": true
+      },
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./services/session/internal/live/causal",
+        "-run",
+        "^TestTerminalDrainOrderedBoundaryTrace$",
+        "-timeout=30s"
+      ],
+      "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/audio-runtime-c127-current-main-_zdm1qug/source/go-agent-runtime",
+      "elapsed_ms": 1660,
+      "failure_marker": "provider media admitted during Receive: context deadline exceeded",
+      "output_bounded": true,
+      "output_tail": "=== RUN   TestTerminalDrainOrderedBoundaryTrace\n    terminal_drain_test.go:236: provider media admitted during Receive: context deadline exceeded\n--- FAIL: TestTerminalDrainOrderedBoundaryTrace (0.00s)\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/causal\t0.417s\nFAIL\n",
+      "returncode": 1,
+      "source_revision": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+      "test_overlay_sha256": "64954ad3ffd256d9af0755b942306ea88cc0dfe3c1bd5f55c034308fc139af42",
+      "test_overlay_sha256s": {
+        "go-agent-runtime/services/session/internal/live/causal/terminal_drain_test.go": "64954ad3ffd256d9af0755b942306ea88cc0dfe3c1bd5f55c034308fc139af42"
+      },
+      "timed_out": false
+    }
+  },
+  "first_divergence": {
+    "accepted_c64": "provider/tool sequence and provider-to-render accounting remain exact with queue zero",
+    "boundary": "rtc_forwarding",
+    "candidate": "sequence 1 claims provider-owned RTC media before sequence 2 Receive",
+    "current_main": "sequence 1 Receive occurs without a claim and the provider media is released",
+    "later_layer_rejected": [
+      "response terminal: candidate forwards the terminal after the media boundary",
+      "sink admission: accepted C64 control admits 6400 samples with zero drops/overflow/discards",
+      "device rendering: accepted C64 control reconciles 6400 consumed and 6720 rendered with only the recorded underflow tail",
+      "graceful drain: accepted C64 control reports shutdown=complete and queued_samples=0"
+    ]
+  },
+  "input": {
+    "provider_sample_range": [
+      0,
+      6400
+    ],
+    "schedule": "same six-boundary fixture; no sleeps or retry-until-reproduction",
+    "timing_domain": "monotonic-process"
+  },
+  "origin_main_at_run": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+  "pinned_current_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+  "schema": "audio-runtime.c127.ordered-causal-run.v1",
+  "startup_integration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+  "task": "audio-runtime-c127-repair-current-main-terminal-drain-regression"
+}
