@@ -1,0 +1,1 @@
+{"package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/retrypolicy", "exception": "Provider-neutral type and interface declarations only; construction and policy statements live behind the private service and Wire boundary."}
