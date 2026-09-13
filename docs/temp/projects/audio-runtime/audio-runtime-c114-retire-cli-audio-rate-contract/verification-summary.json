@@ -3,6 +3,7 @@
   "work": "audio-runtime-c114-retire-cli-audio-rate-contract",
   "contractRevision": "audio-runtime-v1",
   "branch": "codex/audio-runtime-c114-retire-cli-audio-rate-contract",
+  "candidateRevision": "94da4c489e8211dce77088efae78bbe91d0e895b",
   "workingTreeBase": "3963bc3566da24f8214634c17a9d0f79a6724171",
   "admission": {
     "command": "python3 factory/scripts/project-control.py verify-work --type task --name audio-runtime-c114-retire-cli-audio-rate-contract --root $FACTORY_ROOT",

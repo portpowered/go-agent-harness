@@ -1,6 +1,6 @@
 # C114 audio-rate contract checkpoint
 
-This is the admitted `audio-runtime` task `audio-runtime-c114-retire-cli-audio-rate-contract` on branch `codex/audio-runtime-c114-retire-cli-audio-rate-contract`.
+This is the admitted `audio-runtime` task `audio-runtime-c114-retire-cli-audio-rate-contract` on branch `codex/audio-runtime-c114-retire-cli-audio-rate-contract`, implementation checkpoint `94da4c489e8211dce77088efae78bbe91d0e895b`.
 
 Admission and ancestry were verified in the isolated worktree from the
 immutable project manifest:
