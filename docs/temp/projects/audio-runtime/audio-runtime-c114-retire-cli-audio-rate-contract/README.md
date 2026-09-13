@@ -1,6 +1,6 @@
 # C114 audio-rate contract checkpoint
 
-This is the admitted `audio-runtime` task `audio-runtime-c114-retire-cli-audio-rate-contract` on branch `codex/audio-runtime-c114-retire-cli-audio-rate-contract`, implementation checkpoint `94da4c489e8211dce77088efae78bbe91d0e895b`.
+This is the admitted `audio-runtime` task `audio-runtime-c114-retire-cli-audio-rate-contract` on branch `codex/audio-runtime-c114-retire-cli-audio-rate-contract`, pushed checkpoint `9f869c3a1c0af0c7074dfa4f007f319e2c25c660`.
 
 Admission and ancestry were verified in the isolated worktree from the
 immutable project manifest:
@@ -31,6 +31,7 @@ Passed local evidence:
 - audiorate normal and race tests, focused CLI audio/rate/replay/scheduled tests, and the GOWORK-off consumer;
 - bounded `verify.py` positive/causal-negative, retirement/C101-read-only, and final-scope modes;
 - bounded `run.py` cases `c21-rate-consumption`, `c50-audio-tool-replay`, and `room-scheduled-audio`;
+- follow-up `9d07de6608f38219f83ed2491d18d9282799137f` repaired the retirement verifier's false C101 match on its own evidence filename; all three verifier modes pass on the committed candidate;
 - C21 runtime/device sink consumption boundaries passed in normal and race modes; these are simulated callback/software observations, not physical or acoustic proof;
 - `make fmt`, `make vet`, pinned `make lint` (golangci-lint v2.9.0), pinned `make staticcheck` (2026.1), `make size-check`, `make coverage-registration`, and the architecture-gate unit tests;
 - `git diff --check`.
@@ -38,8 +39,8 @@ Passed local evidence:
 The architecture check reports one shared prerequisite only:
 `generated-file-spoof services/audiorate/wire/wire_gen.go`. C79 currently owns
 the shared `scripts/wire-packages.txt` registry and
-`docs/architecture/architecture-size-baseline.json` lease while its PR is in
-review. Those files are intentionally untouched. After C79 explicitly releases
+`docs/architecture/architecture-size-baseline.json` lease while its changed-head
+script CI is running. Those files are intentionally untouched. After C79 explicitly releases
 the lease, fetch and reconcile current main in this isolated branch, register
 the generated graph, rerun the final gates, then commit/push and submit this
 same task to script CI. No CI, review, merge, or broad project acceptance is
