@@ -14,9 +14,29 @@
   },
   "testedSource": {
     "revision": "77de2f9cd7e3ea5496537f96cde7203249250e6f",
+    "candidateRevision": "9205c794c7a854e33e092ebef0d0d2d0851df934",
     "traceLines": 43,
     "traceSha256": "939fa231d9b182536297cf18f923a6f358fec46a7dcbf5ea64bb7db548ed5d75",
     "traceSha256Command": "rtk git show 77de2f9cd7e3ea5496537f96cde7203249250e6f:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
+    "candidateTraceLines": 43,
+    "candidateTraceSha256": "939fa231d9b182536297cf18f923a6f358fec46a7dcbf5ea64bb7db548ed5d75",
+    "candidateTraceSha256Command": "rtk git show 9205c794c7a854e33e092ebef0d0d2d0851df934:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
+    "candidateRelation": {
+      "type": "evidence-only-descendant",
+      "diffCommand": "rtk git diff --name-only 77de2f9cd7e3ea5496537f96cde7203249250e6f..9205c794c7a854e33e092ebef0d0d2d0851df934",
+      "changedPaths": [
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/README.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/candidate-evidence.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/external-consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/external-consumer/go.sum",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/external-consumer/main.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/external-consumer/main_test.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/run.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/verify.py"
+      ],
+      "executableInputDiffCommand": "rtk git diff --quiet 77de2f9cd7e3ea5496537f96cde7203249250e6f..9205c794c7a854e33e092ebef0d0d2d0851df934 -- agent-cli go-agent-runtime coverage-manifest scripts/wire-packages.txt docs/architecture/architecture-policy.json",
+      "executableInputDiff": "PASS; no production, coverage, Wire, or architecture inputs changed after 77de2f9"
+    },
     "legacyTraceLinesRetired": 76,
     "legacyPathPresent": false,
     "cliSurface": "request/options/device/runtime type adaptation only",
@@ -65,11 +85,13 @@
     "result": "PASS; two independent traces, all four PCM edges, deterministic clock, same-length PCM mutation identity, missing-clock rejection, duplicate destination retention"
   },
   "shippedYuiProbe": {
-    "sourceRevision": "77de2f9cd7e3ea5496537f96cde7203249250e6f",
+    "sourceRevision": "9205c794c7a854e33e092ebef0d0d2d0851df934",
     "artifact": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/artifacts/yui",
-    "artifactSha256": "e2d1d5fbd1398c3955682fefd82397a159e5042a14d8827a01992835fb6c093e",
+    "artifactSha256": "58691a0d65be25eeae2024bca3ddc374a57da3f37e4698a7e189d3fda887ee24",
+    "buildCommand": "rtk make -C agent-cli build BUILD_OUTPUT=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence/docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/artifacts/yui",
+    "buildResult": "PASS; rebuilt from candidateRevision 9205c794c7a854e33e092ebef0d0d2d0851df934",
     "command": "python3 docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/run.py --case trace-audio-tool-replay --case interruption-replay --child-timeout 60 --aggregate-timeout 180",
-    "runDir": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/runs/vertical-20260913T093437Z-45040",
+    "runDir": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/runs/vertical-20260913T100838Z-9937",
     "environment": "credential-free; stdout/stderr capped at 256 KiB; child timeout 60s; aggregate timeout 180s; no surviving process-group PIDs",
     "fixtureHashes": {
       "audioTool": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
@@ -83,7 +105,7 @@
         "providerPcmBytes": 4800,
         "providerPcmSha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
         "renderedPcmBytes": 3200,
-        "renderedPcmSha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805",
+        "renderedPcmSha256": "7d2d8221eb8ec0be3da4a3ed518e1e183aa56e4ac0140ca0cf761068555805",
         "speakerTraceBytes": 4844,
         "speakerTraceSha256": "305d40c0fa1b687133be6a7841654dcbe89310b7b7f9800cb624c25bcffd880c",
         "markers": ["PROBE_TOOL_MARKER_9182", "strict replay continuation"],
@@ -104,6 +126,22 @@
     },
     "physicalAcousticClaim": "OUT_OF_SCOPE"
   },
+  "runnerDiagnostics": {
+    "preservedFailure": {
+      "runDir": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/runs/vertical-20260913T100247Z-94048",
+      "case": "interruption-replay",
+      "status": "FAIL (preserved; not relabeled)",
+      "processExitCode": 0,
+      "timedOut": false,
+      "survivingProcessGroupPids": [],
+      "observedTimelineEvents": 19,
+      "observedProviderPcmBytes": 2400,
+      "observedProviderPcmSha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf",
+      "observedRenderedPcmBytes": 2400,
+      "observedRenderedPcmSha256": "16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf",
+      "diagnostic": "The run overlapped accumulated regression workload; quiet interruption-only run vertical-20260913T100404Z-409 and rebuilt two-case run vertical-20260913T100838Z-9937 passed."
+    }
+  },
   "continuationValidation": {
     "historicalRevision": "8b2983338ea449fd739994e8fbbc958581bd2e7b",
     "historicalFinding": "focused and accumulated checks passed; C79-owned Wire/baseline repairs were blocked while work-task-25 remained in review",
@@ -122,7 +160,17 @@
     "reviewWorkId": "work-review-45",
     "historicalDecision": "FAILED",
     "historicalRejection": "PR #498 at 7725b8d9 had all nine required checks green, and independent focused/race/consumer tests plus both replay fixtures passed. Actionable defects remained: Finish(ctx, \"\", false) returned nil while retain suppressed the staged-path diagnostic for an empty bundle; trace.go kept observer ordering, copying, and preference decisions in the CLI; required verify.py, run.py, and external-consumer paths were absent; evidence was stale/mixed and the replay used untouched livehost tracing.",
-    "repairStatus": "all listed actionable defects repaired and reverified at 77de2f9"
+    "repairStatus": "all listed actionable defects repaired and reverified at 77de2f9; candidateRevision 9205c794 is an evidence-only descendant with the same production trace"
+  },
+  "scriptCi": {
+    "revision": "9205c794c7a854e33e092ebef0d0d2d0851df934",
+    "run": 34749961374,
+    "job": 103704601047,
+    "check": "CI (hermetic)",
+    "status": "FAILURE",
+    "failure": "agent-cli/test/integration/TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/captured_cadence: remote device rendered 167991/174391 compared samples (lost 6400, 96.3% retained)",
+    "scope": "C47 remote high-rate device playback; no C112-owned source path or causal C112 defect was implicated, and native hardware/physical acoustics remain out of C112 scope",
+    "executorAction": "Exact job logs were inspected. Do not claim CI green or waive the rejection; await the C47 owner/accepted-main repair, then fetch origin/main, preserve ancestry, rerun C112 gates, and resubmit PR #498 as the same task."
   },
   "ownership": {
     "manifestOwnedPaths": [
@@ -142,8 +190,8 @@
     "externalConsumerPath": "external-consumer/"
   },
   "acceptanceBoundary": {
-    "decision": "READY_FOR_SCRIPT_CI",
-    "scriptCi": "next external gate; not polled locally",
+    "decision": "CONTINUE_PENDING_EXTERNAL_C47_REPAIR",
+    "scriptCi": "last submission was inspected and rejected only by the recorded C47 hermetic failure; not polled locally",
     "independentReview": "required; implementer does not self-review",
     "guardedMerge": "external after independent review and Script CI",
     "verticalProbe": "post-merge external validation",

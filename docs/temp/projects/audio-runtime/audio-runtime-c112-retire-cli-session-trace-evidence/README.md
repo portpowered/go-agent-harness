@@ -1,9 +1,10 @@
 # C112 session-trace evidence
 
 This is the admitted `audio-runtime` evidence for
-`audio-runtime-c112-retire-cli-session-trace-evidence`. The final implementation
-checkpoint is `77de2f9cd7e3ea5496537f96cde7203249250e6f` on branch
-`codex/audio-runtime-c112-retire-cli-session-trace-evidence`.
+`audio-runtime-c112-retire-cli-session-trace-evidence`. The implementation
+checkpoint is `77de2f9cd7e3ea5496537f96cde7203249250e6f`; candidate/evidence
+head `9205c794c7a854e33e092ebef0d0d2d0851df934` is an evidence-only descendant
+on branch `codex/audio-runtime-c112-retire-cli-session-trace-evidence`.
 
 ## Admission, ancestry, and census
 
@@ -11,7 +12,7 @@ checkpoint is `77de2f9cd7e3ea5496537f96cde7203249250e6f` on branch
 - Accepted planning baseline: `d4766c3dbbf2c198142047ead4449d58dd47d485`.
 - Current fetched `origin/main`: `09c70f51243caeaf1184c4806b99bbf7749e3044`; it is an ancestor of the final candidate.
 - Required startup ancestor: `8bdafc7f947a3a2c9856220abdc539437035bd21`.
-- The current mainline was integrated by merge commit `97ec64687135f12f915096080f5a8c4af901084f`, preserving the predecessor and C79 merge ancestry.
+- The current mainline was integrated by merge commit `97ec64687135f12f915096080f5a8c4af901084f`, preserving the predecessor and C79 merge ancestry. The exact diff from the implementation checkpoint to the candidate head is limited to the evidence README/JSON, verifier/runner, and external-consumer fixture paths; the executable-input diff is empty.
 - The immutable pre-extraction `trace.go` is 119 lines with SHA-256 `db9fab41dd02578db5e7b024af869eb762b21ec14c48c64442d4ad9ca3149710`.
 - The final CLI seam is 43 lines with SHA-256 `939fa231d9b182536297cf18f923a6f358fec46a7dcbf5ea64bb7db548ed5d75`; 76 lines of CLI lifecycle/orchestration are retired.
 
@@ -54,12 +55,21 @@ empty unpublished retention, dropped prior-observer wiring, and shared payload
 copying. The runner strips credential environment variables, caps output,
 reaps the child process group, and checks source-pinned fixture and PCM hashes.
 
-Final runner result from the committed source used artifact
-`artifacts/yui` SHA-256 `e2d1d5fbd1398c3955682fefd82397a159e5042a14d8827a01992835fb6c093e`:
+Final runner result from a yui artifact rebuilt at candidate head `9205c794`
+using `make -C agent-cli build` passed. The artifact is
+`artifacts/yui` SHA-256 `58691a0d65be25eeae2024bca3ddc374a57da3f37e4698a7e189d3fda887ee24`,
+and run directory `runs/vertical-20260913T100838Z-9937`:
 
 - Tool replay: exit 0, no timeout/survivors, 27 timeline events/20 runtime events, provider PCM 4,800 bytes (`0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502`), rendered PCM 3,200 bytes (`7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805`), speaker trace 4,844 bytes (`305d40c0fa1b687133be6a7841654dcbe89310b7b7f9800cb624c25bcffd880c`), and `PROBE_TOOL_MARKER_9182` plus `strict replay continuation`.
 - Interruption replay: exit 0, no timeout/survivors, 20 timeline events/15 runtime events, provider PCM 3,840 bytes (`6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22`), rendered PCM 3,360 bytes (`302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff`), speaker trace 3,884 bytes (`001ff24159be9c44e5ba33e39c15cea64818fb488b14b860b623fe95c7a4f2ca`), and replay-complete terminal evidence.
 - Fixtures: tool `38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169`; interruption `154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206`.
+
+The concurrent run `runs/vertical-20260913T100247Z-94048` is preserved as a
+negative diagnostic, not relabeled: interruption replay exited 0 without
+survivors but retained only 2,400 provider/rendered bytes across 19 timeline
+events (`16508b8b42304d49869684c95e47c794b0eb9b54fd9137537dfaa4370097dfbf`).
+The quiet rerun `runs/vertical-20260913T100404Z-409` and the rebuilt final-head
+run above passed.
 
 This is credential-free software/file replay evidence. Native Windows hardware,
 physical devices, and physical/acoustic claims are OUT OF SCOPE and are never
@@ -74,6 +84,12 @@ provenance. Those repairs are complete. Focused causal tests, accumulated
 replay regressions, formatting, vet, Wire, architecture-size, coverage
 registration, pinned lint, pinned staticcheck, and `git diff --check` pass.
 
-The candidate is ready for the Script CI gate. Script CI and independent review
-remain external gates; this implementation does not poll CI or self-review, and
-green local checks do not claim CI acceptance.
+The last Script CI submission was inspected rather than polled: run
+`34749961374`, job `103704601047`, failed only at `CI (hermetic)` on the
+C47-owned remote high-rate device playback test
+`TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/captured_cadence`
+(167,991/174,391 samples retained; 6,400 lost). No C112-owned path or causal
+C112 defect was implicated, so this task remains CONTINUE pending the C47 owner
+merging an accepted-main repair. After that merge, fetch `origin/main`, preserve
+the required ancestry, rerun the C112 gates, and resubmit PR #498 as this same
+task without polling CI.
