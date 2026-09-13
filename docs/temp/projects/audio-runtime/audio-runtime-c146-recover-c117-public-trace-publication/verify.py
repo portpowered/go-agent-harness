@@ -380,8 +380,8 @@ def verify_runtime() -> dict[str, Any]:
 
     positive = report["cases"]["c141-simulated-duplex-four-tap"]
     process_clean(positive["process"], 0)
-    process_clean(positive["preflight"]["process"], None)
-    require(positive["preflight"]["process"].get("exit_code") != 0, "C141 source preflight unexpectedly accepted the incompatible text-only fixture")
+    process_clean(positive["preflight"], None)
+    require(positive["preflight"].get("exit_code") != 0, "C141 source preflight unexpectedly accepted the incompatible text-only fixture")
     require(positive.get("credential_free") is True, "positive replay is not credential-free")
     require(positive.get("acoustic_proof") == "OUT_OF_SCOPE_AND_NEVER_PASS" and positive.get("native_hardware") == "OUT_OF_SCOPE_AND_NEVER_PASS", "positive proof-level limits drifted")
     fixture = positive.get("source_fixture", {})
