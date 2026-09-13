@@ -136,7 +136,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		},
 		flushBuffered: func() error {
 			flushErr := flushBufferedDurationSessionLoopMessages(out, loop, terminationPlanned, &durationTerminalWritten, artifacts, opts.observer, terminalState)
-			if terminationPlanned && !terminalState.terminalWritten {
+			if terminationPlanned && !terminalState.written() {
 				flushErr = errors.Join(flushErr, terminalState.writeObservedProviderTerminal(out, artifacts))
 			}
 			return flushErr
@@ -147,7 +147,7 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		terminationPlanned = planned
 		drainDevicePlayback = !planned && preferredErr == nil && ctx.Err() == nil
 		terminationErr := termination.terminate(preferredErr)
-		durationTerminalWritten = terminalState.terminalWritten
+		durationTerminalWritten = terminalState.written()
 		markSessionDurationExpiry(opts.terminalReporter, planned, terminalState.outputState())
 		sessionErr := observedInferencer.sessionFailure()
 		runtimeErr := admittedInferencer.runtimeError()
@@ -166,12 +166,11 @@ func runAgentLoopSessionWithDurationAdmissionClockStream(ctx context.Context, ou
 		if runErr != nil && !errors.Is(runErr, context.Canceled) {
 			return fmt.Errorf("session error: %w", runErr)
 		}
-		if planned && !terminalState.terminalWritten {
-			if err := writeMaxDurationTerminal(out, artifacts, terminalState.outputState()); err != nil {
+		if planned && !terminalState.written() {
+			if err := terminalState.writeMaxDurationTerminal(out, artifacts, terminalState.outputState()); err != nil {
 				return err
 			}
-			terminalState.terminalWritten = true
-			durationTerminalWritten = true
+			durationTerminalWritten = terminalState.written()
 		}
 		return nil
 	}
@@ -367,12 +366,12 @@ func processDurationLoopMessage(ctx context.Context, sessionDone <-chan struct{}
 		var shouldWrite bool
 		msg, shouldWrite = terminalState.admitTerminal(durationExpired, msg)
 		if !shouldWrite {
-			result.durationTerminalWritten = terminalState.terminalWritten
+			result.durationTerminalWritten = terminalState.written()
 			result.planned = durationExpired
 			result.stop = false
 			return result, nil
 		}
-		result.durationTerminalWritten = terminalState.terminalWritten
+		result.durationTerminalWritten = terminalState.written()
 	}
 	opts.observer.observe(msg)
 	if err := writeDurationSessionReplayMessage(out, msg, artifacts); err != nil {
@@ -454,8 +453,8 @@ func writeDurationSessionReplayMessage(out io.Writer, msg messages.StreamMessage
 
 // flushBufferedDurationSessionLoopMessages renders only messages already
 // buffered after the loop's owned resources have stopped. Duration-specific
-// terminal and artifact state remains in this adapter rather than in the
-// shared termination boundary.
+// terminal and artifact state remains in the runtime service state rather than
+// in the shared termination boundary.
 func flushBufferedDurationSessionLoopMessages(out io.Writer, loop *agentloop.AgentLoop, planned bool, terminalWritten *bool, artifacts SessionDurationArtifactLifecycle, obs *sessionProgressObserver, terminalState *sessionDurationTerminalState) error {
 	for {
 		msg, ok := loop.Deltas().Read()
@@ -466,7 +465,7 @@ func flushBufferedDurationSessionLoopMessages(out io.Writer, loop *agentloop.Age
 			terminalState.observe(msg)
 			var shouldWrite bool
 			msg, shouldWrite = terminalState.admitTerminal(planned, msg)
-			*terminalWritten = terminalState.terminalWritten
+			*terminalWritten = terminalState.written()
 			if !shouldWrite {
 				continue
 			}
@@ -508,7 +507,7 @@ func waitForDurationSessionLoopStragglers(out io.Writer, loop *agentloop.AgentLo
 				terminalState.observe(msg)
 				var shouldWrite bool
 				msg, shouldWrite = terminalState.admitTerminal(planned, msg)
-				*terminalWritten = terminalState.terminalWritten
+				*terminalWritten = terminalState.written()
 				if !shouldWrite {
 					continue
 				}
