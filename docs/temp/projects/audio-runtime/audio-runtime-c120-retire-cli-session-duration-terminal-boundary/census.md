@@ -109,3 +109,10 @@ the service-owned `Written` state. The repaired loop SHA-256 is
 `cd65dff97f8d58def4bac1dc0cf81b869a392ac366e6a19dee54359ff6e637ba`; the
 pre-mutation loop SHA-256 remains pinned as
 `2bf32471d10af9117600c5006d453fb12beb6a134e0461f0e6b895005270591f`.
+
+The post-repair architecture check initially found only the three expected
+downward loop entries: file lines `534 -> 533`, function lines
+`285 -> 284`, and function statements `203 -> 202`. Those values were lowered
+in the C120-owned loop baseline fragment; no limit was raised and no unrelated
+entry was absorbed. The repaired architecture inventory passes with `192`
+packages, `1,912` files, and `28,239` functions.

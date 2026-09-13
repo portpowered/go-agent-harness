@@ -23,11 +23,12 @@ STARTUP = "8bdafc7f947a3a2c9856220abdc539437035bd21"
 TARGET = "agent-cli/internal/services/internal/agentruntime/session_duration_terminal.go"
 LOOP = "agent-cli/internal/services/internal/agentruntime/session_duration_loop.go"
 ADAPTER = "agent-cli/internal/services/internal/agentruntime/session_duration_terminal_adapter.go"
+LOOP_BASELINE = "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_duration_loop.go.json"
 TARGET_SHA256 = "82917c1a30ceed01da41109e368c2c6851b2ed6c5e5b689959f9d8faa5f88b88"
 BASE_LOOP_SHA256 = "2bf32471d10af9117600c5006d453fb12beb6a134e0461f0e6b895005270591f"
 REPAIRED_LOOP_SHA256 = "cd65dff97f8d58def4bac1dc0cf81b869a392ac366e6a19dee54359ff6e637ba"
 
-ALLOWED_EXACT = {TARGET, LOOP, ADAPTER, "agent-cli/internal/services/internal/agentruntime/session_duration_terminal_service_test.go", "docs/architecture/architecture-policy.json"}
+ALLOWED_EXACT = {TARGET, LOOP, LOOP_BASELINE, ADAPTER, "agent-cli/internal/services/internal/agentruntime/session_duration_terminal_service_test.go", "docs/architecture/architecture-policy.json"}
 ALLOWED_PREFIXES = (
     "go-agent-runtime/services/sessionduration/",
     "coverage-manifest/go-agent-runtime/services/sessionduration/",
@@ -107,6 +108,31 @@ def verify_repaired_loop() -> None:
         raise VerificationFailure("duration loop differs from the authorized terminal-state repair")
 
 
+def verify_repaired_baseline() -> None:
+    result = subprocess.run(
+        ["git", "diff", "--unified=0", "origin/main...HEAD", "--", LOOP_BASELINE],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    actual = [
+        line
+        for line in result.stdout.splitlines()
+        if line.startswith(("-", "+")) and not line.startswith(("---", "+++"))
+    ]
+    expected = [
+        '-      "value": 534',
+        '+      "value": 533',
+        '-      "value": 285',
+        '+      "value": 284',
+        '-      "value": 203',
+        '+      "value": 202',
+    ]
+    if actual != expected:
+        raise VerificationFailure(f"duration baseline diff is not the authorized downward repair: {actual}")
+
+
 def diff_base() -> str:
     result = subprocess.run(["git", "merge-base", "--is-ancestor", "origin/main", "HEAD"], cwd=ROOT)
     return "origin/main" if result.returncode == 0 else BASE
@@ -126,6 +152,7 @@ def verify_ownership() -> None:
         if path != TARGET and path not in ALLOWED_EXACT and not any(path.startswith(prefix) for prefix in ALLOWED_PREFIXES):
             raise VerificationFailure(f"path outside admitted C120 ownership: {path}")
     verify_repaired_loop()
+    verify_repaired_baseline()
     if (ROOT / TARGET).exists():
         raise VerificationFailure("legacy session_duration_terminal.go still exists")
     adapter = ROOT / ADAPTER
