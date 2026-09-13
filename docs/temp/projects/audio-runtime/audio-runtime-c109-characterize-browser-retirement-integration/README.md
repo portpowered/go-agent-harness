@@ -10,9 +10,10 @@ The accepted main revision is `d4766c3dbbf2c198142047ead4449d58dd47d485`.
 The preserved candidate revisions are C61
 `8e8177c031a7b3b9322d712af19970e13fa7a1bc` and C83
 `22cc6769aaf06d1e2c1275b064cc7ec29de3e371`.
-The final provenance also records fetched `origin/main`
-`09c70f51243caeaf1184c4806b99bbf7749e3044` as the newer integrated review
-main; the branch diff relative to that review main remains C109-owned only.
+The final provenance records the freshly fetched `origin/main` as the newer
+integrated review main; the current revalidation uses
+`bd6a1289218d1bef1a3af36e64e9d4496062416f` and the branch diff relative to that
+review main remains C109-owned only.
 The required and control synthetic rehearsals intentionally remain based on
 the admitted accepted main, as required by the PRD.  Because the newer review
 main deletes the architecture baseline that C61 still modifies, the final
@@ -56,6 +57,25 @@ orders, and the two public reports.  `verify.py --mode all` is the accumulated
 gate for determinism, report/public negative controls, causal attribution, and
 handoff readiness; it does not claim that candidate CI is green or that the
 project is accepted.
+
+## Current-main recovery revalidation
+
+After the previously recorded hermetic rejection, `git fetch origin main`
+resolved `origin/main` to `bd6a1289218d1bef1a3af36e64e9d4496062416f`, which was
+integrated into this isolated branch as `76d12b2304bad77be5e7f9ab0af5e0d44e8260ec`.
+The accepted main, startup integration revision, and immutable C61/C83 inputs
+remain ancestral, and the branch diff against current `origin/main` remains
+inside this directory.
+
+The exact former hermetic failures
+`TestRunRoomWithResult_BidirectionalOverlapRecordsPeerOnlyEvidence` and
+`TestRunSessionWithAudioOut_FinalizesPlayableWAV` pass 10/10 under
+`CGO_ENABLED=0 -tags=nomicrophone`.  Fresh analyzer orders, analyzer unit
+regressions, both bounded public cases, and `verify.py --mode all` pass; the
+machine-readable final bundle records the exact source, tree, ref, report and
+negative-fixture hashes.  The public evidence remains credential-free and
+software-only, and no hosted-CI, C61/C83 merge, acceptance, vertical, hardware
+or acoustic claim is made.
 
 The analyzer resolves API references from complete package/module identity:
 anonymous function bodies do not become declarations, qualified imports are
