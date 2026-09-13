@@ -37,3 +37,15 @@ GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPres
 ```
 
 The command exited `0` in `22.211s`; the named `provider_burst` subtest passed in `12.44s`, with the strict final PCM marker reached. The prior timeout did not reproduce, so no C111-owned repair was made; retain the separate C64 terminal-drain observation if it recurs. Post-merge public replay and the four accumulated C111 regressions also exited `0` with bounded, reaped process groups. Script CI remains the next external gate and is not claimed green.
+
+## Latest bounded executor rerun
+
+At candidate head `6a41574b4f8e0eb090a9d515839ed9d15f10ec95`, the same
+causal `test46/provider_burst` command passed in `22.586s` total, with the
+named subtest passing in `12.38s` and the strict final PCM marker reached. The
+accumulated `COUNT=1 bash scripts/test-session-ci-regressions.sh all` command
+also passed its normal, coverage, and race lanes, including all `20/20`
+high-rate trials and the four named C111 continuation regressions. No source
+repair was demonstrated or made; the worktree remains clean after the test
+runs. These are executor checks only and do not claim Script CI, review, merge,
+or acceptance.

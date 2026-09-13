@@ -249,6 +249,25 @@
     "observedCompletedRun": true,
     "claimedGreen": false
   },
+  "latestLocalRerun": {
+    "sourceRevision": "6a41574b4f8e0eb090a9d515839ed9d15f10ec95",
+    "causal": {
+      "command": "GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v",
+      "result": "passed",
+      "durationSeconds": 22.586,
+      "subtestDurationSeconds": 12.38,
+      "strictFinalPCMMarker": true
+    },
+    "accumulatedRegressions": {
+      "command": "COUNT=1 bash scripts/test-session-ci-regressions.sh all",
+      "result": "passed",
+      "lanes": ["normal", "coverage", "race"],
+      "highRateTrials": "20/20",
+      "namedC111Regressions": "4/4"
+    },
+    "sourceRepair": "none; no C111-owned cause demonstrated",
+    "scriptCI": "not submitted by this local rerun; no CI green claim"
+  },
   "handoff": {
     "ci": "completed run 34729269748 inspected for exact failure; current integrated candidate is ready for a fresh script CI submission; no CI green claim",
     "review": "not self-reviewed; no C111 review findings were present at admission",
