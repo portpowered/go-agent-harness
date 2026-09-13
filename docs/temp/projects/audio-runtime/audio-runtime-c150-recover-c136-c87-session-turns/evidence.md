@@ -95,3 +95,24 @@ released, fetch current main, apply only the demonstrated sessionturns Wire
 registration and twelve downward baseline deletions while preserving peers,
 rerun the focused and accumulated gates, then push the changed head to PR #513
 through SCRIPT CI without polling.
+
+## Changed behavioral coverage and lease recheck — 2026-09-13
+
+`make coverage-changed COVERAGE_BASE=4a1c399ccbb3d780be95eb04316e84b8f11a6646`
+exited 0. The complete module coverage profiles, embedded runtime coverage,
+and coverage gate passed; the worktree remains clean.
+
+Admission was reverified as `admitted` for the sole `audio-runtime` project.
+C110 PR #497 remains open at `a1dab09a990a96f08fc21fc2977b8f7dad4e5a98`,
+C111 PR #496 remains open at
+`d014a3586368c37e20618481ee162e1b83db113f`, and C119 PR #505 remains open at
+`a15b8112c84b7f3a6eb98c176094237b29d97e11`; their exact shared leases remain
+held. PR #513 remains open/draft at its preserved C136 head
+`7268f46a8c23cea480aecba621d49c01e4a30aac`, so no knowingly red candidate was
+pushed and no second PR was opened.
+
+Exact next action: retain C150 ownership until those guarded merges release
+the leases, then fetch current main and apply only the one sessionturns Wire
+registration plus the twelve demonstrated downward baseline deletions. After
+the focused and accumulated gates pass, push the changed C150 candidate to
+the existing PR #513 and return `ACCEPTED` to Script CI without polling.
