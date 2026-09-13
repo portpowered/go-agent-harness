@@ -15,7 +15,7 @@
       "500",
       "--all"
     ],
-    "payload_sha256": "1e1678ea240615afd21bf24e17df1970e6e2454c3f0256d61606b28504b38b49",
+    "payload_sha256": "39d62d70ccb3a2c836f0949d5468222193f0b1a199a855175b9d5c4d69f285cb",
     "rows": [
       {
         "baseRevision": null,
@@ -65,21 +65,6 @@
       {
         "baseRevision": null,
         "branch": null,
-        "content": null,
-        "last_output": null,
-        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-        "rejection_feedback": null,
-        "state": {
-          "name": "init",
-          "type": "PROCESSING"
-        },
-        "workId": "work-review-278",
-        "workTypeName": "review",
-        "worktree": null
-      },
-      {
-        "baseRevision": null,
-        "branch": null,
         "content": [
           {
             "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
@@ -90,7 +75,7 @@
         "name": "audio-runtime-c79-retire-cli-response-lifecycle",
         "rejection_feedback": null,
         "state": {
-          "name": "in-review",
+          "name": "init",
           "type": "PROCESSING"
         },
         "workId": "work-task-114",
@@ -300,6 +285,21 @@
       {
         "baseRevision": null,
         "branch": null,
+        "content": null,
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "fin",
+          "type": "FAILED"
+        },
+        "workId": "work-review-278",
+        "workTypeName": "review",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
         "content": [
           {
             "text": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence\", \"branch\": \"codex/audio-runtime-c112-retire-cli-session-trace-evidence\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
@@ -454,6 +454,26 @@
           "type": "TERMINAL"
         },
         "workId": "work-thoughts-274",
+        "workTypeName": "thoughts",
+        "worktree": null
+      },
+      {
+        "baseRevision": null,
+        "branch": null,
+        "content": [
+          {
+            "text": "Reconciled the C79 wake.\n\n- Independent review failed on concrete malformed tool-event ownership/state-retention defects and stale evidence.\n- Moved the existing C79 `work-task-114` from `failed` to `init`; no duplicate Work was created.\n- Eight workers remain active; C79 and C120 are queued. The ten-item delivery backlog is full.\n- PR 470 remains unmerged and no vertical probe or acceptance was issued.\n- All nine project criteria remain open.\n- Updated [meta-status.md](/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/docs/temp/projects/audio-runtime/meta-status.md:3) with the evidence and exact next decision.",
+            "type": "text"
+          }
+        ],
+        "last_output": null,
+        "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+        "rejection_feedback": null,
+        "state": {
+          "name": "complete",
+          "type": "TERMINAL"
+        },
+        "workId": "work-thoughts-285",
         "workTypeName": "thoughts",
         "worktree": null
       }
@@ -762,7 +782,7 @@
     },
     "work": "audio-runtime-c79-retire-cli-response-lifecycle"
   },
-  "current_head": "6777955c6e06bfde4627a9e27c21a18f99ab3778",
+  "current_head": "aedfb8fcfad94bb8725ee029f2f43b55fe75615e",
   "host_source_and_test_paths": {
     "c108_artifacts_at_planning_main": [
       {
@@ -794,8 +814,8 @@
       {
         "exit_code": 0,
         "needle": "TraceAudio",
-        "stdout": "agent-cli/internal/transport/cli/session_observability.go:145:\t\trequest.TraceAudio,\nagent-cli/internal/transport/cli/session_command_support.go:63:\tTraceAudio           bool\nagent-cli/internal/transport/cli/session_command_support.go:141:\t\tTraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed(\"prompt\")},\nagent-cli/internal/transport/cli/internal/livehost/run_trace_test.go:31:\t\t\trequest := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, \"bundle\")}\nagent-cli/internal/transport/cli/internal/livehost/run.go:172:\t\tif err != nil || !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/run.go:210:\tif !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:66:\t\t\tassertTraceAudioFrame(t, frame, wantSamples)\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:80:func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {\nagent-cli/internal/transport/cli/session.go:486:\t\t\t\tTraceAudio: traceAudio, Transport: transport, Signaling: signaling,\n",
-        "stdout_sha256": "8d3f707a738f8f3adc1f35c7983cc26260383cbfe666d935fb08f793c7b202d5"
+        "stdout": "agent-cli/internal/transport/cli/session.go:486:\t\t\t\tTraceAudio: traceAudio, Transport: transport, Signaling: signaling,\nagent-cli/internal/transport/cli/internal/livehost/run_trace_test.go:31:\t\t\trequest := serviceSession.Request{TraceAudio: test.traceAudio, RecordDirectory: filepath.Join(root, \"bundle\")}\nagent-cli/internal/transport/cli/internal/livehost/run.go:172:\t\tif err != nil || !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/run.go:210:\tif !request.TraceAudio {\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:66:\t\t\tassertTraceAudioFrame(t, frame, wantSamples)\nagent-cli/internal/transport/cli/internal/livehost/trace_test.go:80:func assertTraceAudioFrame(t *testing.T, frame *audio.PCMFrame, wantSamples []int16) {\nagent-cli/internal/transport/cli/session_observability.go:145:\t\trequest.TraceAudio,\nagent-cli/internal/transport/cli/session_command_support.go:63:\tTraceAudio           bool\nagent-cli/internal/transport/cli/session_command_support.go:141:\t\tTraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed(\"prompt\")},\n",
+        "stdout_sha256": "c1791f0019678949c750d3a1484ef788267210fef4d23d6f9bd39ce61b1fa609"
       },
       {
         "exit_code": 1,
