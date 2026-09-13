@@ -1,0 +1,45 @@
+{
+  "run": 34660918724,
+  "headSha": "427566239c1a7c24ee2363c94370f063899bfff7",
+  "conclusion": "failure",
+  "source": "gh run view 34660918724 --log-failed",
+  "jobs": [
+    {"name": "CI (unit)", "id": 103463055789, "conclusion": "success"},
+    {"name": "CI (hermetic)", "id": 103463055979, "conclusion": "success"},
+    {"name": "CI (WebMCP Chrome)", "id": 103463055983, "conclusion": "success"},
+    {"name": "CI (coverage)", "id": 103463056005, "conclusion": "success"},
+    {"name": "CI (integration)", "id": 103463056016, "conclusion": "failure"},
+    {"name": "CI (race)", "id": 103463056043, "conclusion": "success"},
+    {"name": "CI (static)", "id": 103463056072, "conclusion": "failure"},
+    {"name": "CI (macOS audio release)", "id": 103463056161, "conclusion": "success"},
+    {"name": "CI (Windows audio portable)", "id": 103463056171, "conclusion": "success"}
+  ],
+  "failedLogs": [
+    {
+      "job": "CI (static)",
+      "jobId": 103463056072,
+      "failedSteps": ["Verify generated service composition", "Verify service architecture and size budgets"],
+      "lines": [
+        "wire-check: Wire registry mismatch: unregistered=['go-agent-runtime/services/terminaloutcome/wire/wire_gen.go'], outside modules=[]",
+        "architecture gate failed with 5 issue(s)",
+        "baseline-stale internal/services/internal/agentruntime/session_terminal_outcome.go: baseline entry file-lines no longer describes a current violation; delete it",
+        "baseline-stale internal/services/internal/agentruntime/session_terminal_outcome.go:*sessionTerminalReporter.reconcileLocked: baseline entry function-lines no longer describes a current violation; delete it",
+        "baseline-stale internal/services/internal/agentruntime/session_terminal_outcome.go:ErrSessionTerminalAlreadyPublished: baseline entry mutable-global no longer describes a current violation; delete it",
+        "baseline-stale internal/services/internal/agentruntime/session_terminal_outcome.go:streamMessageHasOutput: baseline entry cyclomatic-complexity no longer describes a current violation; delete it",
+        "generated-file-spoof services/terminaloutcome/wire/wire_gen.go: generated header is not registered with a reproducible generator"
+      ]
+    },
+    {
+      "job": "CI (integration)",
+      "jobId": 103463056016,
+      "failedSteps": ["Run production-binary audio-device replay integration"],
+      "lines": [
+        "TestAgentBinaryTest46HighRateToolAudioRegression/trial_17",
+        "remote device rendered 167991/174391 compared samples (lost 6400, 96.3% retained)",
+        "playback={Format:16000 Hz, 1 channel, 16-bit pcm16 LatencyTarget:250ms CapacitySamples:4000 QueuedSamples:0 PeakQueuedSamples:2880 DroppedSamples:0 OverflowEvents:0 DiscardedSamples:0 DiscardEvents:0 CallbackCount:388 RenderedSamples:186240 UnderflowEvents:40 UnderflowSamples:18240 ZeroFilledSamples:18240 MinimumQueuedSamples:0}",
+        "provider={responsesSent:9 responseCreates:7 initialRequests:0 inputHistories:0 inputSamplesSeen:279359 toolResults:7 protocolError:}"
+      ],
+      "ownership": "C64 provider-audio terminal-drain repair; outside C63 owned paths"
+    }
+  ]
+}
