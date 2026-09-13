@@ -56,6 +56,7 @@ ALLOWED_PREFIXES = (
     "go-agent-runtime/services/sessioninstructions/",
     "coverage-manifest/go-agent-runtime/services/sessioninstructions/",
     "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/",
+    "docs/temp/projects/audio-runtime/audio-runtime-c144-recover-c110-session-instruction-resolution/",
 )
 SHARED_LEASE_PATHS = (
     "scripts/wire-packages.txt",
@@ -406,6 +407,9 @@ def verify_retirement() -> dict[str, Any]:
         *INSTRUCTION_CONSTRUCTION_CALLERS,
         str(ROOT.relative_to(REPO_ROOT) / "verify.py"),
         str(ROOT.relative_to(REPO_ROOT) / "run.py"),
+        "docs/temp/projects/audio-runtime/audio-runtime-c144-recover-c110-session-instruction-resolution/adoption.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c144-recover-c110-session-instruction-resolution/PR_BODY.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c144-recover-c110-session-instruction-resolution/README.md",
     ]
     return {
         "ancestry": ancestry,

@@ -57,14 +57,14 @@
   "mode": "retirement-and-owned-paths",
   "retirement": {
     "agentruntime_production_lines": {
-      "candidate": 39361,
-      "origin_main": 39552,
+      "candidate": 39138,
+      "origin_main": 39329,
       "retired_lines": 191
     },
     "ancestry": {
       "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "head": "831ec692237a1e45449fb1a63b6c98cb74854ef4",
-      "origin_main": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
+      "head": "3d5b90bc7e6c090c3079bee9edc71ae82391260d",
+      "origin_main": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
       "required_ancestors": {
         "accepted_main": {
           "is_ancestor": true,
@@ -72,7 +72,7 @@
         },
         "origin_main": {
           "is_ancestor": true,
-          "revision": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b"
+          "revision": "4a1c399ccbb3d780be95eb04316e84b8f11a6646"
         },
         "startup_ancestor": {
           "is_ancestor": true,
@@ -105,7 +105,6 @@
       "agent-cli/internal/transport/cli/internal/livehost/request.go",
       "agent-cli/internal/transport/cli/internal/livehost/request_test.go",
       "agent-cli/internal/transport/cli/session_observability.go",
-      "coverage-manifest/go-agent-runtime/services/session/internal/live/causal/package.json",
       "coverage-manifest/go-agent-runtime/services/sessioninstructions/internal/service/package.json",
       "coverage-manifest/go-agent-runtime/services/sessioninstructions/package.json",
       "coverage-manifest/go-agent-runtime/services/sessioninstructions/wire/package.json",
@@ -170,7 +169,8 @@
       "allowed_prefixes": [
         "go-agent-runtime/services/sessioninstructions/",
         "coverage-manifest/go-agent-runtime/services/sessioninstructions/",
-        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/"
+        "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/",
+        "docs/temp/projects/audio-runtime/audio-runtime-c144-recover-c110-session-instruction-resolution/"
       ],
       "caller_evidence": [
         {
@@ -235,7 +235,10 @@
       "agent-cli/internal/transport/cli/session_observability.go": "ad98b191c8fab1462ea5f6b4849518ce360636ebc1c7844be0b10550b5cb1c74",
       "coverage-manifest/go-agent-runtime/services/session/internal/live/causal/package.json": "1ed94ad13ad7b724f800616d113bb62e5d42d8a8ff77c0bb7b9682539233bb30",
       "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py": "94e33d50ab1bcfc35aa44ea42dd835246b86fc19dcf8292ac7f6badb6b18d179",
-      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py": "50dc9ec3723290ebe51ed2073b0fdf628df14738304eeba8558f7350a2ccf469",
+      "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/verify.py": "f723c84bb58e0ff011168a7121c645be931cc68e74ece8e457d823484a8d57ae",
+      "docs/temp/projects/audio-runtime/audio-runtime-c144-recover-c110-session-instruction-resolution/PR_BODY.md": "573f5cde6e9cc30a04aa3602dc9f5d309437b6dd4991ac769d20fe1ec9efe335",
+      "docs/temp/projects/audio-runtime/audio-runtime-c144-recover-c110-session-instruction-resolution/README.md": "b01fab828287e8da3c78ef48d5b54e88950ab29202d853dd87f0a5c42639c3c3",
+      "docs/temp/projects/audio-runtime/audio-runtime-c144-recover-c110-session-instruction-resolution/adoption.json": "928222668cb545de61811a892c4e954f1b4179ea609a93d4b1f1d31c09c66d51",
       "go-agent-runtime/services/session/instructions.go": "edae2ebe95d618f0c3fd13236e101772652350e97174ecd31cc6024c479bbff4",
       "go-agent-runtime/services/session/wire/providers.go": "60c9d605729c22916e6fae2ab7e90c29dd4590fb8f2c5dd0fec1014235c74ac7",
       "go-agent-runtime/services/session/wire/wire_gen.go": "ebffc2829a7c5497f57e845adb923e935f52d9ec97b78a5e5a1f23e35ef435cb",

@@ -16,8 +16,8 @@
       "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
       "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
       "label": "audio-tool-replay",
-      "manifest": "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/audio-tool-replay/tool-record/manifest.json",
-      "manifest_sha256": "d898158a227ab84628afe3411a77c361764f4cf0c44f363721e73e0d232ecf13",
+      "manifest": "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/audio-tool-replay/tool-record/manifest.json",
+      "manifest_sha256": "526db0716b2d0ab1e1885f9a1231213ce15b2f2f321031a2290f96d91aaeea1b",
       "pcm_bytes": 4800,
       "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
       "process": {
@@ -27,24 +27,24 @@
           "--replay",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
           "--audio-out",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/audio-tool-replay/rendered.wav",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/audio-tool-replay/rendered.wav",
           "--record-dir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/audio-tool-replay/tool-record",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/audio-tool-replay/tool-record",
           "--trace-audio",
           "--workdir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/audio-tool-replay",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/audio-tool-replay",
           "--allow-path",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/audio-tool-replay"
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/audio-tool-replay"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/audio-tool-replay",
-        "elapsed_seconds": 0.437725,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/audio-tool-replay",
+        "elapsed_seconds": 0.431122,
         "exit_code": 0,
         "label": "audio-tool-replay",
         "output_exceeded": false,
         "reaped": true,
         "removed_credential_env": [],
         "stderr": "",
-        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/audio-tool-replay; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/audio-tool-replay; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
         "termination_signals": [],
         "timed_out": false,
         "timeout_seconds": 120.0
@@ -69,7 +69,7 @@
           "-count=1"
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution",
-        "elapsed_seconds": 2.100863,
+        "elapsed_seconds": 2.503264,
         "exit_code": 0,
         "label": "cli-instruction-positive",
         "output_exceeded": false,
@@ -89,8 +89,8 @@
       "fixture": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
       "fixture_sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
       "label": "instruction-text-seed",
-      "manifest": "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/instruction-text-seed/tool-record/manifest.json",
-      "manifest_sha256": "06c814ff8d6cead4b13871cd054bf354d5ffb0ac4b0e38c09d1dd9c1facbff96",
+      "manifest": "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/instruction-text-seed/tool-record/manifest.json",
+      "manifest_sha256": "99fd62f5efffa178f4ddede36f9fd86c40998004f23af715bc5cb7c50e1e2c16",
       "pcm_bytes": 4800,
       "pcm_sha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
       "process": {
@@ -100,26 +100,26 @@
           "--replay",
           "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
           "--audio-out",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/instruction-text-seed/rendered.wav",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/instruction-text-seed/rendered.wav",
           "--record-dir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/instruction-text-seed/tool-record",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/instruction-text-seed/tool-record",
           "--trace-audio",
           "--workdir",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/instruction-text-seed",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/instruction-text-seed",
           "--allow-path",
-          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/instruction-text-seed",
+          "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/instruction-text-seed",
           "--prompt",
           "probe PROBE_TOOL_MARKER_9182"
         ],
-        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/instruction-text-seed",
-        "elapsed_seconds": 0.060202,
+        "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/instruction-text-seed",
+        "elapsed_seconds": 0.053095,
         "exit_code": 0,
         "label": "instruction-text-seed",
         "output_exceeded": false,
         "reaped": true,
         "removed_credential_env": [],
         "stderr": "",
-        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T170344Z-15323/instruction-text-seed; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
+        "stdout": "Filesystem scope: workdir=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/runs/run-20260913T200336Z-67684/instruction-text-seed; additional_allowed_roots=none\nFilesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox.\nTools: exec\nTool result: PROBE_TOOL_MARKER_9182\n\nAssistant: strict replay continuation\n\n[session closed: fixture_complete]\n[session terminal: classification=provider_close terminal_reason=provider_close terminal_provenance=provider output_state=not_applicable]\n",
         "termination_signals": [],
         "timed_out": false,
         "timeout_seconds": 120.0
@@ -150,7 +150,7 @@
           "-count=1"
         ],
         "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution",
-        "elapsed_seconds": 0.331294,
+        "elapsed_seconds": 0.322325,
         "exit_code": 0,
         "label": "invalid-instruction",
         "output_exceeded": false,
@@ -171,7 +171,7 @@
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c21-correlated-device-consumption/fixtures/c16-audio-tool.session.json",
     "sha256": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169"
   },
-  "origin_main": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
+  "origin_main": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
   "schema": "audio-runtime-c110-source-provenance.v1",
   "source_hashes": {
     "agent-cli/internal/services/internal/agentruntime/session_instructions.go": "aa3115b405a1c66ef977a85f43f1be22e348d3fd54c9e95114098febd0bb77fa",
@@ -180,7 +180,7 @@
     "agent-cli/internal/transport/cli/session_observability.go": "ad98b191c8fab1462ea5f6b4849518ce360636ebc1c7844be0b10550b5cb1c74",
     "coverage-manifest/go-agent-runtime/services/session/internal/live/causal/package.json": "1ed94ad13ad7b724f800616d113bb62e5d42d8a8ff77c0bb7b9682539233bb30",
     "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/admission.json": "dea0c56cd9f9fec2e7e9832831204055d4086cb198778bd093282aabd36a4295",
-    "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/baseline.json": "2b5d21efd8aa8926695292ced73ac1e856659630f6325246f3cb4cff592aada8",
+    "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/baseline.json": "2cc144ab045748b3f6750ed63ee67abc7a702bf7c0ee757f78c42e36663977be",
     "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/go.mod": "f58b738310524b7e934d80a2ead7c44bf3c24f64af3e3f37f09b059870ef89cb",
     "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer/main.go": "89d330da64ef4ef1754ab41a89a8e60927200a8a07cdd5107eb2fcfa517cc484",
     "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/run.py": "94e33d50ab1bcfc35aa44ea42dd835246b86fc19dcf8292ac7f6badb6b18d179",
@@ -196,9 +196,9 @@
     "go-agent-runtime/services/sessioninstructions/wire/wire.go": "838410e1f09036c75792b2031b3530509c02bc6e1b93f9d0ef74df8faeb78978",
     "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go": "b69e8fe21fb582d60388b2f0773988993a830e1ef875fe91bb67ab4a8172d1f9"
   },
-  "source_revision": "831ec692237a1e45449fb1a63b6c98cb74854ef4",
+  "source_revision": "3d5b90bc7e6c090c3079bee9edc71ae82391260d",
   "yui_artifact": {
-    "bytes": 51162914,
+    "bytes": 51183106,
     "path": "docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/artifacts/yui",
     "process": {
       "argv": [
@@ -211,7 +211,7 @@
         "./agent-cli/cmd/yui"
       ],
       "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "elapsed_seconds": 0.224695,
+      "elapsed_seconds": 0.253966,
       "exit_code": 0,
       "label": "yui-build",
       "output_exceeded": false,
@@ -223,8 +223,8 @@
       "timed_out": false,
       "timeout_seconds": 120.0
     },
-    "sha256": "6a40d1b4b4dcbcf81802ad5f263ab84905f21ab7f337b07fa4b1cc4ff75e50fa",
-    "source_revision": "831ec692237a1e45449fb1a63b6c98cb74854ef4",
+    "sha256": "89220655d1952f8dfe7a355e82d8944238f6f062699b7328f240868350ee7a0b",
+    "source_revision": "3d5b90bc7e6c090c3079bee9edc71ae82391260d",
     "source_tree_scope": "C110 evidence build; no CI/review/merge claim"
   }
 }
