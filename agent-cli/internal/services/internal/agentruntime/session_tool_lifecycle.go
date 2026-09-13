@@ -6,10 +6,6 @@ import (
 )
 
 const (
-	SessionScheduledAudioClassification       = "scheduled_audio_incomplete"
-	SessionUnresolvedToolResultClassification = "unresolved_tool_result"
-	SessionImageContinuationClassification    = "image_tool_continuation"
-	SessionToolContinuationClassification     = "tool_continuation"
 	// ErrSessionAudioResponseIncomplete is the CLI compatibility name for the
 	// reusable runtime's finite audio-response contract.
 	ErrSessionAudioResponseIncomplete = sc.ErrAudioResponseIncomplete
@@ -38,8 +34,6 @@ func withUnresolvedToolResults(err error, observer *sessionProgressObserver) err
 	ids, statuses := observer.unresolvedToolCallIDs(), observer.unresolvedToolResultSendStatuses()
 	return w.New().Enrich(err, sc.Snapshot{Unresolved: sc.UnresolvedToolResultsSnapshot{CallIDs: ids, SendStatuses: statuses}})
 }
-
-func formatContinuationMetadata(v map[string]string) string { return w.New().FormatMetadata(v) }
 
 func withPendingToolContinuations(err error, observer *sessionProgressObserver) error {
 	ids, statuses, codes, details := observer.pendingNonImageToolContinuationSnapshot()
