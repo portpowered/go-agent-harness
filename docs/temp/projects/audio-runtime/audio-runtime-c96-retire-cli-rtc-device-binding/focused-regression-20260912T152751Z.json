@@ -1,0 +1,81 @@
+{
+  "schema": "audio-runtime.c96.executor-evidence.v1",
+  "recordedAt": "2026-09-12T15:27:51Z",
+  "candidateRevision": "dfe68e9fdf11440a8546e161d92b3303adb0b6b7",
+  "evidenceRevision": "6f8640e423f7d54814997f79e131b6d0a10f2742",
+  "originMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "branch": "codex/audio-runtime-c96-retire-cli-rtc-device-binding",
+  "admission": {
+    "status": "admitted",
+    "project": "audio-runtime",
+    "contractRevision": "audio-runtime-v1",
+    "task": "audio-runtime-c96-retire-cli-rtc-device-binding"
+  },
+  "ancestry": {
+    "startup": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "acceptedMain": "3d3e72786ac6fc1fd47c7e029589e5117674b035",
+    "freshOriginMainIsAncestor": true
+  },
+  "immutableBaseline": {
+    "lines": 303,
+    "sha256": "0c0a72c306f748535d8d35ff2c019d1ac1c8408b7f22dff46814e2abf0a57bc1"
+  },
+  "causalProof": {
+    "positiveAndFourMutations": "pass",
+    "mutationsRejected": 4,
+    "externalConsumerGoworkOff": "pass",
+    "devicebindingNormal": "39 tests across 3 packages",
+    "devicebindingRace": "20 tests across 3 packages",
+    "agentruntimeNormal": "100 tests"
+  },
+  "retirement": {
+    "legacyLines": 82,
+    "retiredLines": 221,
+    "ownedScope": "pass",
+    "excludedPaths": "unchanged"
+  },
+  "accumulatedRegressions": {
+    "count": 1,
+    "normal": "pass",
+    "coverage": "pass",
+    "raceCli": "pass",
+    "raceDeviceGateway": "pass",
+    "raceOpenAIProvider": "pass",
+    "raceIntegrationInitial": {
+      "result": "build-cache-failure",
+      "detail": "missing Go build-cache archives for os, reflect, testing and test dependencies before test execution"
+    },
+    "raceIntegrationBoundedRerun": "pass; all selected integration controls including 20 high-rate trials"
+  },
+  "verificationRerun": {
+    "recordedAt": "2026-09-12T15:57:35Z",
+    "ownedVerifier": {
+      "mode": "positive-and-four-mutations",
+      "result": "pass",
+      "mutationsRejected": 4,
+      "externalConsumerGoworkOff": "pass",
+      "focusedNormal": "pass; devicebinding 3 packages and agentruntime 100 selected tests"
+    },
+    "devicebindingRace": {
+      "result": "pass",
+      "count": 3,
+      "tests": 18,
+      "packages": 3
+    },
+    "accumulated": {
+      "command": "COUNT=1 bash scripts/test-session-ci-regressions.sh all",
+      "normal": "pass",
+      "coverage": "pass",
+      "race": "pass",
+      "highRateTrials": "20/20 pass in each mode",
+      "simulatedDeviceGateway": "pass",
+      "composedOpenAIProvider": "pass"
+    }
+  },
+  "handoff": {
+    "pr": 485,
+    "reviewFindings": "none",
+    "sharedLease": "C79 retains scripts/wire-packages.txt and docs/architecture/architecture-size-baseline.json until reviewed guarded merge",
+    "nextAction": "After C79 releases the lease, fetch and merge current origin/main, apply only the demonstrated devicebinding Wire registration and three downward/deleted C96 baseline entries, rerun focused quality gates, push PR 485, and submit the changed same-task head to SCRIPT CI without polling."
+  }
+}
