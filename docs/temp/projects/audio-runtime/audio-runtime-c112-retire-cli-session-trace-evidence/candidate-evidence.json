@@ -1,0 +1,157 @@
+{
+  "schema": "audio-runtime-c112-session-trace-evidence/v2",
+  "project": "audio-runtime",
+  "task": "audio-runtime-c112-retire-cli-session-trace-evidence",
+  "contractRevision": "audio-runtime-v1",
+  "baseline": {
+    "acceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "originMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+    "tracePath": "agent-cli/internal/services/internal/agentruntime/trace.go",
+    "traceLines": 119,
+    "traceSha256": "db9fab41dd02578db5e7b024af869eb762b21ec14c48c64442d4ad9ca3149710",
+    "traceSha256Command": "rtk git show d4766c3dbbf2c198142047ead4449d58dd47d485:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
+    "ancestry": "accepted main and required startup are ancestors of the final candidate; current origin/main is integrated"
+  },
+  "testedSource": {
+    "revision": "77de2f9cd7e3ea5496537f96cde7203249250e6f",
+    "traceLines": 43,
+    "traceSha256": "939fa231d9b182536297cf18f923a6f358fec46a7dcbf5ea64bb7db548ed5d75",
+    "traceSha256Command": "rtk git show 77de2f9cd7e3ea5496537f96cde7203249250e6f:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
+    "legacyTraceLinesRetired": 76,
+    "legacyPathPresent": false,
+    "cliSurface": "request/options/device/runtime type adaptation only",
+    "serviceOwnership": "sessiontrace owns observer ordering, payload copying, redaction, preference composition, bounded close, retention, and atomic publication",
+    "deviceAndRecordingOwnership": "device callbacks remain in go-device-gateway; trace storage remains in go-audio/pkg/recording"
+  },
+  "callerInventory": [
+    "agent-cli/internal/services/internal/agentruntime/service.go:Dispatcher.Run -> prepareTrace",
+    "agent-cli/internal/services/internal/agentruntime/trace.go:prepareTrace -> sessiontrace/wire.NewService().Prepare",
+    "agent-cli/internal/services/internal/agentruntime/trace.go:traceRun.finish -> Prepared.Finish",
+    "go-agent-runtime/services/sessiontrace/internal/service/service.go:wrapBinding and traceObserver own capture/publication",
+    "go-agent-runtime/services/sessiontrace/internal/service/service.go:combineObservers owns prior-observer fanout"
+  ],
+  "focusedValidation": {
+    "normal": [
+      "go test ./services/sessiontrace/... -count=1: PASS",
+      "go test ./internal/services/internal/agentruntime -run C112 -count=1: PASS",
+      "GOWORK=off go test ./... -count=1 (external-consumer): PASS",
+      "GOWORK=off go build . (external-consumer): PASS"
+    ],
+    "race": [
+      "go test -race ./services/sessiontrace/... -count=1: PASS",
+      "go test -race ./internal/services/internal/agentruntime -run C112 -count=1: PASS"
+    ],
+    "causalMutations": [
+      "empty unpublished retention mutant: expected test failure PASS",
+      "dropped prior-observer request mutant: expected test failure PASS",
+      "shared observer payload mutant: expected test failure PASS"
+    ],
+    "accumulatedRegressions": "make test-regressions: PASS; agent-cli replay fixtures 13.372s; all five go-llm-gateway replay groups PASS",
+    "quality": [
+      "make fmt: PASS",
+      "make vet: PASS",
+      "make wire-check: PASS",
+      "make architecture-size-check: PASS (195 packages, 1917 files, 28314 functions)",
+      "make coverage-registration: PASS (185 workspace packages across 6 modules)",
+      "make lint: PASS with golangci-lint 2.9.0",
+      "make staticcheck: PASS with staticcheck 2026.1",
+      "git diff --check: PASS"
+    ]
+  },
+  "externalConsumer": {
+    "path": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/external-consumer",
+    "imports": "public sessiontrace and generated Wire only; no agent-cli/private-runtime imports",
+    "command": "GOWORK=off go test ./... -count=1 && GOWORK=off go build .",
+    "result": "PASS; two independent traces, all four PCM edges, deterministic clock, same-length PCM mutation identity, missing-clock rejection, duplicate destination retention"
+  },
+  "shippedYuiProbe": {
+    "sourceRevision": "77de2f9cd7e3ea5496537f96cde7203249250e6f",
+    "artifact": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/artifacts/yui",
+    "artifactSha256": "e2d1d5fbd1398c3955682fefd82397a159e5042a14d8827a01992835fb6c093e",
+    "command": "python3 docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/run.py --case trace-audio-tool-replay --case interruption-replay --child-timeout 60 --aggregate-timeout 180",
+    "runDir": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/runs/vertical-20260913T093437Z-45040",
+    "environment": "credential-free; stdout/stderr capped at 256 KiB; child timeout 60s; aggregate timeout 180s; no surviving process-group PIDs",
+    "fixtureHashes": {
+      "audioTool": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
+      "interruption": "154477d4086c47f707441e19489dfa1a21d493475b4163e64a2833dca3f17206"
+    },
+    "cases": {
+      "trace-audio-tool-replay": {
+        "exitCode": 0,
+        "timelineEvents": 27,
+        "runtimeEvents": 20,
+        "providerPcmBytes": 4800,
+        "providerPcmSha256": "0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502",
+        "renderedPcmBytes": 3200,
+        "renderedPcmSha256": "7d2d8221eb8ec0be3e1da4a3ed518e1e183aa56e4ac0140ca0cf761068555805",
+        "speakerTraceBytes": 4844,
+        "speakerTraceSha256": "305d40c0fa1b687133be6a7841654dcbe89310b7b7f9800cb624c25bcffd880c",
+        "markers": ["PROBE_TOOL_MARKER_9182", "strict replay continuation"],
+        "terminal": "fixture_complete/provider_close"
+      },
+      "interruption-replay": {
+        "exitCode": 0,
+        "timelineEvents": 20,
+        "runtimeEvents": 15,
+        "providerPcmBytes": 3840,
+        "providerPcmSha256": "6c0dbccd178ab1bcc005bc756c548f28f3888e265a46c11fe66bece28c539e22",
+        "renderedPcmBytes": 3360,
+        "renderedPcmSha256": "302e7421a29a4868a0a1a2f1ca2e8432c9015a6475412ec63fe2b15414f469ff",
+        "speakerTraceBytes": 3884,
+        "speakerTraceSha256": "001ff24159be9c44e5ba33e39c15cea64818fb488b14b860b623fe95c7a4f2ca",
+        "terminal": "replay_complete/replay"
+      }
+    },
+    "physicalAcousticClaim": "OUT_OF_SCOPE"
+  },
+  "continuationValidation": {
+    "historicalRevision": "8b2983338ea449fd739994e8fbbc958581bd2e7b",
+    "historicalFinding": "focused and accumulated checks passed; C79-owned Wire/baseline repairs were blocked while work-task-25 remained in review",
+    "supersededBy": "C79 guarded merge 1a8467246c6607a06ffc7289075da2595724ce8b and current-main merge 97ec64687135f12f915096080f5a8c4af901084f"
+  },
+  "postC79Integration": {
+    "dependencyTask": "audio-runtime-c79-retire-cli-response-lifecycle",
+    "dependencyWorkId": "work-task-25",
+    "pullRequest": 470,
+    "mergeCommit": "1a8467246c6607a06ffc7289075da2595724ce8b",
+    "candidateMainlineMerge": "97ec64687135f12f915096080f5a8c4af901084f",
+    "currentOriginMain": "09c70f51243caeaf1184c4806b99bbf7749e3044",
+    "sharedRepair": "sessiontrace Wire registration and stale prepareTrace architecture baseline removal preserved from the released predecessor"
+  },
+  "sharedGateFindings": {
+    "reviewWorkId": "work-review-45",
+    "historicalDecision": "FAILED",
+    "historicalRejection": "PR #498 at 7725b8d9 had all nine required checks green, and independent focused/race/consumer tests plus both replay fixtures passed. Actionable defects remained: Finish(ctx, \"\", false) returned nil while retain suppressed the staged-path diagnostic for an empty bundle; trace.go kept observer ordering, copying, and preference decisions in the CLI; required verify.py, run.py, and external-consumer paths were absent; evidence was stale/mixed and the replay used untouched livehost tracing.",
+    "repairStatus": "all listed actionable defects repaired and reverified at 77de2f9"
+  },
+  "ownership": {
+    "manifestOwnedPaths": [
+      "agent-cli/internal/services/internal/agentruntime/trace.go",
+      "agent-cli/internal/services/internal/agentruntime/trace_c112_test.go",
+      "go-agent-runtime/services/sessiontrace/",
+      "coverage-manifest/go-agent-runtime/services/sessiontrace/",
+      "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/"
+    ],
+    "preservedPredecessorPaths": [
+      "agent-cli/internal/services/internal/agentruntime/service.go",
+      "agent-cli/internal/services/internal/agentruntime/session_runtime_observation.go",
+      "scripts/wire-packages.txt",
+      "docs/architecture/architecture-policy.json"
+    ],
+    "legacyConsumerPathRemoved": true,
+    "externalConsumerPath": "external-consumer/"
+  },
+  "acceptanceBoundary": {
+    "decision": "READY_FOR_SCRIPT_CI",
+    "scriptCi": "next external gate; not polled locally",
+    "independentReview": "required; implementer does not self-review",
+    "guardedMerge": "external after independent review and Script CI",
+    "verticalProbe": "post-merge external validation",
+    "limitations": [
+      "software/file replay only",
+      "no credentials or Realtime claim",
+      "native Windows hardware and physical/acoustic testing OUT OF SCOPE",
+      "local green checks do not claim CI green"
+    ]
+  }
+}
