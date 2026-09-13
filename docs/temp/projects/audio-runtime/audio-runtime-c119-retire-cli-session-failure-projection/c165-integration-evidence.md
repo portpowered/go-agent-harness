@@ -59,8 +59,8 @@ functions), and `git diff --check`.
 
 This is executor evidence. No current-head Script CI result, independent
 review, guarded merge, fresh vertical acceptance, or project acceptance is
-claimed. After this evidence and PR-body checkpoint are committed and pushed
-on the same PR #505 branch, the exact next action is to return `ACCEPTED` to
-the script-owned CI gate without polling it. If that gate rejects, inspect the
+claimed. The evidence and PR-body checkpoint are committed and pushed on the
+same PR #505 branch at the submitted source head. The exact next action is to
+return `ACCEPTED` to the script-owned CI gate without polling it. If that gate rejects, inspect the
 exact failed check/log, repair only with an ownership-grounded cause, and
 resubmit this same task with `CONTINUE`.
