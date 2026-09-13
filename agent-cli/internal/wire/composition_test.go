@@ -98,6 +98,18 @@ func (*recordingClock) NewTimer(duration time.Duration) clock.Timer {
 	return clock.Real{}.NewTimer(duration)
 }
 
+func (*recordingClock) Wait(ctx context.Context, duration time.Duration) error {
+	return clock.Real{}.Wait(ctx, duration)
+}
+
+func (*recordingClock) WithDeadline(ctx context.Context, deadline time.Time) (context.Context, context.CancelFunc) {
+	return clock.Real{}.WithDeadline(ctx, deadline)
+}
+
+func (*recordingClock) WithTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	return clock.Real{}.WithTimeout(ctx, timeout)
+}
+
 type recordingSessionRuntimeObserver struct{}
 
 func (recordingSessionRuntimeObserver) ObserveSessionRuntime(SessionRuntimeObservation) {}
