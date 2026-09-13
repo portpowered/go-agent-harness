@@ -24,7 +24,8 @@ type runResult struct {
 // Service is intentionally stateless apart from its process runner. Each
 // Convert call owns its temporary input and result buffers.
 type Service struct {
-	runner runner
+	runner     runner
+	removeTemp func(string) error
 }
 
 func newError(kind audiocodec.ErrorKind, cause error, detail string) error {
@@ -43,11 +44,11 @@ func defaultLimits() audiocodec.Limits {
 // New constructs the default ffmpeg-backed implementation. It performs no
 // process lookup or filesystem access until Convert is called.
 func New() *Service {
-	return &Service{runner: newProcessRunner("ffmpeg")}
+	return &Service{runner: newProcessRunner("ffmpeg"), removeTemp: removeTempFile}
 }
 
 func newWithRunner(process runner) *Service {
-	return &Service{runner: process}
+	return &Service{runner: process, removeTemp: removeTempFile}
 }
 
 // Convert implements audiocodec.Service.
@@ -103,13 +104,22 @@ func contextForConversion(ctx context.Context, duration time.Duration) (context.
 	return context.WithTimeout(ctx, duration)
 }
 
-func (s *Service) decode(ctx context.Context, input []byte, limits audiocodec.Limits) (runResult, error) {
+func (s *Service) decode(ctx context.Context, input []byte, limits audiocodec.Limits) (result runResult, returnErr error) {
 	tmp, err := os.CreateTemp("", "audiocodec-input-*")
 	if err != nil {
 		return runResult{}, newError(audiocodec.ErrorInputFile, err, "create temporary input")
 	}
 	tmpPath := tmp.Name()
-	defer removeTempFile(tmpPath)
+	removeTemp := s.removeTemp
+	if removeTemp == nil {
+		removeTemp = removeTempFile
+	}
+	defer func() {
+		if err := removeTemp(tmpPath); err != nil {
+			returnErr = errors.Join(returnErr, newError(audiocodec.ErrorInputFile, err, "remove temporary input"))
+			result = runResult{}
+		}
+	}()
 
 	if _, err := tmp.Write(input); err != nil {
 		if closeErr := tmp.Close(); closeErr != nil {
@@ -150,10 +160,10 @@ func isTypedCodecError(err error) bool {
 	return errors.As(err, &typed)
 }
 
-func removeTempFile(path string) {
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		// Conversion already has a primary result. The temporary file is private
-		// cleanup state, so there is no second error channel to expose here.
-		return
+func removeTempFile(path string) error {
+	err := os.Remove(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
 	}
+	return err
 }

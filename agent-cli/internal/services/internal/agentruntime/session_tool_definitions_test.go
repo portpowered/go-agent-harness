@@ -13,6 +13,7 @@ import (
 	agentruntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	audiocodecwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec/wire"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -166,7 +167,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 
 	capabilityFactory := cli.NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
 		return webmcp.NewBroker(webmcp.BrokerOptions{}), nil
-	})
+	}, runtimeToolsWire.NewServiceWithAudioCodec(audiocodecwire.NewService()))
 	capabilities, err := capabilityFactory(cfg)
 	if err != nil {
 		t.Fatalf("resolve composed session capabilities: %v", err)

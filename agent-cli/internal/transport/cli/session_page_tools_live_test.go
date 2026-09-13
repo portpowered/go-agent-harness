@@ -37,7 +37,7 @@ func TestSessionPageToolsFirstClassAgainstLiveChrome(t *testing.T) {
 		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "exec"})
 	}
 
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil, newTestSessionRuntimeToolService())(cfg)
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestSessionPageToolsConcurrentColdSessions(t *testing.T) {
 				for _, id := range config.DefaultToolIDs {
 					cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "exec"})
 				}
-				capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
+				capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil, newTestSessionRuntimeToolService())(cfg)
 				if err != nil {
 					return fmt.Errorf("factory: %w", err)
 				}

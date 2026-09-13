@@ -164,6 +164,22 @@ func TestConvertPreservesTypedRunnerErrorsAndMapsOtherFailures(t *testing.T) {
 	}
 }
 
+func TestConvertReportsTemporaryCleanupFailure(t *testing.T) {
+	cleanupErr := errors.New("remove temporary input failed")
+	service := newWithRunner(&fakeRunner{result: runResult{stdout: []byte{0, 0}}})
+	service.removeTemp = func(path string) error {
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+		return cleanupErr
+	}
+
+	_, err := service.Convert(context.Background(), audiocodec.Request{Input: []byte("RIFF"), Limits: defaultLimits()})
+	if !errors.Is(err, cleanupErr) || !errors.Is(err, audiocodec.ErrInputFile) {
+		t.Fatalf("cleanup error = %v, want cleanup and input-file identity", err)
+	}
+}
+
 type blockingRunner struct {
 	started chan struct{}
 }
@@ -236,17 +252,25 @@ func TestProcessRunnerEnforcesOutputAndStderrBounds(t *testing.T) {
 	t.Run("stdout bound", func(t *testing.T) {
 		limits := defaultLimits()
 		limits.MaxOutputBytes = 2
-		runner := testProcessRunner(&testCommand{stdoutData: []byte{0, 0, 1, 0}})
+		process := &testCommand{stdoutData: []byte{0, 0, 1, 0}}
+		runner := testProcessRunner(process)
 		if _, err := runner.run(context.Background(), input, limits); !errors.Is(err, audiocodec.ErrOutputTooLarge) {
 			t.Fatalf("stdout bound error = %v", err)
+		}
+		if process.terminateCalls != 1 {
+			t.Fatalf("stdout overflow terminate calls = %d, want 1", process.terminateCalls)
 		}
 	})
 	t.Run("stderr bound", func(t *testing.T) {
 		limits := defaultLimits()
 		limits.MaxStderrBytes = 2
-		runner := testProcessRunner(&testCommand{stderrData: []byte("too much")})
+		process := &testCommand{stderrData: []byte("too much")}
+		runner := testProcessRunner(process)
 		if _, err := runner.run(context.Background(), input, limits); !errors.Is(err, audiocodec.ErrStderrTooLarge) {
 			t.Fatalf("stderr bound error = %v", err)
+		}
+		if process.terminateCalls != 1 {
+			t.Fatalf("stderr overflow terminate calls = %d, want 1", process.terminateCalls)
 		}
 	})
 }
@@ -296,8 +320,12 @@ func TestRemoveTempFileHandlesExistingAndMissingPaths(t *testing.T) {
 	if err := os.WriteFile(path, []byte("input"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	removeTempFile(path)
-	removeTempFile(path)
+	if err := removeTempFile(path); err != nil {
+		t.Fatalf("remove existing temporary file: %v", err)
+	}
+	if err := removeTempFile(path); err != nil {
+		t.Fatalf("remove missing temporary file: %v", err)
+	}
 }
 
 func commandExitError(t *testing.T) error {
@@ -328,19 +356,21 @@ func testProcessRunner(process *testCommand) *processRunner {
 }
 
 type testCommand struct {
-	stdin      io.Reader
-	stdout     io.Writer
-	stderr     io.Writer
-	startErr   error
-	waitErr    error
-	stdoutData []byte
-	stderrData []byte
+	stdin          io.Reader
+	stdout         io.Writer
+	stderr         io.Writer
+	startErr       error
+	waitErr        error
+	stdoutData     []byte
+	stderrData     []byte
+	terminateCalls int
 }
 
 func (c *testCommand) setStdin(reader io.Reader)  { c.stdin = reader }
 func (c *testCommand) setStdout(writer io.Writer) { c.stdout = writer }
 func (c *testCommand) setStderr(writer io.Writer) { c.stderr = writer }
 func (c *testCommand) start() error               { return c.startErr }
+func (c *testCommand) terminate() error           { c.terminateCalls++; return nil }
 func (c *testCommand) wait() error {
 	if len(c.stdoutData) != 0 {
 		if _, err := c.stdout.Write(c.stdoutData); err != nil {

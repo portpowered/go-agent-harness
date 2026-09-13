@@ -65,7 +65,7 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	askCommand := cli.NewAskCommand(sessionService, askFlags, loopFlags, globalFlags)
 	chatFlags := flags.NewChatFlags()
 	chatCommand := cli.NewChatCommand(sessionService, askFlags, loopFlags, chatFlags, globalFlags, fileStoreFactory)
-	toolCommand := cli.NewToolCommand(globalFlags)
+	toolCommand := cli.NewToolCommandWithRuntimeService(globalFlags, service)
 	interactionCommand := cli.NewInteractionCommand()
 	interactionReplayCommand := cli.NewInteractionReplayCommand()
 	probeCommand := cli.NewProbeCommand()
@@ -105,7 +105,7 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	sessionReplayCommand := cli.NewSessionReplayCommand(strictService)
 	scheduler := provideRoomClock(clockSource)
 	roomsService := wire2.NewRoomServiceWithDevices(liveService, devicesService, deviceRegistry, scheduler)
-	roomRunCommand := cli.NewRoomRunCommand(globalFlags, roomsService)
+	roomRunCommand := cli.NewRoomRunCommandWithToolService(globalFlags, roomsService, service)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
 	v6 := provideAcceptanceCommands()
@@ -362,7 +362,7 @@ func provideSessionDependencies(clockSource Clock, resolver tools.Service, runti
 
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire4.NewSet(
-	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommand, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire2.DeviceSet, wire2.RoomSet, wire2.SessionSet, wire2.NewReplayService, wire2.NewMetricsCollector, provideDefaultRuntimeToolService,
+	FlagsSet, cli.NewRootCommand, cli.NewAskCommand, cli.NewChatCommand, cli.NewToolCommandWithRuntimeService, cli.NewInteractionCommand, cli.NewInteractionReplayCommand, cli.NewProbeCommand, wire2.DeviceSet, wire2.RoomSet, wire2.SessionSet, wire2.NewReplayService, wire2.NewMetricsCollector, provideDefaultRuntimeToolService,
 	provideRuntimeToolService, wire.NewFileStoreFactory, provideRecordingService,
 	provideProviderCaptureService,
 	provideSessionBrowserCapabilityFactory,
@@ -383,5 +383,5 @@ var CliSet = wire4.NewSet(
 	provideSessionDependencies,
 	provideToolCapabilitiesService, cli.NewProbeRunCommandWithDeviceService, cli.NewProbeGateCommand, cli.NewProbeReportCommand, cli.NewProbeFleetCommand, provideFleetEntryExecutors,
 	provideAcceptanceCommands,
-	provideSessionRTCRuntimeFactory, cli.NewSessionToolCapabilitiesFactoryFromService, cli.NewSessionCommandWithLive, wire2.SelfPlaySet, cli.NewSessionReplayCommand, cli.NewRoomRunCommand, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
+	provideSessionRTCRuntimeFactory, cli.NewSessionToolCapabilitiesFactoryFromService, cli.NewSessionCommandWithLive, wire2.SelfPlaySet, cli.NewSessionReplayCommand, cli.NewRoomRunCommandWithToolService, cli.NewSessionShowCommand, cli.NewSessionListCommand, cli.NewSessionDeleteCommand, cli.NewConfigCommand, cli.NewConfigAddLocalCommand, cli.NewRouter, cli.NewAgentCLI,
 )

@@ -108,7 +108,7 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 	)
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(cfg)
+	}, newTestSessionRuntimeToolService())(cfg)
 	if err != nil {
 		t.Fatalf("construct session capabilities: %v", err)
 	}
@@ -424,7 +424,7 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 	)
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(cfg)
+	}, newTestSessionRuntimeToolService())(cfg)
 	if err != nil {
 		t.Fatalf("construct session capabilities: %v", err)
 	}
@@ -611,7 +611,7 @@ func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.
 	)
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(cfg)
+	}, newTestSessionRuntimeToolService())(cfg)
 	if err != nil {
 		t.Fatalf("construct session capabilities: %v", err)
 	}

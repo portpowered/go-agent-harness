@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audiocodec"
 )
@@ -24,6 +25,7 @@ type command interface {
 	setStderr(io.Writer)
 	start() error
 	wait() error
+	terminate() error
 }
 
 type execCommand struct {
@@ -35,6 +37,12 @@ func (c *execCommand) setStdout(writer io.Writer) { c.cmd.Stdout = writer }
 func (c *execCommand) setStderr(writer io.Writer) { c.cmd.Stderr = writer }
 func (c *execCommand) start() error               { return c.cmd.Start() }
 func (c *execCommand) wait() error                { return c.cmd.Wait() }
+func (c *execCommand) terminate() error {
+	if c == nil || c.cmd == nil || c.cmd.Process == nil {
+		return nil
+	}
+	return c.cmd.Process.Kill()
+}
 
 func newProcessRunner(executable string) *processRunner {
 	return &processRunner{
@@ -64,9 +72,20 @@ func (r *processRunner) run(ctx context.Context, inputPath string, limits audioc
 		}
 	}()
 
-	cmd := r.command(ctx, path, "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", inputPath, "-f", "s16le", "-ac", "1", "-ar", "16000", "-")
+	commandContext, cancel := context.WithCancel(ctx)
+	defer cancel()
+	cmd := r.command(commandContext, path, "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", inputPath, "-f", "s16le", "-ac", "1", "-ar", "16000", "-")
+	var terminateOnce sync.Once
+	terminate := func() {
+		terminateOnce.Do(func() {
+			cancel()
+			_ = cmd.terminate()
+		})
+	}
 	stdout := newBoundedBuffer(limits.MaxOutputBytes)
 	stderr := newBoundedBuffer(limits.MaxStderrBytes)
+	stdout.onOverflow = terminate
+	stderr.onOverflow = terminate
 	cmd.setStdin(input)
 	cmd.setStdout(stdout)
 	cmd.setStderr(stderr)
@@ -113,8 +132,10 @@ func decoderWaitError(ctx context.Context, waitErr error, stderr *boundedBuffer,
 
 type boundedBuffer struct {
 	bytes.Buffer
-	max      int
-	exceeded bool
+	max          int
+	exceeded     bool
+	onOverflow   func()
+	overflowOnce sync.Once
 }
 
 func newBoundedBuffer(max int) *boundedBuffer {
@@ -124,15 +145,24 @@ func newBoundedBuffer(max int) *boundedBuffer {
 func (b *boundedBuffer) Write(data []byte) (int, error) {
 	remaining := b.max - b.Len()
 	if remaining <= 0 {
-		b.exceeded = true
+		b.markExceeded()
 		return 0, io.ErrShortBuffer
 	}
 	if len(data) > remaining {
 		_, _ = b.Buffer.Write(data[:remaining])
-		b.exceeded = true
+		b.markExceeded()
 		return remaining, io.ErrShortBuffer
 	}
 	return b.Buffer.Write(data)
+}
+
+func (b *boundedBuffer) markExceeded() {
+	b.exceeded = true
+	b.overflowOnce.Do(func() {
+		if b.onOverflow != nil {
+			b.onOverflow()
+		}
+	})
 }
 
 func (b *boundedBuffer) limitError() error {

@@ -62,7 +62,7 @@ func displayAdmissionConfig(t *testing.T) *config.Config {
 // advertising.
 func TestSessionToolCapabilitiesFactoryOmitsDisplayToolsOnHeadlessProbe(t *testing.T) {
 	surface := &sessionDisplaySurfaceFake{capability: tools.UnavailableDisplayCapability("no desktop session")}
-	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
+	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface, newTestSessionRuntimeToolService())
 
 	capabilities, err := factory(displayAdmissionConfig(t))
 	if err != nil {
@@ -89,7 +89,7 @@ func TestSessionToolCapabilitiesFactoryOmitsDisplayToolsOnHeadlessProbe(t *testi
 
 func TestSessionToolCapabilitiesFactoryRetainsShowOnUsableProbe(t *testing.T) {
 	surface := &sessionDisplaySurfaceFake{capability: tools.UsableDisplayCapability(1)}
-	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
+	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface, newTestSessionRuntimeToolService())
 
 	capabilities, err := factory(displayAdmissionConfig(t))
 	if err != nil {
@@ -131,7 +131,7 @@ func TestSessionToolCapabilitiesFactoryAdvertisesShowWhenPermissionDeniedWithDis
 			Reason:    "CGPreflightScreenCaptureAccess reported that Screen Recording access is denied",
 		},
 	}
-	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
+	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface, newTestSessionRuntimeToolService())
 
 	capabilities, err := factory(displayAdmissionConfig(t))
 	if err != nil {
@@ -189,7 +189,7 @@ func TestSessionToolCapabilitiesFactoryAdvertisesShowWhenPermissionDeniedWithDis
 // -- proving the gating fix did not loosen anything on the granted path.
 func TestSessionToolCapabilitiesFactoryCapturesNormallyWhenPermissionGranted(t *testing.T) {
 	surface := &sessionDisplaySurfaceFake{capability: tools.UsableDisplayCapability(1)}
-	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
+	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface, newTestSessionRuntimeToolService())
 
 	capabilities, err := factory(displayAdmissionConfig(t))
 	if err != nil {
@@ -230,7 +230,7 @@ func TestSessionDisplayAdmissionProbeIsBoundedAndFailsClosed(t *testing.T) {
 		return tools.UnavailableDisplayCapability("released after timeout"), nil
 	})
 	t.Cleanup(func() { close(release) })
-	factory := NewSessionToolCapabilitiesFactoryWithDisplayProbe(nil, nil, probe)
+	factory := NewSessionToolCapabilitiesFactoryWithDisplayProbe(nil, nil, probe, newTestSessionRuntimeToolService())
 	startedAt := time.Now()
 	capabilities, err := factory(displayAdmissionConfig(t))
 	if err != nil {
