@@ -14,39 +14,6 @@ import (
 	sessioninstructions "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions"
 )
 
-// The contract remains public while this package owns the concrete implementation.
-type Service = sessioninstructions.Service
-type InstructionRequest = sessioninstructions.InstructionRequest
-type InstructionResult = sessioninstructions.InstructionResult
-type InstructionLoader = sessioninstructions.InstructionLoader
-type InstructionComposition = sessioninstructions.InstructionComposition
-type BrowserCapabilityState = sessioninstructions.BrowserCapabilityState
-type ResolutionPhase = sessioninstructions.ResolutionPhase
-type ResolutionError = sessioninstructions.ResolutionError
-
-const (
-	MaxInstructionBytes                  = sessioninstructions.MaxInstructionBytes
-	MaxSkillSummaryBytes                 = sessioninstructions.MaxSkillSummaryBytes
-	MaxFilesystemScopeDescriptionBytes   = sessioninstructions.MaxFilesystemScopeDescriptionBytes
-	MaxWorkspacePathBytes                = sessioninstructions.MaxWorkspacePathBytes
-	MaxToolDefinitions                   = sessioninstructions.MaxToolDefinitions
-	MaxToolNameBytes                     = sessioninstructions.MaxToolNameBytes
-	ErrContextRequired                   = sessioninstructions.ErrContextRequired
-	ErrLoaderRequired                    = sessioninstructions.ErrLoaderRequired
-	ErrInstructionTooLarge               = sessioninstructions.ErrInstructionTooLarge
-	ErrSkillSummaryTooLarge              = sessioninstructions.ErrSkillSummaryTooLarge
-	ErrFilesystemScopeTooLarge           = sessioninstructions.ErrFilesystemScopeTooLarge
-	ErrWorkspacePathTooLong              = sessioninstructions.ErrWorkspacePathTooLong
-	ErrMalformedInstruction              = sessioninstructions.ErrMalformedInstruction
-	PhaseValidation                      = sessioninstructions.PhaseValidation
-	PhasePromptStat                      = sessioninstructions.PhasePromptStat
-	PhasePromptRead                      = sessioninstructions.PhasePromptRead
-	PhaseWorkspaceRead                   = sessioninstructions.PhaseWorkspaceRead
-	PhaseSkillsSummary                   = sessioninstructions.PhaseSkillsSummary
-	PhaseScope                           = sessioninstructions.PhaseScope
-	BrowserCapabilityConnectedUnselected = sessioninstructions.BrowserCapabilityConnectedUnselected
-)
-
 const (
 	defaultPageSightToolID = "show_page"
 
@@ -86,103 +53,103 @@ const (
 - Two or more tabs matching the same current step: ask exactly one concise question naming every matching candidate by its title before calling webmcp_select_tab. Do not guess and do not select by list order.`
 )
 
-// Service is stateless. Host-specific I/O enters only through a request-owned
+// sessioninstructions.Service is stateless. Host-specific I/O enters only through a request-owned
 // loader and composition receives a value snapshot.
 type instructionService struct{}
 
 func New() sessioninstructions.InstructionService { return &instructionService{} }
 
-var _ Service = (*instructionService)(nil)
+var _ sessioninstructions.Service = (*instructionService)(nil)
 
 // Resolve selects the explicit prompt, workspace AGENTS.md, or none; then it
 // appends skills and scope in their established order. Every loader operation
 // is attributed to a phase and checked for cancellation.
-func (s *instructionService) Resolve(ctx context.Context, request InstructionRequest) (InstructionResult, error) {
+func (s *instructionService) Resolve(ctx context.Context, request sessioninstructions.InstructionRequest) (sessioninstructions.InstructionResult, error) {
 	if err := validateRequest(ctx, request); err != nil {
-		return InstructionResult{}, err
+		return sessioninstructions.InstructionResult{}, err
 	}
 	instructions, err := resolvePrompt(ctx, request.Prompt, request.WorkspaceDir, request.Loader)
 	if err != nil {
-		return InstructionResult{}, err
+		return sessioninstructions.InstructionResult{}, err
 	}
 	instructions, err = appendSkillsSummary(ctx, instructions, request.WorkspaceDir, request.Loader)
 	if err != nil {
-		return InstructionResult{}, err
+		return sessioninstructions.InstructionResult{}, err
 	}
 	instructions, err = appendFilesystemScope(instructions, request)
 	if err != nil {
-		return InstructionResult{}, err
+		return sessioninstructions.InstructionResult{}, err
 	}
-	return InstructionResult{Instructions: instructions}, nil
+	return sessioninstructions.InstructionResult{Instructions: instructions}, nil
 }
 
-func appendSkillsSummary(ctx context.Context, instructions, workspaceDir string, loader InstructionLoader) (string, error) {
+func appendSkillsSummary(ctx context.Context, instructions, workspaceDir string, loader sessioninstructions.InstructionLoader) (string, error) {
 	if instructions == "" || workspaceDir == "" || loader == nil {
 		return instructions, nil
 	}
-	if err := checkContext(ctx, PhaseSkillsSummary, workspaceDir); err != nil {
+	if err := checkContext(ctx, sessioninstructions.PhaseSkillsSummary, workspaceDir); err != nil {
 		return "", err
 	}
 	summary, summaryErr := skillsSummary(ctx, loader)
-	if err := checkContext(ctx, PhaseSkillsSummary, workspaceDir); err != nil {
+	if err := checkContext(ctx, sessioninstructions.PhaseSkillsSummary, workspaceDir); err != nil {
 		return "", err
 	}
 	if summaryErr != nil {
-		return "", resolutionError(PhaseSkillsSummary, workspaceDir, fmt.Errorf("load skills summary: %w", summaryErr))
+		return "", resolutionError(sessioninstructions.PhaseSkillsSummary, workspaceDir, fmt.Errorf("load skills summary: %w", summaryErr))
 	}
-	if err := checkContext(ctx, PhaseSkillsSummary, workspaceDir); err != nil {
+	if err := checkContext(ctx, sessioninstructions.PhaseSkillsSummary, workspaceDir); err != nil {
 		return "", err
 	}
-	if err := validateText(summary, MaxSkillSummaryBytes, ErrSkillSummaryTooLarge); err != nil {
-		return "", resolutionError(PhaseSkillsSummary, workspaceDir, err)
+	if err := validateText(summary, sessioninstructions.MaxSkillSummaryBytes, sessioninstructions.ErrSkillSummaryTooLarge); err != nil {
+		return "", resolutionError(sessioninstructions.PhaseSkillsSummary, workspaceDir, err)
 	}
 	if summary == "" {
 		return instructions, nil
 	}
 	instructions += "\n\n---\n\n" + summary
-	if err := validateText(instructions, MaxInstructionBytes, ErrInstructionTooLarge); err != nil {
-		return "", resolutionError(PhaseSkillsSummary, workspaceDir, err)
+	if err := validateText(instructions, sessioninstructions.MaxInstructionBytes, sessioninstructions.ErrInstructionTooLarge); err != nil {
+		return "", resolutionError(sessioninstructions.PhaseSkillsSummary, workspaceDir, err)
 	}
 	return instructions, nil
 }
 
-func appendFilesystemScope(instructions string, request InstructionRequest) (string, error) {
+func appendFilesystemScope(instructions string, request sessioninstructions.InstructionRequest) (string, error) {
 	if instructions == "" || !request.FilesystemScopeSet {
 		return instructions, nil
 	}
 	scope := "Filesystem scope: " + request.FilesystemScopeDescription + ". Relative filesystem-tool paths resolve from this workdir."
 	instructions += "\n\n" + scope
-	if err := validateText(instructions, MaxInstructionBytes, ErrInstructionTooLarge); err != nil {
-		return "", resolutionError(PhaseScope, "", err)
+	if err := validateText(instructions, sessioninstructions.MaxInstructionBytes, sessioninstructions.ErrInstructionTooLarge); err != nil {
+		return "", resolutionError(sessioninstructions.PhaseScope, "", err)
 	}
 	return instructions, nil
 }
 
-func validateRequest(ctx context.Context, request InstructionRequest) error {
+func validateRequest(ctx context.Context, request sessioninstructions.InstructionRequest) error {
 	if ctx == nil {
-		return resolutionError(PhaseValidation, "", ErrContextRequired)
+		return resolutionError(sessioninstructions.PhaseValidation, "", sessioninstructions.ErrContextRequired)
 	}
 	if err := ctx.Err(); err != nil {
-		return resolutionError(PhaseValidation, "", err)
+		return resolutionError(sessioninstructions.PhaseValidation, "", err)
 	}
-	if err := validateText(request.Prompt, MaxInstructionBytes, ErrInstructionTooLarge); err != nil {
-		return resolutionError(PhaseValidation, "prompt", err)
+	if err := validateText(request.Prompt, sessioninstructions.MaxInstructionBytes, sessioninstructions.ErrInstructionTooLarge); err != nil {
+		return resolutionError(sessioninstructions.PhaseValidation, "prompt", err)
 	}
-	if err := validateText(request.WorkspaceDir, MaxWorkspacePathBytes, ErrWorkspacePathTooLong); err != nil {
-		return resolutionError(PhaseValidation, "workspace", err)
+	if err := validateText(request.WorkspaceDir, sessioninstructions.MaxWorkspacePathBytes, sessioninstructions.ErrWorkspacePathTooLong); err != nil {
+		return resolutionError(sessioninstructions.PhaseValidation, "workspace", err)
 	}
 	if request.FilesystemScopeSet {
-		if err := validateText(request.FilesystemScopeDescription, MaxFilesystemScopeDescriptionBytes, ErrFilesystemScopeTooLarge); err != nil {
-			return resolutionError(PhaseValidation, "scope", err)
+		if err := validateText(request.FilesystemScopeDescription, sessioninstructions.MaxFilesystemScopeDescriptionBytes, sessioninstructions.ErrFilesystemScopeTooLarge); err != nil {
+			return resolutionError(sessioninstructions.PhaseValidation, "scope", err)
 		}
 	}
 	if request.Prompt == "" && request.WorkspaceDir != "" && request.Loader == nil {
-		return resolutionError(PhaseValidation, request.WorkspaceDir, ErrLoaderRequired)
+		return resolutionError(sessioninstructions.PhaseValidation, request.WorkspaceDir, sessioninstructions.ErrLoaderRequired)
 	}
 	return nil
 }
 
-func resolvePrompt(ctx context.Context, value, workspaceDir string, loader InstructionLoader) (string, error) {
+func resolvePrompt(ctx context.Context, value, workspaceDir string, loader sessioninstructions.InstructionLoader) (string, error) {
 	if value == "none" {
 		return "", nil
 	}
@@ -192,83 +159,83 @@ func resolvePrompt(ctx context.Context, value, workspaceDir string, loader Instr
 	return resolveWorkspacePrompt(ctx, workspaceDir, loader)
 }
 
-func resolveExplicitPrompt(ctx context.Context, value string, loader InstructionLoader) (string, error) {
+func resolveExplicitPrompt(ctx context.Context, value string, loader sessioninstructions.InstructionLoader) (string, error) {
 	// A nil loader is useful for literal-only embedded callers. It prevents the
 	// runtime from reaching into host filesystem state when the host has not
 	// opted into prompt-file resolution.
 	if loader == nil {
-		return validateAndReturn(value, MaxInstructionBytes, ErrInstructionTooLarge, PhaseValidation, "prompt")
+		return validateAndReturn(value, sessioninstructions.MaxInstructionBytes, sessioninstructions.ErrInstructionTooLarge, sessioninstructions.PhaseValidation, "prompt")
 	}
-	if err := checkContext(ctx, PhasePromptStat, value); err != nil {
+	if err := checkContext(ctx, sessioninstructions.PhasePromptStat, value); err != nil {
 		return "", err
 	}
 	statErr := loaderStat(ctx, loader, value)
-	if err := checkContext(ctx, PhasePromptStat, value); err != nil {
+	if err := checkContext(ctx, sessioninstructions.PhasePromptStat, value); err != nil {
 		return "", err
 	}
 	if statErr != nil {
 		if errors.Is(statErr, context.Canceled) || errors.Is(statErr, context.DeadlineExceeded) {
-			return "", resolutionError(PhasePromptStat, value, statErr)
+			return "", resolutionError(sessioninstructions.PhasePromptStat, value, statErr)
 		}
 		// Preserve the established literal fallback for every ordinary stat
 		// failure, including a missing explicit path.
-		return validateAndReturn(value, MaxInstructionBytes, ErrInstructionTooLarge, PhasePromptStat, value)
+		return validateAndReturn(value, sessioninstructions.MaxInstructionBytes, sessioninstructions.ErrInstructionTooLarge, sessioninstructions.PhasePromptStat, value)
 	}
-	if err := checkContext(ctx, PhasePromptRead, value); err != nil {
+	if err := checkContext(ctx, sessioninstructions.PhasePromptRead, value); err != nil {
 		return "", err
 	}
 	data, readErr := loaderReadFile(ctx, loader, value)
-	if err := checkContext(ctx, PhasePromptRead, value); err != nil {
+	if err := checkContext(ctx, sessioninstructions.PhasePromptRead, value); err != nil {
 		return "", err
 	}
 	if readErr != nil {
-		return "", resolutionError(PhasePromptRead, value, fmt.Errorf("read system prompt %s: %w", value, readErr))
+		return "", resolutionError(sessioninstructions.PhasePromptRead, value, fmt.Errorf("read system prompt %s: %w", value, readErr))
 	}
-	if err := checkContext(ctx, PhasePromptRead, value); err != nil {
+	if err := checkContext(ctx, sessioninstructions.PhasePromptRead, value); err != nil {
 		return "", err
 	}
-	text, err := boundedText(data, MaxInstructionBytes, ErrInstructionTooLarge)
+	text, err := boundedText(data, sessioninstructions.MaxInstructionBytes, sessioninstructions.ErrInstructionTooLarge)
 	if err != nil {
-		return "", resolutionError(PhasePromptRead, value, err)
+		return "", resolutionError(sessioninstructions.PhasePromptRead, value, err)
 	}
 	return text, nil
 }
 
-func resolveWorkspacePrompt(ctx context.Context, workspaceDir string, loader InstructionLoader) (string, error) {
+func resolveWorkspacePrompt(ctx context.Context, workspaceDir string, loader sessioninstructions.InstructionLoader) (string, error) {
 	if workspaceDir == "" {
 		return "", nil
 	}
 	if loader == nil {
-		return "", resolutionError(PhaseWorkspaceRead, workspaceDir, ErrLoaderRequired)
+		return "", resolutionError(sessioninstructions.PhaseWorkspaceRead, workspaceDir, sessioninstructions.ErrLoaderRequired)
 	}
-	if err := checkContext(ctx, PhaseWorkspaceRead, workspaceDir); err != nil {
+	if err := checkContext(ctx, sessioninstructions.PhaseWorkspaceRead, workspaceDir); err != nil {
 		return "", err
 	}
 	agentsPath := filepath.Join(workspaceDir, "AGENTS.md")
 	data, readErr := loaderReadFile(ctx, loader, agentsPath)
-	if err := checkContext(ctx, PhaseWorkspaceRead, agentsPath); err != nil {
+	if err := checkContext(ctx, sessioninstructions.PhaseWorkspaceRead, agentsPath); err != nil {
 		return "", err
 	}
 	if readErr != nil {
 		if errors.Is(readErr, context.Canceled) || errors.Is(readErr, context.DeadlineExceeded) {
-			return "", resolutionError(PhaseWorkspaceRead, agentsPath, readErr)
+			return "", resolutionError(sessioninstructions.PhaseWorkspaceRead, agentsPath, readErr)
 		}
 		if errors.Is(readErr, fs.ErrNotExist) {
 			return "", nil
 		}
-		return "", resolutionError(PhaseWorkspaceRead, agentsPath, fmt.Errorf("read AGENTS.md %s: %w", agentsPath, readErr))
+		return "", resolutionError(sessioninstructions.PhaseWorkspaceRead, agentsPath, fmt.Errorf("read AGENTS.md %s: %w", agentsPath, readErr))
 	}
-	if err := checkContext(ctx, PhaseWorkspaceRead, agentsPath); err != nil {
+	if err := checkContext(ctx, sessioninstructions.PhaseWorkspaceRead, agentsPath); err != nil {
 		return "", err
 	}
-	text, err := boundedText(data, MaxInstructionBytes, ErrInstructionTooLarge)
+	text, err := boundedText(data, sessioninstructions.MaxInstructionBytes, sessioninstructions.ErrInstructionTooLarge)
 	if err != nil {
-		return "", resolutionError(PhaseWorkspaceRead, agentsPath, err)
+		return "", resolutionError(sessioninstructions.PhaseWorkspaceRead, agentsPath, err)
 	}
 	return text, nil
 }
 
-func loaderStat(ctx context.Context, loader InstructionLoader, path string) error {
+func loaderStat(ctx context.Context, loader sessioninstructions.InstructionLoader, path string) error {
 	if contextual, ok := loader.(interface {
 		StatContext(context.Context, string) error
 	}); ok {
@@ -277,7 +244,7 @@ func loaderStat(ctx context.Context, loader InstructionLoader, path string) erro
 	return loader.Stat(path)
 }
 
-func loaderReadFile(ctx context.Context, loader InstructionLoader, path string) ([]byte, error) {
+func loaderReadFile(ctx context.Context, loader sessioninstructions.InstructionLoader, path string) ([]byte, error) {
 	if contextual, ok := loader.(interface {
 		ReadFileContext(context.Context, string) ([]byte, error)
 	}); ok {
@@ -286,7 +253,7 @@ func loaderReadFile(ctx context.Context, loader InstructionLoader, path string) 
 	return loader.ReadFile(path)
 }
 
-func skillsSummary(ctx context.Context, loader InstructionLoader) (string, error) {
+func skillsSummary(ctx context.Context, loader sessioninstructions.InstructionLoader) (string, error) {
 	if contextual, ok := loader.(interface {
 		SkillsSummaryContext(context.Context) (string, error)
 	}); ok {
@@ -295,9 +262,9 @@ func skillsSummary(ctx context.Context, loader InstructionLoader) (string, error
 	return loader.SkillsSummary()
 }
 
-func checkContext(ctx context.Context, phase ResolutionPhase, path string) error {
+func checkContext(ctx context.Context, phase sessioninstructions.ResolutionPhase, path string) error {
 	if ctx == nil {
-		return resolutionError(phase, path, ErrContextRequired)
+		return resolutionError(phase, path, sessioninstructions.ErrContextRequired)
 	}
 	if err := ctx.Err(); err != nil {
 		return resolutionError(phase, path, err)
@@ -305,7 +272,7 @@ func checkContext(ctx context.Context, phase ResolutionPhase, path string) error
 	return nil
 }
 
-func validateAndReturn(value string, limit int, tooLarge error, phase ResolutionPhase, path string) (string, error) {
+func validateAndReturn(value string, limit int, tooLarge error, phase sessioninstructions.ResolutionPhase, path string) (string, error) {
 	if err := validateText(value, limit, tooLarge); err != nil {
 		return "", resolutionError(phase, path, err)
 	}
@@ -328,18 +295,18 @@ func validateText(value string, limit int, tooLarge error) error {
 		return errors.Join(tooLarge, fmt.Errorf("got %d bytes, limit is %d", len(value), limit))
 	}
 	if !utf8.ValidString(value) || strings.IndexByte(value, 0) >= 0 {
-		return ErrMalformedInstruction
+		return sessioninstructions.ErrMalformedInstruction
 	}
 	return nil
 }
 
-func resolutionError(phase ResolutionPhase, path string, err error) error {
-	return &ResolutionError{Phase: phase, Path: path, Err: err}
+func resolutionError(phase sessioninstructions.ResolutionPhase, path string, err error) error {
+	return &sessioninstructions.ResolutionError{Phase: phase, Path: path, Err: err}
 }
 
 // Compose appends provider-neutral grounding policies in their historical
 // order. Empty instructions and no-tool requests are exact identity paths.
-func (s *instructionService) Compose(request InstructionComposition) string {
+func (s *instructionService) Compose(request sessioninstructions.InstructionComposition) string {
 	instructions := request.Instructions
 	if instructions == "" {
 		return instructions
@@ -358,8 +325,8 @@ func (s *instructionService) Compose(request InstructionComposition) string {
 	return joinPolicyBlocks(blocks)
 }
 
-func appendConnectedUnselectedPolicy(blocks []string, instructions string, state BrowserCapabilityState) []string {
-	if state == BrowserCapabilityConnectedUnselected && !strings.Contains(instructions, connectedUnselectedBrowserGrounding) {
+func appendConnectedUnselectedPolicy(blocks []string, instructions string, state sessioninstructions.BrowserCapabilityState) []string {
+	if state == sessioninstructions.BrowserCapabilityConnectedUnselected && !strings.Contains(instructions, connectedUnselectedBrowserGrounding) {
 		return append(blocks, connectedUnselectedBrowserGrounding)
 	}
 	return blocks
@@ -371,7 +338,7 @@ func appendBrowserPolicies(blocks []string, instructions string) []string {
 }
 
 func appendSightPolicy(blocks []string, instructions string, definitions []messages.ToolDefinition, pageSightID string) []string {
-	if len(pageSightID) == 0 || len(pageSightID) > MaxToolNameBytes || !utf8.ValidString(pageSightID) || strings.IndexByte(pageSightID, 0) >= 0 {
+	if len(pageSightID) == 0 || len(pageSightID) > sessioninstructions.MaxToolNameBytes || !utf8.ValidString(pageSightID) || strings.IndexByte(pageSightID, 0) >= 0 {
 		pageSightID = defaultPageSightToolID
 	}
 	if hasTool(definitions, pageSightID) {
@@ -399,8 +366,8 @@ func joinPolicyBlocks(blocks []string) string {
 }
 
 func cloneToolDefinitions(definitions []messages.ToolDefinition) []messages.ToolDefinition {
-	if len(definitions) > MaxToolDefinitions {
-		definitions = definitions[:MaxToolDefinitions]
+	if len(definitions) > sessioninstructions.MaxToolDefinitions {
+		definitions = definitions[:sessioninstructions.MaxToolDefinitions]
 	}
 	cloned := make([]messages.ToolDefinition, len(definitions))
 	for index, definition := range definitions {
@@ -413,7 +380,7 @@ func cloneToolDefinitions(definitions []messages.ToolDefinition) []messages.Tool
 
 func hasTool(definitions []messages.ToolDefinition, name string) bool {
 	for _, definition := range definitions {
-		if len(definition.Name) <= MaxToolNameBytes && definition.Name == name {
+		if len(definition.Name) <= sessioninstructions.MaxToolNameBytes && definition.Name == name {
 			return true
 		}
 	}

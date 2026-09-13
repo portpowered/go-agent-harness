@@ -220,7 +220,7 @@ def mutate_and_kill() -> dict[str, Any]:
         source = mutant_cancel.read_text(encoding="utf-8")
         guard = (
             "\tsummary, summaryErr := skillsSummary(ctx, loader)\n"
-            "\tif err := checkContext(ctx, PhaseSkillsSummary, workspaceDir); err != nil {\n"
+            "\tif err := checkContext(ctx, sessioninstructions.PhaseSkillsSummary, workspaceDir); err != nil {\n"
             "\t\treturn \"\", err\n\t}\n"
         )
         mutated, count = source.replace(guard, "\tsummary, summaryErr := skillsSummary(ctx, loader)\n", 1), source.count(guard)
