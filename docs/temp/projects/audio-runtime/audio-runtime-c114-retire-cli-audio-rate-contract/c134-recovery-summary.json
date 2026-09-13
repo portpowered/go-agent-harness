@@ -1,0 +1,80 @@
+{
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "work": "audio-runtime-c134-recover-c114-audio-rate-contract",
+  "candidateRevision": "df48faf0030818f747a4731e361f11d7efc321fb",
+  "branch": "codex/audio-runtime-c134-recover-c114-audio-rate-contract",
+  "admission": {
+    "command": "python3 factory/scripts/project-control.py verify-work --type task --name audio-runtime-c134-recover-c114-audio-rate-contract --root $FACTORY_ROOT",
+    "result": "{\"status\": \"admitted\", \"project\": \"audio-runtime\", \"name\": \"audio-runtime-c134-recover-c114-audio-rate-contract\"}"
+  },
+  "ancestry": {
+    "manifestBaseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+    "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "preservedC114Head": "59edd9e15b8cf631e7230959f31c4a5faf64e56f",
+    "acceptedPlanningMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "freshOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "allRequiredAncestors": true
+  },
+  "historicalCheckpoint": {
+    "pullRequest": 499,
+    "head": "59edd9e15b8cf631e7230959f31c4a5faf64e56f",
+    "scriptCIRun": 34733334460,
+    "status": "historical-only; not promoted to C134 success"
+  },
+  "ownership": {
+    "sharedPathsUnmodified": [
+      "scripts/wire-packages.txt",
+      "docs/architecture/architecture-size-baseline.json"
+    ],
+    "peerPathsModified": [],
+    "legacyProductionReduction": {
+      "session_audio_rate.go": {
+        "baselineLines": 68,
+        "candidateLines": 46,
+        "candidateSHA256": "e1585638ad108eff4f17a2b3b5236e2aa2fb59c835aadb77fb976280b0713fb8"
+      },
+      "session_audio_format.go": {
+        "baselineLines": 84,
+        "candidateLines": 79,
+        "candidateSHA256": "19a4f1aefabd1425088d5fc53439e63c787ed449c46e5faa2b2d27802a1f7cd5"
+      },
+      "strictNetProductionLineReduction": 27
+    }
+  },
+  "gates": {
+    "audiorateNormal": "PASS: 24 tests in 3 packages",
+    "audiorateRace": "PASS: 72 tests across 3 repetitions and 3 packages",
+    "cliFocusedNormal": "PASS: 88 tests",
+    "cliFocusedRace": "PASS: 81 tests across 3 repetitions",
+    "externalConsumer": "PASS: GOWORK=off",
+    "causalVerifiers": "PASS: all three C134-bound modes; reports under runs/c134-recovery/",
+    "softwareReplay": "PASS: c21-rate-consumption, c50-audio-tool-replay, room-scheduled-audio",
+    "transportRegression": "PASS: 4 tests",
+    "formatVetLintStaticcheck": "PASS: make fmt, make vet, pinned make lint, pinned make staticcheck",
+    "coverageRegistration": "PASS: 188 workspace packages across 6 modules",
+    "wireCheck": "PASS: generated output unchanged",
+    "architectureSizeCheck": {
+      "status": "BLOCKED_SHARED_PREREQUISITE",
+      "issues": ["generated-file-spoof services/audiorate/wire/wire_gen.go: generated header is not registered with a reproducible generator"]
+    },
+    "coverageChanged": {
+      "status": "FAILURE_OUT_OF_SCOPE_PEER_FIXTURES",
+      "firstCauses": [
+        "session_browser_scenario_runner_test.go: scheduled PCM fixtures of 3 and 1 byte fail the required odd-tail rejection",
+        "session_instruction_composition_test.go:75: scheduled PCM fixture of 3 bytes fails the required odd-tail rejection",
+        "session_scheduled_audio_policy_test.go:38: scheduled PCM fixture of 1 byte fails the required odd-tail rejection",
+        "session_ambiguous_page_tools_test.go:398,441: dependent session ends before exact tab selection after the same 3-byte conversion failure"
+      ]
+    }
+  },
+  "sharedPrerequisite": {
+    "releasedOwner": "audio-runtime-c79-retire-cli-response-lifecycle",
+    "releasedPullRequest": 470,
+    "releasedHead": "b5e11e47d5ca43b46ed875cabc1418939270ebc5",
+    "releasedMergeCommit": "1a8467246c6607a06ffc7289075da2595724ce8b",
+    "currentOriginMainContainsReleasedRegistration": false,
+    "requiredDecision": "Integrate the released C79 shared Wire/architecture registration into origin/main; C134 must not edit the shared paths."
+  },
+  "nextAction": "After released shared registration and peer-owned odd-byte fixtures are present on origin/main, fetch and integrate main without reset, rerun coverage-changed and architecture-size-check, then force-add the C134 reports, push this changed branch, open the recovery PR, and submit once to SCRIPT CI without polling."
+}

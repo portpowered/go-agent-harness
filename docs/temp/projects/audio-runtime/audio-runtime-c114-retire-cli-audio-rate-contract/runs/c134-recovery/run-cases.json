@@ -1,0 +1,69 @@
+{
+  "cases": [
+    {
+      "case": "c21-rate-consumption",
+      "command": [
+        "go",
+        "test",
+        "./go-agent-runtime/services/audiorate/...",
+        "./go-device-gateway/pkg/runtime",
+        "./go-device-gateway/pkg/devices",
+        "-run",
+        "Test(Convert|Resolve|Configure|Service|NewService|C21|DeviceSinkSampleOnly)",
+        "-count=1",
+        "-timeout=240s"
+      ],
+      "elapsedSeconds": 1.031,
+      "exitCode": 0,
+      "physicalConsumptionClaim": false,
+      "proofLevel": "SOFTWARE_REPLAY",
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate\t0.157s [no tests to run]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate/internal/service\t0.436s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate/wire\t0.296s\nok  \tgithub.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime\t0.353s\nok  \tgithub.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices\t0.458s\n",
+      "timedOut": false,
+      "timeoutSeconds": 60.0
+    },
+    {
+      "case": "c50-audio-tool-replay",
+      "command": [
+        "go",
+        "test",
+        "./agent-cli/internal/services/internal/agentruntime",
+        "-run",
+        "Test(ReplayServiceConsumesActualWireObservationEnvelope|ReplayServiceRunsRealCoreLoopAgainstRecordedWire|SessionCommandAudioInputReplaysCommittedFixture)",
+        "-count=1",
+        "-timeout=240s"
+      ],
+      "elapsedSeconds": 2.888,
+      "exitCode": 0,
+      "physicalConsumptionClaim": false,
+      "proofLevel": "SOFTWARE_REPLAY",
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.442s\n",
+      "timedOut": false,
+      "timeoutSeconds": 60.0
+    },
+    {
+      "case": "room-scheduled-audio",
+      "command": [
+        "go",
+        "test",
+        "./agent-cli/internal/services/internal/agentruntime",
+        "-run",
+        "Test(LiveRecordRuntimeScheduledAudioCompletesWithoutCapturedSessionClose|LiveRecordRuntimeScheduledAudioContinuesAfterEmptyDirectoryResult|PlanSessionRuntime_ScheduledAudioUsesPersistentLiveLifecycle)",
+        "-count=1",
+        "-timeout=240s"
+      ],
+      "elapsedSeconds": 2.038,
+      "exitCode": 0,
+      "physicalConsumptionClaim": false,
+      "proofLevel": "SOFTWARE_REPLAY",
+      "stderr": "",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.597s\n",
+      "timedOut": false,
+      "timeoutSeconds": 60.0
+    }
+  ],
+  "elapsedSeconds": 5.957,
+  "proofLevel": "SOFTWARE_REPLAY",
+  "status": "ACCEPTED"
+}
