@@ -1,5 +1,5 @@
 {
-  "candidate": "7dc1429319011477168cbffd2416f4ad59b356b5",
+  "candidate": "28c078ad5f0a1f9cf01042b6ab3a9d6977bb57cd",
   "mode": "retirement-and-scope",
   "payload": {
     "diff_check": {
@@ -8,7 +8,7 @@
         "diff",
         "--check"
       ],
-      "elapsed_seconds": 0.047,
+      "elapsed_seconds": 0.077,
       "returncode": 0,
       "stderr": "",
       "stdout": ""
@@ -17,12 +17,12 @@
       "baseline": 1387,
       "files": {
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": 400,
-        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 367
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 383
       },
       "maximum": 787,
       "minimum_retired": 600,
-      "retired": 620,
-      "total": 767
+      "retired": 604,
+      "total": 783
     },
     "private_state_boundary": {
       "forbidden_tokens": [
@@ -40,13 +40,14 @@
       "violations": {}
     },
     "scope": {
-      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "base": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
       "outside_owned_paths": [],
       "paths": [
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_test.go",
         "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
         "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
         "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
