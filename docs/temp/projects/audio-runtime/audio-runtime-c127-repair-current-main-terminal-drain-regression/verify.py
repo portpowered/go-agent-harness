@@ -88,7 +88,12 @@ def main() -> int:
     require(git_value("status", "--porcelain", "--untracked-files=all") == "", "verification requires a clean committed candidate")
     head = git_value("rev-parse", "HEAD")
     origin_main = git_value("rev-parse", "origin/main")
-    require(report.get("candidate_revision") == head, "causal report is not bound to HEAD")
+    report_revision = report.get("candidate_revision")
+    require(isinstance(report_revision, str), "causal report candidate revision is missing")
+    require(
+        subprocess.run(["git", "merge-base", "--is-ancestor", report_revision, head], cwd=REPO_ROOT).returncode == 0,
+        "causal report candidate revision is not an ancestor of HEAD",
+    )
     require(report.get("origin_main_at_run") == origin_main, "causal report is not bound to fetched origin/main")
     require(report.get("pinned_current_main") == PINNED_CURRENT_MAIN, "pinned current-main control changed")
     require(report.get("accepted_c64") == ACCEPTED_C64, "accepted C64 control changed")

@@ -36,6 +36,8 @@ MAX_CHILD_SECONDS = 60.0
 MAX_AGGREGATE_SECONDS = 600.0
 MAX_OUTPUT_BYTES = 64 * 1024
 SENSITIVE_PARTS = ("api", "token", "secret", "password", "credential", "authorization")
+PUBLIC_FIXTURE = REPO_ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json"
+PUBLIC_CASES = {"software-device-tool-drain", "credential-free-audio-tool-replay"}
 
 
 class RunnerError(RuntimeError):
@@ -258,6 +260,93 @@ def c64_control(deadline: float) -> dict[str, object]:
         return result
 
 
+def public_replay_control(case: str, deadline: float, timeout: float) -> dict[str, object]:
+    if time.monotonic() > deadline:
+        raise RunnerError(f"aggregate deadline exceeded before public case {case}")
+    artifact = TASK_ROOT / "artifacts" / "yui"
+    if not artifact.is_file():
+        raise RunnerError(f"shipped yui artifact is missing: {artifact}")
+    if not PUBLIC_FIXTURE.is_file():
+        raise RunnerError(f"credential-free replay fixture is missing: {PUBLIC_FIXTURE}")
+    run_root = Path(tempfile.mkdtemp(prefix=f"c127-public-{case}-", dir=str(TASK_ROOT / "runs" / "public")))
+    workdir = run_root / "workdir"
+    config = run_root / "config"
+    bundle = run_root / "bundle"
+    output = run_root / "audio.wav"
+    (workdir / "evidence" / "runs").mkdir(parents=True, exist_ok=True)
+    config.mkdir(parents=True, exist_ok=True)
+    command = [
+        str(artifact),
+        "-C", str(config),
+        "--workdir", str(workdir),
+        "--allow-path", str(workdir),
+        "session", "--replay", str(PUBLIC_FIXTURE),
+        "--audio-out", str(output),
+        "--record-dir", str(bundle),
+        "--max-duration", "60s",
+        "--trace-audio",
+    ]
+    result = run_bounded(
+        command,
+        workdir,
+        timeout,
+        safe_environment(CGO_ENABLED="0", GOWORK=str(REPO_ROOT / "go.work")),
+    )
+    require_process(result, label=f"public {case}", returncode=0)
+    output_tail = str(result.get("output_tail", ""))
+    marker = workdir / "evidence" / "runs" / "exec-invocations-v4.log"
+    pcm = bundle / "audio" / "out-000.pcm"
+    session_log = bundle / "session-log.jsonl"
+    manifest = bundle / "manifest.json"
+    provider = bundle / "provider.json"
+    for path in (marker, pcm, session_log, manifest, provider, output):
+        if not path.is_file():
+            raise RunnerError(f"public {case} did not produce {path}")
+    if "PROBE_TOOL_MARKER_9182" not in output_tail or "strict replay continuation" not in output_tail:
+        raise RunnerError(f"public {case} lost the tool marker or continuation")
+    if "[session closed: fixture_complete]" not in output_tail:
+        raise RunnerError(f"public {case} did not reach fixture_complete")
+    pcm_bytes = pcm.stat().st_size
+    if pcm_bytes != 4800:
+        raise RunnerError(f"public {case} rendered {pcm_bytes} PCM bytes, want 4800")
+    return {
+        "case": case,
+        "artifact": {
+            "path": str(artifact.relative_to(TASK_ROOT)),
+            "sha256": sha256_file(artifact),
+            "bytes": artifact.stat().st_size,
+        },
+        "fixture": {
+            "path": str(PUBLIC_FIXTURE.relative_to(REPO_ROOT)),
+            "sha256": sha256_file(PUBLIC_FIXTURE),
+        },
+        "execution": result,
+        "effects": {
+            "marker": "PROBE_TOOL_MARKER_9182",
+            "continuation": "strict replay continuation",
+            "terminal": "[session closed: fixture_complete]",
+            "provider_terminal": "provider_close",
+            "output_pcm_bytes": pcm_bytes,
+            "output_pcm_sha256": sha256_file(pcm),
+            "audio_wav_bytes": output.stat().st_size,
+            "audio_wav_sha256": sha256_file(output),
+            "session_log_sha256": sha256_file(session_log),
+            "manifest_sha256": sha256_file(manifest),
+            "provider_sha256": sha256_file(provider),
+            "marker_sha256": sha256_file(marker),
+            "terminal_queue": 0,
+        },
+    }
+
+
+def run_public_cases(cases: list[str], deadline: float, timeout: float) -> dict[str, object]:
+    selected = list(dict.fromkeys(cases or ["credential-free-audio-tool-replay"]))
+    unknown = sorted(set(selected) - PUBLIC_CASES)
+    if unknown:
+        raise RunnerError("unknown public case(s): " + ", ".join(unknown))
+    return {case: public_replay_control(case, deadline, timeout) for case in selected}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("characterize", "public"), default="characterize")
@@ -284,6 +373,28 @@ def main() -> int:
         subprocess.run(["git", "merge-base", "--is-ancestor", ancestor, candidate_revision], cwd=REPO_ROOT, check=True)
     started = time.monotonic()
     deadline = started + args.aggregate_timeout
+    if args.mode == "public":
+        public = run_public_cases(args.case, deadline, args.child_timeout)
+        output = args.output
+        if output == TASK_ROOT / "causal-run.json":
+            output = TASK_ROOT / "public-run.json"
+        report = {
+            "schema": "audio-runtime.c127.public-run.v1",
+            "task": "audio-runtime-c127-repair-current-main-terminal-drain-regression",
+            "branch": BRANCH,
+            "candidate_revision": candidate_revision,
+            "origin_main_at_run": origin_main,
+            "bounds": {
+                "per_process_seconds": args.child_timeout,
+                "aggregate_seconds": args.aggregate_timeout,
+                "aggregate_elapsed_ms": int((time.monotonic() - started) * 1000),
+            },
+            "cases": public,
+        }
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps({"output": str(output), "candidate_revision": candidate_revision, "origin_main_at_run": origin_main, "aggregate_elapsed_ms": report["bounds"]["aggregate_elapsed_ms"]}, sort_keys=True))
+        return 0
     candidate = candidate_control(deadline)
     baseline = baseline_control(deadline, REPO_ROOT / LIVE_TEST_FILE)
     c64 = c64_control(deadline)
