@@ -7,6 +7,7 @@ This checkpoint belongs to the admitted `audio-runtime` project and task
 
 - Worktree: `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c116-centralize-rtc-track-transport`
 - Branch: `codex/audio-runtime-c116-centralize-rtc-track-transport`
+- Candidate head: `4c5f57cb` (PR #500, https://github.com/portpowered/go-agent-harness/pull/500)
 - Accepted main: `3963bc3566da24f8214634c17a9d0f79a6724171`
 - Startup revision: `8bdafc7f947a3a2c9856220abdc539437035bd21`
 - Manifest hash: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`
@@ -75,6 +76,11 @@ The following completed successfully:
 The retirement verifier is intentionally still red at this checkpoint: the
 gateway source files are still the accepted-main 453+418-line compatibility
 implementations, so the strict `<871` retirement target is not claimed.
+
+The live board still shows C79's active task in review with its shared Wire
+registry and architecture-baseline lease retained. C96 and C107 are terminal,
+but their excluded device/probe paths remain outside this task's manifest and
+were not mutated.
 
 ## Next action
 
