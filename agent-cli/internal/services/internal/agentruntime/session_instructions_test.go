@@ -25,7 +25,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/workspace"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	sessioninstructions "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -195,33 +194,6 @@ func TestRunSessionWithInstructions_SourceMatrix(t *testing.T) {
 	}
 }
 
-func TestRunSessionWithInstructionsClosesCapabilityOnResolutionFailure(t *testing.T) {
-	closeErr := errors.New("capability close failed")
-	closeCalls := 0
-	inferencer := newSessionInstructionsTestInferencer()
-
-	err := agentruntime.RunSessionWithInstructions(context.Background(), io.Discard, agentruntime.SessionRunOptions{
-		ReplayPath:        filepath.Join(t.TempDir(), "session.json"),
-		SessionInferencer: inferencer,
-		CapabilityClose: func() error {
-			closeCalls++
-			return closeErr
-		},
-	}, "malformed\x00instruction")
-	if !errors.Is(err, sessioninstructions.ErrMalformedInstruction) {
-		t.Fatalf("resolution error = %v, want malformed-instruction identity", err)
-	}
-	if !errors.Is(err, closeErr) {
-		t.Fatalf("resolution error = %v, want capability cleanup error", err)
-	}
-	if closeCalls != 1 {
-		t.Fatalf("capability cleanup calls = %d, want one", closeCalls)
-	}
-	if inferencer.wasConnected() {
-		t.Fatal("malformed instructions connected a session before returning the resolution error")
-	}
-}
-
 func TestRunSessionWithInstructions_MissingAgentsMDSendsNoToolGroundingOrFile(t *testing.T) {
 	workspaceDir := t.TempDir()
 	inferencer := newSessionInstructionsTestInferencer()
@@ -298,7 +270,6 @@ func TestRunSessionWithInstructions_OpenAIInitialConfigCarriesGroundingWithTools
 	if err != nil {
 		t.Fatalf("RunSessionWithInstructions: %v", err)
 	}
-
 	capture, err := gwtesting.LoadSessionCapture(recordPath)
 	if err != nil {
 		t.Fatalf("LoadSessionCapture: %v", err)

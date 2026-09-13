@@ -3,6 +3,7 @@ package agentruntime_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,10 +17,38 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/workspace"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sessioninstructions "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
+
+func TestRunSessionWithInstructionsClosesCapabilityOnResolutionFailure(t *testing.T) {
+	closeErr := errors.New("capability close failed")
+	closeCalls := 0
+	inferencer := newSessionInstructionsTestInferencer()
+
+	err := agentruntime.RunSessionWithInstructions(context.Background(), io.Discard, agentruntime.SessionRunOptions{
+		ReplayPath:        filepath.Join(t.TempDir(), "session.json"),
+		SessionInferencer: inferencer,
+		CapabilityClose: func() error {
+			closeCalls++
+			return closeErr
+		},
+	}, "malformed\x00instruction")
+	if !errors.Is(err, sessioninstructions.ErrMalformedInstruction) {
+		t.Fatalf("resolution error = %v, want malformed-instruction identity", err)
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("resolution error = %v, want capability cleanup error", err)
+	}
+	if closeCalls != 1 {
+		t.Fatalf("capability cleanup calls = %d, want one", closeCalls)
+	}
+	if inferencer.wasConnected() {
+		t.Fatal("malformed instructions connected a session before returning the resolution error")
+	}
+}
 
 func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 	capability := defaultRuntimeToolCapability(t)
