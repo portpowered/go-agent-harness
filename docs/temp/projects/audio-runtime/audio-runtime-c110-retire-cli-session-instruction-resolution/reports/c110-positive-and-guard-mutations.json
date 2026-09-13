@@ -29,6 +29,7 @@
       "invalid_loader_phase": "validation",
       "mode": "invalid",
       "private_imports": false,
+      "service_instances": 2,
       "status": "accepted"
     },
     "positive": {
@@ -39,6 +40,7 @@
       "mode": "positive",
       "private_imports": false,
       "resolved": "consumer AGENTS instructions\n\n---\n\nconsumer skill summary",
+      "service_instances": 2,
       "status": "accepted"
     },
     "print": {
@@ -48,6 +50,7 @@
       "hidden_global_io": false,
       "mode": "print",
       "private_imports": false,
+      "service_instances": 2,
       "status": "accepted"
     }
   },
@@ -63,11 +66,11 @@
           "--mode",
           "positive"
         ],
-        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c110-guard-mutants-1qj_ljkh/repo/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer",
-        "elapsed_seconds": 0.396539,
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c110-guard-mutants-a74vwe97/repo/docs/temp/projects/audio-runtime/audio-runtime-c110-retire-cli-session-instruction-resolution/consumer",
+        "elapsed_seconds": 0.42893,
         "exit_code": 1,
         "stderr": "exit status 1\n",
-        "stdout": "{\"cli_imports\":false,\"credentials\":false,\"error\":\"none resolution = \\\"none\\\", err=\\u003cnil\\u003e\",\"hidden_global_io\":false,\"mode\":\"positive\",\"private_imports\":false,\"status\":\"rejected\"}\n",
+        "stdout": "{\"cli_imports\":false,\"credentials\":false,\"error\":\"none resolution = \\\"none\\\", err=\\u003cnil\\u003e\",\"hidden_global_io\":false,\"mode\":\"positive\",\"private_imports\":false,\"service_instances\":2,\"status\":\"rejected\"}\n",
         "timed_out": false
       }
     },
@@ -82,11 +85,11 @@
           "-run",
           "TestResolveChecksCancellationAfterLegacyLoaderCalls/skills$"
         ],
-        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c110-guard-mutants-1qj_ljkh/repo/go-agent-runtime",
-        "elapsed_seconds": 0.374671,
+        "cwd": "/var/folders/p0/39h9prbs7pn446h35_zhpr300000gn/T/c110-guard-mutants-a74vwe97/repo/go-agent-runtime",
+        "elapsed_seconds": 0.369356,
         "exit_code": 1,
         "stderr": "",
-        "stdout": "--- FAIL: TestResolveChecksCancellationAfterLegacyLoaderCalls (0.00s)\n    --- FAIL: TestResolveChecksCancellationAfterLegacyLoaderCalls/skills (0.00s)\n        service_test.go:194: error instruction resolution skills-summary /workspace: load skills summary: summary completed after cancellation does not unwrap context canceled\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/internal/service\t0.159s\nFAIL\n",
+        "stdout": "--- FAIL: TestResolveChecksCancellationAfterLegacyLoaderCalls (0.00s)\n    --- FAIL: TestResolveChecksCancellationAfterLegacyLoaderCalls/skills (0.00s)\n        service_test.go:213: error instruction resolution skills-summary /workspace: load skills summary: summary completed after cancellation does not unwrap context canceled\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/internal/service\t0.158s\nFAIL\n",
         "timed_out": false
       }
     },

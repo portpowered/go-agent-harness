@@ -332,7 +332,10 @@ def verify_retirement() -> dict[str, Any]:
     unexpected = [path for path in paths if not path_allowed(path)]
     require(not unexpected, f"changed paths outside C110 ownership: {unexpected}")
     shared_changes = [path for path in paths if path in SHARED_LEASE_PATHS]
-    require(not shared_changes, f"C110 changed released shared paths unexpectedly: {shared_changes}")
+    require(
+        sorted(shared_changes) == sorted(SHARED_LEASE_PATHS),
+        f"C110 shared registry repair set is incomplete or unexpected: {shared_changes}",
+    )
     for duplicate in (
         REPO_ROOT / "go-agent-runtime/services/session/internal/instructions/service.go",
         REPO_ROOT / "go-agent-runtime/services/session/internal/instructions/service_test.go",
@@ -404,7 +407,7 @@ def verify_retirement() -> dict[str, Any]:
             "state_at_admission_check": "released-after-guarded-merge",
             "shared_paths": list(SHARED_LEASE_PATHS),
             "candidate_changes": shared_changes,
-            "guard": "released by C79 guarded merge; shared registry state is inherited from current origin/main",
+            "guard": "released by C79 guarded merge; C110 owns the demonstrated shared registry repairs",
         },
         "source_hashes": source_hashes(evidence_paths),
     }
