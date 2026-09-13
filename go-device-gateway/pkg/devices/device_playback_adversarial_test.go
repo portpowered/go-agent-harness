@@ -90,37 +90,19 @@ func TestVirtualPlaybackCapacityAdversarial(t *testing.T) {
 			t.Fatal(err)
 		}
 		primeVirtualPlayback(t, output, high)
-		started := make(chan struct{})
-		waitContext := &capacityWaitStartedContext{Context: context.Background(), started: started}
-		wait := startCapacityWait(output, waitContext, audio.FrameSize)
-		select {
-		case <-started:
-			queued := output.PlaybackStats().QueuedSamples
-			if queued != high {
-				t.Fatalf("waiter started at queued=%d, want high watermark %d", queued, high)
-			}
-			t.Logf("waiter-start queued=%d low=%d high=%d", queued, low, high)
-		case <-time.After(time.Second):
-			t.Fatal("capacity waiter did not reach its blocked select")
-		}
+		wait := startCapacityWaitAtBlocked(t, output, audio.FrameSize, low, high)
 		for output.PlaybackStats().QueuedSamples-audio.FrameSize > low {
-			before := output.PlaybackStats().QueuedSamples
 			if err := input.ReadSamples(context.Background(), make([]int16, audio.FrameSize)); err != nil {
 				t.Fatal(err)
 			}
-			after := output.PlaybackStats().QueuedSamples
-			t.Logf("read-signal queued=%d->%d", before, after)
 			assertCapacityWaitBlocked(t, wait)
 		}
-		before := output.PlaybackStats().QueuedSamples
 		if err := input.ReadSamples(context.Background(), make([]int16, audio.FrameSize)); err != nil {
 			t.Fatal(err)
 		}
-		t.Logf("read-signal-final queued=%d->%d", before, output.PlaybackStats().QueuedSamples)
 		if err := awaitCapacityWait(t, wait); err != nil {
 			t.Fatalf("wait at low watermark: %v", err)
 		}
-		t.Logf("waiter-return queued=%d", output.PlaybackStats().QueuedSamples)
 	})
 
 	t.Run("09 context cancellation wakes waiter", func(t *testing.T) {
@@ -339,6 +321,24 @@ func startCapacityWait(output *VirtualStream, ctx context.Context, samples int) 
 	done := make(chan error, 1)
 	go func() { done <- output.WaitForPlaybackCapacity(ctx, samples) }()
 	return done
+}
+
+func startCapacityWaitAtBlocked(t *testing.T, output *VirtualStream, samples, low, high int) <-chan error {
+	t.Helper()
+	started := make(chan struct{})
+	waitContext := &capacityWaitStartedContext{Context: context.Background(), started: started}
+	wait := startCapacityWait(output, waitContext, samples)
+	select {
+	case <-started:
+		queued := output.PlaybackStats().QueuedSamples
+		if queued != high {
+			t.Fatalf("waiter started at queued=%d, want high watermark %d", queued, high)
+		}
+		t.Logf("waiter-start queued=%d low=%d high=%d", queued, low, high)
+	case <-time.After(time.Second):
+		t.Fatal("capacity waiter did not reach its blocked select")
+	}
+	return wait
 }
 
 type capacityWaitStartedContext struct {
