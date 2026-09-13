@@ -16,6 +16,6 @@ import (
 
 // NewInstructionService assembles the stateless instruction policy service.
 func NewInstructionService() sessioninstructions.InstructionService {
-	wire.Build(service.New, wire.Bind(new(sessioninstructions.InstructionService), new(*service.Service)))
+	wire.Build(service.New)
 	return nil
 }

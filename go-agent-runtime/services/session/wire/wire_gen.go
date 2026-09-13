@@ -14,7 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
 	session2 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/service"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessioninstructions"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -63,7 +63,7 @@ type Dependencies struct {
 }
 
 func newInstructionService() session.InstructionService {
-	return wire.NewInstructionService()
+	return sessioninstructions.Factory{}.Build()
 }
 
 func newFileStoreFactory() *session2.Factory { return session2.NewFactory() }

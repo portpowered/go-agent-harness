@@ -15,6 +15,6 @@ import (
 
 // NewInstructionService assembles the stateless instruction policy service.
 func NewInstructionService() sessioninstructions.InstructionService {
-	serviceService := service.New()
-	return serviceService
+	v := service.New()
+	return v
 }

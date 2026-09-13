@@ -12,7 +12,11 @@ CLI, private runtime packages, credentials, or ambient filesystem state.
 The canonical implementation is stateless and receives all host I/O through an
 injected loader. Resolution rejects malformed or oversized text, preserves
 causes with phase-specific `ResolutionError` values, checks cancellation around
-loader calls, and clones capability snapshots before policy composition.
+loader calls, and clones capability snapshots before policy composition. The
+implementation type is unexported; the dedicated instruction Wire uses the
+private provider package, while the historical `session/wire` constructor uses
+the public stateless `sessioninstructions.Factory{}.Build()` bridge so it does
+not import a peer Wire package.
 
 The committed verification command is:
 

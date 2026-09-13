@@ -36,6 +36,7 @@ SOURCE_FILES = (
     "agent-cli/internal/services/internal/agentruntime/session_instructions_c110_test.go",
     "go-agent-runtime/services/sessioninstructions/contract.go",
     "go-agent-runtime/services/sessioninstructions/contract_test.go",
+    "go-agent-runtime/services/sessioninstructions/service.go",
     "go-agent-runtime/services/sessioninstructions/internal/service/service.go",
     "go-agent-runtime/services/sessioninstructions/internal/service/service_test.go",
     "go-agent-runtime/services/sessioninstructions/wire/wire.go",

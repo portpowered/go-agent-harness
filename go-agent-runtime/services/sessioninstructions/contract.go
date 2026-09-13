@@ -166,5 +166,16 @@ type Service interface {
 	Compose(InstructionComposition) string
 }
 
+// Factory is the stateless compatibility bridge for hosts that historically
+// obtained this service from another service's Wire graph. New composition
+// roots should use services/sessioninstructions/wire; Build exists so the
+// legacy session/wire constructor can preserve its source-compatible API
+// without importing a peer service's private Wire package.
+type Factory struct{}
+
+// Build returns a fresh service with no process-global state or host-owned
+// dependencies.
+func (Factory) Build() Service { return newInstructionService() }
+
 // InstructionService is the compatibility name for Service.
 type InstructionService = Service
