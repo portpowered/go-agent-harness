@@ -13,12 +13,12 @@
         "-count=1",
         "-timeout=240s"
       ],
-      "elapsedSeconds": 1.403,
+      "elapsedSeconds": 1.228,
       "exitCode": 0,
       "physicalConsumptionClaim": false,
       "proofLevel": "SOFTWARE_REPLAY",
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate\t0.178s [no tests to run]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate/internal/service\t0.299s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate/wire\t0.439s\nok  \tgithub.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime\t0.200s\nok  \tgithub.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices\t0.215s\n",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate\t0.167s [no tests to run]\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate/internal/service\t0.456s\nok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/audiorate/wire\t0.306s\nok  \tgithub.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime\t0.254s\nok  \tgithub.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices\t0.340s\n",
       "timedOut": false,
       "timeoutSeconds": 60.0
     },
@@ -33,12 +33,12 @@
         "-count=1",
         "-timeout=240s"
       ],
-      "elapsedSeconds": 3.668,
+      "elapsedSeconds": 3.56,
       "exitCode": 0,
       "physicalConsumptionClaim": false,
       "proofLevel": "SOFTWARE_REPLAY",
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.644s\n",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t1.555s\n",
       "timedOut": false,
       "timeoutSeconds": 60.0
     },
@@ -53,17 +53,17 @@
         "-count=1",
         "-timeout=240s"
       ],
-      "elapsedSeconds": 2.346,
+      "elapsedSeconds": 2.357,
       "exitCode": 0,
       "physicalConsumptionClaim": false,
       "proofLevel": "SOFTWARE_REPLAY",
       "stderr": "",
-      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.609s\n",
+      "stdout": "ok  \tgithub.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime\t0.585s\n",
       "timedOut": false,
       "timeoutSeconds": 60.0
     }
   ],
-  "elapsedSeconds": 7.418,
+  "elapsedSeconds": 7.145,
   "proofLevel": "SOFTWARE_REPLAY",
   "status": "ACCEPTED"
 }
