@@ -30,7 +30,11 @@ C112_PR = 498
 C79_WORK = "audio-runtime-c79-retire-cli-response-lifecycle"
 C79_BRANCH = "codex/audio-runtime-c79-retire-cli-response-lifecycle"
 C79_PR = 470
-C117_TEST = "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go"
+# The fail-closed host tests were initially added in a separate file. Keep the
+# deletion in the allowed diff while recording their consolidation into the
+# existing trace test file to satisfy the maintained-package budget.
+C117_TEST = "agent-cli/internal/transport/cli/internal/livehost/trace_test.go"
+C117_LEGACY_TEST = "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go"
 C117_REL = str(HERE.relative_to(ROOT))
 C108_REL = "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps"
 C108_PROVENANCE = f"{C108_REL}/provenance.json"
@@ -332,7 +336,7 @@ def run_expected_red_test() -> dict[str, Any]:
 
 
 def validate_c117_allowed_paths(paths: list[str]) -> None:
-    allowed = {C117_TEST, C108_PROVENANCE, C108_VERIFIER, C108_SUMS}
+    allowed = {C117_TEST, C117_LEGACY_TEST, C108_PROVENANCE, C108_VERIFIER, C108_SUMS}
     outside = [path for path in sorted(set(paths)) if path not in allowed and not path.startswith(C117_REL + "/")]
     if outside:
         raise EvidenceFailure("C117 candidate changed an unowned path: " + ", ".join(outside))
@@ -405,7 +409,7 @@ def pre_c112_scope() -> dict[str, Any]:
     for revision in (STARTUP_INTEGRATION, PLANNING_MAIN):
         if not exact_ancestor(revision, head):
             raise EvidenceFailure(f"pre-C112 candidate is missing required ancestry {revision}")
-    allowed = {C117_TEST, C108_PROVENANCE, C108_VERIFIER, C108_SUMS}
+    allowed = {C117_TEST, C117_LEGACY_TEST, C108_PROVENANCE, C108_VERIFIER, C108_SUMS}
     validate_scope(changed_paths(PLANNING_MAIN, head) + status_paths(), allowed)
     forbidden = [path for path in changed_paths(PLANNING_MAIN, head) + status_paths() if path.startswith("go-agent-runtime/services/sessiontrace/") or path in {"scripts/wire-packages.txt", "docs/architecture/architecture-size-baseline.json"}]
     if forbidden:

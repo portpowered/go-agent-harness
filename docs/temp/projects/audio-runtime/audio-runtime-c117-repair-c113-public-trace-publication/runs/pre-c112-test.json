@@ -13,6 +13,6 @@
   "exit_code": 1,
   "expected_red": true,
   "stderr": "",
-  "stdout": "--- FAIL: TestTraceRequiredFailsClosedWithoutPublicService (0.00s)\n    --- FAIL: TestTraceRequiredFailsClosedWithoutPublicService/trace_audio (0.00s)\n        run_trace_test.go:46: Run error = <nil>, want fail-closed public trace-service diagnostic\n    --- FAIL: TestTraceRequiredFailsClosedWithoutPublicService/record_directory (0.00s)\n        run_trace_test.go:46: Run error = <nil>, want fail-closed public trace-service diagnostic\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost\t0.224s\nFAIL\n",
+  "stdout": "--- FAIL: TestTraceRequiredFailsClosedWithoutPublicService (0.00s)\n    --- FAIL: TestTraceRequiredFailsClosedWithoutPublicService/trace_audio (0.00s)\n        trace_test.go:230: Run error = <nil>, want fail-closed public trace-service diagnostic\n    --- FAIL: TestTraceRequiredFailsClosedWithoutPublicService/record_directory (0.00s)\n        trace_test.go:230: Run error = <nil>, want fail-closed public trace-service diagnostic\nFAIL\nFAIL\tgithub.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/livehost\t0.224s\nFAIL\n",
   "timed_out": false
 }
