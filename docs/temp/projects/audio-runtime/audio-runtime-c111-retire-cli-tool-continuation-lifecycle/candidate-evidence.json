@@ -207,9 +207,20 @@
     }
   },
   "currentOriginMain": {
-    "revision": "071b0abfd67501db61e3c1929971c6dd6e77eb62",
+    "revision": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
     "integrated": true,
-    "reason": "C79 reviewed guarded merge released the shared prerequisites; integrated with a no-reset merge commit"
+    "reason": "C79 reviewed guarded merge released the shared prerequisites; the freshly fetched current origin/main was integrated with a no-reset merge commit"
+  },
+  "latestMainIntegration": {
+    "originMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f",
+    "candidateRevision": "44747db8fca0a1f5e11ce9722b709976316b943a",
+    "mergeCommit": "44747db8fca0a1f5e11ce9722b709976316b943a",
+    "requiredAncestry": {
+      "factoryStartup": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+      "acceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "currentOriginMain": "bd6a1289218d1bef1a3af36e64e9d4496062416f"
+    },
+    "resetUsed": false
   },
   "coverageCharacterization": {
     "priorRun": "34723920469",
@@ -250,12 +261,12 @@
     "claimedGreen": false
   },
   "latestLocalRerun": {
-    "sourceRevision": "6a41574b4f8e0eb090a9d515839ed9d15f10ec95",
+    "sourceRevision": "44747db8fca0a1f5e11ce9722b709976316b943a",
     "causal": {
       "command": "GOWORK=off go test ./test/integration -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test46/provider_burst$' -count=1 -timeout=90s -v",
       "result": "passed",
-      "durationSeconds": 22.586,
-      "subtestDurationSeconds": 12.38,
+      "durationSeconds": 24.059,
+      "subtestDurationSeconds": 12.55,
       "strictFinalPCMMarker": true
     },
     "accumulatedRegressions": {
@@ -271,6 +282,6 @@
   "handoff": {
     "ci": "completed run 34729269748 inspected for exact failure; current integrated candidate is ready for a fresh script CI submission; no CI green claim",
     "review": "not self-reviewed; no C111 review findings were present at admission",
-    "nextAction": "Commit and push the fresh-current-main provenance/evidence checkpoint, update PR #496, and submit this same task to script CI without polling; on any exact rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge."
+    "nextAction": "Commit and push the final current-main provenance/evidence checkpoint, update PR #496, and return ACCEPTED to the script-owned CI gate without polling; on any exact rejection inspect its full logs, repair the same task, and resubmit before independent review and guarded merge."
   }
 }

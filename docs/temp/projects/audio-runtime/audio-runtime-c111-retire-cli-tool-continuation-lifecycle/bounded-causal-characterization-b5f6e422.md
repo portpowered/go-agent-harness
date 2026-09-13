@@ -49,3 +49,15 @@ high-rate trials and the four named C111 continuation regressions. No source
 repair was demonstrated or made; the worktree remains clean after the test
 runs. These are executor checks only and do not claim Script CI, review, merge,
 or acceptance.
+
+## Final integrated-main rerun
+
+After the no-reset merge `44747db8fca0a1f5e11ce9722b709976316b943a` of the
+fresh `origin/main` `bd6a1289218d1bef1a3af36e64e9d4496062416f`, the same causal
+command passed in `24.059s` total, with the named subtest passing in `12.55s`
+and the strict final PCM marker reached. The accumulated regression command
+passed again in normal, coverage, and race lanes, including `20/20` high-rate
+trials and the four named C111 continuation regressions. The integrated main
+change is outside C111 ownership; no C111 source repair was demonstrated or
+made. These are executor checks only and do not claim Script CI, review, merge,
+or acceptance.
