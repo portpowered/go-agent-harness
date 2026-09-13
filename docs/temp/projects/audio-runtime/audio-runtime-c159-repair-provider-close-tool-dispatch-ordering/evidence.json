@@ -3,6 +3,8 @@
   "work": "audio-runtime-c159-repair-provider-close-tool-dispatch-ordering",
   "branch": "codex/audio-runtime-c159-repair-provider-close-tool-dispatch-ordering",
   "planningMain": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+  "reviewMain": "97d3dcfb1e97a2611aa26b203a7f893442db4768",
+  "sourceCheckpoint": "bec1957d861d9381afa37ff9cd7cc2a5b28b098c",
   "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
   "predecessorReport": {
     "sourceRevision": "4459d56ef3213c2fdb173180b3f4f159bb2b89c0",
