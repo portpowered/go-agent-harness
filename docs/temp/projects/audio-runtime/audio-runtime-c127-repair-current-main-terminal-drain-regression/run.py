@@ -10,11 +10,14 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
 import shutil
 import signal
+import struct
 import subprocess
 import tempfile
 import time
+import urllib.request
 
 
 TASK_ROOT = Path(__file__).resolve().parent
@@ -39,6 +42,8 @@ MAX_OUTPUT_BYTES = 64 * 1024
 SENSITIVE_PARTS = ("api", "token", "secret", "password", "credential", "authorization")
 PUBLIC_FIXTURE = REPO_ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c38-interruption-audio-retention/fixtures/c16-audio-tool.session.json"
 PUBLIC_CASES = {"software-device-tool-drain", "credential-free-audio-tool-replay"}
+DEVICE_SERVER_SOURCE = Path("agent-cli/cmd/audio-device-server")
+DEVICE_SERVER_READY_TIMEOUT = 5.0
 
 
 class RunnerError(RuntimeError):
@@ -91,6 +96,120 @@ def terminate_group(process: subprocess.Popen[bytes]) -> None:
         except ProcessLookupError:
             return
         process.wait(timeout=2.0)
+
+
+def stop_device_server(process: subprocess.Popen[bytes]) -> dict[str, object]:
+    terminate_group(process)
+    try:
+        output, _ = process.communicate(timeout=2.0)
+    except subprocess.TimeoutExpired:
+        terminate_group(process)
+        output, _ = process.communicate()
+    bounded = len(output) <= MAX_OUTPUT_BYTES
+    if not bounded:
+        output = output[-MAX_OUTPUT_BYTES:]
+    return {
+        "returncode": process.returncode,
+        "output_bounded": bounded,
+        "output_tail": output.decode("utf-8", errors="replace"),
+        "cleanup": {
+            "parent_reaped": process.poll() is not None,
+            "group_alive_after": process_group_alive(process.pid),
+        },
+    }
+
+
+def start_device_server(binary: Path, timeout: float) -> tuple[subprocess.Popen[bytes], str, dict[str, object]]:
+    command = [
+        str(binary),
+        "--listen", "127.0.0.1:0",
+        "--sample-rate", "16000",
+        "--render-quantum", "480",
+        "--capture-quantum", "480",
+    ]
+    process = subprocess.Popen(
+        command,
+        cwd=REPO_ROOT,
+        env=safe_environment(CGO_ENABLED="0", GOWORK=str(REPO_ROOT / "go.work")),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    started = time.monotonic()
+    output = bytearray()
+    announcement: dict[str, object] | None = None
+    selector = selectors.DefaultSelector()
+    if process.stdout is None:
+        cleanup = stop_device_server(process)
+        raise RunnerError(f"software device server stdout is unavailable: {cleanup}")
+    selector.register(process.stdout, selectors.EVENT_READ)
+    try:
+        deadline = started + min(timeout, DEVICE_SERVER_READY_TIMEOUT)
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                break
+            events = selector.select(max(0.0, deadline - time.monotonic()))
+            if not events:
+                continue
+            line = process.stdout.readline()
+            if not line:
+                break
+            output.extend(line)
+            if len(output) > MAX_OUTPUT_BYTES:
+                raise RunnerError("software device server readiness output exceeded its bound")
+            try:
+                candidate = json.loads(line.decode("utf-8"))
+            except json.JSONDecodeError as error:
+                raise RunnerError(f"software device server emitted non-JSON readiness output: {line!r}") from error
+            if isinstance(candidate, dict) and candidate.get("endpoint"):
+                announcement = candidate
+                break
+    except Exception as error:
+        cleanup = stop_device_server(process)
+        raise RunnerError(f"software device server readiness failed: {error}; cleanup={cleanup}") from error
+    finally:
+        selector.close()
+    if announcement is None:
+        cleanup = stop_device_server(process)
+        raise RunnerError(
+            "software device server did not announce a loopback endpoint: "
+            f"output={bytes(output)[-2000:].decode('utf-8', errors='replace')!r}; cleanup={cleanup}"
+        )
+    endpoint = str(announcement["endpoint"])
+    if announcement.get("input_device") != "simulated-duplex:input" or announcement.get("output_device") != "simulated-duplex:output":
+        cleanup = stop_device_server(process)
+        raise RunnerError(f"software device server announced unexpected devices: {announcement}; cleanup={cleanup}")
+    return process, endpoint, {
+        "command": command,
+        "ready": announcement,
+        "elapsed_ms": int((time.monotonic() - started) * 1000),
+        "output_bounded": len(output) <= MAX_OUTPUT_BYTES,
+    }
+
+
+def read_device_snapshot(endpoint: str, timeout: float) -> dict[str, object]:
+    request = urllib.request.Request(f"http://{endpoint}/v1/audio-device/control/snapshot", method="GET")
+    with urllib.request.urlopen(request, timeout=max(0.1, min(timeout, 5.0))) as response:
+        snapshot = json.load(response)
+    if not isinstance(snapshot, dict):
+        raise RunnerError("software device snapshot is not an object")
+    return snapshot
+
+
+def pcm16_samples(path: Path) -> list[int]:
+    payload = path.read_bytes()
+    if len(payload) % 2 != 0:
+        raise RunnerError(f"PCM16 artifact has odd byte length: {path}")
+    if not payload:
+        return []
+    return list(struct.unpack("<" + ("h" * (len(payload) // 2)), payload))
+
+
+def contains_pcm16(haystack: list[int], needle: list[int]) -> bool:
+    if not needle or len(needle) > len(haystack):
+        return False
+    width = len(needle)
+    return any(haystack[offset:offset + width] == needle for offset in range(len(haystack) - width + 1))
 
 
 def run_bounded(command: list[str], cwd: Path, timeout: float, env: dict[str, str]) -> dict[str, object]:
@@ -280,24 +399,68 @@ def public_replay_control(case: str, deadline: float, timeout: float) -> dict[st
     output = run_root / "audio.wav"
     (workdir / "evidence" / "runs").mkdir(parents=True, exist_ok=True)
     config.mkdir(parents=True, exist_ok=True)
+    server_workspace: Path | None = None
+    server_process: subprocess.Popen[bytes] | None = None
+    server_endpoint: str | None = None
+    server_start: dict[str, object] | None = None
+    server_build: dict[str, object] | None = None
+    server_snapshot: dict[str, object] | None = None
+    server_cleanup: dict[str, object] | None = None
+    server_snapshot_error: str | None = None
+    if case == "software-device-tool-drain":
+        server_workspace = Path(tempfile.mkdtemp(prefix="c127-device-server-"))
+        server_binary = server_workspace / "audio-device-server"
+        build = run_bounded(
+            ["go", "build", "-tags=nomicrophone", "-trimpath", "-o", str(server_binary), str(DEVICE_SERVER_SOURCE)],
+            REPO_ROOT,
+            timeout,
+            safe_environment(CGO_ENABLED="0", GOWORK=str(REPO_ROOT / "go.work")),
+        )
+        require_process(build, label="software device server build", returncode=0)
+        server_build = {
+            "source": str(DEVICE_SERVER_SOURCE),
+            "command": build["command"],
+            "execution": build,
+            "sha256": sha256_file(server_binary),
+            "bytes": server_binary.stat().st_size,
+        }
+        server_process, server_endpoint, server_start = start_device_server(server_binary, timeout)
     command = [
         str(artifact),
         "-C", str(config),
         "--workdir", str(workdir),
         "--allow-path", str(workdir),
-        "session", "--replay", str(PUBLIC_FIXTURE),
+        "session",
+    ]
+    if server_endpoint is not None:
+        command.extend(["--audio-device-server", server_endpoint, "--audio-out-device="])
+    command.extend([
+        "--replay", str(PUBLIC_FIXTURE),
         "--audio-out", str(output),
         "--record-dir", str(bundle),
         "--max-duration", "60s",
         "--trace-audio",
-    ]
-    result = run_bounded(
-        command,
-        workdir,
-        timeout,
-        safe_environment(CGO_ENABLED="0", GOWORK=str(REPO_ROOT / "go.work")),
-    )
+    ])
+    try:
+        result = run_bounded(
+            command,
+            workdir,
+            timeout,
+            safe_environment(CGO_ENABLED="0", GOWORK=str(REPO_ROOT / "go.work")),
+        )
+        if server_endpoint is not None and result.get("returncode") == 0:
+            try:
+                server_snapshot = read_device_snapshot(server_endpoint, timeout)
+            except (OSError, ValueError, RunnerError) as error:
+                server_snapshot_error = str(error)
+    finally:
+        if server_process is not None:
+            server_cleanup = stop_device_server(server_process)
+        if server_workspace is not None:
+            shutil.rmtree(server_workspace, ignore_errors=True)
     require_process(result, label=f"public {case}", returncode=0)
+    if server_snapshot_error is not None:
+        raise RunnerError(f"public {case} could not read software device snapshot: {server_snapshot_error}")
     output_tail = str(result.get("output_tail", ""))
     marker = workdir / "evidence" / "runs" / "exec-invocations-v4.log"
     pcm = bundle / "audio" / "out-000.pcm"
@@ -314,6 +477,32 @@ def public_replay_control(case: str, deadline: float, timeout: float) -> dict[st
     pcm_bytes = pcm.stat().st_size
     if pcm_bytes != 4800:
         raise RunnerError(f"public {case} rendered {pcm_bytes} PCM bytes, want 4800")
+    software_device: dict[str, object] | None = None
+    if server_endpoint is not None:
+        if server_snapshot is None or server_start is None or server_build is None or server_cleanup is None:
+            raise RunnerError(f"public {case} is missing software device evidence")
+        playback = server_snapshot.get("playback")
+        rendered_samples = server_snapshot.get("rendered_samples")
+        if not isinstance(playback, dict) or not isinstance(rendered_samples, list):
+            raise RunnerError(f"public {case} returned an invalid software device snapshot: {server_snapshot}")
+        for field in ("QueuedSamples", "DroppedSamples", "OverflowEvents", "DiscardedSamples", "DiscardEvents"):
+            if playback.get(field) != 0:
+                raise RunnerError(f"public {case} software device {field}={playback.get(field)!r}, want zero")
+        if playback.get("RenderedSamples") != len(rendered_samples) or not any(sample != 0 for sample in rendered_samples):
+            raise RunnerError(f"public {case} software device did not render nonzero PCM: {playback}")
+        expected_samples = pcm16_samples(pcm)
+        if not contains_pcm16([int(sample) for sample in rendered_samples], expected_samples):
+            raise RunnerError(f"public {case} software device PCM does not contain the exact output PCM")
+        if server_cleanup["cleanup"]["parent_reaped"] is not True or server_cleanup["cleanup"]["group_alive_after"]:
+            raise RunnerError(f"public {case} software device cleanup is incomplete: {server_cleanup}")
+        software_device = {
+            "server_build": server_build,
+            "server_start": server_start,
+            "endpoint": server_endpoint,
+            "snapshot": server_snapshot,
+            "cleanup": server_cleanup,
+            "exact_output_pcm_contained": True,
+        }
     return {
         "case": case,
         "artifact": {
@@ -326,6 +515,7 @@ def public_replay_control(case: str, deadline: float, timeout: float) -> dict[st
             "sha256": sha256_file(PUBLIC_FIXTURE),
         },
         "execution": result,
+        "software_device": software_device,
         "effects": {
             "marker": "PROBE_TOOL_MARKER_9182",
             "continuation": "strict replay continuation",
