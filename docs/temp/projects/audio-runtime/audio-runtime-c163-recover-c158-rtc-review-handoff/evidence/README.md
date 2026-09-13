@@ -11,4 +11,3 @@ CI result, active C162 ownership boundary, and bounded changed-head checks.
 The nine-lane run recorded there is historical evidence for `a16ecf21c`, not
 current-head CI for the merged candidate. Current-head CI, independent review,
 guarded merge, and the meta-owned immutable vertical probe remain external.
-
