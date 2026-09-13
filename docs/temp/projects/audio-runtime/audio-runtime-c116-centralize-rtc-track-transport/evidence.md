@@ -188,6 +188,35 @@ C116; physical Windows hardware and acoustic proof are also out of scope.
 
 ## Script-CI handoff
 
+## Exact current-head CI rejection characterization
+
+- Script-CI run `34751192489` evaluated pushed head
+  `fb730faa557f5a71b376337148cd1a80f3ce48e5`. Eight required checks passed;
+  only `CI (hermetic)` failed in job `103707906550`.
+- The hermetic log reports every `agent-cli` package and integration target
+  passing, then one failure in the unchanged current-main package
+  `go-agent-loop/pkg/probe`: `TestBargeInCoordinatorCoversSignalAndBoundedTeardown`
+  timed out its intentional `20ms` released-worker wait with
+  `observed=[]; unresolved=[session:terminal]`. The remaining go-agent-loop
+  package and functional suites passed.
+- This task has no diff in `go-agent-loop/pkg/probe` relative to reviewed head
+  `418855f756c13f96aadafa6a7932ed6a80ecc9ad` or fetched `origin/main
+  09c70f51243caeaf1184c4806b99bbf7749e3044`; the test was introduced by the
+  pre-existing current-main commit `f681bfd0a43081699dc65c86a02d029db8eac11b`.
+  The exact hermetic command passed `50/50` locally, and passed another
+  `10` runs at `-cpu=1,2,4`, so no C116 causal regression was reproduced.
+- The out-of-scope timing failure is preserved as CI evidence. No
+  go-agent-loop source, timeout, assertion, oracle, device path or C116
+  acceptance criterion was changed to mask it. The next handoff is a changed
+  C116 evidence descendant with the same task ownership; SCRIPT CI must
+  evaluate that exact head without agent polling.
+- After the rejection, C116-owned controls were rerun on the unchanged
+  implementation: `make test-rtc-race` and `make test-regressions` passed;
+  verifier inbound/outbound causal negatives and final scope/provenance all
+  passed; and the bounded runner passed `rtc-track-roundtrip` (15),
+  `external-media` (93), `device-probe-software` (6), `c21-consumption-replay`
+  (3), and `credential-free-audio-tool` (3).
+
 Historical Script-CI results for earlier heads are retained only as context;
 they do not certify the changed handoff descendant. The exact reviewed head
 `418855f756c13f96aadafa6a7932ed6a80ecc9ad` was evaluated by run `34749451614`
