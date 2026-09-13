@@ -59,15 +59,23 @@
       "exit_code": 0,
       "duration": "27.424s"
     },
+    "post_merge_exact_subtest_repeats": {
+      "source_head": "b0e8cebbc5f08dfadfaaf5038b712f3567ecd5bc",
+      "command": "CGO_ENABLED=0 go test ./test/integration -tags=nomicrophone -run '^TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio/test48_matched_healthy_control/provider_burst$' -count=3 -timeout=180s",
+      "exit_code": 0,
+      "duration": "28.738s"
+    },
     "c119_verifier": {
-      "artifact": "artifacts/verify-59071.json",
+      "pre_merge_artifact": "artifacts/verify-59071.json",
+      "artifact": "artifacts/verify-72024.json",
       "exit_code": 0,
       "causal_mutants_survived": false
     },
     "accumulated_regressions": {
       "command": "COUNT=1 bash scripts/test-session-ci-regressions.sh all",
       "exit_code": 0,
-      "modes": ["normal", "coverage", "race"]
+      "modes": ["normal", "coverage", "race"],
+      "post_merge_exit_code": 0
     }
   },
   "scope": {
@@ -75,6 +83,18 @@
     "excluded_failure_path": "agent-cli/test/integration/session_tool_audio_remote_e2e_test.go",
     "production_repair_applied": false
   },
-  "status": "nonreproduced-out-of-scope; same task is ready for script CI resubmission",
-  "next_action": "Push the evidence checkpoint and resubmit PR #505 to script CI without polling. If the same exact integration check rejects again, obtain an exact ownership/repair decision for the excluded remote audio/device path; do not broaden C119 ownership."
+  "current_main": {
+    "revision": "b8650efd95f6a2e2e675a3dfd0969a9d311a877b",
+    "merge_commit": "b0e8cebbc5f08dfadfaaf5038b712f3567ecd5bc",
+    "ancestry_preserved": true,
+    "wire_conflict_resolution": "retained both sessionfailure and sessiontrace registrations"
+  },
+  "coverage_registration": {
+    "exit_code": 2,
+    "missing_package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/causal",
+    "owner": "peer C127",
+    "c119_repair_applied": false
+  },
+  "status": "nonreproduced-out-of-scope; blocked from ACCEPTED by peer coverage registration prerequisite",
+  "next_action": "Retain the same task and PR while the project owner assigns/releases the peer C127 coverage-manifest entry. Then fetch/integrate the accepted current main, rerun coverage-registration and affected bounded gates, and submit the same task to script CI without polling. If the exact remote integration check rejects again, obtain an exact ownership/repair decision for that excluded path; do not broaden C119 ownership."
 }
