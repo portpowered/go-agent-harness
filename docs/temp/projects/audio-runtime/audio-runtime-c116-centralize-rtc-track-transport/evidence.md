@@ -7,15 +7,17 @@ This checkpoint belongs to the admitted `audio-runtime` project and task
 
 - Worktree: `/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c116-centralize-rtc-track-transport`
 - Branch: `codex/audio-runtime-c116-centralize-rtc-track-transport`
-- Tested implementation checkpoint: `c84e3e7ebadef9cf88a7c1a8e708dc14dc7c8134` (PR #500, https://github.com/portpowered/go-agent-harness/pull/500)
-- Current PR #500 head is `c84e3e7ebadef9cf88a7c1a8e708dc14dc7c8134`. The two commits after the tested implementation checkpoint are evidence-only, so executable source, generated outputs, and gate inputs are unchanged from `59c75f6d5b7bbeff9ff21b2048c5e32e10ea196e`.
+- Runtime repair checkpoint: `a55301865a771a70f09551736750ed48f18a5b3a` (PR #500 branch, source and regression-test repair).
+- Baseline integration checkpoint: `5df6a90b214dfcdb94a45760bd732d4e6721049f` (merge of the refreshed `origin/main` into the isolated candidate).
+- The evidence refresh is a docs-only descendant of that source checkpoint; the exact pushed PR head is recorded in the handoff metadata and must be read from `git rev-parse HEAD` at submission.
 - Accepted main: `3963bc3566da24f8214634c17a9d0f79a6724171`
-- Review-time `origin/main`: `b7d25ca6f0e9b94c62b193059160dfbf446ef1d6`
+- Prior review-time `origin/main`: `b7d25ca6f0e9b94c62b193059160dfbf446ef1d6`
+- Current `origin/main`: `ea53be13ce5e4ef14fd8c89c695c21744a1f7686` (`audio-runtime C107 characterize post-wave CLI ownership (#494)`).
 - Startup revision: `8bdafc7f947a3a2c9856220abdc539437035bd21`
 - Manifest hash: `3194edd97aed588f7cdf2f8c58a69ac21da4c9ad`
 - Admission: `project-control.py verify-work --type task --name audio-runtime-c116-centralize-rtc-track-transport` returned `{"status":"admitted","project":"audio-runtime","name":"audio-runtime-c116-centralize-rtc-track-transport"}`.
 - `git fetch origin main` completed. The current main revision is an
-  ancestor of the candidate through merge checkpoint `2a83d8c1`; the
+  ancestor of the candidate through merge checkpoint `5df6a90b`; the
   accepted-main and startup ancestors also pass. Only this isolated worktree
   was merged; the running host checkout was never merged or reset.
 
@@ -64,18 +66,20 @@ provider-media/device-pump paths were edited.
 
 The following completed successfully:
 
-- `go test ./go-agent-runtime/services/rtctransport/... ./go-llm-gateway/pkg/transport/rtc -count=3` — 216 test
-  executions passed across four packages.
-- `make test-rtc-race` — all four required race-gate tests passed, including
+- `run.py` at the merged candidate — RTC transport (14 tests), external media
+  (93), software device probe (6), C21 consumption (3), and credential-free
+  audio-tool (3) all passed.
+- `make test-rtc-race` at the merged candidate — all four required race-gate tests passed, including
   `TestInboundTrackS8ConcurrentIngestReadCancelClose`,
   `TestOutboundTrackSerializesConcurrentWrites`, and
   `TestOutboundTrackConcurrentWriteCancelClose`; the restored Pion-edge test
   remains under the race detector after its complexity-only helper split.
-- The accumulated bounded cases passed 93 CLI wire tests, 6 software v9
-  device-probe tests, 3 C21 consumption tests, and 3 credential-free
-  audio-tool tests.
-- The focused device/probe suite passed 13 tests across 6 packages and the
-  focused CLI/v9 media suite passed 35 tests across 2 packages.
+- Focused causal transport tests passed 50 normal executions and 30 race
+  executions for terminal-error, bounded-queue, close-propagation, identity,
+  obsolete-packet, and typed-nil dependency regressions.
+- The focused gateway RTC package passed 62 normal tests; the focused
+  device/probe suite passed 13 tests across 6 packages; the focused CLI/v9
+  media suite passed 3 tests.
 - `GOWORK=off go test ./...` from `external-consumer/` — independent public-contract
   consumer passed.
 - `verify.py --mode module-boundary`, `--mode inbound-positive-and-causal-negatives`,
@@ -86,12 +90,11 @@ The following completed successfully:
 - `run.py` bounded cases — RTC transport, CLI external media, v9 software
   device probe, C21 simulated consumption, and credential-free audio-tool
   regressions all passed.
-- `make architecture-check` and `make size-check` — both passed with 189
-  packages, 1,903 files, and 27,999 functions; `make wire-check` regenerated
-  all nine graphs without drift.
+- `make architecture-size-check` — passed with 189 packages, 1,903 files,
+  and 28,030 functions; `make wire-check` regenerated all nine graphs without
+  drift; coverage registration passed for 179 packages across 6 modules.
 - Workspace `fmt`, `vet`, pinned Staticcheck 2026.1, and pinned golangci-lint
-  v2.9.0 — all passed with zero findings; coverage registration passed for 179
-  packages across 6 modules; `git diff --check` is clean.
+  v2.9.0 — all passed with zero findings; `git diff --check` is clean.
 - The modified gateway RTC package independently passes `GOWORK=off go test`,
   `go vet`, pinned Staticcheck 2026.1, and pinned golangci-lint v2.9.0 with
   zero findings after the race-gate repair.
@@ -109,6 +112,16 @@ fragments are deleted, the v9 baseline records 215, and the restored race test
 is below the complexity budget. `rtc_runtime.go` remains exactly 674 lines
 against its 674 accepted-main baseline. The focused gates do not claim the
 unrelated provider-audio integration residuals are fixed.
+
+The prior review's five actionable source defects are repaired in the runtime
+repair checkpoint and covered by causal regressions: inbound packet/state
+errors retain their typed identity instead of being mislabeled as source
+errors; terminal completion closes the source without sending an error into a
+full bounded frame queue; terminal failure propagates Close to the packet
+source; playout validates SSRC, payload type, and timestamp before obsolete or
+duplicate suppression; and typed-nil outbound encoder, writer, and pacer
+dependencies are rejected with typed errors. The device-probe packet source
+now closes its owning peer connection.
 
 Script-CI run `34734522403` on head `6a241da0` was rejected while unit,
 coverage, hermetic, and platform checks passed. Its exact actionable findings
@@ -157,30 +170,39 @@ gateway RTC retirement, and the transferred probe/compatibility callers. This
 was preserved as an excluded provider-audio/device-server residual, not an
 actionable C116 transport repair.
 
-## Exact current-head rerun
+## Exact current-candidate rerun
 
-At source `c84e3e7ebadef9cf88a7c1a8e708dc14dc7c8134`, after fetching
-`origin/main=b7d25ca6f0e9b94c62b193059160dfbf446ef1d6`, the bounded executor
-checks passed:
+At runtime repair checkpoint `a55301865a771a70f09551736750ed48f18a5b3a`,
+with current `origin/main=ea53be13ce5e4ef14fd8c89c695c21744a1f7686` merged as
+`5df6a90b214dfcdb94a45760bd732d4e6721049f`, the bounded executor checks passed:
 
-- Focused normal transport tests passed 147 executions across four packages
-  with `-count=3`.
+- `run.py` passed RTC track roundtrip (14 tests), external media (93),
+  software device probe (6), C21 consumption replay (3), and credential-free
+  audio/tool (3).
 - `make test-rtc-race` passed all four focused Pion-edge concurrency tests.
 - The separate `GOWORK=off` external consumer passed.
 - `verify.py` passed `module-boundary`, `inbound-positive-and-causal-negatives`,
   `outbound-positive-and-causal-negatives`,
   `retirement-adapter-callers-and-scope`, and `final-scope-and-provenance`.
-- `run.py` passed the five accumulated cases: RTC track roundtrip (10 tests),
-  external media (93), software device probe (6), C21 consumption replay (3),
-  and credential-free audio/tool (3).
+- `make wire-check`, `make coverage-registration`, and
+  `make architecture-size-check` passed without generated drift.
 
 These are executor checks only. They do not claim script-CI acceptance,
 independent review, guarded merge, an immutable vertical probe, physical or
 acoustic proof, or project completion.
 
+## Script-CI handoff status
+
+The board's latest observed script-CI record is run `34738166200`, which
+reported all nine required checks green for the prior reviewed head
+`3723fc98ab53fbbe34457ce8deaf3afa415f0c49`. The candidate was subsequently
+repaired and rebased through current `origin/main`, so that prior result is
+not claimed as current-head CI. No CI polling was performed for this repair.
+
 ## Next action
 
-Push/update PR #500 at the exact current head and submit this same task to the
-script-owned CI gate without polling. Fresh independent review, guarded merge,
-and the immutable engineering vertical probe remain open. Any exact-head
-rejection that touches C116 returns to this task for repair and resubmission.
+Push the evidence refresh, update PR #500 with the exact pushed head, and
+submit this same task to the script-owned CI gate without polling. Fresh
+independent review, guarded merge, and the immutable engineering vertical
+probe remain open. Any exact-head rejection that touches C116 returns to this
+task for repair and resubmission.
