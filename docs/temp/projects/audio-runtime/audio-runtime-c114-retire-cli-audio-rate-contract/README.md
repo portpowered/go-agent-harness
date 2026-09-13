@@ -2,9 +2,10 @@
 
 This is the admitted `audio-runtime` task `audio-runtime-c114-retire-cli-audio-rate-contract` on branch `codex/audio-runtime-c114-retire-cli-audio-rate-contract`, pushed checkpoint `3cc1764098975476e1a923094b98879de9fe1b82`.
 
-Executor resumption verification at the current branch head
-(`008ad4a44c4d956b64c1ed4c76acb672e8d0328d`): admission remains valid, the
-branch still matches `prd.json`, and freshly fetched `origin/main` remains
+Executor resumption verification at source head
+(`008ad4a44c4d956b64c1ed4c76acb672e8d0328d`, preserved by the documentation
+checkpoint that follows): admission remains valid, the branch still matches
+`prd.json`, and freshly fetched `origin/main` remains
 `3963bc3566da24f8214634c17a9d0f79a6724171`. The implementation source is
 unchanged from `3cc1764098975476e1a923094b98879de9fe1b82`; this refresh is
 evidence-only.
