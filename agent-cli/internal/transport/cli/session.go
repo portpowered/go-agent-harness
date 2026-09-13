@@ -26,15 +26,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// SessionToolCapabilities is the config-scoped tool surface used by a
-// composed session command. Executor and Definitions are derived from the
-// same loaded config snapshot so the session cannot advertise a tool that its
-// executor does not expose.
+// SessionToolCapabilities is the config-scoped tool surface used by a composed session command. Executor and Definitions come from one config snapshot so the session cannot advertise a tool its executor does not expose.
 type SessionToolCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
-	// InteractiveToolPolicy is the host-resolved public runtime snapshot
-	// carried with the same request-scoped executor and definitions.
+	// InteractiveToolPolicy carries the host-resolved public runtime snapshot.
 	InteractiveToolPolicy runtimeTools.InteractiveToolPolicy
 	// BrowserCapabilityState is the session-owned browser state used to
 	// compose model-facing grounding. It is independent from whether the
@@ -63,12 +59,9 @@ type SessionToolCapabilities struct {
 	// opt-in live session input boundary. It is nil for non-browser capability
 	// sets; callers must use the returned context to stop the watch.
 	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
-	// BrowserEventWatch exposes the richer adapter-owned semantic browser event
-	// stream to the opt-in recording observer. It is independent from
-	// BrowserWatch and never participates in tool execution or continuation.
+	// BrowserEventWatch exposes the richer adapter-owned semantic browser event stream to the opt-in recording observer. It is independent from BrowserWatch and never participates in tool execution or continuation.
 	BrowserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
-	// Close transfers ownership of any capability resources to the session
-	// coordinator. Nil means this capability has no closeable resources.
+	// Close transfers ownership of capability resources to the session coordinator; nil means this capability has no closeable resources.
 	Close func() error
 }
 

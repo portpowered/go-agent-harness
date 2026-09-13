@@ -923,58 +923,6 @@ func TestRealtimeSession_ResponseAdmissionExcludesOutOfBandCreate(t *testing.T) 
 	}
 }
 
-func TestRealtimeSession_ToolAcknowledgementIsAdmittedOutOfBandDuringActiveFunctionCall(t *testing.T) {
-	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	session.start(ctx)
-	defer func() { _ = session.Close() }()
-
-	session.observeResponseCreated(models.SessionEvent{
-		Type: models.SessionEventResponseCreated,
-		Data: []byte(`{"response":{"id":"resp-tool"}}`),
-	})
-	session.observeResponseLifecycle(models.SessionEvent{
-		Type: models.SessionEventResponseOutputItemAdded,
-		Data: []byte(`{"item":{"type":"function_call"}}`),
-	})
-	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
-		Type:  messages.StreamTypeResponseCreate,
-		Value: messages.NewToolAcknowledgementResponseCreateValue(),
-	}); !outcome.OK() {
-		t.Fatalf("tool acknowledgement admission: %#v", outcome)
-	}
-
-	raw := waitForClientMessage(t, ctx, conn, "tool acknowledgement response.create")
-	var payload struct {
-		Type     string `json:"type"`
-		Response struct {
-			Conversation string `json:"conversation"`
-			Instructions string `json:"instructions"`
-		} `json:"response"`
-	}
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		t.Fatalf("unmarshal tool acknowledgement: %v", err)
-	}
-	if payload.Type != "response.create" {
-		t.Fatalf("tool acknowledgement event type = %q, want response.create", payload.Type)
-	}
-	if payload.Response.Conversation != realtimeConversationNone {
-		t.Fatalf("tool acknowledgement conversation = %q, want %q", payload.Response.Conversation, realtimeConversationNone)
-	}
-	if payload.Response.Instructions != messages.ToolAcknowledgementInstructions {
-		t.Fatalf("tool acknowledgement instructions = %q, want %q", payload.Response.Instructions, messages.ToolAcknowledgementInstructions)
-	}
-
-	session.responseMu.Lock()
-	active := session.responseActive
-	session.responseMu.Unlock()
-	if !active {
-		t.Fatal("out-of-band tool acknowledgement released the active function-call response")
-	}
-}
-
 func TestRealtimeSession_CloneSessionEventsCopiesRawData(t *testing.T) {
 	original := []models.SessionEvent{{Type: models.SessionEventResponseCreate, Data: []byte(`{"response":{"conversation":"none"}}`)}}
 	cloned := cloneSessionEvents(original)

@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/toolpolicy"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -98,18 +99,18 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		return agentloop.New(options...)
 	}
 	if interactivePolicy != nil {
-		toolExecutor = newInteractivePolicyToolExecutor(toolExecutor, h.scheduler, interactivePolicy, h.request.ToolExecutionTimeout)
+		toolExecutor = toolpolicy.NewInteractiveToolExecutor(toolExecutor, h.scheduler, interactivePolicy, h.request.ToolExecutionTimeout)
 	} else if h.request.ToolExecutionTimeout > 0 {
-		toolExecutor = newTimedToolExecutor(toolExecutor, h.scheduler, h.request.ToolExecutionTimeout)
-	}
-	if h.providerLivenessEnabled() {
-		toolExecutor = livenessToolExecutor{inner: toolExecutor, handle: h}
+		toolExecutor = toolpolicy.NewTimedToolExecutor(toolExecutor, h.scheduler, h.request.ToolExecutionTimeout)
 	}
 	h.mu.Lock()
 	explicitCapability := h.request.Capabilities != nil && !h.request.Capabilities.InheritDefaults
 	h.mu.Unlock()
 	toolExecutor = restrictToolExecutor(toolExecutor, toolDefinitions, explicitCapability)
-	toolExecutor = activeCaptureToolExecutor{inner: toolExecutor, wait: h.waitForActiveCaptureTurn}
+	if h.providerLivenessEnabled() {
+		toolExecutor = livenessToolExecutor{inner: toolExecutor, handle: h}
+	}
+	toolExecutor = toolpolicy.WithActiveCapture(toolExecutor, h.waitForActiveCaptureTurn)
 	options = append(options, agentloop.WithToolExecutor(toolExecutor))
 	if len(toolDefinitions) > 0 {
 		options = append(options, agentloop.WithTools(toolDefinitions))
@@ -135,20 +136,6 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	return agentloop.New(options...)
 }
 
-// activeCaptureToolExecutor keeps tool results behind the next active audio turn.
-type activeCaptureToolExecutor struct {
-	inner messages.ToolExecutor
-	wait  func(context.Context) error
-}
-
-func (e activeCaptureToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	if e.wait != nil {
-		if err := e.wait(ctx); err != nil {
-			return messages.ToolCallResponse{}, err
-		}
-	}
-	return e.inner.Execute(ctx, call)
-}
 func configureActiveScheduledAudio(handle session.LiveHandle, active bool) {
 	if runtimeHandle, ok := handle.(interface{ configureActiveScheduledAudio(bool) }); ok {
 		runtimeHandle.configureActiveScheduledAudio(active)

@@ -223,9 +223,12 @@ func NewResponseCreateEventOutOfBandWithInstructions(instructions string) Sessio
 	if instructions != "" {
 		response["instructions"] = instructions
 	}
-	data, _ := json.Marshal(map[string]any{
+	data, err := json.Marshal(map[string]any{
 		"response": response,
 	})
+	if err != nil {
+		return SessionEvent{Type: SessionEventResponseCreate}
+	}
 	return SessionEvent{Type: SessionEventResponseCreate, Data: data}
 }
 

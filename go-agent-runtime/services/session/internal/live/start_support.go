@@ -7,6 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/toolpolicy"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"strings"
@@ -41,7 +42,7 @@ func (h *handle) validateTimingPolicy() error {
 	return nil
 }
 func (h *handle) requiresScheduler() bool {
-	return h.request.MaxDuration > 0 || h.request.RequireSessionUpdated || h.firstTurnPolicyEnabled() || h.rateLimitRetryEnabled() || h.request.ToolExecutionTimeout > 0 || h.providerLivenessEnabled() || (h.request.Capabilities != nil && h.request.Capabilities.InteractiveToolPolicy != nil)
+	return h.request.MaxDuration > 0 || h.request.RequireSessionUpdated || h.firstTurnPolicyEnabled() || h.rateLimitRetryEnabled() || h.request.ToolExecutionTimeout > 0 || h.providerLivenessEnabled()
 }
 func cloneLiveTerminalValue(value *messages.SessionCloseValue) *messages.SessionCloseValue {
 	if value == nil {
@@ -177,14 +178,7 @@ func (h *handle) admitCapabilities(ctx context.Context) (messages.ToolExecutor, 
 		}
 		binding.InteractiveToolPolicy = policy
 	}
-	effectiveExecutor := executor
-	if !binding.InheritDefaults {
-		effectiveExecutor = binding.Executor
-	}
-	if binding.InteractiveToolPolicy != nil && effectiveExecutor != nil && h.scheduler == nil {
-		return nil, nil, closeFailedCapability(binding, fmt.Errorf("%w: interactive tool policy requires a scheduler", session.ErrLiveSchedulerUnavailable))
-	}
-	normalizeCapabilityLifecycle(binding)
+	toolpolicy.NormalizeCapabilityLifecycle(binding)
 	if binding.Initialize != nil {
 		if err := binding.Initialize(ctx); err != nil {
 			return nil, nil, closeFailedCapability(binding, fmt.Errorf("initialize live capabilities: %w", err))
@@ -219,18 +213,6 @@ func (h *handle) resolveCapabilityBinding(ctx context.Context) (*session.LiveCap
 		return nil, fmt.Errorf("resolve live capabilities: %w", err)
 	}
 	return &binding, nil
-}
-func normalizeCapabilityLifecycle(binding *session.LiveCapabilities) {
-	if binding.Handle == nil {
-		return
-	}
-	binding.Initialize = binding.Handle.Initialize
-	binding.RefreshDefinitions = binding.Handle.RefreshDefinitions
-	binding.Close = binding.Handle.Close
-	binding.BrowserWatch = nil
-	if watcher, ok := binding.Handle.(session.LiveCapabilityWatcher); ok {
-		binding.BrowserWatch = watcher.BrowserWatch
-	}
 }
 func closeFailedCapability(binding *session.LiveCapabilities, cause error) error {
 	if binding.Close == nil {

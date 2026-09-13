@@ -398,8 +398,3 @@ func (e livenessToolExecutor) Execute(ctx context.Context, call messages.ToolCal
 	}
 	return e.inner.Execute(ctx, call)
 }
-
-func (e livenessToolExecutor) AllowUnadvertisedTools() bool {
-	replacement, ok := e.inner.(interface{ AllowUnadvertisedTools() bool })
-	return ok && replacement.AllowUnadvertisedTools()
-}

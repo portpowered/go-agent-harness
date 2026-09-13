@@ -244,13 +244,7 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 				return SessionRunOptions{}, fmt.Errorf("initialize session tools: %w", err)
 			}
 		}
-		options.ToolExecutor = capabilities.Executor
-		options.ToolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
-		options.ToolDefinitionBase = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
-		options.InteractiveToolPolicy = capabilities.InteractiveToolPolicy
-		options.RefreshToolDefinitions = capabilities.RefreshDefinitionsWithError
-		options.BrowserWatch, options.BrowserEventWatch = capabilities.BrowserWatch, capabilities.BrowserEventWatch
-		options.BrowserCapabilityState, options.CapabilityClose = capabilities.BrowserCapabilityState, capabilities.Close
+		applySessionCapabilities(&options, capabilities)
 	}
 	policy, err := cliTools.ResolveFilesystemPolicy(request.WorkDir, request.AllowPaths...)
 	if err != nil {
@@ -281,6 +275,16 @@ func (d *Dispatcher) requestOptions(ctx context.Context, request public.Request)
 		options.AudioInterruptions = interruptions
 	}
 	return options, nil
+}
+
+func applySessionCapabilities(options *SessionRunOptions, capabilities serviceTools.Capabilities) {
+	options.ToolExecutor = capabilities.Executor
+	options.ToolDefinitions = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+	options.ToolDefinitionBase = append([]messages.ToolDefinition(nil), capabilities.Definitions...)
+	options.InteractiveToolPolicy = capabilities.InteractiveToolPolicy
+	options.RefreshToolDefinitions = capabilities.RefreshDefinitionsWithError
+	options.BrowserWatch, options.BrowserEventWatch = capabilities.BrowserWatch, capabilities.BrowserEventWatch
+	options.BrowserCapabilityState, options.CapabilityClose = capabilities.BrowserCapabilityState, capabilities.Close
 }
 
 // resolveSessionToolCapabilities applies request-scoped filesystem values to

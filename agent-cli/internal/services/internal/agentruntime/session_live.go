@@ -175,8 +175,7 @@ type sessionLoopOptions struct {
 	// session loop. It is paired with ToolExecutor by the runtime planner.
 	ToolDefinitions []messages.ToolDefinition
 
-	// InteractiveToolPolicy is the immutable per-session class and timeout
-	// snapshot paired with ToolDefinitions and ToolExecutor.
+	// InteractiveToolPolicy is the immutable per-session class and timeout snapshot paired with ToolDefinitions and ToolExecutor.
 	InteractiveToolPolicy runtimeTools.InteractiveToolPolicy
 	// ToolDefinitionBase is the immutable static and stable broker surface
 	// retained by the dynamic publisher while page definitions change.

@@ -210,7 +210,6 @@ type SessionRunOptions struct {
 	// WebRTC without a factory returns an explicit setup error rather than
 	// silently falling back to WebSocket.
 	RTCRuntimeFactory SessionRTCRuntimeFactory
-
 	// Transport selects the live session runtime. Empty preserves the existing
 	// WebSocket default. The value is retained as supplied in the option
 	// contract only long enough for case/space-insensitive validation; plans
@@ -283,10 +282,7 @@ type SessionRunOptions struct {
 	// When present, provider resolution reuses it instead of loading config a
 	// second time during runtime planning.
 	LoadedConfig *config.Config
-	// InteractiveToolPolicy is the host-resolved, request-scoped runtime
-	// snapshot. Runtime planning clones it before handing it to the loop and
-	// executor; a nil value selects the public runtime defaults for direct
-	// service callers that do not have a host capability adapter.
+	// InteractiveToolPolicy is the host-resolved runtime snapshot; planning clones it before handing it to the loop and executor. Nil selects public defaults for direct callers without a host adapter.
 	InteractiveToolPolicy runtimeTools.InteractiveToolPolicy
 
 	// CapabilityClose is the optional cleanup hook transferred from the CLI
