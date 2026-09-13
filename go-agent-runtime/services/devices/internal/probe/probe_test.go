@@ -132,7 +132,7 @@ func TestProbeHelperContracts(t *testing.T) {
 	if got := scenarioDeviceProbeTranscript(probe.Scenario{Expectations: []probe.ExpectedBehavior{{Type: probe.ExpectTranscriptContains, Value: "from value"}}}); got != "from value" {
 		t.Fatalf("transcript expectation fallback = %q, want from value", got)
 	}
-	if _, err := runDeviceProbeScenario(context.Background(), validProbeScenario(), devicegw.DeviceProbeAvailability{}, nil, runtimeDevices.ProbeRequest{}, nil, nil); err == nil || !bytes.Contains([]byte(err.Error()), []byte("status")) {
+	if _, err := runDeviceProbeScenario(context.Background(), validProbeScenario(), devicegw.DeviceProbeAvailability{}, nil, runtimeDevices.ProbeRequest{}, nil); err == nil || !bytes.Contains([]byte(err.Error()), []byte("status")) {
 		t.Fatalf("invalid availability error = %v, want status diagnostic", err)
 	}
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
-	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
@@ -39,7 +38,7 @@ type deviceProbeInputPlan struct {
 	Utterance string
 }
 
-func runDeviceProbeScenario(ctx context.Context, scenario probe.Scenario, availability devicegw.DeviceProbeAvailability, registry devicegw.DeviceRegistry, opts deviceProbeRuntimeOptions, sessionFactory runtimeDevices.ProbeSessionFactory, mediaTransport rtctransport.Service) (observation probe.ObservationSnapshot, runErr error) {
+func runDeviceProbeScenario(ctx context.Context, scenario probe.Scenario, availability devicegw.DeviceProbeAvailability, registry devicegw.DeviceRegistry, opts deviceProbeRuntimeOptions, sessionFactory runtimeDevices.ProbeSessionFactory) (observation probe.ObservationSnapshot, runErr error) {
 	if ctx == nil {
 		return observation, errors.New("device probe context is required")
 	}
@@ -52,7 +51,7 @@ func runDeviceProbeScenario(ctx context.Context, scenario probe.Scenario, availa
 	}
 	inputDevice := selectLiveDeviceProbeDevice(registry, availability.InputDevices, devicegw.DirectionInput)
 	outputDevice := selectLiveDeviceProbeDevice(registry, availability.OutputDevices, devicegw.DirectionOutput)
-	resources, err := openLiveDeviceProbeResources(registry, inputDevice, outputDevice, mediaTransport)
+	resources, err := openLiveDeviceProbeResources(registry, inputDevice, outputDevice)
 	if err != nil {
 		return observation, err
 	}

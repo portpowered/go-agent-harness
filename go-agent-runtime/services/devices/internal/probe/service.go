@@ -10,7 +10,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
-	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -19,17 +18,12 @@ import (
 type Service struct {
 	registry       devicegw.DeviceRegistry
 	sessionFactory runtimeDevices.ProbeSessionFactory
-	transport      rtctransport.Service
 }
 
 // New creates an inert probe service. Provider sessions are constructed only
 // when Run needs them, through the injected session factory.
-func New(registry devicegw.DeviceRegistry, sessionFactory runtimeDevices.ProbeSessionFactory, transports ...rtctransport.Service) *Service {
-	var transport rtctransport.Service
-	if len(transports) > 0 {
-		transport = transports[0]
-	}
-	return &Service{registry: registry, sessionFactory: sessionFactory, transport: transport}
+func New(registry devicegw.DeviceRegistry, sessionFactory runtimeDevices.ProbeSessionFactory) *Service {
+	return &Service{registry: registry, sessionFactory: sessionFactory}
 }
 
 var _ runtimeDevices.ProbeService = (*Service)(nil)
@@ -48,7 +42,7 @@ func (s *Service) Run(ctx context.Context, request runtimeDevices.ProbeRequest) 
 	if availability.Status != devicegw.DeviceProbeStatusReady {
 		return observation, fmt.Errorf("device probe cannot run with availability status %q", availability.Status)
 	}
-	return runDeviceProbeScenario(ctx, request.Scenario, availability, s.registry, request, s.sessionFactory, s.transport)
+	return runDeviceProbeScenario(ctx, request.Scenario, availability, s.registry, request, s.sessionFactory)
 }
 
 func contextError(ctx context.Context) error {

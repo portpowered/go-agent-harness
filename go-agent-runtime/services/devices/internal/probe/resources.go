@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	rtctransport "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -15,10 +14,7 @@ type liveDeviceProbeResources struct {
 	outputLink *liveDeviceProbeMediaLink
 }
 
-func openLiveDeviceProbeResources(registry devicegw.DeviceRegistry, inputDevice, outputDevice devicegw.Device, mediaTransport rtctransport.Service) (liveDeviceProbeResources, error) {
-	if mediaTransport == nil {
-		return liveDeviceProbeResources{}, errors.New("RTC transport service is required")
-	}
+func openLiveDeviceProbeResources(registry devicegw.DeviceRegistry, inputDevice, outputDevice devicegw.Device) (liveDeviceProbeResources, error) {
 	resources := liveDeviceProbeResources{}
 	var err error
 	resources.source, err = devicegw.NewDeviceSource(registry, inputDevice.ID)
@@ -29,11 +25,11 @@ func openLiveDeviceProbeResources(registry devicegw.DeviceRegistry, inputDevice,
 	if err != nil {
 		return liveDeviceProbeResources{}, errors.Join(fmt.Errorf("open selected output device %q (%s): %w", outputDevice.ID, outputDevice.Display(), err), resources.source.Close())
 	}
-	resources.inputLink, err = newLiveDeviceProbeMediaLink(mediaTransport)
+	resources.inputLink, err = newLiveDeviceProbeMediaLink()
 	if err != nil {
 		return liveDeviceProbeResources{}, errors.Join(fmt.Errorf("create microphone WebRTC path: %w", err), resources.source.Close(), resources.sink.Close())
 	}
-	resources.outputLink, err = newLiveDeviceProbeMediaLink(mediaTransport)
+	resources.outputLink, err = newLiveDeviceProbeMediaLink()
 	if err != nil {
 		return liveDeviceProbeResources{}, errors.Join(fmt.Errorf("create speaker WebRTC path: %w", err), resources.source.Close(), resources.sink.Close(), resources.inputLink.Close())
 	}

@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import pathlib
 import subprocess
@@ -16,16 +18,32 @@ WORK = "audio-runtime-c116-centralize-rtc-track-transport"
 BRANCH = "codex/audio-runtime-c116-centralize-rtc-track-transport"
 ACCEPTED_MAIN = "3963bc3566da24f8214634c17a9d0f79a6724171"
 STARTUP_REVISION = "8bdafc7f947a3a2c9856220abdc539437035bd21"
+REJECTED_CANDIDATE = "e367e90d408fca82ca45c60312eaf76205cba4b8"
+MANIFEST = ROOT / "factory/projects/audio-runtime/manifest.json"
+MANIFEST_SHA256 = "ec1439b3b1edf5ab935a59cfe67756b67f4a27e51c20ffcaad87ffab35acdf3d"
+BASELINE_REVISION = "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad"
 BASELINE_IN = 453
 BASELINE_OUT = 418
 EXTERNAL = HERE / "external-consumer"
 OWNED_PREFIXES = (
-    "agent-cli/internal/services/internal/devices/service_test.go",
-    "agent-cli/internal/services/wire/wire.go",
-    "agent-cli/internal/transport/cli/probe_v9_webrtc_device_test.go",
     "agent-cli/internal/wire/rtc_runtime.go",
     "coverage-manifest/go-agent-runtime/services/rtctransport/",
     "docs/temp/projects/audio-runtime/audio-runtime-c116-centralize-rtc-track-transport/",
+    "go-agent-runtime/services/rtctransport/",
+    "go-llm-gateway/pkg/transport/rtc/track_in.go",
+    "go-llm-gateway/pkg/transport/rtc/track_in_test.go",
+    "go-llm-gateway/pkg/transport/rtc/track_out.go",
+    "go-llm-gateway/pkg/transport/rtc/track_out_test.go",
+)
+REVIEW_REJECTED_PATHS = (
+    "agent-cli/internal/services/internal/devices/service_test.go",
+    "agent-cli/internal/services/wire/wire.go",
+    "agent-cli/internal/transport/cli/probe_v9_webrtc_device_test.go",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/probe_v9_webrtc_device_test.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_in.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_in_test.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_out.go.json",
+    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_out_test.go.json",
     "go-agent-runtime/services/devices/internal/probe/probe.go",
     "go-agent-runtime/services/devices/internal/probe/probe_test.go",
     "go-agent-runtime/services/devices/internal/probe/resources.go",
@@ -33,17 +51,12 @@ OWNED_PREFIXES = (
     "go-agent-runtime/services/devices/internal/probe/service.go",
     "go-agent-runtime/services/devices/wire/providers.go",
     "go-agent-runtime/services/devices/wire/wire_gen.go",
-    "go-agent-runtime/services/rtctransport/",
+)
+CLEANUP_ONLY_PATHS = (
+    # The predecessor registry checkpoint removed the old sessiondiagnostics
+    # entry. This path is retained while the rejected C116 rtctransport entry
+    # is explicitly forbidden below; it is not an owned implementation path.
     "docs/architecture/architecture-policy.json",
-    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/probe_v9_webrtc_device_test.go.json",
-    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_in.go.json",
-    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_in_test.go.json",
-    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_out.go.json",
-    "docs/architecture/baselines/github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc/track_out_test.go.json",
-    "go-llm-gateway/pkg/transport/rtc/track_in.go",
-    "go-llm-gateway/pkg/transport/rtc/track_in_test.go",
-    "go-llm-gateway/pkg/transport/rtc/track_out.go",
-    "go-llm-gateway/pkg/transport/rtc/track_out_test.go",
 )
 
 
@@ -64,6 +77,32 @@ def command(argv: list[str], cwd: pathlib.Path = ROOT, timeout: int = 180) -> st
 def require(path: pathlib.Path) -> None:
     if not path.exists():
         raise VerificationFailure(f"missing required path: {path.relative_to(ROOT)}")
+
+
+def manifest_identity() -> None:
+    require(MANIFEST)
+    raw = MANIFEST.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != MANIFEST_SHA256:
+        raise VerificationFailure(
+            f"admitted manifest sha256 {digest} does not match pinned {MANIFEST_SHA256}"
+        )
+    try:
+        manifest = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise VerificationFailure(f"admitted manifest is not valid JSON: {error}") from error
+    if not isinstance(manifest, dict):
+        raise VerificationFailure("admitted manifest root must be an object")
+    for field, expected in (
+        ("project", "audio-runtime"),
+        ("contractRevision", "audio-runtime-v1"),
+        ("baselineRevision", BASELINE_REVISION),
+    ):
+        observed = manifest.get(field)
+        if observed != expected:
+            raise VerificationFailure(
+                f"admitted manifest {field} {observed!r} does not match {expected!r}"
+            )
 
 
 def module_boundary() -> None:
@@ -118,13 +157,33 @@ def retirement() -> None:
         for forbidden in ("unwrapSequence", "DecodePLC", "wavio.Resample", "sampleOffsetDuration"):
             if forbidden in text:
                 raise VerificationFailure(f"CLI adapter contains transport policy {forbidden}")
-    changed = [
-        path for path in command(["git", "diff", "--name-only", "origin/main", "HEAD"]).splitlines()
+    changed = {
+        path for path in command(["git", "diff", "--name-only", "origin/main"]).splitlines()
         if path and path != "Changes:"
+    }
+    prior_changed = {
+        path for path in command(["git", "diff", "--name-only", REJECTED_CANDIDATE]).splitlines()
+        if path and path != "Changes:"
+    }
+    newly_changed = changed & prior_changed
+    outside = [
+        path for path in newly_changed
+        if not any(path == prefix or path.startswith(prefix) for prefix in OWNED_PREFIXES)
+        and path not in CLEANUP_ONLY_PATHS
     ]
-    outside = [path for path in changed if not any(path == prefix or path.startswith(prefix) for prefix in OWNED_PREFIXES)]
     if outside:
-        raise VerificationFailure("candidate changed paths outside C116 scope: " + ", ".join(outside))
+        raise VerificationFailure("new candidate paths outside C116 scope: " + ", ".join(sorted(outside)))
+    rejected_diffs = command([
+        "git", "diff", "--name-only", "origin/main", "--", *REVIEW_REJECTED_PATHS,
+    ]).splitlines()
+    rejected_diffs = [path for path in rejected_diffs if path and path != "Changes:"]
+    if rejected_diffs:
+        raise VerificationFailure(
+            "review-rejected paths still differ from origin/main: " + ", ".join(rejected_diffs)
+        )
+    architecture_policy = (ROOT / CLEANUP_ONLY_PATHS[0]).read_text(encoding="utf-8")
+    if "services/rtctransport/wire/wire_gen.go" in architecture_policy:
+        raise VerificationFailure("C116 rtctransport Wire registration changed the shared architecture policy")
 
 
 def final_scope() -> None:
@@ -144,6 +203,7 @@ def main() -> int:
     parser.add_argument("--mode", required=True)
     args = parser.parse_args()
     try:
+        manifest_identity()
         if args.mode == "module-boundary":
             module_boundary()
         elif args.mode in {"inbound-positive-and-causal-negatives", "outbound-positive-and-causal-negatives"}:

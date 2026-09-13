@@ -6,8 +6,10 @@ from __future__ import annotations
 import argparse
 import os
 import pathlib
+import signal
 import subprocess
 import sys
+import time
 
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -55,6 +57,49 @@ def safe_environment() -> dict[str, str]:
     }
 
 
+def stop_process_group(process: subprocess.Popen[str]) -> None:
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        try:
+            process.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    else:
+        process.terminate()
+        try:
+            process.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+
+
+def run_bounded(
+    child: list[str], cwd: pathlib.Path, environment: dict[str, str], timeout: float,
+) -> tuple[int, str, str, bool]:
+    options: dict[str, object] = {
+        "cwd": cwd,
+        "env": environment,
+        "text": True,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+    }
+    if os.name == "posix":
+        options["start_new_session"] = True
+    process = subprocess.Popen(["rtk", *child], **options)
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        stop_process_group(process)
+        stdout, stderr = process.communicate()
+        return process.returncode or 124, stdout, stderr, True
+    return process.returncode, stdout, stderr, False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", action="append", choices=sorted(CASES), required=True)
@@ -62,20 +107,29 @@ def main() -> int:
     parser.add_argument("--aggregate-timeout", type=int, default=360)
     args = parser.parse_args()
 
+    if args.child_timeout <= 0 or args.aggregate_timeout <= 0:
+        parser.error("timeouts must be positive")
     if args.aggregate_timeout < args.child_timeout:
         parser.error("aggregate timeout must cover the child timeout")
     environment = safe_environment()
+    deadline = time.monotonic() + args.aggregate_timeout
     for name in args.case:
         cwd, child = CASES[name]
-        result = subprocess.run(
-            ["rtk", *child], cwd=cwd, env=environment,
-            text=True, capture_output=True, timeout=args.child_timeout,
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            print(f"C116 aggregate deadline exceeded before case: {name}", file=sys.stderr)
+            return 124
+        returncode, stdout, stderr, timed_out = run_bounded(
+            child, cwd, environment, min(float(args.child_timeout), remaining),
         )
-        sys.stdout.write(result.stdout)
-        sys.stderr.write(result.stderr)
-        if result.returncode != 0:
+        sys.stdout.write(stdout)
+        sys.stderr.write(stderr)
+        if timed_out:
+            print(f"C116 case timed out: {name}", file=sys.stderr)
+            return 124
+        if returncode != 0:
             print(f"C116 case failed: {name}", file=sys.stderr)
-            return result.returncode or 1
+            return returncode or 1
         print(f"C116 case passed: {name}")
     return 0
 

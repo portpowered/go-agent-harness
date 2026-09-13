@@ -179,7 +179,7 @@ func (s *inboundPlayout) decode(payload []byte, plc bool) ([]int16, error) {
 	if len(resampled) != s.track.config.outputSamples {
 		return nil, inboundTrackError(rtctransport.ErrInboundTrackFrame, "resample", fmt.Errorf("got %d samples, want %d", len(resampled), s.track.config.outputSamples))
 	}
-	return resampled, nil
+	return append([]int16(nil), resampled...), nil
 }
 
 func decodeInboundFrame(decoder rtctransport.OpusDecoder, payload []byte, plc bool) ([]int16, error) {
