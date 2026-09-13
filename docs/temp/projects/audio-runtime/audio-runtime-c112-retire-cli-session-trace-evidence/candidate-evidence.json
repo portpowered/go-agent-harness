@@ -14,16 +14,16 @@
   },
   "testedSource": {
     "revision": "77de2f9cd7e3ea5496537f96cde7203249250e6f",
-    "candidateRevision": "9205c794c7a854e33e092ebef0d0d2d0851df934",
+    "candidateRevision": "e6554aa9ea9e7e28bc6397d281ca78dcd1676ef6",
     "traceLines": 43,
     "traceSha256": "939fa231d9b182536297cf18f923a6f358fec46a7dcbf5ea64bb7db548ed5d75",
     "traceSha256Command": "rtk git show 77de2f9cd7e3ea5496537f96cde7203249250e6f:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
     "candidateTraceLines": 43,
     "candidateTraceSha256": "939fa231d9b182536297cf18f923a6f358fec46a7dcbf5ea64bb7db548ed5d75",
-    "candidateTraceSha256Command": "rtk git show 9205c794c7a854e33e092ebef0d0d2d0851df934:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
+    "candidateTraceSha256Command": "rtk git show e6554aa9ea9e7e28bc6397d281ca78dcd1676ef6:agent-cli/internal/services/internal/agentruntime/trace.go | rtk shasum -a 256",
     "candidateRelation": {
       "type": "evidence-only-descendant",
-      "diffCommand": "rtk git diff --name-only 77de2f9cd7e3ea5496537f96cde7203249250e6f..9205c794c7a854e33e092ebef0d0d2d0851df934",
+      "diffCommand": "rtk git diff --name-only 77de2f9cd7e3ea5496537f96cde7203249250e6f..e6554aa9ea9e7e28bc6397d281ca78dcd1676ef6",
       "changedPaths": [
         "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/README.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/candidate-evidence.json",
@@ -34,7 +34,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/run.py",
         "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/verify.py"
       ],
-      "executableInputDiffCommand": "rtk git diff --quiet 77de2f9cd7e3ea5496537f96cde7203249250e6f..9205c794c7a854e33e092ebef0d0d2d0851df934 -- agent-cli go-agent-runtime coverage-manifest scripts/wire-packages.txt docs/architecture/architecture-policy.json",
+      "executableInputDiffCommand": "rtk git diff --quiet 77de2f9cd7e3ea5496537f96cde7203249250e6f..e6554aa9ea9e7e28bc6397d281ca78dcd1676ef6 -- agent-cli go-agent-runtime coverage-manifest scripts/wire-packages.txt docs/architecture/architecture-policy.json",
       "executableInputDiff": "PASS; no production, coverage, Wire, or architecture inputs changed after 77de2f9"
     },
     "legacyTraceLinesRetired": 76,
@@ -85,13 +85,13 @@
     "result": "PASS; two independent traces, all four PCM edges, deterministic clock, same-length PCM mutation identity, missing-clock rejection, duplicate destination retention"
   },
   "shippedYuiProbe": {
-    "sourceRevision": "9205c794c7a854e33e092ebef0d0d2d0851df934",
+    "sourceRevision": "e6554aa9ea9e7e28bc6397d281ca78dcd1676ef6",
     "artifact": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/artifacts/yui",
     "artifactSha256": "58691a0d65be25eeae2024bca3ddc374a57da3f37e4698a7e189d3fda887ee24",
     "buildCommand": "rtk make -C agent-cli build BUILD_OUTPUT=/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c112-retire-cli-session-trace-evidence/docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/artifacts/yui",
-    "buildResult": "PASS; rebuilt from candidateRevision 9205c794c7a854e33e092ebef0d0d2d0851df934",
+    "buildResult": "PASS; rebuilt from candidateRevision e6554aa9ea9e7e28bc6397d281ca78dcd1676ef6",
     "command": "python3 docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/run.py --case trace-audio-tool-replay --case interruption-replay --child-timeout 60 --aggregate-timeout 180",
-    "runDir": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/runs/vertical-20260913T100838Z-9937",
+    "runDir": "docs/temp/projects/audio-runtime/audio-runtime-c112-retire-cli-session-trace-evidence/runs/vertical-20260913T101349Z-14055",
     "environment": "credential-free; stdout/stderr capped at 256 KiB; child timeout 60s; aggregate timeout 180s; no surviving process-group PIDs",
     "fixtureHashes": {
       "audioTool": "38ed02805ce2dd0b7977e8e9ad2c0cf419d9632499e34fa601555384ef77f169",
