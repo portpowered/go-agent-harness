@@ -11,6 +11,7 @@
 - Startup integration ancestor: `8bdafc7f947a3a2c9856220abdc539437035bd21`.
 - Review-time `origin/main`, fetched before final verification: `2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`.
 - Tested integrated candidate head before this evidence-only commit: `d116ce3e63ad8957678e556ab5cee682002cafb6`.
+- Static-repair checkpoint: `6c91ba2` (`fix(room): preserve architecture gate metrics`).
 - Both required ancestors are present; no reset or running-host checkout merge was used.
 
 ## Failing-before and causal finding
@@ -20,6 +21,10 @@ The accepted-main negative control was run in a temporary detached worktree and 
 The cause was coordinator ownership loss during the unchanged 40 ms bound grace: an active response could retire from the active map before the force phase, so the force phase had no runtime through which to deliver the required cancellation. The repair snapshots runtimes at bound start, retains that snapshot through grace, re-marks each retained lifecycle for coordinator stopping and bound cancellation at force, and then performs the existing active-response cancellation. Grace duration, deadlines, provider-failure precedence and redaction assertions were not changed.
 
 The bound test has a synchronized active-response observation, asserts zero cancellation in the bound callback, and asserts exactly one active cancellation and zero peer cancellation after completion. The duration fixture queues the provider handshake before connection readiness so the response is active during admission. A test-only no-tick cadence isolates this bound ownership oracle from an unrelated periodic mixer-silence admission race; the production mixer is still constructed and torn down, and accumulated healthy audio/tool tests retain their normal cadence. This isolation is not claimed as proof that periodic mixer ingress is causal to C154.
+
+## Static CI repair
+
+The canonical task feedback for PR `#520` head `e8196c4b6be1d19d65e65f6b63ee63cf7bd167cc` named `CI (static)` failure. The bounded local reproduction found the same 18 architecture findings: the two owned files drifted from their immutable baseline metrics, and the new nested callbacks exceeded the test/coordinator complexity budgets. No review findings were present. The repair keeps the existing baseline identities at their prior values, moves only the new test branching into named helpers, and uses the bound-start snapshot directly in the force phase; the shared baseline was not edited.
 
 ## Candidate verification
 
@@ -35,6 +40,8 @@ All commands below were run on the integrated candidate head above, with no retr
 - Accumulated race, count 1: `Go test: 102 passed in 1 packages`.
 - Accumulated CGO-disabled `nomicrophone` coverpkg, count 1: `ok ... 13.487s coverage: 11.6%`.
 - `go vet ./agent-cli/internal/services/internal/agentruntime`: no issues.
+- Post-repair `make architecture-size-check`: pass (`202` packages, `1,941` files, `28,792` functions); the coordinator is back to its baseline `893` physical lines and the preserved bound test function/literal metric identities are clean.
+- Post-repair `make fmt`, `make wire-check`, pinned `make staticcheck` (`2026.1`) and pinned `make lint` (`v2.9.0`, 0 issues in all 15 modules): pass.
 - `git diff --check`: clean.
 
 The source diff against fetched `origin/main` is limited to the two admitted Go paths: `session_room_coordinator.go` and `session_room_bound_shutdown_test.go`. Generated coverage profiles are not part of the handoff.
