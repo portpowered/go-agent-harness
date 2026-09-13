@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/toolpolicy"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -34,6 +35,26 @@ type retryRequest struct {
 func (h *handle) firstTurnPolicyEnabled() bool {
 	return h != nil && (h.request.RequireFirstTurn || h.request.FirstTurnTimeout > 0)
 }
+
+func (h *handle) validateInteractiveToolPolicyAdmission(binding *session.LiveCapabilities) error {
+	toolpolicy.NormalizeCapabilityLifecycle(binding)
+	if binding.InteractiveToolPolicy == nil {
+		return nil
+	}
+	policy := binding.InteractiveToolPolicy.Clone()
+	if policy == nil {
+		return errors.New("interactive tool policy clone returned nil")
+	}
+	if err := policy.Validate(); err != nil {
+		return fmt.Errorf("validate interactive tool policy: %w", err)
+	}
+	binding.InteractiveToolPolicy = policy
+	if h.scheduler == nil {
+		return fmt.Errorf("%w: request requires a scheduler", session.ErrLiveSchedulerUnavailable)
+	}
+	return nil
+}
+
 func (h *handle) firstTurnTimeout() time.Duration {
 	if h == nil || h.request.FirstTurnTimeout <= 0 {
 		return defaultFirstTurnTimeout

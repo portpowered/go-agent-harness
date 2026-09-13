@@ -65,7 +65,6 @@ type testLiveCapabilityHandle struct {
 	initialized, closed       chan struct{}
 	events                    chan session.LiveCapabilityEvent
 	initializeOnce, closeOnce sync.Once
-	closeCalls                int
 }
 
 func (h *testLiveCapabilityHandle) Initialize(context.Context) error {
@@ -79,7 +78,7 @@ func (h *testLiveCapabilityHandle) BrowserWatch(context.Context) <-chan session.
 	return h.events
 }
 func (h *testLiveCapabilityHandle) Close() error {
-	h.closeOnce.Do(func() { h.closeCalls++; close(h.closed) })
+	h.closeOnce.Do(func() { close(h.closed) })
 	return nil
 }
 func newTestSession() *testSession {

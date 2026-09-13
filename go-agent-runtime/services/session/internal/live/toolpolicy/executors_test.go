@@ -175,6 +175,116 @@ func TestLiveInteractiveToolPolicyRequiresScheduler(t *testing.T) {
 	}
 }
 
+func TestLiveInteractiveToolPolicyRequiresSchedulerBeforeProvider(t *testing.T) {
+	providerCalls := 0
+	service := live.New(live.Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+		providerCalls++
+		return policyInferencer{session: newPolicySession()}, nil
+	}})
+	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
+		Capabilities: &session.LiveCapabilities{InteractiveToolPolicy: testPolicy(runtimeTools.InteractiveToolPolicySettings{})},
+	})
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); !errors.Is(err, session.ErrLiveSchedulerUnavailable) {
+		t.Fatalf("Start = %v, want ErrLiveSchedulerUnavailable", err)
+	}
+	if providerCalls != 0 {
+		t.Fatalf("provider calls = %d, want no provider setup before scheduler admission", providerCalls)
+	}
+}
+
+func TestLiveFactoryInteractiveToolPolicyRequiresSchedulerBeforeProvider(t *testing.T) {
+	capabilityCalls, providerCalls := 0, 0
+	service := live.New(live.Dependencies{
+		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+			providerCalls++
+			return policyInferencer{session: newPolicySession()}, nil
+		},
+		CapabilityFactory: func(context.Context, session.LiveRequest) (session.LiveCapabilities, error) {
+			capabilityCalls++
+			return session.LiveCapabilities{
+				Definitions:           []messages.ToolDefinition{{Name: "exec"}},
+				InteractiveToolPolicy: testPolicy(runtimeTools.InteractiveToolPolicySettings{}),
+			}, nil
+		},
+	})
+	handle, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "factory-policy-without-scheduler"})
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); !errors.Is(err, session.ErrLiveSchedulerUnavailable) {
+		t.Fatalf("Start = %v, want ErrLiveSchedulerUnavailable", err)
+	}
+	if capabilityCalls != 1 || providerCalls != 0 {
+		t.Fatalf("factory/provider calls = %d/%d, want one factory and no provider setup", capabilityCalls, providerCalls)
+	}
+}
+
+type validationPolicy struct {
+	runtimeTools.InteractiveToolPolicy
+	validationErr error
+}
+
+func (p validationPolicy) Validate() error                           { return p.validationErr }
+func (p validationPolicy) Clone() runtimeTools.InteractiveToolPolicy { return p }
+
+type countingCapabilityHandle struct {
+	closed     chan struct{}
+	closeOnce  sync.Once
+	closeCalls int
+}
+
+func (h *countingCapabilityHandle) Initialize(context.Context) error { return nil }
+func (h *countingCapabilityHandle) RefreshDefinitions(context.Context) ([]messages.ToolDefinition, error) {
+	return nil, nil
+}
+func (h *countingCapabilityHandle) Close() error {
+	h.closeOnce.Do(func() { h.closeCalls++; close(h.closed) })
+	return nil
+}
+
+func TestLiveFactoryInteractivePolicyValidationClosesHandle(t *testing.T) {
+	validationErr := errors.New("factory interactive policy is invalid")
+	capability := &countingCapabilityHandle{closed: make(chan struct{})}
+	providerCalls := 0
+	service := live.New(live.Dependencies{
+		InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+			providerCalls++
+			return policyInferencer{session: newPolicySession()}, nil
+		},
+		CapabilityFactory: func(context.Context, session.LiveRequest) (session.LiveCapabilities, error) {
+			return session.LiveCapabilities{
+				Handle: capability,
+				InteractiveToolPolicy: validationPolicy{
+					InteractiveToolPolicy: testPolicy(runtimeTools.InteractiveToolPolicySettings{}),
+					validationErr:         validationErr,
+				},
+			}, nil
+		},
+		Scheduler: platformclock.Real{},
+	})
+	handle, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "factory-invalid-policy"})
+	if err != nil {
+		t.Fatalf("OpenLive: %v", err)
+	}
+	if err := handle.Start(context.Background()); !errors.Is(err, validationErr) {
+		t.Fatalf("Start = %v, want factory policy validation error", err)
+	}
+	select {
+	case <-capability.closed:
+	case <-time.After(time.Second):
+		t.Fatal("factory capability handle was not closed after policy validation failed")
+	}
+	if capability.closeCalls != 1 {
+		t.Fatalf("capability handle close calls = %d, want exactly one", capability.closeCalls)
+	}
+	if providerCalls != 0 {
+		t.Fatalf("provider calls = %d, want no provider setup after policy validation failed", providerCalls)
+	}
+}
+
 type blockingTool struct{ started chan struct{} }
 
 func (tool blockingTool) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {

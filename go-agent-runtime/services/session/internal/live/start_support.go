@@ -7,7 +7,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/toolpolicy"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"strings"
@@ -168,19 +167,8 @@ func (h *handle) admitCapabilities(ctx context.Context) (messages.ToolExecutor, 
 	if binding == nil {
 		return executor, definitions, nil
 	}
-	toolpolicy.NormalizeCapabilityLifecycle(binding)
-	if binding.InteractiveToolPolicy != nil {
-		policy := binding.InteractiveToolPolicy.Clone()
-		if policy == nil {
-			return nil, nil, closeFailedCapability(binding, errors.New("interactive tool policy clone returned nil"))
-		}
-		if err := policy.Validate(); err != nil {
-			return nil, nil, closeFailedCapability(binding, fmt.Errorf("validate interactive tool policy: %w", err))
-		}
-		binding.InteractiveToolPolicy = policy
-		if h.scheduler == nil {
-			return nil, nil, closeFailedCapability(binding, fmt.Errorf("%w: request requires a scheduler", session.ErrLiveSchedulerUnavailable))
-		}
+	if err := h.validateInteractiveToolPolicyAdmission(binding); err != nil {
+		return nil, nil, closeFailedCapability(binding, err)
 	}
 	if binding.Initialize != nil {
 		if err := binding.Initialize(ctx); err != nil {
