@@ -1,0 +1,109 @@
+{
+  "candidate": "6390bc9dd0ab7c669507533d77cb4667bf302e3b",
+  "mode": "retirement-and-scope",
+  "payload": {
+    "diff_check": {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "elapsed_seconds": 0.033,
+      "returncode": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "lines": {
+      "baseline": 1387,
+      "files": {
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go": 400,
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go": 383
+      },
+      "maximum": 787,
+      "minimum_retired": 600,
+      "retired": 604,
+      "total": 783
+    },
+    "private_state_boundary": {
+      "forbidden_tokens": [
+        "EventSyncLegacy",
+        "LegacyState",
+        "syncLegacy",
+        "restoreLegacy"
+      ],
+      "scanned_files": [
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/continuation.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/events.go",
+        "go-agent-runtime/services/sessiondiagnostics/service.go"
+      ],
+      "status": "private reducer state; adapter uses lifecycle events",
+      "violations": {}
+    },
+    "scope": {
+      "base": "ea53be13ce5e4ef14fd8c89c695c21744a1f7686",
+      "outside_owned_paths": [],
+      "paths": [
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_audio.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go",
+        "agent-cli/internal/services/internal/agentruntime/session_live_observation.go",
+        "agent-cli/internal/services/internal/agentruntime/session_liveness.go",
+        "agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_response_admission.go",
+        "agent-cli/internal/services/internal/agentruntime/session_response_admission_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_regression_test.go",
+        "agent-cli/internal/services/internal/agentruntime/session_scheduled_response_identity_test.go",
+        "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/internal/service/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/package.json",
+        "coverage-manifest/go-agent-runtime/services/sessiondiagnostics/wire/package.json",
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_liveness.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720097094.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34720884934.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/ci-rejection-34738737840.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-duplicate-scheduled-disposition.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-mutation-remove-continuation-owner.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-response-matrix.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/latest-retirement-and-scope.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/credential-free-audio-tool-replay.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/scheduled-tool-continuation.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/runs/terminal-and-malformed.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/evidence/static-repair-2f6713d4.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/go.mod",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/external-consumer/main_test.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/run.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c79-retire-cli-response-lifecycle/verify.py",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/continuation.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/events.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/helpers.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/response.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/scheduled.go",
+        "go-agent-runtime/services/sessiondiagnostics/internal/service/service.go",
+        "go-agent-runtime/services/sessiondiagnostics/service.go",
+        "go-agent-runtime/services/sessiondiagnostics/service_test.go",
+        "go-agent-runtime/services/sessiondiagnostics/wire/providers.go",
+        "go-agent-runtime/services/sessiondiagnostics/wire/wire_gen.go",
+        "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
+        "scripts/wire-packages.txt"
+      ],
+      "released_shared_paths": [
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_observation.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_response.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_diagnostics_tools.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_liveness.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_rate_limit_retry_test.go.json",
+        "scripts/wire-packages.txt"
+      ]
+    },
+    "service_forbidden_token_scan": "pass"
+  },
+  "schema": "audio-runtime-c79-evidence/v1"
+}

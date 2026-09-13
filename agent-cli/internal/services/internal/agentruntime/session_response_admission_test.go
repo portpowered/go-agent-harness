@@ -187,9 +187,7 @@ func TestSessionProgressObserver_DoesNotClassifyCancellationOrToolContinuationAs
 		{
 			name: "pending tool continuation",
 			setup: func(observer *sessionProgressObserver) {
-				observer.toolStateMu.Lock()
-				observer.toolContinuations["call-1"] = &toolContinuationState{resultAccepted: true}
-				observer.toolStateMu.Unlock()
+				observer.noteToolResultAccepted("call-1")
 			},
 			value: messages.NewMessageEndValueWithTerminal(
 				messages.TokenUsage{},
