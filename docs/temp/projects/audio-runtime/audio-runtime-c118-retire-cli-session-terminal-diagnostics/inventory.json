@@ -91,14 +91,18 @@
   },
   "implementationCheckpoint": {
     "testedSourceRevision": "55a652fc61bcee8ab87171f00fd930fad57b67e0",
+    "evidenceRunnerRevision": "9a440390e10e1f995268aab49b4adf90fb489e60",
     "commits": [
       "360d2a973d01e572daa9c1725b370474a88bb429",
       "26365f5383d2e9ddad27e7920240d9c837d8ebc0",
       "1130e84db55b9b1be89fbb4277ee8d6763ed5c77",
-      "55a652fc61bcee8ab87171f00fd930fad57b67e0"
+      "55a652fc61bcee8ab87171f00fd930fad57b67e0",
+      "084de02fe95ab246fe3d15410c93600182d2cb92",
+      "9a440390e10e1f995268aab49b4adf90fb489e60"
     ],
     "retirementLineReduction": 227,
     "focusedValidation": "candidate-evidence.json",
+    "shippedYuiEvidence": "passed: runs/session-terminal-36ncezax/report.json; replay, SIGINT cancellation, provider-error, and existing audio/tool replay; source-pinned YUI; no surviving process groups",
     "sharedGateStatus": "passed after integrating released main and applying only demonstrated C118 registration/stale-fragment repairs"
   }
 }

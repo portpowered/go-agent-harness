@@ -20,7 +20,9 @@
       "360d2a973d01e572daa9c1725b370474a88bb429",
       "26365f5383d2e9ddad27e7920240d9c837d8ebc0",
       "1130e84db55b9b1be89fbb4277ee8d6763ed5c77",
-      "55a652fc61bcee8ab87171f00fd930fad57b67e0"
+      "55a652fc61bcee8ab87171f00fd930fad57b67e0",
+      "084de02fe95ab246fe3d15410c93600182d2cb92",
+      "9a440390e10e1f995268aab49b4adf90fb489e60"
     ],
     "public_contract": "go-agent-runtime/services/sessionterminal",
     "private_implementation": "go-agent-runtime/services/sessionterminal/internal/service",
@@ -52,6 +54,21 @@
     "scoped_vet": "passed: sessionterminal and agentruntime packages",
     "wire_generation": "passed: GOWORK=off go generate; generated output unchanged",
     "diff_check": "passed: git diff --check",
+    "shipped_yui": {
+      "status": "passed",
+      "command": "rtk proxy python3 docs/temp/projects/audio-runtime/audio-runtime-c118-retire-cli-session-terminal-diagnostics/run.py --case replay-terminal --case user-cancellation --case provider-error --case existing-audio-tool-replay --child-timeout 60 --aggregate-timeout 300",
+      "report": "runs/session-terminal-36ncezax/report.json",
+      "source_revision": "9a440390e10e1f995268aab49b4adf90fb489e60",
+      "origin_main": "b7d25ca6f0e9b94c62b193059160dfbf446ef1d6",
+      "yui_sha256": "06a497e0467f009f32dac20984500b11661272addad719d5941228fe096f20ca",
+      "elapsed_seconds": 2.26175,
+      "cases": {
+        "replay-terminal": "exit 0; replay_complete/replay/complete terminal; 2 final accounting records; descendants_reaped=true",
+        "user-cancellation": "exit 0 after SIGINT; user_cancelled/cancellation/cli/partial terminal; partial audio accounting; descendants_reaped=true",
+        "provider-error": "exit 1; terminal_failure/terminal_failure/session/none terminal; provider message and incomplete accounting; descendants_reaped=true",
+        "existing-audio-tool-replay": "exit 0; provider_close/provider_close/provider/not_applicable terminal; tool marker; strict continuation; audio/out-000.pcm SHA-256 0e769b4aa4a4532ee188a966ec485fb98d0938bcb77bceac7a85edce15b92502; descendants_reaped=true"
+      }
+    },
     "positive_and_causal_mutations": {
       "status": "passed",
       "positive_suites": 2,
