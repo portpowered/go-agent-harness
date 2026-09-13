@@ -73,11 +73,11 @@ nonblocking behavior.
   1,942 files and 28,795 functions; Wire regeneration is unchanged; focused vet
   and `git diff --check` pass. The worktree is clean after the merged-source
   verification.
-- Delivery checkpoint `b6f28cd1a059d79def3292107835669301f3bca0` is pushed on the
-  same branch and PR #518 is OPEN at that exact head with base
+- Delivery checkpoint `b6f28cd1a059d79def3292107835669301f3bca0` was pushed on the
+  same branch and PR #518 was updated against base
   `main@2c79ec6a931c3e86944d6a625d0a5060b4f85aa0`. The PR update records the
   current-main merge, exact bounded checks, and the retained remote-device race
-  failures. This closeout changes only the owned evidence ledger; executable
+  failures. The subsequent closeout commits are evidence-only; executable
   source inputs remain pinned to the recorded source checkpoint.
 - Next action: return `ACCEPTED` to SCRIPT-owned CI for the changed pushed head
   without polling. No review, merge, vertical probe or project acceptance is
