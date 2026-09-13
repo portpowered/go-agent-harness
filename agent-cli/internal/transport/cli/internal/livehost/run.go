@@ -18,6 +18,7 @@ import (
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionTrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -124,6 +125,9 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 		defer func() { runErr = errors.Join(runErr, filePorts.Close()) }()
 	}
 	configureLegacyReplayInput(filePorts, request, liveRequest)
+	if traceRun != nil {
+		traceRun.wrapFilePorts(filePorts)
+	}
 	options := liveRunOptions(out, request, liveRequest, recorder, filePorts, deps, traceRun)
 	return suppressExpectedDuration(runner.RunLive(ctx, options))
 }
@@ -154,7 +158,9 @@ type publicTraceRun struct {
 	binding  runtimeSessionTrace.DeviceBinding
 	observer runtimeSessionTrace.RuntimeObserver
 
-	terminalOnce sync.Once
+	capturePreGateBound  atomic.Bool
+	captureUploadedBound atomic.Bool
+	terminalOnce         sync.Once
 }
 
 // sessiontracePrepared is kept as the narrow public contract used by the host.
@@ -222,6 +228,98 @@ func (r *publicTraceRun) wrapRecorder(inner runtimeSession.LiveRecorder, liveReq
 		sequence:   new(atomic.Uint64),
 	}
 }
+
+func (r *publicTraceRun) wrapFilePorts(filePorts *FilePorts) {
+	if r == nil || filePorts == nil {
+		return
+	}
+	if filePorts.Input != nil {
+		filePorts.Input.Source = r.wrapFileSource(filePorts.Input.Source, filePorts.Input.SampleRate)
+	}
+	for index := range filePorts.InputTurns {
+		filePorts.InputTurns[index].Source = r.wrapFileSource(filePorts.InputTurns[index].Source, filePorts.InputTurns[index].SampleRate)
+	}
+}
+
+func (r *publicTraceRun) wrapFileSource(source sharedaudio.AudioSource, rate int) sharedaudio.AudioSource {
+	if r == nil || source == nil || r.binding.PreGateSamplesObserver == nil {
+		return source
+	}
+	if rate <= 0 {
+		rate = sharedaudio.SampleRate
+	}
+	r.capturePreGateBound.Store(true)
+	if sampleSource, ok := source.(sharedaudio.SampleSource); ok {
+		return &traceSampleSource{source: sampleSource, rate: rate, observer: r.binding.PreGateSamplesObserver}
+	}
+	return &traceAudioSource{source: source, rate: rate, observer: r.binding.PreGateSamplesObserver}
+}
+
+type traceAudioSource struct {
+	source   sharedaudio.AudioSource
+	rate     int
+	observer runtimeSessionTrace.CaptureSamplesObserver
+}
+
+func (s *traceAudioSource) ReadFrame(ctx context.Context, buf []int16) error {
+	if s == nil || s.source == nil {
+		return io.EOF
+	}
+	if err := s.source.ReadFrame(ctx, buf); err != nil {
+		return err
+	}
+	if len(buf) > 0 && s.observer != nil {
+		s.observer(s.rate, append([]int16(nil), buf...))
+	}
+	return nil
+}
+
+func (s *traceAudioSource) Close() error {
+	if s == nil || s.source == nil {
+		return nil
+	}
+	return s.source.Close()
+}
+
+type traceSampleSource struct {
+	source   sharedaudio.SampleSource
+	rate     int
+	observer runtimeSessionTrace.CaptureSamplesObserver
+}
+
+func (s *traceSampleSource) ReadFrame(ctx context.Context, buf []int16) error {
+	if s == nil || s.source == nil {
+		return io.EOF
+	}
+	if err := s.source.ReadFrame(ctx, buf); err != nil {
+		return err
+	}
+	if len(buf) > 0 && s.observer != nil {
+		s.observer(s.rate, append([]int16(nil), buf...))
+	}
+	return nil
+}
+
+func (s *traceSampleSource) ReadSamples(ctx context.Context, buf []int16) (int, error) {
+	if s == nil || s.source == nil {
+		return 0, io.EOF
+	}
+	count, err := s.source.ReadSamples(ctx, buf)
+	if count > 0 && count <= len(buf) && s.observer != nil {
+		s.observer(s.rate, append([]int16(nil), buf[:count]...))
+	}
+	return count, err
+}
+
+func (s *traceSampleSource) Close() error {
+	if s == nil || s.source == nil {
+		return nil
+	}
+	return s.source.Close()
+}
+
+var _ sharedaudio.AudioSource = (*traceAudioSource)(nil)
+var _ sharedaudio.SampleSource = (*traceSampleSource)(nil)
 
 type publicTraceRecorder struct {
 	inner                 runtimeSession.LiveRecorder
@@ -333,18 +431,12 @@ func (r *publicTraceRecorder) observeAudio(ctx context.Context, record runtimeSe
 	if len(samples) > 0 {
 		switch {
 		case record.Direction == runtimeSession.LiveRecordClient && record.Admission == runtimeSession.LiveAudioQueueAdmitted:
-			if r.binding.PreGateSamplesObserver != nil {
+			if !r.run.capturePreGateBound.Load() && r.binding.PreGateSamplesObserver != nil {
 				r.binding.PreGateSamplesObserver(rate, samples)
 			}
 		case record.Direction == runtimeSession.LiveRecordClient:
-			if r.binding.UploadedSamplesObserver != nil {
+			if !r.run.captureUploadedBound.Load() && r.binding.UploadedSamplesObserver != nil {
 				r.binding.UploadedSamplesObserver(rate, samples)
-			}
-		case record.Direction == runtimeSession.LiveRecordAgent:
-			if r.binding.PlaybackSamplesObserver != nil {
-				if err := r.binding.PlaybackSamplesObserver(ctx, rate, samples); err != nil {
-					return err
-				}
 			}
 		}
 	}
@@ -445,18 +537,57 @@ type publicTraceDeviceService struct {
 	trace *publicTraceRun
 }
 
+type traceCapturePreGateSetter interface {
+	SetPreGateSamplesObserver(func(int, []int16))
+}
+
+type traceCaptureUploadedSetter interface {
+	SetUploadedSamplesObserver(func(int, []int16))
+}
+
+type tracePlaybackSetter interface {
+	SetPlaybackSamplesObserver(func(context.Context, int, []int16) error)
+}
+
+type traceRenderedSetter interface {
+	SetRenderedSamplesObserver(func(int, []int16)) bool
+}
+
+type tracePlaybackRenderSetter interface {
+	SetPlaybackRenderObserver(sharedaudio.PlaybackRenderObserver)
+}
+
 func (s publicTraceDeviceService) Open(ctx context.Context, request runtimeDevices.Request) (runtimeDevices.Handle, error) {
 	if s.inner == nil {
 		return nil, runtimeDevices.ErrUnavailable
 	}
 	handle, err := s.inner.Open(ctx, request)
-	if err != nil || handle == nil || s.trace == nil || !request.PlaybackEnabled {
+	if err != nil || handle == nil || s.trace == nil {
 		return handle, err
 	}
-	playback := handle.Media().Playback
-	setter, ok := playback.(interface{ SetRenderedSamplesObserver(func(int, []int16)) bool })
-	if !ok || !setter.SetRenderedSamplesObserver(s.trace.binding.RenderedSamplesObserver) {
-		if s.trace.binding.RenderedSamplesUnavailable != nil {
+	ports := handle.Media()
+	if request.CaptureEnabled && ports.Capture != nil {
+		if setter, ok := ports.Capture.(traceCapturePreGateSetter); ok {
+			setter.SetPreGateSamplesObserver(s.trace.binding.PreGateSamplesObserver)
+			s.trace.capturePreGateBound.Store(true)
+		}
+		if setter, ok := ports.Capture.(traceCaptureUploadedSetter); ok {
+			setter.SetUploadedSamplesObserver(s.trace.binding.UploadedSamplesObserver)
+			s.trace.captureUploadedBound.Store(true)
+		}
+	}
+	if request.PlaybackEnabled && ports.Playback != nil {
+		if setter, ok := ports.Playback.(tracePlaybackSetter); ok {
+			setter.SetPlaybackSamplesObserver(s.trace.binding.PlaybackSamplesObserver)
+		}
+		rendered := false
+		if setter, ok := ports.Playback.(traceRenderedSetter); ok {
+			rendered = setter.SetRenderedSamplesObserver(s.trace.binding.RenderedSamplesObserver)
+		} else if setter, ok := ports.Playback.(tracePlaybackRenderSetter); ok {
+			setter.SetPlaybackRenderObserver(sharedaudio.PlaybackRenderObserver(s.trace.binding.RenderedSamplesObserver))
+			rendered = true
+		}
+		if !rendered && s.trace.binding.RenderedSamplesUnavailable != nil {
 			s.trace.binding.RenderedSamplesUnavailable()
 		}
 	}

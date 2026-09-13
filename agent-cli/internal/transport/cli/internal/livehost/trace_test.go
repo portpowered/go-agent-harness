@@ -14,6 +14,7 @@ import (
 
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -276,10 +277,24 @@ func TestPublicSessionTracePublishesRedactedRuntimeAndAudioAfterRecording(t *tes
 	root := t.TempDir()
 	bundle := filepath.Join(root, "bundle")
 	secret := "trace-secret-value"
+	capture := &traceCaptureProbe{}
+	playback := &tracePlaybackProbe{renderSupported: true}
+	devices := &traceDeviceProbe{handle: &traceDeviceHandle{ports: runtimeDevices.MediaPorts{Capture: capture, Playback: playback}}}
 	probe := &traceHostProbe{run: func(options runtimeSession.LiveRunOptions) error {
 		if options.Recorder == nil {
 			t.Fatal("live options recorder is nil")
 		}
+		handle, err := options.Devices.Open(context.Background(), options.DeviceRequest)
+		if err != nil {
+			return err
+		}
+		defer handle.Close()
+		capture.emitPreGate(16_000, []int16{11, -12, 13})
+		capture.emitUploaded(16_000, []int16{14, -15, 16})
+		if err := playback.emitEnqueued(context.Background(), 16_000, []int16{17, -18, 19}); err != nil {
+			return err
+		}
+		playback.emitRendered(16_000, []int16{20, -21, 22})
 		message := messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCreate,
 			Value: &messages.ResponseCreateValue{Type: "response_create", Instructions: secret},
@@ -311,9 +326,10 @@ func TestPublicSessionTracePublishesRedactedRuntimeAndAudioAfterRecording(t *tes
 		return options.Recorder.Finalize(context.Background(), nil)
 	}}
 	recording := &traceRecordingProbe{}
-	err := Run(context.Background(), nil, serviceSession.Request{TraceAudio: true, RecordDirectory: bundle}, Dependencies{
-		LiveService:  probe,
-		TraceService: runtimeSessionTraceWire.NewService(),
+	err := Run(context.Background(), nil, serviceSession.Request{TraceAudio: true, RecordDirectory: bundle, AudioInputDevicePresent: true, AudioOutputDevicePresent: true}, Dependencies{
+		LiveService:   probe,
+		DeviceService: devices,
+		TraceService:  runtimeSessionTraceWire.NewService(),
 		BuildRequest: func(context.Context, serviceSession.Request, *runtimeReplay.CaptureInspection) (runtimeSession.LiveRequest, error) {
 			return runtimeSession.LiveRequest{SessionID: "trace-public", InputAudioSampleRate: 16_000, OutputAudioSampleRate: 16_000}, nil
 		},
@@ -340,6 +356,56 @@ func TestPublicSessionTracePublishesRedactedRuntimeAndAudioAfterRecording(t *tes
 		if _, err := os.Stat(filepath.Join(bundle, "audio-trace", name)); err != nil {
 			t.Fatalf("trace audio %s: %v", name, err)
 		}
+	}
+	if got := capture.preGateSamples(); !equalTraceSamples(got, []int16{11, -12, 13}) {
+		t.Fatalf("pre-gate callback samples = %v, want callback payload", got)
+	}
+	if got := capture.uploadedSamples(); !equalTraceSamples(got, []int16{14, -15, 16}) {
+		t.Fatalf("uploaded callback samples = %v, want callback payload", got)
+	}
+	if got := playback.enqueuedSamples(); !equalTraceSamples(got, []int16{17, -18, 19}) {
+		t.Fatalf("enqueued callback samples = %v, want callback payload", got)
+	}
+	if got := playback.renderedSamples(); !equalTraceSamples(got, []int16{20, -21, 22}) {
+		t.Fatalf("rendered callback samples = %v, want callback payload", got)
+	}
+}
+
+func TestPublicSessionTraceMarksUnsupportedRenderBoundary(t *testing.T) {
+	root := t.TempDir()
+	bundle := filepath.Join(root, "bundle")
+	playback := &tracePlaybackProbe{}
+	devices := &traceDeviceProbe{handle: &traceDeviceHandle{ports: runtimeDevices.MediaPorts{Playback: playback}}}
+	probe := &traceHostProbe{run: func(options runtimeSession.LiveRunOptions) error {
+		handle, err := options.Devices.Open(context.Background(), options.DeviceRequest)
+		if err != nil {
+			return err
+		}
+		defer handle.Close()
+		return options.Recorder.Finalize(context.Background(), nil)
+	}}
+	err := Run(context.Background(), nil, serviceSession.Request{TraceAudio: true, RecordDirectory: bundle, AudioOutputDevicePresent: true}, Dependencies{
+		LiveService:   probe,
+		DeviceService: devices,
+		TraceService:  runtimeSessionTraceWire.NewService(),
+		BuildRequest: func(context.Context, serviceSession.Request, *runtimeReplay.CaptureInspection) (runtimeSession.LiveRequest, error) {
+			return runtimeSession.LiveRequest{SessionID: "trace-render-unavailable", OutputAudioSampleRate: 16_000}, nil
+		},
+		RecordingService: &traceRecordingProbe{},
+		CredentialValues: func(serviceSession.Request) ([]string, error) { return nil, nil },
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	timeline, err := os.ReadFile(filepath.Join(bundle, "audio-trace", "timeline.jsonl"))
+	if err != nil {
+		t.Fatalf("read published timeline: %v", err)
+	}
+	if !strings.Contains(string(timeline), `"runtime_kind":"audio_render_tap_unavailable"`) {
+		t.Fatalf("timeline missing render-unavailable observation: %s", timeline)
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "audio-trace", "speaker-rendered.wav")); !os.IsNotExist(err) {
+		t.Fatalf("unsupported render unexpectedly published speaker-rendered.wav: %v", err)
 	}
 }
 
@@ -443,7 +509,129 @@ func (r *traceRecorderProbe) Finalize(context.Context, error) error {
 	return os.MkdirAll(r.destination, 0o755)
 }
 
+type traceDeviceProbe struct {
+	handle *traceDeviceHandle
+	opened atomic.Int32
+}
+
+func (p *traceDeviceProbe) Open(context.Context, runtimeDevices.Request) (runtimeDevices.Handle, error) {
+	p.opened.Add(1)
+	return p.handle, nil
+}
+
+type traceDeviceHandle struct {
+	ports runtimeDevices.MediaPorts
+}
+
+func (h *traceDeviceHandle) Media() runtimeDevices.MediaPorts {
+	if h == nil {
+		return runtimeDevices.MediaPorts{}
+	}
+	return h.ports
+}
+
+func (*traceDeviceHandle) Close() error { return nil }
+
+type traceCaptureProbe struct {
+	preGate      func(int, []int16)
+	uploaded     func(int, []int16)
+	preGateSeen  []int16
+	uploadedSeen []int16
+}
+
+func (*traceCaptureProbe) Pump(context.Context, audio.OutboundMedia) error { return nil }
+func (*traceCaptureProbe) Close() error                                    { return nil }
+
+func (p *traceCaptureProbe) SetPreGateSamplesObserver(observer func(int, []int16)) {
+	p.preGate = observer
+}
+
+func (p *traceCaptureProbe) SetUploadedSamplesObserver(observer func(int, []int16)) {
+	p.uploaded = observer
+}
+
+func (p *traceCaptureProbe) emitPreGate(rate int, samples []int16) {
+	p.preGateSeen = append([]int16(nil), samples...)
+	if p.preGate != nil {
+		p.preGate(rate, append([]int16(nil), samples...))
+	}
+}
+
+func (p *traceCaptureProbe) emitUploaded(rate int, samples []int16) {
+	p.uploadedSeen = append([]int16(nil), samples...)
+	if p.uploaded != nil {
+		p.uploaded(rate, append([]int16(nil), samples...))
+	}
+}
+
+func (p *traceCaptureProbe) preGateSamples() []int16 {
+	return append([]int16(nil), p.preGateSeen...)
+}
+
+func (p *traceCaptureProbe) uploadedSamples() []int16 {
+	return append([]int16(nil), p.uploadedSeen...)
+}
+
+type tracePlaybackProbe struct {
+	enqueued        func(context.Context, int, []int16) error
+	rendered        func(int, []int16)
+	renderSupported bool
+	enqueuedSeen    []int16
+	renderedSeen    []int16
+}
+
+func (*tracePlaybackProbe) Pump(context.Context, audio.InboundMedia) error { return nil }
+func (*tracePlaybackProbe) Close() error                                   { return nil }
+
+func (p *tracePlaybackProbe) SetPlaybackSamplesObserver(observer func(context.Context, int, []int16) error) {
+	p.enqueued = observer
+}
+
+func (p *tracePlaybackProbe) SetRenderedSamplesObserver(observer func(int, []int16)) bool {
+	p.rendered = observer
+	return p.renderSupported
+}
+
+func (p *tracePlaybackProbe) emitEnqueued(ctx context.Context, rate int, samples []int16) error {
+	p.enqueuedSeen = append([]int16(nil), samples...)
+	if p.enqueued == nil {
+		return nil
+	}
+	return p.enqueued(ctx, rate, append([]int16(nil), samples...))
+}
+
+func (p *tracePlaybackProbe) emitRendered(rate int, samples []int16) {
+	p.renderedSeen = append([]int16(nil), samples...)
+	if p.rendered != nil {
+		p.rendered(rate, append([]int16(nil), samples...))
+	}
+}
+
+func (p *tracePlaybackProbe) enqueuedSamples() []int16 {
+	return append([]int16(nil), p.enqueuedSeen...)
+}
+
+func (p *tracePlaybackProbe) renderedSamples() []int16 {
+	return append([]int16(nil), p.renderedSeen...)
+}
+
+func equalTraceSamples(got, want []int16) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			return false
+		}
+	}
+	return true
+}
+
 var _ runtimeSession.LiveService = (*traceHostProbe)(nil)
 var _ runtimeSession.LiveRunner = (*traceHostProbe)(nil)
 var _ runtimeRecording.Service = (*traceRecordingProbe)(nil)
 var _ runtimeSession.LiveRecorder = (*traceRecorderProbe)(nil)
+var _ runtimeDevices.Service = (*traceDeviceProbe)(nil)
+var _ runtimeDevices.Handle = (*traceDeviceHandle)(nil)
+var _ runtimeDevices.Capture = (*traceCaptureProbe)(nil)
+var _ runtimeDevices.Playback = (*tracePlaybackProbe)(nil)
