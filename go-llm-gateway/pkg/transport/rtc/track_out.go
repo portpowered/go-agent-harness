@@ -2,7 +2,6 @@ package rtc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -20,15 +19,13 @@ const OutboundRTPClockRate = wavio.Rate48kHz
 const (
 	defaultOpusPayloadType uint8  = 111
 	defaultOutboundSSRC    uint32 = 1
-)
 
-var (
-	ErrOutboundClosed        = errors.New("rtc outbound track is closed")
-	ErrOutboundEmptyFrame    = errors.New("rtc outbound PCM frame is empty")
-	ErrOutboundNilEncoder    = errors.New("rtc outbound Opus encoder is nil")
-	ErrOutboundNilWriter     = errors.New("rtc outbound RTP writer is nil")
-	ErrOutboundEmptyPayload  = errors.New("rtc outbound encoder produced an empty payload")
-	ErrOutboundFrameTooLarge = errors.New("rtc outbound PCM frame is too large")
+	ErrOutboundClosed        Error = "rtc outbound track is closed"
+	ErrOutboundEmptyFrame    Error = "rtc outbound PCM frame is empty"
+	ErrOutboundNilEncoder    Error = "rtc outbound Opus encoder is nil"
+	ErrOutboundNilWriter     Error = "rtc outbound RTP writer is nil"
+	ErrOutboundEmptyPayload  Error = "rtc outbound encoder produced an empty payload"
+	ErrOutboundFrameTooLarge Error = "rtc outbound PCM frame is too large"
 )
 
 type OutboundOperationError struct {

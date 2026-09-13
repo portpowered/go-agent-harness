@@ -21,18 +21,24 @@ const (
 	maxInboundJitterDepth        = 2 * time.Second
 )
 
-var (
-	ErrInvalidInboundTrackConfig = errors.New("invalid inbound RTP audio track configuration")
-	ErrNilInboundRTPTrack        = errors.New("nil inbound RTP track")
-	ErrNilOpusDecoder            = errors.New("nil Opus decoder")
-	ErrUnsupportedOpusDecoder    = errors.New("unsupported Opus decoder seam")
-	ErrInvalidInboundRTPPacket   = errors.New("invalid inbound RTP packet")
-	ErrImpossibleRTPProgress     = errors.New("impossible RTP audio progress")
-	ErrInboundTrackSource        = errors.New("inbound RTP track source failed")
-	ErrInboundTrackDecode        = errors.New("inbound Opus decode failed")
-	ErrInboundTrackResample      = errors.New("inbound PCM resample failed")
-	ErrInboundTrackFrame         = errors.New("inbound PCM frame has invalid size")
-	ErrInboundTrackClosed        = errors.New("inbound RTP audio track is closed")
+// Error is an immutable legacy error identity. The runtime service owns the
+// policy; these constants remain only for source-compatible adapter callers.
+type Error string
+
+func (e Error) Error() string { return string(e) }
+
+const (
+	ErrInvalidInboundTrackConfig Error = "invalid inbound RTP audio track configuration"
+	ErrNilInboundRTPTrack        Error = "nil inbound RTP track"
+	ErrNilOpusDecoder            Error = "nil Opus decoder"
+	ErrUnsupportedOpusDecoder    Error = "unsupported Opus decoder seam"
+	ErrInvalidInboundRTPPacket   Error = "invalid inbound RTP packet"
+	ErrImpossibleRTPProgress     Error = "impossible RTP audio progress"
+	ErrInboundTrackSource        Error = "inbound RTP track source failed"
+	ErrInboundTrackDecode        Error = "inbound Opus decode failed"
+	ErrInboundTrackResample      Error = "inbound PCM resample failed"
+	ErrInboundTrackFrame         Error = "inbound PCM frame has invalid size"
+	ErrInboundTrackClosed        Error = "inbound RTP audio track is closed"
 )
 
 // InboundTrackConfig is retained for source compatibility. New runtime code
