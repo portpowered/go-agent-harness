@@ -73,3 +73,25 @@ func TestContinuationErrorsExposeLegacyRuntimeViews(t *testing.T) {
 		t.Fatalf("tool continuation did not expose its legacy view: %v", tool)
 	}
 }
+
+func TestLegacyToolContinuationViewRetainsDeterministicFormatting(t *testing.T) {
+	canonical := &sessioncontinuation.ToolContinuationError{CallIDs: []string{"tool-call"}}
+	var legacy *runtimesession.LiveToolContinuationError
+	if !errors.As(canonical, &legacy) || legacy == nil {
+		t.Fatalf("canonical tool continuation did not expose a legacy view: %v", canonical)
+	}
+	if got := legacy.Error(); !strings.Contains(got, "tool continuation was not completed for 1 call(s): tool-call") {
+		t.Fatalf("legacy tool continuation error = %q, want deterministic call formatting", got)
+	}
+
+	for name, err := range map[string]*runtimesession.LiveToolContinuationError{
+		"empty": {},
+		"nil":   nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got, want := err.Error(), runtimesession.ErrLiveToolContinuationIncomplete.Error(); got != want {
+				t.Fatalf("legacy %s tool continuation error = %q, want %q", name, got, want)
+			}
+		})
+	}
+}
