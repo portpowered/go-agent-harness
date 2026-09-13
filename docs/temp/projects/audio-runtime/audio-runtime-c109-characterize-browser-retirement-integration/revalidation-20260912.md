@@ -1,6 +1,6 @@
 # C109 focused revalidation
 
-Timestamp: `2026-09-13T00:03:38Z`
+Timestamp: `2026-09-13T00:18:35Z`
 
 This is a fresh software-only revalidation of the C109 evidence repair. It
 changes only the admitted C109-owned directory. C61, C83, C79-owned shared
@@ -11,17 +11,17 @@ Admission and provenance:
 
 - `project-control.py verify-work --type task --name audio-runtime-c109-characterize-browser-retirement-integration` returned `admitted` for project `audio-runtime`.
 - branch `codex/audio-runtime-c109-characterize-browser-retirement-integration` matches `prd.branchName`.
-- accepted main `d4766c3dbbf2c198142047ead4449d58dd47d485` was fetched and remained the review main.
+- admitted accepted baseline is `d4766c3dbbf2c198142047ead4449d58dd47d485`; fetched origin/main `3963bc3566da24f8214634c17a9d0f79a6724171` was newer and integrated in this isolated C109 branch.
 - C61 `8e8177c031a7b3b9322d712af19970e13fa7a1bc` and C83 `22cc6769aaf06d1e2c1275b064cc7ec29de3e371` candidate refs remained unchanged.
 - the expected clean C61/C83 predecessor worktrees were present at their pinned heads before and after both analyzer orders.
-- final required/control evidence binds its analyzer/verifier source to committed source head `a081a3cd141d4e8f9c6d8e99ba9213ab7308a531`.
+- final required/control evidence binds its analyzer/verifier source to committed source head `35a5c90a06b24e18fd3f429b6e18be5f752817aa`.
 
 Merge-order and causal evidence:
 
 - required analyzer: `main -> C61 -> C83`, passed; candidate refs and preserved worktrees unchanged.
 - reverse control analyzer: `main -> C83 -> C61`, passed; candidate refs and preserved worktrees unchanged.
 - `verify.py --mode merge-orders` passed source-driven provenance/ledger and both merge rehearsals.
-- both orders converged to synthetic tree `4d8e93ae0e74db403fdb02c70db9cf849c590156`.
+- both orders converged to synthetic tree `8372c75f4b2e8181148ac000d6dcd5db26414630`.
 - the final ledger covers 70 changed paths, 3,408 source-derived hunk caller edges, and an API scan of 15 C83 Go paths with 372 source-derived edges; `c83_requires_c61_api` is derived `true`.
 - `ci-attribution.json` retains historical C83 run `34713381619`, exact C83 head `22cc6769aaf06d1e2c1275b064cc7ec29de3e371`, seven passing lanes, and the static/integration failures with exact signatures and owners. The 6,400-sample loss remains assigned to `C79/provider-audio`; C109 does not repair or relabel it.
 - `verify.py --mode all --write runs/final/verification.json` passed provenance, merge orders, behavior/attribution, handoff sequence, determinism, all 13 report negatives, both public reports, and five public negatives. The recorded result is `status: passed`.

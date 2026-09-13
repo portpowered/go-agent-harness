@@ -10,6 +10,9 @@ The accepted main revision is `d4766c3dbbf2c198142047ead4449d58dd47d485`.
 The preserved candidate revisions are C61
 `8e8177c031a7b3b9322d712af19970e13fa7a1bc` and C83
 `22cc6769aaf06d1e2c1275b064cc7ec29de3e371`.
+The final provenance also records fetched `origin/main`
+`3963bc3566da24f8214634c17a9d0f79a6724171` as the newer integrated review
+main; the branch diff relative to that review main remains C109-owned only.
 
 Run the analyzer from the repository root, writing outside the checkout while
 iterating:

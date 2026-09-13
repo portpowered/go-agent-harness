@@ -1,6 +1,6 @@
 {
   "inputs": {
-    "accepted_main": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "accepted_main": "3963bc3566da24f8214634c17a9d0f79a6724171",
     "c61": {
       "commit": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
       "pr": 452,
@@ -69,7 +69,7 @@
       "id": "reconcile-c61",
       "inputs": [
         "PR #452 head 8e8177c031a7b3b9322d712af19970e13fa7a1bc",
-        "accepted main d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "accepted main 3963bc3566da24f8214634c17a9d0f79a6724171",
         "c61-historical-delta-barrier-reconciliation"
       ],
       "number": 2,
@@ -101,7 +101,7 @@
       "id": "reconcile-c83",
       "inputs": [
         "PR #473 head 22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
-        "accepted main d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "accepted main 3963bc3566da24f8214634c17a9d0f79a6724171",
         "c83-ci-34713381619",
         "c83-integration-provider-audio-loss-6400"
       ],

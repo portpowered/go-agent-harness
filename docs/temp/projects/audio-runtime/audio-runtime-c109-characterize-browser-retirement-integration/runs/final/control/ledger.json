@@ -38550,7 +38550,7 @@
       "go-agent-runtime/services/browserscenario/service.go",
       "go-agent-runtime/services/browserscenario/wire/wire.go"
     ],
-    "reviewMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "reviewMain": "3963bc3566da24f8214634c17a9d0f79a6724171",
     "source_driven": true
   },
   "failClosedRules": [
