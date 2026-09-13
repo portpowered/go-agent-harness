@@ -63,7 +63,7 @@
     },
     "ancestry": {
       "branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
-      "head": "61fdb4ffd94b24d43e7fd27a2eff5a75749981ae",
+      "head": "a761ad40e00d111b0aa5d9f673af6b99629b5d1f",
       "origin_main": "09c70f51243caeaf1184c4806b99bbf7749e3044",
       "required_ancestors": {
         "accepted_main": {
