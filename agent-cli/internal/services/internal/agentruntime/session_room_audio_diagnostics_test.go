@@ -408,3 +408,27 @@ func TestRoomAudioIngressLedgerDistinguishesNoPeerAudioFromContentLoss(t *testin
 		t.Fatalf("no-peer content_loss=%q, want false", fields[SessionDiagnosticFieldContentLoss])
 	}
 }
+
+func TestRoomAudioIngressRejectionReasonPreservesHostErrorKinds(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "closed", err: room.ErrMixerClosed, want: "mixer_closed"},
+		{name: "missing-input", err: room.ErrMixerInputMissing, want: "mixer_input_missing"},
+		{name: "input-queue-full", err: room.ErrMixerInputBufferFull, want: "mixer_input_queue_full"},
+		{name: "invalid-format", err: room.ErrMixerInvalidFormat, want: "invalid_pcm16"},
+		{name: "canceled", err: context.Canceled, want: "context_canceled"},
+		{name: "deadline", err: context.DeadlineExceeded, want: "context_deadline_exceeded"},
+		{name: "output-backpressure", err: room.ErrMixerOutputBackpressure, want: "mixer_output_backpressure"},
+		{name: "wrapped-unknown", err: errors.New("host write failed"), want: "mixer_rejected"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := roomAudioIngressRejectionReason(test.err); got != test.want {
+				t.Fatalf("rejection reason=%q, want %q", got, test.want)
+			}
+		})
+	}
+}
