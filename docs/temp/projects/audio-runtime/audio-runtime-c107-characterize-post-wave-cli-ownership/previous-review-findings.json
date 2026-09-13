@@ -122,9 +122,20 @@
       "work_type": "review"
     },
     {
+      "last_output": "",
+      "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
+      "rejection_feedback": "PR 494 is green at current head 8853510dad106948b4594aa657866ac05ccec3e2 (run 34731886748, all 9 required checks), and independent analyzer, YUI replay, focused and race checks pass. However, checked-in verification-summary.json, provenance.json, state-capture.json, pr-inventory.json and public/regression reports still bind to f741115c90163e83542bf3302e98bb0dc32ba5b9. Repair the release binding workflow, regenerate all head-bound evidence against the final pushed head/current board, update SHA256SUMS, push only owned paths, submit the changed head to SCRIPT CI without polling, and request fresh review. Do not merge.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-273",
+      "work_type": "review"
+    },
+    {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"branch\": \"codex/audio-runtime-c107-characterize-post-wave-cli-ownership\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
       "name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
-      "rejection_feedback": "PR #494 head 376f71a2b27008eb1bf207cdb872214d848b6eb3 has 9/9 required checks green (run 34729346947). Independent validate-copy and credential-free YUI replay passed. Evidence is stale: verification-summary.json, provenance.json, state-capture.json, public/regression reports, and pr-inventory.json bind to pre-evidence bb494b4775038a21df3e9d76de682c0d1fb30939, not the reviewed PR head; this repeats the prior exact-head finding. Harden the verifier to enforce final PR/HEAD identity, recapture board/PR state, regenerate all evidence and SHA256SUMS at the final submitted head, update PR metadata, push only owned paths, submit the new exact head to SCRIPT CI without polling, and request fresh review. Do not merge.",
+      "rejection_feedback": "PR 494 is green at current head 8853510dad106948b4594aa657866ac05ccec3e2 (run 34731886748, all 9 required checks), and independent analyzer, YUI replay, focused and race checks pass. However, checked-in verification-summary.json, provenance.json, state-capture.json, pr-inventory.json and public/regression reports still bind to f741115c90163e83542bf3302e98bb0dc32ba5b9. Repair the release binding workflow, regenerate all head-bound evidence against the final pushed head/current board, update SHA256SUMS, push only owned paths, submit the changed head to SCRIPT CI without polling, and request fresh review. Do not merge.",
       "state": {
         "name": "init",
         "type": "PROCESSING"
@@ -212,7 +223,7 @@
     {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration\", \"branch\": \"codex/audio-runtime-c109-characterize-browser-retirement-integration\", \"baseRevision\": \"d4766c3dbbf2c198142047ead4449d58dd47d485\", \"reused\": false}",
       "name": "audio-runtime-c109-characterize-browser-retirement-integration",
-      "rejection_feedback": "PR #495 head 399b60809e986c6e468716b44c75bd8e636d0a66 has all nine required checks green, but independent review found actionable defects. run_public_checks.py:115-128 accepts `ok ... [no tests to run]` as discovered tests; a live unmatched-test control returned exit 0/status passed with tests_discovered=1. Its caller-owned --tree path also returns passed after a child creates an untracked file; cleanup_claim is false but top-level status remains passed (around lines 429-461). The mandated browser run at --child-timeout 90 --aggregate-timeout 300 failed when accumulated session CI regressions exceeded 90s; only the looser 480/900 run passed, so checked-in public evidence does not satisfy the admitted command. Final public reports were last regenerated before the later runner changes and are not bound/hash-checked to the current runner. Executor: amend only the C109 directory; make test discovery and caller-tree immutability fail closed with regression controls, make the full positive case pass under the admitted 90/300 bounds (or split its bounded children without changing acceptance), regenerate both public reports and verification with current source/artifact/fixture hashes, rerun verify.py --mode all and exact public commands, push the same PR, and submit the changed head to SCRIPT CI without polling. Do not merge; preserve C61/C83/C79 ownership and refs.",
+      "rejection_feedback": "CI checks failed for PR #495 at head 0185f03afbd2bf81e6d2cdb32d3a1586576aad7d: required checks failed on current head 0185f03afbd2bf81e6d2cdb32d3a1586576aad7d: CI (integration)=FAILURE; checks: CI (integration)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34732547786/job/103657892852). Return this task to the executor with the listed failures.",
       "state": {
         "name": "init",
         "type": "PROCESSING"
@@ -247,8 +258,8 @@
       "name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
       "rejection_feedback": "",
       "state": {
-        "name": "init",
-        "type": "PROCESSING"
+        "name": "failed",
+        "type": "FAILED"
       },
       "work_id": "work-task-236",
       "work_type": "task"
@@ -258,8 +269,8 @@
       "name": "audio-runtime-c112-retire-cli-session-trace-evidence",
       "rejection_feedback": "CI checks failed for PR #498 at head 8b2983338ea449fd739994e8fbbc958581bd2e7b: required checks failed on current head 8b2983338ea449fd739994e8fbbc958581bd2e7b: CI (static)=FAILURE; checks: CI (static)=FAILURE (https://github.com/portpowered/go-agent-harness/actions/runs/34722701991/job/103631345381). Return this task to the executor with the listed failures.",
       "state": {
-        "name": "init",
-        "type": "PROCESSING"
+        "name": "failed",
+        "type": "FAILED"
       },
       "work_id": "work-task-238",
       "work_type": "task"
@@ -281,7 +292,7 @@
       "rejection_feedback": "",
       "state": {
         "name": "init",
-        "type": "INITIAL"
+        "type": "PROCESSING"
       },
       "work_id": "work-task-262",
       "work_type": "task"
@@ -303,9 +314,20 @@
       "rejection_feedback": "",
       "state": {
         "name": "init",
-        "type": "INITIAL"
+        "type": "PROCESSING"
       },
       "work_id": "work-task-268",
+      "work_type": "task"
+    },
+    {
+      "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c118-retire-cli-session-terminal-diagnostics\", \"branch\": \"codex/audio-runtime-c118-retire-cli-session-terminal-diagnostics\", \"baseRevision\": \"3963bc3566da24f8214634c17a9d0f79a6724171\", \"reused\": false}",
+      "name": "audio-runtime-c118-retire-cli-session-terminal-diagnostics",
+      "rejection_feedback": "",
+      "state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "work_id": "work-task-277",
       "work_type": "task"
     },
     {
@@ -815,9 +837,20 @@
       "work_type": "review"
     },
     {
+      "last_output": "",
+      "name": "audio-runtime-c79-retire-cli-response-lifecycle",
+      "rejection_feedback": "PR #470 head e78f9644 has all 9 required checks green, but an independent public reducer probe accepted Candidate/Admitted=true for duplicate response end after untagged content; events.go:55-58 clears messageEndSeen without ownership validation. Fix response ownership/generation and add this regression while retaining prior ID, purpose, reset, continuation, disposition, retry, audio-drain, cleanup, and shipped-tool assertions. Evidence is also stale: all ledgers/replay artifacts record e3212e4, not e78f9644. Executor must fix, rebuild yui, run all three run.py cases and verify.py response-matrix, retirement-and-scope, and both mutation modes with --expect-failure, refresh every ledger/artifact digest to final_head=candidate=e78f9644 and origin_main=3963bc3, commit/push, submit changed-head CI, and request fresh review.",
+      "state": {
+        "name": "fin",
+        "type": "FAILED"
+      },
+      "work_id": "work-review-270",
+      "work_type": "review"
+    },
+    {
       "last_output": "{\"status\": \"ready\", \"worktree\": \"/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c79-retire-cli-response-lifecycle\", \"branch\": \"codex/audio-runtime-c79-retire-cli-response-lifecycle\", \"baseRevision\": \"84c91ee1b41d9ff0ba7e31f321c61f6e34c7a72f\", \"reused\": false}",
       "name": "audio-runtime-c79-retire-cli-response-lifecycle",
-      "rejection_feedback": "Independent normal/race service and adapter tests, GOWORK=off consumer, and rebuilt shipped workflows passed; all nine current-head checks pass on e3212e4d. However, every checked-in C79 evidence ledger and artifact provenance still records e9ce4894, not the reviewed PR head e3212e4d (the PR body is older still). Executor must rebuild yui and rerun response/retirement/mutation and all three shipped replay cases at e3212e4d, refresh ledgers with final_head=candidate=e3212e4d and current origin/main=3963bc3, commit/push the evidence refresh, then submit that new head to script CI for re-review.",
+      "rejection_feedback": "PR #470 head e78f9644 has all 9 required checks green, but an independent public reducer probe accepted Candidate/Admitted=true for duplicate response end after untagged content; events.go:55-58 clears messageEndSeen without ownership validation. Fix response ownership/generation and add this regression while retaining prior ID, purpose, reset, continuation, disposition, retry, audio-drain, cleanup, and shipped-tool assertions. Evidence is also stale: all ledgers/replay artifacts record e3212e4, not e78f9644. Executor must fix, rebuild yui, run all three run.py cases and verify.py response-matrix, retirement-and-scope, and both mutation modes with --expect-failure, refresh every ledger/artifact digest to final_head=candidate=e78f9644 and origin_main=3963bc3, commit/push, submit changed-head CI, and request fresh review.",
       "state": {
         "name": "in-review",
         "type": "PROCESSING"
@@ -1024,6 +1057,6 @@
       "work_type": "task"
     }
   ],
-  "observed_at": "2026-09-13T01:49:04Z",
+  "observed_at": "2026-09-13T02:36:10Z",
   "schema_version": "c107-previous-review-findings-v1"
 }

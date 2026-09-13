@@ -53,7 +53,9 @@
     498,
     499,
     500,
-    501
+    501,
+    502,
+    503
   ],
   "all_open_retirement_pr_numbers": [
     365,
@@ -109,7 +111,9 @@
     498,
     499,
     500,
-    501
+    501,
+    502,
+    503
   ],
   "commands": [
     [
@@ -126,7 +130,7 @@
       "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
     ]
   ],
-  "observed_at": "2026-09-13T01:49:04Z",
+  "observed_at": "2026-09-13T02:36:10Z",
   "prs": [
     {
       "accepted_main_changed_production_paths": [],
@@ -2179,7 +2183,7 @@
         "go-agent-runtime/services/sessiondiagnostics/wire/wire_test.go",
         "scripts/wire-packages.txt"
       ],
-      "head": "e78f96443527ea5cae78fcb811f40002a72351b9",
+      "head": "a9099ec555644517fc10f0d4ecbddd3f3cf7c56b",
       "head_branch": "codex/audio-runtime-c79-retire-cli-response-lifecycle",
       "is_retirement_checkpoint": true,
       "number": 470,
@@ -4090,7 +4094,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verification-summary.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/verify.py"
       ],
-      "head": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
+      "head": "8853510dad106948b4594aa657866ac05ccec3e2",
       "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
       "is_retirement_checkpoint": true,
       "number": 494,
@@ -4144,6 +4148,7 @@
       "files": [
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/README.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/analyze.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/ci-rejection-34731461393.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/fixtures/negative-cases.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/revalidation-20260912.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/run_public_checks.py",
@@ -4166,7 +4171,7 @@
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/runs/final/verification.json",
         "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/verify.py"
       ],
-      "head": "399b60809e986c6e468716b44c75bd8e636d0a66",
+      "head": "0185f03afbd2bf81e6d2cdb32d3a1586576aad7d",
       "head_branch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
       "is_retirement_checkpoint": true,
       "number": 495,
@@ -4285,8 +4290,8 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c111-retire-cli-tool-continuation-lifecycle",
       "task_state": {
-        "name": "init",
-        "type": "PROCESSING"
+        "name": "failed",
+        "type": "FAILED"
       },
       "task_work_id": "work-task-236",
       "title": "refactor(audio-runtime): retire CLI tool continuation lifecycle",
@@ -4330,7 +4335,7 @@
         "go-agent-runtime/services/sessioninstructions/wire/wire.go",
         "go-agent-runtime/services/sessioninstructions/wire/wire_gen.go"
       ],
-      "head": "97e690ba29556ba7537e1954b7b7a56babe8429b",
+      "head": "a9479a1fbdb14682b16153c97b7a74453362b2f3",
       "head_branch": "codex/audio-runtime-c110-retire-cli-session-instruction-resolution",
       "is_retirement_checkpoint": true,
       "number": 497,
@@ -4454,8 +4459,8 @@
       "state": "OPEN",
       "task_name": "audio-runtime-c112-retire-cli-session-trace-evidence",
       "task_state": {
-        "name": "init",
-        "type": "PROCESSING"
+        "name": "failed",
+        "type": "FAILED"
       },
       "task_work_id": "work-task-238",
       "title": "feat(runtime): retire CLI session trace orchestration",
@@ -4494,7 +4499,7 @@
         "go-agent-runtime/services/audiorate/wire/wire_gen.go",
         "go-agent-runtime/services/audiorate/wire/wire_test.go"
       ],
-      "head": "3cc1764098975476e1a923094b98879de9fe1b82",
+      "head": "59edd9e15b8cf631e7230959f31c4a5faf64e56f",
       "head_branch": "codex/audio-runtime-c114-retire-cli-audio-rate-contract",
       "is_retirement_checkpoint": true,
       "number": 499,
@@ -4623,6 +4628,7 @@
         "coverage-manifest/go-agent-runtime/services/audiocodec/internal/service/package.json",
         "coverage-manifest/go-agent-runtime/services/audiocodec/package.json",
         "coverage-manifest/go-agent-runtime/services/audiocodec/wire/package.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-04934ed.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/checkpoint-5b23b484.md",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/external-consumer/go.mod",
         "docs/temp/projects/audio-runtime/audio-runtime-c115-centralize-filesystem-audio-codec/external-consumer/go.sum",
@@ -4639,7 +4645,7 @@
         "go-agent-runtime/services/audiocodec/wire/wire_test.go",
         "go-agent-runtime/services/tools/internal/filesystem/tool_filesystem.go"
       ],
-      "head": "541fdacbdcea5979371dfdee51aa64e12009252b",
+      "head": "ffdb887949c802e887b3b0e0e7f5ef744b60472a",
       "head_branch": "codex/audio-runtime-c115-centralize-filesystem-audio-codec",
       "is_retirement_checkpoint": true,
       "number": 501,
@@ -4679,11 +4685,226 @@
       "task_name": "audio-runtime-c115-centralize-filesystem-audio-codec",
       "task_state": {
         "name": "init",
-        "type": "INITIAL"
+        "type": "PROCESSING"
       },
       "task_work_id": "work-task-262",
       "title": "refactor: centralize filesystem audio codec",
       "url": "https://github.com/portpowered/go-agent-harness/pull/501"
+    },
+    {
+      "accepted_main_changed_production_paths": [],
+      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "base_branch": "main",
+      "draft": false,
+      "files": [
+        ".gitignore",
+        "Makefile",
+        "docs/architecture/architecture-policy.json",
+        "docs/architecture/architecture-size-baseline.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/cmd/audio-device-server/main.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/cmd/testtimeout/main.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/config/browser_config_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/config/browser_overrides.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/config/browser_overrides_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/config/interface.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/config/loading.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/config/loading_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/config/models.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/config/overrides.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/config/revision.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/input/files.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/input/mimetype_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/input/validate.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/logger/logger.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/logger/logger_behavior_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/output/binary_stream.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/output/json_stream_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/_package.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/acceptance.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/acceptance_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_contract.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_contract_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_evidence.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_family_a.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_family_c.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_family_d.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_family_d_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_family_e.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_family_e_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_oracle.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_suite.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_suite_coverage_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_suite_evidence.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_suite_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_validator.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customer_simulation_validator_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/duplex.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/duplex_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fault/rtc.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fault/transport.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fault/transport_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet/executor_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet/manifest.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/room/browser_tools.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/room/manifest.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/room/manifest_browser_tools_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/room/manifest_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/room/mesh.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/room/mesh_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/room/mixer.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/room/mixer_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/room/room_tool_assistant_fixture_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports/rtc.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession/validation.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession/voices.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/ask_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/autocomplete.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/autocomplete_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/chat_atfile.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/chat_atfile_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/chat_commands.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/chat_repl.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/chat_repl_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/chat_scrollback.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices/validation.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/_package.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/capability_alias.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/metrics_collector.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/replay_integration_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/rtc_device_binding.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/rtc_device_feedback_suppression_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/rtc_device_feedback_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/rtc_device_hold_tone_feedback_interaction_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/rtc_device_production_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/rtc_device_roundtrip_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/rtc_device_runtime.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_cancel_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/rtc_device_runtime_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/rtc_device_sink_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/s2s_live_feedback_bypass_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/s2s_room_cancel_not_active_race_replay_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/s2s_room_evidence_degradation_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_cadence_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_dialer_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_empty_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_ledger_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_long_conversation_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_overlap_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/s2s_room_realtime_replay_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/service.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_audio_format.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_audio_in.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_audio_in_endofturn_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_audio_in_full_stream_test.go.json",
+        "docs/architecture/baselines/github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime/session_audio_in_live_lifecycle_test.go.json"
+      ],
+      "head": "02f2111702a694cb23f684ef8d5996283fa9f825",
+      "head_branch": "codex/registry-contention-unblock",
+      "is_retirement_checkpoint": true,
+      "number": 502,
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "502",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "runtime"
+        ]
+      },
+      "state": "OPEN",
+      "task_name": "NONE",
+      "task_state": "NONE",
+      "task_work_id": "NONE",
+      "title": "build: remove registry contention from runtime decomposition",
+      "url": "https://github.com/portpowered/go-agent-harness/pull/502"
+    },
+    {
+      "accepted_main_changed_production_paths": [],
+      "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
+      "base_branch": "main",
+      "draft": false,
+      "files": [
+        "agent-cli/internal/transport/cli/internal/livehost/run_trace_test.go",
+        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/SHA256SUMS",
+        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/provenance.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c108-characterize-audio-device-boundary-gaps/verify.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/README.md",
+        "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/admission.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/c108-source-base-and-checksums.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/census.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/pre-c112-scope.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/reproduce_c113.py",
+        "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/c113-reproduction.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/runs/pre-c112-test.json",
+        "docs/temp/projects/audio-runtime/audio-runtime-c117-repair-c113-public-trace-publication/verify.py"
+      ],
+      "head": "7f116013142762dee39acae21fd2cf104d2e0473",
+      "head_branch": "codex/audio-runtime-c117-repair-c113-public-trace-publication",
+      "is_retirement_checkpoint": true,
+      "number": 503,
+      "observation_commands": [
+        [
+          "gh",
+          "pr",
+          "list",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--state",
+          "open",
+          "--limit",
+          "500",
+          "--json",
+          "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,url"
+        ],
+        [
+          "gh",
+          "pr",
+          "view",
+          "503",
+          "--repo",
+          "portpowered/go-agent-harness",
+          "--json",
+          "files"
+        ]
+      ],
+      "retirement_classification": {
+        "accepted_main_target_paths": [],
+        "title_branch_keywords": [
+          "audio",
+          "runtime"
+        ]
+      },
+      "state": "OPEN",
+      "task_name": "audio-runtime-c117-repair-c113-public-trace-publication",
+      "task_state": {
+        "name": "init",
+        "type": "PROCESSING"
+      },
+      "task_work_id": "work-task-268",
+      "title": "test(audio): pin C113 trace publication gap",
+      "url": "https://github.com/portpowered/go-agent-harness/pull/503"
     }
   ],
   "schema_version": "c107-open-pr-inventory-v1"

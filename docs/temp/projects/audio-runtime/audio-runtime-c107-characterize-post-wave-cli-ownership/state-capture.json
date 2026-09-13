@@ -1,24 +1,24 @@
 {
-  "active_task_count": 10,
+  "active_task_count": 9,
   "board_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/canonical-board.json",
-  "board_sha256": "38ff907a843f6119358fa1cb3f67e89cd627a6c8892044edc72ede8dc4f4443a",
+  "board_sha256": "b8b153751b8b2577a14b1e5b3699b53fdab5d71b929cb505bf39119542772dd1",
   "candidate_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
-  "candidate_head": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
+  "candidate_head": "8853510dad106948b4594aa657866ac05ccec3e2",
   "candidate_pr": {
     "base": "3963bc3566da24f8214634c17a9d0f79a6724171",
     "base_branch": "main",
-    "head": "f741115c90163e83542bf3302e98bb0dc32ba5b9",
+    "head": "8853510dad106948b4594aa657866ac05ccec3e2",
     "head_branch": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "number": 494,
     "task_name": "audio-runtime-c107-characterize-post-wave-cli-ownership",
     "task_work_id": "work-task-218"
   },
   "contract_revision": "audio-runtime-v1",
-  "observed_at": "2026-09-13T01:49:04Z",
-  "open_pr_count": 54,
-  "open_retirement_pr_count": 54,
+  "observed_at": "2026-09-13T02:36:10Z",
+  "open_pr_count": 56,
+  "open_retirement_pr_count": 56,
   "pr_inventory_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/pr-inventory.json",
-  "pr_inventory_sha256": "5a5ccac63bf8056d983c7e40226d85e38d101b1843a12b4572d182981e28d6f7",
+  "pr_inventory_sha256": "464a47a80574fb3b077fef94dcbae17d26e5295fc6baef2065fb199fd1689500",
   "prd_identity": {
     "branchName": "codex/audio-runtime-c107-characterize-post-wave-cli-ownership",
     "project": "audio-runtime"
@@ -28,5 +28,5 @@
   "server": "http://127.0.0.1:7439",
   "session": "~default",
   "subtraction_path": "docs/temp/projects/audio-runtime/audio-runtime-c107-characterize-post-wave-cli-ownership/subtraction.json",
-  "subtraction_sha256": "594498e9fc205ddae921bc7316f58b9b764f8f90b186023c9f69188878653e7c"
+  "subtraction_sha256": "7f656628c108953bdebe007f8b2e73a397a95f8baf9095355feb6c22a3d5d3be"
 }
